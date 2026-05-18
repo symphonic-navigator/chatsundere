@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+:root {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  /* Catppuccin Mocha — base + text */
+  background: #1e1e2e;
+  color: #cdd6f4;
+}

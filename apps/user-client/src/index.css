@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Instrument Serif", Georgia, serif;
+}
+
+body {
+  background: #050210;
+  color: #e8e6f5;
+}

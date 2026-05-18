@@ -1,0 +1,107 @@
+# Production Chatsundere stack — example.
+#
+# Copy this file to `compose.prod.yml` and fill in the environment variables
+# below. Do NOT commit `compose.prod.yml`.
+#
+# Deployment target: a single Hetzner VPS running Docker + Traefik.
+# All public ingress goes through Traefik; only Traefik exposes ports 80/443
+# on the host. Postgres and Redis are not published to the host at all.
+#
+# Required environment variables (export before `docker compose up -d`):
+#
+#   POSTGRES_USER, POSTGRES_PASSWORD
+#   GRAFANA_ADMIN_USER, GRAFANA_ADMIN_PASSWORD
+#   TRAEFIK_HOST_PROMETHEUS  (e.g. prometheus.chatsundere.app)
+#   TRAEFIK_HOST_GRAFANA     (e.g. grafana.chatsundere.app)
+#   TRAEFIK_AUTH_USERS       (htpasswd-format, e.g. user:$apr1$...)
+
+name: chatsundere-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: auth_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', '${POSTGRES_USER}', '-d', 'auth_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatsundere
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - chatsundere
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    labels:
+      traefik.enable: 'true'
+      traefik.http.routers.prometheus.rule: Host(`${TRAEFIK_HOST_PROMETHEUS}`)
+      traefik.http.routers.prometheus.entrypoints: websecure
+      traefik.http.routers.prometheus.tls.certresolver: letsencrypt
+      traefik.http.routers.prometheus.middlewares: prometheus-auth
+      traefik.http.middlewares.prometheus-auth.basicauth.users: ${TRAEFIK_AUTH_USERS}
+      traefik.http.services.prometheus.loadbalancer.server.port: '9090'
+    networks:
+      - chatsundere
+      - traefik
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_SERVER_ROOT_URL: https://${TRAEFIK_HOST_GRAFANA}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    labels:
+      traefik.enable: 'true'
+      traefik.http.routers.grafana.rule: Host(`${TRAEFIK_HOST_GRAFANA}`)
+      traefik.http.routers.grafana.entrypoints: websecure
+      traefik.http.routers.grafana.tls.certresolver: letsencrypt
+      traefik.http.services.grafana.loadbalancer.server.port: '3000'
+    networks:
+      - chatsundere
+      - traefik
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  chatsundere:
+    driver: bridge
+  traefik:
+    external: true
