@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { derivePrfAmk } from './amk.js';
+import { putPasskeyCredential } from './db/passkey-credentials.js';
+import type { PasskeyCredentialRow } from './db/schema.js';
 import { deriveDek } from './dek.js';
 import { CryptoError } from './errors.js';
 import { aeadDecrypt, aeadEncrypt } from './primitives/aead.js';
+import { addIntegrityHmac, deriveIntegrityKey } from './primitives/integrity.js';
 import { computeRecoveryProof } from './recovery.js';
 import { type AMK, type DEK, type MasterKey, type RecoveryKey, WRAP_ALGO } from './types.js';
+import { credentialIdPrefix } from './webauthn/prf.js';
 
 export interface MasterKeySessionInit {
   mk: MasterKey;
@@ -15,6 +20,15 @@ export interface MasterKeySessionInit {
   role?: 'primary_admin' | 'admin' | 'user';
   accessToken?: string;
   recoveryKey?: RecoveryKey;
+}
+
+export interface RegisterLocalBiometricArgs {
+  db: IDBDatabase;
+  credentialId: Uint8Array;
+  publicKey: Uint8Array;
+  aaguid: string | null;
+  prfOutput: Uint8Array;
+  label: string;
 }
 
 export interface MasterKeySession {
@@ -36,6 +50,15 @@ export interface MasterKeySession {
     context: string;
   }): Promise<Uint8Array>;
   produceRecoveryProof(nonce: Uint8Array, serverId: string): Promise<Uint8Array>;
+  /**
+   * Wrap the in-session MK under a PRF-derived AMK for a new biometric
+   * credential and persist the row in IndexedDB. The raw MK never leaves the
+   * session closure — callers in `apps/user-client` only see the public
+   * arguments and the resulting promise. Throws `CryptoError('expired_state')`
+   * if the session has been closed, and `CryptoError('prf_not_supported')` if
+   * `prfOutput.length !== 32`.
+   */
+  registerLocalBiometric(args: RegisterLocalBiometricArgs): Promise<void>;
   close(): void;
 }
 
@@ -109,6 +132,35 @@ export function createMasterKeySession(init: MasterKeySessionInit): MasterKeySes
         throw new CryptoError('wrong_recovery_key', 'session has no recovery key in scope');
       }
       return computeRecoveryProof(recoveryKey, nonce, init.username, serverId);
+    },
+
+    async registerLocalBiometric(args: RegisterLocalBiometricArgs) {
+      // Capture the MK reference synchronously: requireMk() throws on a closed
+      // session, and the PRF-length check fails fast before any expensive work.
+      const localMk = requireMk();
+      if (args.prfOutput.length !== 32) {
+        throw new CryptoError('prf_not_supported', 'PRF output must be 32 bytes');
+      }
+      const prefix = credentialIdPrefix(args.credentialId);
+      const amk = await derivePrfAmk(args.prfOutput, prefix);
+      const aad = new TextEncoder().encode(`${init.userId}::prf::${prefix}::v1`);
+      const wrapped = await aeadEncrypt(amk, localMk, aad);
+      const ik = await deriveIntegrityKey(amk);
+      const tagged = await addIntegrityHmac(wrapped, ik);
+      const row: PasskeyCredentialRow = {
+        credential_id: args.credentialId,
+        public_key: args.publicKey,
+        sign_counter: 0,
+        aaguid: args.aaguid,
+        label: args.label,
+        wrapped_mk_prf_ciphertext: tagged.ciphertext,
+        wrapped_mk_prf_nonce: tagged.nonce,
+        wrapped_mk_prf_aad: tagged.aad,
+        wrapped_mk_prf_integrity: tagged.integrity_hmac,
+        is_synced_with_server: false,
+        created_at: new Date(),
+      };
+      await putPasskeyCredential(args.db, row);
     },
 
     close() {

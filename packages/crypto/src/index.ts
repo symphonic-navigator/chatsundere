@@ -106,7 +106,11 @@ export {
   setStagingState,
 } from './db/staging.js';
 export { createMasterKeySession } from './session.js';
-export type { MasterKeySession, MasterKeySessionInit } from './session.js';
+export type {
+  MasterKeySession,
+  MasterKeySessionInit,
+  RegisterLocalBiometricArgs,
+} from './session.js';
 export { createLocalAccount, validateUsername } from './flows/create-local-account.js';
 export type {
   CreateLocalAccountArgs,
