@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chatsundere — coming soon</title>
+  <meta name="description" content="A new kind of AI companion. End-to-end encrypted. Mobile-first. Yours." />
+  <meta name="theme-color" content="#0a0418" />
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:title" content="Chatsundere" />
+  <meta property="og:description" content="Prickly toward regulation. Sweet toward you." />
+  <meta property="og:image" content="https://chatsune.me/assets/og.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://chatsune.me/" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A8%3C/text%3E%3C/svg%3E" />
+
+  <style>
+    /* ----- reset & root ----- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep: #050210;
+      --bg-mid: #0a0418;
+      --cyan: #4dd0ff;
+      --magenta: #ff4dc8;
+      --gold: #ffd56b;
+      --soft-pink: #ff9ad9;
+      --soft-blue: #8cc7ff;
+      --text: #e8e6f5;
+      --text-muted: #8c8aa8;
+      --tsun-glow: 0 0 40px rgba(255, 77, 200, 0.4), 0 0 80px rgba(255, 77, 200, 0.2);
+      --dere-glow: 0 0 40px rgba(255, 213, 107, 0.4), 0 0 80px rgba(255, 213, 107, 0.2);
+    }
+
+    html, body {
+      background: var(--bg-deep);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ----- background gradient + grain ----- */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 30%, rgba(255, 77, 200, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 70%, rgba(77, 208, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(255, 213, 107, 0.04) 0%, transparent 60%);
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(
+          0deg,
+          transparent 0,
+          transparent 2px,
+          rgba(255, 255, 255, 0.015) 2px,
+          rgba(255, 255, 255, 0.015) 3px
+        );
+      z-index: -1;
+      pointer-events: none;
+      mix-blend-mode: overlay;
+    }
+
+    /* ----- container ----- */
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: clamp(1.5rem, 4vw, 3rem);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ----- top brand ----- */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: clamp(2rem, 5vw, 4rem);
+      opacity: 0;
+      animation: fadeIn 1.2s ease-out 0.2s forwards;
+    }
+    .brand-mark {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      box-shadow: 0 0 12px rgba(255, 77, 200, 0.6);
+    }
+    .brand-name {
+      font-size: 0.875rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ----- hero ----- */
+    .hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: clamp(1.5rem, 3vw, 2.5rem);
+    }
+
+    .title {
+      font-size: clamp(2.5rem, 8vw, 5.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--cyan) 0%, var(--soft-pink) 50%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      opacity: 0;
+      animation: fadeUp 1.2s ease-out 0.4s forwards;
+      position: relative;
+    }
+
+    .title::after {
+      content: "✦";
+      position: absolute;
+      top: -0.2em;
+      right: -0.6em;
+      font-size: 0.3em;
+      color: var(--gold);
+      -webkit-text-fill-color: var(--gold);
+      animation: twinkle 3s ease-in-out infinite;
+    }
+
+    .tagline {
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      color: var(--text);
+      max-width: 36ch;
+      line-height: 1.5;
+      opacity: 0;
+      animation: fadeUp 1.2s ease-out 0.6s forwards;
+    }
+
+    .tagline .accent-tsun { color: var(--magenta); font-weight: 600; }
+    .tagline .accent-dere { color: var(--gold); font-weight: 600; }
+
+    /* ----- duality image ----- */
+    .duality {
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 16 / 9;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.06),
+        0 20px 60px rgba(0, 0, 0, 0.6),
+        0 0 80px rgba(77, 208, 255, 0.15);
+      cursor: crosshair;
+      opacity: 0;
+      animation: fadeUp 1.4s ease-out 0.8s forwards;
+    }
+
+    .duality img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: filter 0.5s ease;
+    }
+
+    .duality-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .duality-half {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .duality-half.left { background: linear-gradient(180deg, transparent 40%, rgba(255, 77, 200, 0.25) 100%); }
+    .duality-half.right { background: linear-gradient(180deg, transparent 40%, rgba(255, 213, 107, 0.25) 100%); }
+
+    .duality-half span {
+      font-size: clamp(0.75rem, 1.5vw, 0.95rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      background: rgba(5, 2, 16, 0.8);
+      backdrop-filter: blur(8px);
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .duality-half.left span { color: var(--magenta); }
+    .duality-half.right span { color: var(--gold); }
+
+    .duality:hover .duality-half { opacity: 1; }
+
+    /* hover-side highlighting */
+    .duality.hover-left img { filter: brightness(1.05) saturate(1.1); }
+    .duality.hover-left .duality-half.right { opacity: 0.3; }
+    .duality.hover-right img { filter: brightness(1.05) saturate(1.1); }
+    .duality.hover-right .duality-half.left { opacity: 0.3; }
+
+    /* ----- hints (the "soon" promises) ----- */
+    .hints {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      max-width: 720px;
+      opacity: 0;
+      animation: fadeUp 1.2s ease-out 1s forwards;
+    }
+
+    .hint {
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      transition: all 0.3s ease;
+    }
+    .hint:hover {
+      background: rgba(77, 208, 255, 0.08);
+      border-color: rgba(77, 208, 255, 0.3);
+      color: var(--cyan);
+    }
+    .hint-icon {
+      display: inline-block;
+      margin-right: 0.4em;
+      opacity: 0.8;
+    }
+
+    /* ----- status pill + CTA ----- */
+    .status-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      opacity: 0;
+      animation: fadeUp 1.2s ease-out 1.2s forwards;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 1rem;
+      background: rgba(77, 208, 255, 0.08);
+      border: 1px solid rgba(77, 208, 255, 0.25);
+      border-radius: 999px;
+      font-size: 0.85rem;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.9rem 1.75rem;
+      background: linear-gradient(135deg, rgba(77, 208, 255, 0.15), rgba(255, 77, 200, 0.15));
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+    .cta:hover {
+      background: linear-gradient(135deg, rgba(77, 208, 255, 0.25), rgba(255, 77, 200, 0.25));
+      border-color: rgba(77, 208, 255, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(77, 208, 255, 0.2);
+    }
+    .cta-arrow {
+      transition: transform 0.3s ease;
+    }
+    .cta:hover .cta-arrow { transform: translateX(4px); }
+
+    /* ----- footer ----- */
+    .footer {
+      margin-top: clamp(2rem, 5vw, 4rem);
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      opacity: 0;
+      animation: fadeIn 1.2s ease-out 1.4s forwards;
+    }
+
+    .footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    .footer a:hover { color: var(--cyan); }
+
+    .footer-links {
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    /* ----- animations ----- */
+    @keyframes fadeIn { to { opacity: 1; } }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.9); }
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.4; transform: rotate(0deg) scale(1); }
+      50% { opacity: 1; transform: rotate(180deg) scale(1.2); }
+    }
+
+    /* ----- mobile tweaks ----- */
+    @media (max-width: 640px) {
+      .hints { gap: 0.5rem; }
+      .hint { font-size: 0.8rem; padding: 0.4rem 0.8rem; }
+      .duality { border-radius: 12px; }
+      .footer { flex-direction: column; text-align: center; }
+    }
+
+    /* respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      .title::after { animation: none; }
+      .status-dot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <span class="brand-name">Tidesson Communications</span>
+    </header>
+
+    <main class="hero">
+
+      <h1 class="title">Chatsundere</h1>
+
+      <p class="tagline">
+        <span class="accent-tsun">Tsuntsun</span> toward regulation &amp; censorship.
+        <span class="accent-dere">Deredere</span> toward you.
+      </p>
+
+      <figure class="duality" id="duality" aria-label="Two characters discovering a treasure labelled Chatsundere">
+        <img src="assets/hero.png" alt="Tsundere and Deredere anime characters discovering the Chatsundere treasure in a cyberpunk Tokyo alleyway" />
+        <div class="duality-overlay" aria-hidden="true">
+          <div class="duality-half left"><span>↯ no compromise</span></div>
+          <div class="duality-half right"><span>✦ your data, your keys</span></div>
+        </div>
+      </figure>
+
+      <div class="hints">
+        <span class="hint"><span class="hint-icon">🔐</span>End-to-end encrypted</span>
+        <span class="hint"><span class="hint-icon">📱</span>Mobile-first</span>
+        <span class="hint"><span class="hint-icon">🗝️</span>Zero-knowledge backend</span>
+        <span class="hint"><span class="hint-icon">🏠</span>Self-hostable</span>
+        <span class="hint"><span class="hint-icon">⚡</span>Bring your own compute</span>
+        <span class="hint"><span class="hint-icon">🪶</span>AGPLv3</span>
+      </div>
+
+      <div class="status-row">
+        <div class="status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>Building · Q3 2026</span>
+        </div>
+
+        <a class="cta" href="https://discord.gg/secondcircuit" target="_blank" rel="noopener noreferrer">
+          Get updates on Second Circuit
+          <span class="cta-arrow" aria-hidden="true">→</span>
+        </a>
+      </div>
+
+    </main>
+
+    <footer class="footer">
+      <div>
+        <span>Crafted by Chris Tidesson · Vienna</span>
+      </div>
+      <nav class="footer-links" aria-label="Project links">
+        <a href="https://github.com/symphonic-navigator/chatsundere" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://superradiance.info" target="_blank" rel="noopener noreferrer">Superradiance</a>
+        <a href="mailto:hello@chatsune.me">Contact</a>
+      </nav>
+    </footer>
+
+  </div>
+
+  <script>
+    // Subtle interactivity: track hover side over duality image
+    (function () {
+      const duality = document.getElementById('duality');
+      if (!duality) return;
+
+      duality.addEventListener('mousemove', (e) => {
+        const rect = duality.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const isLeft = x < rect.width / 2;
+        duality.classList.toggle('hover-left', isLeft);
+        duality.classList.toggle('hover-right', !isLeft);
+      });
+
+      duality.addEventListener('mouseleave', () => {
+        duality.classList.remove('hover-left', 'hover-right');
+      });
+
+      // touch: tap left/right side highlights for ~1.5s
+      duality.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        const rect = duality.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const isLeft = x < rect.width / 2;
+        duality.classList.toggle('hover-left', isLeft);
+        duality.classList.toggle('hover-right', !isLeft);
+        clearTimeout(duality._touchTimer);
+        duality._touchTimer = setTimeout(() => {
+          duality.classList.remove('hover-left', 'hover-right');
+        }, 1500);
+      }, { passive: true });
+    })();
+
+    // Console easter egg for the curious
+    console.log(
+      "%c Chatsundere %c — coming soon. ",
+      "background: linear-gradient(135deg, #4dd0ff, #ff4dc8); color: #050210; font-weight: 700; padding: 4px 8px; border-radius: 4px;",
+      "color: #8c8aa8;"
+    );
+    console.log(
+      "%cInterested in the build? %chttps://github.com/symphonic-navigator/chatsundere",
+      "color: #ffd56b;",
+      "color: #4dd0ff; text-decoration: underline;"
+    );
+  </script>
+
+</body>
+</html>
