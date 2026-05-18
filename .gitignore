@@ -127,3 +127,6 @@ obsidian/.trash/
 .idea/
 .vscode/
 *.swp
+
+# API keys
+keys/
