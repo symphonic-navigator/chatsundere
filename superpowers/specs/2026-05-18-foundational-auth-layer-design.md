@@ -384,8 +384,8 @@ All paths under `${base_url}/auth` plus version `/v1`. The default `base_url` in
 | GET | `/v1/jwks` | none | Public keys for JWT verification by sibling services |
 | POST | `/v1/link/opaque/start` | invitation token | Returns `{ session_id, registration_response }` |
 | POST | `/v1/link/opaque/finish` | invitation token | Body: `{ session_id, username, registration_record, wrapped_mk_opaque, wrap_nonce_opaque, wrap_aad_opaque, wrapped_mk_recovery, wrap_nonce_recovery, wrap_aad_recovery, recovery_verifier_key }`. UNIQUE username check; 409 on conflict |
-| POST | `/v1/link/passkey/start` | invitation token *or* bearer | Returns `{ session_id, options }` |
-| POST | `/v1/link/passkey/finish` | invitation token *or* bearer | Adds passkey; first-time link includes recovery and OPAQUE fields if invitation-authorised |
+| POST | `/v1/link/passkey/start` | bearer (post-OPAQUE) | Returns `{ session_id, options }`. Refuses if no OPAQUE method exists for the user — see [ADR 0021](../../obsidian/decisions/0021-phase0-opaque-first-linking.md) |
+| POST | `/v1/link/passkey/finish` | bearer (post-OPAQUE) | Adds a passkey as a secondary auth method. Phase 0 does not support passkey-first registration; see [ADR 0021](../../obsidian/decisions/0021-phase0-opaque-first-linking.md) |
 | POST | `/v1/opaque/login/start` | none | Returns `{ session_id, ke2, wrapped_mk_opaque, wrap_nonce_opaque, wrap_aad_opaque }`. Fake response for unknown usernames (deterministic from username), constant-time |
 | POST | `/v1/opaque/login/finish` | none | Body includes `session_id`, `ke3`. Returns `{ user_id, role, access_token, expires_in }` and sets refresh-cookie |
 | POST | `/v1/passkey/login/start` | none | Returns `{ session_id, options }` |
