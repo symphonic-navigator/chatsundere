@@ -55,7 +55,10 @@ services:
       - prometheus_data:/prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      # NOT 'host-gateway' — that magic resolves to docker0 (172.17.0.1)
+      # on Linux, which is unreachable from our user-defined bridge below.
+      # Hard-code the user-defined bridge gateway (172.28.0.1) instead.
+      - 'host.docker.internal:172.28.0.1'
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:9090/-/healthy']
       interval: 10s
@@ -98,3 +101,9 @@ volumes:
 networks:
   chatsundere-dev:
     driver: bridge
+    ipam:
+      config:
+        # Pinned so host.docker.internal:172.28.0.1 (above) stays stable
+        # across compose down/up cycles. /24 is plenty for four services.
+        - subnet: 172.28.0.0/24
+          gateway: 172.28.0.1
