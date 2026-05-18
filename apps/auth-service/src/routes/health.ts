@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Hono } from 'hono';
-import { renderMetrics } from '../metrics.js';
 
 export function registerHealthRoutes(app: Hono): void {
   app.get('/healthz', (c) => c.json({ status: 'ok' }));
@@ -14,11 +13,5 @@ export function registerHealthRoutes(app: Hono): void {
       redis: 'unknown',
     };
     return c.json({ status: 'ok', deps });
-  });
-
-  app.get('/metrics', async (c) => {
-    const { body, contentType } = await renderMetrics();
-    c.header('content-type', contentType);
-    return c.body(body);
   });
 }
