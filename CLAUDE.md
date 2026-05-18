@@ -102,11 +102,12 @@ chatsundere/
 
 Three documentation directories with deliberately separate audiences:
 
-- **`docs/`** — public, GitHub Pages target. Audience: external operators, contributors, potential users. Polished, opinionated, good prose. Examples: `ARCHITECTURE.md`, `DEPLOYMENT.md`, `RELEASE-PROCESS.md`.
+- **`docs/`** — static HTML teaser site for **chatsune.me**, served from GitHub Pages with a custom domain (`.nojekyll`, no toolchain, no Markdown rendering). Audience: prospective users discovering the project via the public domain. Pure marketing surface, not a documentation tree.
 - **`superpowers/`** — internal working tools. Audience: me and Chris during build.
   - `superpowers/specs/` — design specs (this file was implemented from one).
   - `superpowers/plans/` — implementation plans tied to a spec.
-- **`obsidian/`** — the vault. Audience: me, Lyra, and Chris over time.
+- **`obsidian/`** — the vault. Audience: me, Lyra, and Chris over time. Also the home for *all* longer-form Markdown documentation — anything that would have lived in `docs/` under the brief's original assumption (architecture, onboarding, deployment, releases). Linkable from the public site if and when we choose to surface a given file.
+  - `obsidian/ARCHITECTURE.md`, `obsidian/ONBOARDING.md` (and future `DEPLOYMENT.md`, `RELEASE-PROCESS.md`, `SYNC.md`, `PROXY.md`) — top-level Markdown documentation.
   - `obsidian/briefs/` — Lyra design briefs (peer-reviewed by Chris before landing here).
   - `obsidian/decisions/` — ADRs, sequentially numbered, Michael Nygard style.
   - `obsidian/insights/` — my running journal, including `security-deferrals.md`.
@@ -130,6 +131,7 @@ Enforced as a hard rule in §3 because Chatsune drifted on this point repeatedly
 - **Feature branches:** use one when work needs parallel iteration, when Larissa is about to audit, or when a chunk is large enough that I want a checkpoint.
 - **Granularity:** one squashed commit per feature unit. Correct units: "Set up monorepo and tooling", "Add auth-service", "Wire user-client registration". Not finer, not coarser. See [ADR 0003](obsidian/decisions/0003-squash-per-feature.md).
 - **Commit messages:** free-form imperative, no Conventional Commits prefix. Subject line capitalised.
+- **`[skip ci]` for doc-only commits.** If a commit touches only text — Markdown, ADRs, briefs, READMEs, comments without code change — append `[skip ci]` to the subject so GitHub Actions short-circuits. Mixed commits (text + code) do *not* get the tag. Use GitHub's exact form `[skip ci]` (with the space); `[skip-ci]` with a hyphen is not recognised.
 - **Co-author tag:** `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`.
 - **Subagents never merge, push, or switch branches.** Those responsibilities stay with me.
 
@@ -241,11 +243,12 @@ Load these when their topic comes up. Do not preload.
 | Project setup (monorepo, tooling, stack) | `obsidian/briefs/phase 0/project-setup.md` |
 | Auth service (endpoints, flows, schema) | `obsidian/briefs/phase 0/auth-service.md` |
 | Client crypto (OPAQUE, WebAuthn PRF, AMK/DEK, wrapping) | `obsidian/briefs/phase 0/crypto.md` |
-| Architecture overview | `docs/ARCHITECTURE.md` *(TBD)* |
-| Sync vault model | `docs/SYNC.md` *(Phase 1)* |
-| Proxy service | `docs/PROXY.md` *(Phase 2)* |
-| Deployment behind Traefik on Hetzner | `docs/DEPLOYMENT.md` *(later)* |
-| Release process | `docs/RELEASE-PROCESS.md` *(at v0.1.0)* |
+| Architecture overview | `obsidian/ARCHITECTURE.md` *(TBD)* |
+| Onboarding new contributors | `obsidian/ONBOARDING.md` *(TBD)* |
+| Sync vault model | `obsidian/SYNC.md` *(Phase 1)* |
+| Proxy service | `obsidian/PROXY.md` *(Phase 2)* |
+| Deployment behind Traefik on Hetzner | `obsidian/DEPLOYMENT.md` *(later)* |
+| Release process | `obsidian/RELEASE-PROCESS.md` *(at v0.1.0)* |
 | Past architectural decisions | `obsidian/decisions/` |
 | Project journal, gotchas, observations | `obsidian/insights/` |
 | Larissa audit deferrals | `obsidian/insights/security-deferrals.md` |
