@@ -130,3 +130,15 @@ obsidian/.trash/
 
 # API keys
 keys/
+
+# Chatsundere — added by project-structure unit
+
+# Docker bind-mount target (local dev data, never committed)
+infra/data/
+
+# Per-service env files (.env at root is already gitignored)
+apps/*/.env
+packages/*/.env
+
+# Production compose file (only the .example is committed)
+infra/compose.prod.yml
