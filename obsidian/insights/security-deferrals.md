@@ -66,6 +66,24 @@ Full audit report at `superpowers/plans/2026-05-18-foundational-auth-crypto-pack
 - **Rationale for deferral:** Implementing a constant-time base32 decoder is non-trivial and the realistic threat model (timing attacks against client-side decoding of one's own key) is contrived.
 - **Follow-up commitment:** None; documented as accepted.
 
+## 2026-05-18 — Refresh-reuse user-facing notification
+
+- **Affected paths:** `apps/auth-service/src/jwt/refresh.ts`, `apps/user-client/**`
+- **Finding (Larissa's summary, H-B1):** When refresh-token reuse is detected the server revokes the entire token family and writes an audit event. The Prometheus counter `auth_refresh_reuse_detected_total` now makes this observable to ops. However, the affected user receives no real-time notification (e.g. push notification, in-app alert) that their session was force-terminated due to a potential token theft.
+- **Severity:** low (ops-observable via Prometheus alert; the user-facing impact is that they are silently signed out on next request, which is already the secure default behaviour; no data is exposed).
+- **Rationale for deferral:** The user-client (phase 0) has no push-notification infrastructure. Adding in-app alerts requires a connected WebSocket or SSE channel that is phase-1 scope. The Prometheus counter satisfies the ops-observability requirement in the interim.
+- **Follow-up commitment:** When the sync-service real-time channel is built in phase 1, wire a `session.revoked` event so the client can surface a dismissible "Your session was terminated on another device" banner.
+
+## 2026-05-18 — Per-process OPAQUE server setup (Task 9)
+
+### M-5 — OPAQUE server setup is regenerated on every process start
+
+- **Affected paths:** `apps/auth-service/src/opaque/server.ts`
+- **Finding (Larissa's summary):** `getServerSetup()` calls `opaqueServer.createSetup()` on first invocation and caches the result in a module-level variable. Every process restart produces a new OPAQUE server setup. In-flight registration sessions started before a restart will fail at `/finish` (Redis state holds the old session_id but the server setup has changed). In a multi-replica deployment, each replica has an independent setup, making inter-replica OPAQUE cross-requests fail silently.
+- **Severity:** medium (phase-0 single-replica, no multi-instance deployment; the window where an in-flight registration straddling a restart fails is narrow and recoverable by retrying).
+- **Rationale for deferral:** Phase 0 runs a single replica. A restart mid-registration is unlikely in practice, and the user-facing error is a clear "session expired" prompting a retry. Storing the setup in the DB or a dedicated env var requires key-management scaffolding that is out of scope here.
+- **Follow-up commitment:** Before any multi-replica or production deployment: store the OPAQUE server setup in the DB (one row, written once at first boot, read-only thereafter) or pass it via a dedicated `OPAQUE_SERVER_SETUP` env var. Log the migration as a prerequisite for v0.1.0.
+
 ### L-5 — Old `local_amk` not explicitly zeroed after passphrase change
 
 - **Affected paths:** `packages/crypto/src/flows/change-passphrase.ts`
@@ -73,3 +91,55 @@ Full audit report at `superpowers/plans/2026-05-18-foundational-auth-crypto-pack
 - **Severity:** low (best-effort zeroing in JS is documented in spec §3.11 as a known limitation).
 - **Rationale for deferral:** Applying the discipline consistently across every transient KDF output would clutter the code. Spec §3.11 explicitly documents the limitation.
 - **Follow-up commitment:** None unless a memory-disclosure-class vulnerability emerges in practice.
+
+## 2026-05-18 — Auth-service squash B — additional deferred Larissa findings
+
+Full audit run between commit `371d895` and `93429b0`. Critical and must-fix High items addressed in `93429b0`. The items below were consciously deferred.
+
+### M-B1 — `/metrics` endpoint is not authenticated
+
+- **Affected paths:** `apps/auth-service/src/routes/metrics.ts`, `apps/auth-service/src/server.ts`
+- **Finding:** Anyone reaching port 3100 can read Prometheus exposition, including counters such as `auth_logins_total{result="fail"}` and `auth_admin_actions_total{action="role_change"}`. Labels are PII-free per M3 fix, but timing information and counter values still leak operational signals.
+- **Severity:** medium (no PII leak; operational-signal leak).
+- **Rationale for deferral:** Deployment topology will firewall the metrics port at the reverse-proxy layer or scrape from localhost only. README and `DEPLOYMENT.md` (when written) will mandate this.
+- **Follow-up commitment:** Add an explicit hint in the auth-service README's "Running locally" section warning that `/metrics` must not be exposed publicly. Decision before v0.1.0: either bind a separate listener for `/metrics` or require bearer-auth.
+
+### M-B3 — `writeAudit` does not format-check `userId` / `actorUserId`
+
+- **Affected paths:** `apps/auth-service/src/audit/log.ts`
+- **Finding:** UUID columns are inserted as strings; a future regression could feed a non-UUID value and corrupt the audit log.
+- **Severity:** low (no current caller does this; pure defense-in-depth).
+- **Rationale for deferral:** Cost minimal; pragmatic to defer to the next audit/spec-touch pass.
+- **Follow-up commitment:** Add a UUID-format assertion when next touching `audit/log.ts`.
+
+### M-B4 — `transfer-primary` audit-event semantics under-documented
+
+- **Affected paths:** `apps/auth-service/src/routes/admin/users.ts`
+- **Finding:** `userId` in the `primary_admin.transferred` event refers to the new primary admin (target), `actorUserId` to the previous primary admin (initiator). Reviewer could assume the opposite.
+- **Severity:** low (documentation gap, not a bug).
+- **Rationale for deferral:** ADR-worthy; not blocking. Decision before v0.1.0.
+- **Follow-up commitment:** Write a short ADR (likely 0020) documenting the audit-event semantics map.
+
+### L-B1 — `rateLimit` middleware is exported but never registered as a global middleware
+
+- **Affected paths:** `apps/auth-service/src/middleware/rate-limit.ts`, `apps/auth-service/src/server.ts`
+- **Finding:** The middleware is dead code in the current wiring; all live rate-limiting flows through the body-aware `applyLoginRateLimit` helper.
+- **Severity:** low (confusion risk; not a security hole).
+- **Rationale for deferral:** Genuine deletion would close the option of using it for IP-based limits on `/v1/token/refresh` etc. Keep for now; clean up when applying IP rate-limits at a later milestone.
+- **Follow-up commitment:** Decide before v0.1.0 between (a) wire IP-keyed limits on `/v1/token/refresh` + `/v1/admin/invitations`, or (b) delete the unused middleware. Whichever wins, take it; do not leave both.
+
+### L-B3 — Per-username login rate-limit counts successful logins
+
+- **Affected paths:** `apps/auth-service/src/routes/_rate-limit-helpers.ts`
+- **Finding:** A user who legitimately signs in 11 times in 15 minutes can lock themselves out for the rest of the window.
+- **Severity:** low (UX paper-cut, not a security issue).
+- **Rationale for deferral:** Counting only failures is the conventional pattern; current code counts every attempt because the counter increments before the OPAQUE finish runs. Refactoring to defer increment until after the failure verdict is straightforward but not urgent.
+- **Follow-up commitment:** Address in the post-Larissa cleanup pass for squash D, when the user-client surfaces rate-limit errors and the UX cost becomes user-visible.
+
+### L-B4 — Bootstrap file path uses `/tmp` fallback when `XDG_RUNTIME_DIR` is unset
+
+- **Affected paths:** `apps/auth-service/src/cli/bootstrap.ts`, `apps/auth-service/src/routes/link.ts`
+- **Finding:** File mode is `0o600`, but the parent directory `/tmp` is typically world-readable. The filename itself encodes the invitation id (visible to `ls /tmp`).
+- **Severity:** low (token is inside the file, not the filename; file is 0600).
+- **Rationale for deferral:** The container deployment will set `XDG_RUNTIME_DIR=/run/auth-service` with the directory at `0700`. Local-dev exposure is acceptable.
+- **Follow-up commitment:** Add `XDG_RUNTIME_DIR=/run/auth-service` to `infra/compose.prod.yml.example` and document the requirement in `apps/auth-service/README.md` operational section before v0.1.0.
