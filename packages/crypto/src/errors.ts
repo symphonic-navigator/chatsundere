@@ -8,6 +8,16 @@ export type CryptoErrorCode =
   | 'corrupted_data'
   | 'expired_state'
   | 'invalid_recovery_key_format'
+  | 'integrity_check_failed'
+  | 'runtime_unsupported'
+  | 'opaque_protocol_error'
+  | 'webauthn_verification_failed'
+  | 'webauthn_sign_counter_rollback'
+  | 'db_schema_mismatch'
+  | 'staging_inconsistent'
+  | 'not_found'
+  | 'invalid_input'
+  | 'conflict'
   | 'internal';
 
 /**

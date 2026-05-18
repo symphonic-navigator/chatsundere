@@ -8,50 +8,57 @@
 export type UserRole = 'primary_admin' | 'admin' | 'user';
 
 /**
- * The categories of authentication method a user may register. A single
- * user may have multiple methods; each one independently wraps the same
- * Master Key client-side.
+ * The categories of server-side authentication method. Recovery is
+ * handled entirely client-side (gated by a server-stored verifier key)
+ * and is not represented as an auth method on the server.
  */
-export type AuthMethodType = 'opaque' | 'passkey' | 'recovery_key';
+export type ServerAuthMethodType = 'opaque' | 'passkey';
 
 /**
- * A one-time invitation token, issued by an admin, that binds a
- * pre-assigned username and role to a future registration event.
- *
- * Field names match the wire format produced by the auth-service
- * (see `obsidian/briefs/phase 0/auth-service.md`). The secret
- * `token` is intentionally absent — it is only returned once at
- * creation time and is never re-listed or re-fetched.
+ * Per-invitation metadata as returned by `GET /v1/admin/invitations`.
+ * The one-time secret `token` is intentionally absent — it is only
+ * returned by the create endpoint and is never re-listed.
  */
 export interface Invitation {
   id: string;
-  username: string;
   role: UserRole;
+  issuer_label: string | null;
   created_by: string | null;
   created_at: string;
   expires_at: string;
   redeemed_at: string | null;
   redeemed_by_user_id: string | null;
   revoked_at: string | null;
+  attempt_count: number;
 }
 
 /**
- * Standard JWT claims issued by the auth-service for cross-service
- * authentication. The access token is short-lived (~15 min); refresh
- * tokens are opaque strings stored server-side.
- *
- * `aud` is always emitted as a JSON array (single-element by default).
- * Verifying services should treat it as `string[]`; the expected
- * baseline value is `['chatsundere-services']`.
+ * The QR-payload embedded in an invitation. Encoded as JSON, then
+ * base64url for transport. The user-client renders this as a QR code
+ * and parses it on scan.
+ */
+export interface InvitationQrPayload {
+  v: 1;
+  kind: 'invitation';
+  token: string;
+  base_url: string;
+  role: UserRole;
+  issuer_label: string | null;
+}
+
+/**
+ * JWT claims issued by the auth-service. Username is deliberately
+ * absent — services that need the current username call `/v1/me`.
+ * `aud` is the full `${base_url}/auth/v1` string; `iss` carries a
+ * version suffix so future protocol breaks can be detected.
  */
 export interface JWTClaims {
   sub: string;
-  username: string;
   role: UserRole;
   iat: number;
   exp: number;
-  iss: 'chatsundere-auth';
-  aud: string[];
+  iss: 'chatsundere-auth-v1';
+  aud: string;
 }
 
 /**
@@ -59,7 +66,20 @@ export interface JWTClaims {
  */
 export interface ErrorEnvelope {
   error: {
-    code: string;
+    code: ErrorCode;
     message: string;
   };
 }
+
+export type ErrorCode =
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'invalid_input'
+  | 'rate_limited'
+  | 'expired'
+  | 'conflict'
+  | 'internal'
+  | 'username_taken'
+  | 'invitation_consumed'
+  | 'invitation_attempts_exhausted';

@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+
+export const DB_NAME = 'chatsundere';
+export const DB_VERSION = 1;
+
+export const STORE_LOCAL_ACCOUNT = 'local_account';
+export const STORE_LINKED_ACCOUNT = 'linked_account';
+export const STORE_PASSKEY_CREDENTIALS = 'local_passkey_credentials';
+export const STORE_STAGING = 'staging';
+
+export interface LocalAccountRow {
+  schema_version: number;
+  username: string;
+  local_salt: Uint8Array;
+  wrapped_mk_local_ciphertext: Uint8Array;
+  wrapped_mk_local_nonce: Uint8Array;
+  wrapped_mk_local_aad: Uint8Array;
+  wrapped_mk_local_integrity: Uint8Array;
+  wrapped_mk_recovery_ciphertext: Uint8Array;
+  wrapped_mk_recovery_nonce: Uint8Array;
+  wrapped_mk_recovery_aad: Uint8Array;
+  wrapped_mk_recovery_integrity: Uint8Array;
+  recovery_verifier_key: Uint8Array;
+  created_at: Date;
+}
+
+export interface LinkedAccountRow {
+  server_user_id: string;
+  base_url: string;
+  issuer_label: string | null;
+  role: 'primary_admin' | 'admin' | 'user';
+  wrapped_mk_opaque_ciphertext: Uint8Array;
+  wrapped_mk_opaque_nonce: Uint8Array;
+  wrapped_mk_opaque_aad: Uint8Array;
+  wrapped_mk_opaque_integrity: Uint8Array;
+  linked_at: Date;
+}
+
+export interface PasskeyCredentialRow {
+  credential_id: Uint8Array;
+  public_key: Uint8Array;
+  sign_counter: number;
+  aaguid: string | null;
+  label: string;
+  wrapped_mk_prf_ciphertext: Uint8Array;
+  wrapped_mk_prf_nonce: Uint8Array;
+  wrapped_mk_prf_aad: Uint8Array;
+  wrapped_mk_prf_integrity: Uint8Array;
+  is_synced_with_server: boolean;
+  created_at: Date;
+}
+
+export type StagingState = 'pending' | 'committed' | 'rolled_back';
+
+export interface StagingRow {
+  key: 'pending_passphrase_change';
+  new_local_salt: Uint8Array;
+  new_wrapped_mk_local_ciphertext: Uint8Array;
+  new_wrapped_mk_local_nonce: Uint8Array;
+  new_wrapped_mk_local_aad: Uint8Array;
+  new_wrapped_mk_local_integrity: Uint8Array;
+  server_state: StagingState;
+  created_at: Date;
+}

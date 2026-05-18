@@ -19,6 +19,8 @@
     "test": "echo 'no tests yet for shared-types'"
   },
   "devDependencies": {
+    "@simplewebauthn/server": "^11.0.0",
+    "@simplewebauthn/types": "^11.0.0",
     "typescript": "^5.7.0"
   }
 }
