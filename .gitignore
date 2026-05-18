@@ -143,3 +143,6 @@ packages/*/.env
 
 # Production compose file (only the .example is committed)
 infra/compose.prod.yml
+
+# Turborepo local cache (regenerated per build, never committed)
+.turbo/
