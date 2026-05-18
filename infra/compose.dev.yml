@@ -48,7 +48,11 @@ services:
     ports:
       - '9090:9090'
     volumes:
-      - ./data/prometheus:/prometheus
+      # Named volume rather than a bind-mount because the prometheus image
+      # runs as `nobody` (UID 65534) without an entrypoint chown, so a
+      # host-created bind-mount target ends up root-owned and unwritable.
+      # Reset state with: docker volume rm chatsundere-dev_prometheus_data
+      - prometheus_data:/prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     extra_hosts:
       - 'host.docker.internal:host-gateway'
@@ -70,7 +74,11 @@ services:
     ports:
       - '3001:3000'
     volumes:
-      - ./data/grafana:/var/lib/grafana
+      # Named volume for the same reason as prometheus — grafana runs as
+      # UID 472 and a root-owned bind-mount target leaves it unable to
+      # write its sqlite database.
+      # Reset state with: docker volume rm chatsundere-dev_grafana_data
+      - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       prometheus:
@@ -82,6 +90,10 @@ services:
       retries: 5
     networks:
       - chatsundere-dev
+
+volumes:
+  prometheus_data:
+  grafana_data:
 
 networks:
   chatsundere-dev:
