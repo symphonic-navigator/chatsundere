@@ -111,3 +111,19 @@ dist
 
 # TernJS port file
 .tern-port
+
+# Obsidian vault — commit settings, ignore user state
+obsidian/.obsidian/workspace*
+obsidian/.obsidian/workspace-mobile.json
+obsidian/.obsidian/cache
+obsidian/.obsidian/types.json
+obsidian/.trash/
+
+# direnv local overrides
+.envrc.local
+
+# Editor / OS clutter
+.DS_Store
+.idea/
+.vscode/
+*.swp
