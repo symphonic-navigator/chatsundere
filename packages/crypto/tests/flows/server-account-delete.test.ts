@@ -62,6 +62,12 @@ describe('deleteServerAccount', () => {
       async deleteMe() {
         deleteMeCalled = true;
       },
+      async passphraseChangeStart() {
+        throw new Error('nope');
+      },
+      async passphraseChangeFinish() {
+        throw new Error('nope');
+      },
     };
     await deleteServerAccount({ db, serverClient: fake, accessToken: 'tok' });
     expect(deleteMeCalled).toBe(true);

@@ -155,5 +155,11 @@ function makeFakeServer(serverSetup: string, userId: string): ServerClient {
     async deleteMe(_baseUrl, _accessToken) {
       /* no-op */
     },
+    async passphraseChangeStart(_req, _baseUrl, _accessToken) {
+      throw new Error('not in test');
+    },
+    async passphraseChangeFinish(_req, _baseUrl, _accessToken) {
+      throw new Error('not in test');
+    },
   };
 }

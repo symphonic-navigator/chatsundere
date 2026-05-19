@@ -57,6 +57,12 @@ function makeServerClient(behaviour: 'ok' | '401' | '500'): ServerClient {
     async deleteMe() {
       throw new Error('unexpected');
     },
+    async passphraseChangeStart() {
+      throw new Error('unexpected');
+    },
+    async passphraseChangeFinish() {
+      throw new Error('unexpected');
+    },
   };
 }
 

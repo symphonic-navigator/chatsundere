@@ -52,6 +52,12 @@ function makeFakeClient(): ServerClient {
     async deleteMe() {
       throw new Error('unexpected');
     },
+    async passphraseChangeStart() {
+      throw new Error('unexpected');
+    },
+    async passphraseChangeFinish() {
+      throw new Error('unexpected');
+    },
   };
 }
 
