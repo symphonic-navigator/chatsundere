@@ -9,6 +9,15 @@ all should land before v0.1.0.
 
 ## 1. Cross-device identity, QR pairing, and the "I am the same user everywhere" experience
 
+> **Status update 2026-05-19:** the seven sub-questions in this section have
+> been walked through with Chris (six resolved, one explicitly deferred to
+> Phase 1). All decisions, architectural constraints, and implementation
+> notes are consolidated in [[2026-05-19-brief-material-cross-device-identity]]
+> for Lyra to formalise into the brief in `obsidian/briefs/phase 0/` and
+> the supporting ADRs. Master tracking of all open follow-ups lives in
+> [[follow-ups-index]]. The text below is preserved for context but is
+> superseded by the brief material.
+
 ### Where we are today
 
 Phase 0 ships a `local_account` model where each device holds an
@@ -128,6 +137,13 @@ without their having to know what server-linking is.
 ---
 
 ## 2. Passkey without biometric — the Gmail/Amazon model
+
+> **Status update 2026-05-19:** the four sub-questions in this section have
+> been resolved during a walk-through with Chris. Decisions and a draft
+> ADR 0022 skeleton are captured in
+> [[2026-05-19-brief-material-passkey-uv]] for Lyra to formalise.
+> The text below is preserved for context but is superseded by the brief
+> material.
 
 ### Where we are today
 
