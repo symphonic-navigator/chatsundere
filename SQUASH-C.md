@@ -209,6 +209,26 @@ Diese haben sich im Squash D bewährt:
 10. **Subagents never merge, push, or switch branches.** Das ist
     weiterhin deine Verantwortung. Larissa-Audits ebenfalls.
 
+11. **Pre-Squash-Checkliste — repo-weit, nicht nur ein Package** (lesson
+    learned 2026-05-19 Abend, beim Push nach Squash D). Heißt:
+    - `pnpm typecheck` an der Root, nicht `pnpm --filter <package>
+      typecheck`. Turbo's Cache kann sonst Stale-Pass-Ergebnisse für
+      Packages liefern, deren Tests von Interface-Änderungen in einem
+      anderen Package betroffen sind.
+    - `pnpm test` an der Root analog. Erst dann ist sicher dass nichts
+      in `packages/crypto/tests/` oder anderen Cross-Package-Stellen
+      durch eine Interface-Erweiterung bricht.
+    - `pnpm exec biome check .` (oder zumindest `pnpm exec biome check
+      apps packages`) — nicht nur das aktuelle Package.
+    - Wenn ein Interface in `packages/crypto/src/` erweitert wird (neue
+      Methode, neue Property), explizit grep'en in `tests/` und
+      `apps/*/src/`, ob Mock-Implementations zu aktualisieren sind.
+      Konkret im Squash D Fall: `ServerClient.passphraseChange{Start,
+      Finish}` wurde in Task 11 hinzugefügt, aber fünf Test-Mocks in
+      `packages/crypto/tests/` blieben unangepasst. Erst beim Push fiel
+      das auf, weil der lokale Pre-Squash-Check nur user-client typchekt
+      hatte. Repo-weit zu checken hätte das gefangen.
+
 ---
 
 ## Carry-forwards aus heute / Hygiene-Items
