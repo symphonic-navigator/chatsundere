@@ -6,6 +6,7 @@ import { toBase64Url } from '../encoding/base64url.js';
 import { opaqueLoginFinish, opaqueLoginStart } from '../opaque/client.js';
 import type { ServerClient } from '../server-client.js';
 import { type MasterKeySession, createMasterKeySession } from '../session.js';
+import type { MasterKey } from '../types.js';
 import { loginLocalWithPassphrase } from './login-local.js';
 
 export interface LoginOnlineLinkedArgs {
@@ -31,6 +32,12 @@ export type ServerOutcome =
 
 export interface LoginOnlineLinkedResult {
   session: MasterKeySession;
+  /**
+   * The raw master key unwrapped from the local passphrase. Returned so that
+   * callers can pass it to operations that require the raw key bytes (e.g.
+   * `regenerateRecoveryKey`). Never persisted; lives in memory only.
+   */
+  mk: MasterKey;
   /**
    * Discriminated outcome describing what happened on the server leg.
    * Use this to drive user-facing banners with the correct message.
@@ -103,6 +110,7 @@ export async function loginOnlineLinked(
         online: false,
         role: linked?.role,
       }),
+      mk,
       serverOutcome,
       serverReachable: serverOutcome.kind !== 'unreachable' && serverOutcome.kind !== 'auth_failed',
       serverAuthOk: serverOutcome.kind === 'ok',
@@ -126,6 +134,7 @@ export async function loginOnlineLinked(
       role,
       accessToken,
     }),
+    mk,
     serverOutcome: { kind: 'ok' },
     serverReachable: true,
     serverAuthOk: true,

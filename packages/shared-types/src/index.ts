@@ -53,3 +53,10 @@ export type {
   AdminAuditLogEntry,
   AdminAuditLogResponse,
 } from './admin.js';
+
+export type {
+  PassphraseChangeStartRequest,
+  PassphraseChangeStartResponse,
+  PassphraseChangeFinishRequest,
+  PassphraseChangeFinishResponse,
+} from './me.js';

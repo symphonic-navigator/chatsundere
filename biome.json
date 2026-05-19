@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["dist", "node_modules", "infra/postgres/init", "infra/data", "docs"]
+    "ignore": ["dist", "dev-dist", "node_modules", "infra/postgres/init", "infra/data", "docs"]
   },
   "formatter": {
     "enabled": true,

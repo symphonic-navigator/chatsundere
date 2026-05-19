@@ -1,10 +1,137 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
 @import "tailwindcss";
 
+/* Aurora is an intentionally sparse violet scale — only the steps below are in use. */
+@theme {
+  --color-aurora-50: #f7f5ff;
+  --color-aurora-200: #c9bfff;
+  --color-aurora-500: #8d6dff;
+  --color-aurora-700: #432db8;
+  --color-aurora-900: #160a3d;
+  --color-ink: #050210;
+  --color-ink-soft: #110a25;
+  --color-paper: #e8e6f5;
+  --color-paper-soft: #b9b4cf;
+  --color-success: #7be0b8;
+  --color-warning: #ffd06b;
+  --color-danger: #ff7a8a;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  --radius-pill: 9999px;
+  --radius-card: 18px;
+}
+
+/* Body default is monospace (Geist Mono); display headings override via --font-display. */
 :root {
-  font-family: "Instrument Serif", Georgia, serif;
+  font-family: var(--font-mono);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100dvh;
 }
 
 body {
-  background: #050210;
-  color: #e8e6f5;
+  background: radial-gradient(120% 80% at 50% 0%, var(--color-aurora-900) 0%, transparent 60%),
+    radial-gradient(80% 60% at 80% 110%, var(--color-aurora-700) 0%, transparent 55%),
+    var(--color-ink);
+  /* Pin the gradient to the viewport so longer content (onboarding cards on
+     mobile, wizard steps) does not cause the radial fields to tile or shift. */
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: var(--color-paper);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  font-weight: 400;
+}
+
+/* Top-level page headings centre-align with balanced wrapping. h2 and h3 stay
+   left-aligned by default since they appear inside cards and form sections. */
+h1 {
+  text-align: center;
+  text-wrap: balance;
+}
+
+@keyframes breathe {
+  from {
+    transform: translate(calc(var(--drift) * -1), 0) scale(0.95);
+    opacity: 0.32;
+  }
+  to {
+    transform: translate(var(--drift), -8px) scale(1.05);
+    opacity: 0.48;
+  }
+}
+
+/* Wizard step entrance — subtle upward fade, duration varied per-step via inline style */
+@keyframes wizard-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* One-shot badge pulse on connectivity state change — scale 1 → 1.02 → 1 */
+@keyframes badge-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Recovery key block fade-in */
+@keyframes recovery-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes wizard-step-in {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes badge-pulse {
+    from {
+      transform: none;
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes recovery-reveal {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }

@@ -13,6 +13,10 @@ import type {
   OpaqueLoginFinishResponse,
   OpaqueLoginStartRequest,
   OpaqueLoginStartResponse,
+  PassphraseChangeFinishRequest,
+  PassphraseChangeFinishResponse,
+  PassphraseChangeStartRequest,
+  PassphraseChangeStartResponse,
   RecoveryFinishRequest,
   RecoveryFinishResponse,
   RecoveryStartRequest,
@@ -50,4 +54,14 @@ export interface ServerClient {
   recoveryStart(req: RecoveryStartRequest, baseUrl: string): Promise<RecoveryStartResponse>;
   recoveryFinish(req: RecoveryFinishRequest, baseUrl: string): Promise<RecoveryFinishResponse>;
   deleteMe(baseUrl: string, accessToken: string): Promise<void>;
+  passphraseChangeStart(
+    req: PassphraseChangeStartRequest,
+    baseUrl: string,
+    accessToken: string,
+  ): Promise<PassphraseChangeStartResponse>;
+  passphraseChangeFinish(
+    req: PassphraseChangeFinishRequest,
+    baseUrl: string,
+    accessToken: string,
+  ): Promise<PassphraseChangeFinishResponse>;
 }
