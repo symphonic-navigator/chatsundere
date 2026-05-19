@@ -1,6 +1,6 @@
 # Chatsundere
 
-> Chat + Tsundere towards regulation & censorship, Deredere towards the user.
+> Chat + Tsuntsun towards regulation & censorship, Deredere towards the user.
 
 End-to-end-encrypted, local-first AI companion platform. The backend stores
 ciphertext only; it never sees user data, passphrases, or master keys. Users
