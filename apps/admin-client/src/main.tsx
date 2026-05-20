@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { attachConnectivityListeners } from '@chatsundere/ui-shared';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,6 +9,12 @@ import './index.css';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element #root not found');
+
+// Wire the connectivity store to window online/offline events. The pre-login
+// decision tree uses `navigator.onLine` directly, but downstream features
+// (top-bar status indicator, server-reachability dispatch from login) read
+// from the store.
+attachConnectivityListeners();
 
 createRoot(rootEl).render(
   <StrictMode>
