@@ -141,4 +141,31 @@ export const copy = {
       close: 'Close',
     },
   },
+  audit: {
+    title: 'Audit log',
+    filters: {
+      category: 'Category',
+      user: 'User ID',
+      from: 'From',
+      to: 'To',
+    },
+    categories: {
+      all: 'All categories',
+      auth: 'Auth',
+      'user-lifecycle': 'User lifecycle',
+      'invitation-lifecycle': 'Invitation lifecycle',
+      recovery: 'Recovery',
+      'admin-action': 'Admin action',
+    },
+    columns: {
+      timestamp: 'Timestamp',
+      eventType: 'Event',
+      actor: 'Actor',
+      subject: 'Subject',
+      metadata: 'Metadata',
+    },
+    expand: 'Expand',
+    collapse: 'Collapse',
+    empty: 'No matching events. Try a wider time range.',
+  },
 } as const;
