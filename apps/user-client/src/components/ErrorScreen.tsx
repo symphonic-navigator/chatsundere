@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { InlineMarker } from './InlineMarker.js';
+import { InlineMarker } from '@chatsundere/ui-shared';
 
 export interface ErrorScreenProps {
   title: string;

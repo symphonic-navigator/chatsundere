@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getLocalAccount } from '@chatsundere/crypto';
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../boot/open-db.js';
 import { useBootStore } from '../state/boot.store.js';
-import { useSessionStore } from '../state/session.store.js';
 
 export function Gate() {
   const navigate = useNavigate();

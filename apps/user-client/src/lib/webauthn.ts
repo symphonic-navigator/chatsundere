@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { PRF_INPUT_SALT } from '@chatsundere/crypto';
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { getDb } from '../boot/open-db.js';
-import { useSessionStore } from '../state/session.store.js';
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 

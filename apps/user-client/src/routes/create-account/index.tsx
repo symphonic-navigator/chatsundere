@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { CryptoError, createLocalAccount } from '@chatsundere/crypto';
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { copy } from '../../lib/copy.js';
-import { useSessionStore } from '../../state/session.store.js';
 import { StepPassphrase } from './step-passphrase.js';
 import { StepRecoveryReveal } from './step-recovery-reveal.js';
 import { StepUsername } from './step-username.js';

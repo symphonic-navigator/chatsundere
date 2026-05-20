@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { CryptoError } from '@chatsundere/crypto';
+import { motion } from '@chatsundere/ui-shared';
 import { type FormEvent, useMemo, useState } from 'react';
 import { copy } from '../../lib/copy.js';
-import { pickWithin, seedRandom } from '../../lib/motion.js';
 import { validateUsername } from '../../lib/validators.js';
 
 export interface StepUsernameProps {
@@ -18,8 +18,8 @@ export function StepUsername({ value, setValue, onNext }: StepUsernameProps) {
 
   // Per-step entrance timing — step 1 seed is 1.
   const animDuration = useMemo(() => {
-    const rng = seedRandom(1);
-    return Math.round(pickWithin(rng, 200, 280));
+    const rng = motion.seedRandom(1);
+    return Math.round(motion.pickWithin(rng, 200, 280));
   }, []);
 
   function handleSubmit(e: FormEvent) {

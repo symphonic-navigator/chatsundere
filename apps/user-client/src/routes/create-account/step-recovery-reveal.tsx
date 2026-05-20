@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { motion } from '@chatsundere/ui-shared';
 import { useMemo, useState } from 'react';
 import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
 import { copy } from '../../lib/copy.js';
-import { pickWithin, seedRandom } from '../../lib/motion.js';
 
 export interface StepRecoveryRevealProps {
   recoveryKey: string;
@@ -16,8 +16,8 @@ export function StepRecoveryReveal({ recoveryKey, onDone }: StepRecoveryRevealPr
 
   // Per-step entrance timing — step 3 seed is 3.
   const animDuration = useMemo(() => {
-    const rng = seedRandom(3);
-    return Math.round(pickWithin(rng, 200, 280));
+    const rng = motion.seedRandom(3);
+    return Math.round(motion.pickWithin(rng, 200, 280));
   }, []);
 
   return (

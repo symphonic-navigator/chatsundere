@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError, apiFetch, joinUrl } from '../../src/lib/fetch.js';
 
 // Mock the session store so tests do not depend on real Zustand state.
-vi.mock('../../src/state/session.store.js', () => ({
+vi.mock('@chatsundere/ui-shared', () => ({
   useSessionStore: {
     getState: vi.fn(() => ({
       session: { accessToken: 'test-access-token' },
@@ -15,7 +15,7 @@ vi.mock('../../src/state/session.store.js', () => ({
 }));
 
 // Import the mock after vi.mock so we can introspect it.
-const { useSessionStore } = await import('../../src/state/session.store.js');
+const { useSessionStore } = await import('@chatsundere/ui-shared');
 
 const BASE_URL = 'https://api.example.com';
 

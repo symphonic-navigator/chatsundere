@@ -7,15 +7,17 @@ import {
   getLinkedAccount,
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
+import {
+  ConfirmTyped,
+  InlineMarker,
+  useConnectivityStore,
+  useSessionStore,
+} from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
-import { ConfirmTyped } from '../../components/ConfirmTyped.js';
-import { InlineMarker } from '../../components/InlineMarker.js';
 import { copy } from '../../lib/copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
-import { useConnectivityStore } from '../../state/connectivity.store.js';
-import { useSessionStore } from '../../state/session.store.js';
 
 type LoadState =
   | { kind: 'loading' }

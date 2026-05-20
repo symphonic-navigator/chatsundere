@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
-import { pickWithin, seedRandom } from '../../src/lib/motion.js';
+import { pickWithin, seedRandom } from '../../src/components/motion.js';
 
 describe('seedRandom', () => {
   it('produces the same sequence when called twice with the same seed', () => {

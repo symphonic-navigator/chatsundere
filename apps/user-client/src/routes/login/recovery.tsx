@@ -10,6 +10,7 @@ import {
   recoveryOnline,
   regenerateRecoveryKey,
 } from '@chatsundere/crypto';
+import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as v from 'valibot';
@@ -21,8 +22,6 @@ import { env } from '../../env.js';
 import { copy } from '../../lib/copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { PassphrasePair, RecoveryKeyLike } from '../../lib/validators.js';
-import { useConnectivityStore } from '../../state/connectivity.store.js';
-import { useSessionStore } from '../../state/session.store.js';
 
 type RecoveryScope = 'local' | 'full';
 

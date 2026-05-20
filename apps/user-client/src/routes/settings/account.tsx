@@ -6,12 +6,11 @@ import {
   deleteLocalAccount,
   getLocalAccount,
 } from '@chatsundere/crypto';
+import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
-import { ConfirmTyped } from '../../components/ConfirmTyped.js';
 import { copy } from '../../lib/copy.js';
-import { useSessionStore } from '../../state/session.store.js';
 
 type LoadState =
   | { kind: 'loading' }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useSessionStore } from '../state/session.store.js';
+import { useSessionStore } from '@chatsundere/ui-shared';
 
 /**
  * Thrown by apiFetch when the server returns a non-2xx response. Network-level

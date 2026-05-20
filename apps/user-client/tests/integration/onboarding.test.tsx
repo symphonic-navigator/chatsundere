@@ -1,11 +1,11 @@
 import type { MasterKeySession } from '@chatsundere/crypto';
+import { useSessionStore } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/App.js';
 import { useBootStore } from '../../src/state/boot.store.js';
-import { useSessionStore } from '../../src/state/session.store.js';
 
 // vi.hoisted ensures the constant is available when the hoisted vi.mock factory runs.
 const { MOCK_RECOVERY_KEY } = vi.hoisted(() => ({

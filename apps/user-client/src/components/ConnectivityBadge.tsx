@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { type Connectivity, InlineMarker, useConnectivityStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
-import { type Connectivity, useConnectivityStore } from '../state/connectivity.store.js';
-import { InlineMarker } from './InlineMarker.js';
 
 type Tone = NonNullable<Parameters<typeof InlineMarker>[0]['tone']>;
 

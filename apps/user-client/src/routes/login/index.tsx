@@ -10,14 +10,13 @@ import {
   loginOnlineLinked,
   loginWithLocalBiometric,
 } from '@chatsundere/crypto';
+import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { copy } from '../../lib/copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
-import { useConnectivityStore } from '../../state/connectivity.store.js';
-import { useSessionStore } from '../../state/session.store.js';
 
 /**
  * Login screen.

@@ -15,6 +15,7 @@ import {
   opaqueRegistrationStart,
   toBase64Url,
 } from '@chatsundere/crypto';
+import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as v from 'valibot';
@@ -24,8 +25,6 @@ import { copy } from '../lib/copy.js';
 import { HttpError } from '../lib/fetch.js';
 import { httpServerClient } from '../lib/server-client.js';
 import { PassphrasePair } from '../lib/validators.js';
-import { useConnectivityStore } from '../state/connectivity.store.js';
-import { useSessionStore } from '../state/session.store.js';
 
 // ── Screen state ─────────────────────────────────────────────────────────────
 

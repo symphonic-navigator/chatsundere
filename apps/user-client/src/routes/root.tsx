@@ -1,3 +1,4 @@
+import { useSessionStore } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Link, Outlet } from 'react-router-dom';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
@@ -5,7 +6,6 @@ import { UpdateBanner } from '../components/UpdateBanner.js';
 import { GearIcon } from '../components/icons/index.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
-import { useSessionStore } from '../state/session.store.js';
 import { useStagingBannerStore } from '../state/staging-banner.store.js';
 
 /**

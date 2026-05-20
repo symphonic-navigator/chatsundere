@@ -7,15 +7,13 @@ import {
   listLocalBiometric,
   regenerateRecoveryKey,
 } from '@chatsundere/crypto';
+import { ConfirmTyped, InlineMarker, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { getDb } from '../../boot/open-db.js';
-import { ConfirmTyped } from '../../components/ConfirmTyped.js';
-import { InlineMarker } from '../../components/InlineMarker.js';
 import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
 import { copy } from '../../lib/copy.js';
 import { renamePasskey } from '../../lib/passkey-management.js';
 import { PrfRequiredError, registerLocalBiometric } from '../../lib/webauthn.js';
-import { useSessionStore } from '../../state/session.store.js';
 
 type LoadState =
   | { kind: 'loading' }

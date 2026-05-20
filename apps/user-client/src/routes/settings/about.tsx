@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { InlineMarker } from '../../components/InlineMarker.js';
+import { InlineMarker } from '@chatsundere/ui-shared';
 import { copy } from '../../lib/copy.js';
 import { APP_VERSION } from '../../version.js';
 

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { motion } from '@chatsundere/ui-shared';
 import { type FormEvent, useMemo, useState } from 'react';
 import * as v from 'valibot';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { copy } from '../../lib/copy.js';
-import { pickWithin, seedRandom } from '../../lib/motion.js';
 import { PassphrasePair } from '../../lib/validators.js';
 
 export interface StepPassphraseProps {
@@ -29,8 +29,8 @@ export function StepPassphrase({
 
   // Per-step entrance timing — step 2 seed is 2.
   const animDuration = useMemo(() => {
-    const rng = seedRandom(2);
-    return Math.round(pickWithin(rng, 200, 280));
+    const rng = motion.seedRandom(2);
+    return Math.round(motion.pickWithin(rng, 200, 280));
   }, []);
 
   function handleSubmit(e: FormEvent) {

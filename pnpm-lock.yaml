@@ -165,6 +165,9 @@ importers:
       '@chatsundere/shared-types':
         specifier: workspace:^
         version: link:../../packages/shared-types
+      '@chatsundere/ui-shared':
+        specifier: workspace:^
+        version: link:../../packages/ui-shared
       '@tanstack/react-query':
         specifier: ^5.59.0
         version: 5.100.10(react@18.3.1)

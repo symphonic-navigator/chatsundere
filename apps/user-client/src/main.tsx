@@ -1,3 +1,4 @@
+import { attachConnectivityListeners } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,7 +7,6 @@ import { openDb } from './boot/open-db.js';
 import { reconcileStaging } from './boot/reconcile-staging.js';
 import { checkRuntime } from './boot/runtime-check.js';
 import { useBootStore } from './state/boot.store.js';
-import { attachConnectivityListeners } from './state/connectivity.store.js';
 import './index.css';
 
 const rootEl = document.getElementById('root');

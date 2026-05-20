@@ -9,6 +9,7 @@ import {
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
 import type { RegistrationResponseJSON } from '@chatsundere/shared-types';
+import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
@@ -18,9 +19,7 @@ import { HttpError } from '../../lib/fetch.js';
 import type { InvitationQrPayload } from '../../lib/qr.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { PrfRequiredError } from '../../lib/webauthn.js';
-import { useConnectivityStore } from '../../state/connectivity.store.js';
 import { useLinkingStore } from '../../state/linking.store.js';
-import { useSessionStore } from '../../state/session.store.js';
 
 // ── Screen state ─────────────────────────────────────────────────────────────
 
