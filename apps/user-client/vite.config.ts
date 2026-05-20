@@ -61,7 +61,21 @@ export default defineConfig({
       },
     }),
   ],
-  server: { port: 3000, strictPort: true },
+  server: {
+    port: 3000,
+    strictPort: true,
+    // Dev-only same-origin shim: forward /admin/* to the admin-client dev
+    // server so the shared-IndexedDB design (spec §6.1.1) works without a
+    // reverse proxy in development. In production Traefik does this; here
+    // Vite's proxy stands in for it.
+    proxy: {
+      '/admin': {
+        target: 'http://localhost:5174',
+        changeOrigin: false,
+        ws: true,
+      },
+    },
+  },
   optimizeDeps: { exclude: ['qr-scanner/qr-scanner-worker.min.js'] },
   test: {
     environment: 'jsdom',
