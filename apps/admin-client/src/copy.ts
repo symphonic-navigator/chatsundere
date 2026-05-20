@@ -93,6 +93,7 @@ export const copy = {
       transferPrimary: 'Transfer primary admin',
       delete: 'Delete user',
     },
+    changeRoleNotYetAvailable: 'Coming in a later release.',
     selfTargetTooltip: 'You cannot perform this action on your own account.',
     primaryOnlyTooltip: 'Only the primary admin can perform this action.',
     transferOnlyAdminTooltip: 'Can only transfer to a user with the admin role.',

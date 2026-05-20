@@ -22,6 +22,11 @@ export function UserActions({ user, onDeleted }: Props) {
   // across all four action buttons. These are defence-in-depth (H5): the server
   // enforces the same rules authoritatively.
   const sessionLike = { userId: session?.userId ?? null };
+  // Defensive default: if a session reaches this component without a `role`
+  // (e.g. an in-flight refresh between login and `/me`), treat it as `user`.
+  // The route guard upstream ensures only admin/primary_admin sessions render
+  // this UI in practice; this cast tightens the type for downstream uses.
+  // See Larissa Squash C audit, finding S4.
   const sessionRole: Role = (session?.role ?? 'user') as Role;
   const isSelf = isSelfTarget(sessionLike, user.id);
   const sessionIsPrimary = isPrimaryAdmin(sessionRole);
@@ -60,24 +65,41 @@ export function UserActions({ user, onDeleted }: Props) {
           label={copy.userDetail.actions.suspend}
           disabled={isSelf || suspend.isPending}
           tooltip={selfTooltip}
-          onClick={() => suspend.mutate()}
+          onClick={() => {
+            // Defence-in-depth: re-check at click time even though disabled.
+            // See Larissa Squash C audit, finding D2.
+            if (isSelf || suspend.isPending) return;
+            suspend.mutate();
+          }}
         />
       ) : (
         <ActionButton
           label={copy.userDetail.actions.unsuspend}
+          // Gating unsuspend with isSelf is deliberately symmetric to suspend.
+          // The server enforces self-protection (audit H5); we keep the client
+          // mirror strict for consistency rather than risk a UX where suspend
+          // is blocked but unsuspend is not. See Larissa Squash C audit, S3.
           disabled={isSelf || unsuspend.isPending}
           tooltip={selfTooltip}
-          onClick={() => unsuspend.mutate()}
+          onClick={() => {
+            if (isSelf || unsuspend.isPending) return;
+            unsuspend.mutate();
+          }}
         />
       )}
 
       <ActionButton
         label={copy.userDetail.actions.changeRole}
-        disabled={isSelf || !sessionIsPrimary}
-        tooltip={selfTooltip ?? primaryOnlyTooltip}
+        disabled={true}
+        tooltip={copy.userDetail.changeRoleNotYetAvailable}
         onClick={() => {
-          // Role-change form lives inline in this panel in a later iteration;
-          // server-side enforcement protects against unauthorised calls.
+          // Intentional: this button is a UX placeholder until the inline role-
+          // change form lands in a later squash. When that handler is wired,
+          // the implementer MUST preserve the original gating expression:
+          //   disabled={isSelf || !sessionIsPrimary || changeRole.isPending}
+          // and call api.changeRole(user.id, newRole) only after asserting
+          // !isSelfTarget(...). See Larissa Squash C audit, finding S1.
+          console.warn('changeRole button clicked before handler is implemented');
         }}
       />
 
@@ -89,7 +111,11 @@ export function UserActions({ user, onDeleted }: Props) {
           primaryOnlyTooltip ??
           (user.role !== 'admin' ? copy.userDetail.transferOnlyAdminTooltip : undefined)
         }
-        onClick={() => transfer.mutate()}
+        onClick={() => {
+          // Defence-in-depth: re-check all gating conditions.
+          if (isSelf || !sessionIsPrimary || user.role !== 'admin' || transfer.isPending) return;
+          transfer.mutate();
+        }}
       />
 
       <ActionButton
@@ -97,11 +123,18 @@ export function UserActions({ user, onDeleted }: Props) {
         disabled={isSelf || del.isPending}
         tooltip={selfTooltip}
         destructive
-        onClick={() => setConfirmDeleteOpen(true)}
+        onClick={() => {
+          // Defence-in-depth: do not open the confirm dialog at all for self.
+          if (isSelf || del.isPending) return;
+          setConfirmDeleteOpen(true);
+        }}
       />
 
       <ConfirmTyped
-        open={confirmDeleteOpen}
+        // Re-evaluate isSelf on every render: if the session changes while the
+        // dialog is open, the dialog closes itself by becoming open=false.
+        // See Larissa Squash C audit, finding D1.
+        open={confirmDeleteOpen && !isSelf}
         title={copy.userDetail.deleteConfirm.title}
         body={copy.userDetail.deleteConfirm.body}
         confirmToken={user.username}
@@ -110,7 +143,15 @@ export function UserActions({ user, onDeleted }: Props) {
         cancelCta={copy.userDetail.deleteConfirm.cancelCta}
         busy={del.isPending}
         onCancel={() => setConfirmDeleteOpen(false)}
-        onConfirm={() => del.mutate()}
+        onConfirm={() => {
+          // D1 + D3: re-check both isSelf and the pending state at the moment
+          // of confirmation, in case state has shifted since dialog open.
+          if (isSelf || del.isPending) {
+            setConfirmDeleteOpen(false);
+            return;
+          }
+          del.mutate();
+        }}
       />
     </div>
   );

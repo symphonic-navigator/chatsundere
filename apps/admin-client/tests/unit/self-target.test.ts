@@ -14,6 +14,18 @@ describe('isSelfTarget', () => {
   it('returns false when session has no userId', () => {
     expect(isSelfTarget({ userId: null }, 'u-1')).toBe(false);
   });
+
+  it('returns false when session userId is the empty string', () => {
+    expect(isSelfTarget({ userId: '' }, 'u-1')).toBe(false);
+  });
+
+  it('returns false when target userId is the empty string', () => {
+    expect(isSelfTarget({ userId: 'u-1' }, '')).toBe(false);
+  });
+
+  it('returns false when both sides are empty strings', () => {
+    expect(isSelfTarget({ userId: '' }, '')).toBe(false);
+  });
 });
 
 describe('isPrimaryAdmin', () => {
