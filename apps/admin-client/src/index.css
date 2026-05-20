@@ -1,11 +1,40 @@
 @import "tailwindcss";
 
+@theme {
+  /* Catppuccin Mocha (dark, default) */
+  --color-base: #1e1e2e;
+  --color-mantle: #181825;
+  --color-crust: #11111b;
+  --color-text: #cdd6f4;
+  --color-subtext-0: #a6adc8;
+  --color-overlay-0: #6c7086;
+  --color-mauve: #cba6f7;
+  --color-red: #f38ba8;
+  --color-green: #a6e3a1;
+  --color-yellow: #f9e2af;
+}
+
+@media (prefers-color-scheme: light) {
+  @theme {
+    /* Catppuccin Latte */
+    --color-base: #eff1f5;
+    --color-mantle: #e6e9ef;
+    --color-crust: #dce0e8;
+    --color-text: #4c4f69;
+    --color-subtext-0: #6c6f85;
+    --color-overlay-0: #9ca0b0;
+    --color-mauve: #8839ef;
+    --color-red: #d20f39;
+    --color-green: #40a02b;
+    --color-yellow: #df8e1d;
+  }
+}
+
 :root {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
-  /* Catppuccin Mocha — base + text */
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: var(--color-base);
+  color: var(--color-text);
 }
