@@ -70,7 +70,7 @@ Small items that don't fit elsewhere.
 
 | Item | Trigger | Notes |
 |---|---|---|
-| `.envrc` per-subdirectory split (currently single root .envrc collides PORT keys) | Before Squash C admin-client lands | Discovered 2026-05-19 during Squash D QA setup |
+| ~~`.envrc` per-subdirectory split (currently single root .envrc collides PORT keys)~~ | Resolved differently — see "Resolved" | — |
 | Operator-side admin-client invitation creation UI | Squash C (admin-client) | New scope item added during 2026-05-19 |
 | Operator-side invitations list with revoke | Squash C (admin-client) | New scope item added during 2026-05-19 |
 | Vite-PWA `dev-dist` already in biome ignore (2026-05-19) | — | Done; example of how a resolved entry looks |
@@ -94,3 +94,4 @@ landed" — not garbage to be cleaned.
 | ~~Regenerate-recovery-key button silent disabled on biometric session~~ | Inline hint added below button explaining the limitation | 2026-05-19 |
 | ~~Decision: passkey UV-relaxation Q1–Q4~~ | All four decided; awaiting Lyra formal brief + ADR | 2026-05-19 |
 | ~~Decision: cross-device identity Q1–Q6 plus merge strategy~~ | All decided; awaiting Lyra formal brief | 2026-05-19 |
+| ~~`.envrc` global PORT/DATABASE_URL collision (proxy-service overrode auth-service)~~ | Removed app-level `dotenv_if_exists` from root `.envrc`. Each runtime (Vite for frontends, Bun for backends) auto-loads its own `apps/<app>/.env` from cwd. Subdirectory `.envrc` files unnecessary. Discovered 2026-05-20 during Squash C QA when DATABASE_URL pointed to `proxy_db` for auth-service bootstrap. | 2026-05-20 |
