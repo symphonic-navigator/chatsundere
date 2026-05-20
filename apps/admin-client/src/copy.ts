@@ -141,6 +141,12 @@ export const copy = {
       close: 'Close',
     },
   },
+  nav: {
+    dashboard: 'Dashboard',
+    users: 'Users',
+    invitations: 'Invitations',
+    audit: 'Audit',
+  },
   audit: {
     title: 'Audit log',
     filters: {
