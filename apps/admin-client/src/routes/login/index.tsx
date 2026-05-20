@@ -92,13 +92,20 @@ export function LoginScreen() {
                 break;
               case 'unreachable':
                 useConnectivityStore.getState().onServerUnreachable();
-                break;
+                setErrorKey('serverUnreachable');
+                return;
               case 'auth_failed':
                 useConnectivityStore.getState().onServerAuthFailed();
-                break;
+                setErrorKey('authFailed');
+                return;
               case 'skipped':
-                break;
+                // Spec §6.2 step 3 already blocks unlinked accounts pre-login,
+                // so this should not occur in practice; surface it generically.
+                setErrorKey('genericError');
+                return;
             }
+            // Only reach here on serverOutcome.kind === 'ok'. The session now
+            // has a real accessToken and the server-verified role.
             const role = session.role ?? 'user';
             if (classifyPostLogin(role) === 'admin_ok') {
               navigate('/dashboard', { replace: true });
