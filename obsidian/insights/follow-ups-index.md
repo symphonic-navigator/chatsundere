@@ -76,6 +76,8 @@ Small items that don't fit elsewhere.
 | Operator-side admin-client invitation creation UI | Squash C (admin-client) | New scope item added during 2026-05-19 |
 | Operator-side invitations list with revoke | Squash C (admin-client) | New scope item added during 2026-05-19 |
 | Vite-PWA `dev-dist` already in biome ignore (2026-05-19) | — | Done; example of how a resolved entry looks |
+| `full-lifecycle.test.ts` truncates production `auth_db` (no test-DB override, no transaction rollback) | Before next dev cycle that runs the test more than once | Discovered 2026-05-20 during Squash C Manual QA: Chris's primary_admin user wiped by repeated `pnpm test` against the live DB, cascading into login failures. See [[2026-05-20-test-isolation-leak-full-lifecycle]]. |
+| `session.mk` disappears after disconnect-without-logout in user-client; re-link bails silently with `ce.unknown` | Before v0.1.0 — currently masked by logout+login workaround | Discovered 2026-05-20 during Squash C Manual QA. Workaround: sign out before re-linking. Root cause not yet found; suspect a store-overwriting code path between disconnect and the linking screen. See [[2026-05-20-mk-lost-after-disconnect]]. Reinforces the existing "Raw MK in login-flow returns" follow-up. |
 
 ---
 

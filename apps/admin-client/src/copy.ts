@@ -97,6 +97,8 @@ export const copy = {
     selfTargetTooltip: 'You cannot perform this action on your own account.',
     primaryOnlyTooltip: 'Only the primary admin can perform this action.',
     transferOnlyAdminTooltip: 'Can only transfer to a user with the admin role.',
+    lastPrimaryAdminTooltip:
+      'This is the only primary admin. Transfer the role to another admin first.',
     deleteConfirm: {
       title: 'Delete this user?',
       body: 'This action is irreversible. The user loses access immediately and their server-side record is removed. To confirm, type the username below exactly.',

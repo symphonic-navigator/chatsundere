@@ -65,7 +65,11 @@ export class MockAdminApi implements AdminApi {
   async getUser(id: string): Promise<UserDetail> {
     const u = this.users.find((x) => x.id === id);
     if (!u) throw new Error('user not found');
-    return structuredClone(u);
+    const primaryCount = this.users.filter((x) => x.role === 'primary_admin').length;
+    return {
+      ...structuredClone(u),
+      is_last_primary_admin: u.role === 'primary_admin' && primaryCount === 1,
+    };
   }
 
   private categoryFor(event_type: string): AuditEvent['category'] {

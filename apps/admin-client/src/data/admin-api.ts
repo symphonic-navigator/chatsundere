@@ -25,6 +25,17 @@ export interface UserSummary {
 
 export interface UserDetail extends UserSummary {
   auth_methods: AuthMethodSummary[];
+  /**
+   * True when this user is the only `primary_admin` on the server. The UI
+   * disables demote / delete for the last primary admin so the operator is
+   * forced to call `transferPrimary` first — losing the only primary admin
+   * leaves the server unmanageable.
+   *
+   * Optional for forward-compatibility with older servers that do not yet
+   * compute the flag; an absent value is treated as `false` (i.e. no extra
+   * gating). The mock + hybrid composer compute it locally for dev QA.
+   */
+  is_last_primary_admin?: boolean;
 }
 
 export type InvitationStatus = 'pending' | 'redeemed' | 'expired' | 'revoked';

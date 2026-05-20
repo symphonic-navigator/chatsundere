@@ -73,27 +73,21 @@ export function ServerLinking() {
 
   async function handleDisconnect() {
     const session = useSessionStore.getState().session;
-    if (!session?.accessToken) {
-      // If we cannot reach the server we still delete the local linked_account row.
-      // deleteServerAccount will call the server but we swallow the network error and
-      // clear local state regardless.
-    }
     setDisconnectBusy(true);
     try {
+      // `deleteServerAccount` removes the local row even when the server leg
+      // fails, so we collapse both branches to the same UI update.
       await deleteServerAccount({
         db: getDb(),
         serverClient: httpServerClient,
         accessToken: session?.accessToken ?? '',
       });
       useConnectivityStore.getState().setState({ kind: 'local_online' });
-      setDisconnectOpen(false);
-      setLoadState({ kind: 'not_linked' });
     } catch {
-      // Server call may fail when disconnected; local row is still removed above
-      // in the crypto flow. Reflect the change anyway.
+      // Server leg failed; local row is still gone (finally-block in flow).
+    } finally {
       setDisconnectOpen(false);
       setLoadState({ kind: 'not_linked' });
-    } finally {
       setDisconnectBusy(false);
     }
   }

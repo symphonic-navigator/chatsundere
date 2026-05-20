@@ -30,6 +30,11 @@ export function UserActions({ user, onDeleted }: Props) {
   const sessionRole: Role = (session?.role ?? 'user') as Role;
   const isSelf = isSelfTarget(sessionLike, user.id);
   const sessionIsPrimary = isPrimaryAdmin(sessionRole);
+  // True when this user is the only primary admin on the server. Delete
+  // (and a future role-demotion) must be disabled — losing the only primary
+  // admin leaves the server unmanageable. The operator has to call
+  // `transferPrimary` first. Server-enforced; this is the client mirror.
+  const isLastPrimary = user.is_last_primary_admin === true;
 
   const suspend = useMutation({
     mutationFn: () => api.suspendUser(user.id),
@@ -57,6 +62,7 @@ export function UserActions({ user, onDeleted }: Props) {
 
   const selfTooltip = isSelf ? copy.userDetail.selfTargetTooltip : undefined;
   const primaryOnlyTooltip = sessionIsPrimary ? undefined : copy.userDetail.primaryOnlyTooltip;
+  const lastPrimaryTooltip = isLastPrimary ? copy.userDetail.lastPrimaryAdminTooltip : undefined;
 
   return (
     <div className="space-y-2">
@@ -95,10 +101,12 @@ export function UserActions({ user, onDeleted }: Props) {
         onClick={() => {
           // Intentional: this button is a UX placeholder until the inline role-
           // change form lands in a later squash. When that handler is wired,
-          // the implementer MUST preserve the original gating expression:
-          //   disabled={isSelf || !sessionIsPrimary || changeRole.isPending}
+          // the implementer MUST preserve the original gating expression and
+          // include `isLastPrimary` to forbid demoting the last primary admin:
+          //   disabled={isSelf || isLastPrimary || !sessionIsPrimary || changeRole.isPending}
           // and call api.changeRole(user.id, newRole) only after asserting
-          // !isSelfTarget(...). See Larissa Squash C audit, finding S1.
+          // !isSelfTarget(...) and !isLastPrimary. See Larissa Squash C audit,
+          // finding S1.
           console.warn('changeRole button clicked before handler is implemented');
         }}
       />
@@ -120,21 +128,22 @@ export function UserActions({ user, onDeleted }: Props) {
 
       <ActionButton
         label={copy.userDetail.actions.delete}
-        disabled={isSelf || del.isPending}
-        tooltip={selfTooltip}
+        disabled={isSelf || isLastPrimary || del.isPending}
+        tooltip={selfTooltip ?? lastPrimaryTooltip}
         destructive
         onClick={() => {
-          // Defence-in-depth: do not open the confirm dialog at all for self.
-          if (isSelf || del.isPending) return;
+          // Defence-in-depth: do not open the confirm dialog at all for self
+          // or for the last primary admin. Server enforces the same rules.
+          if (isSelf || isLastPrimary || del.isPending) return;
           setConfirmDeleteOpen(true);
         }}
       />
 
       <ConfirmTyped
-        // Re-evaluate isSelf on every render: if the session changes while the
-        // dialog is open, the dialog closes itself by becoming open=false.
-        // See Larissa Squash C audit, finding D1.
-        open={confirmDeleteOpen && !isSelf}
+        // Re-evaluate gating predicates on every render: if the session or the
+        // last-primary state changes while the dialog is open, it closes itself
+        // by becoming open=false. See Larissa Squash C audit, finding D1.
+        open={confirmDeleteOpen && !isSelf && !isLastPrimary}
         title={copy.userDetail.deleteConfirm.title}
         body={copy.userDetail.deleteConfirm.body}
         confirmToken={user.username}
@@ -144,9 +153,9 @@ export function UserActions({ user, onDeleted }: Props) {
         busy={del.isPending}
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={() => {
-          // D1 + D3: re-check both isSelf and the pending state at the moment
-          // of confirmation, in case state has shifted since dialog open.
-          if (isSelf || del.isPending) {
+          // D1 + D3: re-check all gating predicates and the pending state at
+          // the moment of confirmation, in case state has shifted since open.
+          if (isSelf || isLastPrimary || del.isPending) {
             setConfirmDeleteOpen(false);
             return;
           }
