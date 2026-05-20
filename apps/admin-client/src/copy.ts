@@ -46,4 +46,15 @@ export const copy = {
       passkeyCancelled: '',
     },
   } as const,
+  dashboard: {
+    title: 'Dashboard',
+    cards: {
+      totalUsers: 'Total users',
+      pendingInvitations: 'Pending invitations',
+      suspendedUsers: 'Suspended users',
+    },
+    recentActivity: 'Recent activity',
+    noActivity: 'No recent activity.',
+    viewUsers: 'View users',
+  },
 } as const;
