@@ -1,5 +1,5 @@
 import type { MasterKeySession } from '@chatsundere/crypto';
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: LGPL-3.0-only
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '../../src/state/session.store.js';
 

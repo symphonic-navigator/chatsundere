@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: LGPL-3.0-only
 import type { ReactNode } from 'react';
 
 export interface InlineMarkerProps {

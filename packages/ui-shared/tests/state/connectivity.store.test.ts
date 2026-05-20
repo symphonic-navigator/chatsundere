@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: LGPL-3.0-only
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useConnectivityStore } from '../../src/state/connectivity.store.js';
 
