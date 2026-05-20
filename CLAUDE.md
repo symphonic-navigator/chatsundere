@@ -91,6 +91,7 @@ chatsundere/
 │   ├── specs/             Design specs (this file's spec lives here)
 │   └── plans/             Implementation plans
 └── obsidian/
+    ├── STATUS.md          Single-point orientation (read first, update last)
     ├── briefs/            Lyra design briefs
     ├── decisions/         ADRs
     └── insights/          Liz's project journal
@@ -107,6 +108,7 @@ Three documentation directories with deliberately separate audiences:
   - `superpowers/specs/` — design specs (this file was implemented from one).
   - `superpowers/plans/` — implementation plans tied to a spec.
 - **`obsidian/`** — the vault. Audience: me, Lyra, and Chris over time. Also the home for *all* longer-form Markdown documentation — anything that would have lived in `docs/` under the brief's original assumption (architecture, onboarding, deployment, releases). Linkable from the public site if and when we choose to surface a given file.
+  - `obsidian/STATUS.md` — single-point orientation: what's done, what's briefed-but-unimplemented, what we agreed to do next. See §16.
   - `obsidian/ARCHITECTURE.md`, `obsidian/ONBOARDING.md` (and future `DEPLOYMENT.md`, `RELEASE-PROCESS.md`, `SYNC.md`, `PROXY.md`) — top-level Markdown documentation.
   - `obsidian/briefs/` — Lyra design briefs (peer-reviewed by Chris before landing here).
   - `obsidian/decisions/` — ADRs, sequentially numbered, Michael Nygard style.
@@ -255,3 +257,17 @@ Load these when their topic comes up. Do not preload.
 | Brief hygiene for Lyra | `obsidian/briefs/README.md` |
 | Spec for this file | `superpowers/specs/2026-05-18-claude-md-design.md` |
 | Prior wisdom (read-only reference) | `~/workspace/chatsune/INSIGHTS.md`, `PRE-BRANCHING.md`, `CLAUDE.md` |
+
+---
+
+## 16. Session Lifecycle — STATUS.md Protocol
+
+`obsidian/STATUS.md` is the single point of orientation across sessions. It carries three things: what is done, what is briefed-but-not-yet-implemented, and what we agreed to do next. Anything more detailed lives in [`follow-ups-index.md`](obsidian/insights/follow-ups-index.md), ADRs, briefs, or git history.
+
+**Start of every session:** read `STATUS.md` before anything else. Synthesise it in two sentences to Chris so we both agree on where we are before we touch a file. If the synthesis surprises Chris, the file is stale — pause and update it before continuing.
+
+**End of every session:** update `STATUS.md` to reflect what changed. Move items between the "Done", "Briefed", and "Doing now" sections. Refresh the "Next session" block. Update the `Last updated:` line. Commit the change alongside or just after the squash it summarises.
+
+**Stale-detection rule:** if a session adds or removes work that the file doesn't reflect, stop and update it — even mid-session. A stale `STATUS.md` is worse than no file; it lies confidently.
+
+Discipline is mine, not Chris's. There is no git hook fallback.
