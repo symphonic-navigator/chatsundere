@@ -8,3 +8,4 @@ export type { ConfirmTypedProps } from './components/ConfirmTyped.js';
 export { InlineMarker } from './components/InlineMarker.js';
 export type { InlineMarkerProps } from './components/InlineMarker.js';
 export * as motion from './components/motion.js';
+export * from './login/index.js';
