@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpError, apiFetch } from '../../src/lib/fetch.js';
+import { HttpError, apiFetch, joinUrl } from '../../src/lib/fetch.js';
 
 // Mock the session store so tests do not depend on real Zustand state.
 vi.mock('../../src/state/session.store.js', () => ({
@@ -135,6 +135,72 @@ describe('apiFetch — 401 with bearer auth', () => {
     ).rejects.toBeInstanceOf(HttpError);
 
     expect(closeAndForget).toHaveBeenCalled();
+  });
+});
+
+describe('joinUrl', () => {
+  it('joins a host-only baseUrl with an absolute path', () => {
+    expect(joinUrl('https://api.example.com', '/auth/v1/foo')).toBe(
+      'https://api.example.com/auth/v1/foo',
+    );
+  });
+
+  it('strips a trailing slash from baseUrl before joining', () => {
+    expect(joinUrl('https://api.example.com/', '/auth/v1/foo')).toBe(
+      'https://api.example.com/auth/v1/foo',
+    );
+  });
+
+  it('preserves a path prefix in baseUrl', () => {
+    expect(joinUrl('https://example.com/chatsundere', '/auth/v1/foo')).toBe(
+      'https://example.com/chatsundere/auth/v1/foo',
+    );
+  });
+
+  it('preserves a path prefix in baseUrl with a trailing slash', () => {
+    expect(joinUrl('https://example.com/chatsundere/', '/auth/v1/foo')).toBe(
+      'https://example.com/chatsundere/auth/v1/foo',
+    );
+  });
+
+  it('treats a relative path as absolute by prepending /', () => {
+    expect(joinUrl('https://example.com/chatsundere', 'auth/v1/foo')).toBe(
+      'https://example.com/chatsundere/auth/v1/foo',
+    );
+  });
+});
+
+describe('apiFetch — path-prefixed baseUrl', () => {
+  it('sends the request to baseUrl + path, preserving the prefix', async () => {
+    const spy = makeFetchSpy();
+    spy.mockResolvedValueOnce(makeJsonResponse({ ok: true }, 200));
+
+    await apiFetch({
+      baseUrl: 'https://example.com/chatsundere',
+      path: '/auth/v1/ping',
+    });
+
+    expect(spy.mock.calls[0]?.[0]).toBe('https://example.com/chatsundere/auth/v1/ping');
+  });
+
+  it('uses the prefixed baseUrl for the token refresh endpoint on 401', async () => {
+    const spy = makeFetchSpy();
+    // original → 401
+    spy.mockResolvedValueOnce(makeJsonResponse({ error: { code: 'token_expired' } }, 401));
+    // refresh → 200
+    spy.mockResolvedValueOnce(
+      makeJsonResponse({ access_token: 'new-token', expires_in: 3600 }, 200),
+    );
+    // retry → 200
+    spy.mockResolvedValueOnce(makeJsonResponse({ ok: true }, 200));
+
+    await apiFetch({
+      baseUrl: 'https://example.com/chatsundere',
+      path: '/auth/v1/secure',
+      authMode: 'bearer',
+    });
+
+    expect(spy.mock.calls[1]?.[0]).toBe('https://example.com/chatsundere/auth/v1/token/refresh');
   });
 });
 

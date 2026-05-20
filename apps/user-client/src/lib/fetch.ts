@@ -27,7 +27,7 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
 }
 
 export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
-  const url = new URL(opts.path, opts.baseUrl).toString();
+  const url = joinUrl(opts.baseUrl, opts.path);
   const init = buildInit(opts);
   let res = await fetch(url, init);
   if (res.status === 401 && opts.authMode === 'bearer') {
@@ -43,6 +43,22 @@ export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/**
+ * Concatenate a server `baseUrl` with an API `path` so that a baseUrl-embedded
+ * path prefix is preserved.
+ *
+ * The `new URL(path, base)` constructor treats an absolute `path` (one starting
+ * with `/`) as a replacement of base's path — so `new URL('/auth', 'https://x/api')`
+ * yields `https://x/auth`, silently dropping the `/api` prefix. Path-routed
+ * deployments (e.g. a server reached at `https://example.com/chatsundere`) need
+ * the prefix kept, so we concatenate explicitly and normalise the seam.
+ */
+export function joinUrl(baseUrl: string, path: string): string {
+  const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const rel = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${rel}`;
 }
 
 function buildInit(opts: ApiFetchOptions): RequestInit {
@@ -62,7 +78,7 @@ function buildInit(opts: ApiFetchOptions): RequestInit {
 
 async function tryRefresh(baseUrl: string): Promise<boolean> {
   try {
-    const url = new URL('/auth/v1/token/refresh', baseUrl).toString();
+    const url = joinUrl(baseUrl, '/auth/v1/token/refresh');
     const res = await fetch(url, { method: 'POST', credentials: 'include' });
     if (!res.ok) {
       // Per 2026-05-18 refresh-reuse deferral: when the server returns

@@ -168,6 +168,10 @@ export function ChangePassphrase() {
         const capturedPassphrase = newPassphrase;
         const baseUrl = linked.base_url;
         const username = local?.username ?? '';
+        // OPAQUE server-identity: an identity string for the OPAQUE handshake,
+        // not a URL — both sides only need to agree on the same byte sequence,
+        // so plain concatenation is correct here. Keep separate from joinUrl
+        // (lib/fetch.ts), which is for actual HTTP request URLs.
         const serverIdentity = `${baseUrl}/auth/v1`;
         const accessToken = session.accessToken ?? '';
         // session.mk is narrowed to MasterKey by the guard above; capture into
