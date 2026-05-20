@@ -49,6 +49,10 @@ async function registerUser(
     password: opts.password,
     clientRegistrationState,
     registrationResponse: startBody.registration_response,
+    identifiers: {
+      client: opts.username,
+      server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+    },
   });
 
   const zero32 = Buffer.alloc(32).toString('base64url');

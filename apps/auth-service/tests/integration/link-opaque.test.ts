@@ -86,6 +86,10 @@ describe.skipIf(skip)('OPAQUE linking round-trip', () => {
       password,
       clientRegistrationState,
       registrationResponse: startBody.registration_response,
+      identifiers: {
+        client: username,
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
     });
 
     // Dummy wrapping blobs (32 zero bytes each, base64url-encoded).
@@ -171,17 +175,22 @@ describe.skipIf(skip)('OPAQUE linking round-trip', () => {
       registration_response: string;
     };
 
-    const { registrationRecord } = opaqueClient.finishRegistration({
-      password,
-      clientRegistrationState,
-      registrationResponse: startBody.registration_response,
-    });
-
-    const zero32 = Buffer.alloc(32).toString('base64url');
     // Use the same username as the first test user — should conflict.
     const existingUsername = (
       await db.select({ username: users.username }).from(users).where(eq(users.id, userId))
     )[0]?.username;
+
+    const { registrationRecord } = opaqueClient.finishRegistration({
+      password,
+      clientRegistrationState,
+      registrationResponse: startBody.registration_response,
+      identifiers: {
+        client: existingUsername ?? 'unknown',
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
+    });
+
+    const zero32 = Buffer.alloc(32).toString('base64url');
 
     const finishRes = await app.request('/v1/link/opaque/finish', {
       method: 'POST',

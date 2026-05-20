@@ -127,6 +127,10 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       password: originalPassword,
       clientRegistrationState,
       registrationResponse: startBody.registration_response,
+      identifiers: {
+        client: username,
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
     });
 
     const finishRes = await app.request('/v1/link/opaque/finish', {
@@ -233,6 +237,10 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       password: newPassword,
       clientRegistrationState,
       registrationResponse: startBody.registration_response,
+      identifiers: {
+        client: username,
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
     });
 
     // Phase 3: build a valid HMAC proof using the same verifier key we stored.

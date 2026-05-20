@@ -59,6 +59,10 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
       password,
       clientRegistrationState,
       registrationResponse: startBody.registration_response,
+      identifiers: {
+        client: username,
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
     });
 
     const zero32 = Buffer.alloc(32).toString('base64url');
@@ -123,6 +127,10 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
       clientLoginState,
       loginResponse: loginStartBody.login_response,
       password,
+      identifiers: {
+        client: username,
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
     });
     if (!finishResult) throw new Error('Client finishLogin returned undefined');
     const { finishLoginRequest } = finishResult;
@@ -213,6 +221,10 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
       clientLoginState,
       loginResponse: startBody.login_response,
       password: wrongPassword,
+      identifiers: {
+        client: username,
+        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      },
     });
 
     // If the client returns undefined the finish_login_request is bogus — the server rejects it.

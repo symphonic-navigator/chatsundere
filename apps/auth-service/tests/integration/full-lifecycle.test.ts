@@ -81,6 +81,10 @@ async function registerViaOpaque(
     password: opts.password,
     clientRegistrationState,
     registrationResponse: startBody.registration_response,
+    identifiers: {
+      client: opts.username,
+      server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+    },
   });
 
   const zero32 = Buffer.alloc(32).toString('base64url');
@@ -148,6 +152,10 @@ async function loginViaOpaque(
     clientLoginState,
     loginResponse: startBody.login_response,
     password: opts.password,
+    identifiers: {
+      client: opts.username,
+      server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+    },
   });
   if (!finishResult)
     throw new Error('opaqueClient.finishLogin returned undefined (wrong password?)');
