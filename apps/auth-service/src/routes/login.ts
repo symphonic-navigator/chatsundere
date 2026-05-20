@@ -8,6 +8,7 @@ import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
 import { createDb } from '../db/client.js';
 import { authMethods, users } from '../db/schema.js';
+import { loadEnv } from '../env.js';
 import { issueTokens, refreshCookieFor } from '../jwt/issue.js';
 import { metrics } from '../metrics.js';
 import { ApiError } from '../middleware/error-envelope.js';
@@ -102,13 +103,22 @@ export function registerLoginRoutes(app: Hono): void {
 
     const userIdentifier = row?.opaqueUserIdentifier ?? `fake:${body.username}`;
 
+    // Identifiers must match the values the client baked into the registration
+    // record at link time (see packages/crypto/src/opaque/client.ts:62-65):
+    //   client = username
+    //   server = `${baseUrl}/auth/v1`
+    // With API_BASE_URL=`<host>/auth`, `${API_BASE_URL}/v1` resolves to the
+    // identical string. Spec §3 anti-replay binding.
+    const env = loadEnv();
     const { serverLoginState, loginResponse } = opaqueServer.startLogin({
       serverSetup: getServerSetup(),
       registrationRecord,
       startLoginRequest: body.start_login_request,
       userIdentifier,
-      // No custom identifiers — they were not used at registration time, so they must
-      // not be used at login time either (they are bound into the OPAQUE transcript).
+      identifiers: {
+        client: body.username,
+        server: `${env.API_BASE_URL}/v1`,
+      },
     });
 
     if (!row || row.suspendedAt) {
