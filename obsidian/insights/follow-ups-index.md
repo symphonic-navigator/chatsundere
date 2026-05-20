@@ -35,12 +35,8 @@ Canonical sources: brief-material files in this directory.
 
 | Item | Trigger | Origin |
 |---|---|---|
-| Passkey UV-policy: formalise brief + write ADR 0022 | Next Lyra architecture session | [[2026-05-19-brief-material-passkey-uv]] |
-| Cross-device identity: formalise full brief in `obsidian/briefs/phase 0/cross-device-identity.md` | Next Lyra architecture session | [[2026-05-19-brief-material-cross-device-identity]] |
-| ADR — server-at-domain-root, HTTPS, `/api` prefix | Alongside cross-device-identity brief | [[2026-05-19-brief-material-cross-device-identity]] |
-| ADR — single-server-per-account hard rule | Alongside cross-device-identity brief | [[2026-05-19-brief-material-cross-device-identity]] |
-| Pre-disconnect-sync-pull state-machine ADR | Before implementing auto-handover | [[2026-05-19-brief-material-cross-device-identity]] |
-| Rate-limiting numbers for pairing-code generation | Auth-service spec extension when implementing | [[2026-05-19-brief-material-cross-device-identity]] |
+| Passive auth-state visibility on profile/settings: formalise as part of a future Settings/Profile UX brief | Phase 1+ UX work | [[2026-05-20-pattern-passive-auth-state-on-profile]] |
+| API endpoint shape curl-verification — five new endpoints in cross-device-identity brief | Chris exercises proposed request/response bodies with curl before Liz writes tests against them | [[../briefs/phase 0/cross-device-identity]] §Open items #3 |
 | Conflict resolution on concurrent sync edits ("welcher change hat recht") | Phase 1 sync-service brief | [[2026-05-19-brief-material-cross-device-identity]] §Open Items |
 | Q7 — Username-rename flow design | Phase 1 sync-service brief | [[2026-05-19-brief-material-cross-device-identity]] |
 | Conditional UI (`mediation: 'conditional'`) for passkey autocomplete | Future UX-polish squash, post-Phase-0 | [[2026-05-19-brief-material-passkey-uv]] |
@@ -55,13 +51,19 @@ Items that have been decided but not yet implemented in code.
 
 | Item | Trigger | Notes |
 |---|---|---|
-| Wire UV-relaxation in code (3 sites) | After Lyra brief + ADR 0022 land | Trivial diff; user-client only; Larissa courtesy-pass |
-| Onboarding three-path UI rewrite (QR / Manual / Local) | After cross-device-identity brief lands | User-client polish squash |
-| `/api/admin/invitations` endpoint | After cross-device-identity brief lands | Auth-service; Larissa-audit |
-| `/api/me/pairing-codes` endpoints | After cross-device-identity brief lands | Auth-service; Larissa-audit |
-| `/api/join` endpoint with atomic code validation | After cross-device-identity brief lands | Auth-service; Larissa-audit |
-| `invitations` + `pairing_codes` DB tables | After brief + auth-service work above | Drizzle migration |
-| Switch from native UUIDv4 to UUIDv7 (client uuidv7 helper, server gen function) | Before any new entity DB tables land | Cross-cutting; trivial helper |
+| Wire UV-relaxation in code (3 sites) | Brief + ADR 0022 have landed (2026-05-20) | Trivial diff; user-client only; Larissa courtesy-pass per [[2026-05-20-pattern-frontend-changes-affecting-crypto-semantics]] |
+| Onboarding three-path UI rewrite (QR / Manual / Local) | Brief landed (2026-05-20); awaiting API-endpoint curl-verification (Open #3) | User-client polish squash |
+| `/api/admin/invitations` endpoint | Brief + ADRs 0023–0026 landed (2026-05-20); awaiting curl-verification | Auth-service; Larissa-audit; uses `HMAC_KEY_PENDING_CODES` env var (separate from refresh-token key) |
+| `/api/me/pairing-codes` endpoints | As above | Auth-service; Larissa-audit; **gated by step-up** (formal step-up brief pending; inline minimum spec in cross-device-identity brief §Step-up section) |
+| `/api/join` endpoint with atomic code validation | As above | Auth-service; Larissa-audit |
+| `pending_codes` DB table (single table with `type` discriminator) | As above | Drizzle migration |
+| Switch from native UUIDv4 to UUIDv7 (`uuidv7` npm package on client, `gen_uuidv7()` SQL function on server) | Before any new entity DB tables land; documented in ADR 0025 | Cross-cutting; library-based |
+| Auto-handover client state machine with failure-mode handling | After cross-device-identity brief + ADR 0026 land (both done 2026-05-20) | User-client; per pattern in [[2026-05-20-pattern-frontend-changes-affecting-crypto-semantics]] consider Larissa-pass on the state-machine file specifically |
+| Partial-upload cleanup endpoint `DELETE /api/me/account` on handover-cancel | Co-requisite of auto-handover client state machine | Per ADR 0026 §Failure Mode C; Larissa-audit |
+| `POST /v1/auth/step-up` endpoint + step-up middleware on all Tier 1+ endpoints | After step-up brief + ADR 0027 land (both done 2026-05-20) | Auth-service; Larissa-audit; Redis keyspace `step_up:` |
+| `<StepUpModal />` component + request interceptor in user-client | After step-up brief + ADR 0027 land | User-client; centralised interceptor catches `403 step_up_required` and surfaces modal transparently |
+| Tier-4 step-up integration in admin-client | After admin-client invitation-creation UI exists (Squash C) | Reuses `<StepUpModal />` with 5-minute grace window |
+| HTTPS-required + server-at-root + `/api` prefix enforcement in user-client | Per ADR 0023 | Likely already true; verify and document |
 | Theming squash | After Squash C (admin-client) | See design-deferrals |
 
 ## Active — Hygiene & Tooling
@@ -95,3 +97,11 @@ landed" — not garbage to be cleaned.
 | ~~Decision: passkey UV-relaxation Q1–Q4~~ | All four decided; awaiting Lyra formal brief + ADR | 2026-05-19 |
 | ~~Decision: cross-device identity Q1–Q6 plus merge strategy~~ | All decided; awaiting Lyra formal brief | 2026-05-19 |
 | ~~`.envrc` global PORT/DATABASE_URL collision (proxy-service overrode auth-service)~~ | Removed app-level `dotenv_if_exists` from root `.envrc`. Each runtime (Vite for frontends, Bun for backends) auto-loads its own `apps/<app>/.env` from cwd. Subdirectory `.envrc` files unnecessary. Discovered 2026-05-20 during Squash C QA when DATABASE_URL pointed to `proxy_db` for auth-service bootstrap. | 2026-05-20 |
+| ~~Passkey UV-policy: formalise brief + write ADR 0022~~ | Brief `obsidian/briefs/phase 0/passkey-uv-policy.md` + [[ADR 0022]] landed. Sibling insights [[2026-05-20-pattern-frontend-changes-affecting-crypto-semantics]] and [[2026-05-20-pattern-passive-auth-state-on-profile]] captured related design principles for later. | 2026-05-20 |
+| ~~Cross-device identity: formalise full brief~~ | Brief `obsidian/briefs/phase 0/cross-device-identity.md` landed with all seven Q1–Q6 sub-decisions plus the emergent merge-strategy decision. One [OPEN] remains (#3, API curl-verification — Chris-tracked); item moved to Active — Design. | 2026-05-20 |
+| ~~ADR — server-at-domain-root, HTTPS, `/api` prefix~~ | [[ADR 0023]] landed. | 2026-05-20 |
+| ~~ADR — single-server-per-account hard rule~~ | [[ADR 0024]] landed. | 2026-05-20 |
+| ~~ADR — UUIDv7 across the entire data model~~ | [[ADR 0025]] landed (was implicit in originating material, elevated to its own ADR during brief formalisation). Library choice: `uuidv7` npm package. | 2026-05-20 |
+| ~~Pre-disconnect-sync-pull state-machine ADR~~ | [[ADR 0026]] landed, with re-ordered step sequence that eliminates the no-active-server transient by deferring the Y-logout to the final step. | 2026-05-20 |
+| ~~Rate-limiting numbers for pairing-code generation~~ | Decided in cross-device-identity brief §Rate limits: 10 active codes/user, 50 generations/24h, 10 join-attempts/min/IP, 100/h/IP. | 2026-05-20 |
+| ~~Step-up authentication for sensitive operations: formalise brief + ADR~~ | Brief `obsidian/briefs/phase 0/step-up-auth.md` + [[ADR 0027]] landed. Tiers 0–4, mechanisms A (UV='required' WebAuthn) / B (OPAQUE re-prompt) / C (grace window), Redis-backed state, single `POST /v1/auth/step-up` endpoint. Inline minimums in cross-device-identity brief remain authoritative for that brief's standalone implementation and are equivalent to formal tiers. | 2026-05-20 |

@@ -48,3 +48,10 @@ For small, contained decisions (a variable name, a layout choice), a code commen
 - [0005](0005-require-prf-for-passkey-mk-wrapping.md) — Require WebAuthn PRF for passkey-based MK wrapping
 - [0006](0006-exactly-one-primary-admin.md) — Exactly one primary admin per system
 - [0007](0007-recovery-key-required-at-registration.md) — Recovery key generated and shown once at registration
+- [0021](0021-phase0-opaque-first-linking.md) — Backend linking requires OPAQUE first in Phase 0
+- [0022](0022-uv-policy-for-webauthn-passkeys.md) — UV-policy for WebAuthn passkeys is `preferred`, not `required`
+- [0023](0023-server-at-root-https-api-prefix.md) — Servers hosted at domain root, over HTTPS, with `/api/` prefix
+- [0024](0024-single-server-per-account.md) — A `local_account` is linked to at most one server at a time
+- [0025](0025-uuidv7-across-the-data-model.md) — UUIDv7 is the universal identifier across the data model
+- [0026](0026-pre-disconnect-sync-pull-failure-modes.md) — Pre-disconnect-sync-pull failure modes and recovery flows
+- [0027](0027-step-up-authentication-policy.md) — Step-up authentication policy: tiers, mechanisms, and grace windows
