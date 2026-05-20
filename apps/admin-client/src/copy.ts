@@ -57,4 +57,26 @@ export const copy = {
     noActivity: 'No recent activity.',
     viewUsers: 'View users',
   },
+  users: {
+    title: 'Users',
+    searchPlaceholder: 'Search by username',
+    roleFilter: {
+      all: 'All roles',
+      primary_admin: 'Primary admin',
+      admin: 'Admin',
+      user: 'User',
+    },
+    statusFilter: { all: 'All statuses', active: 'Active', suspended: 'Suspended' },
+    columns: {
+      username: 'Username',
+      role: 'Role',
+      status: 'Status',
+      createdAt: 'Created',
+      lastLogin: 'Last login',
+    },
+    createInvitation: 'Create invitation',
+    empty: 'Just you so far. Create an invitation to add the next user.',
+    pagePrev: '← Previous',
+    pageNext: 'Next →',
+  },
 } as const;
