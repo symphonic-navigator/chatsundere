@@ -8,12 +8,12 @@ import type {
 
 export interface OpaqueLoginStartRequest {
   username: string;
-  ke1: string;
+  start_login_request: string;
 }
 
 export interface OpaqueLoginStartResponse {
   session_id: string;
-  ke2: string;
+  login_response: string;
   wrapped_mk_opaque: string;
   wrap_nonce_opaque: string;
   wrap_aad_opaque: string;
@@ -21,7 +21,7 @@ export interface OpaqueLoginStartResponse {
 
 export interface OpaqueLoginFinishRequest {
   session_id: string;
-  ke3: string;
+  finish_login_request: string;
 }
 
 export interface OpaqueLoginFinishResponse {

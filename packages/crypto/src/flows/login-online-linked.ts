@@ -193,13 +193,13 @@ async function runServerLogin(
   const { clientLoginState, startLoginRequest } = await opaqueLoginStart(args.passphrase);
 
   const startResp = await args.serverClient.loginOpaqueStart(
-    { username, ke1: startLoginRequest },
+    { username, start_login_request: startLoginRequest },
     baseUrl,
   );
 
   const finishResult = await opaqueLoginFinish({
     clientLoginState,
-    loginResponse: startResp.ke2,
+    loginResponse: startResp.login_response,
     passphrase: args.passphrase,
     username,
     serverIdentity: serverId,
@@ -208,7 +208,7 @@ async function runServerLogin(
   const finishResp = await args.serverClient.loginOpaqueFinish(
     {
       session_id: startResp.session_id,
-      ke3: toBase64Url(finishResult.finishLoginRequest),
+      finish_login_request: toBase64Url(finishResult.finishLoginRequest),
     },
     baseUrl,
   );
