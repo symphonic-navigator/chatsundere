@@ -33,61 +33,61 @@ export const httpServerClient: ServerClient = {
   linkOpaqueStart: (req: LinkOpaqueStartRequest, baseUrl: string) =>
     apiFetch<LinkOpaqueStartResponse>({
       baseUrl,
-      path: '/auth/v1/link/opaque/start',
+      path: '/v1/link/opaque/start',
       json: req,
       authMode: 'none',
     }),
   linkOpaqueFinish: (req: LinkOpaqueFinishRequest, baseUrl: string) =>
     apiFetch<LinkOpaqueFinishResponse>({
       baseUrl,
-      path: '/auth/v1/link/opaque/finish',
+      path: '/v1/link/opaque/finish',
       json: req,
       authMode: 'none',
     }),
   linkPasskeyStart: (req: LinkPasskeyStartRequest, baseUrl: string, _accessToken: string) =>
     apiFetch<LinkPasskeyStartResponse>({
       baseUrl,
-      path: '/auth/v1/link/passkey/start',
+      path: '/v1/link/passkey/start',
       json: req,
       authMode: 'bearer',
     }),
   linkPasskeyFinish: (req: LinkPasskeyFinishRequest, baseUrl: string, _accessToken: string) =>
     apiFetch<LinkPasskeyFinishResponse>({
       baseUrl,
-      path: '/auth/v1/link/passkey/finish',
+      path: '/v1/link/passkey/finish',
       json: req,
       authMode: 'bearer',
     }),
   loginOpaqueStart: (req: OpaqueLoginStartRequest, baseUrl: string) =>
     apiFetch<OpaqueLoginStartResponse>({
       baseUrl,
-      path: '/auth/v1/opaque/login/start',
+      path: '/v1/opaque/login/start',
       json: req,
       authMode: 'none',
     }),
   loginOpaqueFinish: (req: OpaqueLoginFinishRequest, baseUrl: string) =>
     apiFetch<OpaqueLoginFinishResponse>({
       baseUrl,
-      path: '/auth/v1/opaque/login/finish',
+      path: '/v1/opaque/login/finish',
       json: req,
       authMode: 'none',
     }),
   recoveryStart: (req: RecoveryStartRequest, baseUrl: string) =>
     apiFetch<RecoveryStartResponse>({
       baseUrl,
-      path: '/auth/v1/recovery/start',
+      path: '/v1/recovery/start',
       json: req,
       authMode: 'none',
     }),
   recoveryFinish: (req: RecoveryFinishRequest, baseUrl: string) =>
     apiFetch<RecoveryFinishResponse>({
       baseUrl,
-      path: '/auth/v1/recovery/finish',
+      path: '/v1/recovery/finish',
       json: req,
       authMode: 'none',
     }),
   deleteMe: (baseUrl: string, _accessToken: string) =>
-    apiFetch<void>({ baseUrl, path: '/auth/v1/me', method: 'DELETE', authMode: 'bearer' }),
+    apiFetch<void>({ baseUrl, path: '/v1/me', method: 'DELETE', authMode: 'bearer' }),
   passphraseChangeStart: (
     req: PassphraseChangeStartRequest,
     baseUrl: string,
@@ -95,7 +95,7 @@ export const httpServerClient: ServerClient = {
   ) =>
     apiFetch<PassphraseChangeStartResponse>({
       baseUrl,
-      path: '/auth/v1/auth-methods/passphrase/change/start',
+      path: '/v1/auth-methods/passphrase/change/start',
       json: req,
       authMode: 'bearer',
     }),
@@ -106,7 +106,7 @@ export const httpServerClient: ServerClient = {
   ) =>
     apiFetch<PassphraseChangeFinishResponse>({
       baseUrl,
-      path: '/auth/v1/auth-methods/passphrase/change/finish',
+      path: '/v1/auth-methods/passphrase/change/finish',
       json: req,
       authMode: 'bearer',
     }),

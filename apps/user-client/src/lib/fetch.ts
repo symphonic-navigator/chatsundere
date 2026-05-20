@@ -78,7 +78,7 @@ function buildInit(opts: ApiFetchOptions): RequestInit {
 
 async function tryRefresh(baseUrl: string): Promise<boolean> {
   try {
-    const url = joinUrl(baseUrl, '/auth/v1/token/refresh');
+    const url = joinUrl(baseUrl, '/v1/token/refresh');
     const res = await fetch(url, { method: 'POST', credentials: 'include' });
     if (!res.ok) {
       // Per 2026-05-18 refresh-reuse deferral: when the server returns

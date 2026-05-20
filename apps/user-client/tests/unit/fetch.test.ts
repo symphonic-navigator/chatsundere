@@ -200,7 +200,7 @@ describe('apiFetch — path-prefixed baseUrl', () => {
       authMode: 'bearer',
     });
 
-    expect(spy.mock.calls[1]?.[0]).toBe('https://example.com/chatsundere/auth/v1/token/refresh');
+    expect(spy.mock.calls[1]?.[0]).toBe('https://example.com/chatsundere/v1/token/refresh');
   });
 });
 
