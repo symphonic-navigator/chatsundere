@@ -43,7 +43,10 @@ export const copy = {
   },
   login: {
     headingPrefix: 'Welcome back,',
-    biometricCta: 'Unlock with biometric',
+    // ADR 0022: under UV='preferred' the unlock ceremony is not guaranteed
+    // to be biometric (Bitwarden Desktop with unlocked vault, Yubikey-no-PIN
+    // are all valid passkey unlocks). Copy uses method-agnostic "passkey".
+    passkeyUnlockCta: 'Sign in with passkey',
     passphraseLabel: 'Passphrase',
     unlockCta: 'Unlock',
     unlockingCta: 'Unlocking…',
@@ -52,7 +55,7 @@ export const copy = {
       // Spec §5.6: single non-specific message — no distinction between
       // wrong passphrase and missing account to prevent information leakage.
       wrongPassphrase: 'Wrong passphrase.',
-      biometricFailed: 'Biometric unlock failed. Try your passphrase.',
+      passkeyUnlockFailed: 'Could not verify with passkey. Try your passphrase.',
       unknown: "Couldn't sign in. Please try again.",
     },
   },

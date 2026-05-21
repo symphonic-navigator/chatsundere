@@ -35,6 +35,10 @@ export async function generateRegistration(args: {
     attestationType: 'none',
     authenticatorSelection: {
       residentKey: 'preferred',
+      // ADR 0022: 'preferred' to match the user-client policy.
+      // Cross-platform passkeys (Bitwarden Desktop, Yubikey-no-PIN) are
+      // accepted; the authenticator's intrinsic behaviour decides whether
+      // UV actually happens. PRF (ADR 0005) is enforced elsewhere.
       userVerification: 'preferred',
     },
     // Request PRF extension for master-key wrapping (ADR 0005).
@@ -56,6 +60,9 @@ export async function generateAuthentication(args: {
   const { rpID } = rpFromBaseUrl(env.API_BASE_URL);
   return generateAuthenticationOptions({
     rpID,
+    // ADR 0022: 'preferred' matches the user-client policy. Cross-platform
+    // passkeys without UV (vault-unlocked Bitwarden, no-PIN hardware tokens)
+    // are accepted.
     userVerification: 'preferred',
     allowCredentials: args.allowCredentialIds?.map((id) => ({ id })),
   });

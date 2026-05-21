@@ -201,7 +201,9 @@ function LinkingConfirmInner({ payload }: { payload: InvitationQrPayload }) {
             { type: 'public-key', alg: -257 },
           ],
           authenticatorSelection: {
-            userVerification: 'required',
+            // ADR 0022: blanket UV='preferred'. PRF (ADR 0005) remains
+            // mandatory and is enforced via the prfFirst check below.
+            userVerification: 'preferred',
             residentKey: 'preferred',
           },
           extensions: { prf: { eval: { first: prfSalt.slice() } } },

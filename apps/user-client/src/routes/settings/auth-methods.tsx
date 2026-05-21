@@ -13,6 +13,7 @@ import { getDb } from '../../boot/open-db.js';
 import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
 import { copy } from '../../lib/copy.js';
 import { renamePasskey } from '../../lib/passkey-management.js';
+import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 import { PrfRequiredError, registerLocalBiometric } from '../../lib/webauthn.js';
 
 type LoadState =
@@ -40,20 +41,6 @@ type RegenState =
 
 /** Add-biometric flow state. */
 type AddBiometricState = { kind: 'idle' } | { kind: 'busy' } | { kind: 'error'; message: string };
-
-/**
- * WebAuthn availability check. Done at render time rather than module load
- * so it works in jsdom and SSR contexts (where `window` may be undefined
- * during the initial import phase).
- */
-function isWebAuthnAvailable(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof navigator !== 'undefined' &&
-    'credentials' in navigator &&
-    typeof window.PublicKeyCredential !== 'undefined'
-  );
-}
 
 /**
  * Authentication methods settings tab.

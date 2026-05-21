@@ -1,7 +1,7 @@
 # ADR 0022: UV-policy for WebAuthn passkeys is `preferred`, not `required`
 
 **Date:** 2026-05-20
-**Status:** Proposed
+**Status:** Accepted (implemented 2026-05-21)
 **Related:** ADR 0005 (PRF required)
 
 ## Context

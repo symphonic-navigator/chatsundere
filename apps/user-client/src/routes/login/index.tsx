@@ -17,13 +17,15 @@ import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { copy } from '../../lib/copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
+import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 
 /**
  * Login screen.
  *
- * Spec §5.4: shows username, passphrase field, and (when both passkeys exist
- * and UVPAA resolves true) a primary biometric button with the passphrase
- * field collapsed below. "Forgot passphrase?" is always visible.
+ * Spec §5.4: shows username, passphrase field, and (when at least one passkey
+ * exists and the device is WebAuthn-capable) a primary biometric button with
+ * the passphrase field collapsed below. "Forgot passphrase?" is always
+ * visible. Gate widened to any WebAuthn-capable device per ADR 0022.
  */
 export function Login() {
   const navigate = useNavigate();
@@ -32,7 +34,7 @@ export function Login() {
   // Whether a linked account exists — drives which login flow to call.
   const [hasLinked, setHasLinked] = useState(false);
   const [passkeys, setPasskeys] = useState<PasskeyCredentialRow[]>([]);
-  const [uvpaaAvailable, setUvpaaAvailable] = useState(false);
+  const [webAuthnAvailable] = useState(() => isWebAuthnAvailable());
 
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,11 +46,10 @@ export function Login() {
 
     void (async () => {
       const db = getDb();
-      const [local, linked, creds, uvpaa] = await Promise.all([
+      const [local, linked, creds] = await Promise.all([
         getLocalAccount(db),
         getLinkedAccount(db),
         listLocalBiometric(db),
-        PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(),
       ]);
 
       if (cancelled) return;
@@ -62,7 +63,6 @@ export function Login() {
       setUsername(local.username);
       setHasLinked(linked !== null);
       setPasskeys(creds);
-      setUvpaaAvailable(uvpaa);
     })();
 
     return () => {
@@ -70,8 +70,10 @@ export function Login() {
     };
   }, [navigate]);
 
-  // Biometric UI shown only when at least one passkey exists and UVPAA is available.
-  const showBiometric = passkeys.length > 0 && uvpaaAvailable;
+  // ADR 0022: under UV='preferred' we accept cross-platform passkeys too,
+  // not just UVPAA platform authenticators. The gate is "any WebAuthn-capable
+  // device with at least one registered passkey".
+  const passkeyUnlockAvailable = passkeys.length > 0 && webAuthnAvailable;
 
   async function handlePassphraseUnlock() {
     setError(null);
@@ -126,8 +128,8 @@ export function Login() {
   }
 
   async function handleBiometricUnlock() {
-    // Guarded: showBiometric is true implies passkeys.length > 0, but
-    // noUncheckedIndexedAccess requires an explicit check before indexing.
+    // Guarded: passkeyUnlockAvailable being true implies passkeys.length > 0,
+    // but noUncheckedIndexedAccess requires an explicit check before indexing.
     const firstPasskey = passkeys[0];
     if (!firstPasskey) return;
 
@@ -144,7 +146,10 @@ export function Login() {
             // satisfying the BufferSource constraint of the WebAuthn API.
             { type: 'public-key', id: firstPasskey.credential_id.slice() },
           ],
-          userVerification: 'required',
+          // ADR 0022: 'preferred' lets cross-platform passkeys (Bitwarden,
+          // Yubikey-without-PIN) unlock without being refused. PRF (ADR 0005)
+          // still gates acceptance below.
+          userVerification: 'preferred',
           // PRF eval.first must use the same salt the credential was registered
           // with — otherwise the authenticator produces a different PRF output
           // and the wrapped MK cannot be unwrapped. PRF_INPUT_SALT is the
@@ -154,7 +159,7 @@ export function Login() {
       })) as PublicKeyCredential | null;
 
       if (!assertion) {
-        setError(copy.login.errors.biometricFailed);
+        setError(copy.login.errors.passkeyUnlockFailed);
         return;
       }
 
@@ -166,7 +171,7 @@ export function Login() {
       };
       const prfFirst = extResults.prf?.results?.first;
       if (!prfFirst) {
-        setError(copy.login.errors.biometricFailed);
+        setError(copy.login.errors.passkeyUnlockFailed);
         return;
       }
 
@@ -186,7 +191,7 @@ export function Login() {
     } catch (_e) {
       // All biometric errors map to the same user-facing message regardless of
       // the underlying cause — no detail that could aid an attacker.
-      setError(copy.login.errors.biometricFailed);
+      setError(copy.login.errors.passkeyUnlockFailed);
     } finally {
       setBusy(false);
     }
@@ -206,15 +211,15 @@ export function Login() {
         </h1>
 
         <div className="space-y-4">
-          {/* Primary biometric button — shown when passkeys exist and UVPAA available */}
-          {showBiometric && (
+          {/* Primary biometric button — shown when passkeys exist and WebAuthn is available */}
+          {passkeyUnlockAvailable && (
             <button
               type="button"
               onClick={() => void handleBiometricUnlock()}
               disabled={busy}
               className="w-full rounded-[var(--radius-card)] bg-aurora-600 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? copy.login.unlockingCta : copy.login.biometricCta}
+              {busy ? copy.login.unlockingCta : copy.login.passkeyUnlockCta}
             </button>
           )}
 

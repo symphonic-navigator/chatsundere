@@ -63,7 +63,10 @@ export async function registerLocalBiometric(label: string): Promise<void> {
         { type: 'public-key', alg: -257 }, // RS256
       ],
       authenticatorSelection: {
-        userVerification: 'required',
+        // ADR 0022: UV='preferred' across all WebAuthn ceremonies. PRF (ADR
+        // 0005) remains mandatory and is enforced below — UV is the
+        // per-operation auth strength only.
+        userVerification: 'preferred',
         residentKey: 'preferred',
       },
       extensions: {
