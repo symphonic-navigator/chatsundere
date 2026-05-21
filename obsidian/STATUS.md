@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-20 — after Squash C (admin-client) + Lyra phase-0 brief landing
+**Last updated:** 2026-05-21 — after QA-fixes-from-Squash-C squash (test-isolation + session.mk lifecycle)
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -20,10 +20,15 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 - **Admin-client (Squash C, 2026-05-20)**: login (5-branch decision tree),
   dashboard, users list + detail + actions, invitations list + create + reveal,
   audit log, route-guard, self-target + last-primary-admin gating
+- **QA-fixes-from-Squash-C (2026-05-21)**: test-isolation via
+  TEST_DATABASE_URL + auth_db_test (no more live-DB truncation on
+  `pnpm test`); session.mk lifecycle refactor (mk owned by store as a
+  separate slice, partial-spread drops structurally impossible).
+  Larissa-approved-with-defer.
 
 ### Briefed, awaiting implementation
 
-- UV-relaxation wiring in user-client (3 sites) — small diff per ADR 0022
+- UV-relaxation wiring in user-client (3 sites) — small diff per ADR 0022, **next squash** with plan at `superpowers/plans/2026-05-21-uv-relaxation-wiring.md`
 - Cross-device identity:
   - `/api/admin/invitations`, `/api/me/pairing-codes`, `/api/join`
   - `pending_codes` DB table (single table with `type` discriminator)
@@ -53,9 +58,9 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. Inventory pass on Lyra's three new phase-0 briefs + ADRs 0022–0027
-2. Decide priority order across the "briefed, awaiting implementation" list
-3. Pick the next squash and write its spec
+1. Execute the UV-relaxation wiring plan at `superpowers/plans/2026-05-21-uv-relaxation-wiring.md` (small frontend-only squash, Larissa courtesy-pass)
+2. Brainstorm the API endpoint shapes for cross-device-identity backend with Chris (curl-verification per [[../briefs/phase 0/cross-device-identity]] §Open #3) — blocking item before the cross-device-identity backend implementation
+3. Then: cross-device-identity backend + step-up backend (priority order to decide with Chris)
 
 ---
 
