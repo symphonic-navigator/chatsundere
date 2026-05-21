@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-21 — after QA-fixes-from-Squash-C squash (test-isolation + session.mk lifecycle)
+**Last updated:** 2026-05-21 — after UV-relaxation-wiring squash (ADR 0022 implemented)
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -25,10 +25,14 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   `pnpm test`); session.mk lifecycle refactor (mk owned by store as a
   separate slice, partial-spread drops structurally impossible).
   Larissa-approved-with-defer.
+- **UV-relaxation-wiring (2026-05-21)**: ADR 0022 implemented —
+  `userVerification: 'preferred'` across every WebAuthn ceremony in
+  apps/user-client; PRF (ADR 0005) untouched. Cross-platform passkeys
+  (Bitwarden Desktop unlocked, Yubikey-no-PIN) now unlock. Larissa-approved.
 
 ### Briefed, awaiting implementation
 
-- UV-relaxation wiring in user-client (3 sites) — small diff per ADR 0022, **next squash** with plan at `superpowers/plans/2026-05-21-uv-relaxation-wiring.md`
+- **Settings-button-after-SW-refresh routing bug** — pre-existing bug surfaced during UV-relax manual QA; needs `<ProtectedRoute>` wrapper on `/app`, `/settings/*`, `/change-passphrase`. **Next squash**, small.
 - Cross-device identity:
   - `/api/admin/invitations`, `/api/me/pairing-codes`, `/api/join`
   - `pending_codes` DB table (single table with `type` discriminator)
@@ -58,7 +62,7 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. Execute the UV-relaxation wiring plan at `superpowers/plans/2026-05-21-uv-relaxation-wiring.md` (small frontend-only squash, Larissa courtesy-pass)
+1. Settings-button-after-SW-refresh routing fix (`<ProtectedRoute>` wrapper) — small, own squash
 2. Brainstorm the API endpoint shapes for cross-device-identity backend with Chris (curl-verification per [[../briefs/phase 0/cross-device-identity]] §Open #3) — blocking item before the cross-device-identity backend implementation
 3. Then: cross-device-identity backend + step-up backend (priority order to decide with Chris)
 
