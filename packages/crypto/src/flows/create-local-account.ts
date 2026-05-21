@@ -11,7 +11,7 @@ import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js
 import { getRandomBytes } from '../primitives/random.js';
 import { deriveVerifierKey } from '../recovery.js';
 import { type MasterKeySession, createMasterKeySession } from '../session.js';
-import { ARGON2ID_PARAMS, asMasterKey, asRecoveryKey } from '../types.js';
+import { ARGON2ID_PARAMS, type MasterKey, asMasterKey, asRecoveryKey } from '../types.js';
 
 export interface CreateLocalAccountArgs {
   db: IDBDatabase;
@@ -21,6 +21,18 @@ export interface CreateLocalAccountArgs {
 
 export interface CreateLocalAccountResult {
   session: MasterKeySession;
+  /**
+   * The raw master key bytes. Exposed so callers can pass it to the session
+   * store as the dedicated `mk` slice (Task 7) and to operations that
+   * require the raw key bytes (e.g. recovery-key regeneration). Never
+   * persisted; lives in memory only.
+   *
+   * IMPORTANT: this is the SAME `Uint8Array` instance that is captured by
+   * the session closure. Do NOT `.slice()` it expecting a private copy —
+   * `session.close()` zeros this shared buffer, so any caller-held copy
+   * would silently turn to zeros at logout time. Treat it as borrowed.
+   */
+  mk: MasterKey;
   recoveryKeyString: string;
 }
 
@@ -110,5 +122,5 @@ export async function createLocalAccount(
     online: false,
     recoveryKey,
   });
-  return { session, recoveryKeyString: encodeRecoveryKey(recoveryKey) };
+  return { session, mk, recoveryKeyString: encodeRecoveryKey(recoveryKey) };
 }

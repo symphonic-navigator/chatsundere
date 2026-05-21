@@ -42,12 +42,36 @@ All configuration via env vars; see `.env.example` for the full set with descrip
 
 ## Testing
 
+Unit tests:
+
 ```bash
 pnpm --filter @chatsundere/auth-service test
-RUN_INTEGRATION=1 pnpm --filter @chatsundere/auth-service test:integration
 ```
 
-Integration tests require live Postgres and Redis on the default URLs (the compose file from `infra/` is sufficient).
+### Running integration tests
+
+The full-lifecycle integration test truncates every table in `beforeAll`.
+To prevent this from destroying dev or production data, it requires a
+**separate** Postgres database via the `TEST_DATABASE_URL` env var.
+
+The dev compose creates `auth_db_test` automatically on first boot
+(see `infra/postgres/init/02-create-test-db.sql`). Apply the schema once:
+
+```bash
+DATABASE_URL=postgres://chatsundere:dev@localhost:5432/auth_db_test \
+  pnpm --filter @chatsundere/auth-service db:migrate
+```
+
+Then run integration tests:
+
+```bash
+TEST_DATABASE_URL=postgres://chatsundere:dev@localhost:5432/auth_db_test \
+  REDIS_URL=redis://localhost:6379/0 \
+  pnpm --filter @chatsundere/auth-service test:integration
+```
+
+The test suite will refuse to run if `TEST_DATABASE_URL` is unset, and will
+**throw** if `TEST_DATABASE_URL` equals `DATABASE_URL`.
 
 ## Licence
 

@@ -99,8 +99,8 @@ function LinkingConfirmInner({ payload }: { payload: InvitationQrPayload }) {
   // ── Link action ───────────────────────────────────────────────────────────
 
   async function doLink() {
-    const currentSession = useSessionStore.getState().session;
-    if (!currentSession?.mk) {
+    const { session: currentSession, mk } = useSessionStore.getState();
+    if (!currentSession || !mk) {
       setScreen({ kind: 'error', message: ce.unknown });
       return;
     }
@@ -115,10 +115,12 @@ function LinkingConfirmInner({ payload }: { payload: InvitationQrPayload }) {
         baseUrl: payload.base_url,
         issuerLabel: payload.issuer_label,
         passphrase,
-        mk: currentSession.mk,
+        mk,
       });
 
       useConnectivityStore.getState().onServerOk();
+      // mk is preserved automatically because setSession is called without
+      // an mk arg (Task 7 store refactor).
       useSessionStore.getState().setSession({ ...currentSession, mode: 'linked' });
 
       const creds = await listPasskeyCredentials(getDb());
@@ -160,8 +162,8 @@ function LinkingConfirmInner({ payload }: { payload: InvitationQrPayload }) {
   // ── Biometric sync ────────────────────────────────────────────────────────
 
   async function handleBiometricSync() {
-    const currentSession = useSessionStore.getState().session;
-    if (!currentSession?.accessToken || !currentSession.mk) {
+    const { session: currentSession, mk } = useSessionStore.getState();
+    if (!currentSession?.accessToken || !mk) {
       setScreen({ kind: 'biometric_setup', busy: false, error: ce.unknown });
       return;
     }
@@ -225,7 +227,7 @@ function LinkingConfirmInner({ payload }: { payload: InvitationQrPayload }) {
         db: getDb(),
         serverClient: httpServerClient,
         accessToken: currentSession.accessToken,
-        mk: currentSession.mk,
+        mk,
         credentialJson: credJson,
         credentialId,
         publicKey: new Uint8Array(publicKeyBytes),

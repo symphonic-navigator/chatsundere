@@ -6,6 +6,7 @@ import {
   minLength,
   number,
   object,
+  optional,
   parse,
   pipe,
   regex,
@@ -23,6 +24,7 @@ const envSchema = object({
   LOG_LEVEL: string(),
   API_BASE_URL: pipe(string(), url()),
   DATABASE_URL: pipe(string(), regex(/^postgres:\/\//)),
+  TEST_DATABASE_URL: optional(pipe(string(), regex(/^postgres:\/\//))),
   REDIS_URL: pipe(string(), regex(/^redis:\/\//)),
   AUTH_JWT_PRIVATE_KEY: pipe(string(), minLength(40)),
   INVITATION_HMAC_KEY: pipe(string(), minLength(40)),
@@ -47,6 +49,7 @@ export function loadEnv(): {
   LOG_LEVEL: string;
   API_BASE_URL: string;
   DATABASE_URL: string;
+  TEST_DATABASE_URL?: string;
   REDIS_URL: string;
   AUTH_JWT_PRIVATE_KEY: string;
   INVITATION_HMAC_KEY: string;
@@ -59,6 +62,7 @@ export function loadEnv(): {
     LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
     API_BASE_URL: process.env.API_BASE_URL,
     DATABASE_URL: process.env.DATABASE_URL,
+    TEST_DATABASE_URL: process.env.TEST_DATABASE_URL,
     REDIS_URL: process.env.REDIS_URL,
     AUTH_JWT_PRIVATE_KEY: process.env.AUTH_JWT_PRIVATE_KEY,
     INVITATION_HMAC_KEY: process.env.INVITATION_HMAC_KEY,

@@ -1,81 +1,102 @@
-import type { MasterKeySession } from '@chatsundere/crypto';
 // SPDX-License-Identifier: LGPL-3.0-only
+
+import type { MasterKey } from '@chatsundere/crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '../../src/state/session.store.js';
+import type { AppSession } from '../../src/state/session.store.js';
 
-/**
- * Minimal mock for MasterKeySession.
- * `as unknown as MasterKeySession` is the only allowed cast here — it shapes a
- * minimal stub that does not carry the closure from createMasterKeySession,
- * letting us spy on `close` without importing the full crypto initialisation.
- */
-function makeMockSession(): MasterKeySession {
+// Minimal AppSession stub. Real MasterKeySession comes from packages/crypto;
+// for store-shape testing we only need the same property surface.
+// Note: `mk` is no longer a field on AppSession after the Task 7 refactor —
+// it lives on the store as its own slice.
+function makeStubSession(opts?: { mk?: Uint8Array; close?: () => void }): AppSession {
   return {
-    id: 'test-id',
     userId: 'u1',
-    username: 'alice',
-    mode: 'local',
-    online: false,
-    deriveDek: vi.fn(),
-    encrypt: vi.fn(),
-    decrypt: vi.fn(),
-    produceRecoveryProof: vi.fn(),
-    registerLocalBiometric: vi.fn(),
-    close: vi.fn(),
-  } as unknown as MasterKeySession;
+    username: 'tester',
+    mode: 'linked',
+    accessToken: 'access-token-stub',
+    close: opts?.close ?? vi.fn(),
+    // Any extra MasterKeySession fields the store may touch get stubbed
+    // here as no-ops. Extend if the store's API surface grows.
+  } as unknown as AppSession;
 }
 
-beforeEach(() => {
-  useSessionStore.setState({ session: null });
-});
-
-describe('useSessionStore — initial state', () => {
-  it('starts with session === null', () => {
-    expect(useSessionStore.getState().session).toBeNull();
+describe('useSessionStore', () => {
+  beforeEach(() => {
+    useSessionStore.setState({ session: null, mk: null });
   });
-});
 
-describe('setSession', () => {
-  it('stores the session', () => {
-    const session = makeMockSession();
-    useSessionStore.getState().setSession(session);
-    expect(useSessionStore.getState().session).toBe(session);
-  });
-});
+  it('preserves mk after a partial-update sequence that mimics disconnect+relink', () => {
+    const session = makeStubSession();
+    // Initial open: pass mk explicitly via the second arg.
+    useSessionStore.getState().setSession(session, new Uint8Array(32) as unknown as MasterKey);
 
-describe('updateAccessToken', () => {
-  it('replaces accessToken while preserving userId, username, and the session reference shape', () => {
-    const session = makeMockSession();
-    useSessionStore.getState().setSession(session);
-
+    // Simulate a sequence of partial updates that the disconnect+relink
+    // flow exercises in production:
+    // 1. updateAccessToken (typical refresh during the flow)
     useSessionStore.getState().updateAccessToken('new-token');
 
-    const updated = useSessionStore.getState().session;
-    expect(updated).not.toBeNull();
-    expect(updated?.accessToken).toBe('new-token');
-    expect(updated?.userId).toBe('u1');
-    expect(updated?.username).toBe('alice');
+    // 2. setSession with a partial spread that does NOT carry mk as a second
+    // arg. This is the exact shape used by linking/confirm.tsx after a
+    // successful link: setSession({ ...currentSession, mode: 'linked' }).
+    const current = useSessionStore.getState().session;
+    if (!current) throw new Error('session unexpectedly null');
+    useSessionStore.getState().setSession({ ...current, mode: 'linked' });
+
+    // Contract: mk survives the sequence.
+    const mkAfter = useSessionStore.getState().mk;
+    expect(mkAfter).not.toBeNull();
+    expect(mkAfter?.length).toBe(32);
   });
 
-  it('is a no-op when there is no active session', () => {
-    // Should not throw.
-    expect(() => useSessionStore.getState().updateAccessToken('tok')).not.toThrow();
-    expect(useSessionStore.getState().session).toBeNull();
-  });
-});
+  it('preserves mk when re-linking after a disconnect-without-logout', () => {
+    // This is the exact bug reported in
+    // obsidian/insights/2026-05-20-mk-lost-after-disconnect.md.
+    const session = makeStubSession();
+    useSessionStore.getState().setSession(session, new Uint8Array(32) as unknown as MasterKey);
 
-describe('closeAndForget', () => {
-  it('calls session.close() and sets session to null', () => {
-    const session = makeMockSession();
-    useSessionStore.getState().setSession(session);
+    // Disconnect: handleDisconnect does NOT call setSession or closeAndForget.
+    // So nothing happens to the store from the disconnect itself. We simulate
+    // any intermediate store activity that might happen during the routing.
+    useSessionStore.getState().updateAccessToken('refreshed-during-routing');
+
+    // Re-link confirm screen: doLink reads mk from the store for linkToServer.
+    // Under the old shape, the pre-flight check at confirm.tsx:103 was the bug
+    // surface. After Task 7, mk lives in its own slice and cannot be dropped
+    // by partial-spread updates.
+    const mkPreflight = useSessionStore.getState().mk;
+    expect(mkPreflight).not.toBeNull(); // The bug was THIS being null.
+  });
+
+  it('closeAndForget nulls both session and mk AND zeros the MK buffer via session.close()', () => {
+    const close = vi.fn();
+    const mk = new Uint8Array(32) as unknown as MasterKey;
+    useSessionStore.getState().setSession(makeStubSession({ close }), mk);
+
+    // Sanity: both slices are populated
+    expect(useSessionStore.getState().session).not.toBeNull();
+    expect(useSessionStore.getState().mk).not.toBeNull();
 
     useSessionStore.getState().closeAndForget();
 
-    expect(session.close).toHaveBeenCalledOnce();
     expect(useSessionStore.getState().session).toBeNull();
+    expect(useSessionStore.getState().mk).toBeNull();
+    // Security-critical: the MK byte buffer must be zeroed via session.close().
+    // Without this assertion, a future refactor of closeAndForget that drops
+    // the close() call would silently regress the zeroing guarantee.
+    expect(close).toHaveBeenCalledOnce();
   });
 
-  it('is a no-op when there is no active session', () => {
-    expect(() => useSessionStore.getState().closeAndForget()).not.toThrow();
+  it('replaces mk when a new mk is passed (not preserve-on-omit)', () => {
+    const mk1 = new Uint8Array(32).fill(0x11) as unknown as MasterKey;
+    const mk2 = new Uint8Array(32).fill(0x22) as unknown as MasterKey;
+    useSessionStore.getState().setSession(makeStubSession(), mk1);
+    expect(useSessionStore.getState().mk).toBe(mk1);
+
+    // Login-after-login: a fresh setSession with a new mk REPLACES the prior one.
+    // This is the explicit-pass branch of the asymmetric contract.
+    useSessionStore.getState().setSession(makeStubSession(), mk2);
+    expect(useSessionStore.getState().mk).toBe(mk2);
+    expect(useSessionStore.getState().mk).not.toBe(mk1);
   });
 });

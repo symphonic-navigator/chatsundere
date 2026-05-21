@@ -26,7 +26,7 @@ export function CreateAccount() {
     setCreateError(null);
     try {
       const result = await createLocalAccount({ db: getDb(), username, passphrase });
-      useSessionStore.getState().setSession(result.session);
+      useSessionStore.getState().setSession(result.session, result.mk);
       setRecoveryKey(result.recoveryKeyString);
       setStep(3);
     } catch (err) {

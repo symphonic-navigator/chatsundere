@@ -86,7 +86,8 @@ export function Login() {
           passphrase,
         });
         // setSession before connectivity transitions per Task 4 reviewer note.
-        useSessionStore.getState().setSession({ ...session, mk });
+        // mk passed as explicit second arg per Task 7 store refactor.
+        useSessionStore.getState().setSession(session, mk);
         switch (serverOutcome.kind) {
           case 'ok':
             useConnectivityStore.getState().onServerOk();
@@ -104,7 +105,7 @@ export function Login() {
       } else {
         // Local-only account.
         const { session, mk } = await loginLocalWithPassphrase({ db, passphrase });
-        useSessionStore.getState().setSession({ ...session, mk });
+        useSessionStore.getState().setSession(session, mk);
       }
       navigate('/app', { replace: true });
     } catch (e) {

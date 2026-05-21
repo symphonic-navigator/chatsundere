@@ -28,6 +28,8 @@ Canonical source: [[security-deferrals]]
 | — | Refresh-reuse user-facing notification | Phase 1 sync-service real-time channel | — |
 | — | Raw MK in login-flow returns — tighten MK custody | Dedicated "Tighten crypto MK custody" squash before v0.1.0 | — |
 | — | `passkey-management.ts` belongs in `packages/crypto` not user-client | Before v0.1.0 (own small squash, Larissa-audited) | — |
+| L-3 (2026-05-21) | `refresh-on-401` triggers `closeAndForget` on *any* non-ok refresh response, not just reuse_detected | Coordinated with "Refresh-reuse user-facing notification" (above) — phase-1 sync-service real-time channel | Low |
+| L-4 (2026-05-21) | `change-passphrase.tsx` `capturedMk` comment slightly stale post-Shape-A | Opportunistic next time the file is touched | Low |
 
 ## Active — Design (Lyra-brief candidates)
 
@@ -77,6 +79,8 @@ Small items that don't fit elsewhere.
 | Operator-side invitations list with revoke | Squash C (admin-client) | New scope item added during 2026-05-19 |
 | Vite-PWA `dev-dist` already in biome ignore (2026-05-19) | — | Done; example of how a resolved entry looks |
 | `full-lifecycle.test.ts` truncates production `auth_db` (no test-DB override, no transaction rollback) | Before next dev cycle that runs the test more than once | Discovered 2026-05-20 during Squash C Manual QA: Chris's primary_admin user wiped by repeated `pnpm test` against the live DB, cascading into login failures. See [[2026-05-20-test-isolation-leak-full-lifecycle]]. |
+| `full-lifecycle.test.ts` steps 2-10 broken since `002e6e1` (OPAQUE wire field rename) — step 2 fails with `link/opaque/finish` returning 500 internal | Own follow-up squash after current QA-fixes squash lands | Discovered 2026-05-21 during Task 3 of QA-fixes squash: with the new TEST_DATABASE_URL isolation in place, the test now runs without destroying live data — and reveals it has been silently broken since the wire-field-rename. 1/10 steps pass (bootstrap CLI), rest cascade from step 2. Orthogonal to Task 3's gating concern. The Redis-side test-isolation leak (cross-test rate-limit pollution) is a related but separate issue; flush Redis between full-test runs as workaround. |
+| QR-scanner camera stream stays active after navigating away from `/linking/scan` | Phase 0 polish, own small squash | Discovered 2026-05-21 during Task 9 manual QA of QA-fixes squash: after a successful re-link, the user navigates from `/linking/scan` → `/linking/confirm` → `/app`, and Chris observed the device camera turning on at the end despite no scanner UI being on screen. Likely missing `useEffect` cleanup in `apps/user-client/src/routes/linking/scan.tsx` (qr-scanner library's `stop()` should be called on unmount). Same root cause likely behind the `qr.ts:194 The camera stream is only accessible if the page is transferred via https.` warnings in the console — a stale ceremony attempts to restart on the wrong route. |
 | `session.mk` disappears after disconnect-without-logout in user-client; re-link bails silently with `ce.unknown` | Before v0.1.0 — currently masked by logout+login workaround | Discovered 2026-05-20 during Squash C Manual QA. Workaround: sign out before re-linking. Root cause not yet found; suspect a store-overwriting code path between disconnect and the linking screen. See [[2026-05-20-mk-lost-after-disconnect]]. Reinforces the existing "Raw MK in login-flow returns" follow-up. |
 
 ---

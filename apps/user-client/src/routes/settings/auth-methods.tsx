@@ -165,16 +165,17 @@ export function AuthMethods() {
   }
 
   async function confirmRegen() {
-    const session = useSessionStore.getState().session;
-    // mk is only present when the session was opened via passphrase (not biometric).
-    // If absent, we cannot safely regenerate without re-authentication.
-    if (!session?.mk) {
+    // mk is only present when the session was opened via passphrase or
+    // recovery-key (not biometric). If absent, we cannot safely regenerate
+    // without re-authentication.
+    const { mk } = useSessionStore.getState();
+    if (!mk) {
       setRegenState({ kind: 'idle' });
       return;
     }
     setRegenState({ kind: 'busy' });
     try {
-      const { recoveryKeyString } = await regenerateRecoveryKey({ db: getDb(), mk: session.mk });
+      const { recoveryKeyString } = await regenerateRecoveryKey({ db: getDb(), mk });
       setRegenState({ kind: 'done', key: recoveryKeyString });
     } catch (e) {
       if (e instanceof CryptoError) {
@@ -206,9 +207,9 @@ export function AuthMethods() {
     }
   }
 
-  // Recovery key regeneration is only possible when the session carries the raw
+  // Recovery key regeneration is only possible when the store carries the raw
   // master key (passphrase or recovery-key login). Biometric-only sessions do not.
-  const canRegen = useSessionStore.getState().session?.mk !== undefined;
+  const canRegen = useSessionStore.getState().mk !== null;
   const webAuthnAvailable = isWebAuthnAvailable();
   const addBusy = addState.kind === 'busy';
   const canAdd = webAuthnAvailable && !addBusy;

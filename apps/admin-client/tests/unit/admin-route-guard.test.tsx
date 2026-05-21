@@ -33,7 +33,9 @@ function renderAt(initialEntries: string[]) {
 
 describe('AdminRouteGuard', () => {
   beforeEach(() => {
-    useSessionStore.setState({ session: null } as never);
+    // Both slices must be reset because Zustand's setState does a shallow
+    // merge — passing only `session` would leave a prior `mk` in place.
+    useSessionStore.setState({ session: null, mk: null } as never);
   });
 
   it('redirects to /login when no session', () => {
@@ -43,7 +45,7 @@ describe('AdminRouteGuard', () => {
 
   it('redirects to /login when role is user', () => {
     useSessionStore.setState({
-      session: { userId: 'u-1', accessToken: 'tok', role: 'user', mk: null },
+      session: { userId: 'u-1', accessToken: 'tok', role: 'user' },
     } as never);
     renderAt(['/dashboard']);
     expect(screen.getByText('login-screen')).toBeInTheDocument();
@@ -51,7 +53,7 @@ describe('AdminRouteGuard', () => {
 
   it('renders children when role is admin', () => {
     useSessionStore.setState({
-      session: { userId: 'u-1', accessToken: 'tok', role: 'admin', mk: null },
+      session: { userId: 'u-1', accessToken: 'tok', role: 'admin' },
     } as never);
     renderAt(['/dashboard']);
     expect(screen.getByText('protected-content')).toBeInTheDocument();
@@ -59,7 +61,7 @@ describe('AdminRouteGuard', () => {
 
   it('renders children when role is primary_admin', () => {
     useSessionStore.setState({
-      session: { userId: 'u-1', accessToken: 'tok', role: 'primary_admin', mk: null },
+      session: { userId: 'u-1', accessToken: 'tok', role: 'primary_admin' },
     } as never);
     renderAt(['/dashboard']);
     expect(screen.getByText('protected-content')).toBeInTheDocument();

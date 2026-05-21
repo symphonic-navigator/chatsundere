@@ -147,8 +147,8 @@ export function ChangePassphrase() {
       return;
     }
 
-    const session = useSessionStore.getState().session;
-    if (!session?.mk) {
+    const { session, mk } = useSessionStore.getState();
+    if (!session || !mk) {
       // mk is absent when signed in via biometric only — cannot change passphrase.
       setScreen({ kind: 'form', busy: false, error: c.errors.unknown });
       return;
@@ -173,9 +173,9 @@ export function ChangePassphrase() {
         // (lib/fetch.ts), which is for actual HTTP request URLs.
         const serverIdentity = `${baseUrl}/auth/v1`;
         const accessToken = session.accessToken ?? '';
-        // session.mk is narrowed to MasterKey by the guard above; capture into
-        // a typed local so the async callback does not carry the optional type.
-        const capturedMk: MasterKey = session.mk;
+        // Capture mk into a typed local so the async callback closes over a
+        // narrowed MasterKey rather than re-reading the store mid-flight.
+        const capturedMk: MasterKey = mk;
 
         const serverCommit = async () => {
           const { clientRegistrationState, registrationRequest } =
@@ -217,7 +217,7 @@ export function ChangePassphrase() {
         await changePassphraseLinkedOnline({
           db,
           session,
-          mk: session.mk,
+          mk,
           newPassphrase: capturedPassphrase,
           serverCommit,
         });
@@ -226,7 +226,7 @@ export function ChangePassphrase() {
         await changePassphraseLocalOnly({
           db,
           session,
-          mk: session.mk,
+          mk,
           newPassphrase,
         });
       }

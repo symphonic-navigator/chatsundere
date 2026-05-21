@@ -85,7 +85,7 @@ export function LoginScreen() {
               serverClient: httpServerClient,
               passphrase,
             });
-            useSessionStore.getState().setSession({ ...session, mk });
+            useSessionStore.getState().setSession(session, mk);
             switch (serverOutcome.kind) {
               case 'ok':
                 useConnectivityStore.getState().onServerOk();

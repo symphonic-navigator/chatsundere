@@ -179,13 +179,13 @@ export function Recovery() {
         }
 
         // Mark the server connection as established.
-        useSessionStore.getState().setSession(session);
+        useSessionStore.getState().setSession(session, mk);
         useConnectivityStore.getState().onServerOk();
       } else if (step.kind === 'step2-local') {
         // Local-only path: session and mk already present from step 1.
         session = step.session;
         mk = step.mk;
-        useSessionStore.getState().setSession(session);
+        useSessionStore.getState().setSession(session, mk);
       } else {
         // step2-deferred without isLinked is unreachable under the spec
         // (deferred only ever set in the full-recovery branch which requires

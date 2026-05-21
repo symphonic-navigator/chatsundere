@@ -26,7 +26,46 @@ import { authMethods, invitations, users } from '../../src/db/schema.js';
 import { createRedis } from '../../src/redis/client.js';
 import { createServer } from '../../src/server.js';
 
-const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
+// The integration test truncates every table in beforeAll. To prevent this
+// from ever happening against a real DATABASE_URL (dev or prod), we require
+// a separate TEST_DATABASE_URL pointing at a dedicated database.
+//
+// If TEST_DATABASE_URL is unset, skip entirely — never fall back to
+// DATABASE_URL. If it accidentally equals DATABASE_URL, refuse to run.
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
+const REDIS_URL = process.env.REDIS_URL;
+const skip = !TEST_DATABASE_URL || !REDIS_URL;
+
+if (TEST_DATABASE_URL && process.env.DATABASE_URL) {
+  // Compare normalised host + pathname rather than raw strings — trailing
+  // slashes, equivalent host aliases (localhost vs 127.0.0.1 are NOT equal
+  // here intentionally; sslmode query params and the like are stripped),
+  // and case-variation in the protocol must not be allowed to bypass this
+  // guard. The point of the check is to make accidental misconfiguration
+  // impossible, not to catch sophisticated bypasses.
+  const normalise = (url: string): string => {
+    const u = new URL(url);
+    return `${u.host}${u.pathname.replace(/\/+$/, '')}`;
+  };
+  try {
+    if (normalise(TEST_DATABASE_URL) === normalise(process.env.DATABASE_URL)) {
+      throw new Error(
+        'TEST_DATABASE_URL and DATABASE_URL resolve to the same host+database. ' +
+          'Set TEST_DATABASE_URL to a dedicated test database (e.g. auth_db_test).',
+      );
+    }
+  } catch (e) {
+    // URL parsing itself can throw. Re-throw the explicit guard error;
+    // hide URL-parse internals from the test output.
+    if (e instanceof Error && e.message.includes('resolve to the same host')) throw e;
+    // If URL parsing fails for either env var, we can't compare — let
+    // Valibot reject the URL downstream rather than continue silently.
+  }
+}
+
+// Save the original DATABASE_URL so we can restore it after the test.
+// The override happens in beforeAll and the restore in afterAll.
+let ORIGINAL_DATABASE_URL: string | undefined;
 
 const ORIGIN = { Origin: 'http://localhost:3000' };
 const JSON_ORIGIN = { 'Content-Type': 'application/json', ...ORIGIN };
@@ -238,6 +277,14 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   let conflictUserId: string;
 
   beforeAll(async () => {
+    // Override DATABASE_URL for the duration of this test so createDb() picks
+    // up the test DB. This override is scoped to beforeAll/afterAll so other
+    // tests running in the same process are not affected.
+    if (TEST_DATABASE_URL) {
+      ORIGINAL_DATABASE_URL = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = TEST_DATABASE_URL;
+    }
+
     await opaqueReady;
     app = createServer();
 
@@ -294,6 +341,18 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
       } catch {
         // Already removed by the link/finish route.
       }
+    }
+
+    // Restore the original DATABASE_URL so any subsequent code (e.g. when the
+    // test process is reused) sees the unaltered env.
+    if (ORIGINAL_DATABASE_URL !== undefined) {
+      process.env.DATABASE_URL = ORIGINAL_DATABASE_URL;
+    } else {
+      // `process.env.X = undefined` coerces to the literal string "undefined"
+      // (process.env coerces all values to strings), which leaves the env var
+      // present with a wrong value. `delete` is the only correct way to unset.
+      // biome-ignore lint/performance/noDelete: process.env requires delete to truly unset
+      delete process.env.DATABASE_URL;
     }
 
     await closeDb();

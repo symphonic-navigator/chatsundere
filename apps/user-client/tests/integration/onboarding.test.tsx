@@ -68,8 +68,10 @@ vi.mock('../../src/boot/open-db.js', () => ({
 beforeEach(() => {
   // Seed boot store to the ready phase so <App /> renders the router tree.
   useBootStore.setState({ phase: { kind: 'ready', staging: { kind: 'none' } } });
-  // Clear any lingering session.
-  useSessionStore.setState({ session: null });
+  // Clear any lingering session. Both slices must be reset because Zustand's
+  // setState does a shallow merge — passing only `session` would leave a
+  // prior `mk` in place across tests.
+  useSessionStore.setState({ session: null, mk: null });
 });
 
 afterEach(() => {
