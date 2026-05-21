@@ -13,6 +13,7 @@ import { LinkingScan } from './routes/linking/scan.js';
 import { Login } from './routes/login/index.js';
 import { Recovery } from './routes/login/recovery.js';
 import { Onboarding } from './routes/onboarding.js';
+import { ProtectedRoute } from './routes/protected-route.js';
 import { Root } from './routes/root.js';
 import { About } from './routes/settings/about.js';
 import { Account } from './routes/settings/account.js';
@@ -60,21 +61,28 @@ export function App() {
             <Routes>
               <Route element={<Root />}>
                 <Route index element={<Gate />} />
-                <Route path="/app" element={<AppShell />} />
+                {/* Routes that do NOT require a session. */}
                 <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/create" element={<CreateAccount />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/recovery" element={<Recovery />} />
-                <Route path="/linking/scan" element={<LinkingScan />} />
-                <Route path="/linking/paste" element={<LinkingPaste />} />
-                <Route path="/linking/confirm" element={<LinkingConfirm />} />
-                <Route path="/change-passphrase" element={<ChangePassphrase />} />
-                <Route path="/settings" element={<SettingsLayout />}>
-                  <Route index element={<Navigate to="account" replace />} />
-                  <Route path="account" element={<Account />} />
-                  <Route path="auth-methods" element={<AuthMethods />} />
-                  <Route path="server-linking" element={<ServerLinking />} />
-                  <Route path="about" element={<About />} />
+                {/* Routes that REQUIRE a session. Reload while in-memory
+                    session is gone (e.g. after a service-worker refresh)
+                    must not leave the user on a session-stripped Root layout
+                    — ProtectedRoute reroutes through Gate. */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/app" element={<AppShell />} />
+                  <Route path="/linking/scan" element={<LinkingScan />} />
+                  <Route path="/linking/paste" element={<LinkingPaste />} />
+                  <Route path="/linking/confirm" element={<LinkingConfirm />} />
+                  <Route path="/change-passphrase" element={<ChangePassphrase />} />
+                  <Route path="/settings" element={<SettingsLayout />}>
+                    <Route index element={<Navigate to="account" replace />} />
+                    <Route path="account" element={<Account />} />
+                    <Route path="auth-methods" element={<AuthMethods />} />
+                    <Route path="server-linking" element={<ServerLinking />} />
+                    <Route path="about" element={<About />} />
+                  </Route>
                 </Route>
               </Route>
             </Routes>
