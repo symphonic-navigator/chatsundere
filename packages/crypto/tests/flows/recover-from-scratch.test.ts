@@ -225,10 +225,12 @@ describe('recoverFromScratch', () => {
       issuerLabel: 'My Chatsundere',
     });
 
-    // The recovered MK must match the original.
+    // The recovered MK must match the original. Compare raw bytes since
+    // MasterKey is a branded Uint8Array; `toEqual` against the branded type
+    // tightens unhelpfully — strip the brand by wrapping in a plain Uint8Array.
     expect(result.mk).toBeInstanceOf(Uint8Array);
     expect(result.mk.length).toBe(32);
-    expect(result.mk).toEqual(originalMk);
+    expect(new Uint8Array(result.mk)).toEqual(new Uint8Array(originalMk));
 
     // Session shape.
     expect(result.session.mode).toBe('linked');

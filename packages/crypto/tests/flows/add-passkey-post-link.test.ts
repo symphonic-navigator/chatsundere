@@ -18,10 +18,10 @@ const FAKE_MK = asMasterKey(new Uint8Array(32).fill(0x11));
 /** A ServerClient that no-ops on linkPasskeyFinish and throws on everything else. */
 function makeFakeClient(): ServerClient {
   return {
-    async linkOpaqueStart() {
+    async joinStart() {
       throw new Error('unexpected');
     },
-    async linkOpaqueFinish() {
+    async joinFinish() {
       throw new Error('unexpected');
     },
     async linkPasskeyStart() {

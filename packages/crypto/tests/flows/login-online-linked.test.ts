@@ -22,10 +22,10 @@ const LINKED_ROW = {
 
 function makeServerClient(behaviour: 'ok' | '401' | '500'): ServerClient {
   return {
-    async linkOpaqueStart() {
+    async joinStart() {
       throw new Error('unexpected');
     },
-    async linkOpaqueFinish() {
+    async joinFinish() {
       throw new Error('unexpected');
     },
     async linkPasskeyStart() {

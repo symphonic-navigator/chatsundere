@@ -323,10 +323,11 @@ describe('finishJoinByPairing', () => {
       issuerLabel: 'My Chatsundere',
     });
 
-    // The recovered MK must match the original.
+    // The recovered MK must match the original. MasterKey is a branded
+    // Uint8Array; compare raw bytes to dodge the brand mismatch.
     expect(result.mk).toBeInstanceOf(Uint8Array);
     expect(result.mk.length).toBe(32);
-    expect(result.mk).toEqual(originalMk);
+    expect(new Uint8Array(result.mk)).toEqual(new Uint8Array(originalMk));
 
     // Session shape.
     expect(result.session.mode).toBe('linked');

@@ -35,10 +35,10 @@ describe('deleteServerAccount', () => {
     });
     let deleteMeCalled = false;
     const fake: ServerClient = {
-      async linkOpaqueStart() {
+      async joinStart() {
         throw new Error('nope');
       },
-      async linkOpaqueFinish() {
+      async joinFinish() {
         throw new Error('nope');
       },
       async linkPasskeyStart() {
