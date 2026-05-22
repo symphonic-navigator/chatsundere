@@ -17,7 +17,7 @@ describe('codes/token', () => {
     it('uses only ambiguity-removed Base32 characters across many samples', () => {
       for (let i = 0; i < 500; i++) {
         const code = generateCode();
-        for (const ch of code.replace('-', '')) {
+        for (const ch of code.replaceAll('-', '')) {
           expect(VALID_CHAR.test(ch)).toBe(true);
         }
       }
