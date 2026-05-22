@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-22 — Squash α of cross-device-identity backend landed (path migration, DB rename, codes/token helpers, admin-invitations reshape, Tier 4 step-up); Larissa-approved with two minor fixes applied
+**Last updated:** 2026-05-22 — Squash γ (step-up backend) landed at commit `cffeb0b`; Larissa-approved after H1+M1+M2 fixes (migration 0005, GETDEL, counter-before-UV)
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -59,6 +59,25 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   guard against undefined step-up tier). Tests: 97 pass / 9 fail (the 9
   are pre-existing `full-lifecycle.test.ts` failures from `002e6e1`,
   tracked in [[insights/follow-ups-index]] line 82).
+- **Step-up backend Squash γ (2026-05-22)**: landed at commit `cffeb0b`.
+  `POST /api/v1/auth/step-up/{start,finish}` mechanism-discriminated
+  (webauthn | opaque); requireStepUp extended to Tier 2/3 (10s
+  tolerance); logout cascade clears `step_up:<jti>:*` via SCAN;
+  rate limits 10/session/5min + 20/IP/5min; audit
+  `auth.step_up.{confirmed,failed}`; metrics
+  `auth_step_up_{started,finished}_total{method_type, tier, ...}`.
+  Brief patched: t3 accepted at `/start` (10s tolerance is the TTL,
+  not a grace window). Migration 0005 added
+  `auth_methods.opaque_client_identifier` to fix the pre-existing
+  username-change-bricks-OPAQUE bug (Larissa H1) across login and
+  step-up. Two further Larissa fixes landed pre-squash: GETDEL atomic
+  on WebAuthn `/finish` round-state (M1), counter persist before
+  UV-required throw (M2). L-γ-1 / L-γ-2 / L-γ-3 deferred in
+  [[insights/security-deferrals]]. Larissa γ verdict: clear to squash
+  on re-pass. Tests: 118 pass / 9 fail (same baseline failures; +21
+  new step-up tests). WebAuthn `/finish` is implemented but
+  integration-tested only via the synthetic-passkey-row shortcut at
+  `/start`; real assertion verification is manual-verification only.
 
 ### Briefed, awaiting implementation
 
@@ -69,14 +88,12 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   - ADR 0023 amendment (relax sub-path hosting) + new ADR for unified join
   - auto-handover client state machine (ADR 0026)
   - `DELETE /api/me/account` partial-upload cleanup
-- Step-up backend (separate plan, runs before Squash β):
-  - `POST /api/v1/auth/step-up/{start,finish}` unified by mechanism
-  - Extend requireStepUp for Tier 3 (10-second tolerance window)
-  - Logout cascade DELetes step_up:<session>:* keys
 - UUIDv4 → UUIDv7 migration across the entire data model (ADR 0025)
+- Client-side step-up: `<StepUpModal />` + request interceptor in
+  user-client that catches 401 `step_up_required` + `webauthn_uv_required`
+  and runs the unified `/api/v1/auth/step-up/{start,finish}` flow.
 - Client-side cross-device identity:
   - User-client onboarding overhaul (three paths: QR / manual / local)
-  - `<StepUpModal />` + request interceptor in user-client
   - Admin-client invitation-form fields for suggested_username and note
 - Theming pivot to cyberpunk (mood-board curation pending from Chris)
 
@@ -96,8 +113,8 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. **Step-up backend** — [[../superpowers/plans/2026-05-22-step-up-backend]] all tasks (POST /api/v1/auth/step-up/{start,finish} unified by mechanism, requireStepUp extended for Tier 3, logout cascade, Larissa γ). Inline execution preferred (see [[insights/2026-05-22-subagent-vs-inline-trade-off]]).
-2. **Cross-device Squash β** — [[../superpowers/plans/2026-05-22-cross-device-identity-backend]] Tasks 8–15 (pairing-code endpoints, unified /api/v1/join/{start,finish}, wrapped-MK return + integrity guarantee, Larissa β, ADR 0023 amendment + new ADR 0028).
+1. **Cross-device Squash β** — [[../superpowers/plans/2026-05-22-cross-device-identity-backend]] Tasks 8–15 (pairing-code endpoints, unified /api/v1/join/{start,finish}, wrapped-MK return + integrity guarantee, Larissa β, ADR 0023 amendment + new ADR 0028). Inline execution preferred per [[insights/2026-05-22-subagent-vs-inline-trade-off]].
+2. **Client-side step-up** — `<StepUpModal />` + 401 interceptor in user-client; admin-client wire-up for Tier 4 admin-invitations POST (now gated server-side).
 
 ---
 
