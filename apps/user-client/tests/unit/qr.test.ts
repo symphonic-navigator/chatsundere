@@ -1,83 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
-import { parseInvitationPayload, parseInvitationUrl } from '../../src/lib/qr.js';
-import type { InvitationQrPayload } from '../../src/lib/qr.js';
+import { parseJoinUrl } from '../../src/lib/qr.js';
 
-const VALID_PAYLOAD: InvitationQrPayload = {
-  v: 1,
-  kind: 'invitation',
-  token: 'tok-abc123def456ghi7',
-  base_url: 'https://chat.example.com',
-  role: 'user',
-  issuer_label: 'Example Org',
-};
-
-function encodePayloadToBase64Url(payload: unknown): string {
-  const json = JSON.stringify(payload);
-  const b64 = btoa(json);
-  // Convert standard base64 to base64url.
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-describe('parseInvitationPayload', () => {
-  it('round-trips a valid JSON string', () => {
-    const raw = JSON.stringify(VALID_PAYLOAD);
-    const result = parseInvitationPayload(raw);
+describe('parseJoinUrl', () => {
+  it('accepts the canonical https://host/join#CODE form', () => {
+    const result = parseJoinUrl('https://chatsundere.me/join#AB7K3-MN9PN');
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual(VALID_PAYLOAD);
+      expect(result.value.baseUrl).toBe('https://chatsundere.me/');
+      expect(result.value.code).toBe('AB7K3-MN9PN');
     }
   });
 
-  it('rejects JSON with wrong "kind"', () => {
-    const bad = { ...VALID_PAYLOAD, kind: 'something_else' };
-    const result = parseInvitationPayload(JSON.stringify(bad));
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects JSON with wrong version number', () => {
-    const bad = { ...VALID_PAYLOAD, v: 2 };
-    const result = parseInvitationPayload(JSON.stringify(bad));
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects JSON with missing token', () => {
-    const { token: _omitted, ...bad } = VALID_PAYLOAD;
-    const result = parseInvitationPayload(JSON.stringify(bad));
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects JSON with an invalid base_url', () => {
-    const bad = { ...VALID_PAYLOAD, base_url: 'not-a-url' };
-    const result = parseInvitationPayload(JSON.stringify(bad));
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects non-JSON strings', () => {
-    const result = parseInvitationPayload('definitely not json');
-    expect(result.ok).toBe(false);
-  });
-});
-
-describe('parseInvitationUrl', () => {
-  it('extracts and validates a payload from a well-formed deep-link URL', () => {
-    const encoded = encodePayloadToBase64Url(VALID_PAYLOAD);
-    const url = `https://example.org/link?payload=${encoded}`;
-    const result = parseInvitationUrl(url);
+  it('accepts http://localhost:N/join#CODE', () => {
+    const result = parseJoinUrl('http://localhost:3100/join#AB7K3-MN9PN');
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toEqual(VALID_PAYLOAD);
-    }
+    if (result.ok) expect(result.value.baseUrl).toBe('http://localhost:3100/');
   });
 
-  it('rejects a URL that is missing the payload query parameter', () => {
-    const result = parseInvitationUrl('https://example.org/link?other=value');
-    expect(result.ok).toBe(false);
-  });
-
-  it('also accepts bare JSON strings (falls back to parseInvitationPayload)', () => {
-    const raw = JSON.stringify(VALID_PAYLOAD);
-    const result = parseInvitationUrl(raw);
+  it('accepts sub-path-hosted base URLs (ADR 0023 relaxation)', () => {
+    const result = parseJoinUrl('https://relay.example.com/t4524089/join#AB7K3-MN9PN');
     expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.baseUrl).toBe('https://relay.example.com/t4524089/');
+  });
+
+  it('rejects non-loopback http://', () => {
+    const result = parseJoinUrl('http://chatsundere.me/join#AB7K3-MN9PN');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('bad_scheme');
+  });
+
+  it('rejects URLs without /join segment', () => {
+    expect(parseJoinUrl('https://chatsundere.me/').ok).toBe(false);
+    expect(parseJoinUrl('https://chatsundere.me/login').ok).toBe(false);
+  });
+
+  it('rejects out-of-alphabet fragment chars', () => {
+    expect(parseJoinUrl('https://chatsundere.me/join#IB7K3-MN9PN').ok).toBe(false);
+    expect(parseJoinUrl('https://chatsundere.me/join#VB7K3-MN9PN').ok).toBe(false);
+  });
+
+  it('rejects entirely malformed strings', () => {
+    expect(parseJoinUrl('not a url').ok).toBe(false);
   });
 });
