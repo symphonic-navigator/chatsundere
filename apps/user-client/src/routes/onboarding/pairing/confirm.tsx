@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { CryptoError, finishJoinByPairing, startJoinByPairing } from '@chatsundere/crypto';
+import {
+  CryptoError,
+  finishJoinByPairing,
+  setBiometricPromptDue,
+  startJoinByPairing,
+} from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -94,6 +99,7 @@ function PairingConfirmInner() {
       useConnectivityStore.getState().onServerOk();
       useSessionStore.getState().setSession(result.session, result.mk);
       useOnboardingStore.getState().reset();
+      await setBiometricPromptDue(getDb());
       navigate('/app', { replace: true });
     } catch (err) {
       const mapped = mapError(err);

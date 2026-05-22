@@ -3,6 +3,7 @@ import {
   CryptoError,
   finishJoinByInvitation,
   linkToServer,
+  setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
@@ -123,6 +124,7 @@ function InvitationConfirmInner() {
         // Preserve the existing MK by omitting the second argument.
         useSessionStore.getState().setSession({ ...localSession, mode: 'linked' });
         useOnboardingStore.getState().reset();
+        await setBiometricPromptDue(getDb());
         navigate('/app', { replace: true });
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is
@@ -152,6 +154,7 @@ function InvitationConfirmInner() {
           username: result.session.username,
           recoveryKeyString: result.recoveryKeyString,
         });
+        await setBiometricPromptDue(getDb());
         navigate('/onboarding/invitation/recovery', { replace: true });
       }
     } catch (err) {

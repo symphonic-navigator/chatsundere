@@ -4,6 +4,7 @@ import { CryptoError } from '../errors.js';
 import {
   DB_NAME,
   DB_VERSION,
+  STORE_FLAGS,
   STORE_LINKED_ACCOUNT,
   STORE_LOCAL_ACCOUNT,
   STORE_PASSKEY_CREDENTIALS,
@@ -40,7 +41,9 @@ function runMigrations(db: IDBDatabase, oldVersion: number, newVersion: number):
     db.createObjectStore(STORE_PASSKEY_CREDENTIALS, { keyPath: 'credential_id' });
     db.createObjectStore(STORE_STAGING, { keyPath: 'key' });
   }
-  // Future versions: add a block per inclusive (oldVersion < N && newVersion >= N).
+  if (oldVersion < 2 && newVersion >= 2) {
+    db.createObjectStore(STORE_FLAGS, { keyPath: 'key' });
+  }
 }
 
 /** Promise-friendly wrapper for IDB request. */

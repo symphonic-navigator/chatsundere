@@ -70,12 +70,14 @@ export type { LocalAssertionArgs, LocalAssertionResult } from './webauthn/local-
 export {
   DB_NAME,
   DB_VERSION,
+  STORE_FLAGS,
   STORE_LOCAL_ACCOUNT,
   STORE_LINKED_ACCOUNT,
   STORE_PASSKEY_CREDENTIALS,
   STORE_STAGING,
 } from './db/schema.js';
 export type {
+  FlagsRow,
   LocalAccountRow,
   LinkedAccountRow,
   PasskeyCredentialRow,
@@ -83,6 +85,11 @@ export type {
   StagingState,
 } from './db/schema.js';
 export { openLocalDb } from './db/open.js';
+export {
+  getBiometricPromptShown,
+  setBiometricPromptDue,
+  setBiometricPromptShown,
+} from './db/flags.js';
 export {
   getLocalAccount,
   putLocalAccount,

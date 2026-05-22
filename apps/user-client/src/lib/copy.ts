@@ -207,4 +207,15 @@ export const copy = {
     message: 'A new version is ready.',
     refreshCta: 'Refresh now',
   },
+  biometricPrompt: {
+    title: 'Set up biometric unlock?',
+    body: "Future unlocks can use your device's biometric instead of typing your passphrase.",
+    setupCta: 'Set up now',
+    laterCta: 'Maybe later',
+    busyCta: 'Setting up…',
+    prfRequired:
+      'This authenticator does not support the PRF extension. A PRF-capable passkey is required to protect your master key. Try a different authenticator.',
+    genericError: 'Could not add biometric. Please try again.',
+    defaultLabel: 'This device',
+  },
 } as const;

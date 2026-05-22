@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 export const DB_NAME = 'chatsundere';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const STORE_LOCAL_ACCOUNT = 'local_account';
 export const STORE_LINKED_ACCOUNT = 'linked_account';
 export const STORE_PASSKEY_CREDENTIALS = 'local_passkey_credentials';
 export const STORE_STAGING = 'staging';
+export const STORE_FLAGS = 'flags';
 
 export interface LocalAccountRow {
   schema_version: number;
@@ -61,4 +62,14 @@ export interface StagingRow {
   new_wrapped_mk_local_integrity: Uint8Array;
   server_state: StagingState;
   created_at: Date;
+}
+
+/**
+ * One-row key/value flags store. All persisted boolean feature flags go here.
+ * The store is keyed by `key`; currently used for post-onboarding prompts.
+ */
+export interface FlagsRow {
+  key: 'biometric_prompt';
+  /** false = prompt due (not yet shown), true = prompt already dismissed/completed. */
+  shown: boolean;
 }
