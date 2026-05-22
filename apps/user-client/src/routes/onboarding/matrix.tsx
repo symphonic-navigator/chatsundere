@@ -7,7 +7,7 @@ const CELLS = [
   { to: '/onboarding/invitation', label: 'I have an invitation', hint: 'From your operator' },
   { to: '/onboarding/pairing', label: 'Add this device', hint: "I'm already a user" },
   { to: '/onboarding/recovery', label: 'Use a recovery key', hint: 'I lost my devices' },
-  { to: '/onboarding/local/username', label: 'Just this device', hint: 'No server, no sync' },
+  { to: '/onboarding/local', label: 'Just this device', hint: 'No server, no sync' },
 ] as const;
 
 /**

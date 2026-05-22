@@ -14,13 +14,19 @@ import { useOnboardingStore } from '../../../state/onboarding.store.js';
 export function InvitationForm() {
   const navigate = useNavigate();
   const setOnboardingState = useOnboardingStore((s) => s.setState);
-  const stored = useOnboardingStore((s) =>
-    s.state.kind === 'invitation_input' || s.state.kind === 'invitation_confirm'
-      ? { baseUrl: s.state.baseUrl, code: s.state.code }
-      : { baseUrl: '', code: '' },
-  );
-  const [baseUrl, setBaseUrl] = useState(stored.baseUrl);
-  const [code, setCode] = useState(stored.code);
+  // Read initial values from the store once on mount via the lazy useState
+  // initialiser. A subscribed selector that returns a fresh object literal each
+  // call triggers an infinite useSyncExternalStore loop (the snapshot is never
+  // referentially equal to itself); we only need the initial value here, not
+  // reactivity, so no subscription is required.
+  const [baseUrl, setBaseUrl] = useState(() => {
+    const s = useOnboardingStore.getState().state;
+    return s.kind === 'invitation_input' || s.kind === 'invitation_confirm' ? s.baseUrl : '';
+  });
+  const [code, setCode] = useState(() => {
+    const s = useOnboardingStore.getState().state;
+    return s.kind === 'invitation_input' || s.kind === 'invitation_confirm' ? s.code : '';
+  });
 
   const urlValid = isValidServerUrl(baseUrl);
   const codeValid = isValidCode(code);
