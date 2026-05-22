@@ -48,6 +48,8 @@ export interface InvitationSummary {
   created_at: string;
   expires_at: string;
   issuer_label: string | null;
+  suggested_username: string | null;
+  note: string | null;
 }
 
 export interface InvitationCreated extends InvitationSummary {
@@ -59,6 +61,8 @@ export interface CreateInvitationInput {
   role: 'user' | 'admin' | 'primary_admin';
   expires_in_days: 1 | 7 | 30;
   issuer_label?: string;
+  suggested_username?: string;
+  note?: string;
 }
 
 export type AuditEventCategory =

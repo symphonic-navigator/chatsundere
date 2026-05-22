@@ -14,6 +14,8 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
   const [role, setRole] = useState<CreateInvitationInput['role']>('user');
   const [expiresIn, setExpiresIn] = useState<1 | 7 | 30>(7);
   const [issuerLabel, setIssuerLabel] = useState('');
+  const [suggestedUsername, setSuggestedUsername] = useState('');
+  const [note, setNote] = useState('');
   const api = getAdminApi();
 
   const create = useMutation({
@@ -26,6 +28,8 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
       role,
       expires_in_days: expiresIn,
       ...(issuerLabel ? { issuer_label: issuerLabel } : {}),
+      ...(suggestedUsername ? { suggested_username: suggestedUsername } : {}),
+      ...(note ? { note } : {}),
     };
     create.mutate(input);
   };
@@ -69,6 +73,29 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
           onChange={(e) => setIssuerLabel(e.target.value)}
           className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
         />
+        <span className="mt-1 block text-xs text-[var(--color-subtext-0)]">
+          {copy.invitations.modal.issuerLabelHint}
+        </span>
+      </label>
+      <label className="block text-sm">
+        {copy.invitations.modal.suggestedUsername}
+        <input
+          value={suggestedUsername}
+          onChange={(e) => setSuggestedUsername(e.target.value)}
+          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+        />
+      </label>
+      <label className="block text-sm">
+        {copy.invitations.modal.note}
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          className="mt-1 w-full resize-none rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+        />
+        <span className="mt-1 block text-xs text-[var(--color-subtext-0)]">
+          {copy.invitations.modal.noteHint}
+        </span>
       </label>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-md px-3 py-1">

@@ -63,6 +63,8 @@ export function InvitationsScreen() {
               <th className="py-2">{copy.invitations.columns.status}</th>
               <th className="py-2">{copy.invitations.columns.redeemedBy}</th>
               <th className="py-2">{copy.invitations.columns.expiresAt}</th>
+              <th className="py-2">{copy.invitations.columns.issuerLabel}</th>
+              <th className="py-2">{copy.invitations.columns.note}</th>
               <th className="py-2" />
             </tr>
           </thead>
@@ -74,6 +76,19 @@ export function InvitationsScreen() {
                 <td className="py-2">{inv.status}</td>
                 <td className="py-2">{inv.redeemed_by ?? '—'}</td>
                 <td className="py-2">{formatRelative(inv.expires_at)}</td>
+                <td className="py-2 text-[var(--color-subtext-0)]">{inv.issuer_label ?? '—'}</td>
+                <td className="py-2">
+                  {inv.note ? (
+                    <span
+                      title={inv.note}
+                      className="cursor-help text-[var(--color-subtext-0)] underline decoration-dotted"
+                    >
+                      {copy.invitations.columns.noteHover}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td className="py-2 text-right">
                   {inv.status === 'pending' && (
                     <button

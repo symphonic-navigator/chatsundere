@@ -224,6 +224,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(1),
       expires_at: daysFromNow(6),
       issuer_label: 'New user onboarding batch',
+      suggested_username: null,
+      note: null,
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000002',
@@ -233,6 +235,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(2),
       expires_at: daysFromNow(5),
       issuer_label: 'Beta tester invite',
+      suggested_username: 'tester.beta',
+      note: 'From the Discord beta channel — confirmed willing to report bugs.',
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000003',
@@ -242,6 +246,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(10),
       expires_at: daysFromNow(20),
       issuer_label: 'Piotr sign-up link',
+      suggested_username: 'piotr',
+      note: null,
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000004',
@@ -251,6 +257,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(8),
       expires_at: daysFromNow(22),
       issuer_label: 'Rosalind sign-up link',
+      suggested_username: null,
+      note: null,
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000005',
@@ -260,6 +268,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(7),
       expires_at: daysFromNow(23),
       issuer_label: 'Sven sign-up link',
+      suggested_username: null,
+      note: null,
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000006',
@@ -269,6 +279,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(38),
       expires_at: daysAgo(8),
       issuer_label: 'Early access wave 1',
+      suggested_username: null,
+      note: null,
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000007',
@@ -278,6 +290,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(20),
       expires_at: daysAgo(13),
       issuer_label: 'Admin candidate — did not respond',
+      suggested_username: null,
+      note: 'Sent via email — no response after two weeks. Expired intentionally.',
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000008',
@@ -287,6 +301,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(14),
       expires_at: daysAgo(7),
       issuer_label: 'Revoked after policy change',
+      suggested_username: null,
+      note: null,
     },
     {
       id: 'inv-00000000-0000-7000-8000-000000000009',
@@ -296,6 +312,8 @@ export function initialInvitations(): InvitationSummary[] {
       created_at: daysAgo(12),
       expires_at: daysFromNow(18),
       issuer_label: 'Ophelia sign-up link',
+      suggested_username: 'ophelia',
+      note: null,
     },
   ];
 }

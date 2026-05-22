@@ -179,6 +179,8 @@ export class MockAdminApi implements AdminApi {
       created_at,
       expires_at,
       issuer_label,
+      suggested_username: input.suggested_username ?? null,
+      note: input.note ?? null,
       qr_payload,
       url,
     };

@@ -124,6 +124,9 @@ export const copy = {
       status: 'Status',
       redeemedBy: 'Redeemed by',
       expiresAt: 'Expires',
+      issuerLabel: 'Label',
+      note: 'Note',
+      noteHover: 'Note ↗',
     },
     empty: 'No invitations yet. Create one to start onboarding people.',
     modal: {
@@ -133,6 +136,11 @@ export const copy = {
       expiresIn: 'Expires in',
       expiresOptions: { day: '1 day', week: '7 days', month: '30 days' },
       issuerLabel: 'Issuer label (optional)',
+      issuerLabelHint: "Categorical label visible only to admins (e.g. 'June 2026 wave').",
+      suggestedUsername: 'Suggested username (optional)',
+      note: 'Note (optional)',
+      noteHint:
+        'Freeform note about this invitation. Operator-private — the redeeming user never sees it.',
       submit: 'Create',
       cancel: 'Cancel',
     },
