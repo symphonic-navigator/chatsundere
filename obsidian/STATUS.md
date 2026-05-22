@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-22 — after cross-device-identity API-shapes brainstorm (spec written, plan next)
+**Last updated:** 2026-05-22 — after cross-device-identity spec + plan, mini-brainstorm + plan for step-up; ready for subagent-driven execution
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -80,9 +80,11 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. Write the implementation plan for the cross-device-identity API-shapes spec via `superpowers:writing-plans` (input: [[../superpowers/specs/2026-05-22-cross-device-identity-api-shapes-design]])
-2. Then: execute the plan — likely split across two squashes (DB migration + endpoint reshape; new pairing/join endpoints) with Larissa pre-squash audit on each
-3. Step-up backend (ADR 0027) — either before or interleaved with cross-device-identity backend, since pairing-codes requires Tier 1 step-up enforcement and admin invitations requires Tier 4
+Subagent-driven execution in three phases, interleaved per the plans:
+
+1. **Cross-device Squash α** — [[../superpowers/plans/2026-05-22-cross-device-identity-backend]] Tasks 1–7 (path migration `/v1/` → `/api/v1/`, DB rename invitations → pending_codes, requireStepUp helper for Tier 1/4, Tier 4 gate on admin invitations, Larissa α)
+2. **Step-up backend** — [[../superpowers/plans/2026-05-22-step-up-backend]] all tasks (POST /api/v1/auth/step-up/{start,finish} unified by mechanism, requireStepUp extended for Tier 3, logout cascade, Larissa γ)
+3. **Cross-device Squash β** — cross-device plan Tasks 8–15 (pairing-code endpoints, unified /api/v1/join/{start,finish}, wrapped-MK return + integrity guarantee, Larissa β, ADR amendments)
 
 ---
 

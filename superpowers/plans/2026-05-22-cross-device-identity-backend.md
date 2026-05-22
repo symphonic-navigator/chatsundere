@@ -615,13 +615,13 @@ git commit -m "Reshape POST /api/v1/admin/invitations to use 10-char codes and q
 
 ---
 
-## Task 5: `requireStepUp` helper
+## Task 5: `requireStepUp` helper (Tier 1/4 only)
 
 **Files:**
 - Create: `apps/auth-service/src/auth/step-up.ts`
 - Create: `apps/auth-service/tests/unit/step-up.test.ts`
 
-The helper checks Redis for a recent step-up confirmation per ADR 0027. Issuing the confirmation (`POST /api/v1/auth/step-up`) is a **separate spec** — out of scope. The helper alone is sufficient to gate Tier 1+ endpoints; gating endpoints will return 403 until the issuer endpoint exists.
+The helper checks Redis for a recent step-up confirmation per ADR 0027. Issuing the confirmation (`POST /api/v1/auth/step-up/*`) is built by the [step-up backend plan](2026-05-22-step-up-backend.md), which executes BETWEEN cross-device Squash α and Squash β. This task builds the helper covering Tier 1 (pairing-codes) and Tier 4 (admin invitations) — the two tiers cross-device endpoints actually consult. The step-up plan extends the helper for Tier 3 (destructive ops).
 
 - [ ] **Step 1: Write the failing test**
 
