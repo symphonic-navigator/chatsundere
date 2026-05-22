@@ -277,6 +277,11 @@ export async function finishJoinByPairing(
     wrapped_mk_recovery_nonce: recoveryTagged.nonce,
     wrapped_mk_recovery_aad: recoveryTagged.aad,
     wrapped_mk_recovery_integrity: recoveryTagged.integrity_hmac,
+    // Placeholder verifier — pairs with the placeholder recovery key above (not
+    // the user's real one). `loginLocalWithRecoveryKey` will reject the user's
+    // actual recovery key on this device; offline recovery here is
+    // intentionally unavailable. Use `recoveryOnline` instead, which derives
+    // the real verifier from the recovery key string before any DB lookup.
     recovery_verifier_key: verifierKey,
     created_at: new Date(),
   };

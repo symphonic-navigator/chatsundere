@@ -221,3 +221,21 @@ Full audit run on the four functional commits of Squash β. Critical: none. High
 - **Severity:** low (configuration-dependent; mitigated by the production deployment requiring a reverse proxy that overwrites the header authoritatively).
 - **Rationale for deferral:** The fix is to read a configurable `TRUSTED_PROXY_IPS` list and only honour `X-Forwarded-For` from those hops. Doing it correctly requires environment plumbing and per-deployment configuration that does not exist yet. The interim mitigation is operational: `compose.prod.yml.example` must front the auth-service with a reverse proxy that overwrites `X-Forwarded-For` (not appends).
 - **Follow-up commitment:** Add `TRUSTED_PROXY_IPS` env var + middleware-aware header parsing before v0.1.0. Document the "production deployment must front with a reverse proxy" requirement in `compose.prod.yml.example` + `apps/auth-service/README.md` in the same squash that lands the env var.
+
+## 2026-05-22 — Onboarding overhaul Task 5 (`joinByPairing`) deferrals
+
+### O-5-1 — Device B local recovery-key login intentionally unavailable
+
+- **Affected paths:** `packages/crypto/src/flows/join-by-pairing.ts:249-280`
+- **Finding (Liz, pre-Larissa):** Pairing onto a fresh PWA (Device B) cannot persist the user's actual recovery key into `local_account.wrapped_mk_recovery_*` — the user's recovery key string lives in their notes or password manager from Device A's original onboarding, and is not transmitted by the pairing protocol. The implementation populates the local recovery wrap with a random placeholder, including a placeholder `recovery_verifier_key`. Consequence: `loginLocalWithRecoveryKey` on Device B will reject the user's real recovery key as `wrong_recovery_key`. The user must use `recoveryOnline` (server-assisted) for any recovery on Device B; `recoveryOnline` is unaffected because it derives the verifier from the input recovery-key string before consulting the local row.
+- **Severity:** low (UX availability — not a confidentiality or integrity issue; the placeholder never leaves the device).
+- **Rationale for deferral:** Alternatives would require either prompting the user for the recovery key during pairing (worsens UX), or transmitting the wrap material via a side channel (adds protocol surface). For Phase 0 the constraint is acceptable; the documented recovery path is `recoveryOnline`.
+- **Follow-up commitment:** Either (a) extend the pairing protocol to permit optional user-supplied recovery key sync during finish, or (b) add a guard in `loginLocalWithRecoveryKey` that detects placeholder verifiers and reroutes the user to `recoveryOnline` with a "recovery on this device requires the server" hint. Decide before v0.1.0.
+
+### O-5-2 — AAD-consistency between server-stored wrap and key-rotation paths (deferred for Larissa)
+
+- **Affected paths:** `packages/crypto/src/flows/join-by-pairing.ts:262-265`; `change-passphrase.ts`, `regenerate-recovery-key.ts` (key-rotation flows)
+- **Finding (Liz, pre-Larissa, flagged for audit):** `finishJoinByPairing` stores `linked_account.wrapped_mk_opaque_aad = serverWrapped.aad`. If key-rotation flows (`change-passphrase`, `regenerate-recovery-key`) re-derive the AAD via `makeLocalAccountAad(username, 'opaque')` instead of reading the stored AAD field, Device B's OPAQUE wrap will decrypt-fail after a passphrase change. Has to be verified during the Larissa pass for the squash; not addressed in this fix.
+- **Severity:** unconfirmed; depends on key-rotation flow implementation.
+- **Rationale for deferral:** Belongs in the same Larissa audit that covers the join flows.
+- **Follow-up commitment:** Larissa audit task at end of onboarding-overhaul squash (Task 24) explicitly checks the AAD-source consistency between join, login, and key-rotation flows.
