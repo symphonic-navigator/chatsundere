@@ -40,10 +40,13 @@ export async function linkToServer(args: LinkToServerArgs): Promise<void> {
     args.passphrase,
   );
 
-  const start = await args.serverClient.linkOpaqueStart(
-    { invitation_token: args.invitationToken, registration_request: registrationRequest },
+  const startResp = await args.serverClient.joinStart(
+    { kind: 'invitation', code: args.invitationToken, registration_request: registrationRequest },
     args.baseUrl,
   );
+  if (startResp.kind !== 'invitation')
+    throw new CryptoError('opaque_protocol_error', 'unexpected join/start kind');
+  const start = startResp;
 
   const { registrationRecord, exportKey } = await opaqueRegistrationFinish({
     clientRegistrationState,
@@ -59,10 +62,11 @@ export async function linkToServer(args: LinkToServerArgs): Promise<void> {
   const ik = await deriveIntegrityKey(opaqueAmk);
   const tagged = await addIntegrityHmac(wrapped, ik);
 
-  let finish: Awaited<ReturnType<ServerClient['linkOpaqueFinish']>>;
+  let finishResp: Awaited<ReturnType<ServerClient['joinFinish']>>;
   try {
-    finish = await args.serverClient.linkOpaqueFinish(
+    finishResp = await args.serverClient.joinFinish(
       {
+        kind: 'invitation',
         session_id: start.session_id,
         username,
         registration_record: toBase64Url(registrationRecord),
@@ -84,6 +88,9 @@ export async function linkToServer(args: LinkToServerArgs): Promise<void> {
     }
     throw err;
   }
+  if (finishResp.kind !== 'invitation')
+    throw new CryptoError('opaque_protocol_error', 'unexpected join/finish kind');
+  const finish = finishResp;
 
   const row: LinkedAccountRow = {
     server_user_id: finish.user_id,

@@ -123,16 +123,30 @@ describe('full lifecycle', () => {
 
 function makeFakeServer(serverSetup: string, userId: string): ServerClient {
   return {
-    async linkOpaqueStart(req, _baseUrl) {
+    async joinStart(req, _baseUrl) {
+      if (req.kind !== 'invitation') throw new Error('unexpected kind in test');
       const { registrationResponse } = opaqueServer.createRegistrationResponse({
         serverSetup,
         userIdentifier: 'alice',
         registrationRequest: req.registration_request,
       });
-      return { session_id: 'sess', registration_response: registrationResponse };
+      return {
+        kind: 'invitation',
+        session_id: 'sess',
+        registration_response: registrationResponse,
+        suggested_username: null,
+      };
     },
-    async linkOpaqueFinish(_req, _baseUrl) {
-      return { user_id: userId, role: 'user', access_token: 'tok', expires_in: 900 };
+    async joinFinish(_req, _baseUrl) {
+      return {
+        kind: 'invitation',
+        user_id: userId,
+        username: 'alice',
+        role: 'user',
+        access_token: 'tok',
+        expires_in: 900,
+        is_new_account: true,
+      };
     },
     async linkPasskeyStart(_req, _baseUrl, _token) {
       throw new Error('not in test');

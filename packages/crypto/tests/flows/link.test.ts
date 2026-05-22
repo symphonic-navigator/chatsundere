@@ -31,16 +31,30 @@ describe('linkToServer', () => {
     const serverSetup = opaqueServer.createSetup();
 
     const fakeServer: ServerClient = {
-      async linkOpaqueStart(req, _baseUrl) {
+      async joinStart(req, _baseUrl) {
+        if (req.kind !== 'invitation') throw new Error('unexpected kind');
         const { registrationResponse } = opaqueServer.createRegistrationResponse({
           serverSetup,
           userIdentifier: 'alice',
           registrationRequest: req.registration_request,
         });
-        return { session_id: 'test-session', registration_response: registrationResponse };
+        return {
+          kind: 'invitation',
+          session_id: 'test-session',
+          registration_response: registrationResponse,
+          suggested_username: null,
+        };
       },
-      async linkOpaqueFinish(_req, _baseUrl) {
-        return { user_id: 'srv-uuid', role: 'user', access_token: 'jwt', expires_in: 900 };
+      async joinFinish(_req, _baseUrl) {
+        return {
+          kind: 'invitation',
+          user_id: 'srv-uuid',
+          username: 'alice',
+          role: 'user',
+          access_token: 'jwt',
+          expires_in: 900,
+          is_new_account: true,
+        };
       },
       async linkPasskeyStart() {
         throw new Error('not used');
