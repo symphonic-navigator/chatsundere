@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-21 — after ProtectedRoute-guard squash (session-required routes guarded)
+**Last updated:** 2026-05-22 — after cross-device-identity API-shapes brainstorm (spec written, plan next)
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -33,12 +33,27 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   for `/app`, `/linking/*`, `/change-passphrase`, `/settings/*`. Service-
   worker refresh on a protected route now correctly reroutes through Gate
   instead of leaving the user on a session-stripped header.
+- **Cross-device-identity API-shapes spec (2026-05-22)**: brainstorm with
+  Chris resolved brief's Open #3. Spec at
+  [[../superpowers/specs/2026-05-22-cross-device-identity-api-shapes-design]].
+  Key decisions: URL+code two-field UX (Baalnet sub-path hosting
+  first-class, relaxes ADR 0023); 10-char/50-bit code; QR is real URL
+  with `#code` fragment; unified `POST /api/v1/join/{start,finish}` with
+  `kind` discriminator absorbs `/v1/link/opaque/*`; pairing-finish returns
+  wrapped MK material with three-layer integrity guarantee; step-up per
+  ADR 0027 (implicit Redis check, no proof header). Triggers ADR-0023
+  amendment + new ADR (~0028) for the unified two-round join flow.
 
 ### Briefed, awaiting implementation
 
-- Cross-device identity:
-  - `/api/admin/invitations`, `/api/me/pairing-codes`, `/api/join`
-  - `pending_codes` DB table (single table with `type` discriminator)
+- Cross-device identity (spec landed; plan next):
+  - `POST /api/v1/admin/invitations` (reshape existing), `GET`, `DELETE`
+  - `POST/GET/DELETE /api/v1/me/pairing-codes`
+  - `POST /api/v1/join/{start,finish}` (replaces `/v1/link/opaque/*`)
+  - `pending_codes` DB table (rename + extend existing `invitations`)
+  - `HMAC_KEY_PENDING_CODES` env var (leak-domain isolation)
+  - Path migration `/v1/...` → `/api/v1/...` repo-wide
+  - ADR 0023 amendment (relax sub-path hosting) + new ADR for unified join
   - auto-handover client state machine (ADR 0026)
   - `DELETE /api/me/account` partial-upload cleanup
 - UUIDv4 → UUIDv7 migration across the entire data model (ADR 0025)
@@ -65,8 +80,9 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. Brainstorm the API endpoint shapes for cross-device-identity backend with Chris (curl-verification per [[../briefs/phase 0/cross-device-identity]] §Open #3) — blocking item before the cross-device-identity backend implementation
-2. Then: cross-device-identity backend + step-up backend (priority order to decide with Chris)
+1. Write the implementation plan for the cross-device-identity API-shapes spec via `superpowers:writing-plans` (input: [[../superpowers/specs/2026-05-22-cross-device-identity-api-shapes-design]])
+2. Then: execute the plan — likely split across two squashes (DB migration + endpoint reshape; new pairing/join endpoints) with Larissa pre-squash audit on each
+3. Step-up backend (ADR 0027) — either before or interleaved with cross-device-identity backend, since pairing-codes requires Tier 1 step-up enforcement and admin invitations requires Tier 4
 
 ---
 
