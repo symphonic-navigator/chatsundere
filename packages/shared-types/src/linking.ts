@@ -9,52 +9,18 @@ import type {
 
 import type { ServerAuthMethodType } from './auth.js';
 
-/** Request body for `POST /v1/link/opaque/start`. */
-export interface LinkOpaqueStartRequest {
-  invitation_token: string;
-  registration_request: string;
-}
-
-/** Response body for `POST /v1/link/opaque/start`. */
-export interface LinkOpaqueStartResponse {
-  session_id: string;
-  registration_response: string;
-}
-
-/** Request body for `POST /v1/link/opaque/finish`. */
-export interface LinkOpaqueFinishRequest {
-  session_id: string;
-  username: string;
-  registration_record: string;
-  wrapped_mk_opaque: string;
-  wrap_nonce_opaque: string;
-  wrap_aad_opaque: string;
-  wrapped_mk_recovery: string;
-  wrap_nonce_recovery: string;
-  wrap_aad_recovery: string;
-  recovery_verifier_key: string;
-}
-
-/** Response body for `POST /v1/link/opaque/finish`. */
-export interface LinkOpaqueFinishResponse {
-  user_id: string;
-  role: 'primary_admin' | 'admin' | 'user';
-  access_token: string;
-  expires_in: number;
-}
-
-/** Request body for `POST /v1/link/passkey/start`. */
+/** Request body for `POST /api/v1/link/passkey/start`. */
 export interface LinkPasskeyStartRequest {
   invitation_token?: string;
 }
 
-/** Response body for `POST /v1/link/passkey/start`. */
+/** Response body for `POST /api/v1/link/passkey/start`. */
 export interface LinkPasskeyStartResponse {
   session_id: string;
   options: PublicKeyCredentialCreationOptionsJSON;
 }
 
-/** Request body for `POST /v1/link/passkey/finish`. */
+/** Request body for `POST /api/v1/link/passkey/finish`. */
 export interface LinkPasskeyFinishRequest {
   session_id: string;
   invitation_token?: string;
@@ -74,8 +40,12 @@ export interface LinkPasskeyFinishRequest {
   username?: string;
 }
 
-/** Response body for `POST /v1/link/passkey/finish`. */
-export interface LinkPasskeyFinishResponse extends LinkOpaqueFinishResponse {
+/** Response body for `POST /api/v1/link/passkey/finish`. */
+export interface LinkPasskeyFinishResponse {
+  user_id: string;
+  role: 'primary_admin' | 'admin' | 'user';
+  access_token: string;
+  expires_in: number;
   auth_method_id: string;
   method_type: ServerAuthMethodType;
 }

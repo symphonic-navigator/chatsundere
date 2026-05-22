@@ -11,10 +11,6 @@ export type {
 } from './auth.js';
 
 export type {
-  LinkOpaqueStartRequest,
-  LinkOpaqueStartResponse,
-  LinkOpaqueFinishRequest,
-  LinkOpaqueFinishResponse,
   LinkPasskeyStartRequest,
   LinkPasskeyStartResponse,
   LinkPasskeyFinishRequest,
@@ -24,6 +20,16 @@ export type {
   AuthenticationResponseJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from './linking.js';
+
+export { JoinError } from './join.js';
+
+export type {
+  JoinStartRequest,
+  JoinStartResponse,
+  JoinFinishRequest,
+  JoinFinishResponse,
+  JoinErrorCode,
+} from './join.js';
 
 export type {
   OpaqueLoginStartRequest,
