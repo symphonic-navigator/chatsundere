@@ -88,3 +88,35 @@ Negative / accepted trade-offs:
 - [`obsidian/briefs/phase 0/cross-device-identity.md`](../briefs/phase%200/cross-device-identity.md) — Self-hosting Constraints section.
 - [ADR 0021](0021-phase0-opaque-first-linking.md) — auth-service routing assumes `/api/v1/...` per this ADR's prefix rule.
 - WebAuthn Level 2 spec, §5.1.3 — secure-context requirement and loopback exception.
+
+## Amendment — 2026-05-22 (cross-device-identity)
+
+The "server hosted at domain root" constraint is **relaxed** to permit
+*transparent reverse-proxy sub-path hosting*. The auth-service still mounts
+at `/api/v1/...` from its own perspective; deployers may front it with a
+path-rewriting reverse proxy that strips an external prefix before
+forwarding to the instance.
+
+The motivating use case is the Baalnet-style relay model: a single relay
+host at `https://relay.baalnet.io/` may proxy multiple Chatsundere
+operator instances at sub-paths such as `https://relay.baalnet.io/t4524.../`,
+where the relay rewrites the request before forwarding so the instance
+sees the request as if it lived at root. The QR fragment URL embedded by
+the operator's invitation (`${API_BASE_URL}/join#CODE`) naturally encodes
+the public-facing prefix because `API_BASE_URL` is operator-configurable.
+
+Sub-path hosting *without* a path-rewriting proxy (i.e., the instance
+itself serving from `/chatsundere/api/v1/...`) **remains unsupported** —
+the auth-service does not parse an operator-supplied API prefix, and the
+WebAuthn relying-party ID derivation in `apps/auth-service/src/webauthn/server.ts`
+still assumes the hostname matches the API origin.
+
+The original alternative "Allow sub-path hosting via operator-supplied
+API prefix" (in the Alternatives Considered section above) stays rejected;
+this amendment does *not* reverse that decision — it only acknowledges
+that a *transparent* sub-path proxy (URL rewriting at the relay edge) is
+a deployer concern, not a server concern.
+
+Driven by the cross-device-identity spec
+([`superpowers/specs/2026-05-22-cross-device-identity-api-shapes-design.md`](../../superpowers/specs/2026-05-22-cross-device-identity-api-shapes-design.md))
+and the Web-of-Trust use case requiring path-routed relays.
