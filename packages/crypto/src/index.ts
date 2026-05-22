@@ -166,6 +166,11 @@ export type {
 } from './flows/login-online-linked.js';
 export { recoveryOnline } from './flows/recovery-online.js';
 export type { RecoveryOnlineArgs } from './flows/recovery-online.js';
+export { recoverFromScratch } from './flows/recover-from-scratch.js';
+export type {
+  RecoverFromScratchArgs,
+  RecoverFromScratchResult,
+} from './flows/recover-from-scratch.js';
 export { deleteServerAccount } from './flows/server-account-delete.js';
 export type { DeleteServerAccountArgs } from './flows/server-account-delete.js';
 export { addPasskeyPostLink } from './flows/add-passkey-post-link.js';
