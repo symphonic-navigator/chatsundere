@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-22 — after cross-device-identity spec + plan, mini-brainstorm + plan for step-up; ready for subagent-driven execution
+**Last updated:** 2026-05-22 — Squash α of cross-device-identity backend landed (path migration, DB rename, codes/token helpers, admin-invitations reshape, Tier 4 step-up); Larissa-approved with two minor fixes applied
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -43,25 +43,41 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   wrapped MK material with three-layer integrity guarantee; step-up per
   ADR 0027 (implicit Redis check, no proof header). Triggers ADR-0023
   amendment + new ADR (~0028) for the unified two-round join flow.
+- **Cross-device-identity Squash α (2026-05-22)**: backend infrastructure
+  landed at commit `9b170c1`. Route prefix migrated repo-wide from `/v1/`
+  to `/api/v1/` (link/opaque/* and link/passkey/* deferred to Squash β).
+  DB rename `invitations` → `pending_codes` with type discriminator,
+  suggested_username, note; migration 0003 + 0004 (role nullable).
+  `codes/token.ts` with 10-char ambiguity-removed Base32 generator and
+  HMAC_KEY_PENDING_CODES env var (leak-domain-isolated). POST
+  `/api/v1/admin/invitations` reshape to return `code` + `qr_url` and
+  accept `suggested_username` + `note`. requireStepUp helper for Tier 1
+  and Tier 4 with Redis-backed grace windows per ADR 0027. JWT access
+  tokens now carry a `jti` claim used as the server-side `session_id`.
+  Tier 4 gate wired onto admin-invitations POST. Larissa-approved with
+  two fixes applied (HMAC keys added to pino redact list; defence-in-depth
+  guard against undefined step-up tier). Tests: 97 pass / 9 fail (the 9
+  are pre-existing `full-lifecycle.test.ts` failures from `002e6e1`,
+  tracked in [[insights/follow-ups-index]] line 82).
 
 ### Briefed, awaiting implementation
 
-- Cross-device identity (spec landed; plan next):
-  - `POST /api/v1/admin/invitations` (reshape existing), `GET`, `DELETE`
+- Cross-device identity Squash β (Tasks 8-15 of the backend plan):
   - `POST/GET/DELETE /api/v1/me/pairing-codes`
   - `POST /api/v1/join/{start,finish}` (replaces `/v1/link/opaque/*`)
-  - `pending_codes` DB table (rename + extend existing `invitations`)
-  - `HMAC_KEY_PENDING_CODES` env var (leak-domain isolation)
-  - Path migration `/v1/...` → `/api/v1/...` repo-wide
+  - Wrapped-MK return + three-layer integrity guarantee on pairing-finish
   - ADR 0023 amendment (relax sub-path hosting) + new ADR for unified join
   - auto-handover client state machine (ADR 0026)
   - `DELETE /api/me/account` partial-upload cleanup
+- Step-up backend (separate plan, runs before Squash β):
+  - `POST /api/v1/auth/step-up/{start,finish}` unified by mechanism
+  - Extend requireStepUp for Tier 3 (10-second tolerance window)
+  - Logout cascade DELetes step_up:<session>:* keys
 - UUIDv4 → UUIDv7 migration across the entire data model (ADR 0025)
-- Step-up authentication (ADR 0027):
-  - `POST /v1/auth/step-up` + middleware on Tier 1+ endpoints
+- Client-side cross-device identity:
+  - User-client onboarding overhaul (three paths: QR / manual / local)
   - `<StepUpModal />` + request interceptor in user-client
-  - Tier-4 step-up wiring in admin-client invitation creation
-- HTTPS-required + server-at-root + `/api` prefix enforcement (ADR 0023)
+  - Admin-client invitation-form fields for suggested_username and note
 - Theming pivot to cyberpunk (mood-board curation pending from Chris)
 
 ### Open design questions / blockers
@@ -80,11 +96,8 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-Subagent-driven execution in three phases, interleaved per the plans:
-
-1. **Cross-device Squash α** — [[../superpowers/plans/2026-05-22-cross-device-identity-backend]] Tasks 1–7 (path migration `/v1/` → `/api/v1/`, DB rename invitations → pending_codes, requireStepUp helper for Tier 1/4, Tier 4 gate on admin invitations, Larissa α)
-2. **Step-up backend** — [[../superpowers/plans/2026-05-22-step-up-backend]] all tasks (POST /api/v1/auth/step-up/{start,finish} unified by mechanism, requireStepUp extended for Tier 3, logout cascade, Larissa γ)
-3. **Cross-device Squash β** — cross-device plan Tasks 8–15 (pairing-code endpoints, unified /api/v1/join/{start,finish}, wrapped-MK return + integrity guarantee, Larissa β, ADR amendments)
+1. **Step-up backend** — [[../superpowers/plans/2026-05-22-step-up-backend]] all tasks (POST /api/v1/auth/step-up/{start,finish} unified by mechanism, requireStepUp extended for Tier 3, logout cascade, Larissa γ). Inline execution preferred (see [[insights/2026-05-22-subagent-vs-inline-trade-off]]).
+2. **Cross-device Squash β** — [[../superpowers/plans/2026-05-22-cross-device-identity-backend]] Tasks 8–15 (pairing-code endpoints, unified /api/v1/join/{start,finish}, wrapped-MK return + integrity guarantee, Larissa β, ADR 0023 amendment + new ADR 0028).
 
 ---
 
