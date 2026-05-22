@@ -1,6 +1,6 @@
 # Chatsundere Status
 
-**Last updated:** 2026-05-22 — Squash γ (step-up backend) landed at commit `cffeb0b`; Larissa-approved after H1+M1+M2 fixes (migration 0005, GETDEL, counter-before-UV)
+**Last updated:** 2026-05-22 — Squash β (cross-device-identity endpoints) landed at commit `7a01697`; ADR 0023 amended + ADR 0028 added; Larissa β-approved after H1+M1+L1 fixes (per-IP rate limits, kind_mismatch pre-consume, kind_mismatch message scrub)
 
 This file is the single point of orientation. Read it first at the start of
 every session; update it at the end of every session. Anything more detailed
@@ -78,16 +78,35 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   new step-up tests). WebAuthn `/finish` is implemented but
   integration-tested only via the synthetic-passkey-row shortcut at
   `/start`; real assertion verification is manual-verification only.
+- **Cross-device-identity Squash β (2026-05-22)**: landed at commit
+  `7a01697`. `POST/GET/DELETE /api/v1/me/pairing-codes` (Tier 1 gated;
+  GET surfaces `code: null` and `qr_url: null` because storage is
+  HMAC-only — spec §4.5 deviation tracked in
+  [[insights/follow-ups-index]]). Unified `POST /api/v1/join/{start,finish}`
+  with `kind: 'invitation' | 'pairing'` discriminator absorbs the
+  former `/v1/link/opaque/*`; pairing-finish returns the owner's
+  wrapped MK material so the new device joins the existing crypto
+  domain. `assertOpaqueWrappingPresent` (ADR 0021 defence-in-depth)
+  writes `wrapping_invariant_violated` audit + metric on any anomaly
+  and refuses with a generic 500. Per-IP rate limits on `/join/*`
+  per spec §6 (10/min + 100/hour on /start, 10/min on /finish);
+  `kind_mismatch` short-circuits before the 4-attempt cap consume
+  (Larissa β M1). `/v1/link/opaque/*` and `invitations/token.ts`
+  deleted; passkey-link migrated to `/api/v1/link/passkey/*`.
+  bootstrap-admin CLI writes the new `{ code, qr_url, ... }` shape.
+  ADR 0023 amended (transparent sub-path proxy allowed), ADR 0028
+  added (unified two-round join flow). Larissa β-approved on re-pass
+  after H1+M1+L1 fixes; L-β-1 / L-β-2 deferred in
+  [[insights/security-deferrals]]. Tests: 136 pass / 9 fail (same
+  baseline; +18 new endpoint + integrity tests). User-client
+  `linkOpaqueStart`/`linkOpaqueFinish` wiring intentionally broken
+  pending the onboarding overhaul (next session).
 
 ### Briefed, awaiting implementation
 
-- Cross-device identity Squash β (Tasks 8-15 of the backend plan):
-  - `POST/GET/DELETE /api/v1/me/pairing-codes`
-  - `POST /api/v1/join/{start,finish}` (replaces `/v1/link/opaque/*`)
-  - Wrapped-MK return + three-layer integrity guarantee on pairing-finish
-  - ADR 0023 amendment (relax sub-path hosting) + new ADR for unified join
-  - auto-handover client state machine (ADR 0026)
-  - `DELETE /api/me/account` partial-upload cleanup
+- auto-handover client state machine (ADR 0026)
+- `DELETE /api/v1/me/account` partial-upload cleanup (per ADR 0026
+  Failure Mode C)
 - UUIDv4 → UUIDv7 migration across the entire data model (ADR 0025)
 - Client-side step-up: `<StepUpModal />` + request interceptor in
   user-client that catches 401 `step_up_required` + `webauthn_uv_required`
@@ -113,15 +132,28 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. **Cross-device Squash β** — [[../superpowers/plans/2026-05-22-cross-device-identity-backend]] Tasks 8–15 (pairing-code endpoints, unified /api/v1/join/{start,finish}, wrapped-MK return + integrity guarantee, Larissa β, ADR 0023 amendment + new ADR 0028). Inline execution preferred per [[insights/2026-05-22-subagent-vs-inline-trade-off]].
-2. **Client-side step-up** — `<StepUpModal />` + 401 interceptor in user-client; admin-client wire-up for Tier 4 admin-invitations POST (now gated server-side).
+1. **Client-side cross-device identity** — user-client onboarding
+   overhaul (three paths: QR / manual / local) targeting the new
+   `/api/v1/join/{start,finish}` surface. Replaces the now-broken
+   `linkOpaqueStart`/`linkOpaqueFinish` wiring in
+   `apps/user-client/src/lib/server-client.ts`. Includes the
+   admin-client invitation-form fields for `suggested_username`
+   and `note`. Inline execution preferred per
+   [[insights/2026-05-22-subagent-vs-inline-trade-off]].
+2. **Client-side step-up** — `<StepUpModal />` + 401 interceptor in
+   user-client that catches `step_up_required` /
+   `webauthn_uv_required` and runs the unified step-up flow.
+   Admin-client wire-up for Tier 4 admin-invitations POST.
+3. **First end-to-end test** — Chris's first full-system test once
+   the user-client onboarding lands. Backend surface should be
+   ready; auth-service Larissa-approved across three squashes.
 
 ---
 
 ## Pointers
 
 - All open todos: [[insights/follow-ups-index]]
-- Decisions: `decisions/0001–0027`
+- Decisions: `decisions/0001–0028`
 - Design briefs: `briefs/phase 0/`
 - Session journal: `insights/YYYY-MM-DD-*.md`
 - Recent commits: `git log --oneline -20`
