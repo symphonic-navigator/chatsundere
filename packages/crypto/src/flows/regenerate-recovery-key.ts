@@ -3,6 +3,7 @@
 import { deriveRecoveryAmk } from '../amk.js';
 import { getLocalAccount, putLocalAccount, requireLocalAccount } from '../db/local-account.js';
 import { encodeRecoveryKey } from '../encoding/recovery-key.js';
+import { makeLocalAccountAad } from '../primitives/aad.js';
 import { aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import { getRandomBytes } from '../primitives/random.js';
@@ -31,7 +32,7 @@ export async function regenerateRecoveryKey(
   const newRk = asRecoveryKey(getRandomBytes(32));
   const newAmk = await deriveRecoveryAmk(newRk);
   const newVerifier = await deriveVerifierKey(newRk);
-  const aad = new TextEncoder().encode(`${row.username}::recovery::v1`);
+  const aad = makeLocalAccountAad(row.username, 'recovery');
   const wrapped = await aeadEncrypt(newAmk, args.mk, aad);
   const ik = await deriveIntegrityKey(newAmk);
   const tagged = await addIntegrityHmac(wrapped, ik);

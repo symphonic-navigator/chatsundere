@@ -6,6 +6,7 @@ import type { LocalAccountRow } from '../db/schema.js';
 import { deleteStaging } from '../db/staging.js';
 import { encodeRecoveryKey } from '../encoding/recovery-key.js';
 import { CryptoError } from '../errors.js';
+import { makeLocalAccountAad } from '../primitives/aad.js';
 import { aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import { getRandomBytes } from '../primitives/random.js';
@@ -34,15 +35,6 @@ export interface CreateLocalAccountResult {
    */
   mk: MasterKey;
   recoveryKeyString: string;
-}
-
-/**
- * Build the AAD bytes for a wrapped MK bundle. The scope distinguishes
- * local-passphrase wrapping from recovery-key wrapping. Exported so that
- * login-local can reproduce the same bytes without re-encoding.
- */
-export function makeLocalAccountAad(username: string, scope: 'local' | 'recovery'): Uint8Array {
-  return new TextEncoder().encode(`${username}::${scope}::v1`);
 }
 
 const USERNAME_RE = /^[a-z][a-z0-9_-]{2,31}$/;

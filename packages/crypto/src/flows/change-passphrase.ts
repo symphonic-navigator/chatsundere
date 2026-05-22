@@ -5,6 +5,7 @@ import { getLocalAccount, putLocalAccount, requireLocalAccount } from '../db/loc
 import type { StagingRow } from '../db/schema.js';
 import { deleteStaging, getStaging, putStaging, setStagingState } from '../db/staging.js';
 import { CryptoError } from '../errors.js';
+import { makeLocalAccountAad } from '../primitives/aad.js';
 import { aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import { getRandomBytes } from '../primitives/random.js';
@@ -76,7 +77,7 @@ async function prepareStaging(
 ): Promise<{ staged: StagingRow }> {
   const newSalt = getRandomBytes(ARGON2ID_PARAMS.saltLength);
   const newAmk = await deriveLocalAmk(newPassphrase, newSalt);
-  const aad = new TextEncoder().encode(`${username}::local::v1`);
+  const aad = makeLocalAccountAad(username, 'local');
   const wrapped = await aeadEncrypt(newAmk, mk, aad);
   const ik = await deriveIntegrityKey(newAmk);
   const tagged = await addIntegrityHmac(wrapped, ik);

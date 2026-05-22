@@ -7,6 +7,7 @@ import { fromBase64Url, toBase64Url } from '../encoding/base64url.js';
 import { decodeRecoveryKey } from '../encoding/recovery-key.js';
 import { CryptoError } from '../errors.js';
 import { opaqueRegistrationFinish, opaqueRegistrationStart } from '../opaque/client.js';
+import { makeLocalAccountAad } from '../primitives/aad.js';
 import { aeadDecrypt, aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import { computeRecoveryProof, deriveVerifierKey } from '../recovery.js';
@@ -110,14 +111,14 @@ export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<void> {
   const newOpaqueAmk = await deriveOpaqueAmk(exportKey);
 
   // Step 6 — Wrap MK under the new opaque_amk.
-  const opaqueAad = new TextEncoder().encode(`${args.username}::opaque::v1`);
+  const opaqueAad = makeLocalAccountAad(args.username, 'opaque');
   const newOpaqueWrap = await aeadEncrypt(newOpaqueAmk, mk, opaqueAad);
   const opaqueIk = await deriveIntegrityKey(newOpaqueAmk);
   const newOpaqueTagged = await addIntegrityHmac(newOpaqueWrap, opaqueIk);
 
   // Re-wrap MK under the existing recovery_amk so local_account and server
   // copies remain consistent. Recovery key itself is not rotated here.
-  const recoveryAad = new TextEncoder().encode(`${args.username}::recovery::v1`);
+  const recoveryAad = makeLocalAccountAad(args.username, 'recovery');
   const newRecoveryWrap = await aeadEncrypt(recoveryAmk, mk, recoveryAad);
   // No integrity HMAC needed for the server copy; we compute one for IndexedDB.
   const recoveryIk = await deriveIntegrityKey(recoveryAmk);

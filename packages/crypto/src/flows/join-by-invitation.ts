@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { deriveLocalAmk, deriveOpaqueAmk, deriveRecoveryAmk } from '../amk.js';
-import { putLinkedAccount } from '../db/linked-account.js';
-import { putLocalAccount } from '../db/local-account.js';
+import { putLocalAndLinkedAccount } from '../db/account-pair.js';
 import type { LinkedAccountRow, LocalAccountRow } from '../db/schema.js';
 import { toBase64Url } from '../encoding/base64url.js';
 import { encodeRecoveryKey } from '../encoding/recovery-key.js';
 import { CryptoError } from '../errors.js';
 import { opaqueRegistrationFinish, opaqueRegistrationStart } from '../opaque/client.js';
+import { makeLocalAccountAad } from '../primitives/aad.js';
 import { aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import { getRandomBytes } from '../primitives/random.js';
@@ -159,8 +159,8 @@ export async function finishJoinByInvitation(
   const recoveryAmk = await deriveRecoveryAmk(recoveryKey);
 
   // --- Wrap MK under local passphrase (for local_account / loginOnlineLinked) --
-  const localAad = new TextEncoder().encode(`${args.username}::local::v1`);
-  const recoveryAad = new TextEncoder().encode(`${args.username}::recovery::v1`);
+  const localAad = makeLocalAccountAad(args.username, 'local');
+  const recoveryAad = makeLocalAccountAad(args.username, 'recovery');
 
   const wrappedLocal = await aeadEncrypt(localAmk, mk, localAad);
   const wrappedRecovery = await aeadEncrypt(recoveryAmk, mk, recoveryAad);
@@ -183,7 +183,7 @@ export async function finishJoinByInvitation(
 
   // --- Wrap MK under OPAQUE export-key ----------------------------------------
   const opaqueAmk = await deriveOpaqueAmk(exportKey);
-  const opaqueAad = new TextEncoder().encode(`${args.username}::opaque::v1`);
+  const opaqueAad = makeLocalAccountAad(args.username, 'opaque');
   const wrappedOpaque = await aeadEncrypt(opaqueAmk, mk, opaqueAad);
   const opaqueIk = await deriveIntegrityKey(opaqueAmk);
   const opaqueTagged = await addIntegrityHmac(wrappedOpaque, opaqueIk);
@@ -221,7 +221,7 @@ export async function finishJoinByInvitation(
     );
   }
 
-  // --- Persist IndexedDB rows --------------------------------------------------
+  // --- Persist IndexedDB rows (single transaction for atomicity) ---------------
   const localRow: LocalAccountRow = {
     schema_version: 1,
     username: args.username,
@@ -237,7 +237,6 @@ export async function finishJoinByInvitation(
     recovery_verifier_key: verifierKey,
     created_at: new Date(),
   };
-  await putLocalAccount(args.db, localRow);
 
   const linkedRow: LinkedAccountRow = {
     server_user_id: finish.user_id,
@@ -250,7 +249,8 @@ export async function finishJoinByInvitation(
     wrapped_mk_opaque_integrity: opaqueTagged.integrity_hmac,
     linked_at: new Date(),
   };
-  await putLinkedAccount(args.db, linkedRow);
+
+  await putLocalAndLinkedAccount(args.db, localRow, linkedRow);
 
   // --- Build session -----------------------------------------------------------
   const session = createMasterKeySession({

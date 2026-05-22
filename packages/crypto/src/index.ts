@@ -27,6 +27,7 @@ export { assertRuntimeSupport } from './runtime.js';
 export { constantTimeEqual } from './primitives/constant-time.js';
 export { getRandomBytes } from './primitives/random.js';
 export { hkdfSha256, argon2id } from './primitives/kdf.js';
+export { makeLocalAccountAad } from './primitives/aad.js';
 export type { Argon2idParams } from './primitives/kdf.js';
 export { fromBase64Url, toBase64Url } from './encoding/base64url.js';
 export { decodeRecoveryKey, encodeRecoveryKey } from './encoding/recovery-key.js';
@@ -93,6 +94,7 @@ export {
   putLinkedAccount,
   deleteLinkedAccount,
 } from './db/linked-account.js';
+export { putLocalAndLinkedAccount } from './db/account-pair.js';
 export {
   listPasskeyCredentials,
   getPasskeyCredential,

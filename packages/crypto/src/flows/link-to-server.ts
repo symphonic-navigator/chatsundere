@@ -7,6 +7,7 @@ import type { LinkedAccountRow } from '../db/schema.js';
 import { toBase64Url } from '../encoding/base64url.js';
 import { CryptoError } from '../errors.js';
 import { opaqueRegistrationFinish, opaqueRegistrationStart } from '../opaque/client.js';
+import { makeLocalAccountAad } from '../primitives/aad.js';
 import { aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import type { ServerClient } from '../server-client.js';
@@ -53,7 +54,7 @@ export async function linkToServer(args: LinkToServerArgs): Promise<void> {
   });
 
   const opaqueAmk = await deriveOpaqueAmk(exportKey);
-  const aad = new TextEncoder().encode(`${username}::opaque::v1`);
+  const aad = makeLocalAccountAad(username, 'opaque');
   const wrapped = await aeadEncrypt(opaqueAmk, args.mk, aad);
   const ik = await deriveIntegrityKey(opaqueAmk);
   const tagged = await addIntegrityHmac(wrapped, ik);
