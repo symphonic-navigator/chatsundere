@@ -149,6 +149,13 @@ export type {
   FinishJoinByInvitationArgs,
   FinishJoinByInvitationResult,
 } from './flows/join-by-invitation.js';
+export { startJoinByPairing, finishJoinByPairing } from './flows/join-by-pairing.js';
+export type {
+  StartJoinByPairingArgs,
+  JoinByPairingState,
+  FinishJoinByPairingArgs,
+  FinishJoinByPairingResult,
+} from './flows/join-by-pairing.js';
 export { linkToServer } from './flows/link-to-server.js';
 export type { LinkToServerArgs } from './flows/link-to-server.js';
 export { loginOnlineLinked } from './flows/login-online-linked.js';
