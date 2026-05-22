@@ -142,14 +142,14 @@ describe.skipIf(skip)('Admin invitation endpoints', () => {
       state: string;
     };
     expect(typeof body.invitation_id).toBe('string');
-    expect(body.code).toMatch(/^[23456789A-HJ-NP-Z]{5}-[23456789A-HJ-NP-Z]{5}$/);
+    expect(body.code).toMatch(/^[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/);
     expect(typeof body.expires_at).toBe('string');
     expect(body.state).toBe('active');
     createdInvitationIds.push(body.invitation_id);
 
     // qr_url is the join deep-link constructed from the (stripped) base URL.
     expect(body.qr_url).toMatch(
-      /^https?:\/\/.+\/join#[23456789A-HJ-NP-Z]{5}-[23456789A-HJ-NP-Z]{5}$/,
+      /^https?:\/\/.+\/join#[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/,
     );
     expect(body.qr_url.endsWith(body.code)).toBe(true);
     expect(body.qr_url.includes('/auth/join')).toBe(false); // /auth suffix stripped

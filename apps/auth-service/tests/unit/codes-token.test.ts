@@ -3,9 +3,9 @@
 import { describe, expect, it } from 'bun:test';
 import { generateCode, hashCode, isValidCodeFormat } from '../../src/codes/token.js';
 
-// RFC 4648 §6 Base32 minus the four ambiguous characters {0, O, 1, I}.
-const VALID_CHAR = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]$/;
-const CODE_FORMAT = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/;
+// Crockford Base32 with V↔U swap (see spec § 2 Decision 8).
+const VALID_CHAR = /^[0-9ABCDEFGHJKMNPQRSTUWXYZ]$/;
+const CODE_FORMAT = /^[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/;
 
 describe('codes/token', () => {
   describe('generateCode', () => {
@@ -54,13 +54,16 @@ describe('codes/token', () => {
       expect(isValidCodeFormat('AB7K3-MN9PX')).toBe(true);
       expect(isValidCodeFormat('22222-33333')).toBe(true);
       expect(isValidCodeFormat('ZZZZZ-YYYYY')).toBe(true);
+      expect(isValidCodeFormat('AB7K3-MNUPX')).toBe(true); // U is in alphabet
+      expect(isValidCodeFormat('00000-00000')).toBe(true); // digits 0 and 1 now valid
+      expect(isValidCodeFormat('11111-11111')).toBe(true);
     });
 
-    it('rejects codes containing ambiguous characters', () => {
-      expect(isValidCodeFormat('AB7K3-MN0PX')).toBe(false); // contains 0 (zero)
-      expect(isValidCodeFormat('AB7K3-MNOPX')).toBe(false); // contains O (oh)
-      expect(isValidCodeFormat('AB7K3-MN1PX')).toBe(false); // contains 1 (one)
-      expect(isValidCodeFormat('AB7K3-MNIPX')).toBe(false); // contains I (eye)
+    it('rejects codes containing out-of-alphabet characters', () => {
+      expect(isValidCodeFormat('AB7K3-MNIPX')).toBe(false); // I excluded
+      expect(isValidCodeFormat('AB7K3-MNLPX')).toBe(false); // L excluded
+      expect(isValidCodeFormat('AB7K3-MNOPX')).toBe(false); // O excluded
+      expect(isValidCodeFormat('AB7K3-MNVPX')).toBe(false); // V excluded (V↔U swap)
     });
 
     it('rejects codes with wrong shape', () => {

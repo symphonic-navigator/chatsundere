@@ -199,7 +199,7 @@ describe.skipIf(skip)('/api/v1/me/pairing-codes', () => {
         created_at: string;
         state: string;
       };
-      expect(body.code).toMatch(/^[23456789A-HJ-NP-Z]{5}-[23456789A-HJ-NP-Z]{5}$/);
+      expect(body.code).toMatch(/^[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/);
       expect(body.qr_url).toBe(
         `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/join#${body.code}`,
       );

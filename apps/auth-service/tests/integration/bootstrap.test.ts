@@ -152,7 +152,7 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
     // bootstrap writes a 10-char ambiguity-removed code plus a real
     // qr_url (https://host/join#CODE) — no more base64url-JSON payload.
     const data = JSON.parse(content);
-    expect(data.code).toMatch(/^[23456789A-HJ-NP-Z]{5}-[23456789A-HJ-NP-Z]{5}$/);
+    expect(data.code).toMatch(/^[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/);
     expect(data.qr_url).toContain('/join#');
     expect(data.invitation_id).toBeDefined();
     expect(data.expires_at_unix_ms).toBeDefined();

@@ -2,14 +2,16 @@
 
 import { loadEnv } from '../env.js';
 
-// RFC 4648 §6 Base32 alphabet minus the four ambiguous characters
-// {0 (zero), O (oh), 1 (one), I (eye)}. 32 entries; each character carries
-// exactly 5 bits of entropy. A 10-character code therefore carries 50 bits.
-const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-
-// Validates the canonical display format: AAAAA-BBBBB. Both halves must use
-// only the ambiguity-removed alphabet and be uppercase.
-const CODE_RE = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/;
+// Crockford-derived Base32 alphabet with deliberate V↔U swap (see
+// superpowers/specs/2026-05-22-user-client-onboarding-overhaul-design.md § 2
+// Decision 8). Canonical Crockford excludes I, L, O, U; we keep U and exclude
+// V instead. V↔Y carries a real (if minor) visual confusability on small
+// monospace displays; U being in the alphabet is also a deliberate decision
+// aligned with Chatsundere's anti-censorship positioning (Crockford excluded U
+// to avoid the four-letter word; we accept that words can occur). Entropy is
+// unchanged at 32 chars × 5 bits = 50 bits per 10-char code.
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTUWXYZ';
+const CODE_RE = /^[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/;
 
 let keyCache: CryptoKey | null = null;
 
