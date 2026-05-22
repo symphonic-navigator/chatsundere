@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
-import { StepRecoveryReveal } from '../../create-account/step-recovery-reveal.js';
+import { StepRecoveryReveal } from '../local/step-recovery-reveal.js';
 
 /**
  * `/onboarding/invitation/recovery` — mandatory recovery-key reveal for the

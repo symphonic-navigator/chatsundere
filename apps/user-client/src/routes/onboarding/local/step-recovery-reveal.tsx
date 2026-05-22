@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { motion } from '@chatsundere/ui-shared';
 import { useMemo, useState } from 'react';
-import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
-import { copy } from '../../lib/copy.js';
+import { RecoveryKeyReveal } from '../../../components/RecoveryKeyReveal.js';
+import { copy } from '../../../lib/copy.js';
 
 export interface StepRecoveryRevealProps {
   recoveryKey: string;

@@ -2,9 +2,9 @@
 import { motion } from '@chatsundere/ui-shared';
 import { type FormEvent, useMemo, useState } from 'react';
 import * as v from 'valibot';
-import { PassphraseField } from '../../components/PassphraseField.js';
-import { copy } from '../../lib/copy.js';
-import { PassphrasePair } from '../../lib/validators.js';
+import { PassphraseField } from '../../../components/PassphraseField.js';
+import { copy } from '../../../lib/copy.js';
+import { PassphrasePair } from '../../../lib/validators.js';
 
 export interface StepPassphraseProps {
   value: string;

@@ -2,8 +2,8 @@
 import { CryptoError } from '@chatsundere/crypto';
 import { motion } from '@chatsundere/ui-shared';
 import { type FormEvent, useMemo, useState } from 'react';
-import { copy } from '../../lib/copy.js';
-import { validateUsername } from '../../lib/validators.js';
+import { copy } from '../../../lib/copy.js';
+import { validateUsername } from '../../../lib/validators.js';
 
 export interface StepUsernameProps {
   value: string;
