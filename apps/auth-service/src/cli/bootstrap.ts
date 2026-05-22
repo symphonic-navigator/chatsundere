@@ -3,10 +3,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { count, eq } from 'drizzle-orm';
+import { generateCode, hashCode } from '../codes/token.js';
 import { closeDb, createDb } from '../db/client.js';
 import { authMethods, pendingCodes, users } from '../db/schema.js';
 import { loadEnv } from '../env.js';
-import { generateInvitationToken, hashInvitationToken } from '../invitations/token.js';
 
 export async function main(): Promise<void> {
   const { db } = createDb();
@@ -26,8 +26,8 @@ export async function main(): Promise<void> {
   }
 
   const env = loadEnv();
-  const token = generateInvitationToken();
-  const codeHmac = await hashInvitationToken(token);
+  const code = generateCode();
+  const codeHmac = await hashCode(code);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const inserted = await db
     .insert(pendingCodes)
@@ -43,18 +43,7 @@ export async function main(): Promise<void> {
   const invitationId = inserted[0]?.id;
   if (!invitationId) throw new Error('Failed to insert invitation');
 
-  const baseUrl = env.API_BASE_URL.replace(/\/auth$/, '');
-  const qrPayload = {
-    v: 1 as const,
-    kind: 'invitation' as const,
-    token,
-    base_url: baseUrl,
-    role: 'primary_admin' as const,
-    issuer_label: 'bootstrap',
-  };
-  const url = `chatsundere://invite?payload=${Buffer.from(JSON.stringify(qrPayload)).toString(
-    'base64url',
-  )}`;
+  const qrUrl = `${env.API_BASE_URL}/join#${code}`;
 
   const dir = process.env.XDG_RUNTIME_DIR ?? '/tmp';
   mkdirSync(dir, { recursive: true });
@@ -63,8 +52,8 @@ export async function main(): Promise<void> {
     filePath,
     JSON.stringify(
       {
-        qr_payload: Buffer.from(JSON.stringify(qrPayload)).toString('base64url'),
-        url,
+        code,
+        qr_url: qrUrl,
         invitation_id: invitationId,
         expires_at_unix_ms: expiresAt.getTime(),
       },

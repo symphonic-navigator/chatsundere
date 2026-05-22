@@ -148,10 +148,12 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
       throw new Error(`Failed to read bootstrap file at ${filePath}: ${err}`);
     }
 
-    // Parse and verify structure.
+    // Parse and verify structure. Per the unified-join shape (ADR 0028),
+    // bootstrap writes a 10-char ambiguity-removed code plus a real
+    // qr_url (https://host/join#CODE) — no more base64url-JSON payload.
     const data = JSON.parse(content);
-    expect(data.qr_payload).toBeDefined();
-    expect(data.url).toBeDefined();
+    expect(data.code).toMatch(/^[23456789A-HJ-NP-Z]{5}-[23456789A-HJ-NP-Z]{5}$/);
+    expect(data.qr_url).toContain('/join#');
     expect(data.invitation_id).toBeDefined();
     expect(data.expires_at_unix_ms).toBeDefined();
 

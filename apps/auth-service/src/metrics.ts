@@ -17,6 +17,9 @@ const ALLOWED_LABEL_NAMES = new Set([
   // Step-up tier (1|2|3|4) per ADR 0027 — classifies the destructiveness of
   // the endpoint being gated. Not PII; high-cardinality bounded to 4 values.
   'tier',
+  // Wrapping-invariant violation reason (no_opaque_method |
+  // multiple_opaque_methods | null_wrapping_columns) — bounded enum, not PII.
+  'reason',
 ]);
 
 function assertLabelsAllowed(labelNames: string[], metricName: string): void {
@@ -78,6 +81,23 @@ export const metrics = {
     'tier',
     'result',
   ]),
+  authPairingCodesCreatedTotal: counter(
+    'auth_pairing_codes_created_total',
+    'Pairing codes created via POST /api/v1/me/pairing-codes',
+  ),
+  authPairingCodesRevokedTotal: counter(
+    'auth_pairing_codes_revoked_total',
+    'Pairing codes revoked via DELETE /api/v1/me/pairing-codes/:id',
+  ),
+  authPairingCodesRedeemedTotal: counter(
+    'auth_pairing_codes_redeemed_total',
+    'Pairing codes redeemed via POST /api/v1/join/finish (kind=pairing)',
+  ),
+  authWrappingInvariantViolationsTotal: counter(
+    'auth_wrapping_invariant_violations_total',
+    'OPAQUE wrapping integrity check failures (should be zero in steady state)',
+    ['reason'],
+  ),
 };
 
 export function initialiseMetrics(): void {

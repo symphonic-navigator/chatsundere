@@ -90,26 +90,27 @@ function cookieHeader(refreshToken: string): string {
 // OPAQUE registration helper
 // ---------------------------------------------------------------------------
 
-/** Runs the full OPAQUE link flow for a new user. Returns { userId, accessToken, refreshToken }. */
+/** Runs the full unified-join flow for a new user (kind=invitation). Returns { userId, accessToken, refreshToken }. */
 async function registerViaOpaque(
   app: ReturnType<typeof createServer>,
-  opts: { password: string; username: string; invitationToken: string },
+  opts: { password: string; username: string; invitationCode: string },
 ): Promise<{ userId: string; accessToken: string; refreshToken: string }> {
   const { clientRegistrationState, registrationRequest } = opaqueClient.startRegistration({
     password: opts.password,
   });
 
-  const startRes = await app.request('/v1/link/opaque/start', {
+  const startRes = await app.request('/api/v1/join/start', {
     method: 'POST',
     headers: JSON_ORIGIN,
     body: JSON.stringify({
-      invitation_token: opts.invitationToken,
+      kind: 'invitation',
+      code: opts.invitationCode,
       registration_request: registrationRequest,
     }),
   });
   if (startRes.status !== 200) {
     const body = await startRes.text();
-    throw new Error(`link/opaque/start returned ${startRes.status}: ${body}`);
+    throw new Error(`join/start (invitation) returned ${startRes.status}: ${body}`);
   }
   const startBody = (await startRes.json()) as {
     session_id: string;
@@ -127,10 +128,11 @@ async function registerViaOpaque(
   });
 
   const zero32 = Buffer.alloc(32).toString('base64url');
-  const finishRes = await app.request('/v1/link/opaque/finish', {
+  const finishRes = await app.request('/api/v1/join/finish', {
     method: 'POST',
     headers: JSON_ORIGIN,
     body: JSON.stringify({
+      kind: 'invitation',
       session_id: startBody.session_id,
       username: opts.username,
       registration_record: registrationRecord,
@@ -254,7 +256,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
 
   // Mutable state threaded through the ordered `it` steps.
   let bootstrapFilePath: string;
-  let bootstrapInvitationToken: string;
+  let bootstrapInvitationCode: string;
   let bootstrapInvitationId: string;
 
   let adminUserId: string;
@@ -263,7 +265,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   const adminUsername = `admlc${Date.now()}`.slice(0, 32).replace(/-/g, '');
   const adminPassword = 'primary-admin-lifecycle-password-1!';
 
-  let userInvitationToken: string;
+  let userInvitationCode: string;
   let userInvitationId: string;
 
   let userUserId: string;
@@ -383,22 +385,17 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
 
     const raw = readFileSync(filePath, 'utf-8');
     const data = JSON.parse(raw) as {
-      qr_payload: string;
+      code: string;
+      qr_url: string;
       invitation_id: string;
       expires_at_unix_ms: number;
     };
-    expect(typeof data.qr_payload).toBe('string');
+    expect(typeof data.code).toBe('string');
+    expect(typeof data.qr_url).toBe('string');
     expect(typeof data.invitation_id).toBe('string');
 
     bootstrapInvitationId = data.invitation_id;
-
-    // Decode QR payload to extract the raw token.
-    const decoded = JSON.parse(Buffer.from(data.qr_payload, 'base64url').toString('utf-8')) as {
-      token: string;
-    };
-    bootstrapInvitationToken = decoded.token;
-
-    expect(typeof bootstrapInvitationToken).toBe('string');
+    bootstrapInvitationCode = data.code;
   });
 
   // -------------------------------------------------------------------------
@@ -409,7 +406,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     const result = await registerViaOpaque(app, {
       password: adminPassword,
       username: adminUsername,
-      invitationToken: bootstrapInvitationToken,
+      invitationCode: bootstrapInvitationCode,
     });
 
     adminUserId = result.userId;
@@ -454,14 +451,14 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
 
     const body = (await res.json()) as {
       invitation_id: string;
-      token: string;
-      qr_payload: string;
+      code: string;
+      qr_url: string;
     };
     expect(typeof body.invitation_id).toBe('string');
-    expect(typeof body.token).toBe('string');
+    expect(typeof body.code).toBe('string');
 
     userInvitationId = body.invitation_id;
-    userInvitationToken = body.token;
+    userInvitationCode = body.code;
   });
 
   // -------------------------------------------------------------------------
@@ -472,7 +469,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     const result = await registerViaOpaque(app, {
       password: userPassword,
       username: userUsername,
-      invitationToken: userInvitationToken,
+      invitationCode: userInvitationCode,
     });
 
     userUserId = result.userId;
@@ -582,12 +579,9 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   it('step 9: PATCH /api/v1/me with an already-taken username returns 409', async () => {
     // Register a second user to create the conflict target.
     const { db } = createDb();
-    const conflictToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString(
-      'base64url',
-    );
-    // Import the token hasher inline to avoid pulling in non-exported internals.
-    const { hashInvitationToken } = await import('../../src/invitations/token.js');
-    const codeHmac = await hashInvitationToken(conflictToken);
+    const { generateCode, hashCode } = await import('../../src/codes/token.js');
+    const conflictCode = generateCode();
+    const codeHmac = await hashCode(conflictCode);
     await db.insert(pendingCodes).values({
       type: 'invitation',
       codeHmac,
@@ -598,7 +592,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     const conflictResult = await registerViaOpaque(app, {
       password: 'conflict-user-password-9!',
       username: conflictUsername,
-      invitationToken: conflictToken,
+      invitationCode: conflictCode,
     });
     conflictUserId = conflictResult.userId;
 

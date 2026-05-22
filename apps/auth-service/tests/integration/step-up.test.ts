@@ -12,9 +12,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { and, desc, eq } from 'drizzle-orm';
+import { generateCode, hashCode } from '../../src/codes/token.js';
 import { closeDb, createDb } from '../../src/db/client.js';
 import { auditLog, authMethods, pendingCodes, users } from '../../src/db/schema.js';
-import { hashInvitationToken } from '../../src/invitations/token.js';
 import { createRedis } from '../../src/redis/client.js';
 import { createServer } from '../../src/server.js';
 
@@ -34,10 +34,13 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
     await opaqueReady;
     app = createServer();
     const { db } = createDb();
+    // Drop cross-file rate-limit pollution before this file's /join call.
+    const rlKeys = await redis.keys('rl:join_*');
+    if (rlKeys.length) await redis.del(...rlKeys);
 
     // 1. Mint an invitation and redeem it via the OPAQUE link flow.
-    const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-    const codeHmac = await hashInvitationToken(rawToken);
+    const invitationCode = generateCode();
+    const codeHmac = await hashCode(invitationCode);
     await db.insert(pendingCodes).values({
       type: 'invitation',
       codeHmac,
@@ -49,11 +52,12 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
       password,
     });
 
-    const linkStart = await app.request('/v1/link/opaque/start', {
+    const linkStart = await app.request('/api/v1/join/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
-        invitation_token: rawToken,
+        kind: 'invitation',
+        code: invitationCode,
         registration_request: registrationRequest,
       }),
     });
@@ -73,10 +77,11 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
     });
 
     const zero32 = Buffer.alloc(32).toString('base64url');
-    await app.request('/v1/link/opaque/finish', {
+    await app.request('/api/v1/join/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
+        kind: 'invitation',
         session_id: linkStartBody.session_id,
         username,
         registration_record: registrationRecord,

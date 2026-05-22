@@ -201,3 +201,23 @@ Full audit run over commits `fa29bb4..fe08e89` (later squashed). Critical: none.
 - **Severity:** low (Redis is trusted infrastructure today).
 - **Rationale for deferral:** Same `JSON.parse(stateRaw) as T` pattern is already used in `routes/login.ts` for passkey-login state and elsewhere. Tightening this in isolation would be inconsistent; a project-wide pass that introduces Valibot schemas for all Redis-stored state shapes is the right scope.
 - **Follow-up commitment:** Bundle into the existing crypto/auth hygiene cleanup tracked in `follow-ups-index.md` if and when we adopt a consistent serialisation convention.
+
+## 2026-05-22 — Squash β (cross-device-identity endpoints) deferred Larissa findings
+
+Full audit run on the four functional commits of Squash β. Critical: none. High: H1 (no per-IP rate limits on `/api/v1/join/*`) fixed in commit `ae8389a` before squash. Medium: M1 (kind_mismatch consumed attempt counter) fixed in the same commit. Low items below were consciously deferred.
+
+### L-β-1 — `consumePendingCodeAttempt` "type never changes" comment is too absolute
+
+- **Affected paths:** `apps/auth-service/src/codes/rate-limit.ts:39`
+- **Finding (Larissa's summary):** The comment justifying the SELECT-then-UPDATE TOCTOU window claims `pending_codes.type` never changes after insert. True for production code (no endpoint mutates `type`), but test code (`tests/integration/join-invitation.test.ts:252`) does mutate `type` via direct DB UPDATE for kind-mismatch coverage. If a future contributor follows that same pattern in a production code path, the TOCTOU assumption silently breaks.
+- **Severity:** low (documentation precision; not currently exploitable — only test code mutates).
+- **Rationale for deferral:** The comment is accurate as a *runtime* statement today; the only risk is future drift. Adding a DB-level CHECK constraint (`type` is immutable) is the durable fix, but introduces a schema change with no exploit lurking.
+- **Follow-up commitment:** Either tighten the comment to "no production code path mutates `pending_codes.type`" the next time the file is touched, or add a Postgres trigger refusing UPDATEs on the `type` column. No standalone work warranted; revisit only if the TOCTOU window grows (e.g. if the SELECT and UPDATE are split across connections).
+
+### L-β-2 — `ipKey` trusts `X-Forwarded-For` blindly — relies on a deployment invariant
+
+- **Affected paths:** `apps/auth-service/src/middleware/rate-limit.ts:38-42`
+- **Finding (Larissa's summary):** Pre-existing finding (not introduced by Squash β) but the H1 rate-limit wiring widens its blast radius. `ipKey()` reads the first comma-separated value from `X-Forwarded-For` then falls back to `X-Real-IP`, with no allow-list of trusted proxy hops. A client speaking directly to the auth-service (e.g. a misconfigured deployment without a fronting reverse proxy) can set `X-Forwarded-For` to a random value per request and bypass every per-IP rate limit (`step_up_ip`, `join_ip_minute`, `join_ip_hour`, and any future per-IP bucket).
+- **Severity:** low (configuration-dependent; mitigated by the production deployment requiring a reverse proxy that overwrites the header authoritatively).
+- **Rationale for deferral:** The fix is to read a configurable `TRUSTED_PROXY_IPS` list and only honour `X-Forwarded-For` from those hops. Doing it correctly requires environment plumbing and per-deployment configuration that does not exist yet. The interim mitigation is operational: `compose.prod.yml.example` must front the auth-service with a reverse proxy that overwrites `X-Forwarded-For` (not appends).
+- **Follow-up commitment:** Add `TRUSTED_PROXY_IPS` env var + middleware-aware header parsing before v0.1.0. Document the "production deployment must front with a reverse proxy" requirement in `compose.prod.yml.example` + `apps/auth-service/README.md` in the same squash that lands the env var.

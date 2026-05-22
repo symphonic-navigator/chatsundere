@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // Integration test for the recovery challenge-response flow:
-//   /v1/link/opaque/start + finish  →  /api/v1/recovery/start + finish
+//   /api/v1/join/start + finish  →  /api/v1/recovery/start + finish
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
+import { generateCode, hashCode } from '../../src/codes/token.js';
 import { closeDb, createDb } from '../../src/db/client.js';
 import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
-import { hashInvitationToken } from '../../src/invitations/token.js';
+import { createRedis } from '../../src/redis/client.js';
 import { createServer } from '../../src/server.js';
 
 const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
@@ -92,13 +93,16 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
   );
 
   beforeAll(async () => {
+    const _rlRedis = createRedis();
+    const _rlKeys = await _rlRedis.keys('rl:join_*');
+    if (_rlKeys.length) await _rlRedis.del(..._rlKeys);
     await opaqueReady;
     app = createServer();
 
     // Register a user via the OPAQUE link flow.
     const { db } = createDb();
-    const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-    const codeHmac = await hashInvitationToken(rawToken);
+    const invitationCode = generateCode();
+    const codeHmac = await hashCode(invitationCode);
     await db.insert(pendingCodes).values({
       type: 'invitation',
       codeHmac,
@@ -110,11 +114,12 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       password: originalPassword,
     });
 
-    const startRes = await app.request('/v1/link/opaque/start', {
+    const startRes = await app.request('/api/v1/join/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
-        invitation_token: rawToken,
+        kind: 'invitation',
+        code: invitationCode,
         registration_request: registrationRequest,
       }),
     });
@@ -134,10 +139,11 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       },
     });
 
-    const finishRes = await app.request('/v1/link/opaque/finish', {
+    const finishRes = await app.request('/api/v1/join/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
+        kind: 'invitation',
         session_id: startBody.session_id,
         username,
         registration_record: registrationRecord,

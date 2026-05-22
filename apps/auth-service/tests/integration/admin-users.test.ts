@@ -6,10 +6,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
+import { generateCode, hashCode } from '../../src/codes/token.js';
 import { closeDb, createDb } from '../../src/db/client.js';
 import { pendingCodes, users } from '../../src/db/schema.js';
-import { hashInvitationToken } from '../../src/invitations/token.js';
 import { issueTokens } from '../../src/jwt/issue.js';
+import { createRedis } from '../../src/redis/client.js';
 import { createServer } from '../../src/server.js';
 
 const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
@@ -23,8 +24,8 @@ async function registerUser(
   opts: { password: string; username: string; role?: 'primary_admin' | 'admin' | 'user' },
 ): Promise<{ userId: string }> {
   const { db } = createDb();
-  const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-  const codeHmac = await hashInvitationToken(rawToken);
+  const invitationCode = generateCode();
+  const codeHmac = await hashCode(invitationCode);
   await db.insert(pendingCodes).values({
     type: 'invitation',
     codeHmac,
@@ -36,10 +37,14 @@ async function registerUser(
     password: opts.password,
   });
 
-  const startRes = await app.request('/v1/link/opaque/start', {
+  const startRes = await app.request('/api/v1/join/start', {
     method: 'POST',
     headers: JSON_ORIGIN,
-    body: JSON.stringify({ invitation_token: rawToken, registration_request: registrationRequest }),
+    body: JSON.stringify({
+      kind: 'invitation',
+      code: invitationCode,
+      registration_request: registrationRequest,
+    }),
   });
   const startBody = (await startRes.json()) as {
     session_id: string;
@@ -57,10 +62,11 @@ async function registerUser(
   });
 
   const zero32 = Buffer.alloc(32).toString('base64url');
-  const finishRes = await app.request('/v1/link/opaque/finish', {
+  const finishRes = await app.request('/api/v1/join/finish', {
     method: 'POST',
     headers: JSON_ORIGIN,
     body: JSON.stringify({
+      kind: 'invitation',
       session_id: startBody.session_id,
       username: opts.username,
       registration_record: registrationRecord,
@@ -106,6 +112,9 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   const userUsername = `usr${ts}`.slice(0, 32).replace(/-/g, '');
 
   beforeAll(async () => {
+    const _rlRedis = createRedis();
+    const _rlKeys = await _rlRedis.keys('rl:join_*');
+    if (_rlKeys.length) await _rlRedis.del(..._rlKeys);
     await opaqueReady;
     app = createServer();
     const { db } = createDb();

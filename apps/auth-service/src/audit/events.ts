@@ -21,6 +21,10 @@ export const AUDIT_EVENT_TYPES = [
   'auth.logout',
   'auth.step_up.confirmed',
   'auth.step_up.failed',
+  'pairing_code.created',
+  'pairing_code.revoked',
+  'pairing_code.redeemed',
+  'wrapping_invariant_violated',
   'recovery_used',
   'refresh_token.reuse_detected',
 ] as const;
@@ -76,6 +80,23 @@ const stepUpFailedMeta = object({
   reason: picklist(['auth_failed', 'verify_failed', 'uv_required']),
 });
 
+const pairingCodeCreatedMeta = object({
+  pairing_code_id: string(),
+  expires_at: string(),
+});
+
+const pairingCodeRevokedMeta = object({
+  pairing_code_id: string(),
+});
+
+const pairingCodeRedeemedMeta = object({
+  pairing_code_id: string(),
+});
+
+const wrappingInvariantViolatedMeta = object({
+  reason: picklist(['no_opaque_method', 'multiple_opaque_methods', 'null_wrapping_columns']),
+});
+
 const primaryAdminTransferredMeta = object({ previous_primary_admin_id: string() });
 
 const refreshTokenReuseMeta = object({ family_id: string() });
@@ -105,6 +126,10 @@ export const AUDIT_EVENT_SCHEMAS: Record<
   'auth.logout': authLogoutMeta,
   'auth.step_up.confirmed': stepUpConfirmedMeta,
   'auth.step_up.failed': stepUpFailedMeta,
+  'pairing_code.created': pairingCodeCreatedMeta,
+  'pairing_code.revoked': pairingCodeRevokedMeta,
+  'pairing_code.redeemed': pairingCodeRedeemedMeta,
+  wrapping_invariant_violated: wrappingInvariantViolatedMeta,
   recovery_used: emptyMeta,
   'refresh_token.reuse_detected': refreshTokenReuseMeta,
 };
