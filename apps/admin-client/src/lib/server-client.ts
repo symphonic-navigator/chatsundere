@@ -25,10 +25,10 @@ export const httpServerClient: ServerClient = {
       json: req,
       authMode: 'none',
     }),
-  linkOpaqueStart: () => {
+  joinStart: () => {
     throw new Error('not used in admin-client');
   },
-  linkOpaqueFinish: () => {
+  joinFinish: () => {
     throw new Error('not used in admin-client');
   },
   linkPasskeyStart: () => {
