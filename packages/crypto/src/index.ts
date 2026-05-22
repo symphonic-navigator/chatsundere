@@ -140,6 +140,13 @@ export { regenerateRecoveryKey } from './flows/regenerate-recovery-key.js';
 export type { RegenerateRecoveryKeyArgs } from './flows/regenerate-recovery-key.js';
 export { changeUsername } from './flows/change-username.js';
 export type { ChangeUsernameArgs } from './flows/change-username.js';
+export { startJoinByInvitation, finishJoinByInvitation } from './flows/join-by-invitation.js';
+export type {
+  StartJoinByInvitationArgs,
+  JoinByInvitationState,
+  FinishJoinByInvitationArgs,
+  FinishJoinByInvitationResult,
+} from './flows/join-by-invitation.js';
 export { linkToServer } from './flows/link-to-server.js';
 export type { LinkToServerArgs } from './flows/link-to-server.js';
 export { loginOnlineLinked } from './flows/login-online-linked.js';
