@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Implementation note (ADR 0021 — OPAQUE-first linking): the passkey link
-// endpoints are bearer-only and refuse passkey-first registration on a fresh
-// account. The _accessToken parameter in linkPasskeyStart / linkPasskeyFinish
-// is part of the ServerClient interface contract but not forwarded explicitly;
-// the auth-aware fetch wrapper reads the token from the session store.
+// Bearer-only passkey link endpoints unchanged; join endpoints absorbed the OPAQUE flows.
 import type { ServerClient } from '@chatsundere/crypto';
 import type {
-  LinkOpaqueFinishRequest,
-  LinkOpaqueFinishResponse,
-  LinkOpaqueStartRequest,
-  LinkOpaqueStartResponse,
+  JoinFinishRequest,
+  JoinFinishResponse,
+  JoinStartRequest,
+  JoinStartResponse,
   LinkPasskeyFinishRequest,
   LinkPasskeyFinishResponse,
   LinkPasskeyStartRequest,
@@ -30,31 +26,31 @@ import type {
 import { apiFetch } from './fetch.js';
 
 export const httpServerClient: ServerClient = {
-  linkOpaqueStart: (req: LinkOpaqueStartRequest, baseUrl: string) =>
-    apiFetch<LinkOpaqueStartResponse>({
+  joinStart: (req: JoinStartRequest, baseUrl: string) =>
+    apiFetch<JoinStartResponse>({
       baseUrl,
-      path: '/v1/link/opaque/start',
+      path: '/api/v1/join/start',
       json: req,
       authMode: 'none',
     }),
-  linkOpaqueFinish: (req: LinkOpaqueFinishRequest, baseUrl: string) =>
-    apiFetch<LinkOpaqueFinishResponse>({
+  joinFinish: (req: JoinFinishRequest, baseUrl: string) =>
+    apiFetch<JoinFinishResponse>({
       baseUrl,
-      path: '/v1/link/opaque/finish',
+      path: '/api/v1/join/finish',
       json: req,
       authMode: 'none',
     }),
   linkPasskeyStart: (req: LinkPasskeyStartRequest, baseUrl: string, _accessToken: string) =>
     apiFetch<LinkPasskeyStartResponse>({
       baseUrl,
-      path: '/v1/link/passkey/start',
+      path: '/api/v1/link/passkey/start',
       json: req,
       authMode: 'bearer',
     }),
   linkPasskeyFinish: (req: LinkPasskeyFinishRequest, baseUrl: string, _accessToken: string) =>
     apiFetch<LinkPasskeyFinishResponse>({
       baseUrl,
-      path: '/v1/link/passkey/finish',
+      path: '/api/v1/link/passkey/finish',
       json: req,
       authMode: 'bearer',
     }),
