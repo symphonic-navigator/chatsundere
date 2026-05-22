@@ -18,6 +18,7 @@ import { registerLoginRoutes } from './routes/login.js';
 import { registerMeRoutes } from './routes/me.js';
 import { registerMetricsRoute } from './routes/metrics.js';
 import { registerRecoveryRoutes } from './routes/recovery.js';
+import { registerStepUpRoutes } from './routes/step-up.js';
 import { registerTokenRoutes } from './routes/token.js';
 
 export function createServer(): Hono {
@@ -35,6 +36,7 @@ export function createServer(): Hono {
   registerJwksRoute(app);
   registerTokenRoutes(app);
   registerAuthRoutes(app);
+  registerStepUpRoutes(app);
   registerLinkRoutes(app);
   registerLoginRoutes(app);
   registerRecoveryRoutes(app);

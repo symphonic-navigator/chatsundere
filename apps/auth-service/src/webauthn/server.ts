@@ -52,18 +52,21 @@ export async function generateRegistration(args: {
 /**
  * Generates WebAuthn authentication options.
  * When allowCredentialIds is provided the ceremony is bound to those credentials only.
+ *
+ * The userVerification default of 'preferred' matches ADR 0022 (cross-platform
+ * passkeys without intrinsic UV are accepted for ordinary login). Step-up
+ * Mechanism A per ADR 0027 overrides to 'required' so the user reconfirms
+ * presence before privileged operations.
  */
 export async function generateAuthentication(args: {
   allowCredentialIds?: string[];
+  userVerification?: 'preferred' | 'required' | 'discouraged';
 }): Promise<Awaited<ReturnType<typeof generateAuthenticationOptions>>> {
   const env = loadEnv();
   const { rpID } = rpFromBaseUrl(env.API_BASE_URL);
   return generateAuthenticationOptions({
     rpID,
-    // ADR 0022: 'preferred' matches the user-client policy. Cross-platform
-    // passkeys without UV (vault-unlocked Bitwarden, no-PIN hardware tokens)
-    // are accepted.
-    userVerification: 'preferred',
+    userVerification: args.userVerification ?? 'preferred',
     allowCredentials: args.allowCredentialIds?.map((id) => ({ id })),
   });
 }

@@ -10,16 +10,23 @@ describe.skipIf(skip)('requireStepUp', () => {
   const sessionId = `step-up-test-${Math.random().toString(36).slice(2, 10)}`;
   const redis = createRedis();
 
+  const allTierKeys = [
+    `step_up:${sessionId}:t1`,
+    `step_up:${sessionId}:t2`,
+    `step_up:${sessionId}:t3`,
+    `step_up:${sessionId}:t4`,
+  ];
+
   beforeAll(async () => {
-    await redis.del(`step_up:${sessionId}:t1`, `step_up:${sessionId}:t4`);
+    await redis.del(...allTierKeys);
   });
 
   beforeEach(async () => {
-    await redis.del(`step_up:${sessionId}:t1`, `step_up:${sessionId}:t4`);
+    await redis.del(...allTierKeys);
   });
 
   afterAll(async () => {
-    await redis.del(`step_up:${sessionId}:t1`, `step_up:${sessionId}:t4`);
+    await redis.del(...allTierKeys);
   });
 
   it('throws 403 step_up_required when no key exists for the tier', async () => {
@@ -82,11 +89,48 @@ describe.skipIf(skip)('requireStepUp', () => {
       });
     }
   });
+
+  it('passes when a fresh key exists within the Tier 3 tolerance window', async () => {
+    await redis.set(`step_up:${sessionId}:t3`, String(Date.now()), 'EX', 15);
+    await expect(requireStepUp({ sessionId, tier: 3 })).resolves.toBeUndefined();
+  });
+
+  it('throws 403 when the Tier 3 timestamp is older than 10 seconds', async () => {
+    // 12 seconds old; Tier 3 tolerance is 10 seconds.
+    const ts = String(Date.now() - 12_000);
+    await redis.set(`step_up:${sessionId}:t3`, ts, 'EX', 30);
+    await expect(requireStepUp({ sessionId, tier: 3 })).rejects.toMatchObject({
+      status: 403,
+      code: 'step_up_required',
+    });
+  });
+
+  it('passes when a fresh key exists within the Tier 2 tolerance window', async () => {
+    await redis.set(`step_up:${sessionId}:t2`, String(Date.now()), 'EX', 15);
+    await expect(requireStepUp({ sessionId, tier: 2 })).resolves.toBeUndefined();
+  });
+
+  it('throws 403 when the Tier 2 timestamp is older than 10 seconds', async () => {
+    const ts = String(Date.now() - 12_000);
+    await redis.set(`step_up:${sessionId}:t2`, ts, 'EX', 30);
+    await expect(requireStepUp({ sessionId, tier: 2 })).rejects.toMatchObject({
+      status: 403,
+      code: 'step_up_required',
+    });
+  });
 });
 
 describe('tierGraceMs', () => {
   it('returns 120_000 for Tier 1', () => {
     expect(tierGraceMs(1)).toBe(120_000);
+  });
+
+  it('returns 10_000 for Tier 2', () => {
+    expect(tierGraceMs(2)).toBe(10_000);
+  });
+
+  it('returns 10_000 for Tier 3', () => {
+    expect(tierGraceMs(3)).toBe(10_000);
   });
 
   it('returns 300_000 for Tier 4', () => {

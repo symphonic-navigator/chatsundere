@@ -19,6 +19,8 @@ export const AUDIT_EVENT_TYPES = [
   'auth.login.success',
   'auth.login.failed',
   'auth.logout',
+  'auth.step_up.confirmed',
+  'auth.step_up.failed',
   'recovery_used',
   'refresh_token.reuse_detected',
 ] as const;
@@ -63,6 +65,17 @@ const authLoginFailedMeta = object({
 
 const authLogoutMeta = object({ scope: picklist(['this_device', 'all']) });
 
+const stepUpConfirmedMeta = object({
+  method_type: picklist(['opaque', 'passkey']),
+  tier: picklist(['t1', 't3', 't4']),
+});
+
+const stepUpFailedMeta = object({
+  method_type: picklist(['opaque', 'passkey']),
+  tier: picklist(['t1', 't3', 't4']),
+  reason: picklist(['auth_failed', 'verify_failed', 'uv_required']),
+});
+
 const primaryAdminTransferredMeta = object({ previous_primary_admin_id: string() });
 
 const refreshTokenReuseMeta = object({ family_id: string() });
@@ -90,6 +103,8 @@ export const AUDIT_EVENT_SCHEMAS: Record<
   'auth.login.success': authLoginSuccessMeta,
   'auth.login.failed': authLoginFailedMeta,
   'auth.logout': authLogoutMeta,
+  'auth.step_up.confirmed': stepUpConfirmedMeta,
+  'auth.step_up.failed': stepUpFailedMeta,
   recovery_used: emptyMeta,
   'refresh_token.reuse_detected': refreshTokenReuseMeta,
 };

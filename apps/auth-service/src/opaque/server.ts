@@ -35,7 +35,7 @@ export function generateSessionId(): string {
 
 /** Stores per-session OPAQUE state in Redis with a short TTL. */
 export async function storeOpaqueState(args: {
-  scope: 'register' | 'login';
+  scope: 'register' | 'login' | 'step-up';
   sessionId: string;
   payload: Record<string, string>;
 }): Promise<void> {
@@ -53,7 +53,7 @@ export async function storeOpaqueState(args: {
  * Returns null if the session has expired or never existed.
  */
 export async function fetchOpaqueState(
-  scope: 'register' | 'login',
+  scope: 'register' | 'login' | 'step-up',
   sessionId: string,
 ): Promise<Record<string, string> | null> {
   const redis = createRedis();

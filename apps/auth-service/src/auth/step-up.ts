@@ -7,17 +7,20 @@ import { createRedis } from '../redis/client.js';
  * The step-up tier required by a privileged endpoint. Per ADR 0027:
  * - Tier 1: mutations of auth state (add passkey, generate pairing code)
  *   — 2-minute grace window, allows bursts of related operations.
+ * - Tier 2: re-disclosure of secrets (re-reveal recovery key, re-show a
+ *   pairing code) — 10-second tolerance window. Reserved in Phase 0; no
+ *   endpoint enforces Tier 2 today.
+ * - Tier 3: destructive ops (delete account, revoke all passkeys) — 10-second
+ *   tolerance window, forces complete-the-operation-immediately UX.
  * - Tier 4: operator-side privileged operations (create / revoke invitation,
  *   suspend user) — 5-minute grace window.
- *
- * Tier 2 (re-disclosure of secrets) and Tier 3 (destructive ops) also exist
- * per ADR 0027 but use a tighter 10-second tolerance; they are added by the
- * step-up backend plan, not this initial cross-device Squash α helper.
  */
-export type StepUpTier = 1 | 4;
+export type StepUpTier = 1 | 2 | 3 | 4;
 
 const GRACE_MS: Record<StepUpTier, number> = {
   1: 120_000, // 2 minutes
+  2: 10_000, // 10 seconds — re-disclosure of secrets
+  3: 10_000, // 10 seconds — destructive ops
   4: 300_000, // 5 minutes
 };
 

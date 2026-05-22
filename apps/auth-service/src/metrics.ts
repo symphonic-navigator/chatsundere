@@ -14,6 +14,9 @@ const ALLOWED_LABEL_NAMES = new Set([
   'route',
   'method',
   'status_class',
+  // Step-up tier (1|2|3|4) per ADR 0027 — classifies the destructiveness of
+  // the endpoint being gated. Not PII; high-cardinality bounded to 4 values.
+  'tier',
 ]);
 
 function assertLabelsAllowed(labelNames: string[], metricName: string): void {
@@ -66,6 +69,15 @@ export const metrics = {
     'Refresh token reuse detected — all tokens in the family have been revoked',
     [],
   ),
+  authStepUpStartedTotal: counter('auth_step_up_started_total', 'Step-up /start invocations', [
+    'method_type',
+    'tier',
+  ]),
+  authStepUpFinishedTotal: counter('auth_step_up_finished_total', 'Step-up /finish invocations', [
+    'method_type',
+    'tier',
+    'result',
+  ]),
 };
 
 export function initialiseMetrics(): void {

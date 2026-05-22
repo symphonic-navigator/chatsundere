@@ -81,6 +81,7 @@ export function registerLoginRoutes(app: Hono): void {
         suspendedAt: users.suspendedAt,
         opaqueCredential: authMethods.opaqueCredential,
         opaqueUserIdentifier: authMethods.opaqueUserIdentifier,
+        opaqueClientIdentifier: authMethods.opaqueClientIdentifier,
         wrappedMasterKey: authMethods.wrappedMasterKey,
         wrapNonce: authMethods.wrapNonce,
         wrapAad: authMethods.wrapAad,
@@ -105,10 +106,13 @@ export function registerLoginRoutes(app: Hono): void {
 
     // Identifiers must match the values the client baked into the registration
     // record at link time (see packages/crypto/src/opaque/client.ts:62-65):
-    //   client = username
+    //   client = registration-time username (frozen on the auth_methods row
+    //            as opaque_client_identifier — survives later PATCH /api/v1/me
+    //            username changes)
     //   server = `${baseUrl}/auth/v1`
     // With API_BASE_URL=`<host>/auth`, `${API_BASE_URL}/v1` resolves to the
     // identical string. Spec §3 anti-replay binding.
+    const clientIdentifier = row?.opaqueClientIdentifier ?? body.username;
     const env = loadEnv();
     const { serverLoginState, loginResponse } = opaqueServer.startLogin({
       serverSetup: getServerSetup(),
@@ -116,7 +120,7 @@ export function registerLoginRoutes(app: Hono): void {
       startLoginRequest: body.start_login_request,
       userIdentifier,
       identifiers: {
-        client: body.username,
+        client: clientIdentifier,
         server: `${env.API_BASE_URL}/v1`,
       },
     });

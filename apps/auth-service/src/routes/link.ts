@@ -150,6 +150,9 @@ export function registerLinkRoutes(app: Hono): void {
           methodType: 'opaque',
           opaqueCredential: Buffer.from(body.registration_record, 'base64url'),
           opaqueUserIdentifier,
+          // Persist the registration-time username so future username changes
+          // do not desynchronise it from the sealed OPAQUE identifier.
+          opaqueClientIdentifier: body.username,
           wrappedMasterKey: Buffer.from(body.wrapped_mk_opaque, 'base64url'),
           wrapNonce: Buffer.from(body.wrap_nonce_opaque, 'base64url'),
           wrapAad: Buffer.from(body.wrap_aad_opaque, 'base64url'),

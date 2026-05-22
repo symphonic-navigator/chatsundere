@@ -80,6 +80,12 @@ export const authMethods = pgTable(
     // Stores the OPAQUE userIdentifier used at registration (invitation.id).
     // Login must present the same identifier for OPAQUE credential verification to succeed.
     opaqueUserIdentifier: text('opaque_user_identifier'),
+    // Stores the OPAQUE client identifier (username at registration time) so
+    // login and step-up keep working after a PATCH /api/v1/me username
+    // change. The OPAQUE registration record is sealed against this value;
+    // reading it from the live users.username would lock renamed users out
+    // of OPAQUE entirely. See migration 0005 for the backfill rationale.
+    opaqueClientIdentifier: text('opaque_client_identifier'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   },

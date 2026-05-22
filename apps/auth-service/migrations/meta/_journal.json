@@ -36,6 +36,13 @@
       "when": 1779550000000,
       "tag": "0004_pending_codes_role_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779600000000,
+      "tag": "0005_add_opaque_client_identifier",
+      "breakpoints": true
     }
   ]
 }

@@ -327,7 +327,7 @@ Error responses:
 | Status | Code | Meaning |
 |---|---|---|
 | `400` | `invalid_mechanism` | The body's `mechanism` is not `webauthn` or `opaque` |
-| `400` | `invalid_tier` | The body's `tier_requested` is not `t1` or `t4` (t2/t3 have no grace window; t0 doesn't exist) |
+| `400` | `invalid_tier` | The body's `tier_requested` is not `t1`, `t3`, or `t4` (t2 is reserved with no enforcing endpoint in Phase 0; t0 is not a step-up tier). t3 is accepted because Tier 3 destructive endpoints rely on a key being set — the 10-second tolerance per §"Privileged endpoint behaviour" is the relevant TTL, not a grace window. |
 | `401` | `webauthn_uv_required` | The assertion was accepted but UV did not happen — Mechanism A requires UV. Client should retry with Mechanism B. |
 | `401` | `opaque_authentication_failed` | OPAQUE evidence was wrong |
 | `429` | `rate_limit_exceeded` | See rate-limiting section |

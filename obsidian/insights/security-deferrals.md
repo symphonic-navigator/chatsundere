@@ -173,3 +173,31 @@ Full audit run between commit `0edb18e` and `1905c42`. Critical: none. High: non
 - **Severity:** low (documentation nit, no behavioural concern).
 - **Rationale for deferral:** Pure cosmetics; the file works correctly and the slightly-stale comment is unlikely to mislead anyone touching the code again.
 - **Follow-up commitment:** Update the comment opportunistically the next time `change-passphrase.tsx` is touched for any other reason. No standalone work warranted.
+
+## 2026-05-22 — Squash γ (step-up backend) deferred Larissa findings
+
+Full audit run over commits `fa29bb4..fe08e89` (later squashed). Critical: none. High: H1 (OPAQUE bricks after username change) fixed in commit `29c8a42` before squash via migration 0005 + `auth_methods.opaque_client_identifier`. Medium: M1 (WebAuthn `/finish` GET+DEL race) and M2 (sign counter on uv_required) fixed in the same commit. The Low items below were consciously deferred.
+
+### L-γ-1 — `setStepUpKey` TTL has a sub-second floor mismatch with `requireStepUp`
+
+- **Affected paths:** `apps/auth-service/src/auth/step-up.ts:54-70`, `apps/auth-service/src/routes/step-up.ts` (`setStepUpKey`)
+- **Finding (Larissa's summary):** `requireStepUp` compares millisecond-precision timestamps (`Date.now() - ts > graceMs`) while `setStepUpKey` rounds the Redis TTL up to whole seconds with `Math.ceil`. For Tier 3 (10 s) Redis may evict the key up to ~999 ms *after* the timestamp comparison would have said "expired" — a 10 % overshoot at worst.
+- **Severity:** low (documented defence-in-depth; intentional).
+- **Rationale for deferral:** Behaviour is intentional and the timestamp comparison is the authoritative gate — the Redis TTL is a backstop. Larissa flagged only to confirm awareness.
+- **Follow-up commitment:** No standalone work warranted. If a future change tightens the model and removes the timestamp from the value, revisit then.
+
+### L-γ-2 — Logout cascade SCAN is bounded but unsynchronised
+
+- **Affected paths:** `apps/auth-service/src/routes/auth.ts:83-94`
+- **Finding (Larissa's summary):** A successful `/finish` concurrent with `/logout` can win the race and leave a `step_up:<jti>:t<tier>` key behind after logout returns. Window is the `/finish` handler's runtime.
+- **Severity:** low (non-exploitable today — logout also revokes the refresh-token family via `revokeFamily`, so the bearer's session_id is no longer accepted by `bearerAuth`'s session-existence check anyway).
+- **Rationale for deferral:** Exploitability depends on a future design change that decouples bearer-validity from session-id-validity. Today the bearer is dead before any leftover step-up key could be used.
+- **Follow-up commitment:** Revisit if and when session-id and bearer-validity ever diverge (e.g. long-lived bearers, alternate session-revocation surfaces). No standalone work warranted now.
+
+### L-γ-3 — `step_up_round:*` JSON.parse not Valibot-validated
+
+- **Affected paths:** `apps/auth-service/src/routes/step-up.ts` (`finishWebAuthn`)
+- **Finding (Larissa's summary):** The WebAuthn round state read from Redis is cast directly to `WebAuthnRoundState` without structural validation.
+- **Severity:** low (Redis is trusted infrastructure today).
+- **Rationale for deferral:** Same `JSON.parse(stateRaw) as T` pattern is already used in `routes/login.ts` for passkey-login state and elsewhere. Tightening this in isolation would be inconsistent; a project-wide pass that introduces Valibot schemas for all Redis-stored state shapes is the right scope.
+- **Follow-up commitment:** Bundle into the existing crypto/auth hygiene cleanup tracked in `follow-ups-index.md` if and when we adopt a consistent serialisation convention.

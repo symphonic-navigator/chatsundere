@@ -9,6 +9,7 @@ import { sha256ForCookie } from '../jwt/issue.js';
 import { revokeAllForUser, revokeFamily } from '../jwt/refresh.js';
 import type { AccessClaims } from '../jwt/verify.js';
 import { bearerAuth } from '../middleware/auth.js';
+import { createRedis } from '../redis/client.js';
 
 const CLEAR_COOKIE =
   'refresh_token=; HttpOnly; SameSite=Lax; Path=/api/v1/token/refresh; Max-Age=0';
@@ -65,7 +66,29 @@ export function registerAuthRoutes(app: Hono): void {
       });
     }
 
+    // Step-up cascade per ADR 0027: invalidate all per-session grace windows
+    // so a stolen bearer cannot ride the residual confirmation past logout.
+    await clearStepUpKeys(claims.jti);
+
     c.header('Set-Cookie', CLEAR_COOKIE);
     return c.json({ ok: true });
   });
+}
+
+/**
+ * Deletes every `step_up:<sessionId>:*` key using SCAN — avoids the O(n)
+ * keyspace scan that `KEYS` would do. Phase 0 Redis is small either way,
+ * but SCAN keeps the same code shape when the keyspace grows.
+ */
+async function clearStepUpKeys(sessionId: string): Promise<void> {
+  const redis = createRedis();
+  const pattern = `step_up:${sessionId}:*`;
+  let cursor = '0';
+  do {
+    const [next, batch] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = next;
+    if (batch.length > 0) {
+      await redis.del(...batch);
+    }
+  } while (cursor !== '0');
 }
