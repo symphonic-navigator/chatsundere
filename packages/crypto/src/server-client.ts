@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import type {
-  LinkOpaqueFinishRequest,
-  LinkOpaqueFinishResponse,
-  LinkOpaqueStartRequest,
-  LinkOpaqueStartResponse,
+  JoinFinishRequest,
+  JoinFinishResponse,
+  JoinStartRequest,
+  JoinStartResponse,
   LinkPasskeyFinishRequest,
   LinkPasskeyFinishResponse,
   LinkPasskeyStartRequest,
@@ -28,11 +28,8 @@ import type {
  * package never opens HTTP itself — callers inject a concrete implementation.
  */
 export interface ServerClient {
-  linkOpaqueStart(req: LinkOpaqueStartRequest, baseUrl: string): Promise<LinkOpaqueStartResponse>;
-  linkOpaqueFinish(
-    req: LinkOpaqueFinishRequest,
-    baseUrl: string,
-  ): Promise<LinkOpaqueFinishResponse>;
+  joinStart(req: JoinStartRequest, baseUrl: string): Promise<JoinStartResponse>;
+  joinFinish(req: JoinFinishRequest, baseUrl: string): Promise<JoinFinishResponse>;
   linkPasskeyStart(
     req: LinkPasskeyStartRequest,
     baseUrl: string,
