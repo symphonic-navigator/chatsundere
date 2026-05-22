@@ -53,8 +53,13 @@ export default defineConfig({
           },
           {
             // Belt-and-braces: never cache API responses even if they slip through.
+            // Covers /api/v1/ (current canonical prefix), /auth/v1/ (legacy),
+            // and /api/auth/ (legacy variant). In dev mode with VitePWA's
+            // devOptions enabled, an unmatched cross-origin request to the
+            // auth-service was being dropped by Workbox instead of falling
+            // through to the network — this catches every /api/ shape.
             urlPattern: ({ url }) =>
-              url.pathname.startsWith('/auth/v1/') || url.pathname.startsWith('/api/auth/'),
+              url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/v1/'),
             handler: 'NetworkOnly',
           },
         ],
