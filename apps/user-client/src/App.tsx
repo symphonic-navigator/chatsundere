@@ -5,14 +5,19 @@ import { ErrorScreen } from './components/ErrorScreen.js';
 import { queryClient } from './lib/queryClient.js';
 import { AppShell } from './routes/app-shell.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
-import { CreateAccount } from './routes/create-account/index.js';
 import { Gate } from './routes/gate.js';
-import { LinkingConfirm } from './routes/linking/confirm.js';
-import { LinkingPaste } from './routes/linking/paste.js';
-import { LinkingScan } from './routes/linking/scan.js';
 import { Login } from './routes/login/index.js';
 import { Recovery } from './routes/login/recovery.js';
-import { Onboarding } from './routes/onboarding.js';
+import { InvitationConfirm } from './routes/onboarding/invitation/confirm.js';
+import { InvitationForm } from './routes/onboarding/invitation/form.js';
+import { InvitationRecoveryReveal } from './routes/onboarding/invitation/recovery-reveal.js';
+import { InvitationScan } from './routes/onboarding/invitation/scan.js';
+import { CreateAccount as LocalCreateAccount } from './routes/onboarding/local/index.js';
+import { OnboardingMatrix } from './routes/onboarding/matrix.js';
+import { PairingConfirm } from './routes/onboarding/pairing/confirm.js';
+import { PairingForm } from './routes/onboarding/pairing/form.js';
+import { PairingScan } from './routes/onboarding/pairing/scan.js';
+import { OnboardingRecovery } from './routes/onboarding/recovery.js';
 import { ProtectedRoute } from './routes/protected-route.js';
 import { Root } from './routes/root.js';
 import { About } from './routes/settings/about.js';
@@ -61,20 +66,25 @@ export function App() {
             <Routes>
               <Route element={<Root />}>
                 <Route index element={<Gate />} />
-                {/* Routes that do NOT require a session. */}
-                <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/create" element={<CreateAccount />} />
+                {/* No-session routes */}
+                <Route path="/onboarding" element={<OnboardingMatrix />} />
+                <Route path="/onboarding/invitation" element={<InvitationForm />} />
+                <Route path="/onboarding/invitation/scan" element={<InvitationScan />} />
+                <Route path="/onboarding/invitation/confirm" element={<InvitationConfirm />} />
+                <Route
+                  path="/onboarding/invitation/recovery"
+                  element={<InvitationRecoveryReveal />}
+                />
+                <Route path="/onboarding/pairing" element={<PairingForm />} />
+                <Route path="/onboarding/pairing/scan" element={<PairingScan />} />
+                <Route path="/onboarding/pairing/confirm" element={<PairingConfirm />} />
+                <Route path="/onboarding/recovery" element={<OnboardingRecovery />} />
+                <Route path="/onboarding/local" element={<LocalCreateAccount />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/recovery" element={<Recovery />} />
-                {/* Routes that REQUIRE a session. Reload while in-memory
-                    session is gone (e.g. after a service-worker refresh)
-                    must not leave the user on a session-stripped Root layout
-                    — ProtectedRoute reroutes through Gate. */}
+                {/* Session-required */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/app" element={<AppShell />} />
-                  <Route path="/linking/scan" element={<LinkingScan />} />
-                  <Route path="/linking/paste" element={<LinkingPaste />} />
-                  <Route path="/linking/confirm" element={<LinkingConfirm />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />
                   <Route path="/settings" element={<SettingsLayout />}>
                     <Route index element={<Navigate to="account" replace />} />
