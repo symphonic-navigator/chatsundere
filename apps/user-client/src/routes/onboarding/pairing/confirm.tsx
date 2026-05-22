@@ -6,7 +6,7 @@ import {
   startJoinByPairing,
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
@@ -36,13 +36,17 @@ type Screen =
 export function PairingConfirm() {
   const navigate = useNavigate();
   const onboardingState = useOnboardingStore((s) => s.state);
-  const setOnboardingState = useOnboardingStore((s) => s.setState);
 
-  if (onboardingState.kind !== 'pairing_input' && onboardingState.kind !== 'pairing_confirm') {
-    navigate('/onboarding/pairing', { replace: true });
-    return null;
-  }
+  const needsBounce =
+    onboardingState.kind !== 'pairing_input' && onboardingState.kind !== 'pairing_confirm';
 
+  // Bounce guard via useEffect — calling navigate() during render triggers
+  // React's "setState while rendering" warning and can crash routing.
+  useEffect(() => {
+    if (needsBounce) navigate('/onboarding/pairing', { replace: true });
+  }, [needsBounce, navigate]);
+
+  if (needsBounce) return null;
   return <PairingConfirmInner />;
 }
 

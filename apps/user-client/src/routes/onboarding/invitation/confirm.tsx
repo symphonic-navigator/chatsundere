@@ -7,7 +7,7 @@ import {
   startJoinByInvitation,
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
@@ -48,19 +48,20 @@ type Screen =
 export function InvitationConfirm() {
   const navigate = useNavigate();
   const onboardingState = useOnboardingStore((s) => s.state);
-  const setOnboardingState = useOnboardingStore((s) => s.setState);
+
+  const needsBounce =
+    onboardingState.kind !== 'invitation_input' && onboardingState.kind !== 'invitation_confirm';
 
   // ── Bounce guard ─────────────────────────────────────────────────────────────
   // If the store has no invitation context, the user navigated here directly.
-  // Redirect to the form rather than rendering broken state.
-  if (
-    onboardingState.kind !== 'invitation_input' &&
-    onboardingState.kind !== 'invitation_confirm'
-  ) {
-    navigate('/onboarding/invitation', { replace: true });
-    return null;
-  }
+  // Redirect to the form rather than rendering broken state. The navigate call
+  // must run inside useEffect — calling it during render is a setState-during-
+  // render bug that React warns about and that can crash routing.
+  useEffect(() => {
+    if (needsBounce) navigate('/onboarding/invitation', { replace: true });
+  }, [needsBounce, navigate]);
 
+  if (needsBounce) return null;
   return <InvitationConfirmInner />;
 }
 
