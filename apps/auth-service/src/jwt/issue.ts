@@ -34,6 +34,12 @@ export interface IssuedTokens {
   refreshTokenId: string;
   familyId: string;
   expiresIn: number;
+  /**
+   * Opaque session identifier (the access-token jti claim). Use as the
+   * key prefix for per-session server-side state such as step-up grace
+   * windows. Never derive from the raw refresh or access token.
+   */
+  sessionId: string;
 }
 
 /** Issues an access token (signed JWT) and a refresh token (opaque, SHA-256 hashed at rest). */
@@ -47,9 +53,15 @@ export async function issueTokens(args: {
   const { privateKey, kid } = await getKeyMaterial();
   const aud = `${env.API_BASE_URL}/v1`;
 
+  // jti is a per-token UUID used as the session_id for server-side per-session
+  // state (currently step-up grace windows per ADR 0027; future: any per-session
+  // counter that should reset on logout). Using a UUID rather than the token
+  // itself keeps the actual token out of any storage key.
+  const sessionId = crypto.randomUUID();
   const access = await new SignJWT({ role: args.role })
     .setProtectedHeader({ alg: 'EdDSA', kid })
     .setSubject(args.userId)
+    .setJti(sessionId)
     .setIssuer('chatsundere-auth-v1')
     .setAudience(aud)
     .setIssuedAt()
@@ -83,6 +95,7 @@ export async function issueTokens(args: {
     refreshTokenId: insertedId,
     familyId,
     expiresIn: ACCESS_TTL_SECONDS,
+    sessionId,
   };
 }
 
@@ -113,7 +126,7 @@ export function refreshCookieFor(refreshToken: string): string {
     `refresh_token=${refreshToken}`,
     'HttpOnly',
     'SameSite=Lax',
-    'Path=/v1/token/refresh',
+    'Path=/api/v1/token/refresh',
     `Max-Age=${REFRESH_TTL_SECONDS}`,
   ];
   if (secure) parts.push('Secure');

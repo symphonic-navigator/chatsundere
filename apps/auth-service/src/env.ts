@@ -29,6 +29,7 @@ const envSchema = object({
   AUTH_JWT_PRIVATE_KEY: pipe(string(), minLength(40)),
   INVITATION_HMAC_KEY: pipe(string(), minLength(40)),
   REFRESH_TOKEN_HMAC_KEY: pipe(string(), minLength(40)),
+  HMAC_KEY_PENDING_CODES: pipe(string(), minLength(40)),
   CORS_ALLOWED_ORIGINS: pipe(
     string(),
     transform((s) =>
@@ -54,6 +55,7 @@ export function loadEnv(): {
   AUTH_JWT_PRIVATE_KEY: string;
   INVITATION_HMAC_KEY: string;
   REFRESH_TOKEN_HMAC_KEY: string;
+  HMAC_KEY_PENDING_CODES: string;
   CORS_ALLOWED_ORIGINS: string[];
 } {
   return parse(envSchema, {
@@ -67,6 +69,7 @@ export function loadEnv(): {
     AUTH_JWT_PRIVATE_KEY: process.env.AUTH_JWT_PRIVATE_KEY,
     INVITATION_HMAC_KEY: process.env.INVITATION_HMAC_KEY,
     REFRESH_TOKEN_HMAC_KEY: process.env.REFRESH_TOKEN_HMAC_KEY,
+    HMAC_KEY_PENDING_CODES: process.env.HMAC_KEY_PENDING_CODES,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ?? '',
   });
 }

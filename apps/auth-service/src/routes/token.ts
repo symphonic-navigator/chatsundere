@@ -5,9 +5,9 @@ import { refreshCookieFor } from '../jwt/issue.js';
 import { rotateRefreshToken } from '../jwt/refresh.js';
 import { ApiError } from '../middleware/error-envelope.js';
 
-/** Registers POST /v1/token/refresh — reads the HttpOnly refresh cookie, rotates, sets a new cookie. */
+/** Registers POST /api/v1/token/refresh — reads the HttpOnly refresh cookie, rotates, sets a new cookie. */
 export function registerTokenRoutes(app: Hono): void {
-  app.post('/v1/token/refresh', async (c) => {
+  app.post('/api/v1/token/refresh', async (c) => {
     const cookieHeader = c.req.header('Cookie') ?? '';
     const match = cookieHeader.match(/(?:^|;\s*)refresh_token=([^;]+)/);
     const presented = match?.[1];

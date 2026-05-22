@@ -12,4 +12,7 @@ process.env.INVITATION_HMAC_KEY ??= Buffer.from(new Uint8Array(32).fill(11)).toS
 process.env.REFRESH_TOKEN_HMAC_KEY ??= Buffer.from(new Uint8Array(32).fill(13)).toString(
   'base64url',
 );
+process.env.HMAC_KEY_PENDING_CODES ??= Buffer.from(new Uint8Array(32).fill(17)).toString(
+  'base64url',
+);
 process.env.CORS_ALLOWED_ORIGINS ??= 'http://localhost:3000';

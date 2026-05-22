@@ -6,7 +6,7 @@ import type { Hono } from 'hono';
 import { object, parse, pipe, regex, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
 import { createDb } from '../db/client.js';
-import { authMethods, invitations, users } from '../db/schema.js';
+import { authMethods, pendingCodes, users } from '../db/schema.js';
 import type { AccessClaims } from '../jwt/verify.js';
 import { bearerAuth, invalidateUserExistsCache } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error-envelope.js';
@@ -39,11 +39,11 @@ const passphraseChangeFinishReq = object({
 
 export function registerMeRoutes(app: Hono): void {
   /**
-   * GET /v1/me
+   * GET /api/v1/me
    *
    * Returns the authenticated user's profile and their list of auth methods.
    */
-  app.get('/v1/me', bearerAuth(), async (c) => {
+  app.get('/api/v1/me', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
     const { db } = createDb();
     const user = (await db.select().from(users).where(eq(users.id, claims.sub)).limit(1))[0];
@@ -68,12 +68,12 @@ export function registerMeRoutes(app: Hono): void {
   });
 
   /**
-   * PATCH /v1/me
+   * PATCH /api/v1/me
    *
    * Allows the authenticated user to rename themselves. Returns 409 if the
    * desired username is already taken (PostgreSQL unique constraint 23505).
    */
-  app.patch('/v1/me', bearerAuth(), async (c) => {
+  app.patch('/api/v1/me', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
     const body = parse(patchMeReq, await c.req.json());
     if (RESERVED.has(body.username)) {
@@ -98,20 +98,20 @@ export function registerMeRoutes(app: Hono): void {
   });
 
   /**
-   * DELETE /v1/me
+   * DELETE /api/v1/me
    *
    * Self-deletes the authenticated user. The FK cascade on auth_methods.user_id
    * and refresh_tokens.user_id removes all associated rows automatically.
    */
-  app.delete('/v1/me', bearerAuth(), async (c) => {
+  app.delete('/api/v1/me', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
     const { db } = createDb();
     await db.transaction(async (tx) => {
-      // invitations.redeemed_by_user_id has no ON DELETE CASCADE, so NULL it out first.
+      // pending_codes.redeemed_by_user_id has no ON DELETE CASCADE, so NULL it out first.
       await tx
-        .update(invitations)
+        .update(pendingCodes)
         .set({ redeemedByUserId: null })
-        .where(eq(invitations.redeemedByUserId, claims.sub));
+        .where(eq(pendingCodes.redeemedByUserId, claims.sub));
       await tx.delete(users).where(eq(users.id, claims.sub));
     });
     await invalidateUserExistsCache(claims.sub);
@@ -123,18 +123,18 @@ export function registerMeRoutes(app: Hono): void {
     });
     c.header(
       'Set-Cookie',
-      'refresh_token=; HttpOnly; SameSite=Lax; Path=/v1/token/refresh; Max-Age=0',
+      'refresh_token=; HttpOnly; SameSite=Lax; Path=/api/v1/token/refresh; Max-Age=0',
     );
     return c.json({ ok: true });
   });
 
   /**
-   * DELETE /v1/auth-methods/:id
+   * DELETE /api/v1/auth-methods/:id
    *
    * Removes one auth method. Rejects with 409 if this would leave the user with
    * zero auth methods unless the caller passes `?confirm_lockout=true`.
    */
-  app.delete('/v1/auth-methods/:id', bearerAuth(), async (c) => {
+  app.delete('/api/v1/auth-methods/:id', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
     const id = c.req.param('id');
     const confirm = c.req.query('confirm_lockout') === 'true';
@@ -162,13 +162,13 @@ export function registerMeRoutes(app: Hono): void {
   });
 
   /**
-   * POST /v1/auth-methods/passphrase/change/start
+   * POST /api/v1/auth-methods/passphrase/change/start
    *
    * Begins an OPAQUE re-registration for a passphrase change. Stores a short-lived
    * session in Redis. The existing opaque_user_identifier is reused so that the
    * updated credential remains consistent with the original login binding.
    */
-  app.post('/v1/auth-methods/passphrase/change/start', bearerAuth(), async (c) => {
+  app.post('/api/v1/auth-methods/passphrase/change/start', bearerAuth(), async (c) => {
     await ensureOpaqueReady();
     const claims = c.get('claims') as AccessClaims;
     const body = parse(passphraseChangeStartReq, await c.req.json());
@@ -208,12 +208,12 @@ export function registerMeRoutes(app: Hono): void {
   });
 
   /**
-   * POST /v1/auth-methods/passphrase/change/finish
+   * POST /api/v1/auth-methods/passphrase/change/finish
    *
    * Completes the passphrase change: updates the OPAQUE credential and wrapped
    * master-key blobs on the existing opaque auth_method row.
    */
-  app.post('/v1/auth-methods/passphrase/change/finish', bearerAuth(), async (c) => {
+  app.post('/api/v1/auth-methods/passphrase/change/finish', bearerAuth(), async (c) => {
     await ensureOpaqueReady();
     const claims = c.get('claims') as AccessClaims;
     const body = parse(passphraseChangeFinishReq, await c.req.json());

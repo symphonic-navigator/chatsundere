@@ -52,6 +52,10 @@ export function bearerAuth(options: BearerOptions = {}): MiddlewareHandler {
     }
 
     c.set('claims', claims);
+    // session_id is the jti claim. Downstream handlers reach for it via
+    // `c.get('sessionId')` when keying server-side per-session state
+    // (e.g. step-up grace windows per ADR 0027).
+    c.set('sessionId', claims.jti);
     await next();
   };
 }

@@ -61,33 +61,33 @@ export const httpServerClient: ServerClient = {
   loginOpaqueStart: (req: OpaqueLoginStartRequest, baseUrl: string) =>
     apiFetch<OpaqueLoginStartResponse>({
       baseUrl,
-      path: '/v1/opaque/login/start',
+      path: '/api/v1/opaque/login/start',
       json: req,
       authMode: 'none',
     }),
   loginOpaqueFinish: (req: OpaqueLoginFinishRequest, baseUrl: string) =>
     apiFetch<OpaqueLoginFinishResponse>({
       baseUrl,
-      path: '/v1/opaque/login/finish',
+      path: '/api/v1/opaque/login/finish',
       json: req,
       authMode: 'none',
     }),
   recoveryStart: (req: RecoveryStartRequest, baseUrl: string) =>
     apiFetch<RecoveryStartResponse>({
       baseUrl,
-      path: '/v1/recovery/start',
+      path: '/api/v1/recovery/start',
       json: req,
       authMode: 'none',
     }),
   recoveryFinish: (req: RecoveryFinishRequest, baseUrl: string) =>
     apiFetch<RecoveryFinishResponse>({
       baseUrl,
-      path: '/v1/recovery/finish',
+      path: '/api/v1/recovery/finish',
       json: req,
       authMode: 'none',
     }),
   deleteMe: (baseUrl: string, _accessToken: string) =>
-    apiFetch<void>({ baseUrl, path: '/v1/me', method: 'DELETE', authMode: 'bearer' }),
+    apiFetch<void>({ baseUrl, path: '/api/v1/me', method: 'DELETE', authMode: 'bearer' }),
   passphraseChangeStart: (
     req: PassphraseChangeStartRequest,
     baseUrl: string,
@@ -95,7 +95,7 @@ export const httpServerClient: ServerClient = {
   ) =>
     apiFetch<PassphraseChangeStartResponse>({
       baseUrl,
-      path: '/v1/auth-methods/passphrase/change/start',
+      path: '/api/v1/auth-methods/passphrase/change/start',
       json: req,
       authMode: 'bearer',
     }),
@@ -106,7 +106,7 @@ export const httpServerClient: ServerClient = {
   ) =>
     apiFetch<PassphraseChangeFinishResponse>({
       baseUrl,
-      path: '/v1/auth-methods/passphrase/change/finish',
+      path: '/api/v1/auth-methods/passphrase/change/finish',
       json: req,
       authMode: 'bearer',
     }),

@@ -7,6 +7,11 @@ import { getKeyMaterial } from './keys.js';
 export interface AccessClaims {
   sub: string;
   role: 'primary_admin' | 'admin' | 'user';
+  /**
+   * Token identifier; also doubles as the server-side session id used as the
+   * key prefix for per-session state (e.g. step-up grace windows per ADR 0027).
+   */
+  jti: string;
   iat: number;
   exp: number;
 }
@@ -24,16 +29,19 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims> {
 
   const sub = payload.sub;
   const role = (payload as { role?: unknown }).role;
+  const jti = payload.jti;
   if (
     typeof sub !== 'string' ||
+    typeof jti !== 'string' ||
     (role !== 'primary_admin' && role !== 'admin' && role !== 'user')
   ) {
-    throw new Error('Invalid JWT payload: missing or unknown sub/role');
+    throw new Error('Invalid JWT payload: missing or unknown sub/role/jti');
   }
 
   return {
     sub,
     role,
+    jti,
     iat: payload.iat as number,
     exp: payload.exp as number,
   };

@@ -14,14 +14,14 @@ export const httpServerClient: ServerClient = {
   loginOpaqueStart: (req: OpaqueLoginStartRequest, baseUrl: string) =>
     apiFetch<OpaqueLoginStartResponse>({
       baseUrl,
-      path: '/v1/opaque/login/start',
+      path: '/api/v1/opaque/login/start',
       json: req,
       authMode: 'none',
     }),
   loginOpaqueFinish: (req: OpaqueLoginFinishRequest, baseUrl: string) =>
     apiFetch<OpaqueLoginFinishResponse>({
       baseUrl,
-      path: '/v1/opaque/login/finish',
+      path: '/api/v1/opaque/login/finish',
       json: req,
       authMode: 'none',
     }),

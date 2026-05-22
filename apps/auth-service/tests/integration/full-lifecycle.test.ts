@@ -22,7 +22,7 @@ import { readFileSync, unlinkSync } from 'node:fs';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { authMethods, invitations, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { createRedis } from '../../src/redis/client.js';
 import { createServer } from '../../src/server.js';
 
@@ -176,7 +176,7 @@ async function loginViaOpaque(
     password: opts.password,
   });
 
-  const startRes = await app.request('/v1/opaque/login/start', {
+  const startRes = await app.request('/api/v1/opaque/login/start', {
     method: 'POST',
     headers: JSON_ORIGIN,
     body: JSON.stringify({ username: opts.username, start_login_request: startLoginRequest }),
@@ -200,7 +200,7 @@ async function loginViaOpaque(
     throw new Error('opaqueClient.finishLogin returned undefined (wrong password?)');
   const { finishLoginRequest } = finishResult;
 
-  const finishRes = await app.request('/v1/opaque/login/finish', {
+  const finishRes = await app.request('/api/v1/opaque/login/finish', {
     method: 'POST',
     headers: JSON_ORIGIN,
     body: JSON.stringify({
@@ -232,16 +232,16 @@ async function loginViaOpaque(
 // Cleanup helpers
 // ---------------------------------------------------------------------------
 
-/** Removes a user from the DB, nulling out any invitation FK references first. */
+/** Removes a user from the DB, nulling out any pending_codes FK references first. */
 async function cleanupUser(userId: string): Promise<void> {
   const { db } = createDb();
-  // invitations.created_by and invitations.redeemed_by_user_id both reference users.id
+  // pending_codes.created_by and pending_codes.redeemed_by_user_id both reference users.id
   // without ON DELETE CASCADE, so they must be nulled before the user row can be deleted.
-  await db.update(invitations).set({ createdBy: null }).where(eq(invitations.createdBy, userId));
+  await db.update(pendingCodes).set({ createdBy: null }).where(eq(pendingCodes.createdBy, userId));
   await db
-    .update(invitations)
+    .update(pendingCodes)
     .set({ redeemedByUserId: null })
-    .where(eq(invitations.redeemedByUserId, userId));
+    .where(eq(pendingCodes.redeemedByUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
 }
 
@@ -289,14 +289,14 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     app = createServer();
 
     // Pre-test cleanup: remove every user so that bootstrap is eligible.
-    // Invitations holds two FK references to users.id (created_by and
+    // pending_codes holds two FK references to users.id (created_by and
     // redeemed_by_user_id), neither of which has ON DELETE CASCADE.
     // Both must be nulled before users can be deleted.
     const { db } = createDb();
-    await db.update(invitations).set({ createdBy: null, redeemedByUserId: null });
+    await db.update(pendingCodes).set({ createdBy: null, redeemedByUserId: null });
     await db.delete(authMethods);
     await db.delete(users);
-    await db.delete(invitations);
+    await db.delete(pendingCodes);
   });
 
   afterAll(async () => {
@@ -309,20 +309,20 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     // Step-3 invitation (admin-issued, redeemed by the regular user).
     if (userInvitationId) {
       await db
-        .update(invitations)
+        .update(pendingCodes)
         .set({ createdBy: null, redeemedByUserId: null })
-        .where(eq(invitations.id, userInvitationId));
-      await db.delete(invitations).where(eq(invitations.id, userInvitationId));
+        .where(eq(pendingCodes.id, userInvitationId));
+      await db.delete(pendingCodes).where(eq(pendingCodes.id, userInvitationId));
     }
 
-    // Any remaining invitations that reference our test users.
+    // Any remaining pending_codes that reference our test users.
     for (const id of [adminUserId, userUserId, conflictUserId]) {
       if (!id) continue;
-      await db.update(invitations).set({ createdBy: null }).where(eq(invitations.createdBy, id));
+      await db.update(pendingCodes).set({ createdBy: null }).where(eq(pendingCodes.createdBy, id));
       await db
-        .update(invitations)
+        .update(pendingCodes)
         .set({ redeemedByUserId: null })
-        .where(eq(invitations.redeemedByUserId, id));
+        .where(eq(pendingCodes.redeemedByUserId, id));
     }
 
     // Delete users if still present.
@@ -441,7 +441,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   // -------------------------------------------------------------------------
 
   it('step 3: primary_admin creates an invitation for a regular user', async () => {
-    const res = await app.request('/v1/admin/invitations', {
+    const res = await app.request('/api/v1/admin/invitations', {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminAccessToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({
@@ -511,8 +511,8 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   // Step 6: Admin lists users — both present
   // -------------------------------------------------------------------------
 
-  it('step 6: admin GET /v1/admin/users shows both the admin and the regular user', async () => {
-    const res = await app.request('/v1/admin/users', {
+  it('step 6: admin GET /api/v1/admin/users shows both the admin and the regular user', async () => {
+    const res = await app.request('/api/v1/admin/users', {
       headers: { Authorization: `Bearer ${adminAccessToken}`, ...ORIGIN },
     });
     expect(res.status).toBe(200);
@@ -529,7 +529,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
 
   it('step 7: admin suspends the regular user; after cache eviction /me returns 401', async () => {
     // Suspend the user.
-    const suspendRes = await app.request(`/v1/admin/users/${userUserId}/suspend`, {
+    const suspendRes = await app.request(`/api/v1/admin/users/${userUserId}/suspend`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminAccessToken}`, ...ORIGIN },
     });
@@ -543,7 +543,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     const redis = createRedis();
     await redis.del(`userexists:${userUserId}`);
 
-    const meRes = await app.request('/v1/me', {
+    const meRes = await app.request('/api/v1/me', {
       headers: { Authorization: `Bearer ${userAccessToken}`, ...ORIGIN },
     });
     expect(meRes.status).toBe(401);
@@ -554,7 +554,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   // -------------------------------------------------------------------------
 
   it('step 8: admin unsuspends the regular user; user can log in via OPAQUE again', async () => {
-    const unsuspendRes = await app.request(`/v1/admin/users/${userUserId}/unsuspend`, {
+    const unsuspendRes = await app.request(`/api/v1/admin/users/${userUserId}/unsuspend`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminAccessToken}`, ...ORIGIN },
     });
@@ -579,7 +579,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   // Step 9: PATCH /me username conflict → 409
   // -------------------------------------------------------------------------
 
-  it('step 9: PATCH /v1/me with an already-taken username returns 409', async () => {
+  it('step 9: PATCH /api/v1/me with an already-taken username returns 409', async () => {
     // Register a second user to create the conflict target.
     const { db } = createDb();
     const conflictToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString(
@@ -587,9 +587,10 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     );
     // Import the token hasher inline to avoid pulling in non-exported internals.
     const { hashInvitationToken } = await import('../../src/invitations/token.js');
-    const tokenHmac = await hashInvitationToken(conflictToken);
-    await db.insert(invitations).values({
-      tokenHmac,
+    const codeHmac = await hashInvitationToken(conflictToken);
+    await db.insert(pendingCodes).values({
+      type: 'invitation',
+      codeHmac,
       role: 'user',
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
@@ -602,7 +603,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     conflictUserId = conflictResult.userId;
 
     // The regular user tries to rename to the conflict username.
-    const patchRes = await app.request('/v1/me', {
+    const patchRes = await app.request('/api/v1/me', {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${userAccessToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ username: conflictUsername }),
@@ -620,8 +621,8 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
   // Step 10: Regular user deletes themselves; admin list no longer contains them
   // -------------------------------------------------------------------------
 
-  it('step 10: regular user DELETE /v1/me removes the account; admin list reflects', async () => {
-    const deleteRes = await app.request('/v1/me', {
+  it('step 10: regular user DELETE /api/v1/me removes the account; admin list reflects', async () => {
+    const deleteRes = await app.request('/api/v1/me', {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${userAccessToken}`,
@@ -637,7 +638,7 @@ describe.skipIf(skip)('Full auth-service lifecycle', () => {
     userUserId = '';
 
     // Admin list must no longer contain the deleted user.
-    const listRes = await app.request('/v1/admin/users', {
+    const listRes = await app.request('/api/v1/admin/users', {
       headers: { Authorization: `Bearer ${adminAccessToken}`, ...ORIGIN },
     });
     expect(listRes.status).toBe(200);

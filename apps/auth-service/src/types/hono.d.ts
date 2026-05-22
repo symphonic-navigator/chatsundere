@@ -8,6 +8,12 @@ import type { AccessClaims } from '../jwt/verify.js';
 declare module 'hono' {
   interface ContextVariableMap {
     claims: AccessClaims;
+    /**
+     * Server-side session id (the access-token jti claim). Set by the
+     * bearerAuth middleware alongside `claims`. Use as the key prefix for
+     * per-session state such as step-up grace windows per ADR 0027.
+     */
+    sessionId: string;
     request_id: string;
   }
 }

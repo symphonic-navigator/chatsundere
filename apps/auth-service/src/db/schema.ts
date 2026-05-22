@@ -91,18 +91,21 @@ export const authMethods = pgTable(
   }),
 );
 
-export const invitations = pgTable('invitations', {
+export const pendingCodes = pgTable('pending_codes', {
   id: uuid('id').primaryKey().default(sql`uuidv7()`),
-  tokenHmac: bytea('token_hmac').notNull().unique(),
-  role: invitationRole('role').notNull().default('user'),
-  issuerLabel: text('issuer_label'),
+  type: text('type').$type<'invitation' | 'pairing'>().notNull(),
+  codeHmac: bytea('code_hmac').notNull().unique(),
+  role: invitationRole('role'), // invitation-only; NULL for pairing rows
+  suggestedUsername: text('suggested_username'), // invitation-only
+  issuerLabel: text('issuer_label'), // invitation-only
+  note: text('note'), // invitation-only
+  attemptCount: integer('attempt_count').notNull().default(0),
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
   redeemedByUserId: uuid('redeemed_by_user_id').references(() => users.id),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  attemptCount: integer('attempt_count').notNull().default(0),
 });
 
 export const refreshTokens = pgTable(

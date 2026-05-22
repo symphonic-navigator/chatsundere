@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+/**
+ * @deprecated Superseded by `../codes/token.ts` (10-char ambiguity-removed
+ * Base32 codes, HMAC_KEY_PENDING_CODES). This module's 32-byte base64url
+ * tokens are still used by the legacy `/v1/link/opaque/{start,finish}`
+ * endpoints, which will be replaced by `/api/v1/join/{start,finish}` in
+ * cross-device-identity Squash β. Delete this file when Squash β lands.
+ */
+
 import { loadEnv } from '../env.js';
 
 let keyCache: CryptoKey | null = null;

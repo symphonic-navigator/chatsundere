@@ -8,12 +8,12 @@ import { bearerAuth } from '../../middleware/auth.js';
 
 export function registerAdminAuditRoutes(app: Hono): void {
   /**
-   * GET /v1/admin/audit-log[?event_type=&user_id=&since=&until=&limit=&offset=]
+   * GET /api/v1/admin/audit-log[?event_type=&user_id=&since=&until=&limit=&offset=]
    *
    * Returns paginated audit log entries. All filters are optional and may be combined.
    * Returns { entries, total } where total reflects the filtered count before pagination.
    */
-  app.get('/v1/admin/audit-log', bearerAuth({ minRole: 'admin' }), async (c) => {
+  app.get('/api/v1/admin/audit-log', bearerAuth({ minRole: 'admin' }), async (c) => {
     const eventType = c.req.query('event_type');
     const userId = c.req.query('user_id');
     const since = c.req.query('since');

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { invitations, users } from '../../src/db/schema.js';
+import { pendingCodes, users } from '../../src/db/schema.js';
 import { hashInvitationToken } from '../../src/invitations/token.js';
 import { issueTokens } from '../../src/jwt/issue.js';
 import { createServer } from '../../src/server.js';
@@ -24,9 +24,10 @@ async function registerUser(
 ): Promise<{ userId: string }> {
   const { db } = createDb();
   const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-  const tokenHmac = await hashInvitationToken(rawToken);
-  await db.insert(invitations).values({
-    tokenHmac,
+  const codeHmac = await hashInvitationToken(rawToken);
+  await db.insert(pendingCodes).values({
+    type: 'invitation',
+    codeHmac,
     role: opts.role ?? 'user',
     expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   });
@@ -81,9 +82,9 @@ async function registerUser(
 async function cleanupUser(userId: string): Promise<void> {
   const { db } = createDb();
   await db
-    .update(invitations)
+    .update(pendingCodes)
     .set({ redeemedByUserId: null })
-    .where(eq(invitations.redeemedByUserId, userId));
+    .where(eq(pendingCodes.redeemedByUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
 }
 
@@ -150,11 +151,11 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // GET /v1/admin/users
+  // GET /api/v1/admin/users
   // ---------------------------------------------------------------------------
 
-  it('GET /v1/admin/users returns a list of users (admin token)', async () => {
-    const res = await app.request('/v1/admin/users', {
+  it('GET /api/v1/admin/users returns a list of users (admin token)', async () => {
+    const res = await app.request('/api/v1/admin/users', {
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
     expect(res.status).toBe(200);
@@ -163,15 +164,15 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(body.users.some((u) => u.id === primaryId)).toBe(true);
   });
 
-  it('GET /v1/admin/users returns 403 for regular user', async () => {
-    const res = await app.request('/v1/admin/users', {
+  it('GET /api/v1/admin/users returns 403 for regular user', async () => {
+    const res = await app.request('/api/v1/admin/users', {
       headers: { Authorization: `Bearer ${userToken}`, ...ORIGIN },
     });
     expect(res.status).toBe(403);
   });
 
-  it('GET /v1/admin/users filters by q=', async () => {
-    const res = await app.request(`/v1/admin/users?q=${adminUsername}`, {
+  it('GET /api/v1/admin/users filters by q=', async () => {
+    const res = await app.request(`/api/v1/admin/users?q=${adminUsername}`, {
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
     expect(res.status).toBe(200);
@@ -180,11 +181,11 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // GET /v1/admin/users/:id
+  // GET /api/v1/admin/users/:id
   // ---------------------------------------------------------------------------
 
-  it('GET /v1/admin/users/:id returns user detail with auth_methods', async () => {
-    const res = await app.request(`/v1/admin/users/${userId}`, {
+  it('GET /api/v1/admin/users/:id returns user detail with auth_methods', async () => {
+    const res = await app.request(`/api/v1/admin/users/${userId}`, {
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
     expect(res.status).toBe(200);
@@ -200,19 +201,19 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(body.auth_methods[0]?.method_type).toBe('opaque');
   });
 
-  it('GET /v1/admin/users/:id returns 404 for unknown id', async () => {
-    const res = await app.request('/v1/admin/users/00000000-0000-0000-0000-000000000000', {
+  it('GET /api/v1/admin/users/:id returns 404 for unknown id', async () => {
+    const res = await app.request('/api/v1/admin/users/00000000-0000-0000-0000-000000000000', {
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
     expect(res.status).toBe(404);
   });
 
   // ---------------------------------------------------------------------------
-  // POST /v1/admin/users/:id/suspend
+  // POST /api/v1/admin/users/:id/suspend
   // ---------------------------------------------------------------------------
 
-  it('POST /v1/admin/users/:id/suspend suspends a user', async () => {
-    const res = await app.request(`/v1/admin/users/${userId}/suspend`, {
+  it('POST /api/v1/admin/users/:id/suspend suspends a user', async () => {
+    const res = await app.request(`/api/v1/admin/users/${userId}/suspend`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
@@ -228,8 +229,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(row?.suspendedAt).not.toBeNull();
   });
 
-  it('POST /v1/admin/users/:id/suspend returns 403 for self-target', async () => {
-    const res = await app.request(`/v1/admin/users/${adminId}/suspend`, {
+  it('POST /api/v1/admin/users/:id/suspend returns 403 for self-target', async () => {
+    const res = await app.request(`/api/v1/admin/users/${adminId}/suspend`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
@@ -239,11 +240,11 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /v1/admin/users/:id/unsuspend
+  // POST /api/v1/admin/users/:id/unsuspend
   // ---------------------------------------------------------------------------
 
-  it('POST /v1/admin/users/:id/unsuspend re-enables a suspended user', async () => {
-    const res = await app.request(`/v1/admin/users/${userId}/unsuspend`, {
+  it('POST /api/v1/admin/users/:id/unsuspend re-enables a suspended user', async () => {
+    const res = await app.request(`/api/v1/admin/users/${userId}/unsuspend`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
@@ -257,11 +258,11 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /v1/admin/users/:id/role  (primary_admin only)
+  // POST /api/v1/admin/users/:id/role  (primary_admin only)
   // ---------------------------------------------------------------------------
 
-  it('POST /v1/admin/users/:id/role changes a user role', async () => {
-    const res = await app.request(`/v1/admin/users/${userId}/role`, {
+  it('POST /api/v1/admin/users/:id/role changes a user role', async () => {
+    const res = await app.request(`/api/v1/admin/users/${userId}/role`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${primaryToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ role: 'admin' }),
@@ -276,8 +277,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     await db.update(users).set({ role: 'user' }).where(eq(users.id, userId));
   });
 
-  it('POST /v1/admin/users/:id/role returns 403 for regular admin token', async () => {
-    const res = await app.request(`/v1/admin/users/${userId}/role`, {
+  it('POST /api/v1/admin/users/:id/role returns 403 for regular admin token', async () => {
+    const res = await app.request(`/api/v1/admin/users/${userId}/role`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ role: 'admin' }),
@@ -285,8 +286,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(res.status).toBe(403);
   });
 
-  it('POST /v1/admin/users/:id/role returns 403 for self-target', async () => {
-    const res = await app.request(`/v1/admin/users/${primaryId}/role`, {
+  it('POST /api/v1/admin/users/:id/role returns 403 for self-target', async () => {
+    const res = await app.request(`/api/v1/admin/users/${primaryId}/role`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${primaryToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ role: 'admin' }),
@@ -297,11 +298,11 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /v1/admin/transfer-primary
+  // POST /api/v1/admin/transfer-primary
   // ---------------------------------------------------------------------------
 
-  it('POST /v1/admin/transfer-primary is a no-op success when target is self', async () => {
-    const res = await app.request('/v1/admin/transfer-primary', {
+  it('POST /api/v1/admin/transfer-primary is a no-op success when target is self', async () => {
+    const res = await app.request('/api/v1/admin/transfer-primary', {
       method: 'POST',
       headers: { Authorization: `Bearer ${primaryToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ target_user_id: primaryId }),
@@ -318,8 +319,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(row?.role).toBe('primary_admin');
   });
 
-  it('POST /v1/admin/transfer-primary returns 400 if target is not admin', async () => {
-    const res = await app.request('/v1/admin/transfer-primary', {
+  it('POST /api/v1/admin/transfer-primary returns 400 if target is not admin', async () => {
+    const res = await app.request('/api/v1/admin/transfer-primary', {
       method: 'POST',
       headers: { Authorization: `Bearer ${primaryToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ target_user_id: userId }),
@@ -329,8 +330,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(body.error.code).toBe('invalid_input');
   });
 
-  it('POST /v1/admin/transfer-primary atomically swaps primary_admin to target admin', async () => {
-    const res = await app.request('/v1/admin/transfer-primary', {
+  it('POST /api/v1/admin/transfer-primary atomically swaps primary_admin to target admin', async () => {
+    const res = await app.request('/api/v1/admin/transfer-primary', {
       method: 'POST',
       headers: { Authorization: `Bearer ${primaryToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ target_user_id: adminId }),
@@ -353,8 +354,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     await db.update(users).set({ role: 'primary_admin' }).where(eq(users.id, primaryId));
   });
 
-  it('POST /v1/admin/transfer-primary returns 403 for non-primary-admin', async () => {
-    const res = await app.request('/v1/admin/transfer-primary', {
+  it('POST /api/v1/admin/transfer-primary returns 403 for non-primary-admin', async () => {
+    const res = await app.request('/api/v1/admin/transfer-primary', {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, ...JSON_ORIGIN },
       body: JSON.stringify({ target_user_id: adminId }),
@@ -363,11 +364,11 @@ describe.skipIf(skip)('Admin user endpoints', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // DELETE /v1/admin/users/:id
+  // DELETE /api/v1/admin/users/:id
   // ---------------------------------------------------------------------------
 
-  it('DELETE /v1/admin/users/:id rejects self-delete for primary_admin', async () => {
-    const res = await app.request(`/v1/admin/users/${primaryId}`, {
+  it('DELETE /api/v1/admin/users/:id rejects self-delete for primary_admin', async () => {
+    const res = await app.request(`/api/v1/admin/users/${primaryId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${primaryToken}`, ...ORIGIN },
     });
@@ -376,8 +377,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(body.error.code).toBe('forbidden');
   });
 
-  it('DELETE /v1/admin/users/:id deletes a regular user', async () => {
-    const res = await app.request(`/v1/admin/users/${userId}`, {
+  it('DELETE /api/v1/admin/users/:id deletes a regular user', async () => {
+    const res = await app.request(`/api/v1/admin/users/${userId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });
@@ -390,8 +391,8 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     userId = '';
   });
 
-  it('DELETE /v1/admin/users/:id returns 404 for unknown id', async () => {
-    const res = await app.request('/v1/admin/users/00000000-0000-0000-0000-000000000000', {
+  it('DELETE /api/v1/admin/users/:id returns 404 for unknown id', async () => {
+    const res = await app.request('/api/v1/admin/users/00000000-0000-0000-0000-000000000000', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
     });

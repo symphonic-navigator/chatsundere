@@ -15,6 +15,27 @@
       "when": 1779200000000,
       "tag": "0001_add_opaque_user_identifier",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779400000000,
+      "tag": "0002_add_recovery_wraps_to_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779500000000,
+      "tag": "0003_rename_invitations_to_pending_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779550000000,
+      "tag": "0004_pending_codes_role_nullable",
+      "breakpoints": true
     }
   ]
 }

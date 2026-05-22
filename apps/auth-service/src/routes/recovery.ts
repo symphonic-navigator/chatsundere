@@ -36,7 +36,7 @@ const finishReqSchema = object({
 
 export function registerRecoveryRoutes(app: Hono): void {
   /**
-   * POST /v1/recovery/start
+   * POST /api/v1/recovery/start
    *
    * The client sends its username and an OPAQUE registration_request for a fresh
    * re-registration under its new passphrase. The server returns:
@@ -48,7 +48,7 @@ export function registerRecoveryRoutes(app: Hono): void {
    *
    * The nonce is stored in Redis with a 60 s TTL and consumed on the /finish call.
    */
-  app.post('/v1/recovery/start', async (c) => {
+  app.post('/api/v1/recovery/start', async (c) => {
     await ensureOpaqueReady();
     const body = parse(startReqSchema, await c.req.json());
     await applyLoginRateLimit(body.username);
@@ -94,7 +94,7 @@ export function registerRecoveryRoutes(app: Hono): void {
   });
 
   /**
-   * POST /v1/recovery/finish
+   * POST /api/v1/recovery/finish
    *
    * The client sends:
    *   - username + nonce (as returned by /start)
@@ -109,7 +109,7 @@ export function registerRecoveryRoutes(app: Hono): void {
    * opaque auth_method is inserted, and the recovery columns + verifier key on users
    * are updated. A recovery_used audit event is written and tokens are issued.
    */
-  app.post('/v1/recovery/finish', async (c) => {
+  app.post('/api/v1/recovery/finish', async (c) => {
     await ensureOpaqueReady();
     const body = parse(finishReqSchema, await c.req.json());
 

@@ -56,7 +56,7 @@ const passkeyFinishReq = object({
 
 export function registerLoginRoutes(app: Hono): void {
   /**
-   * POST /v1/opaque/login/start
+   * POST /api/v1/opaque/login/start
    *
    * Runs the OPAQUE server-side login-start step. Returns a `ke2` / `login_response`
    * alongside the stored wrapped_mk_opaque blobs for the client.
@@ -66,7 +66,7 @@ export function registerLoginRoutes(app: Hono): void {
    * to opaqueServer.startLogin. @serenity-kit/opaque handles null records by returning a fake
    * deterministic response that is indistinguishable from a real one at the network layer.
    */
-  app.post('/v1/opaque/login/start', async (c) => {
+  app.post('/api/v1/opaque/login/start', async (c) => {
     await ensureOpaqueReady();
     const body = parse(opaqueStartReq, await c.req.json());
     await applyLoginRateLimit(body.username);
@@ -170,12 +170,12 @@ export function registerLoginRoutes(app: Hono): void {
   });
 
   /**
-   * POST /v1/opaque/login/finish
+   * POST /api/v1/opaque/login/finish
    *
    * Completes the OPAQUE login ceremony. On success issues JWT tokens. On failure emits
    * auth.login.failed and returns 401 — same response shape whether the user exists or not.
    */
-  app.post('/v1/opaque/login/finish', async (c) => {
+  app.post('/api/v1/opaque/login/finish', async (c) => {
     await ensureOpaqueReady();
     const body = parse(opaqueFinishReq, await c.req.json());
 
@@ -252,7 +252,7 @@ export function registerLoginRoutes(app: Hono): void {
   });
 
   /**
-   * POST /v1/passkey/login/start
+   * POST /api/v1/passkey/login/start
    *
    * Generates WebAuthn authentication options bound to the user's registered passkey
    * credential IDs, stores the challenge in Redis, and returns the options.
@@ -260,7 +260,7 @@ export function registerLoginRoutes(app: Hono): void {
    * Requires a username so we can restrict allowCredentials to the user's own passkeys.
    * Discoverable-credential (username-free) login is a phase-1 concern.
    */
-  app.post('/v1/passkey/login/start', async (c) => {
+  app.post('/api/v1/passkey/login/start', async (c) => {
     const body = parse(passkeyStartReq, await c.req.json());
     await applyLoginRateLimit(body.username);
 
@@ -314,14 +314,14 @@ export function registerLoginRoutes(app: Hono): void {
   });
 
   /**
-   * POST /v1/passkey/login/finish
+   * POST /api/v1/passkey/login/finish
    *
    * Verifies the WebAuthn authentication assertion. On success:
    *  - updates the sign counter on the auth_method row
    *  - issues JWT tokens
    *  - returns access_token + the wrapped_mk_passkey blobs for client-side key unwrapping
    */
-  app.post('/v1/passkey/login/finish', async (c) => {
+  app.post('/api/v1/passkey/login/finish', async (c) => {
     const body = parse(passkeyFinishReq, await c.req.json());
 
     const redis = createRedis();

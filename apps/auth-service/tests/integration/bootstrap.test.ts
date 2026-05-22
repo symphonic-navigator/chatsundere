@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { authMethods, invitations, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { issueTokens } from '../../src/jwt/issue.js';
 import { createServer } from '../../src/server.js';
 
@@ -32,7 +32,7 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
     }
     // Delete all auth_methods to make bootstrap eligible.
     await db.delete(authMethods);
-    await db.delete(invitations);
+    await db.delete(pendingCodes);
     await closeDb();
   });
 
@@ -47,7 +47,7 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
       await db.delete(users).where(eq(users.id, id));
     }
     await db.delete(authMethods);
-    await db.delete(invitations);
+    await db.delete(pendingCodes);
     await closeDb();
   });
 
@@ -169,7 +169,7 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
     // Verify invitation exists in DB.
     const { db } = createDb();
     const invId = data.invitation_id;
-    const inv = await db.select().from(invitations).where(eq(invitations.id, invId));
+    const inv = await db.select().from(pendingCodes).where(eq(pendingCodes.id, invId));
     expect(inv.length).toBe(1);
     expect(inv[0]?.role).toBe('primary_admin');
     expect(inv[0]?.issuerLabel).toBe('bootstrap');
@@ -180,7 +180,7 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
     } catch {
       // Already deleted or doesn't exist.
     }
-    await db.delete(invitations).where(eq(invitations.id, invId));
+    await db.delete(pendingCodes).where(eq(pendingCodes.id, invId));
     await closeDb();
   });
 
@@ -214,7 +214,7 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
       // Already deleted.
     }
     const { db } = createDb();
-    await db.delete(invitations).where(eq(invitations.id, invId));
+    await db.delete(pendingCodes).where(eq(pendingCodes.id, invId));
     await closeDb();
   });
 });

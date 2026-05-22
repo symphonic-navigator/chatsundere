@@ -8,9 +8,9 @@ import { and, eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { consumeInvitationAttempt } from '../codes/rate-limit.js';
 import { createDb } from '../db/client.js';
-import { authMethods, invitations, users } from '../db/schema.js';
-import { consumeInvitationAttempt } from '../invitations/rate-limit.js';
+import { authMethods, pendingCodes, users } from '../db/schema.js';
 import { hashInvitationToken } from '../invitations/token.js';
 import { issueTokens, refreshCookieFor } from '../jwt/issue.js';
 import { metrics } from '../metrics.js';
@@ -67,8 +67,8 @@ export function registerLinkRoutes(app: Hono): void {
   app.post('/v1/link/opaque/start', async (c) => {
     await ensureOpaqueReady();
     const body = parse(startReq, await c.req.json());
-    const tokenHmac = await hashInvitationToken(body.invitation_token);
-    const invitation = await consumeInvitationAttempt(tokenHmac);
+    const codeHmac = await hashInvitationToken(body.invitation_token);
+    const invitation = await consumeInvitationAttempt(codeHmac);
 
     const sessionId = generateSessionId();
 
@@ -78,6 +78,10 @@ export function registerLinkRoutes(app: Hono): void {
       registrationRequest: body.registration_request,
     });
 
+    // role is always set for invitation-type codes; null only for pairing codes which
+    // are not handled by this endpoint. Guard here so TypeScript is satisfied.
+    if (!invitation.role)
+      throw new ApiError(400, 'invalid_input', 'Invitation has no assigned role');
     await storeOpaqueState({
       scope: 'register',
       sessionId,
@@ -152,9 +156,9 @@ export function registerLinkRoutes(app: Hono): void {
         });
 
         await tx
-          .update(invitations)
+          .update(pendingCodes)
           .set({ redeemedAt: new Date(), redeemedByUserId: user.id })
-          .where(eq(invitations.id, invitationId));
+          .where(eq(pendingCodes.id, invitationId));
 
         return user;
       });

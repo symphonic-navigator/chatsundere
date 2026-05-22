@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // Integration test for the OPAQUE login round-trip:
-//   /v1/link/opaque/start + finish  →  /v1/opaque/login/start + finish
+//   /v1/link/opaque/start + finish  →  /api/v1/opaque/login/start + finish
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { authMethods, invitations, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { hashInvitationToken } from '../../src/invitations/token.js';
 import { verifyAccessToken } from '../../src/jwt/verify.js';
 import { createServer } from '../../src/server.js';
@@ -30,9 +30,10 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
 
     const { db } = createDb();
     const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-    const tokenHmac = await hashInvitationToken(rawToken);
-    await db.insert(invitations).values({
-      tokenHmac,
+    const codeHmac = await hashInvitationToken(rawToken);
+    await db.insert(pendingCodes).values({
+      type: 'invitation',
+      codeHmac,
       role: 'user',
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
@@ -91,9 +92,9 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
     if (userId) {
       const { db } = createDb();
       await db
-        .update(invitations)
+        .update(pendingCodes)
         .set({ redeemedByUserId: null })
-        .where(eq(invitations.redeemedByUserId, userId));
+        .where(eq(pendingCodes.redeemedByUserId, userId));
       await db.delete(users).where(eq(users.id, userId));
     }
     await closeDb();
@@ -103,8 +104,8 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
     // --- Client: start login ---
     const { clientLoginState, startLoginRequest } = opaqueClient.startLogin({ password });
 
-    // --- POST /v1/opaque/login/start ---
-    const loginStartRes = await app.request('/v1/opaque/login/start', {
+    // --- POST /api/v1/opaque/login/start ---
+    const loginStartRes = await app.request('/api/v1/opaque/login/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({ username, start_login_request: startLoginRequest }),
@@ -135,8 +136,8 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
     if (!finishResult) throw new Error('Client finishLogin returned undefined');
     const { finishLoginRequest } = finishResult;
 
-    // --- POST /v1/opaque/login/finish ---
-    const loginFinishRes = await app.request('/v1/opaque/login/finish', {
+    // --- POST /api/v1/opaque/login/finish ---
+    const loginFinishRes = await app.request('/api/v1/opaque/login/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
@@ -164,7 +165,7 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
   });
 
   it('returns 410 when session_id is replayed at /finish', async () => {
-    const res = await app.request('/v1/opaque/login/finish', {
+    const res = await app.request('/api/v1/opaque/login/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
@@ -178,7 +179,7 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
   it('returns 200 with no wrapped key blobs for an unknown username (enumeration mitigation)', async () => {
     const { startLoginRequest } = opaqueClient.startLogin({ password });
 
-    const res = await app.request('/v1/opaque/login/start', {
+    const res = await app.request('/api/v1/opaque/login/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
@@ -205,7 +206,7 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
       password: wrongPassword,
     });
 
-    const startRes = await app.request('/v1/opaque/login/start', {
+    const startRes = await app.request('/api/v1/opaque/login/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({ username, start_login_request: startLoginRequest }),
@@ -231,7 +232,7 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
     const finishLoginRequest =
       finishResult?.finishLoginRequest ?? Buffer.alloc(32).toString('base64url');
 
-    const finishRes = await app.request('/v1/opaque/login/finish', {
+    const finishRes = await app.request('/api/v1/opaque/login/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({

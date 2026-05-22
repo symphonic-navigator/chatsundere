@@ -12,8 +12,8 @@ const LOGIN_MAX_ATTEMPTS = 10;
  * Normalises the username to lowercase before building the Redis key so that
  * `Alice` and `alice` share the same counter (the DB uses citext for usernames).
  *
- * Used by both /v1/opaque/login/start, /v1/passkey/login/start, and
- * /v1/recovery/start to maintain consistent 10 attempts / 15 min throttling
+ * Used by both /api/v1/opaque/login/start, /api/v1/passkey/login/start, and
+ * /api/v1/recovery/start to maintain consistent 10 attempts / 15 min throttling
  * per spec §8.4.
  */
 export async function applyLoginRateLimit(username: string): Promise<void> {

@@ -30,6 +30,8 @@ const REDACT_PATHS: string[] = [
   '*.authorization',
   '*.AUTH_JWT_PRIVATE_KEY',
   '*.INVITATION_HMAC_KEY',
+  '*.REFRESH_TOKEN_HMAC_KEY',
+  '*.HMAC_KEY_PENDING_CODES',
 ];
 
 export function createLogger(level: string, pretty: boolean): Logger {

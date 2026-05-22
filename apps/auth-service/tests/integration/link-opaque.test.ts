@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { authMethods, invitations, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { hashInvitationToken } from '../../src/invitations/token.js';
 import { createServer } from '../../src/server.js';
 
@@ -28,27 +28,28 @@ describe.skipIf(skip)('OPAQUE linking round-trip', () => {
     const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
     invitationToken = rawToken;
 
-    const tokenHmac = await hashInvitationToken(rawToken);
+    const codeHmac = await hashInvitationToken(rawToken);
     const inserted = await db
-      .insert(invitations)
+      .insert(pendingCodes)
       .values({
-        tokenHmac,
+        type: 'invitation',
+        codeHmac,
         role: 'user',
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
       })
-      .returning({ id: invitations.id });
+      .returning({ id: pendingCodes.id });
     invitationId = inserted[0]?.id ?? '';
   });
 
   afterAll(async () => {
     if (userId) {
       const { db } = createDb();
-      // Null out the redeemed_by_user_id reference on invitations before deleting the user,
+      // Null out the redeemed_by_user_id reference on pending_codes before deleting the user,
       // since that FK has no ON DELETE cascade.
       await db
-        .update(invitations)
+        .update(pendingCodes)
         .set({ redeemedByUserId: null })
-        .where(eq(invitations.redeemedByUserId, userId));
+        .where(eq(pendingCodes.redeemedByUserId, userId));
       // auth_methods deletes via cascade from users.
       await db.delete(users).where(eq(users.id, userId));
     }
@@ -140,7 +141,7 @@ describe.skipIf(skip)('OPAQUE linking round-trip', () => {
 
     // Verify the invitation is marked as redeemed.
     if (!invitationId) throw new Error('invitationId not set');
-    const invRows = await db.select().from(invitations).where(eq(invitations.id, invitationId));
+    const invRows = await db.select().from(pendingCodes).where(eq(pendingCodes.id, invitationId));
     expect(invRows[0]?.redeemedAt).not.toBeNull();
     expect(invRows[0]?.redeemedByUserId).toBe(userId);
   });
@@ -149,9 +150,10 @@ describe.skipIf(skip)('OPAQUE linking round-trip', () => {
     // We need a fresh invitation for the second attempt.
     const { db } = createDb();
     const rawToken2 = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-    const tokenHmac2 = await hashInvitationToken(rawToken2);
-    await db.insert(invitations).values({
-      tokenHmac: tokenHmac2,
+    const codeHmac2 = await hashInvitationToken(rawToken2);
+    await db.insert(pendingCodes).values({
+      type: 'invitation',
+      codeHmac: codeHmac2,
       role: 'user',
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });

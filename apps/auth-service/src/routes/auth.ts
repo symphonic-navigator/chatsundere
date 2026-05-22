@@ -10,11 +10,12 @@ import { revokeAllForUser, revokeFamily } from '../jwt/refresh.js';
 import type { AccessClaims } from '../jwt/verify.js';
 import { bearerAuth } from '../middleware/auth.js';
 
-const CLEAR_COOKIE = 'refresh_token=; HttpOnly; SameSite=Lax; Path=/v1/token/refresh; Max-Age=0';
+const CLEAR_COOKIE =
+  'refresh_token=; HttpOnly; SameSite=Lax; Path=/api/v1/token/refresh; Max-Age=0';
 
-/** Registers POST /v1/auth/logout. */
+/** Registers POST /api/v1/auth/logout. */
 export function registerAuthRoutes(app: Hono): void {
-  app.post('/v1/auth/logout', bearerAuth(), async (c) => {
+  app.post('/api/v1/auth/logout', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
     const all = c.req.query('revoke_all') === 'true';
 

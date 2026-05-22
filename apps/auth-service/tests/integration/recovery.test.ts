@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // Integration test for the recovery challenge-response flow:
-//   /v1/link/opaque/start + finish  →  /v1/recovery/start + finish
+//   /v1/link/opaque/start + finish  →  /api/v1/recovery/start + finish
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { authMethods, invitations, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { hashInvitationToken } from '../../src/invitations/token.js';
 import { createServer } from '../../src/server.js';
 
@@ -98,9 +98,10 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
     // Register a user via the OPAQUE link flow.
     const { db } = createDb();
     const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-    const tokenHmac = await hashInvitationToken(rawToken);
-    await db.insert(invitations).values({
-      tokenHmac,
+    const codeHmac = await hashInvitationToken(rawToken);
+    await db.insert(pendingCodes).values({
+      type: 'invitation',
+      codeHmac,
       role: 'user',
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
@@ -158,9 +159,9 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
     if (userId) {
       const { db } = createDb();
       await db
-        .update(invitations)
+        .update(pendingCodes)
         .set({ redeemedByUserId: null })
-        .where(eq(invitations.redeemedByUserId, userId));
+        .where(eq(pendingCodes.redeemedByUserId, userId));
       await db.delete(users).where(eq(users.id, userId));
     }
     await closeDb();
@@ -173,7 +174,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       },
     );
 
-    const res = await app.request('/v1/recovery/start', {
+    const res = await app.request('/api/v1/recovery/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({ username, registration_request: registrationRequest }),
@@ -201,7 +202,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
 
   it('start returns 404 for an unknown username', async () => {
     const { registrationRequest } = opaqueClient.startRegistration({ password: 'irrelevant' });
-    const res = await app.request('/v1/recovery/start', {
+    const res = await app.request('/api/v1/recovery/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
@@ -218,7 +219,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       password: newPassword,
     });
 
-    const startRes = await app.request('/v1/recovery/start', {
+    const startRes = await app.request('/api/v1/recovery/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({ username, registration_request: registrationRequest }),
@@ -246,8 +247,8 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
     // Phase 3: build a valid HMAC proof using the same verifier key we stored.
     const proof = await buildProof(startBody.nonce, username, recoveryVerifierKey);
 
-    // Phase 4: POST /v1/recovery/finish.
-    const finishRes = await app.request('/v1/recovery/finish', {
+    // Phase 4: POST /api/v1/recovery/finish.
+    const finishRes = await app.request('/api/v1/recovery/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
@@ -288,7 +289,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
   it('finish returns 401 when nonce is replayed', async () => {
     // The nonce from the previous test is already consumed. A replay attempt should fail.
     const proof = await buildProof('aGVsbG8', username, recoveryVerifierKey);
-    const res = await app.request('/v1/recovery/finish', {
+    const res = await app.request('/api/v1/recovery/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({
@@ -313,7 +314,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
   it('finish returns 401 when proof is invalid', async () => {
     // Get a fresh nonce.
     const { registrationRequest } = opaqueClient.startRegistration({ password: 'x' });
-    const startRes = await app.request('/v1/recovery/start', {
+    const startRes = await app.request('/api/v1/recovery/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({ username, registration_request: registrationRequest }),
@@ -321,7 +322,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
     expect(startRes.status).toBe(200);
     const startBody = (await startRes.json()) as { nonce: string; registration_response: string };
 
-    const res = await app.request('/v1/recovery/finish', {
+    const res = await app.request('/api/v1/recovery/finish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
       body: JSON.stringify({

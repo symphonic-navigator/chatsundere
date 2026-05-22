@@ -2,7 +2,7 @@
 
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { createDb } from '../db/client.js';
-import { invitations } from '../db/schema.js';
+import { pendingCodes } from '../db/schema.js';
 import { ApiError } from '../middleware/error-envelope.js';
 
 const MAX_ATTEMPTS = 3;
@@ -12,12 +12,12 @@ const MAX_ATTEMPTS = 3;
  * mark the invitation revoked. Returns the invitation row if still usable; throws
  * ApiError otherwise.
  */
-export async function consumeInvitationAttempt(tokenHmac: Uint8Array) {
+export async function consumeInvitationAttempt(codeHmac: Uint8Array) {
   const { db } = createDb();
   const updated = await db
-    .update(invitations)
-    .set({ attemptCount: sql`${invitations.attemptCount} + 1` })
-    .where(and(eq(invitations.tokenHmac, tokenHmac), isNull(invitations.revokedAt)))
+    .update(pendingCodes)
+    .set({ attemptCount: sql`${pendingCodes.attemptCount} + 1` })
+    .where(and(eq(pendingCodes.codeHmac, codeHmac), isNull(pendingCodes.revokedAt)))
     .returning();
   const row = updated[0];
   if (!row) throw new ApiError(404, 'not_found', 'Invitation not found or revoked');
@@ -28,7 +28,7 @@ export async function consumeInvitationAttempt(tokenHmac: Uint8Array) {
     throw new ApiError(410, 'expired', 'Invitation expired');
   }
   if (row.attemptCount > MAX_ATTEMPTS) {
-    await db.update(invitations).set({ revokedAt: new Date() }).where(eq(invitations.id, row.id));
+    await db.update(pendingCodes).set({ revokedAt: new Date() }).where(eq(pendingCodes.id, row.id));
     throw new ApiError(
       429,
       'invitation_attempts_exhausted',

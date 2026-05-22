@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Integration tests for the /v1/me and /v1/auth-methods/* endpoints.
+// Integration tests for the /api/v1/me and /api/v1/auth-methods/* endpoints.
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { authMethods, invitations, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { hashInvitationToken } from '../../src/invitations/token.js';
 import { createServer } from '../../src/server.js';
 
@@ -20,9 +20,10 @@ async function registerUser(
 ): Promise<{ userId: string; accessToken: string }> {
   const { db } = createDb();
   const rawToken = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
-  const tokenHmac = await hashInvitationToken(rawToken);
-  await db.insert(invitations).values({
-    tokenHmac,
+  const codeHmac = await hashInvitationToken(rawToken);
+  await db.insert(pendingCodes).values({
+    type: 'invitation',
+    codeHmac,
     role: 'user',
     expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   });
@@ -77,13 +78,13 @@ async function registerUser(
 async function cleanupUser(userId: string): Promise<void> {
   const { db } = createDb();
   await db
-    .update(invitations)
+    .update(pendingCodes)
     .set({ redeemedByUserId: null })
-    .where(eq(invitations.redeemedByUserId, userId));
+    .where(eq(pendingCodes.redeemedByUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
 }
 
-describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
+describe.skipIf(skip)('/api/v1/me — self-management endpoints', () => {
   let app: ReturnType<typeof createServer>;
   let userId: string;
   let accessToken: string;
@@ -100,15 +101,15 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
   });
 
   afterAll(async () => {
-    // If DELETE /v1/me was not called (test failed early), tidy up manually.
+    // If DELETE /api/v1/me was not called (test failed early), tidy up manually.
     const { db } = createDb();
     const remaining = await db.select({ id: users.id }).from(users).where(eq(users.id, userId));
     if (remaining.length > 0) await cleanupUser(userId);
     await closeDb();
   });
 
-  it('GET /v1/me returns user profile and auth methods', async () => {
-    const res = await app.request('/v1/me', {
+  it('GET /api/v1/me returns user profile and auth methods', async () => {
+    const res = await app.request('/api/v1/me', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Origin: 'http://localhost:3000',
@@ -126,9 +127,9 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     expect(body.auth_methods[0]?.method_type).toBe('opaque');
   });
 
-  it('PATCH /v1/me renames the user', async () => {
+  it('PATCH /api/v1/me renames the user', async () => {
     const newName = `${username.slice(0, 28)}rn`;
-    const res = await app.request('/v1/me', {
+    const res = await app.request('/api/v1/me', {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -149,7 +150,7 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     expect(row?.username).toBe(newName);
   });
 
-  it('PATCH /v1/me returns 409 on duplicate username', async () => {
+  it('PATCH /api/v1/me returns 409 on duplicate username', async () => {
     // Register a second user to create a collision target.
     const secondUsername = `metest2${Date.now()}`.slice(0, 32).replace(/-/g, '');
     const { userId: secondId } = await registerUser(app, {
@@ -158,7 +159,7 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     });
 
     try {
-      const res = await app.request('/v1/me', {
+      const res = await app.request('/api/v1/me', {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -175,8 +176,8 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     }
   });
 
-  it('PATCH /v1/me returns 400 for a reserved username', async () => {
-    const res = await app.request('/v1/me', {
+  it('PATCH /api/v1/me returns 400 for a reserved username', async () => {
+    const res = await app.request('/api/v1/me', {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -188,14 +189,14 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     expect(res.status).toBe(400);
   });
 
-  it('DELETE /v1/auth-methods/:id rejects without confirm_lockout when only one method remains', async () => {
+  it('DELETE /api/v1/auth-methods/:id rejects without confirm_lockout when only one method remains', async () => {
     const { db } = createDb();
     const methods = await db.select().from(authMethods).where(eq(authMethods.userId, userId));
     expect(methods.length).toBe(1);
     const methodId = methods[0]?.id;
     if (!methodId) throw new Error('No auth method found');
 
-    const res = await app.request(`/v1/auth-methods/${methodId}`, {
+    const res = await app.request(`/api/v1/auth-methods/${methodId}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -207,8 +208,8 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     expect(body.error.code).toBe('conflict');
   });
 
-  it('DELETE /v1/me removes the user and cascades auth_methods', async () => {
-    const res = await app.request('/v1/me', {
+  it('DELETE /api/v1/me removes the user and cascades auth_methods', async () => {
+    const res = await app.request('/api/v1/me', {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -232,8 +233,8 @@ describe.skipIf(skip)('/v1/me — self-management endpoints', () => {
     expect(remainingMethods.length).toBe(0);
   });
 
-  it('GET /v1/me returns 401 after self-deletion', async () => {
-    const res = await app.request('/v1/me', {
+  it('GET /api/v1/me returns 401 after self-deletion', async () => {
+    const res = await app.request('/api/v1/me', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Origin: 'http://localhost:3000',

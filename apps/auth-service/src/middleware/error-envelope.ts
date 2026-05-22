@@ -8,6 +8,7 @@ export class ApiError extends HTTPException {
     status: 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 503,
     public readonly code: string,
     message: string,
+    public readonly metadata?: Record<string, unknown>,
   ) {
     super(status, { message });
     this.name = 'ApiError';
@@ -16,7 +17,10 @@ export class ApiError extends HTTPException {
 
 export const errorEnvelope: ErrorHandler = (err, c) => {
   if (err instanceof ApiError) {
-    return c.json({ error: { code: err.code, message: err.message } }, err.status);
+    return c.json(
+      { error: { code: err.code, message: err.message, ...(err.metadata ?? {}) } },
+      err.status,
+    );
   }
   if (err instanceof ValiError) {
     // Schema validation failure — surface the first issue message as a 400.
