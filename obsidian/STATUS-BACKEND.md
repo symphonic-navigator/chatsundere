@@ -1,9 +1,20 @@
-# Chatsundere Status
+# Chatsundere Status — Backend
 
-**Last updated:** 2026-05-22 — Squash β (cross-device-identity endpoints) landed at commit `7a01697`; ADR 0023 amended + ADR 0028 added; Larissa β-approved after H1+M1+L1 fixes (per-IP rate limits, kind_mismatch pre-consume, kind_mismatch message scrub)
+**Last updated:** 2026-05-23 — Status tracking split off: this file now
+covers server-coupled work (auth, sync, proxy, admin, plus the server-
+gated parts of the user-client). Client-only / standalone-mode work has
+moved to [[STATUS-CLIENT-ONLY]]. Prior entry: 2026-05-22 — Squash β
+(cross-device-identity endpoints) landed at commit `7a01697`; ADR 0023
+amended + ADR 0028 added; Larissa β-approved after H1+M1+L1 fixes
+(per-IP rate limits, kind_mismatch pre-consume, kind_mismatch message
+scrub).
 
-This file is the single point of orientation. Read it first at the start of
-every session; update it at the end of every session. Anything more detailed
+This file tracks server-coupled work — anything that needs auth-service,
+sync-service, proxy-service, or admin-client to exist, plus the user-
+client surfaces that are inherently bound to them (auth flows, linking,
+recovery, biometric register/unlock, etc.). Client-only / standalone
+work lives in [[STATUS-CLIENT-ONLY]]. Read both at the start of every
+session; update the relevant one at the end. Anything more detailed
 than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ---
@@ -152,6 +163,7 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Pointers
 
+- Client-only / standalone-mode work: [[STATUS-CLIENT-ONLY]]
 - All open todos: [[insights/follow-ups-index]]
 - Decisions: `decisions/0001–0028`
 - Design briefs: `briefs/phase 0/`

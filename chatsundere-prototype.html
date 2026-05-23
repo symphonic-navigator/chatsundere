@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatsundere — Interactive Wireframe</title>
+<style>
+  :root {
+    --bg-void: #0a0a0a;
+    --surface-base: rgba(255,255,255,0.025);
+    --surface-raised: rgba(255,255,255,0.04);
+    --surface-input: rgba(0,0,0,0.3);
+    --gold: #c9a84c;
+    --gold-subtle: rgba(201,168,76,0.06);
+    --gold-border: rgba(201,168,76,0.15);
+    --gold-border-active: rgba(201,168,76,0.35);
+    --gold-glow: rgba(201,168,76,0.08);
+    --text-primary: #f0e8d8;
+    --text-secondary: #e8e0d0;
+    --text-muted: rgba(232,224,208,0.4);
+    --text-ghost: rgba(232,224,208,0.2);
+    --sage: #74c69d;
+    --coral: #f87171;
+    --periwinkle: #7c9ede;
+    --lavender: #a78bfa;
+    --divider-gold: rgba(201,168,76,0.08);
+    --divider-neutral: rgba(255,255,255,0.05);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: #1a1a1a;
+    color: var(--text-secondary);
+    font-family: system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: auto;
+  }
+
+  /* ===== PAGE LAYOUT ===== */
+  .lab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 64px;
+    gap: 32px;
+  }
+  .lab-header {
+    max-width: 760px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .lab-header h1 {
+    font-family: Georgia, serif;
+    font-size: 28px;
+    color: var(--text-primary);
+    font-weight: 400;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .lab-header p { font-size: 13px; line-height: 1.6; }
+  .lab-header .hint {
+    margin-top: 16px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.5);
+  }
+
+  /* ===== PHONE FRAME ===== */
+  .phone {
+    width: 380px;
+    height: 780px;
+    background: var(--bg-void);
+    border-radius: 36px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow:
+      0 0 0 8px #0a0a0a,
+      0 0 0 9px rgba(255,255,255,0.05),
+      0 40px 80px rgba(0,0,0,0.6);
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 28px;
+    background: #0a0a0a;
+    border-radius: 0 0 18px 18px;
+    z-index: 100;
+  }
+  .status-bar {
+    position: absolute;
+    top: 6px;
+    left: 0; right: 0;
+    z-index: 99;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  /* ===== AURUM MINDSPACE ===== */
+  .mindspace-aurum {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+  .mindspace-aurum::before {
+    content: '';
+    position: absolute;
+    top: -10%; left: -20%;
+    width: 80%;
+    height: 60%;
+    background: radial-gradient(ellipse, rgba(201,168,76,0.08) 0%, transparent 70%);
+    animation: float1 30s ease-in-out infinite;
+  }
+  .mindspace-aurum::after {
+    content: '';
+    position: absolute;
+    bottom: 10%; right: -20%;
+    width: 70%;
+    height: 50%;
+    background: radial-gradient(ellipse, rgba(201,168,76,0.05) 0%, transparent 65%);
+    animation: float2 40s ease-in-out infinite;
+  }
+  @keyframes float1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(20px, 30px) scale(1.1); }
+  }
+  @keyframes float2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(-30px, -20px) scale(1.15); }
+  }
+
+  /* ===== SCREEN ===== */
+  .screen {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .screen.active { display: flex; }
+
+  /* ===== TOPBAR ===== */
+  .topbar {
+    flex-shrink: 0;
+    height: 60px;
+    padding: 36px 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: rgba(10,10,10,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--divider-gold);
+    position: relative;
+    z-index: 5;
+  }
+  .topbar-left, .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .topbar-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+  .hamburger-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .hamburger-btn:hover { background: var(--surface-raised); color: var(--text-secondary); }
+  .hamburger-btn svg { width: 18px; height: 18px; }
+  .back-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .back-btn:hover { background: var(--surface-raised); color: var(--gold); }
+  .context-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.5);
+  }
+  .context-name {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-top: 1px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .persona-color { color: var(--gold); }
+
+  /* status indicators */
+  .status-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .context-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+  .context-gauge-bar {
+    width: 28px;
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+  .context-gauge-fill {
+    position: absolute;
+    inset: 0;
+    width: 42%;
+    background: var(--gold);
+    border-radius: 2px;
+  }
+  .context-gauge-text {
+    font-size: 8px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+  .journal-indicator {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 7px;
+    background: rgba(116,198,157,0.08);
+    border: 1px solid rgba(116,198,157,0.2);
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--sage);
+    cursor: pointer;
+  }
+  .journal-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--sage);
+    box-shadow: 0 0 6px var(--sage);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  /* ===== CHAT STREAM ===== */
+  .stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 20px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    z-index: 2;
+  }
+  .stream::-webkit-scrollbar { width: 4px; }
+  .stream::-webkit-scrollbar-track { background: transparent; }
+  .stream::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+
+  /* date separator */
+  .date-sep {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-ghost);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 4px 0;
+  }
+  .date-sep-line {
+    flex: 1;
+    height: 1px;
+    background: var(--divider-gold);
+  }
+
+  /* compaction checkpoint */
+  .compaction {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(167,139,250,0.04);
+    border: 1px solid rgba(167,139,250,0.15);
+    border-radius: 8px;
+    font-size: 10px;
+    color: var(--lavender);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .compaction:hover { background: rgba(167,139,250,0.08); }
+  .compaction-icon { font-size: 12px; }
+  .compaction-text { flex: 1; }
+
+  /* message */
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .msg-name {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .msg.from-persona .msg-name { color: var(--gold); }
+  .msg.from-user .msg-name { color: var(--text-primary); }
+  .msg-timestamp {
+    font-size: 9px;
+    color: var(--text-ghost);
+    letter-spacing: 1.5px;
+    margin-top: 1px;
+    margin-bottom: 4px;
+    display: none;
+  }
+  .msg.expanded .msg-timestamp { display: block; }
+  .msg-text {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  .msg-text p + p { margin-top: 10px; }
+  .msg.expanded .msg-text {
+    background: rgba(201,168,76,0.04);
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: 0 -12px;
+  }
+
+  /* pill — tool call */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-family: system-ui, sans-serif;
+    background: rgba(201,168,76,0.04);
+    border: 1px solid rgba(201,168,76,0.1);
+    color: rgba(201,168,76,0.5);
+    margin: 0 2px;
+    vertical-align: middle;
+    transition: all 0.3s;
+  }
+  .msg.expanded .pill {
+    background: rgba(201,168,76,0.1);
+    border-color: rgba(201,168,76,0.3);
+    color: var(--gold);
+  }
+  .pill-icon { font-size: 10px; }
+
+  /* per-message controls */
+  .msg-controls {
+    display: none;
+    gap: 4px;
+    padding: 8px 0 2px;
+  }
+  .msg.expanded .msg-controls { display: flex; }
+  .ctrl-btn {
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ctrl-btn:hover {
+    background: var(--gold-subtle);
+    border-color: var(--gold-border);
+    color: var(--gold);
+  }
+
+  /* ===== BOTTOM AFFORDANCE (Zen mode) ===== */
+  .affordance {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: linear-gradient(to top, rgba(10,10,10,0.95), transparent);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 12px;
+    z-index: 4;
+    cursor: pointer;
+  }
+  .affordance-bar {
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      var(--gold) 50%,
+      transparent 100%);
+    background-size: 200% 100%;
+    animation: glow 3s ease-in-out infinite;
+    box-shadow: 0 0 12px rgba(201,168,76,0.4);
+  }
+  @keyframes glow {
+    0%, 100% { background-position: 0% 50%; opacity: 0.7; }
+    50%      { background-position: 100% 50%; opacity: 1; }
+  }
+
+  /* "scroll to end" replaces the affordance when scrolled up */
+  .scroll-to-end {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,10,10,0.9);
+    border: 1px solid var(--gold-border-active);
+    color: var(--gold);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--gold-glow);
+    z-index: 5;
+    display: none;
+  }
+  .scroll-to-end.active { display: flex; align-items: center; gap: 6px; }
+
+  /* ===== COCKPIT ===== */
+  .cockpit {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--divider-gold);
+    padding: 10px 12px 24px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cockpit.active { transform: translateY(0); }
+  .cockpit-row-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cockpit-row-input {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .cockpit-controls-spacer {
+    flex: 1;
+  }
+  .cockpit-icon-btn {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    background: var(--surface-input);
+    border: 1px solid var(--gold-border);
+    border-radius: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .cockpit-icon-btn:hover { color: var(--gold); border-color: var(--gold-border-active); }
+  .cockpit-icon-btn.active { color: var(--gold); border-color: var(--gold-border-active); background: var(--gold-subtle); }
+  .cockpit-icon-btn svg { width: 16px; height: 16px; }
+  .cockpit-icon-btn .wave-icon {
+    font-size: 18px;
+    font-family: Georgia, serif;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .cockpit-input {
+    flex: 1;
+    background: var(--surface-input);
+    border: 1px solid var(--gold-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-family: Georgia, serif;
+    outline: none;
+    transition: border-color 0.2s;
+    min-height: 44px;
+    max-height: 160px;
+    resize: none;
+    line-height: 1.45;
+  }
+  .cockpit-input:focus { border-color: var(--gold-border-active); }
+  .cockpit-input::placeholder { color: var(--text-ghost); font-style: italic; }
+  .cockpit-action-btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, rgba(201,168,76,0.3), rgba(201,168,76,0.15));
+    border: 1px solid var(--gold-border-active);
+    border-radius: 10px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 16px var(--gold-glow);
+  }
+  .cockpit-action-btn svg { width: 18px; height: 18px; }
+
+  /* ===== INTERACTION DIM OVERLAY ===== */
+  .dim-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0);
+    pointer-events: none;
+    transition: background 0.3s ease;
+    z-index: 3;
+  }
+  .dim-overlay.active {
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  /* ===== ENTRANCE HALL ===== */
+  .hall-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: relative;
+    z-index: 2;
+  }
+  .hall-greeting {
+    text-align: center;
+    margin-top: 20px;
+  }
+  .hall-greeting-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.5);
+  }
+  .hall-greeting-text {
+    font-family: Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--text-primary);
+    margin-top: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .continue-card {
+    background: var(--gold-subtle);
+    border: 1px solid var(--gold-border-active);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 24px var(--gold-glow);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .continue-card:hover { background: rgba(201,168,76,0.1); }
+  .continue-card-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.7);
+    margin-bottom: 6px;
+  }
+  .continue-card-name {
+    font-family: Georgia, serif;
+    font-size: 17px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .continue-card-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .rooms-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .room-card {
+    background: var(--surface-base);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 12px;
+    padding: 18px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .room-card:hover {
+    background: var(--surface-raised);
+    border-color: var(--gold-border);
+  }
+  .room-icon {
+    font-size: 22px;
+    color: rgba(201,168,76,0.6);
+    margin-bottom: 4px;
+  }
+  .room-name {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+  .room-count {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ===== TREASURY ===== */
+  .treasury-toolbar {
+    flex-shrink: 0;
+    padding: 12px 20px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    background: rgba(10,10,10,0.6);
+    position: relative;
+    z-index: 5;
+  }
+  .treasury-toolbar::-webkit-scrollbar { display: none; }
+  .filter-pill {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-pill.active {
+    background: var(--gold-subtle);
+    border-color: var(--gold-border-active);
+    color: var(--gold);
+  }
+  .treasury-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-content: start;
+    position: relative;
+    z-index: 2;
+  }
+  .treasury-item {
+    background: var(--surface-base);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 14px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .treasury-item:hover {
+    background: var(--surface-raised);
+    border-color: var(--gold-border);
+  }
+  .treasury-item-icon {
+    font-size: 22px;
+    color: rgba(201,168,76,0.5);
+    font-family: Georgia, serif;
+  }
+  .treasury-item-meta { display: flex; flex-direction: column; gap: 3px; }
+  .treasury-item-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .treasury-item-type {
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-ghost);
+  }
+
+  /* ===== ANNOTATIONS ===== */
+  .annotation {
+    position: absolute;
+    background: rgba(10,10,10,0.95);
+    border: 1px solid var(--gold-border);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    max-width: 200px;
+    pointer-events: none;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    z-index: 50;
+  }
+  .annotation::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 1px;
+    background: var(--gold-border);
+  }
+
+  /* Toggle for annotations */
+  .annotation-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(10,10,10,0.95);
+    border: 1px solid var(--gold-border-active);
+    color: var(--gold);
+    padding: 10px 16px;
+    border-radius: 24px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="lab">
+
+  <div class="lab-header">
+    <div class="hint">Aurum Mindspace · Mobile-first wireframe</div>
+    <h1>Chatsundere — Interactive Wireframe</h1>
+    <p>Tap the elements to explore the modes. Start in <strong>Reading Mode</strong>, tap a message or the glowing bar.</p>
+  </div>
+
+  <!-- ========== PHONE ========== -->
+  <div class="phone" id="phone">
+    <div class="notch"></div>
+    <div class="status-bar">
+      <span>18:06</span>
+      <span>· · ·</span>
+    </div>
+
+    <!-- AURUM MINDSPACE -->
+    <div class="mindspace-aurum"></div>
+
+    <!-- ============================================
+         SCREEN: READING MODE (Zen, default state)
+         ============================================ -->
+    <div class="screen active" id="screen-reading">
+
+      <!-- No topbar in Reading Mode -->
+
+      <div class="stream" id="stream">
+
+        <div class="date-sep">
+          <span class="date-sep-line"></span>
+          <span>Today</span>
+          <span class="date-sep-line"></span>
+        </div>
+
+        <div class="msg from-user" data-msg-id="u1">
+          <div class="msg-name">Chris</div>
+          <div class="msg-timestamp">14:22 · 23 May 2026</div>
+          <div class="msg-text">
+            <p>Hi Aurum — kannst du mir helfen, das Konzept für die Mindspace-Texturen weiterzuentwickeln? Ich überlege, ob "cloudy" plus eine zweite Option reicht.</p>
+          </div>
+          <div class="msg-controls">
+            <button class="ctrl-btn">✎ Branch</button>
+            <button class="ctrl-btn">⎘ Copy</button>
+            <button class="ctrl-btn">◈ Bookmark</button>
+            <button class="ctrl-btn">▸ Read</button>
+          </div>
+        </div>
+
+        <div class="msg from-persona" data-msg-id="a1">
+          <div class="msg-name">Aurum</div>
+          <div class="msg-timestamp">14:23 · 23 May 2026</div>
+          <div class="msg-text">
+            <p>Gerne. Zwei Texturen würden eine echte Wahl ermöglichen, ohne den User mit zu vielen Optionen zu überfordern. Cloudy als ruhiger Default ist eine gute Basis — als zweite Variante würde ich <span class="pill"><span class="pill-icon">⚡</span>aurora-plasma</span> vorschlagen, weil sie weiches Licht mit minimaler Performance-Last verbindet.</p>
+            <p>Wir haben uns gerade die Token-Kosten angesehen <span class="pill"><span class="pill-icon">⚙</span>web_search</span> und CSS-only Animationen schlagen WebGL auf Mobile um Faktor 8.</p>
+          </div>
+          <div class="msg-controls">
+            <button class="ctrl-btn">✎ Branch</button>
+            <button class="ctrl-btn">↻ Regenerate</button>
+            <button class="ctrl-btn">⎘ Copy</button>
+            <button class="ctrl-btn">◈ Bookmark</button>
+            <button class="ctrl-btn">▸ Read</button>
+          </div>
+        </div>
+
+        <div class="compaction" title="Tap to view summary">
+          <span class="compaction-icon">◇</span>
+          <span class="compaction-text">Compaction checkpoint · 12 messages condensed</span>
+          <span>▸</span>
+        </div>
+
+        <div class="msg from-user" data-msg-id="u2">
+          <div class="msg-name">Chris</div>
+          <div class="msg-timestamp">17:48 · 23 May 2026</div>
+          <div class="msg-text">
+            <p>Lass uns das mal in eine ADR gießen — wir brauchen eh eine für die Tool-Display-Position.</p>
+          </div>
+          <div class="msg-controls">
+            <button class="ctrl-btn">✎ Branch</button>
+            <button class="ctrl-btn">⎘ Copy</button>
+            <button class="ctrl-btn">◈ Bookmark</button>
+            <button class="ctrl-btn">▸ Read</button>
+          </div>
+        </div>
+
+        <div class="msg from-persona" data-msg-id="a2">
+          <div class="msg-name">Aurum</div>
+          <div class="msg-timestamp">17:49 · 23 May 2026</div>
+          <div class="msg-text">
+            <p>Einverstanden. Eine ADR ist genau richtig, um die Position-Logik dauerhaft festzuhalten. Soll ich gleich einen Entwurf schreiben?</p>
+          </div>
+          <div class="msg-controls">
+            <button class="ctrl-btn">✎ Branch</button>
+            <button class="ctrl-btn">↻ Regenerate</button>
+            <button class="ctrl-btn">⎘ Copy</button>
+            <button class="ctrl-btn">◈ Bookmark</button>
+            <button class="ctrl-btn">▸ Read</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom affordance -->
+      <div class="affordance" id="affordance" onclick="enterInteractionMode()">
+        <div class="affordance-bar"></div>
+      </div>
+
+      <!-- Scroll to end (replaces affordance when scrolled up) -->
+      <div class="scroll-to-end" id="scroll-to-end" onclick="scrollToEnd()">
+        <span>↓</span>
+        <span>To end</span>
+      </div>
+
+    </div>
+
+    <!-- ============================================
+         SCREEN: ENTRANCE HALL
+         ============================================ -->
+    <div class="screen" id="screen-hall">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="back-btn" onclick="showScreen('reading')">←</button>
+        </div>
+        <div class="topbar-center">
+          <div class="context-label">Entrance Hall</div>
+        </div>
+        <div class="topbar-right">
+          <div class="status-group">
+            <span style="width:36px"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hall-content">
+        <div class="hall-greeting">
+          <div class="hall-greeting-label">Welcome back</div>
+          <div class="hall-greeting-text">Chris</div>
+        </div>
+
+        <div class="continue-card" onclick="showScreen('reading')">
+          <div class="continue-card-label">Continue chat</div>
+          <div class="continue-card-name">Mindspace Texturen mit Aurum</div>
+          <div class="continue-card-preview">"Einverstanden. Eine ADR ist genau richtig, um die Position-Logik dauerhaft festzuhalten…"</div>
+        </div>
+
+        <div class="rooms-grid">
+          <div class="room-card" onclick="alert('Room: My Circle (not implemented in this prototype)')">
+            <div class="room-icon">✦</div>
+            <div class="room-name">My Circle</div>
+            <div class="room-count">4 personas</div>
+          </div>
+          <div class="room-card" onclick="alert('Room: My Projects (not implemented)')">
+            <div class="room-icon">◇</div>
+            <div class="room-name">My Projects</div>
+            <div class="room-count">2 active</div>
+          </div>
+          <div class="room-card" onclick="alert('Room: My History (not implemented)')">
+            <div class="room-icon">◯</div>
+            <div class="room-name">My History</div>
+            <div class="room-count">37 sessions</div>
+          </div>
+          <div class="room-card" onclick="showScreen('treasury')">
+            <div class="room-icon">⬡</div>
+            <div class="room-name">My Treasury</div>
+            <div class="room-count">128 items</div>
+          </div>
+          <div class="room-card" onclick="alert('Room: My Bookmarks (not implemented)')">
+            <div class="room-icon">◈</div>
+            <div class="room-name">My Bookmarks</div>
+            <div class="room-count">14 saved</div>
+          </div>
+          <div class="room-card" onclick="alert('Room: My Settings (not implemented)')">
+            <div class="room-icon">⚙</div>
+            <div class="room-name">My Settings</div>
+            <div class="room-count">All systems go</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         SCREEN: TREASURY
+         ============================================ -->
+    <div class="screen" id="screen-treasury">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="back-btn" onclick="showScreen('hall')">←</button>
+        </div>
+        <div class="topbar-center">
+          <div class="context-label">Room</div>
+          <div class="context-name">My Treasury</div>
+        </div>
+        <div class="topbar-right">
+          <span style="width:36px"></span>
+        </div>
+      </div>
+
+      <div class="treasury-toolbar">
+        <div class="filter-pill active">All</div>
+        <div class="filter-pill">Documents</div>
+        <div class="filter-pill">Images</div>
+        <div class="filter-pill">Code</div>
+        <div class="filter-pill">Generated</div>
+        <div class="filter-pill">Uploads</div>
+      </div>
+
+      <div class="treasury-grid">
+        <div class="treasury-item">
+          <div class="treasury-item-icon">M↓</div>
+          <div class="treasury-item-meta">
+            <div class="treasury-item-name">chatsundere-ux-overview.md</div>
+            <div class="treasury-item-type">Markdown · 23 May</div>
+          </div>
+        </div>
+        <div class="treasury-item">
+          <div class="treasury-item-icon">⚛</div>
+          <div class="treasury-item-meta">
+            <div class="treasury-item-name">CockpitInputPanel.tsx</div>
+            <div class="treasury-item-type">React · 22 May</div>
+          </div>
+        </div>
+        <div class="treasury-item">
+          <div class="treasury-item-icon">▢</div>
+          <div class="treasury-item-meta">
+            <div class="treasury-item-name">aurum-mindspace-mockup.png</div>
+            <div class="treasury-item-type">Image · 21 May</div>
+          </div>
+        </div>
+        <div class="treasury-item">
+          <div class="treasury-item-icon">∑</div>
+          <div class="treasury-item-meta">
+            <div class="treasury-item-name">orbital-mechanics-firsavaai.tex</div>
+            <div class="treasury-item-type">LaTeX · 20 May</div>
+          </div>
+        </div>
+        <div class="treasury-item">
+          <div class="treasury-item-icon">⟦⟧</div>
+          <div class="treasury-item-meta">
+            <div class="treasury-item-name">e2ee-flow.mermaid</div>
+            <div class="treasury-item-type">Mermaid · 18 May</div>
+          </div>
+        </div>
+        <div class="treasury-item">
+          <div class="treasury-item-icon">M↓</div>
+          <div class="treasury-item-meta">
+            <div class="treasury-item-name">provider-integration-policy.md</div>
+            <div class="treasury-item-type">Markdown · 15 May</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         INTERACTION MODE OVERLAY (topbar + cockpit)
+         These overlay on top of the reading screen
+         ============================================ -->
+    <div class="topbar" id="interaction-topbar" style="display: none; position: absolute; top: 0; left: 0; right: 0;">
+      <div class="topbar-left">
+        <button class="hamburger-btn" onclick="showScreen('hall')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 6h18M3 12h18M3 18h18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="topbar-center">
+        <div class="context-label">Chat with</div>
+        <div class="context-name persona-color">Aurum</div>
+      </div>
+      <div class="topbar-right">
+        <div class="status-group">
+          <div class="journal-indicator" title="Uncommitted journal entries for Aurum">
+            <span class="journal-dot"></span>
+            <span>3</span>
+          </div>
+          <div class="context-gauge" title="Context window">
+            <div class="context-gauge-bar"><div class="context-gauge-fill"></div></div>
+            <div class="context-gauge-text">42%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dim overlay (active when interaction mode is on and input focused) -->
+    <div class="dim-overlay" id="dim-overlay"></div>
+
+    <!-- Cockpit -->
+    <div class="cockpit" id="cockpit">
+      <!-- Row 1: controls -->
+      <div class="cockpit-row-controls">
+        <button class="cockpit-icon-btn" title="Plus — insert from Treasury, Knowledge Base, etc.">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+        <button class="cockpit-icon-btn" title="Menu — tools, reasoning, settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
+          </svg>
+        </button>
+        <button class="cockpit-icon-btn" title="Live Mode (coming soon)">
+          <span class="wave-icon">≈</span>
+        </button>
+        <div class="cockpit-controls-spacer"></div>
+        <button class="cockpit-icon-btn" id="pin-btn" title="Pin cockpit open">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2v10M8 14l4-4 4 4M6 22h12"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Row 2: input + send -->
+      <div class="cockpit-row-input">
+        <textarea class="cockpit-input" id="cockpit-input" placeholder="Speak to Aurum…" rows="1"></textarea>
+        <button class="cockpit-action-btn" id="action-btn" title="Mic (empty) / Send (with text)">
+          <svg id="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="9" y="3" width="6" height="12" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+          </svg>
+          <svg id="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none">
+            <path d="M5 12l14-7-5 14-2-7-7-0z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </div> <!-- /phone -->
+
+  <!-- Mode hint -->
+  <div class="lab-header" style="max-width: 480px;">
+    <div class="hint" style="color: var(--text-muted)">try the affordance · tap messages · open the hamburger</div>
+    <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+      Compaction checkpoint, journal indicator (3 uncommitted), context gauge (42%) and the dual-purpose mic/send button are all interactive.
+    </p>
+  </div>
+
+</div>
+
+<script>
+  // ===== State =====
+  let inInteractionMode = false;
+  let isPinned = false;
+  let currentScreen = 'reading';
+
+  // ===== Screen switching =====
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    currentScreen = name;
+
+    if (name === 'reading') {
+      // Reset to zen if entering reading
+      if (!isPinned) exitInteractionMode();
+    } else {
+      // Hide cockpit & overlay topbar when not in chat
+      exitInteractionMode(true);
+    }
+  }
+
+  // ===== Interaction mode =====
+  const topbar = document.getElementById('interaction-topbar');
+  const cockpit = document.getElementById('cockpit');
+  const affordance = document.getElementById('affordance');
+  const dimOverlay = document.getElementById('dim-overlay');
+
+  function enterInteractionMode() {
+    if (currentScreen !== 'reading') return;
+    inInteractionMode = true;
+    topbar.style.display = 'flex';
+    cockpit.classList.add('active');
+    affordance.style.opacity = '0';
+    // Focus input immediately — this also triggers the dim overlay
+    document.getElementById('cockpit-input').focus();
+  }
+
+  function exitInteractionMode(force=false) {
+    if (isPinned && !force) return;
+    inInteractionMode = false;
+    topbar.style.display = 'none';
+    cockpit.classList.remove('active');
+    dimOverlay.classList.remove('active');
+    affordance.style.opacity = '1';
+  }
+
+  // Dim chat when input is focused (not just when cockpit is open)
+  document.getElementById('cockpit-input').addEventListener('focus', () => {
+    if (inInteractionMode) dimOverlay.classList.add('active');
+  });
+  document.getElementById('cockpit-input').addEventListener('blur', () => {
+    dimOverlay.classList.remove('active');
+  });
+
+  // ===== Message tap to expand =====
+  document.querySelectorAll('.msg').forEach(msg => {
+    msg.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close other expanded messages
+      document.querySelectorAll('.msg').forEach(m => {
+        if (m !== msg) m.classList.remove('expanded');
+      });
+      msg.classList.toggle('expanded');
+    });
+  });
+
+  // Click outside message closes expansion
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.msg') && !e.target.closest('.msg-controls')) {
+      document.querySelectorAll('.msg.expanded').forEach(m => m.classList.remove('expanded'));
+    }
+  });
+
+  // ===== Cockpit input → toggle mic/send =====
+  const cockpitInput = document.getElementById('cockpit-input');
+  const micIcon = document.getElementById('mic-icon');
+  const sendIcon = document.getElementById('send-icon');
+  cockpitInput.addEventListener('input', () => {
+    const has = cockpitInput.value.trim().length > 0;
+    micIcon.style.display = has ? 'none' : '';
+    sendIcon.style.display = has ? '' : 'none';
+    // auto-grow
+    cockpitInput.style.height = 'auto';
+    cockpitInput.style.height = Math.min(cockpitInput.scrollHeight, 100) + 'px';
+  });
+
+  // ===== Pin toggle =====
+  document.getElementById('pin-btn').addEventListener('click', () => {
+    isPinned = !isPinned;
+    document.getElementById('pin-btn').classList.toggle('active', isPinned);
+  });
+
+  // ===== Send button collapses cockpit (unless pinned) =====
+  document.getElementById('action-btn').addEventListener('click', () => {
+    if (cockpitInput.value.trim()) {
+      cockpitInput.value = '';
+      cockpitInput.dispatchEvent(new Event('input'));
+      if (!isPinned) {
+        setTimeout(() => exitInteractionMode(), 100);
+      }
+    }
+  });
+
+  // ===== Scroll behavior =====
+  const stream = document.getElementById('stream');
+  const scrollToEndBtn = document.getElementById('scroll-to-end');
+
+  stream.addEventListener('scroll', () => {
+    if (currentScreen !== 'reading') return;
+    const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 30;
+    if (atBottom) {
+      scrollToEndBtn.classList.remove('active');
+      affordance.style.opacity = inInteractionMode ? '0' : '1';
+    } else {
+      scrollToEndBtn.classList.add('active');
+      affordance.style.opacity = '0';
+    }
+  });
+
+  function scrollToEnd() {
+    stream.scrollTo({ top: stream.scrollHeight, behavior: 'smooth' });
+  }
+
+  // ===== Initial scroll to bottom (zen entry) =====
+  window.addEventListener('load', () => {
+    stream.scrollTop = stream.scrollHeight;
+  });
+
+  // ===== Close expanded message when clicking the affordance =====
+  affordance.addEventListener('click', () => {
+    document.querySelectorAll('.msg.expanded').forEach(m => m.classList.remove('expanded'));
+  });
+</script>
+
+</body>
+</html>
