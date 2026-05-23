@@ -38,7 +38,7 @@ The deliverable also doubles as the surface that the Discord-recruited neurodive
 
 7. **Secrets-only encryption-at-rest, MasterKey-based.** Block 1 encrypts only the secret fields — `ProviderRow.apiKey` and `Settings.corsProxy.sharedKey` — using the existing `packages/crypto` MasterKey. Messages, personas, settings, chats remain plaintext-at-rest in IndexedDB. Rationale: Block 1 is client-only with no sync requirement; IndexedDB is origin-bound; encrypting messages adds eight-figure write-cost overhead and complicates search/filter for zero security gain in the standalone-mode threat model. Sync-aware encryption is a Phase-1 concern, tracked in `STATUS-BACKEND.md`.
 
-8. **Dexie for persistence.** IndexedDB wrapped by Dexie.js. Migrations live in `apps/user-client/src/boot/db-migrations.ts` (extending the existing `boot/open-db.ts`). The current `getLocalAccount` schema is preserved; Block 1 adds tables alongside it.
+8. **Dexie for a separate user-data DB.** IndexedDB wrapped by Dexie.js. Block 1 user-data lives in a Dexie-managed database named `chatsundere_client_data`, distinct from the existing crypto-managed raw-IDB database `chatsundere` (both origin-bound but separated to keep the cross-package boundary clean). Crypto continues to own its schema and versioning untouched; Block 1's schema lives in `apps/user-client/src/boot/client-data-db.ts`. Dexie's declarative `.version(N).stores({...})` form drives migrations; a `.upgrade()` callback on v1 seeds the three built-in mindspaces and the settings singleton.
 
 9. **Onboarding gating is a Phase-1-internal task, not a separate sprint.** The current `/onboarding` intent matrix has four cells (per [`2026-05-22-user-client-onboarding-overhaul-design.md`](2026-05-22-user-client-onboarding-overhaul-design.md)). Block 1 disables three of them — *I have an invitation*, *Add this device*, *Use a recovery key* — keeping only *Just this device* (local-only) interactive. Disabled tiles render greyed with a tooltip "Coming soon — Block 2+". Hidden is wrong here (UX-CONCEPT § 11 "Disabled over Hidden"); the user must see that the capabilities exist.
 
@@ -199,7 +199,7 @@ interface PillRow {
 - `chats.lastMessageAt` (history list sort)
 - `pills.messageId` (pill resolution per message)
 
-**Migrations.** Single migration block adds all seven tables + populates the three built-in mindspaces (Aurum, Azuro, Verdan) and an initial `SettingsRow` with empty strings + Aurum as default. Migration is idempotent — re-running on an already-seeded DB is a no-op.
+**Migrations.** `chatsundere_client_data` v1 declares all seven stores; its `.upgrade()` callback seeds the three built-in mindspaces (Aurum, Azuro, Verdan) and an initial `SettingsRow` with empty strings + Aurum as default. Seeding is gated by an existence check on the singleton settings row so re-running is a no-op. The existing `chatsundere` (crypto-owned) DB is untouched.
 
 ### 4.2 `packages/llm-unified`
 
