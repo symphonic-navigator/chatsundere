@@ -4,11 +4,11 @@
 complete. Thirteen plan tasks squash into one Phase-1 commit; all 107
 tests pass (66 user-client + 41 llm-unified); typecheck clean across
 user-client / llm-unified / crypto; user-client `pnpm build` clean.
-Manual smoke deferred to Chris's device-test. Phase 2 wireframes
-(Reading + Interaction Mode + Entrance Hall + Settings + My Circle +
-Persona Editor) **already landed** in the updated
-`chatsundere-prototype.html` — Phase 2 can start as soon as Chris's
-manual smoke + sync is done. Brainstorm spec at
+Manual smoke deferred to Chris's device-test. Block-1 wireframes
+landed in `chatsundere-prototype.html` for Reading + Interaction Mode
++ Entrance Hall + My Settings + My Circle + Persona Editor; only
+My History (Phase 4) remains wireframe-blocked. Phase 2 can start as
+soon as Chris's manual smoke + sync is done. Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md);
 plan at [`superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md`](../superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md).
 
@@ -123,8 +123,9 @@ update the relevant one at the end.
 
 ## Open design questions / blockers
 
-- Lyra's wireframes for Settings, Circle, Persona-Editor, History —
-  in flight; Chris will iterate 2–3× in parallel to Phase 1.
+- Lyra's wireframe for My History — still in flight; Settings,
+  Circle, Persona-Editor have landed (2026-05-23 update of
+  `chatsundere-prototype.html`).
 - Final 7-Mindspace palette + 2–3 finalised textures — Lyra-led.
 - Provider endpoint exact base-URLs and probe paths (nano-gpt, Novita,
   Ollama Cloud) — verified live during Phase 1 implementation.

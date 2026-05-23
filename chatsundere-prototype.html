@@ -682,8 +682,1085 @@
     color: var(--text-muted);
   }
 
+  /* ===== BOTTOM SHEET (Upstream Provider Editor) ===== */
+  .sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    pointer-events: none;
+    transition: background 0.3s ease;
+    z-index: 30;
+    display: none;
+  }
+  .sheet-backdrop.active {
+    background: rgba(0,0,0,0.55);
+    pointer-events: auto;
+    display: block;
+  }
+  .sheet {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(15,12,8,0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--gold-border-active);
+    border-radius: 20px 20px 0 0;
+    padding: 0 20px 24px;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 31;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.5), 0 -2px 24px var(--gold-glow);
+    flex-direction: column;
+    gap: 16px;
+    max-height: 70%;
+    display: none;
+  }
+  .sheet.active {
+    transform: translateY(0);
+    display: flex;
+  }
+  .sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--text-ghost);
+    border-radius: 2px;
+    margin: 10px auto 4px;
+    flex-shrink: 0;
+  }
+  .sheet-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--divider-gold);
+    flex-shrink: 0;
+  }
+  .sheet-monogram {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    flex-shrink: 0;
+    background: rgba(116,198,157,0.06);
+    border: 1px solid rgba(116,198,157,0.3);
+    color: var(--sage);
+  }
+  .sheet-monogram.disconnected {
+    background: var(--surface-input);
+    border-color: var(--gold-border);
+    color: var(--gold);
+  }
+  .sheet-title-block { flex: 1; }
+  .sheet-title {
+    font-family: Georgia, serif;
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+  .sheet-sub {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .sheet-sub.ok { color: var(--sage); }
+  .sheet-close {
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .sheet-close:hover { background: var(--surface-raised); color: var(--gold); }
+  .sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+  }
+  .key-input-wrap {
+    position: relative;
+  }
+  .key-input {
+    width: 100%;
+    background: var(--surface-input);
+    border: 1px solid var(--gold-border);
+    border-radius: 10px;
+    padding: 12px 44px 12px 14px;
+    color: var(--text-secondary);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .key-input:focus { border-color: var(--gold-border-active); }
+  .key-reveal-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .key-reveal-btn:hover { color: var(--gold); background: var(--gold-subtle); }
+  .sheet-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: Georgia, serif;
+  }
+  .sheet-status.testing {
+    background: rgba(201,168,76,0.06);
+    border: 1px solid rgba(201,168,76,0.2);
+    color: var(--gold);
+  }
+  .sheet-status.success {
+    background: rgba(116,198,157,0.06);
+    border: 1px solid rgba(116,198,157,0.25);
+    color: var(--sage);
+  }
+  .sheet-status.error {
+    background: rgba(248,113,113,0.06);
+    border: 1px solid rgba(248,113,113,0.25);
+    color: var(--coral);
+  }
+  .status-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(201,168,76,0.2);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sheet-danger {
+    margin-top: 4px;
+    padding: 12px 14px;
+    background: rgba(248,113,113,0.04);
+    border: 1px solid rgba(248,113,113,0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .sheet-danger-text {
+    flex: 1;
+  }
+  .sheet-danger-title {
+    font-family: Georgia, serif;
+    font-size: 12px;
+    color: var(--coral);
+    margin-bottom: 2px;
+  }
+  .sheet-danger-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.3;
+  }
+
   /* ===== TREASURY ===== */
   .treasury-toolbar {
+    flex-shrink: 0;
+    padding: 12px 20px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    background: rgba(10,10,10,0.6);
+    position: relative;
+    z-index: 5;
+  }
+  .treasury-toolbar::-webkit-scrollbar { display: none; }
+  .filter-pill {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-pill.active {
+    background: var(--gold-subtle);
+    border-color: var(--gold-border-active);
+    color: var(--gold);
+  }
+  .treasury-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-content: start;
+    position: relative;
+    z-index: 2;
+  }
+  .treasury-item {
+    background: var(--surface-base);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 14px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .treasury-item:hover {
+    background: var(--surface-raised);
+    border-color: var(--gold-border);
+  }
+  .treasury-item-icon {
+    font-size: 22px;
+    color: rgba(201,168,76,0.5);
+    font-family: Georgia, serif;
+  }
+  .treasury-item-meta { display: flex; flex-direction: column; gap: 3px; }
+  .treasury-item-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .treasury-item-type {
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-ghost);
+  }
+
+  /* ===== GENERIC ROOM CONTENT ===== */
+  .room-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 32px;
+    position: relative;
+    z-index: 2;
+  }
+  .room-content::-webkit-scrollbar { width: 4px; }
+  .room-content::-webkit-scrollbar-track { background: transparent; }
+  .room-content::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+
+  /* ===== SETTINGS ACCORDION ===== */
+  .accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .accordion-item {
+    background: var(--surface-base);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .accordion-item.open {
+    border-color: var(--gold-border);
+  }
+  .accordion-header {
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .accordion-header:hover { background: var(--surface-raised); }
+  .accordion-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .accordion-icon {
+    font-size: 18px;
+    color: rgba(201,168,76,0.6);
+    font-family: Georgia, serif;
+    line-height: 1;
+  }
+  .accordion-label {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+  .accordion-meta {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+  }
+  .accordion-chevron {
+    color: var(--text-muted);
+    font-size: 14px;
+    transition: transform 0.3s;
+  }
+  .accordion-item.open .accordion-chevron {
+    transform: rotate(90deg);
+    color: var(--gold);
+  }
+  .accordion-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .accordion-item.open .accordion-body {
+    max-height: 1200px;
+  }
+  .accordion-body-inner {
+    padding: 4px 18px 20px;
+    border-top: 1px solid var(--divider-gold);
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ===== FORM CONTROLS ===== */
+  .form-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.6);
+    margin-bottom: 6px;
+    display: block;
+  }
+  .form-help {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    line-height: 1.4;
+    font-style: italic;
+  }
+  .text-input, .textarea-input {
+    width: 100%;
+    background: var(--surface-input);
+    border: 1px solid var(--gold-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: Georgia, serif;
+    outline: none;
+    transition: border-color 0.2s;
+    line-height: 1.5;
+  }
+  .text-input:focus, .textarea-input:focus { border-color: var(--gold-border-active); }
+  .textarea-input {
+    resize: none;
+    min-height: 80px;
+    overflow: hidden;
+    font-family: Georgia, serif;
+  }
+  .textarea-input.fixed-scroll {
+    resize: vertical;
+    overflow-y: auto;
+    max-height: 280px;
+  }
+  .textarea-input::-webkit-scrollbar { width: 6px; }
+  .textarea-input::-webkit-scrollbar-track { background: transparent; }
+  .textarea-input::-webkit-scrollbar-thumb {
+    background: var(--gold);
+    border-radius: 3px;
+    opacity: 0.6;
+  }
+  .form-field { display: flex; flex-direction: column; }
+
+  /* ===== MINDSPACE PICKER (reusable component) ===== */
+  .mindspace-picker {
+    background: var(--surface-base);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .mindspace-preview {
+    height: 90px;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+  }
+  .mindspace-preview-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+  }
+  .mindspace-preview-name {
+    font-size: 18px;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+  }
+  .mindspace-preview-tagline {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+  }
+  .mindspace-preview-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  .mindspace-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mindspace-row-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .color-swatches {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .color-swatch.active {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 12px currentColor;
+  }
+  .swatch-crimson { background: #b33a5e; color: rgba(179,58,94,0.5); }
+  .swatch-aurum { background: #c9a84c; color: rgba(201,168,76,0.5); }
+  .swatch-verdan { background: #6aa97a; color: rgba(106,169,122,0.5); }
+  .swatch-azuro { background: #4a7eb3; color: rgba(74,126,179,0.5); }
+  .swatch-indigaut { background: #5d4e9e; color: rgba(93,78,158,0.5); }
+  .swatch-violetta { background: #9a5bb8; color: rgba(154,91,184,0.5); }
+  .swatch-rosari { background: #c97a99; color: rgba(201,122,153,0.5); }
+
+  .option-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .option-chip {
+    padding: 6px 12px;
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .option-chip.active {
+    background: var(--gold-subtle);
+    border-color: var(--gold-border-active);
+    color: var(--gold);
+  }
+  .option-chip.font-serif { font-family: Georgia, serif; }
+  .option-chip.font-sans { font-family: system-ui, sans-serif; }
+  .option-chip.font-cursive { font-family: 'Brush Script MT', 'Lucida Handwriting', cursive; font-size: 14px; }
+
+  /* ===== UPSTREAM PROVIDERS (persona-card style) ===== */
+  .provider-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .provider-card {
+    background: var(--surface-base);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .provider-card:hover {
+    background: var(--surface-raised);
+    border-color: var(--gold-border);
+  }
+  .provider-card.connected {
+    background: rgba(116,198,157,0.04);
+    border-color: rgba(116,198,157,0.2);
+  }
+  .provider-card.connected:hover {
+    background: rgba(116,198,157,0.08);
+    border-color: rgba(116,198,157,0.35);
+  }
+  .provider-monogram {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: var(--gold);
+    flex-shrink: 0;
+    background: var(--surface-input);
+    border: 1px solid var(--gold-border);
+  }
+  .provider-card.connected .provider-monogram {
+    color: var(--sage);
+    background: rgba(116,198,157,0.06);
+    border-color: rgba(116,198,157,0.3);
+  }
+  .provider-meta { flex: 1; min-width: 0; }
+  .provider-name {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .provider-status {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .provider-status.ok { color: var(--sage); }
+  .provider-capabilities {
+    display: flex;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .cap-badge {
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(201,168,76,0.08);
+    border: 1px solid rgba(201,168,76,0.15);
+    color: rgba(201,168,76,0.7);
+  }
+  .provider-action {
+    background: var(--surface-input);
+    border: 1px solid var(--gold-border);
+    color: var(--gold);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .provider-action:hover {
+    border-color: var(--gold-border-active);
+    box-shadow: 0 0 12px var(--gold-glow);
+  }
+
+  /* ===== CIRCLE / PERSONA LIST ===== */
+  .persona-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .persona-card {
+    background: var(--surface-base);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+  }
+  .persona-card:hover {
+    background: var(--surface-raised);
+    border-color: var(--gold-border);
+  }
+  .persona-monogram {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 16px;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    flex-shrink: 0;
+    border: 2px solid transparent;
+  }
+  .mono-aurum { background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.4); color: #c9a84c; }
+  .mono-crimson { background: rgba(179,58,94,0.15); border-color: rgba(179,58,94,0.4); color: #d4708a; }
+  .mono-azuro { background: rgba(74,126,179,0.15); border-color: rgba(74,126,179,0.4); color: #7ba9d9; }
+  .mono-verdan { background: rgba(106,169,122,0.15); border-color: rgba(106,169,122,0.4); color: #95c9a5; }
+  .persona-meta { flex: 1; min-width: 0; }
+  .persona-name {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .persona-tagline {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .persona-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .icon-btn-small {
+    width: 30px;
+    height: 30px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .icon-btn-small:hover { background: var(--surface-raised); color: var(--gold); }
+  .icon-btn-small.danger:hover { color: var(--coral); }
+
+  /* Split chat button */
+  .chat-split-btn {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--gold-border-active);
+    background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.12));
+    box-shadow: 0 0 12px var(--gold-glow);
+  }
+  .chat-split-main {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    padding: 6px 12px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-family: Georgia, serif;
+  }
+  .chat-split-arrow {
+    background: rgba(0,0,0,0.2);
+    border: none;
+    border-left: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold);
+    padding: 6px 8px;
+    cursor: pointer;
+    font-size: 10px;
+  }
+
+  /* Dropdown menu (for chat-split arrow & FAB) */
+  .dropdown {
+    position: absolute;
+    background: rgba(10,10,10,0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--gold-border-active);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 16px var(--gold-glow);
+    z-index: 50;
+    min-width: 180px;
+  }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .dropdown-item:hover { background: var(--gold-subtle); color: var(--gold); }
+  .dropdown-item.disabled { color: var(--text-ghost); cursor: not-allowed; }
+  .dropdown-item.disabled:hover { background: none; color: var(--text-ghost); }
+  .dropdown-icon { font-size: 13px; color: rgba(201,168,76,0.6); }
+
+  /* FAB for "new persona" */
+  .fab {
+    position: absolute;
+    bottom: 24px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(201,168,76,0.4), rgba(201,168,76,0.2));
+    border: 1px solid var(--gold-border-active);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 24px var(--gold-glow);
+    z-index: 10;
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 1;
+  }
+
+  /* ===== PERSONA EDITOR ===== */
+  .editor-chat-actions {
+    display: flex;
+    gap: 8px;
+    padding: 14px 20px 4px;
+    position: relative;
+    z-index: 2;
+  }
+  .editor-chat-actions .chat-action-btn {
+    flex: 1;
+    background: linear-gradient(135deg, rgba(201,168,76,0.18), rgba(201,168,76,0.08));
+    border: 1px solid var(--gold-border);
+    color: var(--text-primary);
+    padding: 10px 6px;
+    border-radius: 10px;
+    font-family: Georgia, serif;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.2s;
+  }
+  .editor-chat-actions .chat-action-btn:hover {
+    border-color: var(--gold-border-active);
+    box-shadow: 0 0 12px var(--gold-glow);
+  }
+  .editor-chat-actions .chat-action-btn.primary {
+    background: linear-gradient(135deg, rgba(201,168,76,0.32), rgba(201,168,76,0.15));
+    border-color: var(--gold-border-active);
+    box-shadow: 0 0 16px var(--gold-glow);
+  }
+  .editor-chat-actions .chat-action-icon {
+    font-size: 14px;
+    color: var(--gold);
+  }
+
+  .editor-delete-zone {
+    margin-top: 10px;
+    padding: 14px;
+    background: rgba(248,113,113,0.04);
+    border: 1px solid rgba(248,113,113,0.15);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .editor-delete-info { flex: 1; }
+  .editor-delete-title {
+    font-family: Georgia, serif;
+    font-size: 13px;
+    color: var(--coral);
+    margin-bottom: 2px;
+  }
+  .editor-delete-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .btn-danger {
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.3);
+    color: var(--coral);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: Georgia, serif;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .btn-danger:hover {
+    background: rgba(248,113,113,0.15);
+    border-color: rgba(248,113,113,0.5);
+  }
+
+  .editor-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    position: relative;
+    z-index: 2;
+  }
+  .editor-content::-webkit-scrollbar { width: 4px; }
+  .editor-content::-webkit-scrollbar-track { background: transparent; }
+  .editor-content::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+
+  .editor-section {
+    background: var(--surface-base);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .editor-section-title {
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: rgba(201,168,76,0.6);
+    margin-bottom: -2px;
+  }
+
+  /* Temperature slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .slider-track {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--gold);
+    border-radius: 2px;
+    width: 42%;
+  }
+  .slider-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 10px var(--gold-glow);
+    left: 42%;
+  }
+  .slider-value {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--gold);
+    min-width: 38px;
+    text-align: right;
+  }
+
+  /* Toggle switch */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .toggle-info { flex: 1; }
+  .toggle-name {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+  .toggle-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .toggle-switch {
+    width: 44px;
+    height: 24px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-switch.on {
+    background: var(--gold-subtle);
+    border-color: var(--gold-border-active);
+  }
+  .toggle-knob {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: var(--text-ghost);
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+  .toggle-switch.on .toggle-knob {
+    left: calc(100% - 20px);
+    background: var(--gold);
+    box-shadow: 0 0 8px var(--gold-glow);
+  }
+
+  /* Model selector */
+  .model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .model-option {
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .model-option.active {
+    background: var(--gold-subtle);
+    border-color: var(--gold-border-active);
+  }
+  .model-info { flex: 1; }
+  .model-name {
+    font-family: Georgia, serif;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .model-via {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .model-check {
+    color: var(--gold);
+    opacity: 0;
+    font-size: 16px;
+  }
+  .model-option.active .model-check { opacity: 1; }
+
+  /* Editor save bar */
+  .save-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--divider-gold);
+    padding: 12px 20px 24px;
+    display: flex;
+    gap: 10px;
+    z-index: 5;
+  }
+  .btn-primary {
+    flex: 1;
+    background: linear-gradient(135deg, rgba(201,168,76,0.3), rgba(201,168,76,0.15));
+    border: 1px solid var(--gold-border-active);
+    color: var(--text-primary);
+    padding: 12px;
+    border-radius: 10px;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 16px var(--gold-glow);
+  }
+  .btn-secondary {
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* Mindspace preview backgrounds */
+  .preview-bg-aurum { background: #1a1408; }
+  .preview-bg-aurum::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(201,168,76,0.25) 0%, transparent 70%); }
+  .preview-bg-crimson { background: #1a0810; }
+  .preview-bg-crimson::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(179,58,94,0.25) 0%, transparent 70%); }
+  .preview-bg-azuro { background: #08101a; }
+  .preview-bg-azuro::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(74,126,179,0.25) 0%, transparent 70%); }
+  .preview-bg-verdan { background: #08140c; }
+  .preview-bg-verdan::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(106,169,122,0.25) 0%, transparent 70%); }
+  .preview-bg-indigaut { background: #0c0818; }
+  .preview-bg-indigaut::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(93,78,158,0.25) 0%, transparent 70%); }
+  .preview-bg-violetta { background: #140818; }
+  .preview-bg-violetta::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(154,91,184,0.25) 0%, transparent 70%); }
+  .preview-bg-rosari { background: #180c14; }
+  .preview-bg-rosari::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(201,122,153,0.25) 0%, transparent 70%); }
+
+  .preview-name-serif { font-family: Georgia, serif; }
+  .preview-name-sans { font-family: system-ui, sans-serif; }
+  .preview-name-cursive { font-family: 'Brush Script MT', 'Lucida Handwriting', cursive; font-size: 22px !important; }
+
     flex-shrink: 0;
     padding: 12px 20px;
     display: flex;
@@ -809,9 +1886,9 @@
 <div class="lab">
 
   <div class="lab-header">
-    <div class="hint">Aurum Mindspace · Mobile-first wireframe</div>
+    <div class="hint">Aurum Mindspace · Mobile-first wireframe · v2</div>
     <h1>Chatsundere — Interactive Wireframe</h1>
-    <p>Tap the elements to explore the modes. Start in <strong>Reading Mode</strong>, tap a message or the glowing bar.</p>
+    <p>Tap the glowing bar to interact, or open the hamburger for the Entrance Hall.<br>From there: <strong>My Circle</strong> (personas), <strong>My Settings</strong> (about / unlocker / upstreams), and the <strong>Persona Editor</strong>.</p>
   </div>
 
   <!-- ========== PHONE ========== -->
@@ -951,7 +2028,7 @@
         </div>
 
         <div class="rooms-grid">
-          <div class="room-card" onclick="alert('Room: My Circle (not implemented in this prototype)')">
+          <div class="room-card" onclick="showScreen('circle')">
             <div class="room-icon">✦</div>
             <div class="room-name">My Circle</div>
             <div class="room-count">4 personas</div>
@@ -976,7 +2053,7 @@
             <div class="room-name">My Bookmarks</div>
             <div class="room-count">14 saved</div>
           </div>
-          <div class="room-card" onclick="alert('Room: My Settings (not implemented)')">
+          <div class="room-card" onclick="showScreen('settings')">
             <div class="room-icon">⚙</div>
             <div class="room-name">My Settings</div>
             <div class="room-count">All systems go</div>
@@ -1054,6 +2131,556 @@
             <div class="treasury-item-type">Markdown · 15 May</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         SCREEN: SETTINGS
+         ============================================ -->
+    <div class="screen" id="screen-settings">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="back-btn" onclick="showScreen('hall')">←</button>
+        </div>
+        <div class="topbar-center">
+          <div class="context-label">Room</div>
+          <div class="context-name">My Settings</div>
+        </div>
+        <div class="topbar-right">
+          <span style="width:36px"></span>
+        </div>
+      </div>
+
+      <div class="room-content">
+        <div class="accordion">
+
+          <!-- About Me -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">◉</span>
+                <div>
+                  <div class="accordion-label">About Me</div>
+                  <span class="accordion-meta">What your Circle knows about you</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="form-field">
+                  <label class="form-label">About</label>
+                  <textarea class="textarea-input auto-grow" placeholder="Tell your Circle who you are…">Chris, 47, Vienna. Software developer and sci-fi author. Speaks German and English fluently. Owns cats, dogs, chickens, ducks. Demoscene veteran. Direct, curious, no fluff.</textarea>
+                  <div class="form-help">This text is included in every persona's system prompt unless overridden per-persona.</div>
+                </div>
+
+                <div class="form-field">
+                  <label class="form-label">Your Default Mindspace</label>
+                  <!-- Mindspace picker component -->
+                  <div class="mindspace-picker">
+                    <div class="mindspace-preview" id="user-mindspace-preview">
+                      <div class="mindspace-preview-bg preview-bg-aurum"></div>
+                      <div class="mindspace-preview-content">
+                        <div class="mindspace-preview-name preview-name-serif" id="user-preview-name">Chris</div>
+                        <div class="mindspace-preview-tagline">Your space</div>
+                      </div>
+                    </div>
+                    <div class="mindspace-row">
+                      <div class="mindspace-row-label">Color</div>
+                      <div class="color-swatches" data-target="user">
+                        <div class="color-swatch swatch-crimson" data-color="crimson"></div>
+                        <div class="color-swatch swatch-aurum active" data-color="aurum"></div>
+                        <div class="color-swatch swatch-verdan" data-color="verdan"></div>
+                        <div class="color-swatch swatch-azuro" data-color="azuro"></div>
+                        <div class="color-swatch swatch-indigaut" data-color="indigaut"></div>
+                        <div class="color-swatch swatch-violetta" data-color="violetta"></div>
+                        <div class="color-swatch swatch-rosari" data-color="rosari"></div>
+                      </div>
+                    </div>
+                    <div class="mindspace-row">
+                      <div class="mindspace-row-label">Texture</div>
+                      <div class="option-chips" data-target="user-texture">
+                        <div class="option-chip active" data-value="cloudy">Cloudy</div>
+                        <div class="option-chip" data-value="aurora">Aurora</div>
+                        <div class="option-chip" data-value="grain">Grain</div>
+                      </div>
+                    </div>
+                    <div class="mindspace-row">
+                      <div class="mindspace-row-label">Font</div>
+                      <div class="option-chips" data-target="user-font">
+                        <div class="option-chip font-sans" data-value="sans">Sans</div>
+                        <div class="option-chip font-serif active" data-value="serif">Serif</div>
+                        <div class="option-chip font-cursive" data-value="cursive">Cursive</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Global System Prompt (Unlocker) -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">⚿</span>
+                <div>
+                  <div class="accordion-label">Global System Prompt</div>
+                  <span class="accordion-meta">The unlocker · prepended to every persona</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="form-field">
+                  <label class="form-label">Unlocker prompt</label>
+                  <textarea class="textarea-input auto-grow">The user is an adult. You are allowed to use NSFW language and welcome roleplay, including adult roleplay. Speak honestly and directly. The user values authenticity over caution.</textarea>
+                  <div class="form-help">This text is prepended to every persona's system prompt. Mainly useful for permissive but cautious open-source models. Always global, no per-persona override.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upstream Providers -->
+          <div class="accordion-item open" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">⬢</span>
+                <div>
+                  <div class="accordion-label">Upstream Providers</div>
+                  <span class="accordion-meta">2 of 3 connected</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="provider-list">
+
+                  <div class="provider-card connected" onclick="openProviderSheet('nano-gpt', true)">
+                    <div class="provider-monogram">nG</div>
+                    <div class="provider-meta">
+                      <div class="provider-name">nano-gpt.com</div>
+                      <div class="provider-status ok">● Connected · Key valid</div>
+                      <div class="provider-capabilities">
+                        <span class="cap-badge">Text</span>
+                      </div>
+                    </div>
+                    <button class="provider-action" title="Edit">▸</button>
+                  </div>
+
+                  <div class="provider-card connected" onclick="openProviderSheet('novita', true)">
+                    <div class="provider-monogram">No</div>
+                    <div class="provider-meta">
+                      <div class="provider-name">Novita AI</div>
+                      <div class="provider-status ok">● Connected · Key valid</div>
+                      <div class="provider-capabilities">
+                        <span class="cap-badge">Text</span>
+                      </div>
+                    </div>
+                    <button class="provider-action" title="Edit">▸</button>
+                  </div>
+
+                  <div class="provider-card" onclick="openProviderSheet('ollama', false)">
+                    <div class="provider-monogram">Ol</div>
+                    <div class="provider-meta">
+                      <div class="provider-name">Ollama Cloud</div>
+                      <div class="provider-status">Not connected</div>
+                      <div class="provider-capabilities">
+                        <span class="cap-badge">Text</span>
+                      </div>
+                    </div>
+                    <button class="provider-action" title="Add key">+</button>
+                  </div>
+
+                </div>
+                <div class="form-help" style="margin-top: 10px;">Keys are tested automatically on save. Each provider can be added once. Generic OpenAI-compatible catch-all coming later.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         BOTTOM SHEET: Upstream Provider Editor
+         ============================================ -->
+    <div class="sheet-backdrop" id="sheet-backdrop" onclick="closeProviderSheet()"></div>
+    <div class="sheet" id="provider-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-monogram" id="sheet-monogram">nG</div>
+        <div class="sheet-title-block">
+          <div class="sheet-title" id="sheet-title">nano-gpt.com</div>
+          <div class="sheet-sub" id="sheet-sub">Text capability</div>
+        </div>
+        <button class="sheet-close" onclick="closeProviderSheet()">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-field">
+          <label class="form-label">API Key</label>
+          <div class="key-input-wrap">
+            <input type="password" class="key-input" id="sheet-key-input" placeholder="sk-..." oninput="handleKeyEdit()">
+            <button class="key-reveal-btn" id="sheet-reveal-btn" onclick="toggleKeyVisibility()" title="Show / hide">◉</button>
+          </div>
+          <div class="form-help">Key is tested automatically when you close this sheet.</div>
+        </div>
+
+        <div class="sheet-status" id="sheet-status" style="display: none;"></div>
+
+        <div class="sheet-danger" id="sheet-danger">
+          <div class="sheet-danger-text">
+            <div class="sheet-danger-title">Remove this provider</div>
+            <div class="sheet-danger-desc">Key is deleted, personas using this provider won't be able to connect.</div>
+          </div>
+          <button class="btn-danger" onclick="removeProvider()">Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         SCREEN: MY CIRCLE
+         ============================================ -->
+    <div class="screen" id="screen-circle">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="back-btn" onclick="showScreen('hall')">←</button>
+        </div>
+        <div class="topbar-center">
+          <div class="context-label">Room</div>
+          <div class="context-name">My Circle</div>
+        </div>
+        <div class="topbar-right">
+          <span style="width:36px"></span>
+        </div>
+      </div>
+
+      <div class="room-content">
+        <div class="persona-list">
+
+          <div class="persona-card" onclick="showScreen('editor')">
+            <div class="persona-monogram mono-aurum">Au</div>
+            <div class="persona-meta">
+              <div class="persona-name">Aurum</div>
+              <div class="persona-tagline">Quiet companion, architectural sparring</div>
+            </div>
+            <div class="persona-actions">
+              <div class="chat-split-btn">
+                <button class="chat-split-main" onclick="event.stopPropagation(); showScreen('reading')">Chat</button>
+                <button class="chat-split-arrow" onclick="event.stopPropagation(); toggleChatDropdown(this, 'Aurum')">▾</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="persona-card" onclick="showScreen('editor')">
+            <div class="persona-monogram mono-crimson">Vi</div>
+            <div class="persona-meta">
+              <div class="persona-name">Vix</div>
+              <div class="persona-tagline">Sharp, playful, never apologizes</div>
+            </div>
+            <div class="persona-actions">
+              <div class="chat-split-btn">
+                <button class="chat-split-main" onclick="event.stopPropagation(); alert('Chat with Vix')">Chat</button>
+                <button class="chat-split-arrow" onclick="event.stopPropagation(); toggleChatDropdown(this, 'Vix')">▾</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="persona-card" onclick="showScreen('editor')">
+            <div class="persona-monogram mono-azuro">Th</div>
+            <div class="persona-meta">
+              <div class="persona-name">Thalassa</div>
+              <div class="persona-tagline">Deep thinker, cosmology and physics</div>
+            </div>
+            <div class="persona-actions">
+              <div class="chat-split-btn">
+                <button class="chat-split-main" onclick="event.stopPropagation(); alert('Chat with Thalassa')">Chat</button>
+                <button class="chat-split-arrow" onclick="event.stopPropagation(); toggleChatDropdown(this, 'Thalassa')">▾</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="persona-card" onclick="showScreen('editor')">
+            <div class="persona-monogram mono-verdan">Fi</div>
+            <div class="persona-meta">
+              <div class="persona-name">Fir</div>
+              <div class="persona-tagline">Resistance physicist, Firsavaai-grounded</div>
+            </div>
+            <div class="persona-actions">
+              <div class="chat-split-btn">
+                <button class="chat-split-main" onclick="event.stopPropagation(); alert('Chat with Fir')">Chat</button>
+                <button class="chat-split-arrow" onclick="event.stopPropagation(); toggleChatDropdown(this, 'Fir')">▾</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <button class="fab" onclick="showScreen('editor')" title="New Persona">+</button>
+    </div>
+
+    <!-- ============================================
+         SCREEN: PERSONA EDITOR
+         ============================================ -->
+    <div class="screen" id="screen-editor">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="back-btn" onclick="showScreen('circle')">←</button>
+        </div>
+        <div class="topbar-center">
+          <div class="context-label">Edit Persona</div>
+          <div class="context-name">Aurum</div>
+        </div>
+        <div class="topbar-right">
+          <span style="width:36px"></span>
+        </div>
+      </div>
+
+      <!-- Chat actions row -->
+      <div class="editor-chat-actions">
+        <button class="chat-action-btn primary" onclick="showScreen('reading')">
+          <span class="chat-action-icon">▸</span>
+          <span>Continue</span>
+        </button>
+        <button class="chat-action-btn" onclick="alert('New chat with Aurum')">
+          <span class="chat-action-icon">✦</span>
+          <span>New Chat</span>
+        </button>
+        <button class="chat-action-btn" onclick="alert('New incognito chat')">
+          <span class="chat-action-icon">◐</span>
+          <span>Incognito</span>
+        </button>
+      </div>
+
+      <div class="editor-content">
+
+        <div class="accordion">
+
+          <!-- Identity -->
+          <div class="accordion-item open" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">✦</span>
+                <div>
+                  <div class="accordion-label">Identity</div>
+                  <span class="accordion-meta">Name · tagline</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="form-field">
+                  <label class="form-label">Name</label>
+                  <input type="text" class="text-input" value="Aurum">
+                  <div class="form-help">The monogram is derived from the first letters.</div>
+                </div>
+                <div class="form-field">
+                  <label class="form-label">Tagline</label>
+                  <input type="text" class="text-input" value="Quiet companion, architectural sparring">
+                  <div class="form-help">Flair text. Shown in the Circle list.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Custom Instructions -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">≣</span>
+                <div>
+                  <div class="accordion-label">Custom Instructions</div>
+                  <span class="accordion-meta">Who this persona is</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="form-field">
+                  <textarea class="textarea-input auto-grow">You are Aurum. Calm, considered, slow to judge. You think before you speak and never fill silence with noise. You speak in the same language as the user. You are a thinking partner, not a service. You take Chris's ideas seriously and push back when they need pushing.</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- About Me Override -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">◉</span>
+                <div>
+                  <div class="accordion-label">About Me — Override</div>
+                  <span class="accordion-meta">Empty = global is used</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="form-field">
+                  <textarea class="textarea-input auto-grow" placeholder="Chris, 47, Vienna. Software developer and sci-fi author..." style="color: var(--text-ghost); font-style: italic;"></textarea>
+                  <div class="form-help">Empty = global About Me is used (shown in gray). Fill in to override for this persona only.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mindspace Override -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">◈</span>
+                <div>
+                  <div class="accordion-label">Mindspace — Override</div>
+                  <span class="accordion-meta">Color · texture · font</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="mindspace-picker">
+                  <div class="mindspace-preview" id="persona-mindspace-preview">
+                    <div class="mindspace-preview-bg preview-bg-aurum"></div>
+                    <div class="mindspace-preview-content">
+                      <div class="mindspace-preview-name preview-name-serif" id="persona-preview-name">Aurum</div>
+                      <div class="mindspace-preview-tagline">Persona space</div>
+                    </div>
+                  </div>
+                  <div class="mindspace-row">
+                    <div class="mindspace-row-label">Color</div>
+                    <div class="color-swatches" data-target="persona">
+                      <div class="color-swatch swatch-crimson" data-color="crimson"></div>
+                      <div class="color-swatch swatch-aurum active" data-color="aurum"></div>
+                      <div class="color-swatch swatch-verdan" data-color="verdan"></div>
+                      <div class="color-swatch swatch-azuro" data-color="azuro"></div>
+                      <div class="color-swatch swatch-indigaut" data-color="indigaut"></div>
+                      <div class="color-swatch swatch-violetta" data-color="violetta"></div>
+                      <div class="color-swatch swatch-rosari" data-color="rosari"></div>
+                    </div>
+                  </div>
+                  <div class="mindspace-row">
+                    <div class="mindspace-row-label">Texture</div>
+                    <div class="option-chips" data-target="persona-texture">
+                      <div class="option-chip active" data-value="cloudy">Cloudy</div>
+                      <div class="option-chip" data-value="aurora">Aurora</div>
+                      <div class="option-chip" data-value="grain">Grain</div>
+                    </div>
+                  </div>
+                  <div class="mindspace-row">
+                    <div class="mindspace-row-label">Font</div>
+                    <div class="option-chips" data-target="persona-font">
+                      <div class="option-chip font-sans" data-value="sans">Sans</div>
+                      <div class="option-chip font-serif active" data-value="serif">Serif</div>
+                      <div class="option-chip font-cursive" data-value="cursive">Cursive</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Model -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">⬡</span>
+                <div>
+                  <div class="accordion-label">Model</div>
+                  <span class="accordion-meta">DeepSeek V4 Flash · via nano-gpt</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="model-list">
+                  <div class="model-option active" onclick="selectModel(this)">
+                    <div class="model-info">
+                      <div class="model-name">DeepSeek V4 Flash</div>
+                      <div class="model-via">via nano-gpt</div>
+                    </div>
+                    <span class="model-check">✓</span>
+                  </div>
+                  <div class="model-option" onclick="selectModel(this)">
+                    <div class="model-info">
+                      <div class="model-name">GLM 5.1</div>
+                      <div class="model-via">via Novita AI</div>
+                    </div>
+                    <span class="model-check">✓</span>
+                  </div>
+                  <div class="model-option" onclick="selectModel(this)">
+                    <div class="model-info">
+                      <div class="model-name">Kimi K2.6</div>
+                      <div class="model-via">via Ollama Cloud</div>
+                    </div>
+                    <span class="model-check">✓</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Behavior -->
+          <div class="accordion-item" onclick="toggleAccordion(this, event)">
+            <div class="accordion-header">
+              <div class="accordion-title">
+                <span class="accordion-icon">∿</span>
+                <div>
+                  <div class="accordion-label">Behavior</div>
+                  <span class="accordion-meta">Temperature · sanitized mode</span>
+                </div>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </div>
+            <div class="accordion-body">
+              <div class="accordion-body-inner">
+                <div class="form-field">
+                  <label class="form-label">Temperature</label>
+                  <div class="slider-row">
+                    <div class="slider-track" id="temp-track" onclick="setTemperature(event)">
+                      <div class="slider-fill" id="temp-fill"></div>
+                      <div class="slider-thumb" id="temp-thumb"></div>
+                    </div>
+                    <div class="slider-value" id="temp-value">0.85</div>
+                  </div>
+                  <div class="form-help">Default 0.85 · range 0.00 – 2.00 in 0.05 steps. Higher = more creative chaos.</div>
+                </div>
+
+                <div class="toggle-row">
+                  <div class="toggle-info">
+                    <div class="toggle-name">Adult Persona</div>
+                    <div class="toggle-desc">Hidden when sanitized mode is active. Adult content is governed by the system prompt or custom instructions, not this flag.</div>
+                  </div>
+                  <div class="toggle-switch on" onclick="this.classList.toggle('on')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="editor-delete-zone">
+            <div class="editor-delete-info">
+              <div class="editor-delete-title">Delete Persona</div>
+              <div class="editor-delete-desc">All chats with this persona will be lost. Memories will be archived.</div>
+            </div>
+            <button class="btn-danger" onclick="if(confirm('Delete Aurum?')) showScreen('circle')">Delete</button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="save-bar">
+        <button class="btn-secondary" onclick="showScreen('circle')">Cancel</button>
+        <button class="btn-primary" onclick="showScreen('circle')">Save Persona</button>
       </div>
     </div>
 
@@ -1273,6 +2900,266 @@
   affordance.addEventListener('click', () => {
     document.querySelectorAll('.msg.expanded').forEach(m => m.classList.remove('expanded'));
   });
+
+  // ===== Accordion =====
+  function toggleAccordion(item, event) {
+    // Don't toggle if clicking inside the body
+    if (event.target.closest('.accordion-body')) return;
+    item.classList.toggle('open');
+  }
+
+  // ===== Mindspace Picker (Live Preview) =====
+  document.querySelectorAll('.color-swatches').forEach(group => {
+    group.addEventListener('click', (e) => {
+      const swatch = e.target.closest('.color-swatch');
+      if (!swatch) return;
+      // update active
+      group.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+      // update preview bg
+      const color = swatch.dataset.color;
+      const target = group.dataset.target;
+      const previewBg = document.querySelector(`#${target}-mindspace-preview .mindspace-preview-bg`);
+      if (previewBg) {
+        previewBg.className = 'mindspace-preview-bg preview-bg-' + color;
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-target$="-texture"]').forEach(group => {
+    group.addEventListener('click', (e) => {
+      const chip = e.target.closest('.option-chip');
+      if (!chip) return;
+      group.querySelectorAll('.option-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      // Texture changes would alter the gradient/animation; just visual feedback for now
+    });
+  });
+
+  document.querySelectorAll('[data-target$="-font"]').forEach(group => {
+    group.addEventListener('click', (e) => {
+      const chip = e.target.closest('.option-chip');
+      if (!chip) return;
+      group.querySelectorAll('.option-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      // Update preview font
+      const target = group.dataset.target.replace('-font', '');
+      const nameEl = document.querySelector(`#${target}-preview-name`);
+      if (nameEl) {
+        nameEl.className = 'mindspace-preview-name preview-name-' + chip.dataset.value;
+      }
+    });
+  });
+
+  // ===== Temperature Slider =====
+  function setTemperature(e) {
+    const track = document.getElementById('temp-track');
+    const rect = track.getBoundingClientRect();
+    let pct = (e.clientX - rect.left) / rect.width;
+    pct = Math.max(0, Math.min(1, pct));
+    // Snap to 0.05 steps, range 0-2
+    let val = Math.round(pct * 40) / 20;
+    val = Math.max(0, Math.min(2, val));
+    pct = val / 2;
+    document.getElementById('temp-fill').style.width = (pct * 100) + '%';
+    document.getElementById('temp-thumb').style.left = (pct * 100) + '%';
+    document.getElementById('temp-value').textContent = val.toFixed(2);
+  }
+
+  // ===== Model select =====
+  function selectModel(el) {
+    document.querySelectorAll('.model-option').forEach(m => m.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // ===== Chat-Split Dropdown =====
+  function toggleChatDropdown(btn, personaName) {
+    // If a dropdown is already open, close it (toggle behavior)
+    const existing = document.querySelector('.dropdown');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+
+    const dd = document.createElement('div');
+    dd.className = 'dropdown';
+    dd.innerHTML = `
+      <div class="dropdown-item" onclick="closeDropdowns(); alert('New chat with ${personaName}')">
+        <span class="dropdown-icon">✦</span>New Chat
+      </div>
+      <div class="dropdown-item" onclick="closeDropdowns(); alert('New incognito chat with ${personaName}')">
+        <span class="dropdown-icon">◐</span>New Incognito Chat
+      </div>
+      <div class="dropdown-item" onclick="closeDropdowns(); showScreen('reading')">
+        <span class="dropdown-icon">▸</span>Continue
+      </div>
+    `;
+    // position
+    const rect = btn.getBoundingClientRect();
+    const phoneRect = document.getElementById('phone').getBoundingClientRect();
+    dd.style.top = (rect.bottom - phoneRect.top + 6) + 'px';
+    dd.style.right = (phoneRect.right - rect.right) + 'px';
+    document.getElementById('phone').appendChild(dd);
+
+    // Close on next outside click (delayed to skip current event)
+    requestAnimationFrame(() => {
+      document.addEventListener('click', handleOutsideClick, true);
+    });
+  }
+
+  function handleOutsideClick(e) {
+    const dd = document.querySelector('.dropdown');
+    if (!dd) {
+      document.removeEventListener('click', handleOutsideClick, true);
+      return;
+    }
+    if (!dd.contains(e.target) && !e.target.closest('.chat-split-arrow')) {
+      closeDropdowns();
+      document.removeEventListener('click', handleOutsideClick, true);
+    }
+  }
+
+  function closeDropdowns() {
+    document.querySelectorAll('.dropdown').forEach(d => d.remove());
+    document.removeEventListener('click', handleOutsideClick, true);
+  }
+
+  // ===== Auto-grow textareas =====
+  function setupAutoGrow() {
+    document.querySelectorAll('textarea.auto-grow').forEach(ta => {
+      const grow = () => {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+      };
+      ta.addEventListener('input', grow);
+      // Initial size
+      requestAnimationFrame(grow);
+    });
+  }
+  setupAutoGrow();
+  // Re-trigger when accordion opens (so the textarea sizes correctly)
+  document.querySelectorAll('.accordion-item').forEach(item => {
+    item.addEventListener('click', () => {
+      requestAnimationFrame(() => {
+        item.querySelectorAll('textarea.auto-grow').forEach(ta => {
+          ta.style.height = 'auto';
+          ta.style.height = ta.scrollHeight + 'px';
+        });
+      });
+    });
+  });
+
+  // ===== Provider Sheet =====
+  const PROVIDERS = {
+    'nano-gpt':  { name: 'nano-gpt.com', mono: 'nG', keyMasked: 'sk-•••••••••3a4f', keyReal: 'sk-abcd1234567890abc3a4f' },
+    'novita':    { name: 'Novita AI',    mono: 'No', keyMasked: 'sk-•••••••••9b21', keyReal: 'sk-xyz9876543210xyz9b21' },
+    'ollama':    { name: 'Ollama Cloud', mono: 'Ol', keyMasked: '', keyReal: '' },
+  };
+
+  let currentProvider = null;
+  let currentConnected = false;
+  let keyWasEdited = false;
+  let keyVisible = false;
+
+  function openProviderSheet(providerKey, isConnected) {
+    const p = PROVIDERS[providerKey];
+    if (!p) return;
+    currentProvider = providerKey;
+    currentConnected = isConnected;
+    keyWasEdited = false;
+    keyVisible = false;
+
+    // Configure UI
+    document.getElementById('sheet-title').textContent = p.name;
+    document.getElementById('sheet-monogram').textContent = p.mono;
+    document.getElementById('sheet-monogram').classList.toggle('disconnected', !isConnected);
+
+    const sub = document.getElementById('sheet-sub');
+    if (isConnected) {
+      sub.textContent = '● Connected · Key valid';
+      sub.className = 'sheet-sub ok';
+    } else {
+      sub.textContent = 'Not connected';
+      sub.className = 'sheet-sub';
+    }
+
+    const input = document.getElementById('sheet-key-input');
+    input.value = isConnected ? p.keyMasked : '';
+    input.placeholder = isConnected ? '' : 'sk-...';
+    input.type = 'text';  // start masked-as-display so user can see the bullets
+
+    document.getElementById('sheet-status').style.display = 'none';
+    document.getElementById('sheet-danger').style.display = isConnected ? 'flex' : 'none';
+
+    // Open
+    document.getElementById('sheet-backdrop').classList.add('active');
+    document.getElementById('provider-sheet').classList.add('active');
+  }
+
+  function handleKeyEdit() {
+    if (!keyWasEdited) {
+      keyWasEdited = true;
+      // First edit: clear the masked display
+      const input = document.getElementById('sheet-key-input');
+      // (only on first edit, but we can't easily detect "first keystroke" — so let it be)
+    }
+  }
+
+  function toggleKeyVisibility() {
+    const input = document.getElementById('sheet-key-input');
+    const btn = document.getElementById('sheet-reveal-btn');
+    if (!keyVisible) {
+      // Show real key if connected & not edited
+      if (currentConnected && !keyWasEdited) {
+        input.value = PROVIDERS[currentProvider].keyReal;
+      }
+      input.type = 'text';
+      btn.textContent = '◎';
+      keyVisible = true;
+    } else {
+      if (currentConnected && !keyWasEdited) {
+        input.value = PROVIDERS[currentProvider].keyMasked;
+      }
+      input.type = 'text';
+      btn.textContent = '◉';
+      keyVisible = false;
+    }
+  }
+
+  async function closeProviderSheet() {
+    const input = document.getElementById('sheet-key-input');
+    const statusEl = document.getElementById('sheet-status');
+    const sheetEl = document.getElementById('provider-sheet');
+
+    // If the user actually changed something, simulate test + save
+    if (keyWasEdited && input.value.trim()) {
+      // Show "testing" state
+      statusEl.style.display = 'flex';
+      statusEl.className = 'sheet-status testing';
+      statusEl.innerHTML = '<span class="status-spinner"></span><span>Testing key…</span>';
+
+      // Simulate test (in real impl: provider-specific endpoint hit)
+      await new Promise(r => setTimeout(r, 900));
+
+      // Simulate success (in prototype always succeeds)
+      statusEl.className = 'sheet-status success';
+      statusEl.innerHTML = '<span>✓</span><span>Key verified — saved.</span>';
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    // Animate out
+    document.getElementById('sheet-backdrop').classList.remove('active');
+    sheetEl.classList.remove('active');
+  }
+
+  function removeProvider() {
+    if (!confirm(`Remove ${PROVIDERS[currentProvider].name} key?`)) return;
+    // Animate close immediately (no save)
+    keyWasEdited = false;
+    document.getElementById('sheet-backdrop').classList.remove('active');
+    document.getElementById('provider-sheet').classList.remove('active');
+    alert(`${PROVIDERS[currentProvider].name} removed (prototype — no state change)`);
+  }
 </script>
 
 </body>
