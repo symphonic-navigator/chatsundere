@@ -1,12 +1,16 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-23 — Block 1 brainstorm complete; design spec
-landed at [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md).
-Chris-approved (incl. Decision 16 auto-close-trigger restoration). Phase 1
-(Backbone) starts immediately; Phases 2–4 gated on remaining Lyra
-wireframes. `UX-CONCEPT.md` and the first interactive wireframe
-(`chatsundere-prototype.html`) committed alongside as canonical
-North-Star documents.
+**Last updated:** 2026-05-23 — Phase 1 (Backbone) implementation
+complete. Thirteen plan tasks squash into one Phase-1 commit; all 107
+tests pass (66 user-client + 41 llm-unified); typecheck clean across
+user-client / llm-unified / crypto; user-client `pnpm build` clean.
+Manual smoke deferred to Chris's device-test. Phase 2 wireframes
+(Reading + Interaction Mode + Entrance Hall + Settings + My Circle +
+Persona Editor) **already landed** in the updated
+`chatsundere-prototype.html` — Phase 2 can start as soon as Chris's
+manual smoke + sync is done. Brainstorm spec at
+[`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md);
+plan at [`superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md`](../superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -56,22 +60,57 @@ update the relevant one at the end.
 - **Block 1 design spec (2026-05-23)** —
   `superpowers/specs/2026-05-23-client-block-1-design.md`. 16 captured
   decisions, 4-phase implementation plan, 15 acceptance criteria.
-  Chris-approved; ready for `writing-plans` invocation on Phase 1.
+  Chris-approved.
+- **Phase 1 implementation plan (2026-05-23)** —
+  `superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md`.
+  13 tasks, fully TDD-structured. Subagent-driven execution.
+- **Phase 1 — Backbone, complete (2026-05-23)**. Squashed into one
+  commit. What landed:
+  - `apps/user-client/src/lib/secrets.ts` — DEK-backed AES-GCM seal/open
+    with `slotId` AAD binding (defends against ciphertext-swap across
+    storage slots). 10 Vitest tests.
+  - `apps/user-client/src/boot/client-data-db.ts` — Dexie DB
+    `chatsundere_client_data` with seven tables (settings, providers,
+    personas, mindspaces, chats, messages, pills), UUIDv7 IDs per
+    ADR 0025, idempotent v1-seeding of three built-in mindspaces
+    (Aurum, Azuro, Verdan) + settings singleton. Boot opens both
+    crypto DB and client-data DB in parallel. 5 Vitest tests.
+  - `apps/user-client/src/routes/onboarding/matrix.tsx` — three
+    server-coupled cells disabled with `aria-disabled` + "Coming with
+    Block 2" tooltip per UX-CONCEPT "Disabled over Hidden"; only
+    "Just this device" remains an active link. 3 Vitest tests.
+  - `packages/llm-unified/` — full library: 7 modules + 3 built-in
+    providers + 7 test files. Registry pattern ported from
+    `../chatsune/backend/modules/providers/_registry.py`.
+    Single OpenAI-chat-completions adapter shape; three pre-registered
+    providers (nano-gpt, Novita AI, Ollama Cloud) with CORS hints
+    (`inofficial` / `direct` / `requires-proxy`). Transport routes
+    direct or via cors-proxy. Hand-written SSE parser with split-chunk,
+    abort-signal, and tool-call support. System-prompt composition is
+    a pure module with stub Project + Memory slots. Probe surfaces
+    structured ProbeResult for "Test Connection". 41 Bun tests.
+  - Test runner split per CLAUDE.md: Bun for `packages/llm-unified`,
+    Vitest for `apps/user-client`. Both clean.
+  - New deps: `dexie@^4` and `uuidv7@^1.0.2` in user-client.
+  - Two minor follow-ups noted for later (not blocking): (a) add input
+    validation to `hexToRgb` in `client-data-db.ts` before a Phase-2+
+    palette editor wires it up to user input; (b) consider extracting
+    the duplicated `asMockFetch` helper if a third llm-unified test
+    file needs it.
 
 ## Briefed, awaiting implementation
 
-- **Phase 1 — Backbone** (wireframe-independent, immediate start):
-  Dexie schema (settings / providers / personas / mindspaces / chats /
-  messages / pills), `packages/llm-unified` registry + openai-chat-
-  completions adapter + transport (direct vs. cors-proxy) + streaming
-  + composition, MasterKey-based secret encryption, onboarding gating
-  on the 4-cell intent matrix (local-only enabled, three other paths
-  disabled with tooltip).
-- **Phase 2 — Settings + Circle** (gated on Lyra wireframes for those
-  surfaces): My Settings (Provider-Editor, CORS-Proxy, Unlocker,
-  About-Me, Mindspace defaults), My Circle (Persona list + editor),
-  Mindspace-Engine (CSS-custom-properties, persona > user-default
-  resolution), Entrance Hall skeleton.
+- **Phase 2 — Settings + Circle** (wireframes now available in the
+  updated `chatsundere-prototype.html` — Lyra delivered Settings,
+  My Circle, and Persona-Editor surfaces). Awaiting Chris's
+  device-test of Phase 1 + sync on Phase-2 details before kickoff.
+  Scope: My Settings (Provider-Editor with Test-Connection, CORS-Proxy
+  global config, Unlocker, About-Me, Default-Mindspace), My Circle
+  (Persona list + editor with name/colour/font/instructions/model/
+  mindspace-override/about-me-override), Mindspace-Engine
+  (CSS-custom-properties driven, resolution priority persona >
+  user-default), Entrance Hall skeleton (greeting, Continue-Card,
+  rooms-grid with Treasury + Projects greyed, Setup-Hints panel).
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
   edge, tap-expand, affordance ↔ scroll-to-end), Interaction Mode
   (topbar, 2-row cockpit, dim-overlay, auto-close per Decision 16),
@@ -97,18 +136,24 @@ update the relevant one at the end.
 
 ## Doing now
 
-Writing the Phase 1 implementation plan next; **pause after Phase 1**
-to sync on incoming wireframe iterations before opening Phase 2.
+Phase 1 finished. Paused for Chris's manual device-test smoke +
+sync on Phase 2 scope (Settings / Circle / Mindspace-Engine /
+Entrance Hall).
 
 ---
 
 ## Next session
 
-1. **`writing-plans` skill** → Phase 1 Backbone implementation plan,
-   subagent-friendly per CLAUDE.md global preference.
-2. **Phase 1 execution** — Dexie schema first, then llm-unified, then
-   crypto helpers + composition module, then onboarding gating.
-3. **Pause + sync** on Lyra wireframe iterations before Phase 2.
+1. **Chris's manual smoke** — fresh PWA install → 2×2 intent matrix
+   with three greyed cells + "Just this device" active → local-only
+   onboarding → `/app`. Verify in DevTools that both `chatsundere`
+   (crypto-owned) and `chatsundere_client_data` (Dexie) IDBs exist,
+   the latter containing three mindspaces + one settings row.
+2. **Phase 2 brainstorm + spec extension** — walk through the
+   updated wireframe (Settings, My Circle, Persona Editor) together;
+   extend the Block-1 spec with concrete surface architecture and a
+   Phase 2 implementation plan.
+3. **Phase 2 execution** — subagent-driven, same pattern as Phase 1.
 
 ---
 
