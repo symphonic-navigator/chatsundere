@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   type MindspaceRow,
@@ -16,14 +17,22 @@ beforeEach(async () => {
 describe('chatsundere_client_data Dexie schema', () => {
   it('opens cleanly on a fresh origin', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(1);
+    expect(db.verno).toBe(2);
   });
 
-  it('seeds three built-in mindspaces on first open', async () => {
+  it('seeds seven built-in mindspaces on first open', async () => {
     const db = await openClientDataDb();
     const all = await db.mindspaces.toArray();
     const names = all.map((m) => m.displayName).sort();
-    expect(names).toEqual(['Aurum', 'Azuro', 'Verdan']);
+    expect(names).toEqual([
+      'Aurum',
+      'Azuro',
+      'Crimson',
+      'Indigaut',
+      'Rosari',
+      'Verdan',
+      'Violetta',
+    ]);
     expect(all.every((m: MindspaceRow) => m.builtIn === true)).toBe(true);
   });
 
@@ -45,7 +54,7 @@ describe('chatsundere_client_data Dexie schema', () => {
     await _resetClientDataDbForTests({ keepData: true });
     const db2 = await openClientDataDb();
     const all = await db2.mindspaces.toArray();
-    expect(all.length).toBe(3);
+    expect(all.length).toBe(7);
     const settingsRows = await db2.settings.toArray();
     expect(settingsRows.length).toBe(1);
   });
@@ -59,5 +68,93 @@ describe('chatsundere_client_data Dexie schema', () => {
     expect(chatSchema?.schema.indexes.some((i) => i.name === '[personaId+lastMessageAt]')).toBe(
       true,
     );
+  });
+});
+
+describe('client-data DB — v2 migration', () => {
+  it('seeds seven built-in mindspaces on a fresh database', async () => {
+    await _resetClientDataDbForTests();
+    const db = await openClientDataDb();
+    const mindspaces = await db.mindspaces.toArray();
+    const names = mindspaces.map((m) => m.displayName).sort();
+    expect(names).toEqual([
+      'Aurum',
+      'Azuro',
+      'Crimson',
+      'Indigaut',
+      'Rosari',
+      'Verdan',
+      'Violetta',
+    ]);
+  });
+
+  it('seeds settings with userFont = "serif"', async () => {
+    await _resetClientDataDbForTests();
+    const db = await openClientDataDb();
+    const settings = await db.settings.get(1);
+    expect(settings?.userFont).toBe('serif');
+  });
+
+  it('uses finalised accent hex for Verdan (#6aa97a) and Azuro (#4a7eb3)', async () => {
+    await _resetClientDataDbForTests();
+    const db = await openClientDataDb();
+    const verdan = await db.mindspaces.where('displayName').equals('Verdan').first();
+    const azuro = await db.mindspaces.where('displayName').equals('Azuro').first();
+    expect(verdan?.palette.accent).toBe('#6aa97a');
+    expect(azuro?.palette.accent).toBe('#4a7eb3');
+  });
+
+  it('backfills userFont, persona fields, and missing mindspaces when upgrading from v1', async () => {
+    // Simulate v1: open as v1 only, seed, close, then re-open at v2.
+    await _resetClientDataDbForTests();
+    const v1 = new Dexie('chatsundere_client_data');
+    v1.version(1).stores({
+      settings: 'id',
+      providers: 'id, templateId, enabled',
+      mindspaces: 'id, builtIn, displayName',
+      personas: 'id, providerId',
+      chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+      messages: 'id, chatId, [chatId+createdAt]',
+      pills: 'id, messageId',
+    });
+    await v1.open();
+    // Plant a v1-shape settings row (no userFont) and a v1-shape persona row.
+    const now = Date.now();
+    await v1.table('settings').add({
+      id: 1,
+      globalUnlockerPrompt: 'unlock',
+      globalAboutMe: 'about',
+      defaultMindspaceId: 'aurum-id',
+      animationsEnabled: true,
+      corsProxy: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await v1.table('personas').add({
+      id: 'p1',
+      name: 'Test',
+      colour: '#c9a84c',
+      font: 'serif',
+      instructions: 'be helpful',
+      providerId: 'np',
+      modelId: 'm1',
+      mindspaceId: null,
+      aboutMeOverride: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    v1.close();
+
+    // Now open via the v2 entrypoint and verify backfills.
+    await _resetClientDataDbForTests({ keepData: true });
+    const db = await openClientDataDb();
+    const settings = await db.settings.get(1);
+    expect(settings?.userFont).toBe('serif');
+    const persona = await db.personas.get('p1');
+    expect(persona?.tagline).toBe('');
+    expect(persona?.temperature).toBeCloseTo(0.85);
+    expect(persona?.adultPersona).toBe(false);
+    const mindspaces = await db.mindspaces.toArray();
+    expect(mindspaces.length).toBeGreaterThanOrEqual(7);
   });
 });

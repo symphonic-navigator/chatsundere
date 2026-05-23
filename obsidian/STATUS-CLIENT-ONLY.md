@@ -1,16 +1,19 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-23 — Phase 1 (Backbone) implementation
-complete. Thirteen plan tasks squash into one Phase-1 commit; all 107
-tests pass (66 user-client + 41 llm-unified); typecheck clean across
-user-client / llm-unified / crypto; user-client `pnpm build` clean.
-Manual smoke deferred to Chris's device-test. Block-1 wireframes
-landed in `chatsundere-prototype.html` for Reading + Interaction Mode
-+ Entrance Hall + My Settings + My Circle + Persona Editor; only
-My History (Phase 4) remains wireframe-blocked. Phase 2 can start as
-soon as Chris's manual smoke + sync is done. Brainstorm spec at
+**Last updated:** 2026-05-23 evening — Phase 2 (Settings + Circle +
+Persona Editor + Entrance Hall) implementation complete. Eighteen plan
+tasks squashed into one Phase-2 commit; 353 tests pass across all
+workspaces (129 user-client + 82 llm-unified + 142 crypto); typecheck
+clean; user-client `pnpm build` clean; Biome lint clean. Manual smoke
+deferred to Chris's device-test. Block-1 wireframes landed in
+`chatsundere-prototype.html` for Reading + Interaction Mode +
+Entrance Hall + My Settings + My Circle + Persona Editor; only My
+History (Phase 4) remains wireframe-blocked. Phase 3 (Chat surface —
+Reading + Interaction + Streaming) is the next deliverable; Phase 4
+(History + Polish) follows once Lyra's history wireframe lands.
+Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md);
-plan at [`superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md`](../superpowers/plans/2026-05-23-client-block-1-phase-1-backbone.md).
+Phase-2 plan at [`superpowers/plans/2026-05-23-client-block-1-phase-2-settings-circle.md`](../superpowers/plans/2026-05-23-client-block-1-phase-2-settings-circle.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -98,28 +101,51 @@ update the relevant one at the end.
     the duplicated `asMockFetch` helper if a third llm-unified test
     file needs it.
 
+## Done (continued from Phase 1)
+
+- **Phase 2 — Settings + Circle + Persona Editor + Entrance Hall
+  (2026-05-23 evening)**. Squashed into one Phase-2 commit. What landed:
+  - `apps/user-client/src/boot/client-data-db.ts` — Dexie v2 migration
+    with `.upgrade()` backfilling `Settings.userFont = 'serif'` and
+    `PersonaRow.{tagline:'', temperature:0.85, adultPersona:false}`
+    on existing rows; seven built-in mindspaces (Crimson, Aurum,
+    Verdan, Azuro, Indigaut, Violetta, Rosari) using Lyra's finalised
+    hex values; Verdan/Azuro accent hex refreshed from Phase-1
+    provisional values.
+  - `apps/user-client/src/state/{mindspace-resolver,mindspace.store}.ts`
+    — pure resolver + Zustand store driving the active palette.
+  - `apps/user-client/src/components/{MindspaceLayer,MindspaceTexture,
+    MindspacePicker,PersonaCard,AccordionCard,ProviderSheet,SaveBar}.tsx`
+    — the Phase-2 component library. MindspaceTexture ships three
+    CSS-only variants (cloudy, aurora, grain) with respect for
+    `prefers-reduced-motion`.
+  - `apps/user-client/src/data/{queryKeys,settings,personas,providers,
+    mindspaces,chats}.ts` — TanStack-Query data layer over Dexie with
+    full CUD for personas / providers, plus query-only access for the
+    rest.
+  - `apps/user-client/src/routes/app/{entrance-hall,circle,
+    persona-editor,settings}.tsx` — the four Block-2 surfaces wired
+    to data + state, with accordion accordions, FAB navigation,
+    save-bar validation, delete-zone with cascade, etc.
+  - `apps/user-client/src/App.tsx` — wired `/app` subroutes
+    (`/app`, `/app/circle`, `/app/persona/new`, `/app/persona/:id`,
+    `/app/settings`); MindspaceLayer mounted at root; `app-shell.tsx`
+    placeholder removed.
+  - Tests: 63 new Vitest cases across mindspace engine, data layer,
+    components, and the four routes; all 129 user-client tests pass.
+    Phase-1 packages (crypto, llm-unified) remain untouched and green.
+
 ## Briefed, awaiting implementation
 
-- **Phase 2 — Settings + Circle** (wireframes now available in the
-  updated `chatsundere-prototype.html` — Lyra delivered Settings,
-  My Circle, and Persona-Editor surfaces). Awaiting Chris's
-  device-test of Phase 1 + sync on Phase-2 details before kickoff.
-  Scope: My Settings (Provider-Editor with Test-Connection, CORS-Proxy
-  global config, Unlocker, About-Me, Default-Mindspace), My Circle
-  (Persona list + editor with name/colour/font/instructions/model/
-  mindspace-override/about-me-override), Mindspace-Engine
-  (CSS-custom-properties driven, resolution priority persona >
-  user-default), Entrance Hall skeleton (greeting, Continue-Card,
-  rooms-grid with Treasury + Projects greyed, Setup-Hints panel).
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
   edge, tap-expand, affordance ↔ scroll-to-end), Interaction Mode
   (topbar, 2-row cockpit, dim-overlay, auto-close per Decision 16),
   streaming integration, Pills rendering + ADR "Tool Display
   Position".
 - **Phase 4 — History + Polish** (gated on My History wireframe):
-  List + search, Setup-Hints, scroll-to-end micro-animation,
-  affordance glow tuning, network-loss / abort / partial-stream-on-
-  tab-close edge cases.
+  List + search, Setup-Hints (deferred from Phase 2 per Decision 27),
+  scroll-to-end micro-animation, affordance glow tuning, network-loss
+  / abort / partial-stream-on-tab-close edge cases.
 
 ## Open design questions / blockers
 
@@ -137,24 +163,37 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 1 finished. Paused for Chris's manual device-test smoke +
-sync on Phase 2 scope (Settings / Circle / Mindspace-Engine /
-Entrance Hall).
+Phase 2 finished. Paused for Chris's manual device-test smoke on the
+four new surfaces (Entrance Hall, My Settings, My Circle, Persona
+Editor) before kicking off Phase 3 (Chat).
 
 ---
 
 ## Next session
 
-1. **Chris's manual smoke** — fresh PWA install → 2×2 intent matrix
-   with three greyed cells + "Just this device" active → local-only
-   onboarding → `/app`. Verify in DevTools that both `chatsundere`
-   (crypto-owned) and `chatsundere_client_data` (Dexie) IDBs exist,
-   the latter containing three mindspaces + one settings row.
-2. **Phase 2 brainstorm + spec extension** — walk through the
-   updated wireframe (Settings, My Circle, Persona Editor) together;
-   extend the Block-1 spec with concrete surface architecture and a
-   Phase 2 implementation plan.
-3. **Phase 2 execution** — subagent-driven, same pattern as Phase 1.
+1. **Chris's manual smoke** — fresh PWA install → onboarding "Just
+   this device" → Entrance Hall renders with 5 rooms (3 greyed
+   stubs). Walk through: My Settings → fill About Me, pick a
+   Mindspace colour/texture/font, set Global Unlocker, add at least
+   one provider with API key (Ollama-Cloud also asks for proxy URL +
+   shared key, both stored on `Settings.corsProxy`). Back to Hall →
+   "1 of 3 providers connected" appears on Settings tile. Tap My
+   Circle → empty-state "No personas yet"; FAB "+" opens the editor
+   in create mode; fill Name + Tagline + Custom Instructions + pick
+   a Model → Save → returns to Circle with the persona card visible.
+   Tap a persona card → editor opens in edit mode with three chat-
+   action buttons up top. Edit a field → Save. Tap a persona →
+   Delete → confirm → returns to Circle. Reload PWA → Hall still
+   shows everything intact. Verify in DevTools: `chatsundere_client_data`
+   now has `verno: 2`, seven mindspaces, one settings row with
+   `userFont: 'serif'`, persona row with `tagline / temperature /
+   adultPersona` fields.
+2. **Phase 3 brainstorm + plan** — walk through the chat surface
+   wireframes in `chatsundere-prototype.html` (Reading Mode +
+   Interaction Mode + Cockpit). Open the ADR "Tool Display Position"
+   discussion.
+3. **Phase 3 execution** — subagent-driven, same pattern as Phase 1
+   and Phase 2.
 
 ---
 
@@ -165,7 +204,9 @@ Entrance Hall).
 - UX concept (Chris + Lyra): [`UX-CONCEPT.md`](../UX-CONCEPT.md)
 - Visual ground truth (interactive wireframe): [`chatsundere-prototype.html`](../chatsundere-prototype.html)
 - All open todos: [[insights/follow-ups-index]]
-- Decisions: `decisions/0001–0028`
+- Decisions: `decisions/0001–0028` (plus Block-1 Decisions 17–28 in
+  the Block-1 design spec linked above — these are the Phase-2
+  brainstorm decisions; promoted ADRs may follow)
 - Design briefs: `briefs/phase 0/`
 - Session journal: `insights/YYYY-MM-DD-*.md`
 - Recent commits: `git log --oneline -20`

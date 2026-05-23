@@ -135,3 +135,54 @@ h1 {
     }
   }
 }
+
+@keyframes mindspace-float1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(20px, 30px) scale(1.1);
+  }
+}
+@keyframes mindspace-float2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-30px, -20px) scale(1.15);
+  }
+}
+@keyframes mindspace-aurora1 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(40px, -30px);
+  }
+}
+@keyframes mindspace-aurora2 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-30px, 40px);
+  }
+}
+@keyframes mindspace-aurora3 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(20px, 20px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mindspace-texture * {
+    animation: none !important;
+  }
+}

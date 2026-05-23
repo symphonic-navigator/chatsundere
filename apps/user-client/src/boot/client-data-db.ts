@@ -13,6 +13,7 @@ export interface SettingsRow {
   globalUnlockerPrompt: string;
   globalAboutMe: string;
   defaultMindspaceId: string;
+  userFont: 'sans' | 'serif' | 'cursive';
   animationsEnabled: boolean;
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
   createdAt: number;
@@ -49,7 +50,7 @@ export interface MindspacePalette {
   };
 }
 
-export type MindspaceTexture = 'cloudy';
+export type MindspaceTexture = 'cloudy' | 'aurora' | 'grain';
 
 export interface MindspaceRow {
   id: string;
@@ -63,6 +64,7 @@ export interface MindspaceRow {
 export interface PersonaRow {
   id: string;
   name: string;
+  tagline: string;
   colour: string;
   font: 'sans' | 'serif' | 'cursive';
   instructions: string;
@@ -70,6 +72,8 @@ export interface PersonaRow {
   modelId: string;
   mindspaceId: string | null;
   aboutMeOverride: string | null;
+  temperature: number;
+  adultPersona: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -128,6 +132,33 @@ class ClientDataDb extends Dexie {
       messages: 'id, chatId, [chatId+createdAt]',
       pills: 'id, messageId',
     });
+
+    this.version(2)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        // Backfill new SettingsRow.userFont — default 'serif' per Decision 28.
+        const settings = await tx.table('settings').get(1);
+        if (settings) {
+          await tx.table('settings').update(1, { userFont: 'serif' });
+        }
+        // Backfill new PersonaRow fields — Decision 26.
+        const personas = await tx.table('personas').toArray();
+        for (const p of personas) {
+          await tx.table('personas').update(p.id, {
+            tagline: '',
+            temperature: 0.85,
+            adultPersona: false,
+          });
+        }
+      });
   }
 }
 
@@ -181,31 +212,63 @@ export async function _resetClientDataDbForTests(opts: { keepData?: boolean } = 
 
 // ===== Seeding =====
 
+const BUILT_IN_MINDSPACES: ReadonlyArray<{ displayName: string; accent: string }> = [
+  { displayName: 'Crimson', accent: '#b33a5e' },
+  { displayName: 'Aurum', accent: '#c9a84c' },
+  { displayName: 'Verdan', accent: '#6aa97a' },
+  { displayName: 'Azuro', accent: '#4a7eb3' },
+  { displayName: 'Indigaut', accent: '#5d4e9e' },
+  { displayName: 'Violetta', accent: '#9a5bb8' },
+  { displayName: 'Rosari', accent: '#c97a99' },
+];
+
 async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
   const existingSettings = await db.settings.get(1);
-  if (existingSettings) return; // already seeded — no-op
+  const existingMindspaces = await db.mindspaces.toArray();
+  const existingNames = new Set(existingMindspaces.map((m) => m.displayName));
+
+  const missingBuiltins = BUILT_IN_MINDSPACES.filter((b) => !existingNames.has(b.displayName));
+  const staleVerdanOrAzuro = existingMindspaces.filter(
+    (m) =>
+      (m.displayName === 'Verdan' && m.palette.accent !== '#6aa97a') ||
+      (m.displayName === 'Azuro' && m.palette.accent !== '#4a7eb3'),
+  );
+
+  if (existingSettings && missingBuiltins.length === 0 && staleVerdanOrAzuro.length === 0) {
+    return; // already at Phase-2 state — no-op
+  }
 
   const now = Date.now();
-  const aurumId = uuidv7();
-  const azuroId = uuidv7();
-  const verdanId = uuidv7();
-
   await db.transaction('rw', db.mindspaces, db.settings, async () => {
-    await db.mindspaces.bulkAdd([
-      buildMindspace(aurumId, 'Aurum', '#c9a84c', now),
-      buildMindspace(azuroId, 'Azuro', '#7c9ede', now),
-      buildMindspace(verdanId, 'Verdan', '#74c69d', now),
-    ]);
-    await db.settings.add({
-      id: 1,
-      globalUnlockerPrompt: '',
-      globalAboutMe: '',
-      defaultMindspaceId: aurumId,
-      animationsEnabled: true,
-      corsProxy: null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Add any missing built-ins
+    if (missingBuiltins.length > 0) {
+      await db.mindspaces.bulkAdd(
+        missingBuiltins.map((b) => buildMindspace(uuidv7(), b.displayName, b.accent, now)),
+      );
+    }
+    // Refresh stale palettes for Verdan / Azuro (preserving id + texture + builtIn flag)
+    for (const stale of staleVerdanOrAzuro) {
+      const finalised = BUILT_IN_MINDSPACES.find((b) => b.displayName === stale.displayName);
+      if (!finalised) continue;
+      const refreshed = buildMindspace(stale.id, stale.displayName, finalised.accent, now);
+      await db.mindspaces.put({ ...refreshed, texture: stale.texture });
+    }
+    // Seed the settings singleton if it doesn't exist
+    if (!existingSettings) {
+      const aurum = await db.mindspaces.where('displayName').equals('Aurum').first();
+      const aurumId = aurum?.id ?? (await db.mindspaces.toCollection().first())?.id ?? uuidv7();
+      await db.settings.add({
+        id: 1,
+        globalUnlockerPrompt: '',
+        globalAboutMe: '',
+        defaultMindspaceId: aurumId,
+        userFont: 'serif',
+        animationsEnabled: true,
+        corsProxy: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
   });
 }
 

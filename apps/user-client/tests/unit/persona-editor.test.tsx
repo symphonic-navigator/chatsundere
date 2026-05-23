@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import 'fake-indexeddb/auto';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  _resetClientDataDbForTests,
+  getClientDataDb,
+  openClientDataDb,
+} from '../../src/boot/client-data-db.js';
+import { PersonaEditor } from '../../src/routes/app/persona-editor.js';
+
+function wrap(initial: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[initial]}>
+        <Routes>
+          <Route path="/app/persona/:id" element={<PersonaEditor />} />
+          <Route path="/app/persona/new" element={<PersonaEditor />} />
+          <Route path="/app/circle" element={<div data-testid="circle" />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+  });
+  afterEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+
+  it('renders topbar with "New Persona" in create mode', async () => {
+    wrap('/app/persona/new');
+    await waitFor(() => expect(screen.getByText(/new persona/i)).toBeInTheDocument());
+  });
+
+  it('renders persona name in topbar context in edit mode', async () => {
+    const db = getClientDataDb();
+    const now = Date.now();
+    await db.personas.add({
+      id: 'p-edit',
+      name: 'Vix',
+      tagline: '',
+      colour: '#b33a5e',
+      font: 'sans',
+      instructions: 'i',
+      providerId: 'pv',
+      modelId: 'm',
+      mindspaceId: null,
+      aboutMeOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    wrap('/app/persona/p-edit');
+    await waitFor(() => {
+      const topbar = screen.getAllByText('Vix');
+      expect(topbar.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('Identity card edits name + tagline live in topbar', async () => {
+    wrap('/app/persona/new');
+    const card = await screen.findByText(/identity/i);
+    fireEvent.click(card);
+    const nameInput = await screen.findByLabelText(/name/i);
+    fireEvent.change(nameInput, { target: { value: 'Lyra' } });
+    await waitFor(() => expect(screen.getAllByText('Lyra').length).toBeGreaterThan(0));
+  });
+});
+
+describe('PersonaEditor — Mindspace / Model / Behavior', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+  });
+  afterEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+
+  it('Mindspace-Override picker offers "Use user default" chip', async () => {
+    wrap('/app/persona/new');
+    fireEvent.click(await screen.findByText(/mindspace.*override/i));
+    expect(await screen.findByRole('button', { name: /use user default/i })).toBeInTheDocument();
+  });
+
+  it('Behavior section shows temperature slider with default 0.85', async () => {
+    wrap('/app/persona/new');
+    fireEvent.click(await screen.findByText(/behavior/i));
+    expect(await screen.findByText('0.85')).toBeInTheDocument();
+  });
+
+  it('Behavior section shows Adult Persona toggle', async () => {
+    wrap('/app/persona/new');
+    fireEvent.click(await screen.findByText(/behavior/i));
+    expect(await screen.findByText(/adult persona/i)).toBeInTheDocument();
+  });
+});
+
+describe('PersonaEditor — Delete + Save-Bar', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+  });
+  afterEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+
+  it('disables Save when name is empty', async () => {
+    wrap('/app/persona/new');
+    const save = await screen.findByRole('button', { name: /save persona/i });
+    expect(save).toBeDisabled();
+  });
+
+  it('still disables Save when name + instructions filled but no providerId', async () => {
+    wrap('/app/persona/new');
+    // Open Identity accordion to access the name input
+    fireEvent.click(await screen.findByText(/identity/i));
+    const nameInput = await screen.findByLabelText(/name/i);
+    fireEvent.change(nameInput, { target: { value: 'Aurum' } });
+    // Provider also required — no provider seeded, so Save stays disabled
+    const save = screen.getByRole('button', { name: /save persona/i });
+    expect(save).toBeDisabled();
+  });
+
+  it('shows Delete zone only in edit mode', async () => {
+    const now = Date.now();
+    const db = getClientDataDb();
+    await db.personas.add({
+      id: 'p-del',
+      name: 'X',
+      tagline: '',
+      colour: '#fff',
+      font: 'sans',
+      instructions: 'i',
+      providerId: 'pv',
+      modelId: 'm',
+      mindspaceId: null,
+      aboutMeOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    wrap('/app/persona/p-del');
+    expect(await screen.findByRole('button', { name: /^delete$/i })).toBeInTheDocument();
+  });
+});

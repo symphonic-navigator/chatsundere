@@ -2,8 +2,12 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorScreen } from './components/ErrorScreen.js';
+import { MindspaceLayer } from './components/MindspaceLayer.js';
 import { queryClient } from './lib/queryClient.js';
-import { AppShell } from './routes/app-shell.js';
+import { Circle } from './routes/app/circle.js';
+import { EntranceHall } from './routes/app/entrance-hall.js';
+import { PersonaEditor } from './routes/app/persona-editor.js';
+import { Settings as MySettings } from './routes/app/settings.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
 import { Login } from './routes/login/index.js';
@@ -62,6 +66,7 @@ export function App() {
     case 'ready':
       return (
         <QueryClientProvider client={queryClient}>
+          <MindspaceLayer />
           <BrowserRouter>
             <Routes>
               <Route element={<Root />}>
@@ -84,7 +89,11 @@ export function App() {
                 <Route path="/login/recovery" element={<Recovery />} />
                 {/* Session-required */}
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/app" element={<AppShell />} />
+                  <Route path="/app" element={<EntranceHall />} />
+                  <Route path="/app/circle" element={<Circle />} />
+                  <Route path="/app/persona/new" element={<PersonaEditor />} />
+                  <Route path="/app/persona/:id" element={<PersonaEditor />} />
+                  <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />
                   <Route path="/settings" element={<SettingsLayout />}>
                     <Route index element={<Navigate to="account" replace />} />

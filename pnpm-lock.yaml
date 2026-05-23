@@ -207,6 +207,9 @@ importers:
       '@chatsundere/crypto':
         specifier: workspace:^
         version: link:../../packages/crypto
+      '@chatsundere/llm-unified':
+        specifier: workspace:^
+        version: link:../../packages/llm-unified
       '@chatsundere/shared-types':
         specifier: workspace:^
         version: link:../../packages/shared-types
