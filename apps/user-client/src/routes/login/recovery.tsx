@@ -151,6 +151,13 @@ export function Recovery() {
           setError(c.errors.unknown);
           return;
         }
+        if (!env.VITE_AUTH_URL) {
+          // Server-coupled recovery requires the auth-service URL. In Block 1
+          // local-only deployments the URL is not configured; the onboarding
+          // gating prevents reaching this path, but guard anyway.
+          setError(c.errors.unknown);
+          return;
+        }
         try {
           await recoveryOnline({
             db,
