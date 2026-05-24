@@ -22,8 +22,8 @@ describe('EditorSticky', () => {
     );
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper.className).toContain('sticky');
-    expect(wrapper.className).toContain('top-11');
-    expect(wrapper.className).toContain('lg:top-14');
+    expect(wrapper.className).toContain('top-13');
+    expect(wrapper.className).toContain('lg:top-15');
     expect(wrapper.className).toContain('z-10');
   });
 

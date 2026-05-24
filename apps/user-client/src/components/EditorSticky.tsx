@@ -13,9 +13,11 @@ interface Props {
  * shimmer through, so the sticky region reads as a transparent tool
  * palette rather than a solid header.
  *
- * The sticky offset (top-11 / lg:top-14) matches the root header's
- * measured height so the sticky region anchors just below the brand
- * bar rather than colliding with it (root has z-20, this has z-10).
+ * The sticky offset (top-13 / lg:top-15 = 52 px / 60 px) matches the
+ * root header's measured rendered height (header py-3/py-4 plus the
+ * brand-logo line-box, measured via Chromium DevTools on the dev
+ * server). The sticky region anchors just below the brand bar rather
+ * than colliding with it (root has z-20, this has z-10).
  *
  * The -mt-4 cancels the consumer route's standard `<section pt-4>`
  * padding so the sticky region's box-top sits flush with the brand-bar
@@ -35,7 +37,7 @@ export function EditorSticky({ children }: Props): JSX.Element {
   return (
     <div
       data-editor-sticky=""
-      className="sticky top-11 lg:top-14 z-10 -mt-4 -mx-4 px-4 pb-2 pt-4 backdrop-blur-sm border-b border-paper-soft/15"
+      className="sticky top-13 lg:top-15 z-10 -mt-4 -mx-4 px-4 pb-2 pt-4 backdrop-blur-sm border-b border-paper-soft/15"
     >
       {children}
     </div>
