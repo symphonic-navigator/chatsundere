@@ -51,7 +51,7 @@ function RoomTile({ label, icon, meta, to, disabled, tooltip }: RoomTileProps) {
   );
 }
 
-/** Landing surface for /app — greeting, optional continue-card, and five room tiles. */
+/** Landing surface for /app — greeting, optional continue-card, and six room tiles. */
 export function EntranceHall(): JSX.Element {
   const session = useSessionStore((s) => s.session);
   const settings = useSettings();
@@ -132,6 +132,7 @@ export function EntranceHall(): JSX.Element {
           meta={`${providerCount} providers connected`}
           to="/app/settings"
         />
+        <RoomTile label="My Account" icon="⌬" meta="Identity & auth" to="/app/account" />
       </div>
     </section>
   );

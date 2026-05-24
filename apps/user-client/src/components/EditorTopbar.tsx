@@ -7,6 +7,7 @@ interface Props {
   onSaveAndBack: () => void;
   saveDisabled?: boolean;
   saveTooltip?: string;
+  hideSaveAndBack?: boolean;
 }
 
 /**
@@ -24,6 +25,7 @@ export function EditorTopbar({
   onSaveAndBack,
   saveDisabled = false,
   saveTooltip,
+  hideSaveAndBack = false,
 }: Props): JSX.Element {
   function handleBack() {
     if (isDirty) {
@@ -46,15 +48,19 @@ export function EditorTopbar({
       <div className="min-w-0 flex-1 truncate text-center font-display text-sm text-paper">
         {title}
       </div>
-      <button
-        type="button"
-        onClick={onSaveAndBack}
-        disabled={saveDisabled}
-        title={saveDisabled ? saveTooltip : undefined}
-        className="rounded-md border border-paper px-3 py-1.5 text-xs uppercase tracking-wider text-paper hover:bg-paper/10 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Save &amp; Back
-      </button>
+      {hideSaveAndBack ? (
+        <span className="w-[88px]" aria-hidden />
+      ) : (
+        <button
+          type="button"
+          onClick={onSaveAndBack}
+          disabled={saveDisabled}
+          title={saveDisabled ? saveTooltip : undefined}
+          className="rounded-md border border-paper px-3 py-1.5 text-xs uppercase tracking-wider text-paper hover:bg-paper/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Save &amp; Back
+        </button>
+      )}
     </header>
   );
 }

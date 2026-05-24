@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 interface Props {
   icon: string;
@@ -20,8 +20,21 @@ export function AccordionCard({
   children,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
+  const ref = useRef<HTMLDivElement>(null);
+  const isInitialRef = useRef(true);
+
+  useEffect(() => {
+    if (isInitialRef.current) {
+      isInitialRef.current = false;
+      return;
+    }
+    if (open && ref.current && typeof ref.current.scrollIntoView === 'function') {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [open]);
+
   return (
-    <div data-accordion-card className="rounded-lg border border-white/5 bg-white/[0.02]">
+    <div ref={ref} data-accordion-card className="rounded-lg border border-white/5 bg-white/[0.02]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

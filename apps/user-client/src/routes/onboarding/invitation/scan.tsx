@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { parseJoinUrl, scanWithCamera } from '../../../lib/qr.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { useNavTarget } from './_return-url.js';
 
 type ScanState = { kind: 'starting' } | { kind: 'scanning' } | { kind: 'permission_denied' };
 
@@ -13,6 +14,13 @@ type ScanState = { kind: 'starting' } | { kind: 'scanning' } | { kind: 'permissi
  */
 export function InvitationScan() {
   const navigate = useNavigate();
+  const navTarget = useNavTarget();
+  const [searchParams] = useSearchParams();
+  // Capture the search string once so the effect closure doesn't depend on
+  // navTarget (which returns a new function each render). The search string is
+  // stable for the lifetime of this route — it doesn't change while the camera
+  // is running — so reading it at mount is correct.
+  const searchRef = useRef(searchParams.toString());
   const setOnboardingState = useOnboardingStore((s) => s.setState);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [scanState, setScanState] = useState<ScanState>({ kind: 'starting' });
@@ -20,6 +28,7 @@ export function InvitationScan() {
   useEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | null = null;
+    const search = searchRef.current;
 
     void (async () => {
       const el = videoRef.current;
@@ -37,7 +46,7 @@ export function InvitationScan() {
             baseUrl: result.value.baseUrl,
             code: result.value.code,
           });
-          navigate('/onboarding/invitation', { replace: true });
+          navigate({ pathname: '/onboarding/invitation', search }, { replace: true });
         });
         if (!cancelled) setScanState({ kind: 'scanning' });
       } catch {
@@ -53,7 +62,11 @@ export function InvitationScan() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding/invitation" aria-label="Back" className="text-2xl text-paper-soft">
+      <Link
+        to={navTarget('/onboarding/invitation')}
+        aria-label="Back"
+        className="text-2xl text-paper-soft"
+      >
         ←
       </Link>
 
@@ -68,7 +81,7 @@ export function InvitationScan() {
             </p>
           </div>
           <Link
-            to="/onboarding/invitation"
+            to={navTarget('/onboarding/invitation')}
             className="mt-4 block rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-center text-sm font-medium text-paper transition-opacity hover:opacity-90"
           >
             Use the form instead

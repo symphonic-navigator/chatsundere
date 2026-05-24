@@ -14,7 +14,6 @@ import { AccordionCard } from '../../components/AccordionCard.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
-import { SaveBar } from '../../components/SaveBar.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import {
   useCreatePersona,
@@ -140,17 +139,13 @@ export function PersonaEditor(): JSX.Element {
     setIsDirty(false);
   }
 
-  async function onSaveStay() {
-    await persistDraft();
-  }
-
   async function onSaveAndBack() {
     await persistDraft();
     navigate('/app/circle');
   }
 
   return (
-    <section className="flex flex-col gap-3 px-4 pb-32 pt-4">
+    <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
       <EditorTopbar
         title={isCreate ? 'New Persona' : draft.name || 'Edit Persona'}
         isDirty={isDirty}
@@ -395,22 +390,6 @@ export function PersonaEditor(): JSX.Element {
           </button>
         </div>
       ) : null}
-
-      <SaveBar
-        onCancel={() => navigate('/app/circle')}
-        onSave={() => {
-          void onSaveStay();
-        }}
-        saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
-        saveTooltip={
-          !draft.providerId
-            ? 'Add a provider in Settings first'
-            : !draft.modelId
-              ? 'Pick a model'
-              : 'Fill in name and instructions'
-        }
-        saveLabel="Save Persona"
-      />
     </section>
   );
 }

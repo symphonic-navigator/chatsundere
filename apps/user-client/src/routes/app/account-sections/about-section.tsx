@@ -1,20 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { InlineMarker } from '@chatsundere/ui-shared';
-import { copy } from '../../lib/copy.js';
-import { APP_VERSION } from '../../version.js';
+import { copy } from '../../../lib/copy.js';
+import { APP_VERSION } from '../../../version.js';
 
 /**
- * About settings tab.
+ * About accordion body.
  *
  * Displays app version (injected at build time via Vite `define`), licence,
  * and a documentation link placeholder.
  */
-export function About() {
+export function AboutSection() {
   return (
-    <section className="space-y-8">
-      <h2 className="font-display text-2xl italic text-paper">{copy.settings.about.title}</h2>
-
+    <div className="space-y-8">
       <dl className="space-y-4">
         <div className="flex items-baseline justify-between gap-4">
           <dt className="text-xs font-medium uppercase tracking-wider text-paper-soft">
@@ -48,6 +46,6 @@ export function About() {
           </dd>
         </div>
       </dl>
-    </section>
+    </div>
   );
 }

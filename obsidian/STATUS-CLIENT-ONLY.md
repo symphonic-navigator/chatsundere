@@ -1,23 +1,24 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (later) — Phase 2.6 (Polish Iteration 2)
-complete. Ten plan tasks across nine Phase-2.6 commits (`fb46f05`
-meta=ReactNode, `b2e5708` SaveBar transparency + saveLabel, `15823ad`
-EditorTopbar, `559a99e` MindspacePicker hideFont, `910c31d`
-Settings.userFont gone, `3861642` Persona Editor EditorTopbar +
-Save/Save&Back split, `69a0c15` dynamic accordion meta + Font-and-Voice,
-`da716f5` My Settings draft+Save, `334e521` Circle topbar polish,
-plus this doc commit). All 176 user-client tests pass; typecheck +
-Biome lint clean. Manual smoke pending on Chris's device for the
-three editor surfaces (My Settings draft+save, Persona Editor topbar
-+ Font-and-Voice + dynamic meta, My Circle plain title). Block-1
-wireframes landed in `chatsundere-prototype.html` for Reading +
-Interaction Mode + Entrance Hall + My Settings + My Circle + Persona
-Editor; only My History (Phase 4) remains wireframe-blocked. Phase 3
-(Chat surface) is the next deliverable. Brainstorm spec at
+**Last updated:** 2026-05-24 (even later) — Phase 2.7 (Account Room +
+Polish Iteration 3) complete. Seven plan tasks across seven Phase-2.7
+commits (`0a77b57` Persona SaveBar weg, `d9af78b` AccordionCard
+scrollIntoView, `69e7998` Hall My Account tile + topbar Zahnrad weg,
+`e2c0efa` account-section ports, `976093f` /app/account route +
+EditorTopbar.hideSaveAndBack, `3732ca0` invitation wizard ?return=
+handling, `1041883` /settings/* deletion + change-passphrase
+migration, plus this doc commit). All 183 user-client tests pass;
+typecheck + Biome lint clean. Manual smoke pending on Chris's
+device for the new My Account room, the wizard return-URL fix,
+the bottom-SaveBar removal in Persona Editor, and the accordion
+scrollIntoView. Block-1 wireframes landed in `chatsundere-prototype.html`
+for Reading + Interaction Mode + Entrance Hall + My Settings + My
+Circle + Persona Editor; only My History (Phase 4) remains
+wireframe-blocked. Phase 3 (Chat surface) is the next deliverable.
+Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
-(Decisions 1-41; D28 revoked by D36); Phase-2.6 plan at
-[`superpowers/plans/2026-05-24-client-block-1-phase-2-6-polish-iteration-2.md`](../superpowers/plans/2026-05-24-client-block-1-phase-2-6-polish-iteration-2.md).
+(Decisions 1-47; D28 revoked by D36); Phase-2.7 plan at
+[`superpowers/plans/2026-05-24-client-block-1-phase-2-7-account-room.md`](../superpowers/plans/2026-05-24-client-block-1-phase-2-7-account-room.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -261,6 +262,60 @@ update the relevant one at the end.
     new UX (settings-route persists, persona-editor name-input).
     All 176 user-client tests pass.
 
+- **Phase 2.7 — Account Room + Polish Iteration 3 (2026-05-24)**.
+  Seven commits on master following Chris's iteration-3 device-smoke.
+  Seven plan tasks driven via subagent-driven-development. What
+  landed:
+  - `apps/user-client/src/routes/app/persona-editor.tsx` — bottom
+    `<SaveBar />` removed. EditorTopbar's "Save & Back" is the only
+    persist path. Discard via Back (with confirm-on-dirty). `pb-32`
+    → `pb-8`. `onSaveStay` function dropped.
+  - `apps/user-client/src/components/AccordionCard.tsx` — gains a
+    smooth `scrollIntoView({ behavior: 'smooth', block: 'nearest' })`
+    on every open, guarded by an `isInitialRef` so accordions that
+    mount with `defaultOpen={true}` don't auto-scroll.
+  - `apps/user-client/src/routes/app/entrance-hall.tsx` — gains a
+    sixth `RoomTile` "My Account" (icon `⌬`, meta "Identity & auth",
+    route `/app/account`).
+  - `apps/user-client/src/routes/root.tsx` — global topbar's
+    gear-icon shortcut to `/settings` is removed. `GearIcon` import
+    dropped.
+  - `apps/user-client/src/routes/app/account-sections/` — four new
+    section components: `account-section.tsx` (port of old
+    `/settings/account.tsx`), `auth-methods-section.tsx` (port),
+    `about-section.tsx` (port), `server-linking-section.tsx` (newly
+    authored — status + "Link to server" button).
+  - `apps/user-client/src/routes/app/account.tsx` — new
+    `AccountPage` route component. EditorTopbar with title "My
+    Account"; four accordions in order Account / Auth Methods /
+    Server Linking / About; `hideSaveAndBack` suppresses the
+    Save & Back pill (no global draft to persist).
+  - `apps/user-client/src/components/EditorTopbar.tsx` — new
+    optional `hideSaveAndBack?: boolean` prop; when true, swaps
+    the Save & Back button for an 88px-wide spacer to keep the
+    centred title balanced.
+  - `apps/user-client/src/routes/onboarding/invitation/_return-url.ts`
+    — new shared helper exposing `useReturnUrl()` (default
+    `/onboarding`) and `useNavTarget()` for forward-step search-
+    preserving navigations.
+  - `apps/user-client/src/routes/onboarding/invitation/{form,scan,
+    confirm,recovery-reveal}.tsx` — all four step files now read
+    the `?return=` query param via the helper for their exit-wizard
+    back-targets; forward-step navigations preserve the search
+    string so the return-URL flows through.
+  - `apps/user-client/src/routes/change-passphrase.tsx` — link
+    targets migrate from `/settings*` to `/app/account`.
+  - `apps/user-client/src/App.tsx` — registers `<Route
+    path="/app/account" element={<AccountPage />} />`. Drops the
+    `/settings/*` route block and the five `SettingsLayout/Account/
+    AuthMethods/ServerLinking/About` + `Navigate` imports.
+  - `apps/user-client/src/routes/settings/` — entire directory
+    deleted (layout.tsx + four sub-page files).
+  - Tests: 4 new Vitest cases across AccordionCard scrollIntoView
+    (2 cases), EditorTopbar hideSaveAndBack, account.tsx
+    composition (2 cases), server-linking section navigation. All
+    183 user-client tests pass.
+
 ## Briefed, awaiting implementation
 
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
@@ -289,108 +344,56 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2.6 finished. Paused for Chris's iteration-3 manual smoke on
-the three editor surfaces (My Settings draft+save, Persona Editor
-EditorTopbar + Font-and-Voice + dynamic meta, My Circle plain title)
-before kicking off Phase 3 (Chat).
+Phase 2.7 finished. Paused for Chris's iteration-4 manual smoke
+covering the new My Account room (Hall tile, accordion page,
+sections), the bottom-SaveBar removal on Persona Editor, the
+accordion smooth-scroll behaviour, and the server-linking →
+invitation-wizard → Back-returns-to-account flow.
 
 ---
 
 ## Next session
 
-1. **Chris's iteration-3 smoke after Phase 2.6** — reload the PWA and
+1. **Chris's iteration-4 smoke after Phase 2.7** — reload the PWA and
    walk through:
-   - **Topbar consistency:** My Settings / Persona Editor / My Circle
-     all show a 40×40 back button on the left and a plain title in
-     the centre (no "Room · " prefix any more).
-   - **Save & Back pill:** in My Settings and Persona Editor, the
-     top-right corner shows a "Save & Back" pill. Tapping it
-     persists and navigates home/My-Circle. Disabled when there's
-     nothing to save or required fields are missing.
-   - **Back-button discard:** make an edit in My Settings or the
-     Persona Editor, then tap Back. A confirm dialog asks "Discard
-     your unsaved changes?". Cancel returns, OK navigates without
-     saving.
-   - **My Settings draft+Save:** type in About Me — nothing persists
-     until you tap "Save Settings" (bottom) or "Save & Back" (top).
-     SaveBar grey-out when the draft matches disk.
-   - **Persona Editor — Save vs Save & Back:** Save (bottom) persists
-     and stays on the page (the form remains filled, no navigate).
-     Save & Back (top) persists then returns to My Circle.
-   - **Dynamic accordion metas in Persona Editor (collapsed view):**
-     - Pick a model → Model accordion header reads `<provider> · <model>`.
-     - Toggle Adult Persona → Behavior accordion header shows a red
-       NSFW pill.
-     - With no Mindspace override → Mindspace accordion header reads
-       "Using user default". Pick a mindspace → reads `<name> · <texture>`.
-   - **Font and Voice accordion:** in Persona Editor, between Behavior
-     and Mindspace-Override sits a "Font and Voice" section. Font
-     chips (Sans / Serif / Cursive) live here, with a hint that TTS
-     lands later. The Mindspace-Override accordion no longer has a
-     Font row.
-   - **No User Font in Settings:** in My Settings → About Me → Default
-     Mindspace, there is no Font row at all (Decision 28 revoked).
-     Existing rows from previous sessions retain their orphaned
-     userFont silently — nothing breaks.
-   - **DevTools sanity:** `chatsundere_client_data.settings.get(1)`
-     does not surface `userFont` in TypeScript any more (the
-     `SettingsRow` type doesn't declare it), but raw IndexedDB rows
-     still carry the field if you migrated from v2 (cosmetic only).
+   - **No more gear icon** in the top-right of the global topbar
+     (no matter which screen you are on). Only the username + the
+     connectivity badge sit there.
+   - **Entrance Hall has six tiles** in three rows of two — My
+     Circle (active), My Projects (greyed), My History (greyed),
+     My Treasury (greyed), My Settings (active), My Account
+     (active, new, icon `⌬`).
+   - **Tap "My Account":** opens an accordion page titled "My
+     Account" (EditorTopbar with back-button, no Save & Back pill
+     on the right). Four accordions: Account / Auth Methods /
+     Server Linking / About.
+   - **Accordion smooth-scroll:** open Upstream Providers in My
+     Settings — the accordion smooth-scrolls into view if it was
+     below the fold. Same in any other accordion across My Settings,
+     My Account, and Persona Editor.
+   - **Server Linking accordion:** shows "Not linked — local-only
+     mode" status. Tapping "Link to server" navigates to the
+     invitation wizard. On the wizard's first step, tapping the
+     Back arrow returns you to **/app/account**, not /onboarding.
+     (Walk a few wizard steps forward and back to verify the
+     `?return=/app/account` query param survives.)
+   - **Persona Editor:** the bottom Save Persona button is gone.
+     Only "Save & Back" at the top-right persists. Back at top-left
+     still asks "Discard your unsaved changes?" when you have
+     edits.
 
-2. **Chris's earlier (Phase-2.5) iteration smoke checklist** — if not
-   yet performed, the typography / FAB / Mindspace-Background-coverage
-   / MindspacePicker stability / textarea-growth / ProviderSheet /
-   Persona Editor structure items below are still valid (see prior
-   "Done — Phase 2.5" entries for the full list).
+2. **Earlier iteration-3 smoke checklist (Phase 2.6)** — if not yet
+   performed, the typography / dynamic meta / Font-and-Voice /
+   draft+Save items are still valid (see the Phase-2.6 Done block
+   above for the full list).
 
 3. **Phase 3 brainstorm + plan** — walk through the chat surface
-   the PWA and walk through:
-   - **Typography:** headings and body should render in Lora (serif)
-     and Inter (sans) — visible by glyph shape on a calm screen.
-   - **Entrance Hall FAB (My Circle):** the `+` glyph on the FAB is
-     visible and contrasts against the light circle (was invisible
-     before).
-   - **Mindspace background coverage:** scroll any long page (My
-     Settings while editing About Me; Persona Editor with all
-     accordions open) — the texture should still cover the whole
-     viewport top-to-bottom, not collapse to a single screen-height.
-   - **Mindspace-Picker:** pick a colour, then a texture, then change
-     colour again → the texture choice must persist. The preview
-     card now shows the chosen texture, not a flat panel. Try this
-     in both Settings → About Me → Default Mindspace and Persona
-     Editor → Mindspace Override.
-   - **Textareas grow:** About Me, Global System Prompt, Custom
-     Instructions, About Me Override all expand with content; the
-     two prompts cap at a sane row count.
-   - **ProviderSheet:** open Settings → Upstream Providers →
-     nano-gpt. Background should be opaque (not see-through). Type
-     a key → Test & Save runs the probe; on success the sheet
-     auto-closes after a beat. Closing via × does NOT save.
-     Browsers should NOT propose Bitwarden / 1Password autofill on
-     the API-key field. Now open Ollama Cloud — proxy URL field
-     defaults to `https://example.com` placeholder. Fill in real
-     proxy URL + shared key + API key → Test & Save → key persists
-     across a page reload (this was the Phase-2 bug).
-   - **Persona Editor:** Name + Tagline are visible at the top
-     without expanding any accordion. With Name empty, the inline
-     red ✕ shows up next to the label and disappears once you type.
-     Closed Custom Instructions and Model accordions show a red ✕
-     on their headers until their content / providerId+modelId are
-     filled. Save stays disabled until everything required is
-     provided (including modelId — previously Model could be
-     half-filled).
-   - **Monogram on PersonaCard:** create two personas whose names
-     start with the same letter (e.g. "Liz" and "Lyra") — their
-     monograms should differ (was identical before).
-   - **DevTools:** open the `chatsundere_client_data` DB.
-     `db.verno` is 3. `settings` carries `userTexture` (default
-     `'cloudy'`). `personas` carry `textureOverride: null`.
-2. **Phase 3 brainstorm + plan** — walk through the chat surface
    wireframes in `chatsundere-prototype.html` (Reading Mode +
    Interaction Mode + Cockpit). Open the ADR "Tool Display Position"
    discussion.
-3. **Phase 3 execution** — subagent-driven, same pattern as Phase 1,
-   Phase 2, Phase 2.5.
+
+4. **Phase 3 execution** — subagent-driven, same pattern as Phases
+   1, 2, 2.5, 2.6, 2.7.
 
 ---
 

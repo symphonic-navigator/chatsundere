@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { StepRecoveryReveal } from '../local/step-recovery-reveal.js';
+import { useReturnUrl } from './_return-url.js';
 
 /**
  * `/onboarding/invitation/recovery` — mandatory recovery-key reveal for the
@@ -11,13 +12,14 @@ import { StepRecoveryReveal } from '../local/step-recovery-reveal.js';
  */
 export function InvitationRecoveryReveal() {
   const navigate = useNavigate();
+  const returnUrl = useReturnUrl();
   const state = useOnboardingStore((s) => s.state);
 
   useEffect(() => {
     if (state.kind !== 'invitation_recovery') {
-      navigate('/onboarding', { replace: true });
+      navigate(returnUrl, { replace: true });
     }
-  }, [state.kind, navigate]);
+  }, [state.kind, navigate, returnUrl]);
 
   if (state.kind !== 'invitation_recovery') return null;
 

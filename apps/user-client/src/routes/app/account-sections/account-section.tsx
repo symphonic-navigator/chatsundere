@@ -9,8 +9,8 @@ import {
 import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDb } from '../../boot/open-db.js';
-import { copy } from '../../lib/copy.js';
+import { getDb } from '../../../boot/open-db.js';
+import { copy } from '../../../lib/copy.js';
 
 type LoadState =
   | { kind: 'loading' }
@@ -18,12 +18,12 @@ type LoadState =
   | { kind: 'error'; message: string };
 
 /**
- * Account settings tab.
+ * Account accordion body.
  *
  * Shows username (with inline rename), account creation date, and the
  * destructive "Delete local data" action.
  */
-export function Account() {
+export function AccountSection() {
   const navigate = useNavigate();
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
 
@@ -113,9 +113,7 @@ export function Account() {
   const { username, createdAt } = loadState;
 
   return (
-    <section className="space-y-10">
-      <h2 className="font-display text-2xl italic text-paper">{copy.settings.account.title}</h2>
-
+    <div className="space-y-10">
       {/* Username */}
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-wider text-paper-soft">
@@ -238,6 +236,6 @@ export function Account() {
         onCancel={() => setDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
       />
-    </section>
+    </div>
   );
 }

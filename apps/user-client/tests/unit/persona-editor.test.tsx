@@ -109,7 +109,7 @@ describe('PersonaEditor — Mindspace / Model / Behavior', () => {
   });
 });
 
-describe('PersonaEditor — Delete + Save-Bar', () => {
+describe('PersonaEditor — Delete + Save-And-Back', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
     await openClientDataDb();
@@ -118,19 +118,19 @@ describe('PersonaEditor — Delete + Save-Bar', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('disables Save when name is empty', async () => {
+  it('disables Save & Back when name is empty', async () => {
     wrap('/app/persona/new');
-    const save = await screen.findByRole('button', { name: /save persona/i });
+    const save = await screen.findByRole('button', { name: /save & back/i });
     expect(save).toBeDisabled();
   });
 
-  it('still disables Save when name filled but no providerId or modelId', async () => {
+  it('still disables Save & Back when name filled but no providerId or modelId', async () => {
     wrap('/app/persona/new');
     // Identity is always visible — no accordion to open
     const nameInput = await screen.findByLabelText('Name');
     fireEvent.change(nameInput, { target: { value: 'Aurum' } });
     // Provider and model also required — none seeded, so Save stays disabled
-    const save = screen.getByRole('button', { name: /save persona/i });
+    const save = screen.getByRole('button', { name: /save & back/i });
     expect(save).toBeDisabled();
   });
 

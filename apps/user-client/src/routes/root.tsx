@@ -3,7 +3,6 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { Link, Outlet } from 'react-router-dom';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
 import { UpdateBanner } from '../components/UpdateBanner.js';
-import { GearIcon } from '../components/icons/index.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
 import { useStagingBannerStore } from '../state/staging-banner.store.js';
@@ -40,17 +39,6 @@ export function Root() {
             </span>
           )}
           <ConnectivityBadge />
-          {session && (
-            <Link
-              to="/settings"
-              aria-label="Settings"
-              className="flex items-center gap-1 font-mono text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
-            >
-              {/* Gear icon visible on mobile; label appended on desktop */}
-              <GearIcon size={15} />
-              <span className="hidden lg:inline">Settings</span>
-            </Link>
-          )}
         </div>
       </header>
       <UpdateBanner />

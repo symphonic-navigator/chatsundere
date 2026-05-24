@@ -65,7 +65,7 @@ function mapError(err: unknown, newPassphrase: string, confirmPassphrase: string
  * - Linked + online (`linked_online`): `changePassphraseLinkedOnline` with a
  *   `serverCommit` callback that performs the OPAQUE re-registration.
  * - Linked + offline (`server_unreachable` | `server_auth_failed`): renders a
- *   disabled surface pointing back to `/settings/server-linking`.
+ *   disabled surface pointing back to `/app/account`.
  *
  * Spec §5.7.
  */
@@ -255,7 +255,7 @@ export function ChangePassphrase() {
         </h1>
         <p className="text-sm leading-relaxed text-paper-soft">{c.offlineBody}</p>
         <Link
-          to="/settings/server-linking"
+          to="/app/account"
           className="inline-block rounded-[var(--radius-card)] bg-ink-soft px-4 py-3 text-sm font-medium text-paper ring-1 ring-inset ring-aurora-700/30 transition-opacity hover:opacity-80"
         >
           {c.offlineBackCta}
@@ -274,7 +274,7 @@ export function ChangePassphrase() {
         </h1>
         <p className="text-sm leading-relaxed text-paper-soft">{c.successBody}</p>
         <Link
-          to="/settings"
+          to="/app/account"
           className="inline-block rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90"
         >
           {c.successCta}

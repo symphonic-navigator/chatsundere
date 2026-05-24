@@ -75,4 +75,17 @@ describe('EditorTopbar', () => {
     fireEvent.click(btn);
     expect(onSaveAndBack).not.toHaveBeenCalled();
   });
+
+  it('omits the Save & Back button when hideSaveAndBack is true', () => {
+    render(
+      <EditorTopbar
+        title="X"
+        isDirty={false}
+        onBack={() => {}}
+        onSaveAndBack={() => {}}
+        hideSaveAndBack
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /save & back/i })).toBeNull();
+  });
 });

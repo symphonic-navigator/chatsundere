@@ -8,12 +8,13 @@ import {
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { useNavTarget } from './_return-url.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ type Screen =
  */
 export function InvitationConfirm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const onboardingState = useOnboardingStore((s) => s.state);
 
   const needsBounce =
@@ -57,9 +59,12 @@ export function InvitationConfirm() {
   // Redirect to the form rather than rendering broken state. The navigate call
   // must run inside useEffect — calling it during render is a setState-during-
   // render bug that React warns about and that can crash routing.
+  // Capture search string (stable for this route) to preserve ?return= across
+  // the bounce redirect without a new function in the dependency array.
+  const search = searchParams.toString();
   useEffect(() => {
-    if (needsBounce) navigate('/onboarding/invitation', { replace: true });
-  }, [needsBounce, navigate]);
+    if (needsBounce) navigate({ pathname: '/onboarding/invitation', search }, { replace: true });
+  }, [needsBounce, navigate, search]);
 
   if (needsBounce) return null;
   return <InvitationConfirmInner />;
@@ -69,6 +74,7 @@ export function InvitationConfirm() {
 
 function InvitationConfirmInner() {
   const navigate = useNavigate();
+  const navTarget = useNavTarget();
   const onboardingState = useOnboardingStore((s) => s.state);
   const setOnboardingState = useOnboardingStore((s) => s.setState);
 
@@ -156,7 +162,7 @@ function InvitationConfirmInner() {
           recoveryKeyString: result.recoveryKeyString,
         });
         await setBiometricPromptDue(getDb());
-        navigate('/onboarding/invitation/recovery', { replace: true });
+        navigate(navTarget('/onboarding/invitation/recovery'), { replace: true });
       }
     } catch (err) {
       const mapped = mapSubmitError(err);
@@ -179,7 +185,11 @@ function InvitationConfirmInner() {
   if (screen.kind === 'kind_mismatch') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
+        <Link
+          to={navTarget('/onboarding/invitation')}
+          className="text-2xl text-paper-soft"
+          aria-label="Back"
+        >
           ←
         </Link>
         <h1 className="mt-4 font-display text-2xl italic">This is a different kind of code</h1>
@@ -208,14 +218,18 @@ function InvitationConfirmInner() {
   if (screen.kind === 'fatal') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
+        <Link
+          to={navTarget('/onboarding/invitation')}
+          className="text-2xl text-paper-soft"
+          aria-label="Back"
+        >
           ←
         </Link>
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
         <Link
-          to="/onboarding/invitation"
+          to={navTarget('/onboarding/invitation')}
           replace
           className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
         >

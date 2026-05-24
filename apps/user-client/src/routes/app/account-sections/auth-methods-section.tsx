@@ -9,12 +9,12 @@ import {
 } from '@chatsundere/crypto';
 import { ConfirmTyped, InlineMarker, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
-import { getDb } from '../../boot/open-db.js';
-import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
-import { copy } from '../../lib/copy.js';
-import { renamePasskey } from '../../lib/passkey-management.js';
-import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
-import { PrfRequiredError, registerLocalBiometric } from '../../lib/webauthn.js';
+import { getDb } from '../../../boot/open-db.js';
+import { RecoveryKeyReveal } from '../../../components/RecoveryKeyReveal.js';
+import { copy } from '../../../lib/copy.js';
+import { renamePasskey } from '../../../lib/passkey-management.js';
+import { isWebAuthnAvailable } from '../../../lib/webauthn-availability.js';
+import { PrfRequiredError, registerLocalBiometric } from '../../../lib/webauthn.js';
 
 type LoadState =
   | { kind: 'loading' }
@@ -43,7 +43,7 @@ type RegenState =
 type AddBiometricState = { kind: 'idle' } | { kind: 'busy' } | { kind: 'error'; message: string };
 
 /**
- * Authentication methods settings tab.
+ * Authentication methods accordion body.
  *
  * Lists passphrase (immutable), local biometric credentials (renameable,
  * removable with lockout guard), and the recovery key indicator.
@@ -51,7 +51,7 @@ type AddBiometricState = { kind: 'idle' } | { kind: 'busy' } | { kind: 'error'; 
  * Bottom actions: add a new biometric to this device and regenerate the
  * recovery key.
  */
-export function AuthMethods() {
+export function AuthMethodsSection() {
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
   const [renameStates, setRenameStates] = useState<Map<string, RenameState>>(new Map());
   const [removeState, setRemoveState] = useState<RemoveState>({ kind: 'none' });
@@ -217,9 +217,7 @@ export function AuthMethods() {
   const isLockout = removeState.kind === 'lockout';
 
   return (
-    <section className="space-y-10">
-      <h2 className="font-display text-2xl italic text-paper">{copy.settings.authMethods.title}</h2>
-
+    <div className="space-y-10">
       {/* Passphrase row — immutable */}
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-wider text-paper-soft">
@@ -434,6 +432,6 @@ export function AuthMethods() {
         onCancel={() => setRegenState({ kind: 'idle' })}
         onConfirm={() => void confirmRegen()}
       />
-    </section>
+    </div>
   );
 }

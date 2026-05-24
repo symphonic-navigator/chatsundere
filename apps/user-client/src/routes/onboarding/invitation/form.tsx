@@ -5,6 +5,7 @@ import { JoinFormFields } from '../../../components/JoinFormFields.js';
 import { isValidCode } from '../../../lib/code-input.js';
 import { isValidServerUrl } from '../../../lib/server-url.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { useNavTarget, useReturnUrl } from './_return-url.js';
 
 /**
  * `/onboarding/invitation` — form screen for the invitation join path.
@@ -13,6 +14,8 @@ import { useOnboardingStore } from '../../../state/onboarding.store.js';
  */
 export function InvitationForm() {
   const navigate = useNavigate();
+  const returnUrl = useReturnUrl();
+  const navTarget = useNavTarget();
   const setOnboardingState = useOnboardingStore((s) => s.setState);
   // Read initial values from the store once on mount via the lazy useState
   // initialiser. A subscribed selector that returns a fresh object literal each
@@ -35,12 +38,12 @@ export function InvitationForm() {
   function handleContinue() {
     if (!continueEnabled) return;
     setOnboardingState({ kind: 'invitation_input', baseUrl, code });
-    navigate('/onboarding/invitation/confirm');
+    navigate(navTarget('/onboarding/invitation/confirm'));
   }
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding" aria-label="Back" className="text-2xl text-paper-soft">
+      <Link to={returnUrl} aria-label="Back" className="text-2xl text-paper-soft">
         ←
       </Link>
 
@@ -80,7 +83,7 @@ export function InvitationForm() {
       </div>
 
       <Link
-        to="/onboarding/invitation/scan"
+        to={navTarget('/onboarding/invitation/scan')}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-card)] border border-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90"
       >
         {/* Camera icon slot — styling pass adds a real icon. */}
