@@ -37,14 +37,14 @@ describe('ProviderSheet', () => {
   it('renders CORS-proxy fields for ollama-cloud (requires-proxy)', () => {
     wrap(<ProviderSheet templateId="ollama-cloud" onClose={() => {}} />);
     expect(screen.getByPlaceholderText(/sk-/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/proxy url/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/proxy url/i)).toBeInTheDocument();
   });
 
-  it('triggers an auto-probe on close', async () => {
+  it('calls onClose immediately when the × button is clicked without saving', async () => {
     const onClose = vi.fn();
     wrap(<ProviderSheet templateId="nano-gpt" onClose={onClose} />);
-    // No API key entered — the early-return branch fires and onClose() is called immediately.
-    fireEvent.click(screen.getByRole('button', { name: /close|×/i }));
+    // Closing via × discards the edit — onClose is called directly, no probe.
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

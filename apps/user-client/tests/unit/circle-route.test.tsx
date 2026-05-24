@@ -62,6 +62,7 @@ describe('Circle route', () => {
       modelId: 'm',
       mindspaceId: null,
       aboutMeOverride: null,
+      textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
       createdAt: now,

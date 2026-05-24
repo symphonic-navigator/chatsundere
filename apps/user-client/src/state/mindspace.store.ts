@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { create } from 'zustand';
-import type { MindspaceRow, PersonaRow } from '../boot/client-data-db.js';
-import { resolveMindspace } from './mindspace-resolver.js';
+import type { MindspaceRow, MindspaceTexture } from '../boot/client-data-db.js';
+import {
+  type ResolvedMindspace,
+  type ResolverArgs,
+  resolveMindspace,
+} from './mindspace-resolver.js';
 
-interface UpdateArgs {
-  persona: PersonaRow | null;
-  defaultMindspaceId: string;
-  mindspaces: ReadonlyArray<MindspaceRow>;
-}
-
-interface MindspaceStoreState {
-  resolved: MindspaceRow | null;
-  update: (args: UpdateArgs) => void;
+interface MindspaceState {
+  resolved: ResolvedMindspace | null;
+  update: (args: ResolverArgs) => void;
   reset: () => void;
 }
 
@@ -21,15 +19,10 @@ interface MindspaceStoreState {
  * Updated by surfaces when persona / default / mindspaces change;
  * MindspaceLayer subscribes and writes CSS custom properties.
  */
-export const useMindspaceStore = create<MindspaceStoreState>((set) => ({
+export const useMindspaceStore = create<MindspaceState>((set) => ({
   resolved: null,
-  update: (args) => {
-    if (args.mindspaces.length === 0) {
-      // Defensive: built-ins aren't seeded yet — keep null.
-      set({ resolved: null });
-      return;
-    }
-    set({ resolved: resolveMindspace(args) });
-  },
+  update: (args) => set({ resolved: resolveMindspace(args) }),
   reset: () => set({ resolved: null }),
 }));
+
+export type { MindspaceTexture, MindspaceRow, ResolvedMindspace };

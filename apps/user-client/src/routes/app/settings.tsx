@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AccordionCard } from '../../components/AccordionCard.js';
+import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
-import { useMindspaces, useUpdateMindspaceTexture } from '../../data/mindspaces.js';
+import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
@@ -65,7 +66,6 @@ export function Settings(): JSX.Element {
   const settings = useSettings();
   const mindspaces = useMindspaces();
   const updateSettings = useUpdateSettings();
-  const updateTexture = useUpdateMindspaceTexture();
   const providers = useProviders();
   const setMindspace = useMindspaceStore((s) => s.update);
 
@@ -74,6 +74,7 @@ export function Settings(): JSX.Element {
       setMindspace({
         persona: null,
         defaultMindspaceId: settings.data.defaultMindspaceId,
+        defaultTexture: settings.data.userTexture,
         mindspaces: mindspaces.data,
       });
     }
@@ -101,11 +102,12 @@ export function Settings(): JSX.Element {
       </header>
 
       <AccordionCard icon="◉" label="About Me" meta="What your Circle knows about you">
-        <textarea
-          className="min-h-[100px] w-full rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm text-paper outline-none focus:border-paper-soft"
+        <AutoSizeTextarea
+          aria-label="About me"
+          minRows={4}
+          value={s.globalAboutMe}
+          onChange={(v) => updateSettings.mutate({ globalAboutMe: v })}
           placeholder="Tell your Circle who you are…"
-          defaultValue={s.globalAboutMe}
-          onBlur={(e) => updateSettings.mutate({ globalAboutMe: e.target.value })}
         />
         <p className="mt-2 text-[11px] text-paper-soft">
           This text is included in every persona's system prompt unless overridden per-persona.
@@ -118,15 +120,13 @@ export function Settings(): JSX.Element {
             <MindspacePicker
               mindspaces={mindspaces.data}
               selectedMindspaceId={selectedMindspace.id}
-              selectedTexture={selectedMindspace.texture}
+              selectedTexture={s.userTexture}
               selectedFont={s.userFont}
               previewName="Chris"
               onMindspaceChange={(id) => {
                 if (id) updateSettings.mutate({ defaultMindspaceId: id });
               }}
-              onTextureChange={(t) =>
-                updateTexture.mutate({ id: selectedMindspace.id, texture: t })
-              }
+              onTextureChange={(t) => updateSettings.mutate({ userTexture: t })}
               onFontChange={(f) => updateSettings.mutate({ userFont: f })}
             />
           ) : null}
@@ -138,10 +138,12 @@ export function Settings(): JSX.Element {
         label="Global System Prompt"
         meta="The unlocker — prepended to every persona"
       >
-        <textarea
-          className="min-h-[100px] w-full rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm text-paper outline-none focus:border-paper-soft"
-          defaultValue={s.globalUnlockerPrompt}
-          onBlur={(e) => updateSettings.mutate({ globalUnlockerPrompt: e.target.value })}
+        <AutoSizeTextarea
+          aria-label="Global system prompt"
+          minRows={4}
+          maxRows={20}
+          value={s.globalUnlockerPrompt}
+          onChange={(v) => updateSettings.mutate({ globalUnlockerPrompt: v })}
         />
         <p className="mt-2 text-[11px] text-paper-soft">
           This text is prepended to every persona's system prompt. Mainly useful for permissive but

@@ -38,6 +38,7 @@ function persona(id: string, mindspaceId: string | null): PersonaRow {
     modelId: 'm',
     mindspaceId,
     aboutMeOverride: null,
+    textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
     createdAt: 0,
@@ -59,6 +60,7 @@ describe('mindspace store', () => {
     useMindspaceStore.getState().update({
       persona: null,
       defaultMindspaceId: 'aurum',
+      defaultTexture: null,
       mindspaces: [aurum],
     });
     expect(useMindspaceStore.getState().resolved?.id).toBe('aurum');
@@ -70,6 +72,7 @@ describe('mindspace store', () => {
     useMindspaceStore.getState().update({
       persona: persona('p1', 'verdan'),
       defaultMindspaceId: 'aurum',
+      defaultTexture: null,
       mindspaces: [aurum, verdan],
     });
     expect(useMindspaceStore.getState().resolved?.id).toBe('verdan');
@@ -80,6 +83,7 @@ describe('mindspace store', () => {
     useMindspaceStore.getState().update({
       persona: null,
       defaultMindspaceId: 'aurum',
+      defaultTexture: null,
       mindspaces: [aurum],
     });
     useMindspaceStore.getState().reset();

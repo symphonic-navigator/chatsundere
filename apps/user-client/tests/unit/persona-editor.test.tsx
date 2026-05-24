@@ -56,6 +56,7 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       modelId: 'm',
       mindspaceId: null,
       aboutMeOverride: null,
+      textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
       createdAt: now,
@@ -68,11 +69,10 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
     });
   });
 
-  it('Identity card edits name + tagline live in topbar', async () => {
+  it('Identity inputs are always visible and name edits live in topbar', async () => {
     wrap('/app/persona/new');
-    const card = await screen.findByText(/identity/i);
-    fireEvent.click(card);
-    const nameInput = await screen.findByLabelText(/name/i);
+    // Identity is outside any accordion — the name input is always visible
+    const nameInput = await screen.findByLabelText('Name');
     fireEvent.change(nameInput, { target: { value: 'Lyra' } });
     await waitFor(() => expect(screen.getAllByText('Lyra').length).toBeGreaterThan(0));
   });
@@ -121,13 +121,12 @@ describe('PersonaEditor — Delete + Save-Bar', () => {
     expect(save).toBeDisabled();
   });
 
-  it('still disables Save when name + instructions filled but no providerId', async () => {
+  it('still disables Save when name filled but no providerId or modelId', async () => {
     wrap('/app/persona/new');
-    // Open Identity accordion to access the name input
-    fireEvent.click(await screen.findByText(/identity/i));
-    const nameInput = await screen.findByLabelText(/name/i);
+    // Identity is always visible — no accordion to open
+    const nameInput = await screen.findByLabelText('Name');
     fireEvent.change(nameInput, { target: { value: 'Aurum' } });
-    // Provider also required — no provider seeded, so Save stays disabled
+    // Provider and model also required — none seeded, so Save stays disabled
     const save = screen.getByRole('button', { name: /save persona/i });
     expect(save).toBeDisabled();
   });
@@ -146,6 +145,7 @@ describe('PersonaEditor — Delete + Save-Bar', () => {
       modelId: 'm',
       mindspaceId: null,
       aboutMeOverride: null,
+      textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
       createdAt: now,

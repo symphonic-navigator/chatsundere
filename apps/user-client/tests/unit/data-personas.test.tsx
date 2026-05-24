@@ -52,6 +52,7 @@ describe('usePersonas + CUD mutations', () => {
         modelId: 'deepseek-v4-flash',
         mindspaceId: null,
         aboutMeOverride: null,
+        textureOverride: null,
         temperature: 0.85,
         adultPersona: false,
       });

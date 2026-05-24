@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { getProvider } from '@chatsundere/llm-unified';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
   MindspaceRow,
@@ -10,6 +10,7 @@ import type {
   SettingsRow,
 } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
+import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { SaveBar } from '../../components/SaveBar.js';
 import { useMindspaces } from '../../data/mindspaces.js';
@@ -41,6 +42,7 @@ function defaultDraft(
     modelId: '',
     mindspaceId: null,
     aboutMeOverride: null,
+    textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
   };
@@ -65,17 +67,24 @@ export function PersonaEditor(): JSX.Element {
     [settings.data, mindspaces.data, providers.data],
   );
   const [draft, setDraft] = useState<DraftPersona>(seedDraft);
+  // Tracks whether the user has made any edit in this session. Once true,
+  // the create-mode seed effect will no longer overwrite user changes.
+  const userModifiedRef = useRef(false);
 
   useEffect(() => {
     if (!isCreate && persona.data) {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = persona.data;
       setDraft(rest);
-    } else if (isCreate) {
+    } else if (isCreate && !userModifiedRef.current) {
+      // Keep updating from seed until the user makes their first edit. This
+      // lets later-loaded data (e.g. the default mindspace accent colour)
+      // propagate into the draft while it is still pristine.
       setDraft(seedDraft);
     }
   }, [isCreate, persona.data, seedDraft]);
 
   function patch(p: Partial<DraftPersona>) {
+    userModifiedRef.current = true;
     setDraft((d) => ({ ...d, ...p }));
   }
 
@@ -125,13 +134,22 @@ export function PersonaEditor(): JSX.Element {
         </div>
       ) : null}
 
-      <AccordionCard icon="✦" label="Identity" meta="Name · tagline">
-        <label
-          className="mb-2 block text-xs uppercase tracking-widest text-paper-soft"
-          htmlFor="persona-name"
-        >
-          Name
-        </label>
+      {/* Identity — always visible, outside the accordion */}
+      <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">
+        <header className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Identity</header>
+        <div className="mb-2 flex items-center gap-2">
+          <label
+            className="text-xs uppercase tracking-widest text-paper-soft"
+            htmlFor="persona-name"
+          >
+            Name
+          </label>
+          {!draft.name ? (
+            <span aria-label="Name is required" className="text-danger" data-required-marker>
+              ✕
+            </span>
+          ) : null}
+        </div>
         <input
           id="persona-name"
           type="text"
@@ -152,63 +170,31 @@ export function PersonaEditor(): JSX.Element {
           onChange={(e) => patch({ tagline: e.target.value })}
           className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none focus:border-paper-soft"
         />
-      </AccordionCard>
+      </section>
 
-      <AccordionCard icon="≣" label="Custom Instructions" meta="Who this persona is">
-        <textarea
-          className="min-h-[140px] w-full rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm text-paper outline-none focus:border-paper-soft"
+      {/* ❶ Custom Instructions */}
+      <AccordionCard
+        icon="≣"
+        label="Custom Instructions"
+        meta="Who this persona is"
+        requiredMarker={!draft.instructions}
+      >
+        <AutoSizeTextarea
+          aria-label="Custom instructions"
+          minRows={5}
+          maxRows={30}
           value={draft.instructions}
-          onChange={(e) => patch({ instructions: e.target.value })}
+          onChange={(v) => patch({ instructions: v })}
         />
       </AccordionCard>
 
-      <AccordionCard icon="◉" label="About Me — Override" meta="Empty = global is used">
-        <textarea
-          className="min-h-[100px] w-full rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm text-paper outline-none focus:border-paper-soft"
-          placeholder={settings.data?.globalAboutMe || 'Tell this persona who you are…'}
-          value={draft.aboutMeOverride ?? ''}
-          onChange={(e) =>
-            patch({ aboutMeOverride: e.target.value === '' ? null : e.target.value })
-          }
-        />
-        <p className="mt-2 text-[11px] text-paper-soft">
-          Empty = global About Me is used (shown in grey). Fill in to override for this persona
-          only.
-        </p>
-      </AccordionCard>
-
-      {mindspaces.data ? (
-        <AccordionCard icon="◈" label="Mindspace — Override" meta="Color · texture · font">
-          <MindspacePicker
-            mindspaces={mindspaces.data}
-            selectedMindspaceId={draft.mindspaceId}
-            selectedTexture={
-              (draft.mindspaceId
-                ? mindspaces.data.find((m) => m.id === draft.mindspaceId)?.texture
-                : mindspaces.data.find((m) => m.id === settings.data?.defaultMindspaceId)
-                    ?.texture) ?? 'cloudy'
-            }
-            selectedFont={draft.font}
-            previewName={draft.name || 'New Persona'}
-            allowUserDefault
-            onMindspaceChange={(id) => {
-              const ms = id ? mindspaces.data?.find((m) => m.id === id) : null;
-              patch({
-                mindspaceId: id,
-                colour: ms?.palette.accent ?? draft.colour,
-              });
-            }}
-            onTextureChange={(_t) => {
-              // Texture is mutated on the row (built-in or user), not stored on the persona.
-              // For Phase 2 the override picker writes the user-default texture; full per-persona
-              // texture-override surfaces in a later block.
-            }}
-            onFontChange={(f) => patch({ font: f })}
-          />
-        </AccordionCard>
-      ) : null}
-
-      <AccordionCard icon="⬡" label="Model" meta="Pick a provider/model pair">
+      {/* ❷ Model */}
+      <AccordionCard
+        icon="⬡"
+        label="Model"
+        meta="Pick a provider/model pair"
+        requiredMarker={!draft.providerId || !draft.modelId}
+      >
         <ModelList
           providers={providers.data ?? []}
           selectedProviderId={draft.providerId}
@@ -217,6 +203,7 @@ export function PersonaEditor(): JSX.Element {
         />
       </AccordionCard>
 
+      {/* ❸ Behavior */}
       <AccordionCard icon="∿" label="Behavior" meta="Temperature · content flags">
         <label
           htmlFor="persona-temperature"
@@ -268,6 +255,46 @@ export function PersonaEditor(): JSX.Element {
         </div>
       </AccordionCard>
 
+      {/* ❹ Mindspace — Override */}
+      {mindspaces.data ? (
+        <AccordionCard icon="◈" label="Mindspace — Override" meta="Color · texture · font">
+          <MindspacePicker
+            mindspaces={mindspaces.data}
+            selectedMindspaceId={draft.mindspaceId}
+            selectedTexture={draft.textureOverride ?? settings.data?.userTexture ?? 'cloudy'}
+            selectedFont={draft.font}
+            previewName={draft.name || 'New Persona'}
+            allowUserDefault
+            onMindspaceChange={(id) => {
+              const ms = id ? mindspaces.data?.find((m) => m.id === id) : null;
+              patch({
+                mindspaceId: id,
+                colour: ms?.palette.accent ?? draft.colour,
+              });
+            }}
+            onTextureChange={(t) => patch({ textureOverride: t })}
+            onFontChange={(f) => patch({ font: f })}
+          />
+        </AccordionCard>
+      ) : null}
+
+      {/* ❺ About Me — Override */}
+      <AccordionCard icon="◉" label="About Me — Override" meta="Empty = global is used">
+        <AutoSizeTextarea
+          aria-label="About me override"
+          minRows={4}
+          maxRows={20}
+          placeholder={settings.data?.globalAboutMe || 'Tell this persona who you are…'}
+          value={draft.aboutMeOverride ?? ''}
+          onChange={(v) => patch({ aboutMeOverride: v === '' ? null : v })}
+        />
+        <p className="mt-2 text-[11px] text-paper-soft">
+          Empty = global About Me is used (shown in grey). Fill in to override for this persona
+          only.
+        </p>
+      </AccordionCard>
+
+      {/* Delete zone — edit mode only */}
       {!isCreate && id ? (
         <div className="mt-4 rounded-lg border border-danger/30 p-3">
           <div className="text-sm font-medium uppercase tracking-widest text-danger">
@@ -296,9 +323,13 @@ export function PersonaEditor(): JSX.Element {
       <SaveBar
         onCancel={() => navigate('/app/circle')}
         onSave={onSave}
-        saveDisabled={!draft.name || !draft.instructions || !draft.providerId}
+        saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
         saveTooltip={
-          !draft.providerId ? 'Add a provider in Settings first' : 'Fill in name and instructions'
+          !draft.providerId
+            ? 'Add a provider in Settings first'
+            : !draft.modelId
+              ? 'Pick a model'
+              : 'Fill in name and instructions'
         }
       />
     </section>

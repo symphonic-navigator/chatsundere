@@ -53,7 +53,7 @@ export function Circle(): JSX.Element {
         type="button"
         aria-label="New persona"
         onClick={() => navigate('/app/persona/new')}
-        className="fixed bottom-6 right-6 z-10 grid h-14 w-14 place-items-center rounded-full bg-paper text-2xl text-bg shadow-2xl hover:scale-105"
+        className="fixed bottom-6 right-6 z-10 grid h-14 w-14 place-items-center rounded-full bg-paper text-3xl leading-none text-ink shadow-2xl transition-transform hover:scale-105"
       >
         +
       </button>

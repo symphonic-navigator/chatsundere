@@ -1,19 +1,22 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-23 evening — Phase 2 (Settings + Circle +
-Persona Editor + Entrance Hall) implementation complete. Eighteen plan
-tasks squashed into one Phase-2 commit; 353 tests pass across all
-workspaces (129 user-client + 82 llm-unified + 142 crypto); typecheck
-clean; user-client `pnpm build` clean; Biome lint clean. Manual smoke
-deferred to Chris's device-test. Block-1 wireframes landed in
-`chatsundere-prototype.html` for Reading + Interaction Mode +
-Entrance Hall + My Settings + My Circle + Persona Editor; only My
-History (Phase 4) remains wireframe-blocked. Phase 3 (Chat surface —
-Reading + Interaction + Streaming) is the next deliverable; Phase 4
-(History + Polish) follows once Lyra's history wireframe lands.
-Brainstorm spec at
-[`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md);
-Phase-2 plan at [`superpowers/plans/2026-05-23-client-block-1-phase-2-settings-circle.md`](../superpowers/plans/2026-05-23-client-block-1-phase-2-settings-circle.md).
+**Last updated:** 2026-05-24 — Phase 2.5 (Polish & Bug-Bash) complete.
+Twelve plan tasks split across eight Phase-2.5 commits (`ef9662a`
+fonts, `4aa341d` FAB, `23697b3` monogram, `39fa93a` texture-source
+migration v3 + MindspaceLayer + Picker preview, `de12fe2` AutoSizeTextarea,
+`62b4602` ProviderSheet polish + Ollama-Cloud save fix, `a3bfad2`
+Persona Editor restructure + required markers, plus this doc commit).
+All user-client tests pass; typecheck clean; Biome lint clean.
+Manual re-smoke pending on Chris's device for the four touched
+surfaces. Block-1 wireframes landed in `chatsundere-prototype.html`
+for Reading + Interaction Mode + Entrance Hall + My Settings + My Circle
++ Persona Editor; only My History (Phase 4) remains wireframe-blocked.
+Phase 3 (Chat surface — Reading + Interaction + Streaming) is the next
+deliverable; Phase 4 (History + Polish) follows once Lyra's history
+wireframe lands. Brainstorm spec at
+[`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
+(Decisions 1-35); Phase-2.5 plan at
+[`superpowers/plans/2026-05-24-client-block-1-phase-2-5-polish.md`](../superpowers/plans/2026-05-24-client-block-1-phase-2-5-polish.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -135,6 +138,78 @@ update the relevant one at the end.
     components, and the four routes; all 129 user-client tests pass.
     Phase-1 packages (crypto, llm-unified) remain untouched and green.
 
+- **Phase 2.5 — Polish & Bug-Bash (2026-05-24)**. Eight commits on
+  master following Chris's device-smoke of Phase 2. Twelve plan tasks
+  driven via subagent-driven-development. What landed:
+  - `apps/user-client/public/fonts/` — self-hosted Lora (Regular +
+    Italic, ported from chatsune) and Inter variable (from
+    upstream `rsms/inter`). `src/index.css` `@theme` block points
+    `--font-display` at Lora and `--font-sans` at Inter. No CDN
+    call at runtime.
+  - `apps/user-client/src/lib/monogram.ts` — kollision-free port of
+    `chatsune/backend/modules/persona/_monogram.py`. Five-strategy
+    fallback (multi-part initials → letter pairs → doubled first →
+    AA…ZZ → '??'). 8 Vitest tests; existing `monogramFor` callers
+    keep their one-arg API via a thin wrapper.
+  - `apps/user-client/src/boot/client-data-db.ts` — Dexie v3
+    migration adds `SettingsRow.userTexture` and
+    `PersonaRow.textureOverride`; backfills both from existing rows
+    via a raw-Dexie plant-then-reopen pattern. `MindspaceRow.texture`
+    survives only as a seed-default for first-install.
+  - `apps/user-client/src/state/mindspace-resolver.ts` +
+    `mindspace.store.ts` — new `ResolverArgs` accepts `defaultTexture`;
+    texture priority is `persona.textureOverride > settings.userTexture > mindspace.texture`.
+    Resolver returns `ResolvedMindspace | null` instead of throwing on
+    an empty mindspaces list.
+  - `apps/user-client/src/components/MindspaceLayer.tsx` — wraps the
+    texture in `position: fixed; inset: 0; pointer-events: none;
+    z-index: -1; overflow: hidden`. The background now spans the
+    whole viewport regardless of content height or scroll position.
+  - `apps/user-client/src/components/MindspacePicker.tsx` — preview
+    card renders an actual `MindspaceTexture` sample (was a flat
+    colour panel). Texture and Colour are now genuinely orthogonal;
+    selecting a colour never invokes `onTextureChange`.
+  - `apps/user-client/src/components/AutoSizeTextarea.tsx` — new
+    component; replaces fixed-height textareas across About Me,
+    Global System Prompt, Custom Instructions, About Me Override.
+    Strictly controlled with `value` + `onChange`; growable up to
+    optional `maxRows`.
+  - `apps/user-client/src/components/ProviderSheet.tsx` — opaque
+    `bg-ink` body with a click-through `bg-black/60 backdrop-blur-sm`
+    backdrop; explicit Cancel + Test & Save buttons; closing via ×
+    discards the in-progress edit; password-manager autofill
+    suppressed (`autoComplete="off"`, `data-1p-ignore`,
+    `data-lpignore="true"`, empty `name`); proxy URL placeholder
+    is `https://example.com`. The Ollama-Cloud save bug is fixed —
+    the freshly-sealed shared key is held in a local variable and
+    used directly for the probe instead of being re-read from the
+    stale TanStack-Query cache.
+  - `apps/user-client/src/routes/app/circle.tsx` — FAB `+` glyph is
+    visible again (`text-bg` was undefined; replaced with `text-ink`;
+    glyph bumped from `text-2xl` to `text-3xl leading-none`).
+  - `apps/user-client/src/routes/app/persona-editor.tsx` — Identity
+    (Name + Tagline) lifted out of the accordion, always visible at
+    the top. Accordion order is Custom Instructions → Model →
+    Behavior → Mindspace-Override → About-Me-Override.
+    Required-field markers (red ✕) render on the accordion header
+    via the new `AccordionCard.requiredMarker` prop, and inline next
+    to Name when empty. Save requires `modelId` in addition to
+    `providerId`. A `userModifiedRef` prevents the draft-seed
+    `useEffect` from overwriting in-progress edits when upstream
+    data refetches.
+  - `apps/user-client/src/routes/app/settings.tsx` — wires the
+    Mindspace-Picker to `SettingsRow.userTexture`; About-Me and
+    Global System Prompt use the new `AutoSizeTextarea`. Removed
+    the now-unused `useUpdateMindspaceTexture` import path.
+  - `apps/user-client/src/data/mindspaces.ts` — `useUpdateMindspaceTexture`
+    hook removed (texture no longer lives on the mindspace row).
+    `useMindspaces` retained.
+  - Tests: ~16 new Vitest cases across monogram, db v3 migration,
+    MindspaceLayer wrapper, picker controlled-API regression,
+    AutoSizeTextarea structural contract, ProviderSheet polish, and
+    persona-editor required-field markers. All user-client tests
+    green; llm-unified tests green.
+
 ## Briefed, awaiting implementation
 
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
@@ -163,37 +238,62 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2 finished. Paused for Chris's manual device-test smoke on the
-four new surfaces (Entrance Hall, My Settings, My Circle, Persona
+Phase 2.5 finished. Paused for Chris's manual re-smoke on the four
+touched surfaces (Entrance Hall, My Settings, My Circle, Persona
 Editor) before kicking off Phase 3 (Chat).
 
 ---
 
 ## Next session
 
-1. **Chris's manual smoke** — fresh PWA install → onboarding "Just
-   this device" → Entrance Hall renders with 5 rooms (3 greyed
-   stubs). Walk through: My Settings → fill About Me, pick a
-   Mindspace colour/texture/font, set Global Unlocker, add at least
-   one provider with API key (Ollama-Cloud also asks for proxy URL +
-   shared key, both stored on `Settings.corsProxy`). Back to Hall →
-   "1 of 3 providers connected" appears on Settings tile. Tap My
-   Circle → empty-state "No personas yet"; FAB "+" opens the editor
-   in create mode; fill Name + Tagline + Custom Instructions + pick
-   a Model → Save → returns to Circle with the persona card visible.
-   Tap a persona card → editor opens in edit mode with three chat-
-   action buttons up top. Edit a field → Save. Tap a persona →
-   Delete → confirm → returns to Circle. Reload PWA → Hall still
-   shows everything intact. Verify in DevTools: `chatsundere_client_data`
-   now has `verno: 2`, seven mindspaces, one settings row with
-   `userFont: 'serif'`, persona row with `tagline / temperature /
-   adultPersona` fields.
+1. **Chris's manual re-smoke after Phase 2.5** — re-install / reload
+   the PWA and walk through:
+   - **Typography:** headings and body should render in Lora (serif)
+     and Inter (sans) — visible by glyph shape on a calm screen.
+   - **Entrance Hall FAB (My Circle):** the `+` glyph on the FAB is
+     visible and contrasts against the light circle (was invisible
+     before).
+   - **Mindspace background coverage:** scroll any long page (My
+     Settings while editing About Me; Persona Editor with all
+     accordions open) — the texture should still cover the whole
+     viewport top-to-bottom, not collapse to a single screen-height.
+   - **Mindspace-Picker:** pick a colour, then a texture, then change
+     colour again → the texture choice must persist. The preview
+     card now shows the chosen texture, not a flat panel. Try this
+     in both Settings → About Me → Default Mindspace and Persona
+     Editor → Mindspace Override.
+   - **Textareas grow:** About Me, Global System Prompt, Custom
+     Instructions, About Me Override all expand with content; the
+     two prompts cap at a sane row count.
+   - **ProviderSheet:** open Settings → Upstream Providers →
+     nano-gpt. Background should be opaque (not see-through). Type
+     a key → Test & Save runs the probe; on success the sheet
+     auto-closes after a beat. Closing via × does NOT save.
+     Browsers should NOT propose Bitwarden / 1Password autofill on
+     the API-key field. Now open Ollama Cloud — proxy URL field
+     defaults to `https://example.com` placeholder. Fill in real
+     proxy URL + shared key + API key → Test & Save → key persists
+     across a page reload (this was the Phase-2 bug).
+   - **Persona Editor:** Name + Tagline are visible at the top
+     without expanding any accordion. With Name empty, the inline
+     red ✕ shows up next to the label and disappears once you type.
+     Closed Custom Instructions and Model accordions show a red ✕
+     on their headers until their content / providerId+modelId are
+     filled. Save stays disabled until everything required is
+     provided (including modelId — previously Model could be
+     half-filled).
+   - **Monogram on PersonaCard:** create two personas whose names
+     start with the same letter (e.g. "Liz" and "Lyra") — their
+     monograms should differ (was identical before).
+   - **DevTools:** open the `chatsundere_client_data` DB.
+     `db.verno` is 3. `settings` carries `userTexture` (default
+     `'cloudy'`). `personas` carry `textureOverride: null`.
 2. **Phase 3 brainstorm + plan** — walk through the chat surface
    wireframes in `chatsundere-prototype.html` (Reading Mode +
    Interaction Mode + Cockpit). Open the ADR "Tool Display Position"
    discussion.
-3. **Phase 3 execution** — subagent-driven, same pattern as Phase 1
-   and Phase 2.
+3. **Phase 3 execution** — subagent-driven, same pattern as Phase 1,
+   Phase 2, Phase 2.5.
 
 ---
 

@@ -18,6 +18,7 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     modelId: 'm',
     mindspaceId: null,
     aboutMeOverride: null,
+    textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
     createdAt: 0,

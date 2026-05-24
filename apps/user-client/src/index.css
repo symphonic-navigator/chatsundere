@@ -1,6 +1,29 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 @import "tailwindcss";
 
+/* Self-hosted display + body type. Lora (serif) and Inter (variable sans). */
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Lora-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Lora-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-Regular.woff2") format("woff2-variations");
+}
+
 /* Aurora is an intentionally sparse violet scale — only the steps below are in use. */
 @theme {
   --color-aurora-50: #f7f5ff;
@@ -15,7 +38,8 @@
   --color-success: #7be0b8;
   --color-warning: #ffd06b;
   --color-danger: #ff7a8a;
-  --font-display: "Instrument Serif", Georgia, serif;
+  --font-display: "Lora", Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
   --radius-pill: 9999px;
   --radius-card: 18px;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { CSSProperties } from 'react';
 import { useEffect } from 'react';
 import { useMindspaceStore } from '../state/mindspace.store.js';
 import { MindspaceTexture } from './MindspaceTexture.js';
@@ -32,5 +33,18 @@ export function MindspaceLayer(): JSX.Element | null {
   }, [resolved]);
 
   if (!resolved) return null;
-  return <MindspaceTexture texture={resolved.texture} accent={resolved.palette.accent} />;
+
+  const wrapperStyle: CSSProperties = {
+    position: 'fixed',
+    inset: '0px',
+    pointerEvents: 'none',
+    zIndex: -1,
+    overflow: 'hidden',
+  };
+
+  return (
+    <div data-mindspace-layer style={wrapperStyle}>
+      <MindspaceTexture texture={resolved.texture} accent={resolved.palette.accent} />
+    </div>
+  );
 }

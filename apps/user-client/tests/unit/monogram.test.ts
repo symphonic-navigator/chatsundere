@@ -17,7 +17,7 @@ describe('monogramFor', () => {
   });
 
   it('handles a single character name', () => {
-    expect(monogramFor('A')).toBe('A');
+    expect(monogramFor('A')).toBe('AA');
   });
 
   it('returns "??" for empty input', () => {

@@ -35,24 +35,25 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
   const [proxyShared, setProxyShared] = useState('');
   const [revealKey, setRevealKey] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [saving, setSaving] = useState(false);
 
-  async function close() {
+  async function onSave() {
     if (!apiKey && !existing) {
-      onClose();
+      setStatus({ kind: 'error', reason: 'API key required' });
       return;
     }
     if (!mk || !definition) {
       setStatus({ kind: 'error', reason: 'No master key in session — re-login required' });
-      onClose();
       return;
     }
+    setSaving(true);
     setStatus({ kind: 'probing' });
     try {
       const rowId = existing?.id ?? 'pending';
       const apiKeySlotId = `provider/${rowId}/api-key`;
       const sealedKey = apiKey ? await sealSecret(apiKey, mk, apiKeySlotId) : existing?.apiKey;
       if (!sealedKey) {
-        onClose();
+        setSaving(false);
         return;
       }
       const row = await upsert.mutateAsync({
@@ -62,7 +63,6 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
         enabled: false,
       });
 
-      // Re-seal with the stable row id as slotId when we just created the row.
       const stableSlotId = `provider/${row.id}/api-key`;
       const stableSealedKey =
         apiKey && !existing ? await sealSecret(apiKey, mk, stableSlotId) : sealedKey;
@@ -76,18 +76,22 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
         });
       }
 
+      // For proxy-required providers: seal the shared key locally and use
+      // that local variable for the probe. Do NOT re-read from
+      // settings.data.corsProxy — TanStack-Query cache is stale right after
+      // a mutateAsync write.
+      let sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
       if (requiresProxy && proxyUrl && proxyShared) {
-        const sealedShared = await sealSecret(proxyShared, mk, 'cors-proxy/shared-key');
+        sealedShared = await sealSecret(proxyShared, mk, 'cors-proxy/shared-key');
         await updateSettings.mutateAsync({
           corsProxy: { url: proxyUrl, sharedKey: sealedShared },
         });
       }
 
-      // Probe with decrypted values.
       const decryptedKey = await openSecret(stableSealedKey, mk, stableSlotId);
       const decryptedProxyKey =
-        requiresProxy && settings.data?.corsProxy
-          ? await openSecret(settings.data.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
+        requiresProxy && sealedShared
+          ? await openSecret(sealedShared, mk, 'cors-proxy/shared-key')
           : null;
 
       const config = {
@@ -110,149 +114,194 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
           enabled: true,
         });
         setStatus({ kind: 'ok' });
+        onClose();
       } else {
         setStatus({ kind: 'error', reason: `${result.status} · ${result.reason ?? ''}` });
       }
     } catch (e) {
       setStatus({ kind: 'error', reason: e instanceof Error ? e.message : String(e) });
     } finally {
-      onClose();
+      setSaving(false);
     }
   }
 
   const displayName = definition?.displayName ?? templateId;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 rounded-t-2xl border-t border-white/10 bg-bg p-4 shadow-2xl">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
-            {displayName.slice(0, 2)}
+    <>
+      <div
+        data-ps-backdrop
+        className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+        }}
+        role="button"
+        tabIndex={-1}
+        aria-label="Dismiss sheet"
+      />
+      <div
+        data-ps-sheet
+        className="fixed inset-x-0 bottom-0 z-30 rounded-t-2xl border-t border-white/10 bg-ink p-4 shadow-2xl"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
+              {displayName.slice(0, 2)}
+            </div>
+            <div>
+              <div className="font-display text-sm text-paper">{displayName}</div>
+              <div className="text-xs text-paper-soft">Text capability</div>
+            </div>
           </div>
-          <div>
-            <div className="font-display text-sm text-paper">{displayName}</div>
-            <div className="text-xs text-paper-soft">Text capability</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={() => {
-            void close();
-          }}
-          className="rounded-full p-1 text-paper-soft hover:text-paper"
-        >
-          ×
-        </button>
-      </div>
-
-      <div className="mb-3">
-        <label
-          htmlFor="ps-api-key"
-          className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-        >
-          API Key
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/30 px-3 py-2">
-          <input
-            id="ps-api-key"
-            type={revealKey ? 'text' : 'password'}
-            placeholder="sk-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="flex-1 bg-transparent font-mono text-sm text-paper outline-none"
-          />
           <button
             type="button"
-            onClick={() => setRevealKey((v) => !v)}
-            className="text-paper-soft hover:text-paper"
+            aria-label="Close"
+            onClick={onClose}
+            className="rounded-full p-1 text-paper-soft hover:text-paper"
           >
-            ◉
+            ×
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-paper-soft">
-          Key is tested automatically when you close this sheet.
-        </p>
-      </div>
 
-      {requiresProxy ? (
-        <div className="mb-3 space-y-2 border-t border-white/5 pt-3">
-          <div>
-            <label
-              htmlFor="ps-proxy-url"
-              className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-            >
-              Proxy URL
-            </label>
+        <div className="mb-3">
+          <label
+            htmlFor="ps-api-key"
+            className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+          >
+            API Key
+          </label>
+          <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/30 px-3 py-2">
             <input
-              id="ps-proxy-url"
-              type="text"
-              placeholder="proxy url (https://cors-proxy.tidesson.net)"
-              value={proxyUrl}
-              onChange={(e) => setProxyUrl(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
+              id="ps-api-key"
+              type={revealKey ? 'text' : 'password'}
+              placeholder="sk-..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              name=""
+              className="flex-1 bg-transparent font-mono text-sm text-paper outline-none"
             />
-          </div>
-          <div>
-            <label
-              htmlFor="ps-proxy-shared"
-              className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+            <button
+              type="button"
+              onClick={() => setRevealKey((v) => !v)}
+              aria-label={revealKey ? 'Hide key' : 'Show key'}
+              className="text-paper-soft hover:text-paper"
             >
-              Shared key
-            </label>
-            <input
-              id="ps-proxy-shared"
-              type="password"
-              placeholder="shared secret"
-              value={proxyShared}
-              onChange={(e) => setProxyShared(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
-            />
+              ◉
+            </button>
           </div>
-          <p className="text-[11px] text-paper-soft">
-            Required for Ollama Cloud. Stored once and reused for any provider that needs a proxy.
-          </p>
         </div>
-      ) : null}
 
-      {status.kind !== 'idle' ? (
-        <div
-          data-testid="sheet-status"
-          className={`mb-3 rounded-md border px-3 py-2 text-xs ${
-            status.kind === 'ok'
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-              : status.kind === 'error'
-                ? 'border-coral/30 bg-coral/10 text-coral'
-                : 'border-paper-soft/30 bg-paper-soft/10 text-paper-soft'
-          }`}
-        >
-          {status.kind === 'probing'
-            ? 'Probing…'
-            : status.kind === 'ok'
-              ? '✓ Key valid'
-              : `✗ ${(status as { kind: 'error'; reason: string }).reason}`}
-        </div>
-      ) : null}
+        {requiresProxy ? (
+          <div className="mb-3 space-y-2 border-t border-white/5 pt-3">
+            <div>
+              <label
+                htmlFor="ps-proxy-url"
+                className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+              >
+                Proxy URL
+              </label>
+              <input
+                id="ps-proxy-url"
+                type="text"
+                placeholder="https://example.com"
+                value={proxyUrl}
+                onChange={(e) => setProxyUrl(e.target.value)}
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                name=""
+                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="ps-proxy-shared"
+                className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+              >
+                Shared key
+              </label>
+              <input
+                id="ps-proxy-shared"
+                type="password"
+                placeholder="shared secret"
+                value={proxyShared}
+                onChange={(e) => setProxyShared(e.target.value)}
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                name=""
+                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
+              />
+            </div>
+            <p className="text-[11px] text-paper-soft">
+              Required for Ollama Cloud. Stored once and reused for any provider that needs a proxy.
+            </p>
+          </div>
+        ) : null}
 
-      {existing ? (
-        <div className="mt-2 rounded-md border border-coral/30 p-3">
-          <div className="text-xs font-medium uppercase tracking-widest text-coral">
-            Remove this provider
+        {status.kind !== 'idle' ? (
+          <div
+            data-testid="sheet-status"
+            className={`mb-3 rounded-md border px-3 py-2 text-xs ${
+              status.kind === 'ok'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : status.kind === 'error'
+                  ? 'border-danger/30 bg-danger/10 text-danger'
+                  : 'border-paper-soft/30 bg-paper-soft/10 text-paper-soft'
+            }`}
+          >
+            {status.kind === 'probing'
+              ? 'Probing…'
+              : status.kind === 'ok'
+                ? '✓ Key valid'
+                : `✗ ${(status as { kind: 'error'; reason: string }).reason}`}
           </div>
-          <div className="mb-2 text-[11px] text-paper-soft">
-            Key is deleted, personas using this provider won&apos;t be able to connect.
-          </div>
+        ) : null}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-md border border-paper-soft/30 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
+          >
+            Cancel
+          </button>
           <button
             type="button"
             onClick={() => {
-              void del.mutateAsync(existing.id).then(() => onClose());
+              void onSave();
             }}
-            className="rounded-md border border-coral px-3 py-1 text-xs uppercase tracking-wider text-coral hover:bg-coral/10"
+            disabled={saving}
+            className="flex-1 rounded-md bg-paper px-3 py-2 text-xs uppercase tracking-wider text-ink hover:bg-paper-soft disabled:opacity-50"
           >
-            Remove
+            {saving ? 'Saving…' : 'Test & Save'}
           </button>
         </div>
-      ) : null}
-    </div>
+
+        {existing ? (
+          <div className="mt-4 rounded-md border border-danger/30 p-3">
+            <div className="text-xs font-medium uppercase tracking-widest text-danger">
+              Remove this provider
+            </div>
+            <div className="mb-2 text-[11px] text-paper-soft">
+              Key is deleted, personas using this provider won&apos;t be able to connect.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void del.mutateAsync(existing.id).then(() => onClose());
+              }}
+              className="rounded-md border border-danger px-3 py-1 text-xs uppercase tracking-wider text-danger hover:bg-danger/10"
+            >
+              Remove
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }

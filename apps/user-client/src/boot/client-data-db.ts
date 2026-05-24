@@ -14,6 +14,7 @@ export interface SettingsRow {
   globalAboutMe: string;
   defaultMindspaceId: string;
   userFont: 'sans' | 'serif' | 'cursive';
+  userTexture: MindspaceTexture;
   animationsEnabled: boolean;
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
   createdAt: number;
@@ -72,6 +73,7 @@ export interface PersonaRow {
   modelId: string;
   mindspaceId: string | null;
   aboutMeOverride: string | null;
+  textureOverride: MindspaceTexture | null;
   temperature: number;
   adultPersona: boolean;
   createdAt: number;
@@ -157,6 +159,32 @@ class ClientDataDb extends Dexie {
             temperature: 0.85,
             adultPersona: false,
           });
+        }
+      });
+
+    this.version(3)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        // Backfill SettingsRow.userTexture from the default mindspace's texture,
+        // falling back to 'cloudy' if the mindspace row is absent.
+        const settings = await tx.table('settings').get(1);
+        if (settings) {
+          const defaultMs = await tx.table('mindspaces').get(settings.defaultMindspaceId);
+          const seedTexture = defaultMs?.texture ?? 'cloudy';
+          await tx.table('settings').update(1, { userTexture: seedTexture });
+        }
+        // Backfill PersonaRow.textureOverride — null means "inherit from user default".
+        const personas = await tx.table('personas').toArray();
+        for (const p of personas) {
+          await tx.table('personas').update(p.id, { textureOverride: null });
         }
       });
   }
@@ -263,6 +291,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         globalAboutMe: '',
         defaultMindspaceId: aurumId,
         userFont: 'serif',
+        userTexture: 'cloudy',
         animationsEnabled: true,
         corsProxy: null,
         createdAt: now,

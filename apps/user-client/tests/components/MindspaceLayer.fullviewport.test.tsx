@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MindspaceLayer } from '../../src/components/MindspaceLayer.js';
 import { useMindspaceStore } from '../../src/state/mindspace.store.js';
 
-describe('MindspaceLayer', () => {
+describe('MindspaceLayer fullviewport wrapper', () => {
   beforeEach(() => {
     useMindspaceStore.getState().reset();
   });
@@ -21,7 +21,7 @@ describe('MindspaceLayer', () => {
     }
   });
 
-  it('writes resolved palette as CSS custom properties on documentElement', () => {
+  it('wraps MindspaceTexture in fixed fullviewport div with correct styling', () => {
     useMindspaceStore.getState().update({
       persona: null,
       defaultMindspaceId: 'aurum',
@@ -53,16 +53,15 @@ describe('MindspaceLayer', () => {
         },
       ],
     });
-    render(<MindspaceLayer />);
-    expect(document.documentElement.style.getPropertyValue('--mindspace-bg')).toBe('#0a0a0a');
-    expect(document.documentElement.style.getPropertyValue('--mindspace-accent')).toBe('#c9a84c');
-    expect(document.documentElement.style.getPropertyValue('--mindspace-text-primary')).toBe(
-      '#f0e8d8',
-    );
-  });
 
-  it('renders nothing when resolved is null', () => {
     const { container } = render(<MindspaceLayer />);
-    expect(container.firstChild).toBeNull();
+    const wrapper = container.querySelector('[data-mindspace-layer]') as HTMLDivElement;
+
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.style.position).toBe('fixed');
+    expect(wrapper.style.inset).toBe('0px');
+    expect(wrapper.style.pointerEvents).toBe('none');
+    expect(wrapper.style.zIndex).toBe('-1');
+    expect(wrapper.style.overflow).toBe('hidden');
   });
 });

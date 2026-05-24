@@ -7,13 +7,21 @@ interface Props {
   label: string;
   meta?: string;
   defaultOpen?: boolean;
+  requiredMarker?: boolean;
   children: ReactNode;
 }
 
-export function AccordionCard({ icon, label, meta, defaultOpen = false, children }: Props) {
+export function AccordionCard({
+  icon,
+  label,
+  meta,
+  defaultOpen = false,
+  requiredMarker = false,
+  children,
+}: Props) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02]">
+    <div data-accordion-card className="rounded-lg border border-white/5 bg-white/[0.02]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -21,8 +29,15 @@ export function AccordionCard({ icon, label, meta, defaultOpen = false, children
       >
         <div className="flex items-center gap-3">
           <span className="text-base text-paper-soft">{icon}</span>
+          {requiredMarker ? (
+            <span aria-label={`${label} is required`} className="text-danger" data-required-marker>
+              ✕
+            </span>
+          ) : null}
           <div>
-            <div className="font-display text-sm text-paper">{label}</div>
+            <span data-accordion-label className="font-display text-sm text-paper">
+              {label}
+            </span>
             {meta ? <div className="text-xs text-paper-soft">{meta}</div> : null}
           </div>
         </div>

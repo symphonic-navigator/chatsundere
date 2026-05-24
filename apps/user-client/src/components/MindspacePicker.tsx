@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { MindspaceRow, MindspaceTexture } from '../boot/client-data-db.js';
+import { MindspaceTexture as MindspaceTextureComponent } from './MindspaceTexture.js';
 
 type Font = 'sans' | 'serif' | 'cursive';
 
@@ -52,13 +53,24 @@ export function MindspacePicker(props: Props): JSX.Element {
     <div className="rounded-lg border border-white/5 bg-black/20 p-3">
       {/* Preview card */}
       <div
-        className="mb-3 rounded-md p-4 text-center"
-        style={{ background: surfaceRaised, color: accent }}
+        data-mindspace-preview
+        className="relative mb-3 overflow-hidden rounded-md"
+        style={{ background: selectedMs?.palette.bg ?? '#0a0a0a' }}
       >
-        <div className={`text-2xl ${FONT_CLASSES[selectedFont]}`} style={{ color: accent }}>
-          {previewName}
+        {selectedMs ? (
+          <div className="pointer-events-none absolute inset-0">
+            <MindspaceTextureComponent
+              texture={selectedTexture}
+              accent={selectedMs.palette.accent}
+            />
+          </div>
+        ) : null}
+        <div className="relative p-6 text-center" style={{ color: accent }}>
+          <div className={`text-2xl ${FONT_CLASSES[selectedFont]}`} style={{ color: accent }}>
+            {previewName}
+          </div>
+          <div className="mt-1 text-xs uppercase tracking-widest text-paper-soft">Your space</div>
         </div>
-        <div className="mt-1 text-xs uppercase tracking-widest text-paper-soft">Your space</div>
       </div>
 
       {/* Colour row */}

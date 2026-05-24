@@ -66,6 +66,7 @@ export function EntranceHall(): JSX.Element {
       setMindspace({
         persona: null,
         defaultMindspaceId: settings.data.defaultMindspaceId,
+        defaultTexture: settings.data.userTexture,
         mindspaces: mindspaces.data,
       });
     }
