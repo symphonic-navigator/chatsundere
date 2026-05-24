@@ -9,6 +9,8 @@ export type {
   WireMessage,
   StreamChunk,
   ProbeResult,
+  ReasoningCapability,
+  ReasoningEffortSpec,
 } from './types.js';
 
 export { registerProvider, getProvider, listProviders } from './registry.js';
@@ -19,10 +21,9 @@ export { buildRequest, type BuildRequestArgs } from './transport.js';
 
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';
 
-export {
-  streamCompletion,
-  type StreamCompletionArgs,
-} from './adapters/openai-chat-completions.js';
+export { streamCompletion, type StreamCompletionArgs } from './stream-completion.js';
+
+export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js';
 
 export { probeProvider, type ProbeArgs } from './probe.js';
 

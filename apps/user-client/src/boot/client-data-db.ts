@@ -89,6 +89,7 @@ export interface ChatRow {
   createdAt: number;
   lastMessageAt: number;
   bookmarkedMessageCount: number;
+  draftInput: string; // NEW — Phase 3 cockpit autosave
 }
 
 export type ContentBlock = { type: 'text'; text: string } | { type: 'pill'; pillId: string };
@@ -225,6 +226,26 @@ class ClientDataDb extends Dexie {
         const settings = await tx.table('settings').get(1);
         if (settings && typeof settings.adultMode !== 'string') {
           await tx.table('settings').update(1, { adultMode: 'nsfw' });
+        }
+      });
+
+    this.version(6)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        // ChatRow.draftInput — Phase 3 §6.4 Cockpit-Input persistence.
+        const chats = await tx.table('chats').toArray();
+        for (const c of chats) {
+          if (typeof c.draftInput !== 'string') {
+            await tx.table('chats').update(c.id, { draftInput: '' });
+          }
         }
       });
   }

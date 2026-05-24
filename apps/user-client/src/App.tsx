@@ -5,6 +5,7 @@ import { ErrorScreen } from './components/ErrorScreen.js';
 import { MindspaceLayer } from './components/MindspaceLayer.js';
 import { queryClient } from './lib/queryClient.js';
 import { AccountPage } from './routes/app/account.js';
+import { ChatPage } from './routes/app/chat/chat-page.js';
 import { Circle } from './routes/app/circle.js';
 import { EntranceHall } from './routes/app/entrance-hall.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
@@ -89,6 +90,8 @@ export function App() {
                   <Route path="/app/circle" element={<Circle />} />
                   <Route path="/app/persona/new" element={<PersonaEditor />} />
                   <Route path="/app/persona/:id" element={<PersonaEditor />} />
+                  <Route path="/app/chat/new" element={<ChatPage />} />
+                  <Route path="/app/chat/:chatId" element={<ChatPage />} />
                   <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />

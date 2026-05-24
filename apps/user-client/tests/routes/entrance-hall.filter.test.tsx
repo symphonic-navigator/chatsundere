@@ -116,6 +116,7 @@ describe('Entrance Hall filter (adult mode)', () => {
       createdAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
+      draftInput: '',
     });
     await db.settings.update(1, { adultMode: 'sfw' });
     renderHall();

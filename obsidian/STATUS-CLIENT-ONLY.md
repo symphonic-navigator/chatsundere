@@ -1,25 +1,44 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (Polish iterations 7 + 8 landed on top of
-Phase 2.9) — Mindspace Cards & Adult Mode complete; two follow-up
-polish passes on the card / topbar surfaces ahead of the small-group
-deploy planned for 2026-05-25 evening. Four commits past Phase 2.9
-proper: `6553224` (Phase 2.9), `86975d7` (iteration 7), this iteration
-8, plus this doc commit. All 240 user-client tests pass across 57
-files; typecheck + Biome lint clean; full build clean. Manual smoke
-pending on Chris's device for the per-card mindspace texture (each
-card carries its own atmosphere, not the user's default) and the
-EditorTopbar redesign (SVG arrow + Lora title, one vertically centred
-row across Circle / Persona-Editor / Settings / Account). Block-1
-wireframes landed in `chatsundere-prototype.html` for Reading +
-Interaction Mode + Entrance Hall + My Settings + My Circle + Persona
-Editor; only My History (Phase 4) remains wireframe-blocked. Phase 3
-(Chat surface) is the next deliverable. Brainstorm spec at
-[`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
-(Decisions 1-47; D28 revoked by D36); Phase-2.9 spec at
-[`superpowers/specs/2026-05-24-phase-2-9-mindspace-cards-adult-mode-design.md`](../superpowers/specs/2026-05-24-phase-2-9-mindspace-cards-adult-mode-design.md)
-and plan at
-[`superpowers/plans/2026-05-24-phase-2-9-mindspace-cards-adult-mode.md`](../superpowers/plans/2026-05-24-phase-2-9-mindspace-cards-adult-mode.md).
+**Last updated:** 2026-05-24 (Phase 3.1 — Chat Backbone complete,
+sub-phase 1 of 3 of the Phase-3 chat surface). 27 task-commits landed
+sequentially on master (`464e244` → `ba27f25`), each TDD-paired
+per spec §10. Across the work: `packages/llm-unified` gained
+`ReasoningCapability` + `ReasoningEffortSpec` (ported from chatsune)
+and an extended `KnownModel` (`contextWindow`, `reasoning`, `vision`,
+`tools`), six curated `KnownModel[]` entries per provider sourced from
+`FIRST-MODELS.md` (DeepSeek V4 Pro+Flash, GLM 5+5.1, Kimi K2.6,
+Gemma 4 31B), a nano-gpt pair-map (`slug`/`flag`/`none` switching),
+high-level `streamCompletion` + `runOneShotCompletion` helpers with
+the nano-gpt pre-flight hook inline, and 132 Bun tests across 24 files
+(all green). `apps/user-client` gained Dexie v6 (`ChatRow.draftInput`),
+`current-chat.store` (UI mode + reasoning state + expansion exclusivity),
+`stream-manager.store` (parallel `Map<chatId, StreamHandle>` with
+`abortDiscard` semantics), a pure `stream-engine` orchestrating
+composition + reasoning-resolver + streamCompletion, `lib/`
+helpers (`reasoning-resolver`, `token-estimator`, `cockpit-draft`),
+TanStack hooks (`useChat`, `useCreateChat`, `useUpdateChat`,
+`useToggleBookmark`, `useSendMessage`, `useRegenerate`), and a full
+set of chat components: `DateSeparator`, `Pill`, `MessageBlock` +
+`MessageControls`, `ChatStream` + `StreamingCursor`, `BottomAffordance`
++ `ScrollToEnd`, `PersonaGreeting`, `InteractionTopbar`,
+`CockpitMenu`, `Cockpit` + `DualActionBtn`, `DimOverlay` +
+`InteractionMode`. Routes registered for `/app/chat/new` and
+`/app/chat/:chatId`; `ChatPage` assembled with real wiring (lazy +
+chat-mode, draft persistence across modes, send-flow, regenerate,
+auto-follow + sacred bottom edge + scroll-to-end swap). All 353
+user-client Vitest tests pass across 80 files; full `pnpm typecheck
+&& pnpm lint && pnpm --filter user-client run build` clean. Spec:
+[`superpowers/specs/2026-05-24-phase-3-chat-design.md`](../superpowers/specs/2026-05-24-phase-3-chat-design.md).
+Plan: [`superpowers/plans/2026-05-24-phase-3-chat.md`](../superpowers/plans/2026-05-24-phase-3-chat.md)
+(Tasks 1–27 of 41). Phase 2.9 + iterations 7-8 (`6553224`, `86975d7`,
+`1b8dd02`) remain the previous baseline.
+
+**Manual smoke pending for Phase 3.1:** spec §11.3 items 1–3, 8, 9
+(item 10 = title-gen, deferred to 3.3; items 4–7 = Background-Stream /
+Multi-Chat / NSFW Panic / Pin, deferred to 3.2). After smoke, the 27
+task-commits will be squashed into a single Phase-3.1 commit (per
+plan Task 28).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -498,43 +517,55 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2.9 + Polish iterations 7 & 8 finished. Paused for Chris's
-iteration-8 manual smoke covering the per-card mindspace texture
-(each card carries its own atmosphere) and the EditorTopbar redesign
-(SVG arrow + Lora title across Circle / Persona-Editor / Settings /
-Account). Small-group deploy scheduled for 2026-05-25 evening.
+Phase 3.1 (Chat Backbone) implementation complete — 27 task-commits
+on master, all suites green. Paused for Chris's manual smoke covering
+spec §11.3 items 1, 2, 3, 8, 9 on a real device, then squash into a
+single Phase-3.1 commit and continue with Phase 3.2 (Background-Stream
++ Multi-Chat + NSFW Panic, Tasks 29–33) and Phase 3.3 (Pills + Title
++ Recovery + Polish, Tasks 34–41).
 
 ---
 
 ## Next session
 
-1. **Chris's iteration-8 smoke** (post-deploy or just before) — reload
-   the PWA and walk through:
-   - **Persona cards (My Circle):** each card now shows its mindspace's
-     own texture (cloudy / aurora / grain) clipped inside the rounded
-     card, not the user-default texture. Cards with different mindspaces
-     should look visibly different from each other; cards with the same
-     mindspace should NOT pulse in unison (per-card hashed
-     animation-delay).
-   - **EditorTopbar (Circle / Persona-Editor / Settings / Account):**
-     SVG back arrow on the left (44×44 hit area, stroke 1.5 — should
-     feel deliberate, not generic Unicode), Lora title centred
-     (text-lg mobile / text-xl desktop, no gradient), Save & Back pill
-     on the right where applicable. All three on the same vertical
-     centre line — back arrow should NOT sit lower than the title any
-     more.
-   - **Long persona names** in the Persona-Editor title should truncate
-     gracefully without wrapping.
+1. **Phase 3.1 smoke on Chris's device** — items 1, 2, 3, 8, 9 from
+   spec §11.3:
+   - **Lazy-chat flow:** Circle → tap a persona's New Chat → empty
+     Reading Mode with "<Persona> is listening" + Cockpit auto-open and
+     pinned. Type something, Hamburger out, come back — draft text
+     still in the Cockpit (localStorage survives navigation).
+   - **Reading-Mode stream live:** send a real message against one of
+     the configured providers, watch the stream grow live, scroll
+     mid-stream upwards more than 30 px — affordance fades, scroll-to-
+     end appears, auto-follow paused.
+   - **Tap-to-Expand exclusivity:** tap a user message → expanded
+     (timestamp + controls visible). Tap a different message → first
+     collapses, second expands.
+   - **Cockpit Send disabled during live stream:** send, then before
+     the response try Send again — button disabled with hint
+     "<Persona> antwortet noch…".
+   - **Reasoning menu capability-gated:** open the Cockpit `…` menu
+     against a model with `optional + buckets` — bucket selector +
+     Off entry visible. (No `no_reasoning` model is in
+     `FIRST-MODELS.md` so that branch can't be smoked yet.)
 
-2. **Phase 3 brainstorm + plan** — walk through the chat surface
-   wireframes in `chatsundere-prototype.html` (Reading Mode +
-   Interaction Mode + Cockpit). Open the ADR "Tool Display Position"
-   discussion. Include the "panic button" idea (one-tap kick-out
-   from an in-flight NSFW chat when SFW mode is toggled mid-session,
-   captured during the Phase 2.9 brainstorm).
+   The remaining items 4–7, 10, 11, 12 belong to Phase 3.2 + 3.3
+   (Background-Stream, Multi-Chat, NSFW Panic, Pin, Title-gen, Partial
+   Recovery, per-card stream indicator) and stay out of this smoke.
 
-3. **Phase 3 execution** — subagent-driven, same pattern as Phases
-   1, 2, 2.5, 2.6, 2.7, 2.8, 2.9.
+2. **Squash Phase 3.1** — collapse the 27 task-commits `464e244` →
+   `ba27f25` (plus the format-fix `851b21d`) into a single Phase-3.1
+   commit with the summary from plan Task 28.
+
+3. **Phase 3.2 execution** — Tasks 29–33: Toast component,
+   BackgroundStreamBadge, nsfwPanic helper wired to `useAdultMode`,
+   Cockpit Send-disable subscribed to stream-manager. Sub-agent-driven
+   per task.
+
+4. **Phase 3.3 execution** — Tasks 34–41: Pill integration end-to-end,
+   ADR "Tool Display Position", `title-generator`, Stream-Interrupted
+   footer, polish pass (affordance breathing, micro-animations, pin
+   glow, optional per-card stream indicator).
 
 ---
 

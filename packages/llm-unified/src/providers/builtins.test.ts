@@ -15,31 +15,34 @@ describe('built-in providers', () => {
     expect(ids).toEqual(['nano-gpt', 'novita', 'ollama-cloud']);
   });
 
-  it('nano-gpt has inofficial CORS hint and one known model', () => {
+  it('nano-gpt has inofficial CORS hint and openai-chat-completions shape', () => {
     const p = getProvider('nano-gpt');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      expect(p.knownModels.map((m) => m.id)).toEqual(['deepseek-v4-flash']);
+      // knownModels populated in Task 3 — six curated models
+      expect(p.knownModels).toHaveLength(6);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
 
-  it('novita has direct CORS hint and GLM 5.1', () => {
+  it('novita has direct CORS hint', () => {
     const p = getProvider('novita');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.knownModels.map((m) => m.id)).toEqual(['glm-5.1']);
+      // knownModels populated in Task 3 — six curated models
+      expect(p.knownModels).toHaveLength(6);
     }
   });
 
-  it('ollama-cloud requires proxy and has Kimi K2.6', () => {
+  it('ollama-cloud requires proxy', () => {
     const p = getProvider('ollama-cloud');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.knownModels.map((m) => m.id)).toEqual(['kimi-k2.6']);
+      // knownModels populated in Task 3 — six curated models
+      expect(p.knownModels).toHaveLength(6);
     }
   });
 

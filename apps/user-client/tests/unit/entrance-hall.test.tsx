@@ -113,6 +113,7 @@ describe('EntranceHall', () => {
       createdAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
+      draftInput: '',
     });
     wrap('/app');
     await waitFor(() => {

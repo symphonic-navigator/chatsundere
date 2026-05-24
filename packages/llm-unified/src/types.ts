@@ -12,10 +12,34 @@ export interface ConfigField {
   options?: { value: string; label: string }[];
 }
 
+export interface ReasoningEffortSpec {
+  buckets: string[];
+  defaultBucket: string;
+}
+
+export interface ReasoningCapability {
+  kind: 'no_reasoning' | 'optional' | 'always_on';
+  /** Present when the model exposes granular effort levels (e.g. low / medium / high). */
+  effort?: ReasoningEffortSpec;
+  /** Whether reasoning is enabled by default in the cockpit menu. */
+  defaultOn: boolean;
+  /**
+   * Hard-CoT models (Anthropic, xAI, OpenAI o-series) replay their thinking
+   * blocks back in history. Soft-CoT models (DeepSeek, GLM, Kimi) never see
+   * their own thinking again — set this to false for those.
+   */
+  replayReasoning: boolean;
+}
+
 export interface KnownModel {
   id: string;
   displayName: string;
   notes?: string;
+  /** Recommended context size in tokens (not the hard maximum). Drives the Context-Gauge; see spec §4.2. */
+  contextWindow: number;
+  reasoning: ReasoningCapability;
+  vision: boolean;
+  tools: boolean;
 }
 
 export interface ProviderDefinition {
