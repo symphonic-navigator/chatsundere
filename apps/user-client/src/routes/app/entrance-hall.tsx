@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { usePersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
-import { useSettings } from '../../data/settings.js';
+import { useDisplayName, useSettings } from '../../data/settings.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 interface RoomTileProps {
@@ -53,7 +52,7 @@ function RoomTile({ label, icon, meta, to, disabled, tooltip }: RoomTileProps) {
 
 /** Landing surface for /app — greeting, optional continue-card, and six room tiles. */
 export function EntranceHall(): JSX.Element {
-  const session = useSessionStore((s) => s.session);
+  const displayName = useDisplayName();
   const settings = useSettings();
   const personas = usePersonas();
   const chats = useChats();
@@ -86,7 +85,7 @@ export function EntranceHall(): JSX.Element {
           className="mt-2 text-3xl font-display"
           style={{ color: 'var(--mindspace-text-primary)' }}
         >
-          {session?.username ?? '—'}
+          {displayName}
         </div>
       </div>
 

@@ -10,6 +10,7 @@ const DB_NAME = 'chatsundere_client_data';
 
 export interface SettingsRow {
   id: 1;
+  displayName: string;
   globalUnlockerPrompt: string;
   globalAboutMe: string;
   defaultMindspaceId: string;
@@ -186,6 +187,24 @@ class ClientDataDb extends Dexie {
           await tx.table('personas').update(p.id, { textureOverride: null });
         }
       });
+
+    this.version(4)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        // Backfill SettingsRow.displayName — default '' means "use the username".
+        const settings = await tx.table('settings').get(1);
+        if (settings && typeof settings.displayName !== 'string') {
+          await tx.table('settings').update(1, { displayName: '' });
+        }
+      });
   }
 }
 
@@ -286,6 +305,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
       const aurumId = aurum?.id ?? (await db.mindspaces.toCollection().first())?.id ?? uuidv7();
       await db.settings.add({
         id: 1,
+        displayName: '',
         globalUnlockerPrompt: '',
         globalAboutMe: '',
         defaultMindspaceId: aurumId,

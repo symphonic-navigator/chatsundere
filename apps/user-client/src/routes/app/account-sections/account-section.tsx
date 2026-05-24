@@ -10,6 +10,7 @@ import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
+import { useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { copy } from '../../../lib/copy.js';
 
 type LoadState =
@@ -37,6 +38,20 @@ export function AccountSection() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Display name (lives in the client-data DB, independent of the
+  // crypto-DB-backed account load below).
+  const settings = useSettings();
+  const updateSettings = useUpdateSettings();
+  const [draftDisplayName, setDraftDisplayName] = useState('');
+  const [displayNameInitialised, setDisplayNameInitialised] = useState(false);
+
+  useEffect(() => {
+    if (!displayNameInitialised && settings.data) {
+      setDraftDisplayName(settings.data.displayName ?? '');
+      setDisplayNameInitialised(true);
+    }
+  }, [settings.data, displayNameInitialised]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +129,36 @@ export function AccountSection() {
 
   return (
     <div className="space-y-10">
+      {/* Display name — optional, falls back to username when empty.
+          Rendered only once settings has loaded so the initial draft value
+          matches the persisted displayName before the user can interact. */}
+      {displayNameInitialised && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-paper-soft">
+            Display name <span className="text-paper-soft/60">(optional)</span>
+          </p>
+          <input
+            id="display-name"
+            aria-label="Display name"
+            type="text"
+            maxLength={60}
+            value={draftDisplayName}
+            onChange={(e) => setDraftDisplayName(e.target.value)}
+            onBlur={() => {
+              const trimmed = draftDisplayName.trim();
+              setDraftDisplayName(trimmed);
+              if (trimmed !== (settings.data?.displayName ?? '')) {
+                void updateSettings.mutateAsync({ displayName: trimmed });
+              }
+            }}
+            className="w-full rounded-[var(--radius-input)] bg-ink px-3 py-2 font-mono text-sm text-paper ring-1 ring-inset ring-aurora-700/40 focus:outline-none focus:ring-aurora-500"
+          />
+          <p className="text-xs leading-relaxed text-paper-soft">
+            How you appear across Chatsundere. Empty? Your username is used.
+          </p>
+        </div>
+      )}
+
       {/* Username */}
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-wider text-paper-soft">

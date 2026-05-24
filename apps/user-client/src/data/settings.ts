@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type SettingsRow, getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from './queryKeys.js';
@@ -28,4 +29,20 @@ export function useUpdateSettings() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.settings }),
   });
+}
+
+/**
+ * Resolved display-name for the current user.
+ *
+ * Priority chain:
+ *   1. settings.displayName.trim() if non-empty
+ *   2. session.username
+ *   3. '—' (em-dash placeholder while the session is null)
+ */
+export function useDisplayName(): string {
+  const settings = useSettings();
+  const session = useSessionStore((s) => s.session);
+  const trimmed = settings.data?.displayName?.trim();
+  if (trimmed) return trimmed;
+  return session?.username ?? '—';
 }

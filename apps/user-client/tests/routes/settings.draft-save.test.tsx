@@ -9,6 +9,7 @@ const updateMock = vi.fn(async () => {});
 
 const STABLE_SETTINGS = {
   id: 1,
+  displayName: '',
   globalUnlockerPrompt: 'old prompt',
   globalAboutMe: 'old about',
   defaultMindspaceId: 'a',
