@@ -75,9 +75,10 @@ describe('AccountPage', () => {
     expect(headers).toEqual(['Account', 'Auth Methods', 'Server Linking', 'About']);
   });
 
-  it('renders the EditorTopbar with "My Account" title and no Save & Back button', () => {
+  it('renders the EditorTopbar with "My Account" title and a Save & Back button (disabled until dirty)', () => {
     setup();
     expect(screen.getByText('My Account')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /save & back/i })).toBeNull();
+    const saveBtn = screen.getByRole('button', { name: /save & back/i });
+    expect(saveBtn).toBeDisabled();
   });
 });

@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
+import { useDisplayName } from '../../data/settings.js';
 import { copy } from '../../lib/copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
@@ -35,6 +36,10 @@ export function Login() {
   const [hasLinked, setHasLinked] = useState(false);
   const [passkeys, setPasskeys] = useState<PasskeyCredentialRow[]>([]);
   const [webAuthnAvailable] = useState(() => isWebAuthnAvailable());
+
+  // Resolved name to show in the heading: displayName if set, else the
+  // locally-loaded username (the pre-session screen has no session yet).
+  const displayName = useDisplayName(username);
 
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
@@ -207,7 +212,7 @@ export function Login() {
       <div className="w-full max-w-sm space-y-8">
         {/* Heading */}
         <h1 className="font-display text-3xl italic tracking-tight text-aurora-200 lg:text-4xl">
-          {copy.login.headingPrefix} <span className="text-paper">{username}</span>
+          {copy.login.headingPrefix} <span className="text-paper">{displayName}</span>
         </h1>
 
         <div className="space-y-4">

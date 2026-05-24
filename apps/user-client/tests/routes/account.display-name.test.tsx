@@ -6,9 +6,6 @@ import 'fake-indexeddb/auto';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the crypto-DB-backed account load so the AccountSection reaches the
-// "ready" state. The Display Name block lives inside that ready branch but
-// reads from the (real) client-data DB seeded in beforeEach below.
 vi.mock('@chatsundere/crypto', () => ({
   CryptoError: class CryptoError extends Error {
     code: string;
@@ -19,11 +16,18 @@ vi.mock('@chatsundere/crypto', () => ({
   },
   changeUsername: vi.fn(),
   deleteLocalAccount: vi.fn(),
-  getLocalAccount: vi.fn(async () => ({ username: 'liz', created_at: new Date('2026-01-01') })),
+  getLocalAccount: vi.fn(async () => ({
+    username: 'chris151',
+    created_at: new Date('2026-05-01'),
+  })),
+  listLocalBiometric: vi.fn(async () => []),
+  regenerateRecoveryKey: vi.fn(),
+  deletePasskeyCredential: vi.fn(),
 }));
 
 vi.mock('@chatsundere/ui-shared', () => ({
   ConfirmTyped: () => null,
+  InlineMarker: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   useSessionStore: Object.assign(
     vi.fn(() => ({ mk: new Uint8Array(32) })),
     {
@@ -36,25 +40,50 @@ vi.mock('../../src/boot/open-db.js', () => ({
   getDb: () => ({}),
 }));
 
+vi.mock('../../src/lib/webauthn-availability.js', () => ({
+  isWebAuthnAvailable: () => true,
+}));
+
+vi.mock('../../src/lib/webauthn.js', () => ({
+  registerLocalBiometric: vi.fn(),
+  PrfRequiredError: class extends Error {},
+}));
+
+vi.mock('../../src/lib/passkey-management.js', () => ({
+  renamePasskey: vi.fn(),
+}));
+
+vi.mock('../../src/version.js', () => ({ APP_VERSION: '0.0.0-test' }));
+
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
-import { AccountSection } from '../../src/routes/app/account-sections/account-section.js';
+import { AccountPage } from '../../src/routes/app/account.js';
 
-function renderSection() {
+function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <AccountSection />
+        <AccountPage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-describe('AccountSection display-name input', () => {
+/**
+ * AccountPage renders the four sections inside AccordionCards which
+ * default to collapsed. The Display Name input lives inside the
+ * "Account" accordion — open it so the input becomes queryable.
+ */
+async function openAccountAccordion() {
+  const header = await screen.findByText('Account');
+  fireEvent.click(header);
+}
+
+describe('My Account display-name (Save & Back model)', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
     await openClientDataDb();
@@ -65,32 +94,36 @@ describe('AccountSection display-name input', () => {
 
   it('renders a Display Name input with the current displayName prefilled', async () => {
     await getClientDataDb().settings.update(1, { displayName: 'Chris Tidesson' });
-    renderSection();
+    renderPage();
+    await openAccountAccordion();
     const input = await screen.findByLabelText<HTMLInputElement>(/display name/i);
     expect(input.value).toBe('Chris Tidesson');
     expect(input.maxLength).toBe(60);
   });
 
-  it('persists a trimmed displayName on blur', async () => {
-    renderSection();
+  it('Save & Back becomes enabled when the draft changes; click persists trimmed displayName', async () => {
+    renderPage();
+    await openAccountAccordion();
     const input = await screen.findByLabelText<HTMLInputElement>(/display name/i);
     fireEvent.change(input, { target: { value: '  Chris Tidesson  ' } });
-    fireEvent.blur(input);
+    const saveBtn = await screen.findByRole('button', { name: /save & back/i });
+    expect(saveBtn).not.toBeDisabled();
+    fireEvent.click(saveBtn);
     await waitFor(async () => {
       const settings = await getClientDataDb().settings.get(1);
       expect(settings?.displayName).toBe('Chris Tidesson');
     });
   });
 
-  it('normalises whitespace-only input to empty string on blur', async () => {
-    await getClientDataDb().settings.update(1, { displayName: 'something' });
-    renderSection();
+  it('does NOT persist on blur (only Save & Back persists)', async () => {
+    renderPage();
+    await openAccountAccordion();
     const input = await screen.findByLabelText<HTMLInputElement>(/display name/i);
-    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.change(input, { target: { value: 'should-not-persist-on-blur' } });
     fireEvent.blur(input);
-    await waitFor(async () => {
-      const settings = await getClientDataDb().settings.get(1);
-      expect(settings?.displayName).toBe('');
-    });
+    // Wait a tick to give any stray async work a chance to fire.
+    await new Promise((r) => setTimeout(r, 50));
+    const settings = await getClientDataDb().settings.get(1);
+    expect(settings?.displayName).toBe('');
   });
 });

@@ -62,4 +62,21 @@ describe('useDisplayName', () => {
     renderProbe();
     await waitFor(() => expect(screen.getByTestId('dn').textContent).toBe('—'));
   });
+
+  it('honours the fallback parameter when displayName and session are empty', async () => {
+    useSessionStore.setState({ session: null });
+    function ProbeWithFallback(): JSX.Element {
+      const name = useDisplayName('local-username-fallback');
+      return <span data-testid="dn-fb">{name}</span>;
+    }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <ProbeWithFallback />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('dn-fb').textContent).toBe('local-username-fallback'),
+    );
+  });
 });

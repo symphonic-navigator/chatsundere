@@ -3,6 +3,24 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { SplashContext } from './SplashContext.js';
 
+// Detect hard-reload (Ctrl+F5 / Ctrl+Shift+R). Browsers route hard-reloads
+// around the Service Worker, so the navigation entry's transferSize is > 0;
+// soft-reloads (F5) hit the SW cache and report transferSize === 0. Clearing
+// splashShown here means the splash gating below sees a fresh session and
+// replays the animation.
+if (typeof window !== 'undefined') {
+  try {
+    const navEntry = performance.getEntriesByType('navigation')[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    if (navEntry?.type === 'reload' && (navEntry.transferSize ?? 0) > 0) {
+      sessionStorage.removeItem('splashShown');
+    }
+  } catch {
+    // Performance API or sessionStorage unavailable — degrade silently.
+  }
+}
+
 const STORAGE_KEY = 'splashShown';
 const HARD_TIMEOUT_MS = 3000;
 

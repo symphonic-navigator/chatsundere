@@ -36,13 +36,15 @@ export function useUpdateSettings() {
  *
  * Priority chain:
  *   1. settings.displayName.trim() if non-empty
- *   2. session.username
- *   3. '—' (em-dash placeholder while the session is null)
+ *   2. fallback parameter (e.g. a username known to a pre-session screen)
+ *   3. session.username (when logged in)
+ *   4. '—' (em-dash placeholder)
  */
-export function useDisplayName(): string {
+export function useDisplayName(fallback?: string | null): string {
   const settings = useSettings();
   const session = useSessionStore((s) => s.session);
   const trimmed = settings.data?.displayName?.trim();
   if (trimmed) return trimmed;
+  if (fallback) return fallback;
   return session?.username ?? '—';
 }

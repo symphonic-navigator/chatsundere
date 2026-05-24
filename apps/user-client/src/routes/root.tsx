@@ -69,7 +69,7 @@ export function Root() {
 
   return (
     <SplashContext.Provider value={{ topbarLogoRef }}>
-      <div className="relative isolate min-h-dvh overflow-x-hidden">
+      <div className="relative isolate min-h-dvh overflow-x-clip">
         <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 backdrop-blur-sm lg:px-6 lg:py-4">
           {/* Logo — gradient wordmark + twinkle, sized via .brand-logo CSS */}
           <Link to="/" className="brand-logo" style={{ opacity: topbarLogoVisible ? 1 : 0 }}>
