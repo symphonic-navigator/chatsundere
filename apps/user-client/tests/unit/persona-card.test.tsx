@@ -114,20 +114,19 @@ describe('PersonaCard', () => {
     const ms = makeMindspace({
       palette: {
         ...makeMindspace().palette,
-        surfaceBase: '#3a2e15',
-        accentBorder: '#6a5821',
+        accentSubtle: 'rgba(201, 168, 76, 0.06)',
+        accentBorder: 'rgba(201, 168, 76, 0.15)',
       },
     });
     const { container } = wrap(
       <PersonaCard persona={makePersona()} mindspace={ms} hasProvider onChat={() => {}} />,
     );
     const li = container.querySelector('[data-persona-card]') as HTMLElement;
-    // jsdom normalises 8-digit-hex (#RRGGBBAA) to rgba(); check both forms
-    // so the assertion survives a real-browser CSSOM that keeps the hex.
+    // jsdom normalises whitespace inside rgba(); accept both forms.
     const bg = li.style.background;
-    const border = li.style.border;
-    expect(bg.includes('#3a2e15') || bg.includes('rgba(58, 46, 21')).toBe(true);
-    expect(border.includes('#6a5821') || border.includes('rgb(106, 88, 33)')).toBe(true);
+    expect(bg.includes('rgba(201, 168, 76') || bg.includes('rgba(201,168,76')).toBe(true);
+    const brd = li.style.border;
+    expect(brd.includes('rgba(201, 168, 76') || brd.includes('rgba(201,168,76')).toBe(true);
   });
 
   it('applies persona-card-nsfw class when persona is adult', () => {

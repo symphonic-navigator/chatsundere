@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PersonaCard } from '../../components/PersonaCard.js';
 import { useMindspaces } from '../../data/mindspaces.js';
@@ -7,6 +8,7 @@ import { useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
 import { resolveMindspace } from '../../state/mindspace-resolver.js';
+import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 /**
  * My Circle — lists the user's personas (filtered by current adult-mode)
@@ -25,6 +27,21 @@ export function Circle(): JSX.Element {
   const providers = useProviders();
   const mindspaces = useMindspaces();
   const settings = useSettings();
+  const setMindspace = useMindspaceStore((s) => s.update);
+
+  useEffect(() => {
+    if (!mindspaces.data || !settings.data) return;
+    // Circle owns the user-default mindspace context. Without this reset,
+    // the Persona-Editor's mindspace would leak back when the user
+    // navigates back from editing a persona.
+    setMindspace({
+      persona: null,
+      defaultMindspaceId: settings.data.defaultMindspaceId,
+      defaultTexture: settings.data.userTexture,
+      mindspaces: mindspaces.data,
+    });
+  }, [mindspaces.data, settings.data, setMindspace]);
+
   const enabledProviderIds = new Set(
     (providers.data ?? []).filter((p) => p.enabled).map((p) => p.id),
   );

@@ -18,9 +18,11 @@ interface Props {
  * Visual layers (outer-to-inner):
  *  - Adult-status: NSFW (danger-red) or SFW (paper-soft-grey) box-shadow
  *    ring + shimmer streak via .persona-card-{nsfw,sfw} CSS.
- *  - Mindspace: card background tint (palette.surfaceBase at 10% opacity)
- *    + base border (palette.accentBorder) reflect the persona's resolved
- *    mindspace (with fallback to user default — resolved by the caller).
+ *  - Mindspace: card background tint (palette.accentSubtle — a 6% rgba
+ *    of the persona's mindspace accent colour) + base border
+ *    (palette.accentBorder, a 15% rgba of the same accent) reflect the
+ *    persona's resolved mindspace (with fallback to user default —
+ *    resolved by the caller).
  *  - Persona identity: monogram tile + name in persona.colour, tagline.
  *
  * The `mindspace` prop is required — there is intentionally no default
@@ -45,7 +47,7 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
         persona.adultPersona ? 'persona-card-nsfw' : 'persona-card-sfw'
       }`}
       style={{
-        background: `${mindspace.palette.surfaceBase}1a`,
+        background: mindspace.palette.accentSubtle,
         border: `1px solid ${mindspace.palette.accentBorder}`,
         ['--persona-shimmer-delay' as unknown as string]: `${shimmerDelaySeconds}s`,
       }}

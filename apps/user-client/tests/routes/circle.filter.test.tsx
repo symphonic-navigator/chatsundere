@@ -11,6 +11,7 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { Circle } from '../../src/routes/app/circle.js';
+import { useMindspaceStore } from '../../src/state/mindspace.store.js';
 
 async function seedSfwAndNsfw() {
   const db = getClientDataDb();
@@ -88,6 +89,38 @@ describe('Circle filter (adult mode)', () => {
     expect(screen.queryByText(/hidden/i)).toBeNull();
     expect(screen.queryByText(/nsfw/i)).toBeNull();
     expect(screen.queryByText(/switch to/i)).toBeNull();
+  });
+
+  it('resets the global mindspace store to the user default on mount', async () => {
+    // Pretend a previous route (e.g. Persona-Editor) left a persona-specific
+    // mindspace in the store. Circle's mount-effect must overwrite it with
+    // the user default (persona: null).
+    useMindspaceStore.setState({
+      resolved: {
+        id: 'wrong-id',
+        displayName: 'Wrong',
+        palette: {
+          bg: '#000',
+          surfaceBase: '',
+          surfaceRaised: '',
+          surfaceInput: '',
+          accent: '#fff',
+          accentSubtle: '',
+          accentBorder: '',
+          accentBorderActive: '',
+          accentGlow: '',
+          text: { primary: '', secondary: '', muted: '', ghost: '' },
+        },
+        texture: 'cloudy',
+        builtIn: false,
+        createdAt: 0,
+      },
+    });
+    renderCircle();
+    await waitFor(() => {
+      const r = useMindspaceStore.getState().resolved;
+      expect(r?.id).not.toBe('wrong-id');
+    });
   });
 
   it('SFW mode with ALL personas adult shows identical "no personas yet" empty state', async () => {

@@ -96,14 +96,12 @@ export function PersonaEditor(): JSX.Element {
   useEffect(() => {
     if (!mindspaces.data || !settings.data) return;
     setMindspace({
-      persona: persona.data
-        ? { mindspaceId: persona.data.mindspaceId, textureOverride: persona.data.textureOverride }
-        : null,
+      persona: { mindspaceId: draft.mindspaceId, textureOverride: draft.textureOverride },
       defaultMindspaceId: settings.data.defaultMindspaceId,
       defaultTexture: settings.data.userTexture,
       mindspaces: mindspaces.data,
     });
-  }, [persona.data, mindspaces.data, settings.data, setMindspace]);
+  }, [draft.mindspaceId, draft.textureOverride, mindspaces.data, settings.data, setMindspace]);
 
   function patch(p: Partial<DraftPersona>) {
     userModifiedRef.current = true;
