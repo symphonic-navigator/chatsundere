@@ -1,24 +1,21 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (even later) — Phase 2.7 (Account Room +
-Polish Iteration 3) complete. Seven plan tasks across seven Phase-2.7
-commits (`0a77b57` Persona SaveBar weg, `d9af78b` AccordionCard
-scrollIntoView, `69e7998` Hall My Account tile + topbar Zahnrad weg,
-`e2c0efa` account-section ports, `976093f` /app/account route +
-EditorTopbar.hideSaveAndBack, `3732ca0` invitation wizard ?return=
-handling, `1041883` /settings/* deletion + change-passphrase
-migration, plus this doc commit). All 183 user-client tests pass;
-typecheck + Biome lint clean. Manual smoke pending on Chris's
-device for the new My Account room, the wizard return-URL fix,
-the bottom-SaveBar removal in Persona Editor, and the accordion
-scrollIntoView. Block-1 wireframes landed in `chatsundere-prototype.html`
+**Last updated:** 2026-05-24 (Phase 2.8 landed) — Polish Block
+complete. Four squashed Phase-2.8 commits (`efec239` brand logo,
+`9ed8787` EditorSticky pattern, `e6c252e` Display-Name + Hall
+greeting, `a699fb2` Splash-Screen + FLIP, plus this doc commit).
+All 212 user-client tests pass; typecheck + Biome lint clean;
+full build clean. Manual smoke pending on Chris's device for the
+new brand logo (gradient + twinkle), the sticky-header pattern on
+editor-class routes, the Display-Name field with Hall fallback,
+and the cold-start splash overlay. Block-1 wireframes landed in `chatsundere-prototype.html`
 for Reading + Interaction Mode + Entrance Hall + My Settings + My
 Circle + Persona Editor; only My History (Phase 4) remains
 wireframe-blocked. Phase 3 (Chat surface) is the next deliverable.
 Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
-(Decisions 1-47; D28 revoked by D36); Phase-2.7 plan at
-[`superpowers/plans/2026-05-24-client-block-1-phase-2-7-account-room.md`](../superpowers/plans/2026-05-24-client-block-1-phase-2-7-account-room.md).
+(Decisions 1-47; D28 revoked by D36); Phase-2.8 plan at
+[`superpowers/plans/2026-05-24-polish-block-phase-2-8.md`](../superpowers/plans/2026-05-24-polish-block-phase-2-8.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -316,6 +313,59 @@ update the relevant one at the end.
     composition (2 cases), server-linking section navigation. All
     183 user-client tests pass.
 
+- **Phase 2.8 — Polish Block (2026-05-24)**. Four squashed commits on
+  master following Chris's pre-very-early-alpha polish ask. Driven by
+  subagent-driven-development per task. What landed:
+  - `apps/user-client/src/index.css` — new `.brand-logo` rules (cyan→
+    pink→gold gradient + `✦` twinkle, identical to docs/index.html)
+    plus `.splash-*` keyframes and reduced-motion overrides. Italic
+    Lora wordmark replaced by the gradient brand mark in the topbar.
+  - `apps/user-client/src/routes/root.tsx` — italic Lora wordmark
+    replaced by the gradient brand mark; new topbarLogoRef passed
+    through `SplashContext` to the overlay; topbar logo held
+    `opacity: 0` until the splash FLIP completes (or until the splash
+    dismisses without one — 150 ms safety poll, capped at 3.5 s).
+  - `apps/user-client/src/components/EditorSticky.tsx` (new) — shared
+    sticky-region wrapper adopted by Persona Editor (topbar +
+    Continue/New Chat/Incognito quick-actions in edit mode), My
+    Settings (topbar only), and My Account (topbar only). `top-11
+    lg:top-14 z-10` offsets the region to sit below the global root
+    header (which is sticky `top-0 z-20`); exposes `data-editor-sticky`
+    as a stable test selector instead of fragile class-substring
+    matches. Identity and Delete-zone stay outside the sticky on
+    purpose (Delete is meant to be slightly harder to reach).
+  - `apps/user-client/src/boot/client-data-db.ts` — Dexie v4 migration
+    adds `SettingsRow.displayName: string`, backfills `''` on existing
+    rows, seeds `''` on fresh installs.
+  - `apps/user-client/src/data/settings.ts` — `useDisplayName()` hook:
+    trimmed `displayName` → `session.username` → `'—'`.
+  - `apps/user-client/src/routes/app/account-sections/account-section.tsx`
+    — new Display Name input block above the existing username
+    section; live-write on blur via `useUpdateSettings`; max 60
+    chars; whitespace-only normalises to empty; gated on a one-shot
+    init flag so the settings-resolve seed can't overwrite in-flight
+    user typing.
+  - `apps/user-client/src/routes/app/entrance-hall.tsx` — "WELCOME
+    BACK" greeting now uses `useDisplayName()` instead of
+    `session?.username`.
+  - `apps/user-client/src/components/{SplashContext,SplashOverlay}.tsx`
+    (new) — cold-start splash overlay gated by
+    `sessionStorage.splashShown`. Tap/Escape/3s-hard-timeout skip
+    paths; `prefers-reduced-motion` reduces to a 200 ms crossfade.
+    FLIP migration computes `transform: translate(Δx,Δy) scale(s)`
+    from `getBoundingClientRect` deltas and applies it with
+    `transition: transform 500 ms ease-in-out`; on completion
+    dispatches `chatsundere:splash-flip-done` for Root to flip the
+    topbar opacity to 1.
+  - Tests: 20+ new Vitest cases (EditorSticky 5 incl. data-attribute,
+    SplashOverlay 6 incl. null-ref bailout, client-data-db-v4 2,
+    useDisplayName 4, account.display-name 3, entrance-hall.greeting
+    2, root.brand-logo 2, root.splash 2, persona-editor.sticky 1,
+    settings.sticky 1, account.sticky 1). All 212 user-client tests
+    pass; llm-unified Bun tests untouched and green; full
+    `pnpm typecheck && pnpm lint && pnpm --filter user-client run build`
+    clean.
+
 ## Briefed, awaiting implementation
 
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
@@ -344,56 +394,55 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2.7 finished. Paused for Chris's iteration-4 manual smoke
-covering the new My Account room (Hall tile, accordion page,
-sections), the bottom-SaveBar removal on Persona Editor, the
-accordion smooth-scroll behaviour, and the server-linking →
-invitation-wizard → Back-returns-to-account flow.
+Phase 2.8 finished. Paused for Chris's iteration-5 manual smoke covering
+the new brand logo (gradient + twinkle), the sticky-header pattern on
+all three editor-class routes, the Display-Name field with Hall
+greeting fallback, and the cold-start splash overlay (full motion, tap-
+to-skip, Escape, reduced-motion fallback, 3s safety timeout, FLIP
+migration to the topbar logo position).
 
 ---
 
 ## Next session
 
-1. **Chris's iteration-4 smoke after Phase 2.7** — reload the PWA and
+1. **Chris's iteration-5 smoke after Phase 2.8** — reload the PWA and
    walk through:
-   - **No more gear icon** in the top-right of the global topbar
-     (no matter which screen you are on). Only the username + the
-     connectivity badge sit there.
-   - **Entrance Hall has six tiles** in three rows of two — My
-     Circle (active), My Projects (greyed), My History (greyed),
-     My Treasury (greyed), My Settings (active), My Account
-     (active, new, icon `⌬`).
-   - **Tap "My Account":** opens an accordion page titled "My
-     Account" (EditorTopbar with back-button, no Save & Back pill
-     on the right). Four accordions: Account / Auth Methods /
-     Server Linking / About.
-   - **Accordion smooth-scroll:** open Upstream Providers in My
-     Settings — the accordion smooth-scrolls into view if it was
-     below the fold. Same in any other accordion across My Settings,
-     My Account, and Persona Editor.
-   - **Server Linking accordion:** shows "Not linked — local-only
-     mode" status. Tapping "Link to server" navigates to the
-     invitation wizard. On the wizard's first step, tapping the
-     Back arrow returns you to **/app/account**, not /onboarding.
-     (Walk a few wizard steps forward and back to verify the
-     `?return=/app/account` query param survives.)
-   - **Persona Editor:** the bottom Save Persona button is gone.
-     Only "Save & Back" at the top-right persists. Back at top-left
-     still asks "Discard your unsaved changes?" when you have
-     edits.
+   - **Brand logo (top-left, every route):** gradient cyan→pink→gold
+     'Chatsundere', no italic, with the gold `✦` twinkling on the same
+     3-second cadence as chatsune.me. With OS-level reduced-motion on,
+     the `✦` is visible at lower opacity but does not animate.
+   - **Sticky header (Persona Editor edit-mode):** scrolling keeps
+     `← Edit Persona  [Save & Back]` plus the Continue / New Chat /
+     Incognito row glued to the top (just below the brand bar, not
+     overlapping). Identity, Custom Instructions, Behavior,
+     Mindspace-Override, About-Me-Override, and the Delete-zone all
+     scroll underneath the blurred sticky bar.
+   - **Sticky header (Persona Editor create-mode):** only the topbar is
+     sticky; no quick-actions row.
+   - **Sticky header (My Settings, My Account):** only the topbar is
+     sticky.
+   - **Display Name (My Account → Account section):** type 'Chris
+     Tidesson' in the new Display Name field at the top of the Account
+     section, blur. Go to Entrance Hall — greeting reads "WELCOME BACK
+     / Chris Tidesson". Clear the field, blur — greeting falls back to
+     the username.
+   - **Splash (cold start):** quit and relaunch the PWA. Splash plays:
+     gradient background fades in, 'Chatsundere' + tagline appear,
+     tagline drifts down and fades, 'Chatsundere' wanders and shrinks
+     into the topbar position, overlay fades. Then F5 — splash does
+     NOT replay. Quit + relaunch — splash DOES replay.
+   - **Splash skip paths:** new session, tap during the animation →
+     overlay vanishes; new session, Escape during the animation →
+     overlay vanishes; reduced-motion enabled → splash is a 200ms
+     crossfade with no movement.
 
-2. **Earlier iteration-3 smoke checklist (Phase 2.6)** — if not yet
-   performed, the typography / dynamic meta / Font-and-Voice /
-   draft+Save items are still valid (see the Phase-2.6 Done block
-   above for the full list).
-
-3. **Phase 3 brainstorm + plan** — walk through the chat surface
+2. **Phase 3 brainstorm + plan** — walk through the chat surface
    wireframes in `chatsundere-prototype.html` (Reading Mode +
    Interaction Mode + Cockpit). Open the ADR "Tool Display Position"
    discussion.
 
-4. **Phase 3 execution** — subagent-driven, same pattern as Phases
-   1, 2, 2.5, 2.6, 2.7.
+3. **Phase 3 execution** — subagent-driven, same pattern as Phases
+   1, 2, 2.5, 2.6, 2.7, 2.8.
 
 ---
 
