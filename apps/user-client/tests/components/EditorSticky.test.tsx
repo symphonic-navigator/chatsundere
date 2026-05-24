@@ -27,7 +27,7 @@ describe('EditorSticky', () => {
     expect(wrapper.className).toContain('z-10');
   });
 
-  it('applies backdrop-blur + hairline border', () => {
+  it('applies backdrop-blur + hairline border, no dark fill', () => {
     const { container } = render(
       <EditorSticky>
         <div>x</div>
@@ -36,6 +36,7 @@ describe('EditorSticky', () => {
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper.className).toContain('backdrop-blur-sm');
     expect(wrapper.className).toContain('border-b');
+    expect(wrapper.className).not.toContain('bg-ink');
   });
 
   it('extends across the px-4 route gutter via negative margin', () => {
@@ -47,6 +48,16 @@ describe('EditorSticky', () => {
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper.className).toContain('-mx-4');
     expect(wrapper.className).toContain('px-4');
+  });
+
+  it('applies a negative top margin to cancel the consumer section pt-4 (no scroll-lag)', () => {
+    const { container } = render(
+      <EditorSticky>
+        <div>x</div>
+      </EditorSticky>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain('-mt-4');
   });
 
   it('exposes a stable data-editor-sticky attribute for consumer tests', () => {
