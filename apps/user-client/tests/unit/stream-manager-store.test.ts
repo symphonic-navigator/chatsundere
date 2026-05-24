@@ -4,6 +4,7 @@ import 'fake-indexeddb/auto';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import * as engine from '../../src/lib/stream-engine';
+import * as titleGen from '../../src/lib/title-generator';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
 
 async function seedChat() {
@@ -158,6 +159,72 @@ describe('stream-manager.store', () => {
     expect(msgs.filter((m) => m.role === 'user').length).toBe(1);
     expect(msgs.filter((m) => m.role === 'persona').length).toBe(0);
     expect(useStreamManagerStore.getState().has(chatId)).toBe(false);
+  });
+
+  it('fires title-gen after the first persona response (no-await)', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'Hi there' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+    const store = useStreamManagerStore.getState();
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    // Small delay for the fire-and-forget title-gen to resolve.
+    await new Promise((r) => setTimeout(r, 80));
+    expect(titleSpy).toHaveBeenCalled();
+    const callArg = titleSpy.mock.calls[0]?.[0] as {
+      firstPersonaResponse: string;
+      firstUserMessage: string;
+    };
+    expect(callArg.firstPersonaResponse).toBe('Hi there');
+    expect(callArg.firstUserMessage).toBe('Hello');
+  });
+
+  it('does not fire title-gen for subsequent persona responses', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    // Plant a prior completed persona message so this is the "second" response.
+    await db.messages.add({
+      id: 'prior-p',
+      chatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'earlier' }],
+      createdAt: 50,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'second' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+    const store = useStreamManagerStore.getState();
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(titleSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not fire title-gen if chat.title is already set', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'pre-set title' });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'whatever' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+    const store = useStreamManagerStore.getState();
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(titleSpy).not.toHaveBeenCalled();
   });
 
   it('abortAllForPersonaDiscard kicks every stream against a persona', async () => {

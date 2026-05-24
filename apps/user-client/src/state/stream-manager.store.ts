@@ -3,6 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
 import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
+import { generateTitleAsync } from '../lib/title-generator.js';
 
 export interface StreamHandle {
   chatId: string;
@@ -27,6 +28,31 @@ interface StreamManagerStore {
   abortAllForPersonaDiscard: (personaId: string) => Promise<void>;
   has: (chatId: string) => boolean;
   getDraftMessage: (chatId: string) => { id: string; contentBlocks: ContentBlock[] } | null;
+}
+
+async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[]): Promise<void> {
+  const firstPersonaResponse = finalContentBlocks
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+  try {
+    await generateTitleAsync({
+      chat: args.chat,
+      persona: args.persona,
+      provider: args.provider,
+      providerConfig: args.providerConfig,
+      apiKey: args.apiKey,
+      corsProxyUrl: args.corsProxyUrl,
+      corsProxyKey: args.corsProxyKey,
+      model: args.model,
+      firstUserMessage: args.userText,
+      firstPersonaResponse,
+      globalUnlocker: args.globalUnlocker,
+      globalAboutMe: args.globalAboutMe,
+    });
+  } catch {
+    // generateTitleAsync handles its own errors → fallback title.
+  }
 }
 
 export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
@@ -112,6 +138,19 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           if (pillsWithMessageId.length) await db.pills.bulkAdd(pillsWithMessageId);
           await db.chats.update(args.chatId, { lastMessageAt: Date.now() });
         });
+
+        // Fire title-gen for first persona response (best-effort, no await).
+        const chatAfter = await db.chats.get(args.chatId);
+        if (chatAfter && chatAfter.title === null) {
+          const personaMsgCount = await db.messages
+            .where('chatId')
+            .equals(args.chatId)
+            .filter((m) => m.role === 'persona' && m.streamingState === 'complete')
+            .count();
+          if (personaMsgCount === 1) {
+            void fireTitleGen(args, result.finalContentBlocks);
+          }
+        }
 
         current.status = 'done';
 

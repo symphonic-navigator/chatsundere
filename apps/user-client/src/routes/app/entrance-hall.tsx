@@ -52,6 +52,7 @@ function RoomTile({ label, icon, meta, to, disabled, tooltip }: RoomTileProps) {
 
 /** Landing surface for /app — greeting, optional continue-card, and six room tiles. */
 export function EntranceHall(): JSX.Element {
+  const navigate = useNavigate();
   const displayName = useDisplayName();
   const settings = useSettings();
   const personas = useFilteredPersonas();
@@ -93,7 +94,7 @@ export function EntranceHall(): JSX.Element {
         <button
           type="button"
           className="rounded-2xl border border-paper-soft/30 bg-white/[0.04] p-4 text-left"
-          // Phase-3 navigates into Reading Mode; Phase 2 no-op (chat surface not built yet).
+          onClick={() => navigate(`/app/chat/${recentChat.id}`)}
         >
           <div className="text-[10px] uppercase tracking-widest text-paper-soft">Continue chat</div>
           <div className="mt-1 font-display text-lg" style={{ color: recentPersona.colour }}>

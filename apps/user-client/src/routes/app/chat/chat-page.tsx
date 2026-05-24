@@ -1,6 +1,6 @@
 import { composeSystemPrompt, getProvider } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
@@ -10,6 +10,7 @@ import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { ScrollToEnd } from '../../../components/chat/ScrollToEnd.js';
+import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { useChat, useUpdateChat } from '../../../data/chats.js';
 import { useSendMessage } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
@@ -26,6 +27,7 @@ export function ChatPage(): JSX.Element {
   const [search] = useSearchParams();
   const personaIdFromQuery = search.get('personaId');
   const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const isLazy = !chatId;
   const activeChatId = chatId ?? null;
@@ -204,6 +206,55 @@ export function ChatPage(): JSX.Element {
           streamHandle={streamHandle}
         />
       ) : null}
+
+      {(() => {
+        const last = messages[messages.length - 1];
+        if (!last || last.streamingState !== 'incomplete') return null;
+        return (
+          <StreamInterruptedFooter
+            disabled={isStreamLive}
+            onRetry={async () => {
+              // activeChatId is non-null whenever messages exist (chat-mode only).
+              if (!activeChatId) return;
+              const db = getClientDataDb();
+              const allMsgs = await db.messages
+                .where('chatId')
+                .equals(activeChatId)
+                .sortBy('createdAt');
+              const incomplete = allMsgs.find((m) => m.id === last.id);
+              const priorUser = [...allMsgs]
+                .reverse()
+                .find(
+                  (m) =>
+                    m.role === 'user' &&
+                    m.createdAt < (incomplete?.createdAt ?? Number.POSITIVE_INFINITY),
+                );
+              if (incomplete) await db.messages.delete(incomplete.id);
+              if (priorUser && effectivePersona) {
+                const text = priorUser.contentBlocks
+                  .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+                  .map((b) => b.text)
+                  .join('');
+                // Delete the prior user-message too so useSendMessage's insert doesn't duplicate it.
+                await db.messages.delete(priorUser.id);
+                await qc.invalidateQueries({ queryKey: ['chat', activeChatId] });
+                await sendMessage.mutateAsync({
+                  chatId: activeChatId,
+                  personaId: effectivePersona.id,
+                  text,
+                  reasoning,
+                });
+              } else {
+                await qc.invalidateQueries({ queryKey: ['chat', activeChatId] });
+              }
+            }}
+            onDiscard={async () => {
+              await getClientDataDb().messages.delete(last.id);
+              await qc.invalidateQueries({ queryKey: ['chat', activeChatId] });
+            }}
+          />
+        );
+      })()}
 
       {!isInteractionMode && hasMessages ? (
         autoFollowEnabled ? (

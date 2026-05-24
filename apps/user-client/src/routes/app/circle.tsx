@@ -84,8 +84,8 @@ export function Circle(): JSX.Element {
               persona={p}
               mindspace={ms}
               hasProvider={enabledProviderIds.has(p.providerId)}
-              onChat={(_id) => {
-                // Phase-3 work: open or create a chat surface. No-op for Phase 2.
+              onChat={(personaId) => {
+                navigate(`/app/chat/new?personaId=${personaId}`);
               }}
             />
           );

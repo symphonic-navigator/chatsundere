@@ -518,35 +518,45 @@ update the relevant one at the end.
 ## Doing now
 
 Phase 3.1 (Chat Backbone) + Phase 3.2 (Background-Stream + Multi-Chat
-+ NSFW Panic) implementation both complete on master. Chris asked
-to defer squashing until the entire Phase 3 trio is in (option c) —
-three separate squash-commits will land together when Phase 3.3 is
-done. Continuing now with Phase 3.3 (Pills integration + Title-Gen +
-Partial-Stream Recovery + Polish, Tasks 34–41).
++ NSFW Panic) + Phase 3.3 (Pills integration + Title-Gen + Partial-
+Stream Recovery) all implementation-complete on master. Per Chris's
+2026-05-24 choice (option c), the three sub-phases are NOT yet squashed
+— they land together once the full trio's smoke clears. Paused for
+Chris's manual smoke covering spec §11.3 items 1-11 on a real device,
+then triple-squash and Phase 3 is done.
 
-Phase 3.2 delta on top of 3.1: `534fa23` Toast component + store;
-`024e5bb` BackgroundStreamBadge in brand-bar; `177ff99` NSFW Panic
-auto-kick on `nsfw → sfw` adult-mode transition (`abortDiscard` of
-adult-persona streams + navigation to Entrance Hall + warn-toast when
-the user was inside one). Task 32 (Cockpit Send disable while stream
-live) was already covered by Tasks 24+27 via the `isStreamLive` prop
-flowing from the stream-manager through ChatPage. Plus a small
-follow-up commit `c7d8455` fixing two test-side reveals (AdultModeToggle
-test needed a MemoryRouter now that the toggle calls `useNavigate` for
-the panic kick; stream-manager-store's parallel-multi-chat test was
-racing a 20 ms timeout in the full suite — replaced with direct
-awaits).
+Phase 3.3 delta on top of 3.2: `64d6c4d` Pill rendering integration
+test (end-to-end persistence → DOM); `80acd56` ADR 0029 — Tool Display
+Position (forward-looking, hardcoded `inline` in Phase 3, Tool-Registry
+override later); `64a2713` title-generator + `sanitiseTitle` +
+`fallbackTitle` ("New chat — D MMM, HH:mm"); `49c1a0d` wire title-gen
+into stream-manager (fires once, after first persona response, with
+the active persona's provider+model AND the global unlocker composed
+into the system prompt per the `background-jobs-prompt-composition`
+memory rule); `73c43eb` Stream-Interrupted footer (Retry + Discard
+buttons rendered below an `incomplete` last persona-message).
 
-All 367 user-client Vitest tests pass across 83 files; 132 Bun tests
-in `packages/llm-unified` still green; `pnpm typecheck && pnpm lint`
-fully cached and clean.
+**Polish deferred:** Tasks 39 (affordance breathing / scroll-to-end
+micro-animation / pin glow tuning) and 40 (optional per-card streaming
+indicator) are scoped as Polish iterations on top of the 3.3 baseline.
+The baseline already ships `@keyframes affordance-glow`, `journal-pulse`,
+`bg-stream-pulse`, `streaming-cursor-blink`, plus `prefers-reduced-motion`
+overrides. Chris's manual smoke determines whether 39/40 need a
+follow-up iteration or whether the current treatment is enough.
+
+All 388 user-client Vitest tests pass across 87 files; 132 Bun tests in
+`packages/llm-unified` still green; `pnpm typecheck && pnpm lint && pnpm
+--filter user-client run build` fully clean.
 
 ---
 
 ## Next session
 
-1. **Phase 3.1 smoke on Chris's device** — items 1, 2, 3, 8, 9 from
-   spec §11.3:
+1. **Phase 3 trio smoke on Chris's device** — items 1–11 from spec
+   §11.3. Item 12 (per-card streaming indicator) is a 3.3 polish
+   deferred and may slip to a follow-up.
+
+   Items 1, 2, 3, 8, 9 (3.1):
    - **Lazy-chat flow:** Circle → tap a persona's New Chat → empty
      Reading Mode with "<Persona> is listening" + Cockpit auto-open and
      pinned. Type something, Hamburger out, come back — draft text
@@ -566,23 +576,57 @@ fully cached and clean.
      Off entry visible. (No `no_reasoning` model is in
      `FIRST-MODELS.md` so that branch can't be smoked yet.)
 
-   The remaining items 4–7, 10, 11, 12 belong to Phase 3.2 + 3.3
-   (Background-Stream, Multi-Chat, NSFW Panic, Pin, Title-gen, Partial
-   Recovery, per-card stream indicator) and stay out of this smoke.
+   Items 4–7 (3.2 — Background-Stream + Multi-Chat + NSFW Panic + Pin):
+   - **Background-Stream:** Send a question, Hamburger out mid-stream
+     to the Entrance Hall, watch `BackgroundStreamBadge` light up in
+     the brand-bar (persona initial when one stream; counter when
+     multiple). Tap the badge → routes back to that chat.
+   - **Multi-Chat-Stream:** Start a stream in Aurum's chat, navigate
+     to a different persona via Circle, start a New Chat there, send.
+     Both stream in parallel; both finish; both get titles after seconds.
+   - **NSFW Panic:** Mark a persona as `adultPersona: true` (Persona
+     Editor — Behavior accordion). Start a chat with that persona,
+     send a message. While the stream is in flight, toggle the brand-
+     bar Adult-Mode pill from NSFW → SFW. The stream is aborted, the
+     draft persona-message disappears, the user is back in the Entrance
+     Hall, and the warn-toast "Adult mode off — chat closed" appears.
+   - **Pin** prevents auto-close: in Interaction Mode tap Pin (becomes
+     gold-tinted), then send a message — the Cockpit stays open. Untap
+     to restore default auto-close behaviour.
 
-2. **Squash Phase 3.1** — collapse the 27 task-commits `464e244` →
-   `ba27f25` (plus the format-fix `851b21d`) into a single Phase-3.1
-   commit with the summary from plan Task 28.
+   Items 10, 11 (3.3 — Title-Gen + Partial Recovery):
+   - **Title-Gen:** First send in a new chat. After the persona response
+     completes, watch the My-History / Continue-Card label switch from
+     the fallback (`New chat — D MMM, HH:mm`) to a 3-5-word title
+     generated by the same model.
+   - **Partial Recovery:** Send a message, observe the stream starting,
+     then close the tab mid-stream. Reopen the app, open the chat —
+     a "Stream interrupted" footer renders below the last (now
+     incomplete) persona-message with Retry and Discard buttons.
+     Retry deletes the incomplete + prior user-msg, re-sends; Discard
+     deletes only the incomplete.
 
-3. **Phase 3.2 execution** — Tasks 29–33: Toast component,
-   BackgroundStreamBadge, nsfwPanic helper wired to `useAdultMode`,
-   Cockpit Send-disable subscribed to stream-manager. Sub-agent-driven
-   per task.
+   Item 12 (3.3 polish):
+   - **Per-Card streaming indicator** on Persona Cards while a stream
+     is active in any chat with that persona. Deferred — may slip to
+     a follow-up polish iteration.
 
-4. **Phase 3.3 execution** — Tasks 34–41: Pill integration end-to-end,
-   ADR "Tool Display Position", `title-generator`, Stream-Interrupted
-   footer, polish pass (affordance breathing, micro-animations, pin
-   glow, optional per-card stream indicator).
+2. **Squash Phase 3 — three commits** — once smoke passes:
+   - Phase 3.1 squash: commits `464e244` → `ba27f25` + format-fix
+     `851b21d` + STATUS-1 `5c953d4` into one Phase-3.1 commit (plan
+     Task-28 summary).
+   - Phase 3.2 squash: `534fa23` → `c7d8455` + STATUS-2 `5ab4ec1`
+     into one Phase-3.2 commit (plan Task-33 summary).
+   - Phase 3.3 squash: `64d6c4d` → `73c43eb` + STATUS-3 (this update)
+     into one Phase-3.3 commit (plan Task-41 summary).
+
+3. **Phase 3 polish iterations (if needed)** — drive from Chris's
+   smoke findings. Likely candidates: affordance "breathing" feel,
+   scroll-to-end micro-animation timing, pin glow intensity,
+   per-card streaming indicator (Task 40 — deferred from 3.3).
+
+4. **Phase 4 (My History + Setup-Hints)** — blocked on Lyra's My-History
+   wireframe per spec §7.
 
 ---
 
