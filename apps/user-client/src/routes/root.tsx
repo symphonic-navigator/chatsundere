@@ -27,9 +27,12 @@ export function Root() {
   return (
     <div className="relative isolate min-h-dvh overflow-x-hidden">
       <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 backdrop-blur-sm lg:px-6 lg:py-4">
-        {/* Logo — smaller on mobile to leave room for the right-side controls */}
-        <Link to="/" className="font-display text-xl italic lg:text-2xl">
-          Chatsundere
+        {/* Logo — gradient wordmark + twinkle, sized via .brand-logo CSS */}
+        <Link to="/" className="brand-logo">
+          <span className="brand-logo-text">Chatsundere</span>
+          <span className="brand-logo-twinkle" aria-hidden="true">
+            ✦
+          </span>
         </Link>
         <div className="flex items-center gap-2 lg:gap-3">
           {/* Username hidden on mobile — too cramped at 380 px */}

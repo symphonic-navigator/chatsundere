@@ -131,6 +131,59 @@ h1 {
   }
 }
 
+/* ===== Brand logo ===== */
+
+.brand-logo {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--font-display);
+  font-size: 1.25rem; /* text-xl */
+  line-height: 1;
+  font-style: normal;
+}
+
+@media (min-width: 1024px) {
+  .brand-logo {
+    font-size: 1.5rem; /* text-2xl */
+  }
+}
+
+.brand-logo-text {
+  background: linear-gradient(135deg, #4dd0ff 0%, #ff9ad9 50%, #ffd56b 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.brand-logo-twinkle {
+  position: absolute;
+  top: -0.2em;
+  right: -0.55em;
+  font-size: 0.35em;
+  color: #ffd56b;
+  animation: brand-twinkle 3s ease-in-out infinite;
+}
+
+@keyframes brand-twinkle {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(180deg) scale(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo-twinkle {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes wizard-step-in {
     from {
