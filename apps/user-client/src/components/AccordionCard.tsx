@@ -5,7 +5,7 @@ import { type ReactNode, useState } from 'react';
 interface Props {
   icon: string;
   label: string;
-  meta?: string;
+  meta?: ReactNode;
   defaultOpen?: boolean;
   requiredMarker?: boolean;
   children: ReactNode;

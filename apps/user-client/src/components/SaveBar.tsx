@@ -5,11 +5,18 @@ interface Props {
   onSave: () => void;
   saveDisabled?: boolean;
   saveTooltip?: string;
+  saveLabel?: string;
 }
 
-export function SaveBar({ onCancel, onSave, saveDisabled, saveTooltip }: Props): JSX.Element {
+export function SaveBar({
+  onCancel,
+  onSave,
+  saveDisabled,
+  saveTooltip,
+  saveLabel = 'Save',
+}: Props): JSX.Element {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-2 border-t border-white/5 bg-bg/95 px-4 py-3 backdrop-blur">
+    <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-2 border-t border-white/5 bg-ink/95 px-4 py-3 backdrop-blur">
       <button
         type="button"
         onClick={onCancel}
@@ -24,7 +31,7 @@ export function SaveBar({ onCancel, onSave, saveDisabled, saveTooltip }: Props):
         title={saveDisabled ? saveTooltip : undefined}
         className="rounded-md border border-paper bg-paper/10 px-6 py-2 text-xs uppercase tracking-wider text-paper hover:bg-paper/20 disabled:opacity-40"
       >
-        Save Persona
+        {saveLabel}
       </button>
     </div>
   );

@@ -88,13 +88,6 @@ describe('client-data DB — v2 migration', () => {
     ]);
   });
 
-  it('seeds settings with userFont = "serif"', async () => {
-    await _resetClientDataDbForTests();
-    const db = await openClientDataDb();
-    const settings = await db.settings.get(1);
-    expect(settings?.userFont).toBe('serif');
-  });
-
   it('uses finalised accent hex for Verdan (#6aa97a) and Azuro (#4a7eb3)', async () => {
     await _resetClientDataDbForTests();
     const db = await openClientDataDb();
@@ -104,7 +97,7 @@ describe('client-data DB — v2 migration', () => {
     expect(azuro?.palette.accent).toBe('#4a7eb3');
   });
 
-  it('backfills userFont, persona fields, and missing mindspaces when upgrading from v1', async () => {
+  it('backfills persona fields and missing mindspaces when upgrading from v1', async () => {
     // Simulate v1: open as v1 only, seed, close, then re-open at v2.
     await _resetClientDataDbForTests();
     const v1 = new Dexie('chatsundere_client_data');
@@ -118,7 +111,7 @@ describe('client-data DB — v2 migration', () => {
       pills: 'id, messageId',
     });
     await v1.open();
-    // Plant a v1-shape settings row (no userFont) and a v1-shape persona row.
+    // Plant a v1-shape settings row and a v1-shape persona row.
     const now = Date.now();
     await v1.table('settings').add({
       id: 1,
@@ -148,8 +141,6 @@ describe('client-data DB — v2 migration', () => {
     // Now open via the v2 entrypoint and verify backfills.
     await _resetClientDataDbForTests({ keepData: true });
     const db = await openClientDataDb();
-    const settings = await db.settings.get(1);
-    expect(settings?.userFont).toBe('serif');
     const persona = await db.personas.get('p1');
     expect(persona?.tagline).toBe('');
     expect(persona?.temperature).toBeCloseTo(0.85);

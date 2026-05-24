@@ -10,13 +10,15 @@ interface Props {
   mindspaces: ReadonlyArray<MindspaceRow>;
   selectedMindspaceId: string | null;
   selectedTexture: MindspaceTexture;
-  selectedFont: Font;
+  selectedFont?: Font;
   previewName: string;
   /** When true, surfaces a "Use user default" chip that emits onMindspaceChange(null). */
   allowUserDefault?: boolean;
+  /** When true, the Font row is omitted entirely (caller uses a different surface for font). */
+  hideFont?: boolean;
   onMindspaceChange: (id: string | null) => void;
   onTextureChange: (t: MindspaceTexture) => void;
-  onFontChange: (f: Font) => void;
+  onFontChange?: (f: Font) => void;
 }
 
 const TEXTURES: MindspaceTexture[] = ['cloudy', 'aurora', 'grain'];
@@ -38,9 +40,10 @@ export function MindspacePicker(props: Props): JSX.Element {
     mindspaces,
     selectedMindspaceId,
     selectedTexture,
-    selectedFont,
+    selectedFont = 'serif',
     previewName,
     allowUserDefault = false,
+    hideFont = false,
     onMindspaceChange,
     onTextureChange,
     onFontChange,
@@ -116,17 +119,19 @@ export function MindspacePicker(props: Props): JSX.Element {
       </Row>
 
       {/* Font row */}
-      <Row label="Font">
-        {FONTS.map((f) => (
-          <Chip
-            key={f}
-            active={selectedFont === f}
-            onClick={() => onFontChange(f)}
-            label={capitalise(f)}
-            className={FONT_CLASSES[f]}
-          />
-        ))}
-      </Row>
+      {!hideFont && onFontChange ? (
+        <Row label="Font">
+          {FONTS.map((f) => (
+            <Chip
+              key={f}
+              active={selectedFont === f}
+              onClick={() => onFontChange(f)}
+              label={capitalise(f)}
+              className={FONT_CLASSES[f]}
+            />
+          ))}
+        </Row>
+      ) : null}
     </div>
   );
 }

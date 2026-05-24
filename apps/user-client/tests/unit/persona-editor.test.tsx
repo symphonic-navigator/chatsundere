@@ -69,12 +69,15 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
     });
   });
 
-  it('Identity inputs are always visible and name edits live in topbar', async () => {
+  it('Identity inputs are always visible and name field accepts edits', async () => {
     wrap('/app/persona/new');
     // Identity is outside any accordion — the name input is always visible
     const nameInput = await screen.findByLabelText('Name');
     fireEvent.change(nameInput, { target: { value: 'Lyra' } });
-    await waitFor(() => expect(screen.getAllByText('Lyra').length).toBeGreaterThan(0));
+    // The input itself reflects the change; in create mode the topbar title
+    // stays as "New Persona" (the draft name is only shown in the title in
+    // edit mode where draft.name || 'Edit Persona' is used).
+    await waitFor(() => expect((nameInput as HTMLInputElement).value).toBe('Lyra'));
   });
 });
 

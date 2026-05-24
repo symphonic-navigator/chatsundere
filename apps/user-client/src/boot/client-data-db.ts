@@ -13,7 +13,6 @@ export interface SettingsRow {
   globalUnlockerPrompt: string;
   globalAboutMe: string;
   defaultMindspaceId: string;
-  userFont: 'sans' | 'serif' | 'cursive';
   userTexture: MindspaceTexture;
   animationsEnabled: boolean;
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
@@ -290,7 +289,6 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         globalUnlockerPrompt: '',
         globalAboutMe: '',
         defaultMindspaceId: aurumId,
-        userFont: 'serif',
         userTexture: 'cloudy',
         animationsEnabled: true,
         corsProxy: null,

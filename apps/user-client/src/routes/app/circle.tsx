@@ -16,15 +16,16 @@ export function Circle(): JSX.Element {
 
   return (
     <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-24 pt-4">
-      <header className="flex items-center gap-2 text-xs uppercase tracking-widest text-paper-soft">
+      <header className="flex items-center gap-3 pb-2">
         <button
           type="button"
+          aria-label="Back"
           onClick={() => navigate('/app')}
-          className="text-paper-soft hover:text-paper"
+          className="grid h-10 w-10 place-items-center rounded-md text-2xl leading-none text-paper-soft hover:bg-white/5 hover:text-paper"
         >
           ←
         </button>
-        <span>Room · My Circle</span>
+        <span className="font-display text-sm text-paper">My Circle</span>
       </header>
 
       {personas.data && personas.data.length === 0 ? (

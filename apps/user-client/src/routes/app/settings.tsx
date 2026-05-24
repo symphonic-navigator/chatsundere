@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { MindspaceTexture, SettingsRow } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
+import { SaveBar } from '../../components/SaveBar.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
@@ -16,6 +19,31 @@ const BUILT_IN_PROVIDERS = [
   { id: 'novita', name: 'Novita AI', monogram: 'No' },
   { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
 ] as const;
+
+interface SettingsDraft {
+  globalAboutMe: string;
+  globalUnlockerPrompt: string;
+  defaultMindspaceId: string;
+  userTexture: MindspaceTexture;
+}
+
+function draftFromRow(s: SettingsRow): SettingsDraft {
+  return {
+    globalAboutMe: s.globalAboutMe,
+    globalUnlockerPrompt: s.globalUnlockerPrompt,
+    defaultMindspaceId: s.defaultMindspaceId,
+    userTexture: s.userTexture,
+  };
+}
+
+function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
+  return (
+    a.globalAboutMe === b.globalAboutMe &&
+    a.globalUnlockerPrompt === b.globalUnlockerPrompt &&
+    a.defaultMindspaceId === b.defaultMindspaceId &&
+    a.userTexture === b.userTexture
+  );
+}
 
 function ProvidersList(): JSX.Element {
   const providers = useProviders();
@@ -69,44 +97,87 @@ export function Settings(): JSX.Element {
   const providers = useProviders();
   const setMindspace = useMindspaceStore((s) => s.update);
 
+  const [draft, setDraft] = useState<SettingsDraft | null>(null);
+
   useEffect(() => {
-    if (settings.data && mindspaces.data) {
+    if (!draft && settings.data) {
+      setDraft(draftFromRow(settings.data));
+    }
+  }, [settings.data, draft]);
+
+  useEffect(() => {
+    if (draft && mindspaces.data) {
       setMindspace({
         persona: null,
-        defaultMindspaceId: settings.data.defaultMindspaceId,
-        defaultTexture: settings.data.userTexture,
+        defaultMindspaceId: draft.defaultMindspaceId,
+        defaultTexture: draft.userTexture,
         mindspaces: mindspaces.data,
       });
     }
-  }, [settings.data, mindspaces.data, setMindspace]);
+  }, [draft, mindspaces.data, setMindspace]);
 
-  if (!settings.data || !mindspaces.data) {
+  if (!settings.data || !mindspaces.data || !draft) {
     return <div className="p-4 text-paper-soft">Loading…</div>;
   }
 
-  const s = settings.data;
+  const original = draftFromRow(settings.data);
+  const isDirty = !isSameDraft(draft, original);
+
+  function patch(p: Partial<SettingsDraft>) {
+    setDraft((d) => (d ? { ...d, ...p } : d));
+  }
+
+  async function persistDraft() {
+    if (!draft || !settings.data) return;
+    const orig = draftFromRow(settings.data);
+    const diff: Partial<SettingsDraft> = {};
+    if (draft.globalAboutMe !== orig.globalAboutMe) diff.globalAboutMe = draft.globalAboutMe;
+    if (draft.globalUnlockerPrompt !== orig.globalUnlockerPrompt)
+      diff.globalUnlockerPrompt = draft.globalUnlockerPrompt;
+    if (draft.defaultMindspaceId !== orig.defaultMindspaceId)
+      diff.defaultMindspaceId = draft.defaultMindspaceId;
+    if (draft.userTexture !== orig.userTexture) diff.userTexture = draft.userTexture;
+    if (Object.keys(diff).length > 0) {
+      await updateSettings.mutateAsync(diff);
+    }
+  }
+
+  async function onSaveStay() {
+    await persistDraft();
+  }
+
+  async function onSaveAndBack() {
+    await persistDraft();
+    navigate('/app');
+  }
+
+  function onCancel() {
+    if (!settings.data) return;
+    if (!isDirty || window.confirm('Discard your unsaved changes?')) {
+      setDraft(draftFromRow(settings.data));
+    }
+  }
+
   const selectedMindspace =
-    mindspaces.data.find((m) => m.id === s.defaultMindspaceId) ?? mindspaces.data[0];
+    mindspaces.data.find((m) => m.id === draft.defaultMindspaceId) ?? mindspaces.data[0];
 
   return (
-    <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
-      <header className="flex items-center gap-2 text-xs uppercase tracking-widest text-paper-soft">
-        <button
-          type="button"
-          onClick={() => navigate('/app')}
-          className="text-paper-soft hover:text-paper"
-        >
-          ←
-        </button>
-        <span>Room · My Settings</span>
-      </header>
+    <section className="flex flex-col gap-3 px-4 pb-32 pt-4">
+      <EditorTopbar
+        title="My Settings"
+        isDirty={isDirty}
+        onBack={() => navigate('/app')}
+        onSaveAndBack={() => {
+          void onSaveAndBack();
+        }}
+      />
 
       <AccordionCard icon="◉" label="About Me" meta="What your Circle knows about you">
         <AutoSizeTextarea
           aria-label="About me"
           minRows={4}
-          value={s.globalAboutMe}
-          onChange={(v) => updateSettings.mutate({ globalAboutMe: v })}
+          value={draft.globalAboutMe}
+          onChange={(v) => patch({ globalAboutMe: v })}
           placeholder="Tell your Circle who you are…"
         />
         <p className="mt-2 text-[11px] text-paper-soft">
@@ -120,14 +191,13 @@ export function Settings(): JSX.Element {
             <MindspacePicker
               mindspaces={mindspaces.data}
               selectedMindspaceId={selectedMindspace.id}
-              selectedTexture={s.userTexture}
-              selectedFont={s.userFont}
+              selectedTexture={draft.userTexture}
               previewName="Chris"
+              hideFont
               onMindspaceChange={(id) => {
-                if (id) updateSettings.mutate({ defaultMindspaceId: id });
+                if (id) patch({ defaultMindspaceId: id });
               }}
-              onTextureChange={(t) => updateSettings.mutate({ userTexture: t })}
-              onFontChange={(f) => updateSettings.mutate({ userFont: f })}
+              onTextureChange={(t) => patch({ userTexture: t })}
             />
           ) : null}
         </div>
@@ -142,8 +212,8 @@ export function Settings(): JSX.Element {
           aria-label="Global system prompt"
           minRows={4}
           maxRows={20}
-          value={s.globalUnlockerPrompt}
-          onChange={(v) => updateSettings.mutate({ globalUnlockerPrompt: v })}
+          value={draft.globalUnlockerPrompt}
+          onChange={(v) => patch({ globalUnlockerPrompt: v })}
         />
         <p className="mt-2 text-[11px] text-paper-soft">
           This text is prepended to every persona's system prompt. Mainly useful for permissive but
@@ -155,10 +225,19 @@ export function Settings(): JSX.Element {
         icon="⬢"
         label="Upstream Providers"
         meta={`${(providers.data ?? []).filter((p) => p.enabled).length} of 3 connected`}
-        defaultOpen
       >
         <ProvidersList />
       </AccordionCard>
+
+      <SaveBar
+        onCancel={onCancel}
+        onSave={() => {
+          void onSaveStay();
+        }}
+        saveDisabled={!isDirty}
+        saveTooltip={!isDirty ? 'Nothing to save' : undefined}
+        saveLabel="Save Settings"
+      />
     </section>
   );
 }

@@ -40,13 +40,22 @@ describe('Settings route — About Me', () => {
     });
   });
 
-  it('persists about-me textarea edits', async () => {
+  it('persists about-me textarea edits after Save is clicked', async () => {
     wrap(<Settings />);
+    // Open the About Me accordion
     const card = await screen.findByText(/about me/i);
     fireEvent.click(card);
     const textarea = await screen.findByPlaceholderText(/tell your circle/i);
     fireEvent.change(textarea, { target: { value: 'A new about me' } });
-    fireEvent.blur(textarea);
+    // Draft must not have persisted yet
+    {
+      const db = (await import('../../src/boot/client-data-db.js')).getClientDataDb();
+      const row = await db.settings.get(1);
+      expect(row?.globalAboutMe).not.toBe('A new about me');
+    }
+    // Click the bottom SaveBar's "Save Settings" button
+    const saveBtn = screen.getByRole('button', { name: /save settings/i });
+    fireEvent.click(saveBtn);
     await waitFor(async () => {
       const db = (await import('../../src/boot/client-data-db.js')).getClientDataDb();
       const row = await db.settings.get(1);
@@ -66,6 +75,9 @@ describe('Settings route — Providers list', () => {
 
   it('renders three built-in provider rows (nano-gpt, Novita AI, Ollama Cloud) with status', async () => {
     wrap(<Settings />);
+    // Open the Upstream Providers accordion (no longer defaultOpen)
+    const providerHeader = await screen.findByText(/upstream providers/i);
+    fireEvent.click(providerHeader);
     await waitFor(() => {
       expect(screen.getByText(/nano-gpt/i)).toBeInTheDocument();
       expect(screen.getByText(/novita ai/i)).toBeInTheDocument();

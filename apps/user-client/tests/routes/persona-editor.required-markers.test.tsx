@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 // useMemo for seedDraft sees a changed dependency and the useEffect resets the
 // draft, which triggers another render, ad infinitum.
 const STABLE_SETTINGS = {
-  data: { defaultMindspaceId: 'a', userFont: 'serif' as const, userTexture: 'cloudy' as const },
+  data: { defaultMindspaceId: 'a', userTexture: 'cloudy' as const },
 };
 const STABLE_MINDSPACE = {
   id: 'a',
@@ -97,7 +97,7 @@ describe('PersonaEditor — required-field markers', () => {
     expect(ci?.querySelector('[aria-label="Custom Instructions is required"]')).not.toBeNull();
   });
 
-  it('orders accordion sections as Custom Instructions → Model → Behavior → Mindspace → About-Me-Override', () => {
+  it('orders accordion sections as Custom Instructions → Model → Behavior → Font and Voice → Mindspace → About-Me-Override', () => {
     setup();
     const headers = Array.from(
       document.querySelectorAll('[data-accordion-card] [data-accordion-label]'),
@@ -106,6 +106,7 @@ describe('PersonaEditor — required-field markers', () => {
       'Custom Instructions',
       'Model',
       'Behavior',
+      'Font and Voice',
       'Mindspace — Override',
       'About Me — Override',
     ]);

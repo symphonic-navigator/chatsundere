@@ -66,4 +66,19 @@ describe('MindspacePicker', () => {
     expect(onColour).toHaveBeenCalledWith('b');
     expect(onTexture).not.toHaveBeenCalled();
   });
+
+  it('omits the Font row when hideFont is true', () => {
+    render(
+      <MindspacePicker
+        mindspaces={[ms('a', 'Aurum', '#c9a84c')]}
+        selectedMindspaceId="a"
+        selectedTexture="cloudy"
+        previewName="Chris"
+        onMindspaceChange={() => {}}
+        onTextureChange={() => {}}
+        hideFont
+      />,
+    );
+    expect(screen.queryByText(/^font$/i)).toBeNull();
+  });
 });

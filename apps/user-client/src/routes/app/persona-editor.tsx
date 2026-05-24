@@ -2,6 +2,7 @@
 
 import { getProvider } from '@chatsundere/llm-unified';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
   MindspaceRow,
@@ -11,6 +12,7 @@ import type {
 } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { SaveBar } from '../../components/SaveBar.js';
 import { useMindspaces } from '../../data/mindspaces.js';
@@ -25,6 +27,10 @@ import { useSettings } from '../../data/settings.js';
 
 type DraftPersona = Omit<PersonaRow, 'id' | 'createdAt' | 'updatedAt'>;
 
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function defaultDraft(
   settings: SettingsRow | undefined,
   mindspaces: MindspaceRow[] | undefined,
@@ -36,7 +42,7 @@ function defaultDraft(
     name: '',
     tagline: '',
     colour: defaultMindspace?.palette.accent ?? '#c9a84c',
-    font: settings?.userFont ?? 'serif',
+    font: 'serif',
     instructions: '',
     providerId: firstEnabled?.id ?? '',
     modelId: '',
@@ -83,40 +89,84 @@ export function PersonaEditor(): JSX.Element {
     }
   }, [isCreate, persona.data, seedDraft]);
 
+  const [isDirty, setIsDirty] = useState(false);
+
   function patch(p: Partial<DraftPersona>) {
     userModifiedRef.current = true;
+    setIsDirty(true);
     setDraft((d) => ({ ...d, ...p }));
   }
 
-  async function onSave() {
+  // Dynamic accordion metas
+  const selectedProvider = providers.data?.find((p) => p.id === draft.providerId);
+  const selectedProviderDef = selectedProvider ? getProvider(selectedProvider.templateId) : null;
+  const selectedModelDef = selectedProviderDef?.knownModels.find((m) => m.id === draft.modelId);
+  const modelMeta: ReactNode =
+    draft.modelId && selectedProviderDef
+      ? `${selectedProviderDef.displayName} · ${selectedModelDef?.displayName ?? draft.modelId}`
+      : 'Pick a provider/model pair';
+
+  const behaviourMeta: ReactNode = (
+    <span>
+      Temperature
+      {draft.adultPersona ? (
+        <>
+          {' · '}
+          <span
+            data-nsfw-badge
+            className="rounded-full border border-danger/50 bg-danger/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-danger"
+          >
+            NSFW
+          </span>
+        </>
+      ) : null}
+    </span>
+  );
+
+  const selectedMs = draft.mindspaceId
+    ? mindspaces.data?.find((m) => m.id === draft.mindspaceId)
+    : null;
+  const mindspaceMeta: ReactNode =
+    draft.mindspaceId && selectedMs
+      ? `${selectedMs.displayName} · ${draft.textureOverride ?? selectedMs.texture}`
+      : 'Using user default';
+
+  async function persistDraft() {
     if (isCreate) {
       await create.mutateAsync(draft);
     } else if (id) {
       await update.mutateAsync({ id, patch: draft });
     }
+    setIsDirty(false);
+  }
+
+  async function onSaveStay() {
+    await persistDraft();
+  }
+
+  async function onSaveAndBack() {
+    await persistDraft();
     navigate('/app/circle');
   }
 
   return (
     <section className="flex flex-col gap-3 px-4 pb-32 pt-4">
-      <header className="flex items-center justify-between text-xs uppercase tracking-widest text-paper-soft">
-        <button
-          type="button"
-          onClick={() => navigate('/app/circle')}
-          className="text-paper-soft hover:text-paper"
-        >
-          ←
-        </button>
-        <div className="text-center">
-          <div className="text-[10px] uppercase tracking-widest text-paper-soft">
-            {isCreate ? 'New Persona' : 'Edit Persona'}
-          </div>
-          <div className="font-display text-sm" style={{ color: draft.colour }}>
-            {draft.name || '—'}
-          </div>
-        </div>
-        <span className="w-6" />
-      </header>
+      <EditorTopbar
+        title={isCreate ? 'New Persona' : draft.name || 'Edit Persona'}
+        isDirty={isDirty}
+        onBack={() => navigate('/app/circle')}
+        onSaveAndBack={() => {
+          void onSaveAndBack();
+        }}
+        saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
+        saveTooltip={
+          !draft.providerId
+            ? 'Add a provider in Settings first'
+            : !draft.modelId
+              ? 'Pick a model'
+              : 'Fill in name and instructions'
+        }
+      />
 
       {!isCreate ? (
         <div className="grid grid-cols-3 gap-2">
@@ -192,7 +242,7 @@ export function PersonaEditor(): JSX.Element {
       <AccordionCard
         icon="⬡"
         label="Model"
-        meta="Pick a provider/model pair"
+        meta={modelMeta}
         requiredMarker={!draft.providerId || !draft.modelId}
       >
         <ModelList
@@ -204,7 +254,7 @@ export function PersonaEditor(): JSX.Element {
       </AccordionCard>
 
       {/* ❸ Behavior */}
-      <AccordionCard icon="∿" label="Behavior" meta="Temperature · content flags">
+      <AccordionCard icon="∿" label="Behavior" meta={behaviourMeta}>
         <label
           htmlFor="persona-temperature"
           className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
@@ -255,16 +305,43 @@ export function PersonaEditor(): JSX.Element {
         </div>
       </AccordionCard>
 
-      {/* ❹ Mindspace — Override */}
+      {/* ❹ Font and Voice */}
+      <AccordionCard icon="ℑ" label="Font and Voice" meta={`Voice · ${capitalise(draft.font)}`}>
+        <div className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Font</div>
+        <div className="flex flex-wrap gap-2">
+          {(['sans', 'serif', 'cursive'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => patch({ font: f })}
+              className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wider ${
+                draft.font === f
+                  ? 'border-paper text-paper'
+                  : 'border-paper-soft/40 text-paper-soft'
+              } ${
+                f === 'sans' ? 'font-sans' : f === 'serif' ? 'font-display' : 'italic font-display'
+              }`}
+            >
+              {capitalise(f)}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] text-paper-soft">
+          Font is the persona's visual voice — serif for informal, sans for formal, cursive for
+          dolce vita. Voice (text-to-speech) lands later.
+        </p>
+      </AccordionCard>
+
+      {/* ❺ Mindspace — Override */}
       {mindspaces.data ? (
-        <AccordionCard icon="◈" label="Mindspace — Override" meta="Color · texture · font">
+        <AccordionCard icon="◈" label="Mindspace — Override" meta={mindspaceMeta}>
           <MindspacePicker
             mindspaces={mindspaces.data}
             selectedMindspaceId={draft.mindspaceId}
             selectedTexture={draft.textureOverride ?? settings.data?.userTexture ?? 'cloudy'}
-            selectedFont={draft.font}
             previewName={draft.name || 'New Persona'}
             allowUserDefault
+            hideFont
             onMindspaceChange={(id) => {
               const ms = id ? mindspaces.data?.find((m) => m.id === id) : null;
               patch({
@@ -273,7 +350,6 @@ export function PersonaEditor(): JSX.Element {
               });
             }}
             onTextureChange={(t) => patch({ textureOverride: t })}
-            onFontChange={(f) => patch({ font: f })}
           />
         </AccordionCard>
       ) : null}
@@ -322,7 +398,9 @@ export function PersonaEditor(): JSX.Element {
 
       <SaveBar
         onCancel={() => navigate('/app/circle')}
-        onSave={onSave}
+        onSave={() => {
+          void onSaveStay();
+        }}
         saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
         saveTooltip={
           !draft.providerId
@@ -331,6 +409,7 @@ export function PersonaEditor(): JSX.Element {
               ? 'Pick a model'
               : 'Fill in name and instructions'
         }
+        saveLabel="Save Persona"
       />
     </section>
   );

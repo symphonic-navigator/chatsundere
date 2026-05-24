@@ -29,7 +29,6 @@ describe('useSettings + useUpdateSettings', () => {
   it('returns the seeded singleton settings row', async () => {
     const { result } = renderHook(() => useSettings(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.data).toBeDefined());
-    expect(result.current.data?.userFont).toBe('serif');
     expect(result.current.data?.globalUnlockerPrompt).toBe('');
   });
 

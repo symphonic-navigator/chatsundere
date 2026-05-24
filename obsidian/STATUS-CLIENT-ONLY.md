@@ -1,22 +1,23 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 — Phase 2.5 (Polish & Bug-Bash) complete.
-Twelve plan tasks split across eight Phase-2.5 commits (`ef9662a`
-fonts, `4aa341d` FAB, `23697b3` monogram, `39fa93a` texture-source
-migration v3 + MindspaceLayer + Picker preview, `de12fe2` AutoSizeTextarea,
-`62b4602` ProviderSheet polish + Ollama-Cloud save fix, `a3bfad2`
-Persona Editor restructure + required markers, plus this doc commit).
-All user-client tests pass; typecheck clean; Biome lint clean.
-Manual re-smoke pending on Chris's device for the four touched
-surfaces. Block-1 wireframes landed in `chatsundere-prototype.html`
-for Reading + Interaction Mode + Entrance Hall + My Settings + My Circle
-+ Persona Editor; only My History (Phase 4) remains wireframe-blocked.
-Phase 3 (Chat surface — Reading + Interaction + Streaming) is the next
-deliverable; Phase 4 (History + Polish) follows once Lyra's history
-wireframe lands. Brainstorm spec at
+**Last updated:** 2026-05-24 (later) — Phase 2.6 (Polish Iteration 2)
+complete. Ten plan tasks across nine Phase-2.6 commits (`fb46f05`
+meta=ReactNode, `b2e5708` SaveBar transparency + saveLabel, `15823ad`
+EditorTopbar, `559a99e` MindspacePicker hideFont, `910c31d`
+Settings.userFont gone, `3861642` Persona Editor EditorTopbar +
+Save/Save&Back split, `69a0c15` dynamic accordion meta + Font-and-Voice,
+`da716f5` My Settings draft+Save, `334e521` Circle topbar polish,
+plus this doc commit). All 176 user-client tests pass; typecheck +
+Biome lint clean. Manual smoke pending on Chris's device for the
+three editor surfaces (My Settings draft+save, Persona Editor topbar
++ Font-and-Voice + dynamic meta, My Circle plain title). Block-1
+wireframes landed in `chatsundere-prototype.html` for Reading +
+Interaction Mode + Entrance Hall + My Settings + My Circle + Persona
+Editor; only My History (Phase 4) remains wireframe-blocked. Phase 3
+(Chat surface) is the next deliverable. Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
-(Decisions 1-35); Phase-2.5 plan at
-[`superpowers/plans/2026-05-24-client-block-1-phase-2-5-polish.md`](../superpowers/plans/2026-05-24-client-block-1-phase-2-5-polish.md).
+(Decisions 1-41; D28 revoked by D36); Phase-2.6 plan at
+[`superpowers/plans/2026-05-24-client-block-1-phase-2-6-polish-iteration-2.md`](../superpowers/plans/2026-05-24-client-block-1-phase-2-6-polish-iteration-2.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -210,6 +211,56 @@ update the relevant one at the end.
     persona-editor required-field markers. All user-client tests
     green; llm-unified tests green.
 
+- **Phase 2.6 — Polish Iteration 2 (2026-05-24)**. Nine commits on
+  master following Chris's iteration-2 device-smoke of Phase 2.5.
+  Ten plan tasks driven via subagent-driven-development. What landed:
+  - `apps/user-client/src/components/EditorTopbar.tsx` — new shared
+    topbar component (40×40 back button with discard semantic +
+    confirm-on-dirty; plain title centre; "Save & Back" pill right).
+    Used by Persona Editor and My Settings.
+  - `apps/user-client/src/components/AccordionCard.tsx` — `meta` prop
+    widens from `string` to `ReactNode` so callers can compose
+    dynamic previews.
+  - `apps/user-client/src/components/SaveBar.tsx` — latent `bg-bg/95`
+    transparency bug fixed (→ `bg-ink/95`). New `saveLabel?: string`
+    prop lets each caller name its action ("Save Persona" / "Save
+    Settings").
+  - `apps/user-client/src/components/MindspacePicker.tsx` — new
+    `hideFont?: boolean` prop suppresses the Font row when the caller
+    handles font separately. Used by both the Persona Editor's
+    Mindspace-Override (Font lives in Font-and-Voice now) and My
+    Settings' Default-Mindspace (no user-font any more).
+  - `apps/user-client/src/boot/client-data-db.ts` — `SettingsRow.userFont`
+    removed. New personas default to `serif`. Existing rows with
+    orphaned userFont are harmlessly ignored (Dexie schemaless for
+    non-indexed fields; no version bump).
+  - `apps/user-client/src/routes/app/persona-editor.tsx` — mounts
+    `EditorTopbar`; introduces `isDirty` state; splits Save into
+    `onSaveStay` (bottom SaveBar, persists + stays) vs `onSaveAndBack`
+    (topbar, persists + navigates); dynamic accordion metas for
+    Model (`<provider> · <model>`), Behavior (NSFW badge pill when
+    `adultPersona`), Mindspace-Override (`Using user default` or
+    `<mindspace> · <texture>`); new Font-and-Voice accordion section
+    between Behavior and Mindspace-Override (font chips + a hint
+    that TTS lands later).
+  - `apps/user-client/src/routes/app/settings.tsx` — converted to
+    draft + Save flow. About Me, Global System Prompt, Default
+    Mindspace edits write to local `SettingsDraft` state; SaveBar
+    diffs and dispatches `updateSettings.mutateAsync` only on Save.
+    Upstream Providers stay out-of-band (per-provider Test & Save).
+    EditorTopbar mounted.
+  - `apps/user-client/src/routes/app/circle.tsx` — drops "Room · "
+    breadcrumb prefix; back button bumped to the 40×40 convention.
+  - `apps/user-client/src/routes/app/entrance-hall.tsx` — removes the
+    `settings.data?.userFont` lookup; heading now uses `font-display`
+    directly.
+  - Tests: 11 new Vitest cases across AccordionCard meta-as-node,
+    EditorTopbar (6 cases), MindspacePicker hideFont, persona-editor
+    dynamic-meta (3 cases), persona-editor Font-and-Voice (2 cases),
+    settings draft-save (2 cases). Two existing tests adjusted for
+    new UX (settings-route persists, persona-editor name-input).
+    All 176 user-client tests pass.
+
 ## Briefed, awaiting implementation
 
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
@@ -238,15 +289,61 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2.5 finished. Paused for Chris's manual re-smoke on the four
-touched surfaces (Entrance Hall, My Settings, My Circle, Persona
-Editor) before kicking off Phase 3 (Chat).
+Phase 2.6 finished. Paused for Chris's iteration-3 manual smoke on
+the three editor surfaces (My Settings draft+save, Persona Editor
+EditorTopbar + Font-and-Voice + dynamic meta, My Circle plain title)
+before kicking off Phase 3 (Chat).
 
 ---
 
 ## Next session
 
-1. **Chris's manual re-smoke after Phase 2.5** — re-install / reload
+1. **Chris's iteration-3 smoke after Phase 2.6** — reload the PWA and
+   walk through:
+   - **Topbar consistency:** My Settings / Persona Editor / My Circle
+     all show a 40×40 back button on the left and a plain title in
+     the centre (no "Room · " prefix any more).
+   - **Save & Back pill:** in My Settings and Persona Editor, the
+     top-right corner shows a "Save & Back" pill. Tapping it
+     persists and navigates home/My-Circle. Disabled when there's
+     nothing to save or required fields are missing.
+   - **Back-button discard:** make an edit in My Settings or the
+     Persona Editor, then tap Back. A confirm dialog asks "Discard
+     your unsaved changes?". Cancel returns, OK navigates without
+     saving.
+   - **My Settings draft+Save:** type in About Me — nothing persists
+     until you tap "Save Settings" (bottom) or "Save & Back" (top).
+     SaveBar grey-out when the draft matches disk.
+   - **Persona Editor — Save vs Save & Back:** Save (bottom) persists
+     and stays on the page (the form remains filled, no navigate).
+     Save & Back (top) persists then returns to My Circle.
+   - **Dynamic accordion metas in Persona Editor (collapsed view):**
+     - Pick a model → Model accordion header reads `<provider> · <model>`.
+     - Toggle Adult Persona → Behavior accordion header shows a red
+       NSFW pill.
+     - With no Mindspace override → Mindspace accordion header reads
+       "Using user default". Pick a mindspace → reads `<name> · <texture>`.
+   - **Font and Voice accordion:** in Persona Editor, between Behavior
+     and Mindspace-Override sits a "Font and Voice" section. Font
+     chips (Sans / Serif / Cursive) live here, with a hint that TTS
+     lands later. The Mindspace-Override accordion no longer has a
+     Font row.
+   - **No User Font in Settings:** in My Settings → About Me → Default
+     Mindspace, there is no Font row at all (Decision 28 revoked).
+     Existing rows from previous sessions retain their orphaned
+     userFont silently — nothing breaks.
+   - **DevTools sanity:** `chatsundere_client_data.settings.get(1)`
+     does not surface `userFont` in TypeScript any more (the
+     `SettingsRow` type doesn't declare it), but raw IndexedDB rows
+     still carry the field if you migrated from v2 (cosmetic only).
+
+2. **Chris's earlier (Phase-2.5) iteration smoke checklist** — if not
+   yet performed, the typography / FAB / Mindspace-Background-coverage
+   / MindspacePicker stability / textarea-growth / ProviderSheet /
+   Persona Editor structure items below are still valid (see prior
+   "Done — Phase 2.5" entries for the full list).
+
+3. **Phase 3 brainstorm + plan** — walk through the chat surface
    the PWA and walk through:
    - **Typography:** headings and body should render in Lora (serif)
      and Inter (sans) — visible by glyph shape on a calm screen.

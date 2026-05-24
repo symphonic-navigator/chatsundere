@@ -78,18 +78,12 @@ export function EntranceHall(): JSX.Element {
     : undefined;
   const personaCount = personas.data?.length ?? 0;
   const providerCount = (providers.data ?? []).filter((p) => p.enabled).length;
-  const fontClass: Record<'sans' | 'serif' | 'cursive', string> = {
-    sans: 'font-sans',
-    serif: 'font-display',
-    cursive: 'italic font-display',
-  };
-
   return (
     <section className="flex min-h-[80dvh] flex-col gap-6 px-4 pb-12 pt-6">
       <div className="text-center">
         <div className="text-[10px] uppercase tracking-[0.3em] text-paper-soft">Welcome back</div>
         <div
-          className={`mt-2 text-3xl ${fontClass[settings.data?.userFont ?? 'serif']}`}
+          className="mt-2 text-3xl font-display"
           style={{ color: 'var(--mindspace-text-primary)' }}
         >
           {session?.username ?? '—'}
