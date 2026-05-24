@@ -1,21 +1,21 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (Phase 2.8 landed) — Polish Block
-complete. Four squashed Phase-2.8 commits (`efec239` brand logo,
-`9ed8787` EditorSticky pattern, `e6c252e` Display-Name + Hall
-greeting, `a699fb2` Splash-Screen + FLIP, plus this doc commit).
-All 212 user-client tests pass; typecheck + Biome lint clean;
-full build clean. Manual smoke pending on Chris's device for the
-new brand logo (gradient + twinkle), the sticky-header pattern on
-editor-class routes, the Display-Name field with Hall fallback,
-and the cold-start splash overlay. Block-1 wireframes landed in `chatsundere-prototype.html`
-for Reading + Interaction Mode + Entrance Hall + My Settings + My
-Circle + Persona Editor; only My History (Phase 4) remains
-wireframe-blocked. Phase 3 (Chat surface) is the next deliverable.
-Brainstorm spec at
+**Last updated:** 2026-05-24 (Phase 2.9 landed) — Mindspace Cards &
+Adult Mode complete. One squashed Phase-2.9 commit (`6553224`, plus
+this doc commit). All 238 user-client tests pass across 57 files;
+typecheck + Biome lint clean; full build clean. Manual smoke pending
+on Chris's device for the brand-bar adult-mode pill, the persona-card
+mindspace tinting and NSFW/SFW differentiation, the SFW no-leak filter
+behaviour, and the persona-editor ambient mindspace transition.
+Block-1 wireframes landed in `chatsundere-prototype.html` for Reading
++ Interaction Mode + Entrance Hall + My Settings + My Circle + Persona
+Editor; only My History (Phase 4) remains wireframe-blocked. Phase 3
+(Chat surface) is the next deliverable. Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
-(Decisions 1-47; D28 revoked by D36); Phase-2.8 plan at
-[`superpowers/plans/2026-05-24-polish-block-phase-2-8.md`](../superpowers/plans/2026-05-24-polish-block-phase-2-8.md).
+(Decisions 1-47; D28 revoked by D36); Phase-2.9 spec at
+[`superpowers/specs/2026-05-24-phase-2-9-mindspace-cards-adult-mode-design.md`](../superpowers/specs/2026-05-24-phase-2-9-mindspace-cards-adult-mode-design.md)
+and plan at
+[`superpowers/plans/2026-05-24-phase-2-9-mindspace-cards-adult-mode.md`](../superpowers/plans/2026-05-24-phase-2-9-mindspace-cards-adult-mode.md).
 
 This file tracks **client-only / standalone-mode work** — everything
 the user-client can do without talking to a server. The goal is that
@@ -366,6 +366,53 @@ update the relevant one at the end.
     `pnpm typecheck && pnpm lint && pnpm --filter user-client run build`
     clean.
 
+- **Phase 2.9 — Mindspace Cards & Adult Mode (2026-05-24)**. One
+  squashed commit on master following Chris's pre-very-early-alpha
+  brainstorm. Driven by subagent-driven-development per task. What
+  landed:
+  - `apps/user-client/src/boot/client-data-db.ts` — Dexie v5 migration
+    adds `SettingsRow.adultMode: 'nsfw' | 'sfw'`; default `'nsfw'`
+    (per spec §2 Decision 2 — SFW is the special case); device-local
+    (sync-exclusion contract documented in code for future sync).
+  - `apps/user-client/src/data/settings.ts` — `useAdultMode()` hook
+    (`{ mode, toggleMode, setMode }`).
+  - `apps/user-client/src/data/personas.ts` — `useFilteredPersonas()`
+    composes `usePersonas()` + `useAdultMode()`. **Project guideline**:
+    any UI that lists personas, counts them, or resolves a recent
+    persona reference must use this hook; raw `usePersonas()` is for
+    Editor-class persona-by-id lookups only.
+  - `apps/user-client/src/components/AdultModeToggle.tsx` (new) —
+    brand-bar pill, single-state with ⇄ glyph, click toggles, NSFW
+    red-toned / SFW grey-toned, subtle shimmer.
+  - `apps/user-client/src/components/PersonaCard.tsx` — new required
+    `mindspace: ResolvedMindspace` prop. Card background tint =
+    palette.surfaceBase at 10% opacity; base border = palette.accentBorder.
+    NSFW vs SFW box-shadow ring + CSS shimmer streak. Per-card random
+    shimmer delay (djb2 hash of persona.id mod 4 s). prefers-reduced-motion
+    disables shimmer.
+  - `apps/user-client/src/routes/root.tsx` — `<AdultModeToggle />`
+    mounted between logo and connectivity badge; brand-bar uses
+    `justify-between gap-2` for three-child distribution.
+  - `apps/user-client/src/routes/app/circle.tsx` — `useFilteredPersonas()`;
+    resolves mindspace per card via existing `resolveMindspace()`;
+    empty-state copy unchanged (no-leak per spec §2 Decision 4).
+  - `apps/user-client/src/routes/app/entrance-hall.tsx` — `useFilteredPersonas()`
+    for `personaCount` and `recentPersona` lookup. Continue-chat card
+    naturally hides when recent persona is filtered out.
+  - `apps/user-client/src/routes/app/persona-editor.tsx` — mount-effect
+    updates global `useMindspaceStore` with the loaded persona's
+    mindspace context.
+  - `apps/user-client/src/index.css` — new `.adult-mode-toggle*`,
+    `.persona-card*`, `@keyframes pill-shimmer`, `@keyframes
+    persona-shimmer`, reduced-motion overrides.
+  - Tests: ~18 new Vitest cases across client-data-db v5 (2),
+    use-adult-mode (3), use-filtered-personas (3), AdultModeToggle
+    (4), persona-card (3 added), root.adult-mode-pill (1),
+    circle.filter (3), entrance-hall.filter (3), persona-editor.mindspace
+    (1). All 238 user-client tests pass across 57 files; llm-unified
+    Bun tests untouched and green; `pnpm typecheck && pnpm lint && pnpm
+    --filter user-client run build` clean.
+
 ## Briefed, awaiting implementation
 
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
@@ -394,55 +441,49 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2.8 finished. Paused for Chris's iteration-5 manual smoke covering
-the new brand logo (gradient + twinkle), the sticky-header pattern on
-all three editor-class routes, the Display-Name field with Hall
-greeting fallback, and the cold-start splash overlay (full motion, tap-
-to-skip, Escape, reduced-motion fallback, 3s safety timeout, FLIP
-migration to the topbar logo position).
+Phase 2.9 finished. Paused for Chris's iteration-7 manual smoke covering
+the brand-bar adult-mode pill, the persona-card mindspace tinting and
+NSFW/SFW differentiation, the SFW no-leak filter behaviour (empty
+state identical to "no personas yet"), and the persona-editor ambient
+mindspace transition.
 
 ---
 
 ## Next session
 
-1. **Chris's iteration-5 smoke after Phase 2.8** — reload the PWA and
+1. **Chris's iteration-7 smoke after Phase 2.9** — reload the PWA and
    walk through:
-   - **Brand logo (top-left, every route):** gradient cyan→pink→gold
-     'Chatsundere', no italic, with the gold `✦` twinkling on the same
-     3-second cadence as chatsune.me. With OS-level reduced-motion on,
-     the `✦` is visible at lower opacity but does not animate.
-   - **Sticky header (Persona Editor edit-mode):** scrolling keeps
-     `← Edit Persona  [Save & Back]` plus the Continue / New Chat /
-     Incognito row glued to the top (just below the brand bar, not
-     overlapping). Identity, Custom Instructions, Behavior,
-     Mindspace-Override, About-Me-Override, and the Delete-zone all
-     scroll underneath the blurred sticky bar.
-   - **Sticky header (Persona Editor create-mode):** only the topbar is
-     sticky; no quick-actions row.
-   - **Sticky header (My Settings, My Account):** only the topbar is
-     sticky.
-   - **Display Name (My Account → Account section):** type 'Chris
-     Tidesson' in the new Display Name field at the top of the Account
-     section, blur. Go to Entrance Hall — greeting reads "WELCOME BACK
-     / Chris Tidesson". Clear the field, blur — greeting falls back to
-     the username.
-   - **Splash (cold start):** quit and relaunch the PWA. Splash plays:
-     gradient background fades in, 'Chatsundere' + tagline appear,
-     tagline drifts down and fades, 'Chatsundere' wanders and shrinks
-     into the topbar position, overlay fades. Then F5 — splash does
-     NOT replay. Quit + relaunch — splash DOES replay.
-   - **Splash skip paths:** new session, tap during the animation →
-     overlay vanishes; new session, Escape during the animation →
-     overlay vanishes; reduced-motion enabled → splash is a 200ms
-     crossfade with no movement.
+   - **Brand-bar pill (every route):** centred between logo and
+     connectivity badge. Shows "NSFW ⇄" by default (red-toned), shimmers
+     subtly every 6-8 s. Tap → toggles to "SFW ⇄" (grey-toned), shimmers
+     every 12 s. With OS-level reduced-motion on, no shimmer; static
+     pill colour remains.
+   - **Persona cards (My Circle):** each card's background tint matches
+     its mindspace (Verdan → green, Crimson → red-warm, …). NSFW
+     personas glow red (subtle outer ring + shimmer streak every ~7 s);
+     SFW personas glow grey (quieter ring + ~12 s shimmer). Cards do
+     NOT shimmer in unison (per-card random delay).
+   - **No-leak (SFW mode):** with the pill set to SFW, adult personas
+     vanish from the Circle list AND from the Hall RoomTile count
+     ("My Circle • X personas" reflects filtered count). With ALL
+     personas adult, Circle shows the same "No personas yet — tap +"
+     empty-state as a fresh install; no hint anywhere that hidden
+     personas exist. The most-recent-chat Continue card on the Hall
+     also disappears when the recent persona is adult and mode is SFW.
+   - **Persona-editor ambient mindspace:** tap a persona with Verdan
+     mindspace → editor opens, background transitions to green; back
+     to Circle → transitions back to user default. Create-mode (`+`)
+     stays on user default until the user picks a mindspace.
 
 2. **Phase 3 brainstorm + plan** — walk through the chat surface
    wireframes in `chatsundere-prototype.html` (Reading Mode +
    Interaction Mode + Cockpit). Open the ADR "Tool Display Position"
-   discussion.
+   discussion. Include the "panic button" idea (one-tap kick-out
+   from an in-flight NSFW chat when SFW mode is toggled mid-session,
+   captured during the Phase 2.9 brainstorm).
 
 3. **Phase 3 execution** — subagent-driven, same pattern as Phases
-   1, 2, 2.5, 2.6, 2.7, 2.8.
+   1, 2, 2.5, 2.6, 2.7, 2.8, 2.9.
 
 ---
 
