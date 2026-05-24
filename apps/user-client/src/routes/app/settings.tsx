@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import type { MindspaceTexture, SettingsRow } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
@@ -163,14 +164,16 @@ export function Settings(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-3 px-4 pb-32 pt-4">
-      <EditorTopbar
-        title="My Settings"
-        isDirty={isDirty}
-        onBack={() => navigate('/app')}
-        onSaveAndBack={() => {
-          void onSaveAndBack();
-        }}
-      />
+      <EditorSticky>
+        <EditorTopbar
+          title="My Settings"
+          isDirty={isDirty}
+          onBack={() => navigate('/app')}
+          onSaveAndBack={() => {
+            void onSaveAndBack();
+          }}
+        />
+      </EditorSticky>
 
       <AccordionCard icon="◉" label="About Me" meta="What your Circle knows about you">
         <AutoSizeTextarea

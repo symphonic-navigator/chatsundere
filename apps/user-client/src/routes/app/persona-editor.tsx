@@ -12,6 +12,7 @@ import type {
 } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { useMindspaces } from '../../data/mindspaces.js';
@@ -146,38 +147,40 @@ export function PersonaEditor(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
-      <EditorTopbar
-        title={isCreate ? 'New Persona' : draft.name || 'Edit Persona'}
-        isDirty={isDirty}
-        onBack={() => navigate('/app/circle')}
-        onSaveAndBack={() => {
-          void onSaveAndBack();
-        }}
-        saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
-        saveTooltip={
-          !draft.providerId
-            ? 'Add a provider in Settings first'
-            : !draft.modelId
-              ? 'Pick a model'
-              : 'Fill in name and instructions'
-        }
-      />
+      <EditorSticky>
+        <EditorTopbar
+          title={isCreate ? 'New Persona' : draft.name || 'Edit Persona'}
+          isDirty={isDirty}
+          onBack={() => navigate('/app/circle')}
+          onSaveAndBack={() => {
+            void onSaveAndBack();
+          }}
+          saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
+          saveTooltip={
+            !draft.providerId
+              ? 'Add a provider in Settings first'
+              : !draft.modelId
+                ? 'Pick a model'
+                : 'Fill in name and instructions'
+          }
+        />
 
-      {!isCreate ? (
-        <div className="grid grid-cols-3 gap-2">
-          {(['Continue', 'New Chat', 'Incognito'] as const).map((label) => (
-            <button
-              key={label}
-              type="button"
-              disabled={label === 'Incognito'}
-              title={label === 'Incognito' ? 'Coming with Block 3 memory system' : undefined}
-              className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+        {!isCreate ? (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {(['Continue', 'New Chat', 'Incognito'] as const).map((label) => (
+              <button
+                key={label}
+                type="button"
+                disabled={label === 'Incognito'}
+                title={label === 'Incognito' ? 'Coming with Block 3 memory system' : undefined}
+                className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </EditorSticky>
 
       {/* Identity — always visible, outside the accordion */}
       <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">

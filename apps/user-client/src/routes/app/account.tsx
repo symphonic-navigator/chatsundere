@@ -2,6 +2,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { AccordionCard } from '../../components/AccordionCard.js';
+import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { AboutSection } from './account-sections/about-section.js';
 import { AccountSection } from './account-sections/account-section.js';
@@ -22,13 +23,15 @@ export function AccountPage(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
-      <EditorTopbar
-        title="My Account"
-        isDirty={false}
-        onBack={() => navigate('/app')}
-        onSaveAndBack={() => {}}
-        hideSaveAndBack
-      />
+      <EditorSticky>
+        <EditorTopbar
+          title="My Account"
+          isDirty={false}
+          onBack={() => navigate('/app')}
+          onSaveAndBack={() => {}}
+          hideSaveAndBack
+        />
+      </EditorSticky>
 
       <AccordionCard icon="◉" label="Account" meta="Username · sign-out · delete">
         <AccountSection />
