@@ -2,10 +2,17 @@
 
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Root } from '../../src/routes/root.js';
 
 describe('Root brand logo', () => {
+  beforeEach(() => {
+    sessionStorage.setItem('splashShown', '1'); // skip splash; assert on topbar logo
+  });
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
   it('renders the wordmark inside a span carrying the gradient class', () => {
     render(
       <MemoryRouter>

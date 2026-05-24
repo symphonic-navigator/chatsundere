@@ -184,6 +184,83 @@ h1 {
   }
 }
 
+/* ===== Splash overlay ===== */
+
+.splash-overlay {
+  background: radial-gradient(ellipse at 20% 30%, rgba(255, 77, 200, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(77, 208, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 213, 107, 0.04) 0%, transparent 60%), #050210;
+  animation: splash-bg-fade 2300ms ease-out forwards;
+}
+
+.splash-content {
+  animation: splash-content-fade 400ms ease-out;
+}
+
+.splash-tagline {
+  animation: splash-tagline-drift 600ms ease-out 1200ms forwards;
+}
+
+@keyframes splash-bg-fade {
+  0%,
+  87% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes splash-content-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-tagline-drift {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-overlay {
+    animation: splash-bg-reduced 200ms ease-out forwards;
+  }
+  .splash-content {
+    animation: none;
+    opacity: 1;
+  }
+  .splash-tagline {
+    animation: none;
+    opacity: 1;
+  }
+  .splash-logo {
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes splash-bg-reduced {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes wizard-step-in {
     from {
