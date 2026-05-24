@@ -14,6 +14,7 @@ const STABLE_SETTINGS = {
   globalAboutMe: 'old about',
   defaultMindspaceId: 'a',
   userTexture: 'cloudy' as const,
+  adultMode: 'nsfw' as const,
   animationsEnabled: true,
   corsProxy: null,
   createdAt: 0,

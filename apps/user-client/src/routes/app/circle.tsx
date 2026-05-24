@@ -2,17 +2,35 @@
 
 import { useNavigate } from 'react-router-dom';
 import { PersonaCard } from '../../components/PersonaCard.js';
-import { usePersonas } from '../../data/personas.js';
+import { useMindspaces } from '../../data/mindspaces.js';
+import { useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
+import { useSettings } from '../../data/settings.js';
+import { resolveMindspace } from '../../state/mindspace-resolver.js';
 
-/** My Circle — lists the user's personas and exposes a FAB to create a new one. */
+/**
+ * My Circle — lists the user's personas (filtered by current adult-mode)
+ * and exposes a FAB to create a new one. Each card carries its own
+ * resolved mindspace; the call site explicitly resolves it per card.
+ *
+ * Per spec §2 Decision 4 (no-leak): the empty-state copy is identical
+ * whether the list is empty because no personas exist OR because all
+ * personas are filtered out. Nothing in this surface hints at hidden
+ * personas; the only indication is the AdultModeToggle pill in the
+ * brand-bar.
+ */
 export function Circle(): JSX.Element {
   const navigate = useNavigate();
-  const personas = usePersonas();
+  const personas = useFilteredPersonas();
   const providers = useProviders();
+  const mindspaces = useMindspaces();
+  const settings = useSettings();
   const enabledProviderIds = new Set(
     (providers.data ?? []).filter((p) => p.enabled).map((p) => p.id),
   );
+
+  const defaultMindspaceId = settings.data?.defaultMindspaceId ?? '';
+  const defaultTexture = settings.data?.userTexture ?? null;
 
   return (
     <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-24 pt-4">
@@ -38,16 +56,26 @@ export function Circle(): JSX.Element {
       ) : null}
 
       <ul className="flex flex-col gap-2">
-        {(personas.data ?? []).map((p) => (
-          <PersonaCard
-            key={p.id}
-            persona={p}
-            hasProvider={enabledProviderIds.has(p.providerId)}
-            onChat={(_id) => {
-              // Phase-3 work: open or create a chat surface. No-op for Phase 2.
-            }}
-          />
-        ))}
+        {(personas.data ?? []).map((p) => {
+          const ms = resolveMindspace({
+            persona: { mindspaceId: p.mindspaceId, textureOverride: p.textureOverride },
+            defaultMindspaceId,
+            defaultTexture,
+            mindspaces: mindspaces.data ?? [],
+          });
+          if (!ms) return null;
+          return (
+            <PersonaCard
+              key={p.id}
+              persona={p}
+              mindspace={ms}
+              hasProvider={enabledProviderIds.has(p.providerId)}
+              onChat={(_id) => {
+                // Phase-3 work: open or create a chat surface. No-op for Phase 2.
+              }}
+            />
+          );
+        })}
       </ul>
 
       <button

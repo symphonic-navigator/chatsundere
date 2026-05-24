@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
-import { usePersonas } from '../../data/personas.js';
+import { useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useDisplayName, useSettings } from '../../data/settings.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
@@ -54,7 +54,7 @@ function RoomTile({ label, icon, meta, to, disabled, tooltip }: RoomTileProps) {
 export function EntranceHall(): JSX.Element {
   const displayName = useDisplayName();
   const settings = useSettings();
-  const personas = usePersonas();
+  const personas = useFilteredPersonas();
   const chats = useChats();
   const providers = useProviders();
   const mindspaces = useMindspaces();

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from './queryKeys.js';
+import { useAdultMode } from './settings.js';
 
 /**
  * List all personas ordered by creation date (oldest first).
@@ -101,4 +102,22 @@ export function useDeletePersona() {
       qc.invalidateQueries({ queryKey: QK.chats });
     },
   });
+}
+
+/**
+ * Personas filtered by the current adult-mode setting. **All UI surfaces
+ * that list personas, count personas, or look up a recent persona for
+ * display must use this hook**, not the raw `usePersonas()`.
+ * Raw `usePersonas()` is reserved for Editor-class persona-by-id lookups.
+ *
+ * Per spec §2 Decision 4 (no-leak): the empty-state for an all-NSFW list
+ * in SFW mode is the responsibility of the consuming UI — it must render
+ * identically to the empty-state for "no personas exist at all", with no
+ * counter, no hint, no copy referencing hidden items.
+ */
+export function useFilteredPersonas() {
+  const personas = usePersonas();
+  const { mode } = useAdultMode();
+  const data = personas.data?.filter((p) => mode === 'nsfw' || !p.adultPersona);
+  return { ...personas, data } as typeof personas;
 }

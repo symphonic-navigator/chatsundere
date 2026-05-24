@@ -16,6 +16,7 @@ export interface SettingsRow {
   defaultMindspaceId: string;
   userTexture: MindspaceTexture;
   animationsEnabled: boolean;
+  adultMode: 'nsfw' | 'sfw';
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
   createdAt: number;
   updatedAt: number;
@@ -205,6 +206,27 @@ class ClientDataDb extends Dexie {
           await tx.table('settings').update(1, { displayName: '' });
         }
       });
+
+    this.version(5)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        // Backfill SettingsRow.adultMode. Default is 'nsfw' per spec §2
+        // Decision 2 — SFW is treated as the special case, not the default.
+        // This setting is device-local and must be excluded from any future
+        // sync mechanism.
+        const settings = await tx.table('settings').get(1);
+        if (settings && typeof settings.adultMode !== 'string') {
+          await tx.table('settings').update(1, { adultMode: 'nsfw' });
+        }
+      });
   }
 }
 
@@ -311,6 +333,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         defaultMindspaceId: aurumId,
         userTexture: 'cloudy',
         animationsEnabled: true,
+        adultMode: 'nsfw',
         corsProxy: null,
         createdAt: now,
         updatedAt: now,

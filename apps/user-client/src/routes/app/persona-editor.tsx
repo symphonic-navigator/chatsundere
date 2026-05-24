@@ -24,6 +24,7 @@ import {
 } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
+import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 type DraftPersona = Omit<PersonaRow, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -90,6 +91,19 @@ export function PersonaEditor(): JSX.Element {
   }, [isCreate, persona.data, seedDraft]);
 
   const [isDirty, setIsDirty] = useState(false);
+  const setMindspace = useMindspaceStore((s) => s.update);
+
+  useEffect(() => {
+    if (!mindspaces.data || !settings.data) return;
+    setMindspace({
+      persona: persona.data
+        ? { mindspaceId: persona.data.mindspaceId, textureOverride: persona.data.textureOverride }
+        : null,
+      defaultMindspaceId: settings.data.defaultMindspaceId,
+      defaultTexture: settings.data.userTexture,
+      mindspaces: mindspaces.data,
+    });
+  }, [persona.data, mindspaces.data, settings.data, setMindspace]);
 
   function patch(p: Partial<DraftPersona>) {
     userModifiedRef.current = true;

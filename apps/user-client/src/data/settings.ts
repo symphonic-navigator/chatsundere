@@ -48,3 +48,25 @@ export function useDisplayName(fallback?: string | null): string {
   if (fallback) return fallback;
   return session?.username ?? '—';
 }
+
+/**
+ * Adult-mode toggle for filtering personas (and future surfaces). The mode
+ * is **device-local**: when sync lands in a future phase, this field must
+ * be in the sync-exclusion list. Default is 'nsfw' (per spec §2 Decision 2
+ * — SFW is treated as the special case, not the default).
+ */
+export function useAdultMode(): {
+  mode: 'nsfw' | 'sfw';
+  toggleMode: () => Promise<void>;
+  setMode: (m: 'nsfw' | 'sfw') => Promise<void>;
+} {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const mode = settings.data?.adultMode ?? 'nsfw';
+  return {
+    mode,
+    toggleMode: () =>
+      update.mutateAsync({ adultMode: mode === 'nsfw' ? 'sfw' : 'nsfw' }).then(() => undefined),
+    setMode: (m) => update.mutateAsync({ adultMode: m }).then(() => undefined),
+  };
+}

@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { Root } from '../../src/routes/root.js';
 
-describe('Root mounts the splash overlay', () => {
+describe('Root brand-bar adult-mode pill', () => {
   beforeEach(async () => {
     sessionStorage.clear();
+    sessionStorage.setItem('splashShown', '1'); // suppress splash so the pill is asserted directly
     await _resetClientDataDbForTests();
     await openClientDataDb();
   });
@@ -19,7 +20,7 @@ describe('Root mounts the splash overlay', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('renders SplashOverlay on first mount (cold start)', () => {
+  it('mounts the AdultModeToggle in the brand-bar header', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
@@ -28,19 +29,11 @@ describe('Root mounts the splash overlay', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.getByLabelText(/skip intro/i)).toBeInTheDocument();
-  });
-
-  it('does not render SplashOverlay when splashShown is already set', () => {
-    sessionStorage.setItem('splashShown', '1');
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <Root />
-        </MemoryRouter>
-      </QueryClientProvider>,
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /adult mode/i })).toBeInTheDocument(),
     );
-    expect(screen.queryByLabelText(/skip intro/i)).toBeNull();
+    // The pill lives inside the brand-bar header (sibling to logo + badge).
+    const pill = screen.getByRole('button', { name: /adult mode/i });
+    expect(pill.closest('header')).not.toBeNull();
   });
 });

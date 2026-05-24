@@ -2,6 +2,7 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
+import { AdultModeToggle } from '../components/AdultModeToggle.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
@@ -70,7 +71,7 @@ export function Root() {
   return (
     <SplashContext.Provider value={{ topbarLogoRef }}>
       <div className="relative isolate min-h-dvh overflow-x-clip">
-        <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 backdrop-blur-sm lg:px-6 lg:py-4">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-2 px-4 py-3 backdrop-blur-sm lg:px-6 lg:py-4">
           {/* Logo — gradient wordmark + twinkle, sized via .brand-logo CSS */}
           <Link to="/" className="brand-logo" style={{ opacity: topbarLogoVisible ? 1 : 0 }}>
             <span
@@ -85,6 +86,7 @@ export function Root() {
               ✦
             </span>
           </Link>
+          <AdultModeToggle />
           <div className="flex items-center gap-2 lg:gap-3">
             {/* Username hidden on mobile — too cramped at 380 px */}
             {session && (

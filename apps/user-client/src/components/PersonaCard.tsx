@@ -3,26 +3,53 @@
 import { Link } from 'react-router-dom';
 import type { PersonaRow } from '../boot/client-data-db.js';
 import { monogramFor } from '../lib/monogram.js';
+import type { ResolvedMindspace } from '../state/mindspace-resolver.js';
 
 interface Props {
   persona: PersonaRow;
+  mindspace: ResolvedMindspace;
   hasProvider: boolean;
   onChat: (personaId: string) => void;
 }
 
 /**
  * Compact card representing a single persona in My Circle.
- * Left: monogram tile coloured with the persona accent.
- * Middle: persona name (in persona colour) + tagline (or first 60 chars of instructions).
- * Right: Chat button, or a "Provider missing" badge + disabled Chat button.
- * Card body click navigates to the persona editor.
+ *
+ * Visual layers (outer-to-inner):
+ *  - Adult-status: NSFW (danger-red) or SFW (paper-soft-grey) box-shadow
+ *    ring + shimmer streak via .persona-card-{nsfw,sfw} CSS.
+ *  - Mindspace: card background tint (palette.surfaceBase at 10% opacity)
+ *    + base border (palette.accentBorder) reflect the persona's resolved
+ *    mindspace (with fallback to user default — resolved by the caller).
+ *  - Persona identity: monogram tile + name in persona.colour, tagline.
+ *
+ * The `mindspace` prop is required — there is intentionally no default
+ * inside this component. Every consumer must explicitly resolve and pass
+ * the mindspace so the call site thinks about context (see spec §4.5).
+ *
+ * The shimmer animation is per-card random-offset (derived from persona.id)
+ * so multiple cards do not glitter in unison. prefers-reduced-motion
+ * disables the shimmer; the static glow ring remains visible.
  */
-export function PersonaCard({ persona, hasProvider, onChat }: Props): JSX.Element {
+export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props): JSX.Element {
   const monogram = monogramFor(persona.name);
   const tagline = persona.tagline || persona.instructions.slice(0, 60);
+  // 0–4 second random animation delay so cards don't shimmer in unison.
+  const shimmerDelaySeconds = (hashStringToInt(persona.id) % 4000) / 1000;
 
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] transition hover:bg-white/[0.04]">
+    <li
+      data-persona-card
+      data-adult={persona.adultPersona ? 'true' : 'false'}
+      className={`persona-card relative flex items-center gap-3 rounded-lg transition ${
+        persona.adultPersona ? 'persona-card-nsfw' : 'persona-card-sfw'
+      }`}
+      style={{
+        background: `${mindspace.palette.surfaceBase}1a`,
+        border: `1px solid ${mindspace.palette.accentBorder}`,
+        ['--persona-shimmer-delay' as unknown as string]: `${shimmerDelaySeconds}s`,
+      }}
+    >
       <Link
         to={`/app/persona/${persona.id}`}
         className="flex min-w-0 flex-1 items-center gap-3 p-3"
@@ -74,4 +101,14 @@ export function PersonaCard({ persona, hasProvider, onChat }: Props): JSX.Elemen
       </div>
     </li>
   );
+}
+
+/** djb2-style stable hash; used only for picking a stable shimmer-delay per persona. */
+function hashStringToInt(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
 }

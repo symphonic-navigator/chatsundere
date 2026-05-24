@@ -340,3 +340,124 @@ h1 {
     animation: none !important;
   }
 }
+
+/* ===== Adult-mode toggle pill ===== */
+
+.adult-mode-toggle {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  transition: background 200ms ease, border-color 200ms ease;
+  cursor: pointer;
+}
+
+.adult-mode-toggle-nsfw {
+  background: rgba(255, 122, 138, 0.1);
+  border-color: rgba(255, 122, 138, 0.4);
+  color: var(--color-danger);
+}
+
+.adult-mode-toggle-sfw {
+  background: rgba(185, 180, 207, 0.06);
+  border-color: rgba(185, 180, 207, 0.25);
+  color: var(--color-paper-soft);
+}
+
+.adult-mode-toggle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 70%
+  );
+  transform: translateX(-110%);
+  pointer-events: none;
+}
+
+.adult-mode-toggle-nsfw::before {
+  animation: pill-shimmer 7s ease-in-out infinite;
+}
+
+.adult-mode-toggle-sfw::before {
+  animation: pill-shimmer 12s ease-in-out infinite;
+}
+
+@keyframes pill-shimmer {
+  0%,
+  85% {
+    transform: translateX(-110%);
+  }
+  92% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(110%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adult-mode-toggle::before {
+    animation: none;
+  }
+}
+
+/* ===== Persona card glow + shimmer ===== */
+
+.persona-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.persona-card-sfw {
+  box-shadow: 0 0 0 1px rgba(185, 180, 207, 0.2), 0 0 8px -4px rgba(185, 180, 207, 0.3);
+}
+
+.persona-card-nsfw {
+  box-shadow: 0 0 0 1px rgba(255, 122, 138, 0.45), 0 0 12px -2px rgba(255, 122, 138, 0.4);
+}
+
+.persona-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  transform: translateX(-110%);
+  border-radius: inherit;
+  animation-delay: var(--persona-shimmer-delay, 0s);
+}
+
+.persona-card-sfw::after {
+  animation: persona-shimmer 12s ease-in-out infinite;
+}
+
+.persona-card-nsfw::after {
+  animation: persona-shimmer 7s ease-in-out infinite;
+}
+
+@keyframes persona-shimmer {
+  0%,
+  88% {
+    transform: translateX(-110%);
+  }
+  94% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(110%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-card::after {
+    animation: none;
+  }
+}
