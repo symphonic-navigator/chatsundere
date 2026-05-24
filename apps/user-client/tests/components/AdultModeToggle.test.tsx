@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetClientDataDbForTests,
@@ -15,7 +16,9 @@ function renderToggle() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <AdultModeToggle />
+      <MemoryRouter>
+        <AdultModeToggle />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

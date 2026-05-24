@@ -946,3 +946,91 @@ h1 {
   height: 100%;
   width: 100%;
 }
+
+/* ===== Toast ===== */
+.toast-stack {
+  position: fixed;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  z-index: 100;
+  pointer-events: none;
+}
+.toast {
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  color: inherit;
+  font-size: 0.85rem;
+  max-width: 24rem;
+  pointer-events: auto;
+  animation: toast-in 250ms ease-out;
+}
+.toast[data-tone="warn"] {
+  border-color: rgba(220, 80, 80, 0.4);
+  background: rgba(40, 15, 15, 0.95);
+}
+.toast[data-tone="success"] {
+  border-color: rgba(80, 200, 120, 0.4);
+  background: rgba(15, 35, 20, 0.95);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/* ===== Background Stream Badge ===== */
+.bg-stream-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(201, 168, 76, 0.15);
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  font-size: 0.75rem;
+  color: inherit;
+  cursor: pointer;
+}
+.bg-stream-badge:hover {
+  background: rgba(201, 168, 76, 0.25);
+}
+.bg-stream-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(201, 168, 76, 0.9);
+  animation: bg-stream-pulse 1.4s ease-in-out infinite;
+}
+@keyframes bg-stream-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-stream-dot {
+    animation: none;
+  }
+}

@@ -183,8 +183,8 @@ describe('stream-manager.store', () => {
         }),
     );
     const store = useStreamManagerStore.getState();
-    void store.start(baseStartArgs(c1, persona, model) as never);
-    void store.start({
+    await store.start(baseStartArgs(c1, persona, model) as never);
+    await store.start({
       ...baseStartArgs(c1, persona, model),
       chatId: c2,
       chat: {
@@ -198,7 +198,6 @@ describe('stream-manager.store', () => {
         draftInput: '',
       },
     } as never);
-    await new Promise((r) => setTimeout(r, 20));
     expect(useStreamManagerStore.getState().streams.size).toBe(2);
     await store.abortAllForPersonaDiscard(personaId);
     expect(useStreamManagerStore.getState().streams.size).toBe(0);

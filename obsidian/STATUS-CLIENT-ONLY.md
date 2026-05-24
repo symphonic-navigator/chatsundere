@@ -517,12 +517,29 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 3.1 (Chat Backbone) implementation complete — 27 task-commits
-on master, all suites green. Paused for Chris's manual smoke covering
-spec §11.3 items 1, 2, 3, 8, 9 on a real device, then squash into a
-single Phase-3.1 commit and continue with Phase 3.2 (Background-Stream
-+ Multi-Chat + NSFW Panic, Tasks 29–33) and Phase 3.3 (Pills + Title
-+ Recovery + Polish, Tasks 34–41).
+Phase 3.1 (Chat Backbone) + Phase 3.2 (Background-Stream + Multi-Chat
++ NSFW Panic) implementation both complete on master. Chris asked
+to defer squashing until the entire Phase 3 trio is in (option c) —
+three separate squash-commits will land together when Phase 3.3 is
+done. Continuing now with Phase 3.3 (Pills integration + Title-Gen +
+Partial-Stream Recovery + Polish, Tasks 34–41).
+
+Phase 3.2 delta on top of 3.1: `534fa23` Toast component + store;
+`024e5bb` BackgroundStreamBadge in brand-bar; `177ff99` NSFW Panic
+auto-kick on `nsfw → sfw` adult-mode transition (`abortDiscard` of
+adult-persona streams + navigation to Entrance Hall + warn-toast when
+the user was inside one). Task 32 (Cockpit Send disable while stream
+live) was already covered by Tasks 24+27 via the `isStreamLive` prop
+flowing from the stream-manager through ChatPage. Plus a small
+follow-up commit `c7d8455` fixing two test-side reveals (AdultModeToggle
+test needed a MemoryRouter now that the toggle calls `useNavigate` for
+the panic kick; stream-manager-store's parallel-multi-chat test was
+racing a 20 ms timeout in the full suite — replaced with direct
+awaits).
+
+All 367 user-client Vitest tests pass across 83 files; 132 Bun tests
+in `packages/llm-unified` still green; `pnpm typecheck && pnpm lint`
+fully cached and clean.
 
 ---
 

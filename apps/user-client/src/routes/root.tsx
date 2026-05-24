@@ -3,9 +3,11 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';
+import { BackgroundStreamBadge } from '../components/BackgroundStreamBadge.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
+import { Toast } from '../components/Toast.js';
 import { UpdateBanner } from '../components/UpdateBanner.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
@@ -86,6 +88,7 @@ export function Root() {
               ✦
             </span>
           </Link>
+          <BackgroundStreamBadge />
           <AdultModeToggle />
           <div className="flex items-center gap-2 lg:gap-3">
             {/* Username hidden on mobile — too cramped at 380 px */}
@@ -114,6 +117,7 @@ export function Root() {
           <Outlet />
         </main>
         <SplashOverlay />
+        <Toast />
       </div>
     </SplashContext.Provider>
   );

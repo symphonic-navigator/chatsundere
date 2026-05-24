@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { useNavigate } from 'react-router-dom';
 import { useAdultMode } from '../data/settings.js';
+import { nsfwPanic } from '../lib/nsfw-panic.js';
 
 /**
  * Brand-bar pill toggling the global adult-mode filter.
@@ -10,14 +12,27 @@ import { useAdultMode } from '../data/settings.js';
  * SFW = grey-toned (matches PersonaCard SFW glow). The pill itself
  * shimmers subtly via CSS (.adult-mode-toggle::before in index.css);
  * prefers-reduced-motion disables the shimmer.
+ *
+ * On the nsfw → sfw transition, nsfwPanic() runs first (Phase-3.2):
+ * any in-flight streams against adult personas are aborted (discard
+ * semantics) and the user is navigated away if they are in such a chat.
  */
 export function AdultModeToggle(): JSX.Element {
   const { mode, toggleMode } = useAdultMode();
+  const navigate = useNavigate();
   const isNsfw = mode === 'nsfw';
+
+  async function handleToggle() {
+    if (mode === 'nsfw') {
+      await nsfwPanic({ navigate });
+    }
+    await toggleMode();
+  }
+
   return (
     <button
       type="button"
-      onClick={() => void toggleMode()}
+      onClick={() => void handleToggle()}
       aria-label={`Adult mode: ${mode.toUpperCase()}. Tap to switch.`}
       className={`adult-mode-toggle ${
         isNsfw ? 'adult-mode-toggle-nsfw' : 'adult-mode-toggle-sfw'
