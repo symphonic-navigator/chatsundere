@@ -5,6 +5,13 @@ import type { CSSProperties } from 'react';
 interface Props {
   texture: 'cloudy' | 'aurora' | 'grain';
   accent: string;
+  /**
+   * Optional shift applied to every layer's `animation-delay`. Set this
+   * per-instance (e.g. a stable hash of `persona.id`) so multiple textures
+   * on the same screen do not drift in unison. The grain variant ignores
+   * the delay because it has no animation. Defaults to `0`.
+   */
+  animationDelaySeconds?: number;
 }
 
 /**
@@ -16,8 +23,13 @@ interface Props {
  * All variants respect `prefers-reduced-motion` via global CSS in
  * `index.css` (`.mindspace-texture *` selectors disable animations).
  */
-export function MindspaceTexture({ texture, accent }: Props): JSX.Element {
+export function MindspaceTexture({
+  texture,
+  accent,
+  animationDelaySeconds = 0,
+}: Props): JSX.Element {
   const rgb = hexToRgbTriplet(accent);
+  const delay = `${animationDelaySeconds}s`;
   const wrapStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -35,6 +47,7 @@ export function MindspaceTexture({ texture, accent }: Props): JSX.Element {
       height: '60%',
       background: `radial-gradient(ellipse, rgba(${rgb}, 0.08) 0%, transparent 70%)`,
       animation: 'mindspace-float1 30s ease-in-out infinite',
+      animationDelay: delay,
     };
     const b: CSSProperties = {
       position: 'absolute',
@@ -44,6 +57,7 @@ export function MindspaceTexture({ texture, accent }: Props): JSX.Element {
       height: '50%',
       background: `radial-gradient(ellipse, rgba(${rgb}, 0.05) 0%, transparent 65%)`,
       animation: 'mindspace-float2 40s ease-in-out infinite',
+      animationDelay: delay,
     };
     return (
       <div className="mindspace-texture" data-texture="cloudy" style={wrapStyle}>
@@ -60,6 +74,7 @@ export function MindspaceTexture({ texture, accent }: Props): JSX.Element {
       background: `radial-gradient(ellipse at ${30 + i * 25}% ${20 + i * 30}%,
         rgba(${rgb}, ${0.07 - i * 0.015}) 0%, transparent 60%)`,
       animation: `mindspace-aurora${i + 1} ${50 + i * 10}s ease-in-out infinite`,
+      animationDelay: delay,
       mixBlendMode: 'screen',
     });
     return (

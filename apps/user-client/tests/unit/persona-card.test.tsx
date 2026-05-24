@@ -144,6 +144,17 @@ describe('PersonaCard', () => {
     expect(li.dataset.adult).toBe('true');
   });
 
+  it('renders the persona-mindspace texture inside the card (not the global default)', () => {
+    const ms = makeMindspace({ texture: 'aurora' });
+    const { container } = wrap(
+      <PersonaCard persona={makePersona()} mindspace={ms} hasProvider onChat={() => {}} />,
+    );
+    const card = container.querySelector('[data-persona-card]') as HTMLElement;
+    const tex = card.querySelector('.mindspace-texture') as HTMLElement;
+    expect(tex).not.toBeNull();
+    expect(tex.dataset.texture).toBe('aurora');
+  });
+
   it('applies persona-card-sfw class when persona is not adult', () => {
     const { container } = wrap(
       <PersonaCard

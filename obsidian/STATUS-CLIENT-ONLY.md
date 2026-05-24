@@ -1,14 +1,18 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (Phase 2.9 landed) — Mindspace Cards &
-Adult Mode complete. One squashed Phase-2.9 commit (`6553224`, plus
-this doc commit). All 238 user-client tests pass across 57 files;
-typecheck + Biome lint clean; full build clean. Manual smoke pending
-on Chris's device for the brand-bar adult-mode pill, the persona-card
-mindspace tinting and NSFW/SFW differentiation, the SFW no-leak filter
-behaviour, and the persona-editor ambient mindspace transition.
-Block-1 wireframes landed in `chatsundere-prototype.html` for Reading
-+ Interaction Mode + Entrance Hall + My Settings + My Circle + Persona
+**Last updated:** 2026-05-24 (Polish iterations 7 + 8 landed on top of
+Phase 2.9) — Mindspace Cards & Adult Mode complete; two follow-up
+polish passes on the card / topbar surfaces ahead of the small-group
+deploy planned for 2026-05-25 evening. Four commits past Phase 2.9
+proper: `6553224` (Phase 2.9), `86975d7` (iteration 7), this iteration
+8, plus this doc commit. All 240 user-client tests pass across 57
+files; typecheck + Biome lint clean; full build clean. Manual smoke
+pending on Chris's device for the per-card mindspace texture (each
+card carries its own atmosphere, not the user's default) and the
+EditorTopbar redesign (SVG arrow + Lora title, one vertically centred
+row across Circle / Persona-Editor / Settings / Account). Block-1
+wireframes landed in `chatsundere-prototype.html` for Reading +
+Interaction Mode + Entrance Hall + My Settings + My Circle + Persona
 Editor; only My History (Phase 4) remains wireframe-blocked. Phase 3
 (Chat surface) is the next deliverable. Brainstorm spec at
 [`superpowers/specs/2026-05-23-client-block-1-design.md`](../superpowers/specs/2026-05-23-client-block-1-design.md)
@@ -413,6 +417,59 @@ update the relevant one at the end.
     Bun tests untouched and green; `pnpm typecheck && pnpm lint && pnpm
     --filter user-client run build` clean.
 
+- **Polish iteration 7 (2026-05-24)** — three follow-ups from Chris's
+  iteration-7 smoke after Phase 2.9. One squashed commit (`86975d7`).
+  - `apps/user-client/src/routes/app/circle.tsx` — Circle owns the
+    user-default mindspace context. Mount-effect now resets the global
+    mindspace store to `persona: null` so the Persona-Editor's
+    persona-specific mindspace does not leak back when the user
+    navigates back from editing.
+  - `apps/user-client/src/routes/app/persona-editor.tsx` — mindspace-
+    sync effect now depends on draft fields (`draft.mindspaceId`,
+    `draft.textureOverride`) instead of `persona.data`. Picking a
+    mindspace inside the editor updates the ambient background
+    immediately — live preview without needing to Save.
+  - `apps/user-client/src/components/PersonaCard.tsx` — card tint now
+    uses `palette.accentSubtle` (a persona-specific 6% rgba of the
+    mindspace accent) instead of `palette.surfaceBase + '1a'`. The
+    8-hex-alpha suffix is not valid on an rgba string so the rule was
+    silently ignored — cards had no visible mindspace tint until this
+    fix. `accentSubtle` is already an rgba with the right opacity.
+
+- **Polish iteration 8 (2026-05-24)** — two follow-ups from Chris's
+  pre-deploy review of the persona surface. One squashed commit.
+  - `apps/user-client/src/components/MindspaceTexture.tsx` — new
+    optional `animationDelaySeconds` prop, propagated to each layer's
+    inline `animation-delay`. Lets multiple texture instances on the
+    same screen avoid synchronised drift. Grain variant ignores the
+    prop (no animation).
+  - `apps/user-client/src/components/PersonaCard.tsx` — each card now
+    renders its persona's `MindspaceTexture` inside the rounded
+    container (clipped by the existing `overflow: hidden` on
+    `.persona-card`). Content layered above the texture via
+    `relative z-[1]`; the shimmer `::after` keeps top z-stack via DOM
+    order. Per-card texture-delay derived from a second djb2 hash
+    window (`tx:<persona.id>` mod 8 s) so card textures and shimmers
+    don't co-pulse. Fixes "all persona cards show the user-default
+    texture, not the persona's own".
+  - `apps/user-client/src/components/EditorTopbar.tsx` — full redesign.
+    Hand-drawn SVG back arrow (24×24 viewBox, stroke 1.5, rounded
+    caps) inside a 44×44 hit target. Title promoted from `<span>` at
+    `text-sm` to `<h1>` at `text-lg lg:text-xl` in `font-display`
+    (Lora) with `leading-none` so back arrow, title, and Save-pill
+    sit on the same vertical centre line. No gradient on the title —
+    same family as the brand wordmark but visually quieter. Save &
+    Back button unchanged (border + uppercase + tracking) plus a
+    `transition` on hover. `hideSaveAndBack` spacer kept.
+  - `apps/user-client/src/routes/app/circle.tsx` — inline header
+    replaced with `<EditorTopbar … hideSaveAndBack />` so Circle,
+    Persona-Editor, My Settings, and My Account share one topbar
+    surface.
+  - `apps/user-client/tests/unit/persona-card.test.tsx` — one new
+    Vitest case asserting the `.mindspace-texture` overlay renders
+    inside the card with the persona's mindspace texture name. 240/240
+    user-client tests green; llm-unified Bun tests untouched.
+
 ## Briefed, awaiting implementation
 
 - **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
@@ -441,39 +498,33 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 2.9 finished. Paused for Chris's iteration-7 manual smoke covering
-the brand-bar adult-mode pill, the persona-card mindspace tinting and
-NSFW/SFW differentiation, the SFW no-leak filter behaviour (empty
-state identical to "no personas yet"), and the persona-editor ambient
-mindspace transition.
+Phase 2.9 + Polish iterations 7 & 8 finished. Paused for Chris's
+iteration-8 manual smoke covering the per-card mindspace texture
+(each card carries its own atmosphere) and the EditorTopbar redesign
+(SVG arrow + Lora title across Circle / Persona-Editor / Settings /
+Account). Small-group deploy scheduled for 2026-05-25 evening.
 
 ---
 
 ## Next session
 
-1. **Chris's iteration-7 smoke after Phase 2.9** — reload the PWA and
-   walk through:
-   - **Brand-bar pill (every route):** centred between logo and
-     connectivity badge. Shows "NSFW ⇄" by default (red-toned), shimmers
-     subtly every 6-8 s. Tap → toggles to "SFW ⇄" (grey-toned), shimmers
-     every 12 s. With OS-level reduced-motion on, no shimmer; static
-     pill colour remains.
-   - **Persona cards (My Circle):** each card's background tint matches
-     its mindspace (Verdan → green, Crimson → red-warm, …). NSFW
-     personas glow red (subtle outer ring + shimmer streak every ~7 s);
-     SFW personas glow grey (quieter ring + ~12 s shimmer). Cards do
-     NOT shimmer in unison (per-card random delay).
-   - **No-leak (SFW mode):** with the pill set to SFW, adult personas
-     vanish from the Circle list AND from the Hall RoomTile count
-     ("My Circle • X personas" reflects filtered count). With ALL
-     personas adult, Circle shows the same "No personas yet — tap +"
-     empty-state as a fresh install; no hint anywhere that hidden
-     personas exist. The most-recent-chat Continue card on the Hall
-     also disappears when the recent persona is adult and mode is SFW.
-   - **Persona-editor ambient mindspace:** tap a persona with Verdan
-     mindspace → editor opens, background transitions to green; back
-     to Circle → transitions back to user default. Create-mode (`+`)
-     stays on user default until the user picks a mindspace.
+1. **Chris's iteration-8 smoke** (post-deploy or just before) — reload
+   the PWA and walk through:
+   - **Persona cards (My Circle):** each card now shows its mindspace's
+     own texture (cloudy / aurora / grain) clipped inside the rounded
+     card, not the user-default texture. Cards with different mindspaces
+     should look visibly different from each other; cards with the same
+     mindspace should NOT pulse in unison (per-card hashed
+     animation-delay).
+   - **EditorTopbar (Circle / Persona-Editor / Settings / Account):**
+     SVG back arrow on the left (44×44 hit area, stroke 1.5 — should
+     feel deliberate, not generic Unicode), Lora title centred
+     (text-lg mobile / text-xl desktop, no gradient), Save & Back pill
+     on the right where applicable. All three on the same vertical
+     centre line — back arrow should NOT sit lower than the title any
+     more.
+   - **Long persona names** in the Persona-Editor title should truncate
+     gracefully without wrapping.
 
 2. **Phase 3 brainstorm + plan** — walk through the chat surface
    wireframes in `chatsundere-prototype.html` (Reading Mode +

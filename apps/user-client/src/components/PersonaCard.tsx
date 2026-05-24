@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { PersonaRow } from '../boot/client-data-db.js';
 import { monogramFor } from '../lib/monogram.js';
 import type { ResolvedMindspace } from '../state/mindspace-resolver.js';
+import { MindspaceTexture } from './MindspaceTexture.js';
 
 interface Props {
   persona: PersonaRow;
@@ -15,14 +16,16 @@ interface Props {
 /**
  * Compact card representing a single persona in My Circle.
  *
- * Visual layers (outer-to-inner):
+ * Visual layers (back-to-front):
+ *  - Mindspace tint: card background = palette.accentSubtle (6% rgba of
+ *    the persona's mindspace accent) + 1px palette.accentBorder.
+ *  - Mindspace texture: the persona's own texture (cloudy / aurora /
+ *    grain) is rendered clipped inside the rounded card so each card
+ *    carries its mindspace's atmosphere — not the user's default. Each
+ *    card gets a stable per-id animation-delay so the textures do not
+ *    drift in unison.
  *  - Adult-status: NSFW (danger-red) or SFW (paper-soft-grey) box-shadow
  *    ring + shimmer streak via .persona-card-{nsfw,sfw} CSS.
- *  - Mindspace: card background tint (palette.accentSubtle — a 6% rgba
- *    of the persona's mindspace accent colour) + base border
- *    (palette.accentBorder, a 15% rgba of the same accent) reflect the
- *    persona's resolved mindspace (with fallback to user default —
- *    resolved by the caller).
  *  - Persona identity: monogram tile + name in persona.colour, tagline.
  *
  * The `mindspace` prop is required — there is intentionally no default
@@ -38,6 +41,9 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
   const tagline = persona.tagline || persona.instructions.slice(0, 60);
   // 0–4 second random animation delay so cards don't shimmer in unison.
   const shimmerDelaySeconds = (hashStringToInt(persona.id) % 4000) / 1000;
+  // Separate hash window so a card's texture-drift and shimmer don't
+  // land on the same beat — keeps each card individually animated.
+  const textureDelaySeconds = (hashStringToInt(`tx:${persona.id}`) % 8000) / 1000;
 
   return (
     <li
@@ -52,9 +58,14 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
         ['--persona-shimmer-delay' as unknown as string]: `${shimmerDelaySeconds}s`,
       }}
     >
+      <MindspaceTexture
+        texture={mindspace.texture}
+        accent={mindspace.palette.accent}
+        animationDelaySeconds={textureDelaySeconds}
+      />
       <Link
         to={`/app/persona/${persona.id}`}
-        className="flex min-w-0 flex-1 items-center gap-3 p-3"
+        className="relative z-[1] flex min-w-0 flex-1 items-center gap-3 p-3"
       >
         <div
           className="grid h-12 w-12 shrink-0 place-items-center rounded-md font-display text-lg"
@@ -75,7 +86,7 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
         </div>
       </Link>
 
-      <div className="flex shrink-0 items-center gap-2 pr-3">
+      <div className="relative z-[1] flex shrink-0 items-center gap-2 pr-3">
         {hasProvider ? (
           <button
             type="button"

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { PersonaCard } from '../../components/PersonaCard.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
@@ -51,17 +52,13 @@ export function Circle(): JSX.Element {
 
   return (
     <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-24 pt-4">
-      <header className="flex items-center gap-3 pb-2">
-        <button
-          type="button"
-          aria-label="Back"
-          onClick={() => navigate('/app')}
-          className="grid h-10 w-10 place-items-center rounded-md text-2xl leading-none text-paper-soft hover:bg-white/5 hover:text-paper"
-        >
-          ←
-        </button>
-        <span className="font-display text-sm text-paper">My Circle</span>
-      </header>
+      <EditorTopbar
+        title="My Circle"
+        isDirty={false}
+        onBack={() => navigate('/app')}
+        onSaveAndBack={() => {}}
+        hideSaveAndBack
+      />
 
       {personas.data && personas.data.length === 0 ? (
         <div className="mt-8 grid place-items-center text-center text-paper-soft">
