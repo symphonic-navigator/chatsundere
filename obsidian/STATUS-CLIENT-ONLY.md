@@ -1,16 +1,21 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-25 night (Phase 3.3 polish-iteration 3
-squashed). Pre-Phase-4 micro-polish: cockpit-prompt font locked to
-`var(--font-sans)` so the input never inherits the persona font that
-flows through `.msg-text`; streaming tokens now fade in per upstream
-chunk (`token-fade` keyframe, 280 ms opacity + 1.5 px blur → 0) by
-dropping the live-buffer's text-coalescing — only newly-mounted spans
-animate, fertige Spans bleiben ruhig; the user-name label now wears the
-persona's font (one typographic voice across the chat surface) and its
-accent tint dropped from 55% → 38% so it sits further behind the
-persona name. Next session: simple My History page (no bookmarks yet)
-→ first versioned alpha build.
+**Last updated:** 2026-05-25 night (Phase 4 squashed at `3efc12b`).
+Chain-of-thought display landed: a closed-by-default mindspace-tinted
+pill renders next to each persona-message that carries reasoning, with
+sequential dot-pulse animation while live, opening to stream the trace
+in the persona font with `white-space: pre-wrap`. Pill renders only
+when a trace exists (no empty stub). Reasoning-OFF translation
+completed for all three providers (nano-gpt slug-swap / flag-body,
+Novita unified `{reasoning:{enabled,effort}}`, Ollama-Cloud
+`{think:bool}`) via a new `ReasoningIntent` discriminated union and the
+`_reasoning-body.ts` adapter. Reasoning is consolidated through
+`lib/content-blocks.ts` (flattenAnswerText/coalesceAdjacent/groupAdjacent)
+so it never leaks to clipboard, wire, or context-gauge. Dexie at v7.
+Pre-Phase-4 hotfix `832aa79` preserved the NSFW-Panic draft (was
+discard, now keeps the partial buffer for StreamInterruptedFooter
+Retry/Discard on re-visit). Next session: simple My History page (no
+bookmarks yet) → first versioned alpha build.
 
 ---
 
@@ -785,12 +790,115 @@ update the relevant one at the end.
     cockpit-draft localStorage cascade failures. `pnpm typecheck &&
     pnpm lint && pnpm --filter user-client run build` clean.
 
+- **Pre-Phase-4 hotfix — NSFW Panic preserves draft (2026-05-25,
+  squashed at `832aa79`)**. Phase 3.2's panic deleted the partial
+  persona-draft on adult-mode flip (discard semantics). Corrected per
+  the Phase-4 brainstorm to preserve: abort the stream, write the
+  partial buffer back as `streamingState: 'incomplete'`, leave the row
+  in place so StreamInterruptedFooter on re-visit can offer
+  Retry/Discard. Added `abortAllForPersonaPreserve` next to the
+  existing `abortAllForPersonaDiscard` (still used by user-initiated
+  cockpit Stop). One new Vitest case covers the preserve contract
+  (transition from `'complete'` to `'incomplete'` proves the Dexie
+  write actually fired).
+
+- **Phase 4 — CoT display + reasoning-OFF translation (2026-05-25,
+  squashed at `3efc12b`)**. Chain-of-thought trace surfaces as a
+  closed-by-default mindspace-tinted pill next to each persona-message
+  that carries reasoning. Closed: three sequentially-pulsing dots
+  (Animation A, locked during visual-companion brainstorm) + chevron;
+  18 % accent saturation against ink. Open: body streams the trace in
+  the persona font with `white-space: pre-wrap` (the explicit
+  chatsune-blank-lines fix), 0.85rem font-size, 8 % saturation. Pill
+  renders only when a trace exists (no empty stub). One pill per
+  maximal adjacent-reasoning run; interleaved-thinking models produce
+  multiple pills at time-correct positions in the chat surface
+  (structural correctness — device verification deferred to Block 3
+  with the tool-execution work). Local per-pill open/closed state,
+  orthogonal to `expandedMessageId`. Reduced-motion overrides stop the
+  dot pulse and chevron transition. Screen-reader gets a single
+  `aria-live="polite"` "Model is thinking" hint while live.
+  
+  Wire-side: `ContentBlock` gains a third variant
+  `{ type: 'reasoning'; text: string }` in `client-data-db.ts`
+  (Dexie bumped to v7 as code-capability marker; schema-structurally
+  identical to v6 since `contentBlocks` is non-indexed JSON).
+  `StreamChunk` gains a `reasoning` variant; `streaming.ts` parser
+  reads `delta.reasoning` (modern) + `delta.reasoning_content`
+  (legacy) and yields reasoning before token in the same SSE event.
+  New `_reasoning-body.ts` module owns per-provider Reasoning-OFF
+  translation driven by a `ReasoningIntent` discriminated union:
+  nano-gpt slug-swap (`pair.switchingMode === 'slug'`) vs flag-body
+  (`{reasoning:{enabled,effort}}`), Novita unified
+  `{reasoning:{enabled,effort}}`, Ollama-Cloud `{think:bool}`.
+  `buildBody` in `stream-completion.ts` consumes `extras.reasoning`
+  and delegates; the Phase-3.1 boolean `thinking` extras path is
+  removed. `reasoning-resolver.ts` now emits
+  `{ reasoning: ReasoningIntent }` for `kind: 'optional'` models and
+  `{}` for `no_reasoning` / `always_on` (capability-gated UI ensures
+  toggling is impossible in those cases anyway).
+  
+  Client-side: new `lib/content-blocks.ts` consolidates
+  `flattenAnswerText` (filters reasoning, joins text, ignores pill),
+  `coalesceAdjacent` (merges adjacent same-type, pill never merges),
+  `groupAdjacent` (partitions into ordered runs of same-type blocks).
+  `copyMessageText`, `toWireMessage`, and the renderer all read
+  through these helpers — reasoning never crosses to clipboard, wire,
+  or context-gauge. `stream-engine.ts` routes reasoning chunks via a
+  new `appendReasoning` helper (coalesce-on-adjacent, mirrors
+  `appendText`). `stream-manager.store.ts` `appendTextBlock` was
+  renamed and generalised to `appendStreamChunk({kind, text})` and
+  now mirrors both token AND reasoning chunks into the live buffer,
+  preserving the non-coalescing contract from Phase 3.3 polish-iter 3
+  so the token-fade keyframe plays once per chunk for reasoning
+  spans too. `MessageBlock.renderBlocks` rewritten around
+  `groupAdjacent`: text → span with persona-font + token-fade,
+  reasoning → `<ReasoningPill>` (one per maximal run, last-of-message
+  marked live while streaming), pill → existing `<Pill>` component.
+  `ChatStream` wires mindspace via `useMindspaceStore`. Title-gen
+  uses `runOneShotCompletion` (non-streaming) which structurally
+  reads only `choices[0].message.content`, so reasoning-from-title is
+  already prevented — no code change needed there.
+  
+  Tests: 23 new Bun cases (parser reasoning fields, eleven
+  applyReasoningToBody grid cases, buildBody refactor), ~40 new
+  Vitest cases (content-blocks helpers, stream-engine reasoning
+  routing, stream-manager polymorph, reasoning-resolver intent shape,
+  copy filter, message-block group rendering, reasoning-pill
+  component, Dexie v7 migration), one end-to-end integration test
+  mocking `streamCompletion` and exercising the full pipeline
+  (stream-manager → ChatStream → MessageBlock → ReasoningPill;
+  asserts pill live → static transition and the coalesced trace
+  surfaces on click). Full suite: `pnpm --filter
+  @chatsundere/llm-unified test` 172/172 pass; `pnpm --filter
+  user-client test` 422 pass / 8 pre-existing cockpit-draft
+  localStorage cascade. `pnpm typecheck && pnpm lint && pnpm --filter
+  user-client run build` all clean.
+  
+  Spec: [`superpowers/specs/2026-05-25-phase-4-cot-display-design.md`](../superpowers/specs/2026-05-25-phase-4-cot-display-design.md).
+  Plan: [`superpowers/plans/2026-05-25-phase-4-cot-display.md`](../superpowers/plans/2026-05-25-phase-4-cot-display.md).
+  
+  Follow-ups noted by reviewers during execution (non-blocking, for
+  later polish): four sibling `filter(b => b.type === 'text')`
+  duplicates in `chat-page`, `send-message`, etc. could be migrated
+  to `flattenAnswerText` for further dedup; `one-shot-completion.ts`
+  has a dormant legacy `extras.thinking` reference (dead via the
+  only current caller `title-generator`, but a real divergence from
+  `stream-completion.ts` once a future one-shot caller passes a
+  `ReasoningIntent`); the stream-manager test-env setTimeout leak
+  documented in Task 11 deserves a `vi.useFakeTimers()` pass; biome
+  `useImportType`/`organizeImports` may reorder `ChatStream`'s
+  `MINDSPACE_FALLBACK` declaration on next format.
+
 ## Briefed, awaiting implementation
 
-- **Phase 4 — History + Polish** (gated on My History wireframe):
+- **Phase 4.x — Full History page + Setup-Hints** (still gated on
+  Lyra's My-History wireframe per the original Phase-4 brief).
   List + search, Setup-Hints (deferred from Phase 2 per Decision 27),
   scroll-to-end micro-animation, affordance glow tuning, network-loss
-  / abort / partial-stream-on-tab-close edge cases.
+  / abort / partial-stream-on-tab-close edge cases. Phase 4 above
+  delivered the CoT-display half of the original Phase-4 brief;
+  History is the remaining half.
 
 ## Open design questions / blockers
 
@@ -808,8 +916,9 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(between sessions — Phase 3.3 polish-iteration 3 squashed; ready for
-the simple My History page, then first versioned very-early-alpha build)*
+*(between sessions — Phase 4 CoT-display squashed; ready for the
+simple My History page, then first versioned very-early-alpha build,
+then full Phase-4.x History/Setup-Hints when Lyra's wireframe lands)*
 
 ---
 
@@ -817,27 +926,40 @@ the simple My History page, then first versioned very-early-alpha build)*
 
 1. **Simple My History page (no bookmarks yet)** — minimal list of
    chats sufficient for a very-early-alpha hand-off. Bookmarks +
-   search + Setup-Hints come later in proper Phase 4.
+   search + Setup-Hints come later in proper Phase 4.x.
 2. **First versioned alpha build** — Chris cuts v0.0.1 (or similar
    pre-`v0.1.0` marker) once the simple history lands. v0.1.0 itself
    still gated on the public-release criteria in CLAUDE.md §12.
-3. **Phase 4 (My History full + Setup-Hints)** — still blocked on
+3. **Phase 4.x (My History full + Setup-Hints)** — still blocked on
    Lyra's My-History wireframe per spec §7. The simple history above
    is a deliberate placeholder, not the briefed Phase-4 surface.
 
 **Known follow-ups (non-blocking):**
 
-- Cockpit-draft localStorage tests (9 failures) — pre-existing jsdom
+- Cockpit-draft localStorage tests (8 failures) — pre-existing jsdom
   cascade; investigate test-env setup separately.
-- Reasoning-OFF translation for non-nano-gpt providers — currently
-  the toggle has no body effect; Novita needs `thinking: { type:
-  'disabled' }` etc.
-- Thinking display during stream — needs a `reasoning` `StreamChunk`
-  variant, adapter changes, and a collapsible UI block. Scheduled
-  for Phase 4 polish.
+- Migrate four sibling `filter(b => b.type === 'text').map+join`
+  duplicates in `chat-page.tsx`, `data/send-message.ts`,
+  `state/stream-manager.store.ts` to call `flattenAnswerText` from
+  `lib/content-blocks.ts` so the helper is the single source of
+  truth across the codebase.
+- Port the dormant `extras.thinking` reference in
+  `packages/llm-unified/src/one-shot-completion.ts` to consume the
+  new `ReasoningIntent` shape via `applyReasoningToBody` — currently
+  dead via the only caller (title-generator), but a divergence from
+  `stream-completion.ts` that future one-shot callers would trip
+  over.
+- Stream-manager-store test-env setTimeout leak (deletes handles
+  200 ms after a successful stream test ends, sometimes wiping a
+  handle that a later test created with the same chat-id) — fix
+  with `vi.useFakeTimers()` or a teardown-aware delete.
+- `MINDSPACE_FALLBACK` in `ChatStream.tsx` is currently
+  `{} as ResolvedMindspace` — load-bearing because `ReasoningPill`
+  currently `void`s the prop. Will NPE if a future consumer reads
+  `mindspace.accent` etc. without the store populated first.
 - Port chatsune's `_retry.py` to a TS retry helper for
   `stream-completion` — exponential back-off on 429/503, honour
-  `Retry-After`, ±25% jitter. Defer to Phase 4 polish.
+  `Retry-After`, ±25% jitter. Defer to Phase 4.x polish.
 
 ---
 
