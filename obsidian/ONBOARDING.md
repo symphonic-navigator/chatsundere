@@ -28,6 +28,14 @@ docker compose -f infra/compose.dev.yml up -d
 pnpm dev
 ```
 
+### A note on workspace packages
+
+`pnpm install` does **not** build the TypeScript packages under `packages/`. The user-client imports their compiled `dist/` output (per each package's `main` field), so a fresh clone — or a fresh checkout on a different machine after `packages/*/src` has changed — needs the packages built before Vite can resolve them.
+
+The user-client's `predev` hook (`apps/user-client/package.json`) handles this automatically: any time you run `pnpm dev` in the user-client (or `pnpm dev` at the root, which fans out via Turbo), all workspace packages are rebuilt first. If you bypass that — for example by invoking `vite` directly, or launching another app standalone — run `pnpm build` (root) or `pnpm --filter './packages/*' build` manually first.
+
+Symptom of a stale `dist/`: a white screen and a Vite console error like *"does not provide an export named 'X'"*.
+
 ### One-time Linux + UFW exception
 
 Backend services run natively on the host (`bun --watch`), while Prometheus runs in a container and needs to scrape `/metrics` on those host ports. If your distribution runs UFW (or any firewall that drops traffic from Docker bridges by default), Prometheus's scrape requests time out.
