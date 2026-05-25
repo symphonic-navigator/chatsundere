@@ -1,17 +1,16 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-25 late evening (Phase 3.3 polish-iteration 2
-squashed). Cosmetic styling pass + mindspace/font binding overhaul:
-BottomAffordance refactored to a true flex-child (provably non-scrolling)
-and decoupled from autoFollow so it stays visible throughout reading mode;
-message labels redesigned (✨/🪶 prefixes, larger font, tinted user name);
-Interaction-Topbar persona name now opens the persona editor via
-`?return=` and back lands on the chat; ChatPage auto-scrolls to end on
-mount and binds the mindspace store to the chat's persona; persona-font
-applied to all message text and to the persona editor's topbar title;
-body aurora dimmed to ~30% on `/app/<subroute>` so the persona's
-mindspace texture is the dominant background layer. Next session: simple
-My History page (no bookmarks yet) → first versioned alpha build.
+**Last updated:** 2026-05-25 night (Phase 3.3 polish-iteration 3
+squashed). Pre-Phase-4 micro-polish: cockpit-prompt font locked to
+`var(--font-sans)` so the input never inherits the persona font that
+flows through `.msg-text`; streaming tokens now fade in per upstream
+chunk (`token-fade` keyframe, 280 ms opacity + 1.5 px blur → 0) by
+dropping the live-buffer's text-coalescing — only newly-mounted spans
+animate, fertige Spans bleiben ruhig; the user-name label now wears the
+persona's font (one typographic voice across the chat surface) and its
+accent tint dropped from 55% → 38% so it sits further behind the
+persona name. Next session: simple My History page (no bookmarks yet)
+→ first versioned alpha build.
 
 ---
 
@@ -740,6 +739,52 @@ update the relevant one at the end.
     (down from 9 — one was already flipped). `pnpm typecheck && pnpm
     lint && pnpm --filter user-client run build` clean.
 
+- **Phase 3.3 polish-iteration 3 (2026-05-25 night)** — single squashed
+  commit on master following Chris's pre-Phase-4 micro-polish ask. Two
+  styling items + one follow-up tweak. What landed:
+  - **Cockpit-prompt font locked to sans-serif** —
+    `apps/user-client/src/index.css`. `.cockpit-input` had
+    `font-family: inherit`, which since iter-2 silently picked up the
+    persona's display-font through `.msg-text` (the inheritance chain
+    runs through `.chat-page → .cockpit → .cockpit-input`). Locked to
+    `var(--font-sans)` (Inter) with a comment explaining the cockpit is
+    a system surface, not a persona voice.
+  - **Token fade-in while streaming** —
+    `apps/user-client/src/state/stream-manager.store.ts`,
+    `components/chat/ChatStream.tsx`, `components/chat/MessageBlock.tsx`,
+    `index.css`. `appendTextBlock` no longer coalesces during live
+    streaming — each upstream chunk becomes its own `{type:'text',text}`
+    block. MessageBlock receives a new optional `isStreamingDraft?:
+    boolean` prop (propagated from ChatStream's existing `isDraft`
+    branch); when true, text-block spans get the `token-fade` class.
+    New `@keyframes token-fade-in` (280 ms, opacity + 1.5 px blur → 0)
+    with `prefers-reduced-motion` override. React mounts only the
+    newly-arrived span on each token, so the keyframe plays exactly
+    once per chunk — settled spans stay still. Persistence shape
+    unchanged on the success path (final DB write still uses
+    `result.finalContentBlocks` from the engine, which *does*
+    coalesce). The catch/incomplete path persists the segmented buffer
+    verbatim, which is safe because every downstream reader
+    (`toWireMessage`, copy, StreamInterruptedFooter, context-gauge)
+    already joins text blocks with `filter+map+join`.
+  - **User-name label adopts persona font + deeper desaturation** —
+    `apps/user-client/src/components/chat/MessageBlock.tsx`. Iter-2 set
+    the persona-font on the persona name and on `.msg-text` for both
+    roles but left the user-name label at the default font; the chat
+    surface read inconsistently. User name now uses the same
+    `FONT_VAR[persona.font]` as everything else. Accent share in the
+    user-name `color-mix` dropped from 55% → 38% — the label sits
+    further behind the persona name while still recognisably tinted by
+    the persona's accent. Both name styles refactored to a shared
+    `personaFont` local.
+  - Tests: 2 new Vitest cases (MessageBlock `token-fade` class on/off
+    by `isStreamingDraft`, stream-manager live-buffer pushes each
+    chunk as a separate text block — no coalescing) + 1 existing
+    user-name test extended to assert the persona font is now applied.
+    All 388 user-client tests pass (was 386); same 8 pre-existing
+    cockpit-draft localStorage cascade failures. `pnpm typecheck &&
+    pnpm lint && pnpm --filter user-client run build` clean.
+
 ## Briefed, awaiting implementation
 
 - **Phase 4 — History + Polish** (gated on My History wireframe):
@@ -763,7 +808,7 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(between sessions — Phase 3.3 polish-iteration 2 squashed; ready for
+*(between sessions — Phase 3.3 polish-iteration 3 squashed; ready for
 the simple My History page, then first versioned very-early-alpha build)*
 
 ---

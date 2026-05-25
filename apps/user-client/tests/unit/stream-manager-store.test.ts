@@ -140,6 +140,41 @@ describe('stream-manager.store', () => {
     expect(pills[0]?.messageId).toBe(personaMsgId);
   });
 
+  it('live contentBuffer pushes each token as its own text block (no coalescing)', async () => {
+    // Each upstream chunk should become its own text-block so the renderer's
+    // `.token-fade` keyframe plays once per chunk (only newly-mounted spans
+    // animate). Coalescing here would collapse all tokens into one ever-
+    // growing span and the fade would never re-fire on later chunks.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    type OnChunk = (c: { type: 'token'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      // Never resolves — we only want to observe mid-stream buffer state.
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const store = useStreamManagerStore.getState();
+    void store.start(baseStartArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    fire({ type: 'token', text: 'Hi' });
+    fire({ type: 'token', text: ' there' });
+    fire({ type: 'token', text: ', friend' });
+    const handle = useStreamManagerStore.getState().streams.get(chatId);
+    expect(handle).toBeDefined();
+    expect(handle?.contentBuffer).toEqual([
+      { type: 'text', text: 'Hi' },
+      { type: 'text', text: ' there' },
+      { type: 'text', text: ', friend' },
+    ]);
+    await store.abortDiscard(chatId);
+  });
+
   it('abortDiscard removes the draft, keeps the user message', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);

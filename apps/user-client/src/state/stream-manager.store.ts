@@ -258,14 +258,16 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   },
 }));
 
-/** Append `text` to the tail of `buf`, coalescing with the trailing text block.
- *  Replaces the trailing block with a new reference so React-based subscribers
- *  watching specific blocks re-render on every token append. */
+/** Push `text` as its own text block. We deliberately do NOT coalesce here
+ *  so that the renderer sees one DOM span per upstream chunk — that gives
+ *  each newly-arrived token a fresh-mount and lets the `.token-fade` CSS
+ *  keyframe play exactly once per chunk, without re-triggering on existing
+ *  spans. The final DB persist uses `result.finalContentBlocks` (which the
+ *  engine *does* coalesce), so the persisted shape on the success path
+ *  stays one text block; the error/incomplete path persists the segmented
+ *  buffer verbatim, which is also valid since `ContentBlock[]` is an
+ *  ordered list and all downstream readers (toWireMessage, copy helpers,
+ *  StreamInterruptedFooter) join text blocks before consuming. */
 function appendTextBlock(buf: ContentBlock[], text: string): void {
-  const last = buf[buf.length - 1];
-  if (last && last.type === 'text') {
-    buf[buf.length - 1] = { type: 'text', text: last.text + text };
-  } else {
-    buf.push({ type: 'text', text });
-  }
+  buf.push({ type: 'text', text });
 }

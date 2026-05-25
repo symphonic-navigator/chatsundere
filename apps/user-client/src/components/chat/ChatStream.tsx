@@ -133,6 +133,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                       }
                     : undefined
                 }
+                isStreamingDraft={isDraft}
               />
               {isDraft ? <StreamingCursor /> : null}
             </div>

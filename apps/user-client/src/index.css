@@ -726,6 +726,30 @@ h1 {
   }
 }
 
+/* Token fade-in. The stream-manager pushes one text block per upstream
+ * chunk; MessageBlock renders each block as its own <span class="token-fade">
+ * during the streaming draft. React mounts only the newly-arrived span on
+ * each token, so the keyframe plays exactly once per chunk — gives the
+ * "activating" Grok-style cadence without re-flashing already-rendered text. */
+.msg-text .token-fade {
+  animation: token-fade-in 280ms ease-out both;
+}
+@keyframes token-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(1.5px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-text .token-fade {
+    animation: none;
+  }
+}
+
 /* ===== Interaction Topbar =====
  * Real flex-child of .chat-page now (sibling of .chat-stream / .cockpit).
  * order: -1 keeps it at the top of the flex column regardless of JSX
@@ -968,7 +992,10 @@ h1 {
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
   color: inherit;
-  font-family: inherit;
+  /* The persona's font now flows through `.msg-text` (Phase 3.3 iter-2); the
+   * cockpit-input must NOT inherit it — the input is a system surface, not a
+   * persona voice. Lock to sans-serif so typing always feels like a UI input. */
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   resize: none;
 }

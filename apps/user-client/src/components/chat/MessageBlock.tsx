@@ -17,6 +17,10 @@ export interface MessageBlockProps {
   onCopy: () => void;
   onBookmark: () => void;
   onRegenerate?: () => void;
+  /** True while this message is the active streaming draft. Text-block
+   *  spans rendered under this flag carry the `token-fade` class so each
+   *  freshly-mounted span plays the fade-in keyframe (Grok-style). */
+  isStreamingDraft?: boolean;
 }
 
 /** Renders a single chat message row with optional expanded controls. */
@@ -26,17 +30,20 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
   const namePrefix = isUser ? '🪶' : '✨';
   const nameText = isUser ? p.displayName : (p.persona?.name ?? '');
   // Persona keeps its accent colour at full strength; the user's name is the
-  // same accent but mixed toward the muted paper tone — recognisable as
-  // "this persona's chat" without competing with the persona name itself.
+  // same accent but mixed further toward the muted paper tone — quieter than
+  // the persona name, but still recognisably "this persona's chat". Both
+  // names use the persona's font so the whole chat surface speaks in one
+  // typographic voice (continuation of the iter-2 .msg-text decision).
   const personaColour = p.persona?.colour;
+  const personaFont = p.persona ? FONT_VAR[p.persona.font] : undefined;
   const nameStyle: React.CSSProperties = isUser
-    ? personaColour
-      ? { color: `color-mix(in srgb, ${personaColour} 55%, var(--color-paper-soft) 45%)` }
-      : {}
-    : {
-        color: personaColour,
-        fontFamily: p.persona ? FONT_VAR[p.persona.font] : undefined,
-      };
+    ? {
+        fontFamily: personaFont,
+        ...(personaColour
+          ? { color: `color-mix(in srgb, ${personaColour} 38%, var(--color-paper-soft) 62%)` }
+          : {}),
+      }
+    : { color: personaColour, fontFamily: personaFont };
 
   // When this message is freshly expanded, scroll its controls (rendered at
   // the bottom) into view. Without this, expanding a message near the
@@ -72,7 +79,7 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
         className="msg-text"
         style={p.persona ? { fontFamily: FONT_VAR[p.persona.font] } : undefined}
       >
-        {renderBlocks(p.message.contentBlocks, p.pills)}
+        {renderBlocks(p.message.contentBlocks, p.pills, p.isStreamingDraft === true)}
       </div>
       {p.expanded ? (
         <MessageControls
@@ -86,10 +93,24 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
   );
 }
 
-function renderBlocks(blocks: ContentBlock[], pills: Map<string, PillRow>): (JSX.Element | null)[] {
+function renderBlocks(
+  blocks: ContentBlock[],
+  pills: Map<string, PillRow>,
+  isStreamingDraft: boolean,
+): (JSX.Element | null)[] {
+  // During streaming, the stream-manager pushes one text block per upstream
+  // chunk (no coalescing). Each block then becomes its own DOM span with a
+  // stable per-index key — React mounts only the newest span on each token
+  // arrival, so the `.token-fade` keyframe plays exactly once per chunk.
+  const textClass = isStreamingDraft ? 'token-fade' : undefined;
   return blocks.map((b, i) => {
-    // biome-ignore lint/suspicious/noArrayIndexKey: content blocks have no stable id; index is the correct key here
-    if (b.type === 'text') return <span key={`t-${i}`}>{b.text}</span>;
+    if (b.type === 'text')
+      return (
+        // biome-ignore lint/suspicious/noArrayIndexKey: content blocks have no stable id; index is the correct key here — appending tokens stays append-only so prior keys are preserved
+        <span key={`t-${i}`} className={textClass}>
+          {b.text}
+        </span>
+      );
     const pill = pills.get(b.pillId);
     return pill ? <Pill key={`p-${b.pillId}`} row={pill} /> : null;
   });

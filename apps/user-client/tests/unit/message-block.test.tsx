@@ -72,6 +72,9 @@ describe('MessageBlock', () => {
     const nameEl = container.querySelector('.msg.from-user .msg-name') as HTMLElement;
     expect(nameEl.style.color).toContain('color-mix');
     expect(nameEl.style.color).toContain('#c9a84c');
+    // The user name now also wears the persona's font — the chat surface
+    // speaks in one voice end-to-end.
+    expect(nameEl.style.fontFamily).toBe('var(--font-display)');
   });
 
   it('persona variant renders persona name with sparkle prefix in persona colour and font', () => {
@@ -128,6 +131,50 @@ describe('MessageBlock', () => {
     );
     const userText = container.querySelector('.msg.from-user .msg-text') as HTMLElement;
     expect(userText.style.fontFamily).toBe('var(--font-display)');
+  });
+
+  it('applies token-fade class to text spans only while message is the streaming draft', () => {
+    const msg = personaMsg({
+      contentBlocks: [
+        { type: 'text', text: 'Hi' },
+        { type: 'text', text: ' world' },
+      ],
+    });
+    const { container, rerender } = render(
+      <MessageBlock
+        message={msg}
+        pills={new Map()}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={true}
+      />,
+    );
+    const spans = container.querySelectorAll('.msg-text > span');
+    expect(spans.length).toBe(2);
+    expect(spans[0]?.className).toBe('token-fade');
+    expect(spans[1]?.className).toBe('token-fade');
+
+    rerender(
+      <MessageBlock
+        message={msg}
+        pills={new Map()}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={false}
+      />,
+    );
+    const after = container.querySelectorAll('.msg-text > span');
+    expect(after.length).toBe(2);
+    expect(after[0]?.className).toBe('');
+    expect(after[1]?.className).toBe('');
   });
 
   it('renders contentBlocks in order with pills inline', () => {
