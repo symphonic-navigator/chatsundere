@@ -1,7 +1,7 @@
 import { useSessionStore } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';
 import { BackgroundStreamBadge } from '../components/BackgroundStreamBadge.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
@@ -31,6 +31,21 @@ export function Root() {
   const phase = useBootStore((s) => s.phase);
   const dismissed = useStagingBannerStore((s) => s.dismissed);
   const dismissBanner = useStagingBannerStore((s) => s.dismiss);
+  const location = useLocation();
+
+  // Dim the body aurora on /app subroutes (chat, circle, persona-editor,
+  // settings, account) so the mindspace texture is the visually dominant
+  // background layer. The aurora stays as a faint atmospheric presence
+  // underneath. Exactly /app (Entrance Hall), /, login, onboarding and
+  // /change-passphrase keep the full aurora.
+  useEffect(() => {
+    const dim = /^\/app\/.+/.test(location.pathname);
+    document.body.classList.toggle('dim-ambient', dim);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    return () => document.body.classList.remove('dim-ambient');
+  }, []);
 
   const showRolledBackBanner =
     phase.kind === 'ready' && phase.staging.kind === 'rolled_back' && !dismissed;

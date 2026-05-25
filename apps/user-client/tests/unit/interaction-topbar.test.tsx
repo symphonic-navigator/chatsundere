@@ -80,4 +80,34 @@ describe('InteractionTopbar', () => {
     );
     expect(container.querySelector('.context-gauge-text')?.textContent).toBe('100%');
   });
+
+  it('persona-name button fires onOpenPersonaEditor when callback is provided', () => {
+    const onOpenPersonaEditor = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onOpenPersonaEditor={onOpenPersonaEditor}
+        />
+      </MemoryRouter>,
+    );
+    const btn = container.querySelector('.topbar-center-btn') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    expect(onOpenPersonaEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('persona-name button is disabled when no onOpenPersonaEditor callback', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar persona={aurum} usedTokens={0} contextWindow={1000} onExit={vi.fn()} />
+      </MemoryRouter>,
+    );
+    const btn = container.querySelector('.topbar-center-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
 });

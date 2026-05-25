@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef } from 'react';
 import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { FONT_VAR } from '../../lib/persona-font.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
-
-const FONT_VAR: Record<'sans' | 'serif' | 'cursive', string> = {
-  sans: 'var(--font-sans)',
-  serif: 'var(--font-display)',
-  cursive: 'var(--font-display)',
-};
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -28,11 +23,18 @@ export interface MessageBlockProps {
 export function MessageBlock(p: MessageBlockProps): JSX.Element {
   const isUser = p.message.role === 'user';
   const roleClass = isUser ? 'from-user' : 'from-persona';
+  const namePrefix = isUser ? '🪶' : '✨';
   const nameText = isUser ? p.displayName : (p.persona?.name ?? '');
+  // Persona keeps its accent colour at full strength; the user's name is the
+  // same accent but mixed toward the muted paper tone — recognisable as
+  // "this persona's chat" without competing with the persona name itself.
+  const personaColour = p.persona?.colour;
   const nameStyle: React.CSSProperties = isUser
-    ? {}
+    ? personaColour
+      ? { color: `color-mix(in srgb, ${personaColour} 55%, var(--color-paper-soft) 45%)` }
+      : {}
     : {
-        color: p.persona?.colour,
+        color: personaColour,
         fontFamily: p.persona ? FONT_VAR[p.persona.font] : undefined,
       };
 
@@ -58,12 +60,20 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
       onClick={p.onToggleExpand}
     >
       <div className="msg-name" style={nameStyle}>
-        {nameText}
+        <span className="msg-name-prefix" aria-hidden="true">
+          {namePrefix}
+        </span>
+        <span className="msg-name-text">{nameText}</span>
       </div>
       {p.expanded ? (
         <div className="msg-timestamp">{formatTimestamp(p.message.createdAt)}</div>
       ) : null}
-      <div className="msg-text">{renderBlocks(p.message.contentBlocks, p.pills)}</div>
+      <div
+        className="msg-text"
+        style={p.persona ? { fontFamily: FONT_VAR[p.persona.font] } : undefined}
+      >
+        {renderBlocks(p.message.contentBlocks, p.pills)}
+      </div>
       {p.expanded ? (
         <MessageControls
           message={p.message}

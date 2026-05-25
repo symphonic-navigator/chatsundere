@@ -1,14 +1,17 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-25 evening (Phase 3.3 polish-iteration 1
-squashed). Chris's full-day device smoke surfaced ~25 distinct bugs
-across the chat surface — provider URL build, live streaming
-reactivity, scroll anchoring through layout shifts, dim-overlay
-stacking, multiple z-index regressions from the cockpit flex-child
-restructure, plus a handful of UX details (newlines, context gauge,
-auto-scroll, expand-on-outside-tap, recovery footer flicker). All
-landed in a single Phase-3.3 polish commit. Next session: cosmetic
-styling pass, then Phase 4.
+**Last updated:** 2026-05-25 late evening (Phase 3.3 polish-iteration 2
+squashed). Cosmetic styling pass + mindspace/font binding overhaul:
+BottomAffordance refactored to a true flex-child (provably non-scrolling)
+and decoupled from autoFollow so it stays visible throughout reading mode;
+message labels redesigned (✨/🪶 prefixes, larger font, tinted user name);
+Interaction-Topbar persona name now opens the persona editor via
+`?return=` and back lands on the chat; ChatPage auto-scrolls to end on
+mount and binds the mindspace store to the chat's persona; persona-font
+applied to all message text and to the persona editor's topbar title;
+body aurora dimmed to ~30% on `/app/<subroute>` so the persona's
+mindspace texture is the dominant background layer. Next session: simple
+My History page (no bookmarks yet) → first versioned alpha build.
 
 ---
 
@@ -641,6 +644,102 @@ update the relevant one at the end.
     cockpit-draft jsdom localStorage cascade — confirmed unchanged
     before any session edits, tracked as the known-fragility item.
 
+- **Phase 3.3 polish-iteration 2 (2026-05-25 late evening)** — single
+  squashed commit on master following the cosmetic styling pass and
+  mindspace/font binding overhaul that Chris briefed. What landed:
+  - **BottomAffordance refactor** —
+    `apps/user-client/src/index.css`. The handle is now a true flex-child
+    of `.chat-page` (`order: 999`, `flex-shrink: 0`,
+    `align-self: center`, `padding-bottom: 2rem + safe-area`) consistent
+    with `.interaction-topbar` and `.cockpit` since Phase 3.3 iter 1.
+    Two previous attempts (`position: absolute`, `position: fixed` with
+    z-index) had Chris-observed scrolling — a flex-sibling structurally
+    cannot scroll with another sibling's overflow. Also dropped
+    `chat-page[data-mode="reading"] .chat-stream { padding-bottom: 4rem }`
+    (now redundant — chat-stream shrinks for the affordance naturally).
+  - **Affordance stays visible through scroll-up** —
+    `apps/user-client/src/routes/app/chat/chat-page.tsx`. Render
+    condition was `!isInteractionMode && hasMessages && autoFollowEnabled`;
+    dropping the `autoFollowEnabled` gate fixes both Chris-observed
+    issues: (a) "scrolls away" — really the unmount on autoFollow → false;
+    (b) "scroll snaps back several times near the bottom" — the unmount
+    grew chat-stream's clientHeight, ResizeObserver fired with a stale
+    `autoFollowRef`, and snap-to-bottom executed. With the affordance
+    persistent, no resize → no RO race.
+  - **Message-label redesign** —
+    `apps/user-client/src/components/chat/MessageBlock.tsx`,
+    `apps/user-client/src/index.css`. ✨ prefix on persona name, 🪶 on
+    user name (both `aria-hidden`, decorative). `.msg-name` font-size
+    `0.75rem` → `0.95rem`, weight kept at 600, opacity bumped to 0.95.
+    User name styled with
+    `color-mix(in srgb, persona.colour 55%, var(--color-paper-soft) 45%)`
+    — recognisably the persona accent but muted. `.msg-name` is now
+    `inline-flex` with `gap: 0.4rem` to host the prefix span cleanly.
+  - **Interaction-Topbar persona-name → editor** —
+    `apps/user-client/src/components/chat/InteractionTopbar.tsx`,
+    `InteractionMode.tsx`, `chat-page.tsx`,
+    `routes/app/persona-editor.tsx`. The centre region ("Chat with" +
+    name) is wrapped in a button with `aria-label`; tap navigates to
+    `/app/persona/<id>?return=<current chat URL>`. PersonaEditor reads
+    `?return=` via `useSearchParams` and honours it for both the back
+    arrow and the Save & Back pill (default fallback unchanged at
+    `/app/circle`). Delete-persona still navigates to `/app/circle`
+    (the chat it would return to no longer exists). Optional
+    `onOpenPersonaEditor?: () => void` prop on InteractionTopbar; the
+    centre button is `disabled` when no callback (consumer-friendly
+    default).
+  - **ChatPage auto-scrolls to end on mount** — `chat-page.tsx`. The
+    chatId-bound effect now also calls `setAutoFollow(true)` when
+    entering chat-mode, so navigating back from the persona editor (or
+    arriving from anywhere) lands the user at the latest message even
+    if they had scrolled up before leaving. ChatStream's existing
+    `[autoFollow, messages.length, streamHandle]` effect picks it up.
+  - **ChatPage binds mindspace store to its persona** — `chat-page.tsx`.
+    New `useEffect` parallel to PersonaEditor's: resolves
+    `effectivePersona.mindspaceId` + `textureOverride` with the user
+    default + texture from settings, and writes the result into the
+    global mindspace store. Closes the previously-silent gap — chat
+    surfaces showed whatever was last set elsewhere (Circle's user
+    default, the editor's most-recent persona, etc.).
+  - **Persona-font applies to message text** —
+    `apps/user-client/src/components/chat/MessageBlock.tsx`. The
+    `.msg-text` container receives `fontFamily: FONT_VAR[persona.font]`
+    on both user AND persona messages (Chris's explicit choice — the
+    chat surface speaks in the persona's voice end-to-end). Decision
+    log: this is a deliberate widening of "persona voice = persona's
+    typography" beyond just the persona's own utterances.
+  - **Persona-editor topbar title in persona-font + colour** —
+    `apps/user-client/src/components/EditorTopbar.tsx`,
+    `routes/app/persona-editor.tsx`. New optional `titleStyle?:
+    CSSProperties` prop on EditorTopbar. PersonaEditor passes
+    `{ fontFamily: FONT_VAR[draft.font], color: draft.colour }` in
+    edit-mode (gate: `!isCreate`). Live-preview when picking a different
+    font in "Font and Voice" or a different mindspace accent in
+    "Mindspace — Override". Create-mode left at the default topbar
+    styling — title is the "New Persona" placeholder.
+  - **Body aurora dimmed on `/app/<subroute>`** —
+    `apps/user-client/src/routes/root.tsx`, `index.css`. New `useEffect`
+    in Root toggles `body.dim-ambient` based on a regex `/^\/app\/.+/`.
+    The dimmed CSS rule reduces gradient-stop opacities to `rgba(...0.3)`
+    and `rgba(...0.25)` while preserving the gradient shape. Aurora
+    stays at full strength on `/`, `/login*`, `/onboarding*`, exactly
+    `/app` (Entrance Hall), `/change-passphrase`. Cleanup-on-unmount
+    effect strips the class as defence against Root remounts.
+  - **Shared `FONT_VAR` helper** —
+    `apps/user-client/src/lib/persona-font.ts` (new). Deduplicates the
+    same map between MessageBlock, PersonaGreeting, and PersonaEditor.
+    All three import from here now.
+  - Tests: 12 new Vitest cases — MessageBlock (4: prefix-on-user,
+    prefix-on-persona, tinted user-name colour, font on both
+    `.msg-text` variants), InteractionTopbar (2: centre-button click
+    fires callback, disabled fallback when no callback),
+    persona-editor.return-url (3: default `/app/circle` fallback, back
+    honours `?return=`, Save & Back lands on `?return=` route). All
+    386 user-client tests pass (was 379 before this iter); the 8
+    failing tests are the same pre-existing localStorage cascade
+    (down from 9 — one was already flipped). `pnpm typecheck && pnpm
+    lint && pnpm --filter user-client run build` clean.
+
 ## Briefed, awaiting implementation
 
 - **Phase 4 — History + Polish** (gated on My History wireframe):
@@ -664,18 +763,22 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(between sessions — Phase 3.3 polish-iteration 1 squashed; ready for
-the cosmetic styling pass, then Phase 4)*
+*(between sessions — Phase 3.3 polish-iteration 2 squashed; ready for
+the simple My History page, then first versioned very-early-alpha build)*
 
 ---
 
 ## Next session
 
-1. **Cosmetic styling pass** — typography refinements, spacing,
-   mindspace palette polish, affordance glow tuning, scroll-to-end
-   micro-animation. No mechanics changes — just the visual layer.
-2. **Phase 4 (My History + Setup-Hints)** — still blocked on Lyra's
-   My-History wireframe per spec §7.
+1. **Simple My History page (no bookmarks yet)** — minimal list of
+   chats sufficient for a very-early-alpha hand-off. Bookmarks +
+   search + Setup-Hints come later in proper Phase 4.
+2. **First versioned alpha build** — Chris cuts v0.0.1 (or similar
+   pre-`v0.1.0` marker) once the simple history lands. v0.1.0 itself
+   still gated on the public-release criteria in CLAUDE.md §12.
+3. **Phase 4 (My History full + Setup-Hints)** — still blocked on
+   Lyra's My-History wireframe per spec §7. The simple history above
+   is a deliberate placeholder, not the briefed Phase-4 surface.
 
 **Known follow-ups (non-blocking):**
 

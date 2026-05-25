@@ -7,6 +7,7 @@ interface Props {
   usedTokens: number;
   contextWindow: number;
   onExit: () => void;
+  onOpenPersonaEditor?: () => void;
 }
 
 export function InteractionTopbar(p: Props): JSX.Element {
@@ -33,12 +34,18 @@ export function InteractionTopbar(p: Props): JSX.Element {
           </svg>
         </button>
       </div>
-      <div className="topbar-center">
+      <button
+        type="button"
+        className="topbar-center topbar-center-btn"
+        aria-label={`Open ${p.persona.name} settings`}
+        onClick={p.onOpenPersonaEditor}
+        disabled={!p.onOpenPersonaEditor}
+      >
         <div className="context-label">Chat with</div>
         <div className="context-name" style={{ color: p.persona.colour }}>
           {p.persona.name}
         </div>
-      </div>
+      </button>
       <div className="topbar-right">
         <div className="status-group">
           <div className="journal-indicator" title="Uncommitted journal entries">

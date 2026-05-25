@@ -70,6 +70,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Dimmed aurora variant — applied by Root.tsx on /app subroutes so the
+   persona mindspace texture is the dominant visual layer. The aurora
+   stays as a subtle atmospheric haze beneath the mindspace. Gradient
+   shape is preserved; only the starting colour opacity is reduced. */
+body.dim-ambient {
+  background-image: radial-gradient(120% 80% at 50% 0%, rgba(22, 10, 61, 0.3) 0%, transparent 60%),
+    radial-gradient(80% 60% at 80% 110%, rgba(67, 45, 184, 0.25) 0%, transparent 55%);
+}
+
 h1,
 h2,
 h3 {
@@ -520,10 +529,17 @@ h1 {
   text-align: left;
 }
 .msg-name {
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 0.25rem;
-  opacity: 0.85;
+  margin-bottom: 0.35rem;
+  opacity: 0.95;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.msg-name-prefix {
+  font-size: 0.9em;
+  line-height: 1;
 }
 .msg-timestamp {
   font-size: 0.7rem;
@@ -576,18 +592,22 @@ h1 {
   border-color: rgba(201, 168, 76, 0.4);
 }
 
-/* ===== Bottom Affordance / Scroll-to-end ===== */
+/* ===== Bottom Affordance / Scroll-to-end =====
+ * Real flex-child of .chat-page (consistent with .interaction-topbar and
+ * .cockpit since Phase 3.3 polish-iter 1). order: 999 keeps it pinned to
+ * the bottom of the flex column in reading mode; flex-shrink: 0 means
+ * chat-stream gives up height for it instead of overlapping. The bottom
+ * padding lifts the bar ~2rem above the page edge so it still feels like
+ * a deliberate floating handle. Positioned-fixed was structurally
+ * vulnerable to any ancestor introducing a transform/filter/contain
+ * containing-block; a flex-item cannot scroll with a sibling's overflow. */
 .affordance {
-  position: absolute;
-  left: 50%;
-  /* Sit a little above the viewport edge so the affordance feels like a
-     deliberate handle, not something glued to the bottom. Safe-area is
-     added on top — iOS-style notches push it up further if present. */
-  bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
+  flex-shrink: 0;
+  order: 999;
+  align-self: center;
   background: transparent;
   border: 0;
-  padding: 0.5rem 2rem;
+  padding: 0.75rem 2rem calc(2rem + env(safe-area-inset-bottom, 0px));
   cursor: pointer;
   display: flex;
   justify-content: center;
@@ -675,12 +695,6 @@ h1 {
   display: flex;
   flex-direction: column;
 }
-/* Reading mode has no cockpit to clear, but the absolute-positioned
-   BottomAffordance sits at chat-page bottom ~2rem — extra padding-bottom
-   keeps the last message from running into it. */
-.chat-page[data-mode="reading"] .chat-stream {
-  padding-bottom: 4rem;
-}
 /*
  * Anchor the first child to the bottom when content is shorter than the
  * viewport — short conversations sit on the bottom edge (WhatsApp /
@@ -750,6 +764,27 @@ h1 {
 .interaction-topbar .context-name {
   font-family: var(--font-display);
   font-size: 1rem;
+}
+.topbar-center-btn {
+  background: transparent;
+  border: 0;
+  padding: 0.25rem 0.5rem;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  border-radius: 0.4rem;
+  transition: background 150ms ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+}
+.topbar-center-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.topbar-center-btn:disabled {
+  cursor: default;
 }
 .status-group {
   display: flex;

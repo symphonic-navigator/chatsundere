@@ -16,6 +16,7 @@ interface Props {
   onSend: (text: string) => void;
   isStreamLive: boolean;
   onExit: () => void;
+  onOpenPersonaEditor?: () => void;
 }
 
 /**
@@ -101,6 +102,7 @@ export function InteractionMode(p: Props): JSX.Element {
         usedTokens={p.usedTokens}
         contextWindow={p.model.contextWindow}
         onExit={p.onExit}
+        onOpenPersonaEditor={p.onOpenPersonaEditor}
       />
       <DimOverlay active={inputFocused} />
       {/* Capture focus/blur on the textarea to drive DimOverlay activation. */}

@@ -2,7 +2,7 @@ import { composeSystemPrompt, getProvider } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
@@ -11,12 +11,14 @@ import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { useChat, useUpdateChat } from '../../../data/chats.js';
+import { useMindspaces } from '../../../data/mindspaces.js';
 import { useSendMessage } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
+import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 
 const DRAFT_DEBOUNCE_MS = 250;
@@ -26,6 +28,7 @@ export function ChatPage(): JSX.Element {
   const [search] = useSearchParams();
   const personaIdFromQuery = search.get('personaId');
   const navigate = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
 
   const isLazy = !chatId;
@@ -40,12 +43,16 @@ export function ChatPage(): JSX.Element {
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const isInteractionMode = useCurrentChatStore((s) => s.isInteractionMode);
-  const autoFollowEnabled = useCurrentChatStore((s) => s.autoFollowEnabled);
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
 
   // Sync store with route. Mount auto-opens Interaction Mode in lazy mode + pins cockpit.
+  // On every chat-mode entry — including back from the persona-editor — we
+  // also force autoFollow back on so ChatStream's scroll-to-bottom effect
+  // lands the user at the latest message. Without this the cross-session
+  // autoFollow flag (false if the user had scrolled up before leaving) would
+  // persist and they'd land mid-history on return.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally one-shot per chatId/personaId — store setters are stable Zustand references that do not need to be in the dep array
   useEffect(() => {
     if (isLazy && personaIdFromQuery) {
@@ -55,6 +62,7 @@ export function ChatPage(): JSX.Element {
       if (!useCurrentChatStore.getState().isPinned) togglePin();
     } else if (chatId) {
       setChatId(chatId);
+      setAutoFollow(true);
     }
   }, [chatId, personaIdFromQuery]);
 
@@ -108,6 +116,25 @@ export function ChatPage(): JSX.Element {
     queryFn: async () => (await getClientDataDb().settings.get(1)) ?? null,
   });
   const displayName = useDisplayName();
+
+  // Bind the global mindspace store to this chat's persona. Without this,
+  // chat surfaces would show whatever mindspace was last set (e.g. the
+  // user-default from Circle/Entrance Hall, or the previously-edited
+  // persona's mindspace from the editor). Mirrors PersonaEditor's effect.
+  const mindspaces = useMindspaces();
+  const setMindspaceStore = useMindspaceStore((s) => s.update);
+  useEffect(() => {
+    if (!effectivePersona || !mindspaces.data || !settingsQuery.data) return;
+    setMindspaceStore({
+      persona: {
+        mindspaceId: effectivePersona.mindspaceId,
+        textureOverride: effectivePersona.textureOverride,
+      },
+      defaultMindspaceId: settingsQuery.data.defaultMindspaceId,
+      defaultTexture: settingsQuery.data.userTexture,
+      mindspaces: mindspaces.data,
+    });
+  }, [effectivePersona, settingsQuery.data, mindspaces.data, setMindspaceStore]);
 
   // Draft persistence — chat-mode reads ChatRow.draftInput; lazy mode reads localStorage.
   const dbDraft = chatQuery.data?.chat?.draftInput ?? '';
@@ -181,6 +208,12 @@ export function ChatPage(): JSX.Element {
   const onExitToEntranceHall = (): void => {
     setInteractionMode(false);
     navigate('/app');
+  };
+
+  const onOpenPersonaEditor = (): void => {
+    if (!effectivePersona) return;
+    const returnUrl = `${location.pathname}${location.search}`;
+    navigate(`/app/persona/${effectivePersona.id}?return=${encodeURIComponent(returnUrl)}`);
   };
 
   const messages = chatQuery.data?.messages ?? [];
@@ -261,20 +294,20 @@ export function ChatPage(): JSX.Element {
       })()}
 
       {/*
-        BottomAffordance is the "open the cockpit" cue — only makes sense
-        when the cockpit is closed and auto-follow is active. ScrollToEnd
-        is now rendered inside ChatStream so it lives at the bottom of the
-        scrollable viewport regardless of cockpit height.
+        BottomAffordance is the "open the cockpit" cue — always visible in
+        reading mode so the user can re-engage regardless of scroll
+        position. Decoupling it from autoFollowEnabled also avoids a
+        ResizeObserver race: when the affordance unmounted on scroll-up,
+        chat-stream's clientHeight grew, the RO fired, and a stale
+        autoFollowRef occasionally snapped the scroll back to the bottom.
+        ScrollToEnd (rendered inside ChatStream) handles the "back to
+        latest" intent separately.
       */}
-      {!isInteractionMode && hasMessages && autoFollowEnabled ? (
+      {!isInteractionMode && hasMessages ? (
         <BottomAffordance
           onTap={() => {
-            // Opening the cockpit always lands the user at the end of the
-            // chat ("you reply from the bottom"). setAutoFollow(true) is
-            // usually a no-op since the affordance only shows when already
-            // following, but it's explicit insurance — and ChatStream's
-            // ResizeObserver will lock the bottom alignment as the layout
-            // shifts under the new cockpit.
+            // Tap on the affordance both opens the cockpit and re-anchors
+            // to the latest message — "you reply from the bottom".
             setAutoFollow(true);
             setInteractionMode(true);
           }}
@@ -291,6 +324,7 @@ export function ChatPage(): JSX.Element {
           onSend={(t) => void onSend(t)}
           isStreamLive={isStreamLive}
           onExit={onExitToEntranceHall}
+          onOpenPersonaEditor={onOpenPersonaEditor}
         />
       ) : null}
     </div>

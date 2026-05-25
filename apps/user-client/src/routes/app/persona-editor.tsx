@@ -3,7 +3,7 @@
 import { getProvider } from '@chatsundere/llm-unified';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
   MindspaceRow,
   PersonaRow,
@@ -25,6 +25,7 @@ import {
 } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
+import { FONT_VAR } from '../../lib/persona-font.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 type DraftPersona = Omit<PersonaRow, 'id' | 'createdAt' | 'updatedAt'>;
@@ -60,7 +61,13 @@ function defaultDraft(
 export function PersonaEditor(): JSX.Element {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
   const isCreate = !id || id === 'new';
+
+  // Caller may pass ?return=<path> so back / Save & Back land somewhere
+  // other than /app/circle (used by the Interaction-Topbar's persona-name
+  // click so it returns to the chat). Fallback to /app/circle.
+  const returnPath = search.get('return') || '/app/circle';
 
   const persona = usePersona(isCreate ? null : (id ?? null));
   const settings = useSettings();
@@ -156,7 +163,7 @@ export function PersonaEditor(): JSX.Element {
 
   async function onSaveAndBack() {
     await persistDraft();
-    navigate('/app/circle');
+    navigate(returnPath);
   }
 
   const personaInvalid = !draft.name || !draft.instructions || !draft.providerId || !draft.modelId;
@@ -184,13 +191,22 @@ export function PersonaEditor(): JSX.Element {
     return undefined;
   }
 
+  // Live-preview the chosen font + accent on the topbar title so changes in
+  // Font and Voice / Mindspace are visually reflected immediately. We apply
+  // this in edit-mode only — in create-mode the title is a placeholder
+  // ("New Persona") that benefits less from persona-specific styling.
+  const titleStyle = !isCreate
+    ? { fontFamily: FONT_VAR[draft.font], color: draft.colour }
+    : undefined;
+
   return (
     <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
       <EditorSticky>
         <EditorTopbar
           title={isCreate ? 'New Persona' : draft.name || 'Edit Persona'}
+          titleStyle={titleStyle}
           isDirty={isDirty}
-          onBack={() => navigate('/app/circle')}
+          onBack={() => navigate(returnPath)}
           onSaveAndBack={() => {
             void onSaveAndBack();
           }}

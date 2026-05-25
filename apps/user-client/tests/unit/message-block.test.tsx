@@ -48,7 +48,7 @@ const aurum: PersonaRow = {
 };
 
 describe('MessageBlock', () => {
-  it('user variant renders display name', () => {
+  it('user variant renders display name with feather prefix and tinted persona colour', () => {
     const { container } = render(
       <MessageBlock
         message={userMsg()}
@@ -62,11 +62,19 @@ describe('MessageBlock', () => {
       />,
     );
     expect(container.querySelector('.msg.from-user')).not.toBeNull();
-    expect(container.textContent).toContain('Chris');
+    const prefix = container.querySelector('.msg.from-user .msg-name-prefix');
+    expect(prefix?.textContent).toBe('🪶');
+    const nameText = container.querySelector('.msg.from-user .msg-name-text');
+    expect(nameText?.textContent).toBe('Chris');
     expect(container.textContent).toContain('hello');
+    // Less-saturated tint built off the persona accent. jsdom keeps color-mix
+    // as a raw string, so we assert by substring.
+    const nameEl = container.querySelector('.msg.from-user .msg-name') as HTMLElement;
+    expect(nameEl.style.color).toContain('color-mix');
+    expect(nameEl.style.color).toContain('#c9a84c');
   });
 
-  it('persona variant renders persona name in persona colour and font', () => {
+  it('persona variant renders persona name with sparkle prefix in persona colour and font', () => {
     const { container } = render(
       <MessageBlock
         message={personaMsg()}
@@ -81,9 +89,45 @@ describe('MessageBlock', () => {
     );
     const block = container.querySelector('.msg.from-persona');
     expect(block).not.toBeNull();
-    expect(container.textContent).toContain('Aurum');
-    const nameEl = container.querySelector('.msg-name') as HTMLElement | null;
-    expect(nameEl?.style.color.replace(/\s/g, '')).toBe('rgb(201,168,76)');
+    const prefix = container.querySelector('.msg.from-persona .msg-name-prefix');
+    expect(prefix?.textContent).toBe('✨');
+    const nameText = container.querySelector('.msg.from-persona .msg-name-text');
+    expect(nameText?.textContent).toBe('Aurum');
+    const nameEl = container.querySelector('.msg.from-persona .msg-name') as HTMLElement;
+    expect(nameEl.style.color.replace(/\s/g, '')).toBe('rgb(201,168,76)');
+  });
+
+  it('message text uses the persona font on both user and persona messages', () => {
+    const { container, rerender } = render(
+      <MessageBlock
+        message={personaMsg()}
+        pills={new Map()}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+      />,
+    );
+    const personaText = container.querySelector('.msg.from-persona .msg-text') as HTMLElement;
+    // Aurum uses 'serif' → maps to --font-display.
+    expect(personaText.style.fontFamily).toBe('var(--font-display)');
+
+    rerender(
+      <MessageBlock
+        message={userMsg()}
+        pills={new Map()}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+      />,
+    );
+    const userText = container.querySelector('.msg.from-user .msg-text') as HTMLElement;
+    expect(userText.style.fontFamily).toBe('var(--font-display)');
   });
 
   it('renders contentBlocks in order with pills inline', () => {

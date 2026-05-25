@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { CSSProperties } from 'react';
+
 interface Props {
   title: string;
   isDirty: boolean;
@@ -8,6 +10,9 @@ interface Props {
   saveDisabled?: boolean;
   saveTooltip?: string;
   hideSaveAndBack?: boolean;
+  /** Optional inline style for the centred title — used by Persona Editor
+   *  to render the persona's name in its chosen font + accent colour. */
+  titleStyle?: CSSProperties;
 }
 
 /**
@@ -32,6 +37,7 @@ export function EditorTopbar({
   saveDisabled = false,
   saveTooltip,
   hideSaveAndBack = false,
+  titleStyle,
 }: Props): JSX.Element {
   function handleBack() {
     if (isDirty) {
@@ -51,7 +57,10 @@ export function EditorTopbar({
       >
         <BackArrow />
       </button>
-      <h1 className="min-w-0 flex-1 truncate text-center font-display text-lg leading-none text-paper lg:text-xl">
+      <h1
+        className="min-w-0 flex-1 truncate text-center font-display text-lg leading-none text-paper lg:text-xl"
+        style={titleStyle}
+      >
         {title}
       </h1>
       {hideSaveAndBack ? (

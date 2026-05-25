@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-const FONT_VAR: Record<'sans' | 'serif' | 'cursive', string> = {
-  sans: 'var(--font-sans)',
-  serif: 'var(--font-display)',
-  cursive: 'var(--font-display)',
-};
+import { FONT_VAR } from '../../lib/persona-font.js';
 
 interface PersonaGreetingProps {
   name: string;
