@@ -105,7 +105,14 @@ export function useSendMessage() {
         chat,
         persona,
         provider: providerDef,
-        providerConfig: { baseUrl: provider.baseUrl, routing: provider.routing },
+        // Per Decision 22: baseUrl + routing are derived from the static
+        // ProviderDefinition, not from the persisted ProviderRow (which only
+        // stores templateId, apiKey and the enabled flag authoritatively).
+        providerConfig: {
+          baseUrl: providerDef.baseUrl,
+          routing:
+            providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+        },
         apiKey,
         corsProxyUrl,
         corsProxyKey,
@@ -122,7 +129,7 @@ export function useSendMessage() {
     },
 
     onSuccess: (chatId) => {
-      void qc.invalidateQueries({ queryKey: ['chat', chatId] });
+      void qc.invalidateQueries({ queryKey: ['chats', chatId] });
       void qc.invalidateQueries({ queryKey: ['chats'] });
     },
   });
@@ -219,7 +226,14 @@ export function useRegenerate() {
         chat,
         persona,
         provider: providerDef,
-        providerConfig: { baseUrl: provider.baseUrl, routing: provider.routing },
+        // Per Decision 22: baseUrl + routing are derived from the static
+        // ProviderDefinition, not from the persisted ProviderRow (which only
+        // stores templateId, apiKey and the enabled flag authoritatively).
+        providerConfig: {
+          baseUrl: providerDef.baseUrl,
+          routing:
+            providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+        },
         apiKey,
         corsProxyUrl,
         corsProxyKey,
@@ -233,7 +247,7 @@ export function useRegenerate() {
     },
 
     onSuccess: (_data, vars) => {
-      void qc.invalidateQueries({ queryKey: ['chat', vars.chatId] });
+      void qc.invalidateQueries({ queryKey: ['chats', vars.chatId] });
     },
   });
 }

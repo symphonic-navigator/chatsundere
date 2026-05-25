@@ -2,8 +2,10 @@
 import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
 import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
+import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
+import { toastStore } from './toast.store.js';
 
 export interface StreamHandle {
   chatId: string;
@@ -114,16 +116,42 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     runStreamEngine({
       ...args,
       signal: controller.signal,
-      onChunk: () => {
-        // Live mirroring into handle.contentBuffer is deferred to Phase-3.2
-        // (ChatStream live-subscription wire-up). The engine accumulates its
-        // own buffer and returns it in finalContentBlocks on resolve.
+      onChunk: (chunk) => {
+        // Mirror tokens into the handle so ChatStream can render the draft
+        // as it grows. We *replace* the handle on each chunk so a zustand
+        // selector that returns `streams.get(chatId)` sees a fresh object
+        // reference — bumping just the Map identity isn't enough because
+        // selector subscribers compare via Object.is on the inner value.
+        if (chunk.type !== 'token') return;
+        set((s) => {
+          const live = s.streams.get(args.chatId);
+          if (!live) return s;
+          const nextBuf = [...live.contentBuffer];
+          appendTextBlock(nextBuf, chunk.text);
+          const nextHandle = { ...live, contentBuffer: nextBuf };
+          const m = new Map(s.streams);
+          m.set(args.chatId, nextHandle);
+          return { streams: m };
+        });
       },
     })
       .then(async (result) => {
         const current = get().streams.get(args.chatId);
         if (!current) return;
-        current.status = 'finalising';
+
+        // Rotate the handle reference so subscribers (notably ChatStream's
+        // scroll-to-bottom useEffect, which keys on streamHandle identity)
+        // see the status transition. In-place mutation here used to silently
+        // break that — the handle ref stayed identical until streams.delete
+        // 200ms later, opening a window for scroll drift right after the
+        // last token landed.
+        set((s) => {
+          const live = s.streams.get(args.chatId);
+          if (!live) return s;
+          const m = new Map(s.streams);
+          m.set(args.chatId, { ...live, status: 'finalising' });
+          return { streams: m };
+        });
 
         const pillsWithMessageId = result.pillRows.map((p) => ({
           ...p,
@@ -139,6 +167,12 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           await db.chats.update(args.chatId, { lastMessageAt: Date.now() });
         });
 
+        // TanStack-Query has no idea the underlying Dexie rows just changed.
+        // Invalidate both the single-chat key (for the active ChatPage) and
+        // the chat-list key (entrance-hall continue card, my-history later).
+        void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+        void queryClient.invalidateQueries({ queryKey: ['chats'] });
+
         // Fire title-gen for first persona response (best-effort, no await).
         const chatAfter = await db.chats.get(args.chatId);
         if (chatAfter && chatAfter.title === null) {
@@ -152,7 +186,16 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           }
         }
 
-        current.status = 'done';
+        // Same reasoning as the finalising transition above — rotate so
+        // subscribers re-render and the auto-follow scroll lands at the
+        // post-completion bottom.
+        set((s) => {
+          const live = s.streams.get(args.chatId);
+          if (!live) return s;
+          const m = new Map(s.streams);
+          m.set(args.chatId, { ...live, status: 'done' });
+          return { streams: m };
+        });
 
         setTimeout(() => {
           set((s) => {
@@ -162,15 +205,36 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           });
         }, 200);
       })
-      .catch(async (_err) => {
+      .catch(async (err) => {
+        // Aborts go through abortDiscard, which deletes the handle before
+        // the rejection lands here; the early-return below handles that.
         const current = get().streams.get(args.chatId);
         if (!current) return;
-        current.status = 'error';
-        // Persist whatever was buffered so a recovery footer can pick it up
-        // on a fresh boot if the user navigates away without retrying.
+
+        console.error('[stream-manager] stream failed for chat', args.chatId, err);
+
+        // Persist whatever was buffered so the StreamInterruptedFooter can
+        // offer Retry/Discard when the user revisits the chat.
         await db.messages.update(draftMessageId, {
           contentBlocks: current.contentBuffer,
           streamingState: 'incomplete',
+        });
+        void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+
+        // Free the slot so the Cockpit Send button re-enables for this
+        // chat and the BackgroundStreamBadge stops counting this stream.
+        set((s) => {
+          const m = new Map(s.streams);
+          m.delete(args.chatId);
+          return { streams: m };
+        });
+
+        // Surface the failure for the away-from-chat case — the inline
+        // footer covers the in-chat case.
+        toastStore.show({
+          message: `${args.persona.name} couldn't reach the model — retry from the chat`,
+          tone: 'warn',
+          durationMs: 6000,
         });
       });
   },
@@ -193,3 +257,15 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     for (const h of matching) await get().abortDiscard(h.chatId);
   },
 }));
+
+/** Append `text` to the tail of `buf`, coalescing with the trailing text block.
+ *  Replaces the trailing block with a new reference so React-based subscribers
+ *  watching specific blocks re-render on every token append. */
+function appendTextBlock(buf: ContentBlock[], text: string): void {
+  const last = buf[buf.length - 1];
+  if (last && last.type === 'text') {
+    buf[buf.length - 1] = { type: 'text', text: last.text + text };
+  } else {
+    buf.push({ type: 'text', text });
+  }
+}

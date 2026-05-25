@@ -54,7 +54,12 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   toggleExpanded: (id) =>
     set((s) => ({ expandedMessageId: s.expandedMessageId === id ? null : id })),
   setAutoFollow: (enabled) => set({ autoFollowEnabled: enabled }),
-  setInteractionMode: (on) => set({ isInteractionMode: on }),
+  setInteractionMode: (on) =>
+    // Opening the cockpit collapses any expanded-message state. The user's
+    // attention shifts to the new compose intent; leaving an old message
+    // expanded would (a) clutter the smaller chat surface and (b) interact
+    // badly with scrollIntoView, which can fight cockpit-open layout shifts.
+    set(on ? { isInteractionMode: true, expandedMessageId: null } : { isInteractionMode: false }),
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),
   setReasoning: (r) => set({ reasoning: r }),
   reset: () => set({ ...initial }),

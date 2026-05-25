@@ -9,7 +9,6 @@ import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
-import { ScrollToEnd } from '../../../components/chat/ScrollToEnd.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { useChat, useUpdateChat } from '../../../data/chats.js';
 import { useSendMessage } from '../../../data/send-message.js';
@@ -189,7 +188,7 @@ export function ChatPage(): JSX.Element {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="chat-page">
+    <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
       {isLazy && !hasMessages && effectivePersona ? (
         <PersonaGreeting
           name={effectivePersona.name}
@@ -210,6 +209,11 @@ export function ChatPage(): JSX.Element {
       {(() => {
         const last = messages[messages.length - 1];
         if (!last || last.streamingState !== 'incomplete') return null;
+        // The streamingState schema is binary: 'incomplete' covers both
+        // *active streaming* and *interrupted-needs-recovery*. The footer
+        // is for the recovery case only — suppress it while a stream is
+        // actually live for this chat.
+        if (isStreamLive) return null;
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
@@ -237,7 +241,7 @@ export function ChatPage(): JSX.Element {
                   .join('');
                 // Delete the prior user-message too so useSendMessage's insert doesn't duplicate it.
                 await db.messages.delete(priorUser.id);
-                await qc.invalidateQueries({ queryKey: ['chat', activeChatId] });
+                await qc.invalidateQueries({ queryKey: ['chats', activeChatId] });
                 await sendMessage.mutateAsync({
                   chatId: activeChatId,
                   personaId: effectivePersona.id,
@@ -245,23 +249,36 @@ export function ChatPage(): JSX.Element {
                   reasoning,
                 });
               } else {
-                await qc.invalidateQueries({ queryKey: ['chat', activeChatId] });
+                await qc.invalidateQueries({ queryKey: ['chats', activeChatId] });
               }
             }}
             onDiscard={async () => {
               await getClientDataDb().messages.delete(last.id);
-              await qc.invalidateQueries({ queryKey: ['chat', activeChatId] });
+              await qc.invalidateQueries({ queryKey: ['chats', activeChatId] });
             }}
           />
         );
       })()}
 
-      {!isInteractionMode && hasMessages ? (
-        autoFollowEnabled ? (
-          <BottomAffordance onTap={() => setInteractionMode(true)} />
-        ) : (
-          <ScrollToEnd onTap={() => setAutoFollow(true)} />
-        )
+      {/*
+        BottomAffordance is the "open the cockpit" cue — only makes sense
+        when the cockpit is closed and auto-follow is active. ScrollToEnd
+        is now rendered inside ChatStream so it lives at the bottom of the
+        scrollable viewport regardless of cockpit height.
+      */}
+      {!isInteractionMode && hasMessages && autoFollowEnabled ? (
+        <BottomAffordance
+          onTap={() => {
+            // Opening the cockpit always lands the user at the end of the
+            // chat ("you reply from the bottom"). setAutoFollow(true) is
+            // usually a no-op since the affordance only shows when already
+            // following, but it's explicit insurance — and ChatStream's
+            // ResizeObserver will lock the bottom alignment as the layout
+            // shifts under the new cockpit.
+            setAutoFollow(true);
+            setInteractionMode(true);
+          }}
+        />
       ) : null}
 
       {isInteractionMode && effectivePersona && model ? (

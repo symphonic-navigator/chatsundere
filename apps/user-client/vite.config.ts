@@ -1,8 +1,60 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import fs from 'node:fs';
+import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { type Plugin, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/**
+ * Dev-only POST /__dump-db endpoint. The DevDumpButton in the user-client
+ * collects every Dexie table into a JSON payload and POSTs it here; this
+ * plugin writes the payload to <repo-root>/dumps/db-<timestamp>.json so a
+ * debugger (human or otherwise) can inspect IndexedDB state from disk.
+ *
+ * `apply: 'serve'` keeps this entirely out of production builds.
+ */
+function dbDumpReceiver(): Plugin {
+  return {
+    name: 'chatsundere-db-dump-receiver',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__dump-db', (req, res, next) => {
+        if (req.method !== 'POST') {
+          next();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => chunks.push(chunk));
+        req.on('end', () => {
+          try {
+            const body = Buffer.concat(chunks).toString('utf-8');
+            // vite dev runs from apps/user-client/, so step two levels up.
+            const dumpDir = path.resolve(process.cwd(), '../../dumps');
+            if (!fs.existsSync(dumpDir)) fs.mkdirSync(dumpDir, { recursive: true });
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            const file = path.join(dumpDir, `db-${ts}.json`);
+            fs.writeFileSync(file, body);
+            const relFile = path.relative(path.resolve(process.cwd(), '../..'), file);
+            res.statusCode = 200;
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify({ ok: true, file: relFile }));
+          } catch (e) {
+            res.statusCode = 500;
+            res.setHeader('content-type', 'application/json');
+            res.end(
+              JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+            );
+          }
+        });
+        req.on('error', () => {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ ok: false, error: 'request stream error' }));
+        });
+      });
+    },
+  };
+}
 
 export default defineConfig({
   define: {
@@ -11,6 +63,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    dbDumpReceiver(),
     VitePWA({
       registerType: 'prompt',
       devOptions: { enabled: true },

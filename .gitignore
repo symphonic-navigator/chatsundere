@@ -147,3 +147,10 @@ infra/compose.prod.yml
 # Turborepo local cache (regenerated per build, never committed)
 .turbo/
 .superpowers/
+
+# Screenshots
+screenshots/
+
+# Dev-only IndexedDB dumps written by the user-client's DevDumpButton —
+# Claude / debug sessions only, never committed.
+dumps/

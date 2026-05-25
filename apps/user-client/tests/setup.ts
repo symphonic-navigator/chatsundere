@@ -22,4 +22,16 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   });
 }
 
+// jsdom 25.x doesn't implement ResizeObserver; ChatStream uses it to lock
+// the scroll position to the bottom when layout shifts (cockpit open/close).
+// A no-op stub is enough for unit tests — those don't trigger real resizes.
+if (typeof window !== 'undefined' && !window.ResizeObserver) {
+  // biome-ignore lint/suspicious/noExplicitAny: minimal browser API shim
+  (window as any).ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+}
+
 afterEach(() => cleanup());

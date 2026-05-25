@@ -534,6 +534,11 @@ h1 {
   font-size: 0.95rem;
   line-height: 1.5;
   word-wrap: break-word;
+  /* Preserve newlines and runs of whitespace — both the user's typed
+     structure (paragraph breaks via Shift-Enter) and the model's response
+     formatting depend on this. Without pre-wrap the HTML default collapses
+     them all into a single space. */
+  white-space: pre-wrap;
 }
 .msg.expanded {
   background: rgba(255, 255, 255, 0.04);
@@ -575,7 +580,10 @@ h1 {
 .affordance {
   position: absolute;
   left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  /* Sit a little above the viewport edge so the affordance feels like a
+     deliberate handle, not something glued to the bottom. Safe-area is
+     added on top — iOS-style notches push it up further if present. */
+  bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   background: transparent;
   border: 0;
@@ -605,13 +613,19 @@ h1 {
     opacity: 1;
   }
 }
+/*
+ * ScrollToEnd lives inside the chat-stream now (rendered as its first
+ * child when auto-follow is off). Sticky positioning pins it to the
+ * bottom of the scrollable viewport regardless of where the user has
+ * scrolled. Because chat-stream is flex-col, `align-self: center`
+ * centres it on the cross-axis.
+ */
 .scroll-to-end {
-  position: absolute;
-  left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: sticky;
+  bottom: 1rem;
+  align-self: center;
+  background: rgba(30, 30, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
   padding: 0.4rem 1rem;
   cursor: pointer;
@@ -620,6 +634,11 @@ h1 {
   gap: 0.4rem;
   font-size: 0.85rem;
   color: inherit;
+  z-index: 8;
+  backdrop-filter: blur(8px);
+}
+.scroll-to-end:hover {
+  background: rgba(40, 40, 40, 0.95);
 }
 .scroll-to-end:hover {
   background: rgba(255, 255, 255, 0.12);
@@ -643,13 +662,33 @@ h1 {
   user-select: none;
 }
 
-/* ===== Chat Stream ===== */
+/* ===== Chat Stream =====
+ * No longer needs to clear absolute overlays — the cockpit and topbar are
+ * now flex-siblings that take real height, so the chat-stream simply gets
+ * what's left. flex: 1 + overflow-y: auto handles scrolling internally.
+ */
 .chat-stream {
   flex: 1;
+  min-height: 0; /* enable shrinking inside flex container */
   overflow-y: auto;
   padding: 1rem;
   display: flex;
   flex-direction: column;
+}
+/* Reading mode has no cockpit to clear, but the absolute-positioned
+   BottomAffordance sits at chat-page bottom ~2rem — extra padding-bottom
+   keeps the last message from running into it. */
+.chat-page[data-mode="reading"] .chat-stream {
+  padding-bottom: 4rem;
+}
+/*
+ * Anchor the first child to the bottom when content is shorter than the
+ * viewport — short conversations sit on the bottom edge (WhatsApp /
+ * Messages feel). If content overflows, margin-top: auto resolves to 0
+ * and the natural top-down scroll behaviour kicks in.
+ */
+.chat-stream > :first-child {
+  margin-top: auto;
 }
 .streaming-cursor {
   display: inline-block;
@@ -673,12 +712,18 @@ h1 {
   }
 }
 
-/* ===== Interaction Topbar ===== */
+/* ===== Interaction Topbar =====
+ * Real flex-child of .chat-page now (sibling of .chat-stream / .cockpit).
+ * order: -1 keeps it at the top of the flex column regardless of JSX
+ * placement; flex-shrink: 0 means chat-stream shrinks around it.
+ *
+ * position: relative is mandatory for z-index to take effect — same
+ * reasoning as .cockpit above. Without it the DimOverlay would render
+ * over the topbar. */
 .interaction-topbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
+  order: -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -818,12 +863,19 @@ h1 {
   border-color: rgba(201, 168, 76, 0.5);
 }
 
-/* ===== Cockpit Shell ===== */
+/* ===== Cockpit Shell =====
+ * Now a real flex-child of .chat-page (via .interaction-mode being
+ * display:contents). flex-shrink: 0 means it claims its natural height
+ * and the chat-stream above shrinks to fit; order: 1000 keeps it pinned
+ * to the bottom regardless of where it sits in JSX.
+ *
+ * position: relative is mandatory — without it, z-index would silently
+ * have no effect, and the absolutely-positioned DimOverlay (z-index 3)
+ * would render OVER the cockpit when the textarea is focused. */
 .cockpit {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
+  order: 1000;
   background: rgba(10, 10, 10, 0.95);
   backdrop-filter: blur(12px);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -924,14 +976,14 @@ h1 {
   opacity: 1;
 }
 
-/* ===== InteractionMode wrapper ===== */
+/* ===== InteractionMode wrapper =====
+ * display: contents removes this element from layout entirely — its
+ * children (InteractionTopbar / DimOverlay / Cockpit) appear directly
+ * in the chat-page flex column. The React component still owns its
+ * containerRef for outside-tap detection because the DOM node still
+ * exists; CSS just skips it for layout. */
 .interaction-mode {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.interaction-mode > * {
-  pointer-events: auto;
+  display: contents;
 }
 /* DimOverlay must never intercept taps — only a visual layer. */
 .interaction-mode .dim-overlay {
@@ -939,12 +991,33 @@ h1 {
 }
 
 /* ===== Chat Page Layout ===== */
+/*
+ * Break out of the <main> container's max-width / padding to claim the
+ * full viewport area below the sticky brand header. The header is sticky
+ * at top:0 with z-20; we slot in just under it. Everything inside this
+ * element positions against the chat-page edge, not the page gutter.
+ *
+ * The fixed inset + auto margins centre the surface horizontally while
+ * keeping it pinned vertically — so the cockpit at bottom:0 actually
+ * lands on the viewport floor, not at the end of message content.
+ */
 .chat-page {
-  position: relative;
+  position: fixed;
+  top: 3.5rem;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
+}
+@media (min-width: 1024px) {
+  .chat-page {
+    top: 4rem;
+    max-width: 640px;
+  }
 }
 
 /* ===== Toast ===== */

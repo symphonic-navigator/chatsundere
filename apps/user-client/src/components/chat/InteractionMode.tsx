@@ -46,6 +46,11 @@ export function InteractionMode(p: Props): JSX.Element {
   const blurArmedRef = useRef(false);
 
   // Global outside-pointer listener closes when not pinned (triggers 2 + 3).
+  // The closing pointerdown is followed by a click — without intercepting it,
+  // tapping a message to "close the cockpit" would also expand the message.
+  // The click-capture listener is attached *inside* the pointerdown handler
+  // (not in this useEffect) so it survives the component's own unmount when
+  // setInteractionMode(false) re-renders the parent and tears us down.
   useEffect(() => {
     if (isPinned) return;
 
@@ -53,13 +58,31 @@ export function InteractionMode(p: Props): JSX.Element {
       const target = e.target as Node | null;
       if (!target || !containerRef.current) return;
       if (containerRef.current.contains(target)) return;
+
       // Pointerdown landed outside — close regardless of blur state.
-      setInteractionMode(false);
       blurArmedRef.current = false;
+
+      // One-shot click swallower. Attached to document directly so the
+      // upcoming click event is intercepted even after this component
+      // unmounts as a consequence of setInteractionMode(false).
+      const swallowClick = (ev: MouseEvent): void => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        document.removeEventListener('click', swallowClick, { capture: true });
+      };
+      document.addEventListener('click', swallowClick, { capture: true });
+      // Safety net: drop the listener if no click follows within 300ms.
+      window.setTimeout(() => {
+        document.removeEventListener('click', swallowClick, { capture: true });
+      }, 300);
+
+      setInteractionMode(false);
     };
 
     document.addEventListener('pointerdown', onPointer);
-    return () => document.removeEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+    };
   }, [isPinned, setInteractionMode]);
 
   const handleSend = (text: string): void => {

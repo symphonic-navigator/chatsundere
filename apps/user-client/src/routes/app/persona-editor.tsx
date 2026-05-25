@@ -15,6 +15,7 @@ import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
+import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import {
   useCreatePersona,
@@ -65,6 +66,7 @@ export function PersonaEditor(): JSX.Element {
   const settings = useSettings();
   const mindspaces = useMindspaces();
   const providers = useProviders();
+  const chats = useChats();
   const create = useCreatePersona();
   const update = useUpdatePersona();
   const del = useDeletePersona();
@@ -157,6 +159,31 @@ export function PersonaEditor(): JSX.Element {
     navigate('/app/circle');
   }
 
+  const personaInvalid = !draft.name || !draft.instructions || !draft.providerId || !draft.modelId;
+
+  // Most recent chat for this persona, if any. `useChats` returns rows sorted
+  // by `lastMessageAt` descending, so `find` picks the freshest.
+  const recentChatForThisPersona =
+    !isCreate && id ? (chats.data?.find((c) => c.personaId === id) ?? null) : null;
+
+  async function onContinue() {
+    if (!recentChatForThisPersona || personaInvalid) return;
+    if (isDirty) await persistDraft();
+    navigate(`/app/chat/${recentChatForThisPersona.id}`);
+  }
+
+  async function onNewChat() {
+    if (!id || personaInvalid) return;
+    if (isDirty) await persistDraft();
+    navigate(`/app/chat/new?personaId=${id}`);
+  }
+
+  function continueTooltip(): string | undefined {
+    if (personaInvalid) return 'Finish setting up the persona first';
+    if (!recentChatForThisPersona) return 'No chat with this persona yet — start a New Chat';
+    return undefined;
+  }
+
   return (
     <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
       <EditorSticky>
@@ -179,17 +206,36 @@ export function PersonaEditor(): JSX.Element {
 
         {!isCreate ? (
           <div className="mt-2 grid grid-cols-3 gap-2">
-            {(['Continue', 'New Chat', 'Incognito'] as const).map((label) => (
-              <button
-                key={label}
-                type="button"
-                disabled={label === 'Incognito'}
-                title={label === 'Incognito' ? 'Coming with Block 3 memory system' : undefined}
-                className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
-              >
-                {label}
-              </button>
-            ))}
+            <button
+              type="button"
+              disabled={!recentChatForThisPersona || personaInvalid}
+              title={continueTooltip()}
+              onClick={() => {
+                void onContinue();
+              }}
+              className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
+            >
+              Continue
+            </button>
+            <button
+              type="button"
+              disabled={personaInvalid}
+              title={personaInvalid ? 'Finish setting up the persona first' : undefined}
+              onClick={() => {
+                void onNewChat();
+              }}
+              className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
+            >
+              New Chat
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Coming with Block 3 memory system"
+              className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
+            >
+              Incognito
+            </button>
           </div>
         ) : null}
       </EditorSticky>

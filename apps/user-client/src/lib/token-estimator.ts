@@ -11,9 +11,13 @@ export function estimateTokens(input: string | string[]): number {
 
 /**
  * Percentage of the model's context window used, capped at 100, zero when
- * capacity is zero or negative.
+ * nothing has been used or capacity is non-positive. Reports `1` as the
+ * smallest non-zero value — modern context windows (200k+) would otherwise
+ * floor every real conversation to 0 until you hit several thousand tokens,
+ * which gives the user no signal that the gauge is alive.
  */
 export function contextUtilisation(used: number, capacity: number): number {
-  if (capacity <= 0) return 0;
-  return Math.min(100, Math.floor((used / capacity) * 100));
+  if (capacity <= 0 || used <= 0) return 0;
+  const exact = (used / capacity) * 100;
+  return exact < 1 ? 1 : Math.min(100, Math.floor(exact));
 }

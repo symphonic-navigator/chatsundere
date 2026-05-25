@@ -1,7 +1,8 @@
 import type { KnownModel } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PersonaRow } from '../../boot/client-data-db.js';
+import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
 import { CockpitMenu } from './CockpitMenu.js';
@@ -22,6 +23,36 @@ export function Cockpit(p: Props): JSX.Element {
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
+
+  // Close the menu when the user clicks anywhere outside the wrap, or presses
+  // Escape. Without this the menu had no close path: the toggle button only
+  // toggled by re-clicking the same icon, and clicks on chips left it open.
+  const menuWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onPointer = (e: PointerEvent): void => {
+      const target = e.target as Node | null;
+      if (!target || !menuWrapRef.current) return;
+      if (menuWrapRef.current.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  // Selecting a reasoning option also dismisses the menu — the user has made
+  // their choice; keeping it open is busy-noise.
+  const onReasoningChange = (r: ReasoningState): void => {
+    setReasoning(r);
+    setMenuOpen(false);
+  };
 
   return (
     <div className="cockpit">
@@ -46,12 +77,13 @@ export function Cockpit(p: Props): JSX.Element {
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
-        <div className="cockpit-menu-wrap">
+        <div ref={menuWrapRef} className="cockpit-menu-wrap">
           <button
             type="button"
             className="cockpit-icon-btn"
             data-control="menu"
             aria-label="Open chat menu"
+            aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
           >
             <svg
@@ -72,7 +104,7 @@ export function Cockpit(p: Props): JSX.Element {
             <CockpitMenu
               model={p.model}
               reasoning={reasoning}
-              onReasoningChange={setReasoning}
+              onReasoningChange={onReasoningChange}
               onClose={() => setMenuOpen(false)}
             />
           ) : null}

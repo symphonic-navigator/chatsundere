@@ -1,9 +1,21 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (Phase 3.1 — Chat Backbone complete,
-sub-phase 1 of 3 of the Phase-3 chat surface). 27 task-commits landed
-sequentially on master (`464e244` → `ba27f25`), each TDD-paired
-per spec §10. Across the work: `packages/llm-unified` gained
+**Last updated:** 2026-05-25 evening (Phase 3.3 polish-iteration 1
+squashed). Chris's full-day device smoke surfaced ~25 distinct bugs
+across the chat surface — provider URL build, live streaming
+reactivity, scroll anchoring through layout shifts, dim-overlay
+stacking, multiple z-index regressions from the cockpit flex-child
+restructure, plus a handful of UX details (newlines, context gauge,
+auto-scroll, expand-on-outside-tap, recovery footer flicker). All
+landed in a single Phase-3.3 polish commit. Next session: cosmetic
+styling pass, then Phase 4.
+
+---
+
+**Phase 3.1 baseline (squashed at `6c2f9fa`, 2026-05-24):**
+27 task-commits landed sequentially on master (`464e244` → `ba27f25`),
+each TDD-paired per spec §10. Across the work: `packages/llm-unified`
+gained
 `ReasoningCapability` + `ReasoningEffortSpec` (ported from chatsune)
 and an extended `KnownModel` (`contextWindow`, `reasoning`, `vision`,
 `tools`), six curated `KnownModel[]` entries per provider sourced from
@@ -489,13 +501,148 @@ update the relevant one at the end.
     inside the card with the persona's mindspace texture name. 240/240
     user-client tests green; llm-unified Bun tests untouched.
 
+- **Phase 3.1 — Chat Backbone (2026-05-24, squashed at `6c2f9fa`)**.
+  See the verbatim Phase-3.1 baseline at the top of this file for the
+  full landed contents — `packages/llm-unified` extension (Reasoning
+  + KnownModel + nano-gpt pair-map + helpers, 132 Bun tests),
+  user-client chat backbone (Dexie v6, two new stores, stream-engine,
+  TanStack hooks, full chat-component set, `/app/chat/new` and
+  `/app/chat/:chatId` routes), 353 Vitest tests green.
+- **Phase 3.2 — Background-Stream + Multi-Chat + NSFW Panic
+  (2026-05-24, squashed at `fa4647f`)**. Hamburger-navigation during
+  a live stream no longer aborts the engine — the stream-manager
+  keeps the StreamHandle alive and the engine runs to completion in
+  the background. New `BackgroundStreamBadge` in the brand-bar
+  surfaces live streams (persona initial when one; counter when
+  multiple) and routes back to the oldest on tap. Toast component +
+  store added (queue, auto-dismiss, info/warn/success tones, polite
+  aria-live), mounted globally next to SplashOverlay. NSFW Panic
+  auto-kick: when the Adult-Mode pill flips nsfw → sfw while one or
+  more adult-persona streams are alive, all matching handles
+  `abortDiscard` (draft persona-message deleted, user-message
+  preserved), and if the active chat is one of those personas the
+  user is navigated to the Entrance Hall with a warn-toast "Adult
+  mode off — chat closed". sfw → nsfw is a no-op for panic;
+  previously filtered personas simply become visible again. Cockpit
+  Send-disable subscribed to the stream-manager via the
+  `isStreamLive` prop already plumbed through ChatPage in 3.1.
+  367 Vitest tests pass across 83 files.
+- **Phase 3.3 — Pills + Title-Gen + Partial-Recovery + Chat-route
+  wire-up (2026-05-24, squashed at `d32f223`)**. Pill rendering
+  verified end-to-end (`PillRow` → `ContentBlocks` → `MessageBlock`
+  → `<Pill />` with correct ordering and kind metadata). ADR 0029
+  ("Tool Display Position") landed; Phase 3 hardcodes `positionHint:
+  'inline'` for tool-call pills, forthcoming Tool Registry populates
+  from each tool's manifest. Title-Gen: `lib/title-generator` with
+  `sanitiseTitle` (strip surrounding quotes, collapse whitespace,
+  cap at 60 chars) and `fallbackTitle` ("New chat — D MMM, HH:mm",
+  British convention). Fires asynchronously from the stream-manager
+  after the first persona response, gated on `chat.title === null`
+  and completed-persona-message count of exactly 1. Uses the active
+  persona's provider + model AND composes the global unlocker into
+  the system prompt (per `background-jobs-prompt-composition` memory
+  rule). Partial-stream recovery: `StreamInterruptedFooter` renders
+  below the last persona-message when its `streamingState ===
+  'incomplete'`; Retry deletes both the incomplete and the prior
+  user-message then re-sends via the normal send-flow; Discard
+  deletes only the incomplete. Footer buttons disabled while another
+  stream is live in the same chat. Chat-route wire-up: Circle
+  persona-card's `Chat` button and Entrance-Hall Continue card were
+  left as Phase-2-era no-ops when 3.1 landed; both now route — Circle
+  to `/app/chat/new?personaId=<id>` (lazy), Continue card to
+  `/app/chat/<recentChatId>`. Polish tasks 39 (affordance breathing,
+  scroll-to-end micro-animation, pin glow) and 40 (per-card streaming
+  indicator) deferred. 388 Vitest tests + 132 Bun tests green; full
+  typecheck + lint + build clean.
+
+- **Phase 3.3 polish-iteration 1 (2026-05-25 evening)** — single
+  squashed commit on master following Chris's full-day device smoke.
+  Roughly 25 distinct bugs across the chat surface, plus a dev DB-
+  dump tool. Highlights:
+  - **Provider URL build** — `ProviderRow.baseUrl` was written empty
+    on upsert (Decision 22 only half-implemented), so `transport.ts`
+    composed `'' + '/chat/completions'` and the browser resolved
+    relative against the dev origin (404 against vite). Fixed by
+    deriving `baseUrl` + `routing` from `ProviderDefinition` in
+    `send-message.ts` (both `useSendMessage` and `useRegenerate`).
+  - **Novita 400 on GLM 5.1** — `thinking: true` is a nano-gpt
+    convention; Novita expects a struct `{ type: 'enabled' |
+    'disabled' }` and 400d with *"cannot unmarshal bool into Go
+    struct field …Thinking"*. Drop boolean `thinking` for non-nano-
+    gpt providers in `stream-completion.buildBody`. Reasoning-OFF for
+    Novita / Ollama-Cloud is a per-provider follow-up.
+  - **Live streaming** — `onChunk` was a no-op with a "deferred to
+    Phase 3.2" comment; `queryClient.invalidateQueries` was never
+    called after the DB write completed. Both wired up. Plus: handle
+    reference is rotated on every token (was mutated in place) so
+    zustand selectors actually fire — without this rotation the
+    stream appeared "all at once".
+  - **Scroll anchoring through layout shifts** —`ChatStream` gained
+    a `ResizeObserver` (with a polyfill in `tests/setup.ts` for
+    jsdom 25) that locks scrollTop to scrollHeight on container
+    resize when autoFollow is true. Bridges cockpit-open layout
+    shifts, dynamic cockpit-textarea height, and stream completion.
+    Plus: `stream-manager.then` now rotates handle reference on
+    status transitions (`finalising`, `done`) so the post-completion
+    auto-follow correction fires immediately rather than 200ms late.
+  - **Cockpit restructure** — `.interaction-mode` switched to
+    `display: contents` and `.cockpit` + `.interaction-topbar` became
+    real flex-children of `.chat-page` (`order: -1` / `order: 1000`,
+    `flex-shrink: 0`). `chat-stream` now genuinely shrinks for the
+    cockpit instead of getting overlaid. Required follow-up: `.cockpit`
+    and `.interaction-topbar` need `position: relative` for z-index
+    to actually apply — without it, `.dim-overlay` (z-index 3) was
+    silently rendering over the cockpit on focus.
+  - **queryKey mismatch** — `chat-page.tsx` and `send-message.ts`
+    invalidated `['chat', id]`, but `QK.chat()` returns `['chats',
+    id]`. Three call-sites fixed; explains why Discard "did nothing"
+    (DB row deleted but UI never refreshed).
+  - **CockpitMenu (…) close** — outside-tap and Escape now close;
+    selecting a reasoning chip also auto-closes.
+  - **Outside-tap dual-action** — closing the cockpit by tapping a
+    message no longer also expands that message. Implemented via a
+    document-level click-capture listener attached inside the
+    pointerdown handler (survives React unmount when the cockpit
+    closes).
+  - **StreamInterruptedFooter** — early-return when `isStreamLive` so
+    the footer only appears for genuine recovery, not for in-flight
+    streaming with `streamingState === 'incomplete'`.
+  - **MessageBlock expand → scrollIntoView({ block: 'end' })** so
+    controls don't render behind the cockpit edge.
+  - **Newlines preserved** — `.msg-text { white-space: pre-wrap }`
+    keeps user Shift-Enter structure and model paragraph breaks.
+  - **Context-gauge** — `contextUtilisation` reports `1` as the
+    smallest non-zero value so the 200k-context windows don't sit
+    at 0% for the first few thousand tokens.
+  - **BottomAffordance** — bumped breathing distance to `2rem +
+    safe-area`; tap also calls `setAutoFollow(true)`; chat-stream
+    reading-mode `padding-bottom: 4rem` so it doesn't overlap text.
+  - **ScrollToEnd** — moved inside `ChatStream` as a sticky-bottom
+    last child; always sits 1rem above the visible chat-stream
+    bottom regardless of cockpit height.
+  - **setInteractionMode(true)** also resets `expandedMessageId` —
+    opening the cockpit clears stale expand state.
+  - **Persona-editor quick-actions wired** — Continue + New Chat
+    auto-save (if dirty) then navigate; Incognito stays disabled
+    until Block 3. Continue uses `useChats` to find this persona's
+    most-recent chat.
+  - **predev hook** — `apps/user-client/package.json` `predev`
+    auto-builds workspace packages (`pnpm --filter './packages/*'
+    build`) so a fresh clone or a different-machine pull doesn't
+    crash Vite on stale `dist/`. (Landed as `2db2721` earlier in
+    the day.)
+  - **Dev DB-dump** — new `/__dump-db` Vite middleware (dev-only
+    via `apply: 'serve'`) writes posted IndexedDB JSON to
+    `<repo>/dumps/db-<ISO-timestamp>.json`. Triggered from a new
+    "Developer tools" accordion in My Account (DEV-only).
+  - Hygiene: deleted `WIP-NEXT-SESSION.md` (obsolete since the
+    onboarding squash), refreshed this STATUS file.
+  - Test count: 379 passes / 9 fails. The 9 fails are pre-existing
+    cockpit-draft jsdom localStorage cascade — confirmed unchanged
+    before any session edits, tracked as the known-fragility item.
+
 ## Briefed, awaiting implementation
 
-- **Phase 3 — Chat** (wireframe-ready): Reading Mode (sacred bottom
-  edge, tap-expand, affordance ↔ scroll-to-end), Interaction Mode
-  (topbar, 2-row cockpit, dim-overlay, auto-close per Decision 16),
-  streaming integration, Pills rendering + ADR "Tool Display
-  Position".
 - **Phase 4 — History + Polish** (gated on My History wireframe):
   List + search, Setup-Hints (deferred from Phase 2 per Decision 27),
   scroll-to-end micro-animation, affordance glow tuning, network-loss
@@ -517,116 +664,32 @@ update the relevant one at the end.
 
 ## Doing now
 
-Phase 3.1 (Chat Backbone) + Phase 3.2 (Background-Stream + Multi-Chat
-+ NSFW Panic) + Phase 3.3 (Pills integration + Title-Gen + Partial-
-Stream Recovery) all implementation-complete on master. Per Chris's
-2026-05-24 choice (option c), the three sub-phases are NOT yet squashed
-— they land together once the full trio's smoke clears. Paused for
-Chris's manual smoke covering spec §11.3 items 1-11 on a real device,
-then triple-squash and Phase 3 is done.
-
-Phase 3.3 delta on top of 3.2: `64d6c4d` Pill rendering integration
-test (end-to-end persistence → DOM); `80acd56` ADR 0029 — Tool Display
-Position (forward-looking, hardcoded `inline` in Phase 3, Tool-Registry
-override later); `64a2713` title-generator + `sanitiseTitle` +
-`fallbackTitle` ("New chat — D MMM, HH:mm"); `49c1a0d` wire title-gen
-into stream-manager (fires once, after first persona response, with
-the active persona's provider+model AND the global unlocker composed
-into the system prompt per the `background-jobs-prompt-composition`
-memory rule); `73c43eb` Stream-Interrupted footer (Retry + Discard
-buttons rendered below an `incomplete` last persona-message).
-
-**Polish deferred:** Tasks 39 (affordance breathing / scroll-to-end
-micro-animation / pin glow tuning) and 40 (optional per-card streaming
-indicator) are scoped as Polish iterations on top of the 3.3 baseline.
-The baseline already ships `@keyframes affordance-glow`, `journal-pulse`,
-`bg-stream-pulse`, `streaming-cursor-blink`, plus `prefers-reduced-motion`
-overrides. Chris's manual smoke determines whether 39/40 need a
-follow-up iteration or whether the current treatment is enough.
-
-All 388 user-client Vitest tests pass across 87 files; 132 Bun tests in
-`packages/llm-unified` still green; `pnpm typecheck && pnpm lint && pnpm
---filter user-client run build` fully clean.
+*(between sessions — Phase 3.3 polish-iteration 1 squashed; ready for
+the cosmetic styling pass, then Phase 4)*
 
 ---
 
 ## Next session
 
-1. **Phase 3 trio smoke on Chris's device** — items 1–11 from spec
-   §11.3. Item 12 (per-card streaming indicator) is a 3.3 polish
-   deferred and may slip to a follow-up.
+1. **Cosmetic styling pass** — typography refinements, spacing,
+   mindspace palette polish, affordance glow tuning, scroll-to-end
+   micro-animation. No mechanics changes — just the visual layer.
+2. **Phase 4 (My History + Setup-Hints)** — still blocked on Lyra's
+   My-History wireframe per spec §7.
 
-   Items 1, 2, 3, 8, 9 (3.1):
-   - **Lazy-chat flow:** Circle → tap a persona's New Chat → empty
-     Reading Mode with "<Persona> is listening" + Cockpit auto-open and
-     pinned. Type something, Hamburger out, come back — draft text
-     still in the Cockpit (localStorage survives navigation).
-   - **Reading-Mode stream live:** send a real message against one of
-     the configured providers, watch the stream grow live, scroll
-     mid-stream upwards more than 30 px — affordance fades, scroll-to-
-     end appears, auto-follow paused.
-   - **Tap-to-Expand exclusivity:** tap a user message → expanded
-     (timestamp + controls visible). Tap a different message → first
-     collapses, second expands.
-   - **Cockpit Send disabled during live stream:** send, then before
-     the response try Send again — button disabled with hint
-     "<Persona> antwortet noch…".
-   - **Reasoning menu capability-gated:** open the Cockpit `…` menu
-     against a model with `optional + buckets` — bucket selector +
-     Off entry visible. (No `no_reasoning` model is in
-     `FIRST-MODELS.md` so that branch can't be smoked yet.)
+**Known follow-ups (non-blocking):**
 
-   Items 4–7 (3.2 — Background-Stream + Multi-Chat + NSFW Panic + Pin):
-   - **Background-Stream:** Send a question, Hamburger out mid-stream
-     to the Entrance Hall, watch `BackgroundStreamBadge` light up in
-     the brand-bar (persona initial when one stream; counter when
-     multiple). Tap the badge → routes back to that chat.
-   - **Multi-Chat-Stream:** Start a stream in Aurum's chat, navigate
-     to a different persona via Circle, start a New Chat there, send.
-     Both stream in parallel; both finish; both get titles after seconds.
-   - **NSFW Panic:** Mark a persona as `adultPersona: true` (Persona
-     Editor — Behavior accordion). Start a chat with that persona,
-     send a message. While the stream is in flight, toggle the brand-
-     bar Adult-Mode pill from NSFW → SFW. The stream is aborted, the
-     draft persona-message disappears, the user is back in the Entrance
-     Hall, and the warn-toast "Adult mode off — chat closed" appears.
-   - **Pin** prevents auto-close: in Interaction Mode tap Pin (becomes
-     gold-tinted), then send a message — the Cockpit stays open. Untap
-     to restore default auto-close behaviour.
-
-   Items 10, 11 (3.3 — Title-Gen + Partial Recovery):
-   - **Title-Gen:** First send in a new chat. After the persona response
-     completes, watch the My-History / Continue-Card label switch from
-     the fallback (`New chat — D MMM, HH:mm`) to a 3-5-word title
-     generated by the same model.
-   - **Partial Recovery:** Send a message, observe the stream starting,
-     then close the tab mid-stream. Reopen the app, open the chat —
-     a "Stream interrupted" footer renders below the last (now
-     incomplete) persona-message with Retry and Discard buttons.
-     Retry deletes the incomplete + prior user-msg, re-sends; Discard
-     deletes only the incomplete.
-
-   Item 12 (3.3 polish):
-   - **Per-Card streaming indicator** on Persona Cards while a stream
-     is active in any chat with that persona. Deferred — may slip to
-     a follow-up polish iteration.
-
-2. **Squash Phase 3 — three commits** — once smoke passes:
-   - Phase 3.1 squash: commits `464e244` → `ba27f25` + format-fix
-     `851b21d` + STATUS-1 `5c953d4` into one Phase-3.1 commit (plan
-     Task-28 summary).
-   - Phase 3.2 squash: `534fa23` → `c7d8455` + STATUS-2 `5ab4ec1`
-     into one Phase-3.2 commit (plan Task-33 summary).
-   - Phase 3.3 squash: `64d6c4d` → `73c43eb` + STATUS-3 (this update)
-     into one Phase-3.3 commit (plan Task-41 summary).
-
-3. **Phase 3 polish iterations (if needed)** — drive from Chris's
-   smoke findings. Likely candidates: affordance "breathing" feel,
-   scroll-to-end micro-animation timing, pin glow intensity,
-   per-card streaming indicator (Task 40 — deferred from 3.3).
-
-4. **Phase 4 (My History + Setup-Hints)** — blocked on Lyra's My-History
-   wireframe per spec §7.
+- Cockpit-draft localStorage tests (9 failures) — pre-existing jsdom
+  cascade; investigate test-env setup separately.
+- Reasoning-OFF translation for non-nano-gpt providers — currently
+  the toggle has no body effect; Novita needs `thinking: { type:
+  'disabled' }` etc.
+- Thinking display during stream — needs a `reasoning` `StreamChunk`
+  variant, adapter changes, and a collapsible UI block. Scheduled
+  for Phase 4 polish.
+- Port chatsune's `_retry.py` to a TS retry helper for
+  `stream-completion` — exponential back-off on 429/503, honour
+  `Retry-After`, ±25% jitter. Defer to Phase 4 polish.
 
 ---
 

@@ -67,12 +67,20 @@ function setup() {
 }
 
 describe('AccountPage', () => {
-  it('renders the four accordion sections in the expected order', () => {
+  it('renders the accordion sections in the expected order', () => {
     setup();
     const headers = Array.from(
       document.querySelectorAll('[data-accordion-card] [data-accordion-label]'),
     ).map((n) => n.textContent?.trim() ?? '');
-    expect(headers).toEqual(['Account', 'Auth Methods', 'Server Linking', 'About']);
+    // Developer tools is dev-only (import.meta.env.DEV); vitest sets DEV=true
+    // so it appears here. Production builds strip it.
+    expect(headers).toEqual([
+      'Account',
+      'Auth Methods',
+      'Server Linking',
+      'About',
+      'Developer tools',
+    ]);
   });
 
   it('renders the EditorTopbar with "My Account" title and a Save & Back button (disabled until dirty)', () => {

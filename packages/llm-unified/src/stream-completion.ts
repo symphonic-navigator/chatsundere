@@ -20,7 +20,15 @@ export interface StreamCompletionArgs {
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
   signal?: AbortSignal;
+  /**
+   * Cap on how long we wait for the upstream to begin responding (TTFB).
+   * Once the headers arrive the timer is cleared and the body stream can
+   * run as long as it needs to. Defaults to 15 000 ms.
+   */
+  initialResponseTimeoutMs?: number;
 }
+
+const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
 
 /**
  * High-level streaming completion. Picks the right wire-body, handles
@@ -43,7 +51,30 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
     method: 'POST',
     body,
   });
-  const response = await fetch(request, { signal: args.signal });
+
+  // Couple a TTFB timeout to the user-supplied abort signal. The timer
+  // is cleared as soon as the response headers arrive, so a slow generation
+  // (long reply, deep reasoning) never triggers it.
+  const timeoutMs = args.initialResponseTimeoutMs ?? DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS;
+  const timeoutCtrl = new AbortController();
+  const timeoutId = setTimeout(
+    () =>
+      timeoutCtrl.abort(
+        new DOMException(`upstream did not respond within ${timeoutMs}ms`, 'TimeoutError'),
+      ),
+    timeoutMs,
+  );
+  const fetchSignal = args.signal
+    ? AbortSignal.any([args.signal, timeoutCtrl.signal])
+    : timeoutCtrl.signal;
+
+  let response: Response;
+  try {
+    response = await fetch(request, { signal: fetchSignal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!response.ok || !response.body) {
     yield { type: 'error', message: `upstream ${response.status}` };
     return;
@@ -62,6 +93,15 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
       extras.thinking = undefined; // slug-swap consumes the flag
     }
     // 'flag' mode keeps `extras.thinking` on the body; 'none' leaves it untouched.
+  } else if (typeof extras.thinking === 'boolean') {
+    // The boolean `thinking` flag is a nano-gpt convention. Other providers
+    // reject it — Novita for example expects a struct
+    // `{ type: 'enabled' | 'disabled' }` and 400s with
+    // "cannot unmarshal bool into Go struct field …Thinking". Drop the
+    // flag so the request goes through. Reasoning-OFF for non-nano-gpt
+    // providers needs per-provider translation and is tracked as a
+    // follow-up.
+    extras.thinking = undefined;
   }
   return {
     model: modelId,

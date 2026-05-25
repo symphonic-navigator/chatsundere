@@ -6,6 +6,7 @@ import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
 import { DateSeparator } from './DateSeparator.js';
 import { MessageBlock } from './MessageBlock.js';
+import { ScrollToEnd } from './ScrollToEnd.js';
 import { StreamingCursor } from './StreamingCursor.js';
 
 const FOLLOW_THRESHOLD_PX = 30;
@@ -33,13 +34,43 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   const pillMap = new Map(p.pills.map((x) => [x.id, x]));
 
   // Scroll to bottom when new content arrives and auto-follow is active.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: p.messages.length and contentBuffer.length are intentional triggers — the effect re-runs on every new message or streamed chunk even though it only reads el.scrollHeight.
+  // streamHandle ref changes on every token (the stream-manager replaces the
+  // handle object per chunk for reactivity), so this effect re-runs on every
+  // token append even though it only reads el.scrollHeight.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: p.messages.length and p.streamHandle are intentional triggers
   useEffect(() => {
     if (!autoFollow) return;
     const el = ref.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [autoFollow, p.messages.length, p.streamHandle?.contentBuffer.length]);
+  }, [autoFollow, p.messages.length, p.streamHandle]);
+
+  // ResizeObserver bridges layout shifts to scroll position. When the
+  // cockpit opens, chat-stream's clientHeight shrinks while scrollHeight
+  // stays put — without intervention the user drifts visually upward by
+  // the cockpit's height. The useEffect above doesn't catch this because
+  // none of its dependencies change on resize. The ref-mirror of
+  // autoFollow keeps the callback free of stale closures across renders.
+  const autoFollowRef = useRef(autoFollow);
+  useEffect(() => {
+    autoFollowRef.current = autoFollow;
+  }, [autoFollow]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (!autoFollowRef.current) return;
+      // Wait one frame so the post-resize layout has settled before we
+      // measure scrollHeight — otherwise we'd race against the browser
+      // and land on a stale max.
+      requestAnimationFrame(() => {
+        const live = ref.current;
+        if (live && autoFollowRef.current) live.scrollTop = live.scrollHeight;
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const onScroll = (): void => {
     const el = ref.current;
@@ -72,12 +103,20 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
         const isDraft = p.streamHandle?.draftMessageId === m.id;
         const isLastPersona = i === lastPersonaIdx && m.role === 'persona';
 
+        // While this message is the active draft, mirror the live token
+        // buffer in place of the (still-empty) DB contentBlocks — that's
+        // how the user actually sees streaming as it happens. Once the
+        // stream completes the DB row is updated and TanStack-Query
+        // invalidation pushes the final content back into `m`.
+        const renderMessage: MessageRow =
+          isDraft && p.streamHandle ? { ...m, contentBlocks: p.streamHandle.contentBuffer } : m;
+
         return (
           <div key={m.id}>
             {sep}
             <div data-msg-id={m.id}>
               <MessageBlock
-                message={m}
+                message={renderMessage}
                 pills={pillMap}
                 persona={p.persona}
                 displayName={p.displayName}
@@ -100,6 +139,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
           </div>
         );
       })}
+      {!autoFollow && sorted.length > 0 ? <ScrollToEnd onTap={() => setAutoFollow(true)} /> : null}
     </div>
   );
 }
