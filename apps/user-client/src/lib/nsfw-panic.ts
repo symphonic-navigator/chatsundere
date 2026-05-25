@@ -11,10 +11,12 @@ interface PanicArgs {
 /**
  * Phase-3.2 NSFW Panic auto-kick. Called when the user toggles
  * Adult Mode from 'nsfw' to 'sfw'. Aborts every in-flight stream
- * against an `adultPersona`-marked persona (discard semantics —
- * draft persona-message removed, user-message preserved). If the
- * user happens to be inside one of those chats, navigates them
- * to the Entrance Hall and surfaces a brief toast.
+ * against an `adultPersona`-marked persona (preserve semantics —
+ * the partial draft persona-message is written back as
+ * `streamingState: 'incomplete'` so the StreamInterruptedFooter
+ * can offer Retry/Discard on re-visit; the user-message stays
+ * untouched). If the user happens to be inside one of those chats,
+ * navigates them to the Entrance Hall and surfaces a brief toast.
  *
  * No-op when no adult personas exist or none are streaming and
  * the active chat is unrelated.
@@ -28,7 +30,7 @@ export async function nsfwPanic(args: PanicArgs): Promise<void> {
 
   const mgr = useStreamManagerStore.getState();
   for (const pid of adultPersonaIds) {
-    await mgr.abortAllForPersonaDiscard(pid);
+    await mgr.abortAllForPersonaPreserve(pid);
   }
 
   const activeChatId = useCurrentChatStore.getState().chatId;

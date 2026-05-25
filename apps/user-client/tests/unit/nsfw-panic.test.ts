@@ -119,6 +119,51 @@ describe('nsfwPanic', () => {
     );
   });
 
+  it('preserves the draft persona-message of an aborted adult-persona stream', async () => {
+    const { personaId, chatId } = await seedAdultPersona();
+    const db = await openClientDataDb();
+    const draftMsgId = uuidv7();
+    await db.messages.add({
+      id: draftMsgId,
+      chatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'partial …' }],
+      createdAt: 100,
+      bookmarked: false,
+      // Seed as 'complete' (the only non-'incomplete' value the schema permits)
+      // so the post-condition `streamingState === 'incomplete'` meaningfully
+      // proves the preserve method wrote to Dexie — a no-op implementation
+      // would leave the row as 'complete' and fail the assertion.
+      streamingState: 'complete',
+    });
+
+    // Seed a live stream-handle so panic has something to abort.
+    useStreamManagerStore.setState({
+      streams: new Map([
+        [
+          chatId,
+          {
+            chatId,
+            personaId,
+            draftMessageId: draftMsgId,
+            controller: new AbortController(),
+            status: 'streaming' as const,
+            contentBuffer: [{ type: 'text', text: 'partial …' }],
+            pillBuffer: [],
+            startedAt: Date.now(),
+          },
+        ],
+      ]),
+    });
+
+    await nsfwPanic({ navigate: () => {} });
+
+    const row = await db.messages.get(draftMsgId);
+    expect(row).toBeDefined();
+    expect(row?.streamingState).toBe('incomplete');
+    expect(useStreamManagerStore.getState().streams.has(chatId)).toBe(false);
+  });
+
   it('preserves user-message rows on aborted streams', async () => {
     const { personaId, chatId } = await seedAdultPersona();
     const db = await openClientDataDb();

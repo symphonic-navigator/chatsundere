@@ -28,6 +28,7 @@ interface StreamManagerStore {
   start: (args: StartArgs) => Promise<void>;
   abortDiscard: (chatId: string) => Promise<void>;
   abortAllForPersonaDiscard: (personaId: string) => Promise<void>;
+  abortAllForPersonaPreserve: (personaId: string) => Promise<void>;
   has: (chatId: string) => boolean;
   getDraftMessage: (chatId: string) => { id: string; contentBlocks: ContentBlock[] } | null;
 }
@@ -255,6 +256,25 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   abortAllForPersonaDiscard: async (personaId) => {
     const matching = [...get().streams.values()].filter((h) => h.personaId === personaId);
     for (const h of matching) await get().abortDiscard(h.chatId);
+  },
+
+  abortAllForPersonaPreserve: async (personaId) => {
+    const matching = [...get().streams.values()].filter((h) => h.personaId === personaId);
+    const db = getClientDataDb();
+    for (const h of matching) {
+      h.controller.abort();
+      // Persist the partial buffer + mark as incomplete so the user sees
+      // StreamInterruptedFooter on re-visit. No Dexie delete.
+      await db.messages.update(h.draftMessageId, {
+        contentBlocks: h.contentBuffer,
+        streamingState: 'incomplete',
+      });
+      set((s) => {
+        const m = new Map(s.streams);
+        m.delete(h.chatId);
+        return { streams: m };
+      });
+    }
   },
 }));
 
