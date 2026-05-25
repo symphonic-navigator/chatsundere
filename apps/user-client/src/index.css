@@ -1192,3 +1192,100 @@ h1 {
   display: flex;
   gap: 0.4rem;
 }
+
+/* === Phase 4 — ReasoningPill === */
+
+.reasoning-pill,
+.pill {
+  margin-block: 0.75rem;
+}
+
+.reasoning-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 18%, var(--color-ink) 82%);
+  border: 1px solid color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 35%, transparent);
+  color: var(--color-paper);
+  appearance: none;
+}
+
+.reasoning-pill-dots {
+  display: inline-flex;
+  gap: 0.15rem;
+  letter-spacing: 0.05em;
+}
+.reasoning-pill-dots .dot {
+  display: inline-block;
+  line-height: 1;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot {
+  animation: reasoning-dots-pulse 1.2s ease-in-out infinite;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes reasoning-dots-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+.reasoning-pill-chevron {
+  opacity: 0.7;
+  transition: transform 200ms ease;
+}
+.reasoning-pill[data-state="open"] .reasoning-pill-chevron {
+  transform: rotate(90deg);
+}
+
+.reasoning-pill-open {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 100%;
+}
+.reasoning-pill-open > .reasoning-pill {
+  border-radius: 14px 14px 0 0;
+  margin: 0;
+  align-self: flex-start;
+}
+
+.reasoning-pill-body {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 8%, var(--color-ink) 92%);
+  border: 1px solid color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 25%, transparent);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  color: var(--color-paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reasoning-pill[data-live="true"] .reasoning-pill-dots .dot {
+    animation: none;
+  }
+  .reasoning-pill-chevron {
+    transition: none;
+  }
+}

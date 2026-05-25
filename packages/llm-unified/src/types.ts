@@ -66,9 +66,19 @@ export interface WireMessage {
 
 export type StreamChunk =
   | { type: 'token'; text: string }
+  | { type: 'reasoning'; text: string }
   | { type: 'tool-call'; toolCallId: string; name: string; argumentsJson: string }
   | { type: 'finish'; reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown' }
   | { type: 'error'; message: string };
+
+/**
+ * Engine → adapter intent for reasoning. Per-provider translation
+ * to body shape (`{reasoning:{enabled,effort}}` vs `{think:bool}` vs
+ * model-slug swap) is the adapter layer's responsibility.
+ */
+export type ReasoningIntent =
+  | { enabled: false }
+  | { enabled: true; effort?: 'low' | 'medium' | 'high' };
 
 export interface ProbeResult {
   ok: boolean;

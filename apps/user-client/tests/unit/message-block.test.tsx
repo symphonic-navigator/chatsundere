@@ -2,6 +2,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow, PersonaRow, PillRow } from '../../src/boot/client-data-db';
 import { MessageBlock } from '../../src/components/chat/MessageBlock';
+import type { ResolvedMindspace } from '../../src/state/mindspace-resolver';
+
+// Minimal stub — MessageBlock forwards the resolved mindspace to ReasoningPill,
+// which today reads only the CSS var written by an ancestor MindspaceLayer.
+// A cast keeps the type contract intact without pinning the full shape here.
+const mindspaceStub = {} as ResolvedMindspace;
 
 function userMsg(over: Partial<MessageRow> = {}): MessageRow {
   return {
@@ -53,6 +59,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={userMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -82,6 +89,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -105,6 +113,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -121,6 +130,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={userMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -144,6 +154,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={msg}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -153,15 +164,18 @@ describe('MessageBlock', () => {
         isStreamingDraft={true}
       />,
     );
-    const spans = container.querySelectorAll('.msg-text > span');
-    expect(spans.length).toBe(2);
-    expect(spans[0]?.className).toBe('token-fade');
-    expect(spans[1]?.className).toBe('token-fade');
+    // Adjacent text chunks coalesce into one group span; each chunk lives
+    // inside it as its own inner span carrying the token-fade class.
+    const innerSpans = container.querySelectorAll('.msg-text > span > span');
+    expect(innerSpans.length).toBe(2);
+    expect(innerSpans[0]?.className).toBe('token-fade');
+    expect(innerSpans[1]?.className).toBe('token-fade');
 
     rerender(
       <MessageBlock
         message={msg}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -171,7 +185,7 @@ describe('MessageBlock', () => {
         isStreamingDraft={false}
       />,
     );
-    const after = container.querySelectorAll('.msg-text > span');
+    const after = container.querySelectorAll('.msg-text > span > span');
     expect(after.length).toBe(2);
     expect(after[0]?.className).toBe('');
     expect(after[1]?.className).toBe('');
@@ -198,6 +212,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={msg}
         pills={new Map([['p1', pill]])}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -216,6 +231,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -235,6 +251,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -252,6 +269,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={false}
@@ -270,6 +288,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -289,6 +308,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -308,6 +328,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -325,6 +346,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg()}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -343,6 +365,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg({ bookmarked: false })}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -356,6 +379,7 @@ describe('MessageBlock', () => {
       <MessageBlock
         message={personaMsg({ bookmarked: true })}
         pills={new Map()}
+        mindspace={mindspaceStub}
         persona={aurum}
         displayName="Chris"
         expanded={true}
@@ -365,5 +389,108 @@ describe('MessageBlock', () => {
       />,
     );
     expect(container.querySelector('[data-ctrl="bookmark"][data-active="true"]')).not.toBeNull();
+  });
+});
+
+describe('<MessageBlock> reasoning rendering', () => {
+  it('renders a single ReasoningPill for a maximal reasoning run', () => {
+    const message: MessageRow = {
+      id: 'm-r1',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'reasoning', text: 'plan A. ' },
+        { type: 'reasoning', text: 'plan B.' },
+        { type: 'text', text: 'Result: ready' },
+      ],
+      streamingState: 'complete',
+      bookmarked: false,
+      createdAt: Date.now(),
+    };
+    render(
+      <MessageBlock
+        message={message}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={false}
+      />,
+    );
+    const pills = document.querySelectorAll('.reasoning-pill');
+    expect(pills.length).toBe(1);
+    expect(screen.getByText(/result/i)).toBeInTheDocument();
+  });
+
+  it('renders two ReasoningPills for interleaved reasoning-text-reasoning-text', () => {
+    const message: MessageRow = {
+      id: 'm-r2',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'reasoning', text: 'think 1' },
+        { type: 'text', text: 'partial answer' },
+        { type: 'reasoning', text: 'think 2' },
+        { type: 'text', text: 'final answer' },
+      ],
+      streamingState: 'complete',
+      bookmarked: false,
+      createdAt: Date.now(),
+    };
+    render(
+      <MessageBlock
+        message={message}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={false}
+      />,
+    );
+    expect(document.querySelectorAll('.reasoning-pill').length).toBe(2);
+  });
+
+  it('marks only the LAST reasoning pill as data-live="true" when streaming', () => {
+    // The MessageRow.streamingState union is binary ('complete' | 'incomplete')
+    // — liveness is driven by the `isStreamingDraft` prop, not the row field.
+    const message: MessageRow = {
+      id: 'm-r3',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'reasoning', text: 't1' },
+        { type: 'text', text: 'answer' },
+        { type: 'reasoning', text: 't2' },
+      ],
+      streamingState: 'incomplete',
+      bookmarked: false,
+      createdAt: Date.now(),
+    };
+    render(
+      <MessageBlock
+        message={message}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={true}
+      />,
+    );
+    const pills = document.querySelectorAll('.reasoning-pill');
+    expect(pills.length).toBe(2);
+    expect(pills[0]?.getAttribute('data-live')).toBe('false');
+    expect(pills[1]?.getAttribute('data-live')).toBe('true');
   });
 });

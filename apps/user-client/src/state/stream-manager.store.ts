@@ -118,17 +118,21 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       ...args,
       signal: controller.signal,
       onChunk: (chunk) => {
-        // Mirror tokens into the handle so ChatStream can render the draft
-        // as it grows. We *replace* the handle on each chunk so a zustand
-        // selector that returns `streams.get(chatId)` sees a fresh object
-        // reference — bumping just the Map identity isn't enough because
-        // selector subscribers compare via Object.is on the inner value.
-        if (chunk.type !== 'token') return;
+        // Mirror tokens and reasoning deltas into the handle so ChatStream
+        // can render the draft as it grows. We *replace* the handle on
+        // each chunk so a zustand selector that returns `streams.get(chatId)`
+        // sees a fresh object reference — bumping just the Map identity
+        // isn't enough because selector subscribers compare via Object.is
+        // on the inner value.
+        if (chunk.type !== 'token' && chunk.type !== 'reasoning') return;
         set((s) => {
           const live = s.streams.get(args.chatId);
           if (!live) return s;
           const nextBuf = [...live.contentBuffer];
-          appendTextBlock(nextBuf, chunk.text);
+          appendStreamChunk(nextBuf, {
+            kind: chunk.type === 'reasoning' ? 'reasoning' : 'text',
+            text: chunk.text,
+          });
           const nextHandle = { ...live, contentBuffer: nextBuf };
           const m = new Map(s.streams);
           m.set(args.chatId, nextHandle);
@@ -278,16 +282,26 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   },
 }));
 
-/** Push `text` as its own text block. We deliberately do NOT coalesce here
- *  so that the renderer sees one DOM span per upstream chunk — that gives
- *  each newly-arrived token a fresh-mount and lets the `.token-fade` CSS
- *  keyframe play exactly once per chunk, without re-triggering on existing
- *  spans. The final DB persist uses `result.finalContentBlocks` (which the
- *  engine *does* coalesce), so the persisted shape on the success path
- *  stays one text block; the error/incomplete path persists the segmented
- *  buffer verbatim, which is also valid since `ContentBlock[]` is an
- *  ordered list and all downstream readers (toWireMessage, copy helpers,
- *  StreamInterruptedFooter) join text blocks before consuming. */
-function appendTextBlock(buf: ContentBlock[], text: string): void {
-  buf.push({ type: 'text', text });
+/**
+ * Push a stream chunk as its own block in the live buffer. We
+ * deliberately do NOT coalesce here so that the renderer sees one
+ * DOM span per upstream chunk — that gives each newly-arrived token
+ * a fresh-mount and lets the `.token-fade` CSS keyframe play exactly
+ * once per chunk, without re-triggering on existing spans.
+ * Coalescing happens once, engine-side, at stream finalise (see
+ * stream-engine.appendText / appendReasoning).
+ *
+ * The same contract holds for reasoning chunks — every upstream
+ * reasoning delta becomes its own sub-block so the body of an open
+ * ReasoningPill also benefits from per-chunk fade-in.
+ */
+function appendStreamChunk(
+  buf: ContentBlock[],
+  chunk: { kind: 'text' | 'reasoning'; text: string },
+): void {
+  buf.push(
+    chunk.kind === 'reasoning'
+      ? { type: 'reasoning', text: chunk.text }
+      : { type: 'text', text: chunk.text },
+  );
 }

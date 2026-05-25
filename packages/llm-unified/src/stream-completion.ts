@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { NANO_GPT_PAIRS } from './providers/_nano-gpt-pairs.js';
+import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
 import { parseOpenAiSseStream } from './streaming.js';
 import { buildRequest } from './transport.js';
 import type {
   KnownModel,
   ProviderConfig,
   ProviderDefinition,
+  ReasoningIntent,
   StreamChunk,
   WireMessage,
 } from './types.js';
@@ -31,14 +32,16 @@ export interface StreamCompletionArgs {
 const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
 
 /**
- * High-level streaming completion. Picks the right wire-body, handles
- * nano-gpt's pair-map quirk inline, and yields parsed StreamChunks.
+ * High-level streaming completion. Picks the right wire-body, delegates the
+ * per-provider reasoning translation to `applyReasoningToBody`, and yields
+ * parsed StreamChunks.
  *
  * Body composition rules:
- *   - `model` defaults to args.model.id, but the nano-gpt pre-flight may
- *     swap it for the thinking slug when bodyExtras carries thinking=true.
- *   - bodyExtras is shallow-merged into the request body; the engine layer
- *     puts reasoning params, temperature, and similar in here.
+ *   - `model` defaults to args.model.id. nano-gpt slug-mode models may
+ *     rewrite it when extras.reasoning is enabled.
+ *   - bodyExtras is shallow-merged into the request body. The engine layer
+ *     puts the unified `reasoning: ReasoningIntent` field plus things like
+ *     temperature in here. Legacy boolean `thinking` is silently dropped.
  */
 export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterable<StreamChunk> {
   const body = buildBody(args);
@@ -83,26 +86,20 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
 }
 
 function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
+  // Strip the legacy boolean `thinking` flag (replaced by
+  // `extras.reasoning: ReasoningIntent`) and the consumed `reasoning`
+  // intent itself from the spread-into body — `applyReasoningToBody`
+  // re-emits whatever the wire wants.
+  const { thinking: _thinking, reasoning: rawReasoning, ...extras } = args.bodyExtras;
+
   let modelId = args.model.id;
-  const extras = { ...args.bodyExtras };
-  if (args.provider.id === 'nano-gpt') {
-    const pair = NANO_GPT_PAIRS[args.model.id];
-    if (pair && pair.switchingMode === 'slug') {
-      const thinkingOn = extras.thinking === true;
-      modelId = thinkingOn ? (pair.thinkingSlug ?? pair.nonThinkingSlug) : pair.nonThinkingSlug;
-      extras.thinking = undefined; // slug-swap consumes the flag
-    }
-    // 'flag' mode keeps `extras.thinking` on the body; 'none' leaves it untouched.
-  } else if (typeof extras.thinking === 'boolean') {
-    // The boolean `thinking` flag is a nano-gpt convention. Other providers
-    // reject it — Novita for example expects a struct
-    // `{ type: 'enabled' | 'disabled' }` and 400s with
-    // "cannot unmarshal bool into Go struct field …Thinking". Drop the
-    // flag so the request goes through. Reasoning-OFF for non-nano-gpt
-    // providers needs per-provider translation and is tracked as a
-    // follow-up.
-    extras.thinking = undefined;
+  const intent = rawReasoning as ReasoningIntent | undefined;
+  if (intent) {
+    const applied = applyReasoningToBody(args.provider.id as ProviderId, args.model.id, intent, {});
+    modelId = applied.modelId;
+    Object.assign(extras, applied.body);
   }
+
   return {
     model: modelId,
     messages: args.messages,
@@ -110,3 +107,7 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
     ...extras,
   };
 }
+
+// Test-only re-export so unit tests can exercise body composition without
+// running the full streaming fetch path.
+export const buildBodyForTest = buildBody;

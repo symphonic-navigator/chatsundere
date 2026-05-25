@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef } from 'react';
 import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { groupAdjacent } from '../../lib/content-blocks.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
+import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
+import { ReasoningPill } from './ReasoningPill.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -11,6 +14,9 @@ export interface MessageBlockProps {
   message: MessageRow;
   pills: Map<string, PillRow>;
   persona: PersonaRow | null;
+  /** Active mindspace for this chat — propagated to ReasoningPill so its
+   *  open-body can pick up the resolved accent in future iterations. */
+  mindspace: ResolvedMindspace;
   displayName: string;
   expanded: boolean;
   onToggleExpand: () => void;
@@ -79,7 +85,13 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
         className="msg-text"
         style={p.persona ? { fontFamily: FONT_VAR[p.persona.font] } : undefined}
       >
-        {renderBlocks(p.message.contentBlocks, p.pills, p.isStreamingDraft === true)}
+        {renderBlocks(
+          p.message.contentBlocks,
+          p.pills,
+          p.isStreamingDraft === true,
+          p.persona,
+          p.mindspace,
+        )}
       </div>
       {p.expanded ? (
         <MessageControls
@@ -97,22 +109,67 @@ function renderBlocks(
   blocks: ContentBlock[],
   pills: Map<string, PillRow>,
   isStreamingDraft: boolean,
+  persona: PersonaRow | null,
+  mindspace: ResolvedMindspace,
 ): (JSX.Element | null)[] {
+  // Partition into ordered runs of same-type blocks — one component per run.
+  // Pills never coalesce (their `pillId` identity is load-bearing); text and
+  // reasoning runs merge into a single span / pill respectively.
+  const groups = groupAdjacent(blocks);
+
+  // Only the LAST reasoning group of a streaming-draft message wears the
+  // live indicator. Finalised messages (and all earlier groups within a
+  // live draft) animate-out.
+  const lastReasoningIdx = isStreamingDraft
+    ? groups.map((g) => g.type).lastIndexOf('reasoning')
+    : -1;
+
   // During streaming, the stream-manager pushes one text block per upstream
-  // chunk (no coalescing). Each block then becomes its own DOM span with a
-  // stable per-index key — React mounts only the newest span on each token
-  // arrival, so the `.token-fade` keyframe plays exactly once per chunk.
+  // chunk (no coalescing). Each block becomes its own DOM span inside the
+  // group span; React mounts only the newest span on each token arrival, so
+  // the `.token-fade` keyframe plays exactly once per chunk.
   const textClass = isStreamingDraft ? 'token-fade' : undefined;
-  return blocks.map((b, i) => {
-    if (b.type === 'text')
+  // Reasoning needs a font; the prop type allows persona=null (greeting /
+  // empty chat surface), so fall back to 'serif' — the default user font.
+  const reasoningFont: PersonaRow['font'] = persona?.font ?? 'serif';
+
+  return groups.map((group, idx) => {
+    if (group.type === 'text') {
       return (
-        // biome-ignore lint/suspicious/noArrayIndexKey: content blocks have no stable id; index is the correct key here — appending tokens stays append-only so prior keys are preserved
-        <span key={`t-${i}`} className={textClass}>
-          {b.text}
+        // biome-ignore lint/suspicious/noArrayIndexKey: groups have no stable id; the group index is stable across token appends (append-only)
+        <span key={`g-${idx}`}>
+          {group.blocks.map((b, j) => (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: see above — per-chunk spans are append-only within their group
+              key={`t-${idx}-${j}`}
+              className={textClass}
+            >
+              {(b as { type: 'text'; text: string }).text}
+            </span>
+          ))}
         </span>
       );
-    const pill = pills.get(b.pillId);
-    return pill ? <Pill key={`p-${b.pillId}`} row={pill} /> : null;
+    }
+    if (group.type === 'reasoning') {
+      const trace = group.blocks
+        .map((b) => (b as { type: 'reasoning'; text: string }).text)
+        .join('');
+      return (
+        <ReasoningPill
+          // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across appends
+          key={`g-${idx}`}
+          text={trace}
+          isLive={idx === lastReasoningIdx}
+          isStreamingDraft={isStreamingDraft}
+          mindspace={mindspace}
+          font={reasoningFont}
+        />
+      );
+    }
+    // 'pill' — single-block group (pills never coalesce; one PillRow per group).
+    const pillBlock = group.blocks[0] as { type: 'pill'; pillId: string };
+    const pill = pills.get(pillBlock.pillId);
+    return pill ? <Pill key={`p-${pillBlock.pillId}`} row={pill} /> : null;
   });
 }
 

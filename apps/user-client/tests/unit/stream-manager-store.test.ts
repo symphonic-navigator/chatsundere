@@ -175,6 +175,135 @@ describe('stream-manager.store', () => {
     await store.abortDiscard(chatId);
   });
 
+  it('mirrors reasoning chunks into the live content buffer as reasoning blocks', async () => {
+    // Phase 4: reasoning chunks must mirror into the live buffer just like
+    // token chunks — each one its own sub-block so the ReasoningPill body
+    // benefits from the same per-chunk fade-in as the token stream.
+    //
+    // We deliberately use a unique chatId here (and in the two sibling
+    // tests below) because earlier tests in this file leak setTimeout(...,
+    // 200ms) closures that `m.delete('c1')` from the live streams Map
+    // after their success chain runs. A shared chatId would race with
+    // those leaks and intermittently wipe our freshly-started handle.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    const myChatId = 'c-mirror-reasoning';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    fire({ type: 'reasoning', text: 'planning' });
+    const handle = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(handle).toBeDefined();
+    expect(handle?.contentBuffer).toEqual([{ type: 'reasoning', text: 'planning' }]);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('preserves non-coalescing for reasoning (token-fade compat)', async () => {
+    // Same contract as the token-chunk non-coalescing test: each reasoning
+    // delta must land as its own block so the .token-fade keyframe replays
+    // on fresh-mounted spans inside the open ReasoningPill body.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const myChatId = 'c-preserve-reasoning';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    fire({ type: 'reasoning', text: 'aa' });
+    fire({ type: 'reasoning', text: 'bb' });
+    const handle = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(handle?.contentBuffer).toEqual([
+      { type: 'reasoning', text: 'aa' },
+      { type: 'reasoning', text: 'bb' },
+    ]);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('rotates the handle reference on every reasoning chunk', async () => {
+    // Same handle-rotation guarantee as for token chunks — a zustand
+    // selector returning `streams.get(chatId)` must see a fresh reference
+    // after every reasoning delta, otherwise ReasoningPill won't re-render.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.knownModels[0];
+    type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const myChatId = 'c-rotate-reasoning';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    const h0 = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(h0).toBeDefined();
+    fire({ type: 'reasoning', text: 'a' });
+    const h1 = useStreamManagerStore.getState().streams.get(myChatId);
+    fire({ type: 'reasoning', text: 'b' });
+    const h2 = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(h1).toBeDefined();
+    expect(h2).toBeDefined();
+    expect(h1).not.toBe(h0);
+    expect(h2).not.toBe(h1);
+    await store.abortDiscard(myChatId);
+  });
+
   it('abortDiscard removes the draft, keeps the user message', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);

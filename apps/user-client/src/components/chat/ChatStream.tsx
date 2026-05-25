@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef } from 'react';
 import type { MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
+import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
+import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
+
+// Stub used only before the mindspace store has resolved (first paint, or
+// in tests that don't seed the store). ReasoningPill reads its palette via
+// the CSS var written by MindspaceLayer, not via these fields directly, so
+// an empty shell is a safe fallback for the prop contract.
+const MINDSPACE_FALLBACK = {} as ResolvedMindspace;
 import { DateSeparator } from './DateSeparator.js';
 import { MessageBlock } from './MessageBlock.js';
 import { ScrollToEnd } from './ScrollToEnd.js';
@@ -29,6 +38,13 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   const autoFollow = useCurrentChatStore((s) => s.autoFollowEnabled);
   const expandedId = useCurrentChatStore((s) => s.expandedMessageId);
   const toggleExpanded = useCurrentChatStore((s) => s.toggleExpanded);
+  // The resolved mindspace lives in a global store that ChatPage binds for
+  // the active chat's persona. We forward it to MessageBlock so reasoning
+  // pills can pick up the persona-accented palette (today via CSS var,
+  // tomorrow potentially via direct prop reads). Falls back to an empty
+  // stub before resolution lands — in practice ChatPage's effect populates
+  // it on first render after mindspaces load.
+  const resolvedMindspace = useMindspaceStore((s) => s.resolved);
 
   const sorted = [...p.messages].sort((a, b) => a.createdAt - b.createdAt);
   const pillMap = new Map(p.pills.map((x) => [x.id, x]));
@@ -119,6 +135,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 message={renderMessage}
                 pills={pillMap}
                 persona={p.persona}
+                mindspace={resolvedMindspace ?? MINDSPACE_FALLBACK}
                 displayName={p.displayName}
                 expanded={expandedId === m.id}
                 onToggleExpand={() => toggleExpanded(m.id)}
@@ -152,9 +169,6 @@ function dayKey(ts: number): string {
 }
 
 function copyMessageText(m: MessageRow): void {
-  const text = m.contentBlocks
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
-  void navigator.clipboard?.writeText(text);
+  const text = flattenAnswerText(m.contentBlocks);
+  void navigator.clipboard.writeText(text);
 }

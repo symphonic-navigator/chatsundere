@@ -3,7 +3,64 @@ import * as llm from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it, vi } from 'vitest';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt.js';
-import { type StreamEngineResult, runStreamEngine } from '../../src/lib/stream-engine';
+import type { MessageRow } from '../../src/boot/client-data-db.js';
+import {
+  type StartStreamArgs,
+  type StreamEngineResult,
+  runStreamEngine,
+} from '../../src/lib/stream-engine';
+
+/**
+ * Build a minimal StartStreamArgs for the engine. Tests override only the
+ * fields they exercise; everything else comes from this baseline.
+ */
+function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
+  const model = nanoGpt.knownModels[0];
+  if (!model) throw new Error('no model');
+  return {
+    chat: {
+      id: 'c1',
+      personaId: 'p1',
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    },
+    persona: {
+      id: 'p1',
+      name: 'A',
+      tagline: '',
+      colour: '#fff',
+      font: 'serif',
+      instructions: 'You are A.',
+      providerId: 'pr1',
+      modelId: model.id,
+      mindspaceId: null,
+      aboutMeOverride: null,
+      textureOverride: null,
+      temperature: 0.5,
+      adultPersona: false,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    provider: nanoGpt,
+    providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+    apiKey: 'k',
+    corsProxyUrl: null,
+    corsProxyKey: null,
+    model,
+    priorMessages: [],
+    userMessageText: 'hi',
+    reasoning: { mode: 'on' },
+    globalUnlocker: '',
+    globalAboutMe: '',
+    signal: new AbortController().signal,
+    onChunk: vi.fn(),
+    ...overrides,
+  };
+}
 
 const fakeChunks: StreamChunk[] = [
   { type: 'token', text: 'Hello ' },
@@ -181,5 +238,60 @@ describe('runStreamEngine', () => {
         onChunk: vi.fn(),
       }),
     ).rejects.toThrow(/rate limited/);
+  });
+
+  it('coalesces adjacent reasoning chunks into a single reasoning block in finalContentBlocks', async () => {
+    vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* () {
+      yield { type: 'reasoning', text: 'planning … ' };
+      yield { type: 'reasoning', text: 'more thought' };
+      yield { type: 'token', text: 'Hello ' };
+      yield { type: 'token', text: 'world.' };
+      yield { type: 'finish', reason: 'stop' };
+    });
+    const result = await runStreamEngine(makeArgs());
+    expect(result.finalContentBlocks).toEqual([
+      { type: 'reasoning', text: 'planning … more thought' },
+      { type: 'text', text: 'Hello world.' },
+    ]);
+  });
+
+  it('passes reasoning chunks through the onChunk callback', async () => {
+    vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* () {
+      yield { type: 'reasoning', text: 'a' };
+      yield { type: 'reasoning', text: 'b' };
+      yield { type: 'token', text: 'answer' };
+      yield { type: 'finish', reason: 'stop' };
+    });
+    const onChunk = vi.fn();
+    await runStreamEngine(makeArgs({ onChunk }));
+    const reasoningCalls = onChunk.mock.calls.filter(
+      (call) => (call[0] as StreamChunk).type === 'reasoning',
+    );
+    expect(reasoningCalls.length).toBe(2);
+  });
+
+  it('toWireMessage filters reasoning blocks from priorMessages history', async () => {
+    let capturedMessages: unknown = null;
+    vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* (args) {
+      capturedMessages = (args as { messages: unknown }).messages;
+      yield { type: 'token', text: 'ok' };
+      yield { type: 'finish', reason: 'stop' };
+    });
+    const priorWithReasoning: MessageRow = {
+      id: 'm-prior',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'reasoning', text: 'past thought' },
+        { type: 'text', text: 'past answer' },
+      ],
+      createdAt: 1,
+      bookmarked: false,
+      streamingState: 'complete',
+    };
+    await runStreamEngine(makeArgs({ priorMessages: [priorWithReasoning] }));
+    const msgs = capturedMessages as Array<{ role: string; content: string }>;
+    const assistantEntry = msgs.find((m) => m.role === 'assistant');
+    expect(assistantEntry?.content).toBe('past answer');
   });
 });

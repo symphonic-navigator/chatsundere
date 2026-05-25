@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, it, mock } from 'bun:test';
 import { nanoGpt } from './providers/nano-gpt.js';
-import { type StreamCompletionArgs, streamCompletion } from './stream-completion.js';
+import { novita } from './providers/novita.js';
+import {
+  type StreamCompletionArgs,
+  buildBodyForTest,
+  streamCompletion,
+} from './stream-completion.js';
 
 const sseBody = [
   'data: {"choices":[{"delta":{"content":"Hi "}}]}',
@@ -52,7 +57,7 @@ describe('streamCompletion', () => {
     expect(chunks.at(-1)).toEqual({ type: 'finish', reason: 'stop' });
   });
 
-  it('nano-gpt slug-mode swaps modelId when thinking=true', async () => {
+  it('nano-gpt slug-mode swaps modelId when reasoning is enabled', async () => {
     let capturedBody: unknown = null;
     const oldFetch = globalThis.fetch;
     globalThis.fetch = mock(async (req: Request) => {
@@ -72,18 +77,19 @@ describe('streamCompletion', () => {
       corsProxyKey: null,
       model: flashModel,
       messages: [],
-      bodyExtras: { thinking: true },
+      bodyExtras: { reasoning: { enabled: true } },
     };
     for await (const _ of streamCompletion(args)) {
       /* drain */
     }
     globalThis.fetch = oldFetch;
-    const body = capturedBody as { model: string; thinking?: boolean };
+    const body = capturedBody as { model: string; reasoning?: unknown; thinking?: unknown };
     expect(body.model).toBe('deepseek/deepseek-v4-flash:thinking');
-    expect(body.thinking).toBeUndefined(); // consumed by slug-swap
+    expect(body.reasoning).toBeUndefined(); // consumed by slug-swap
+    expect(body.thinking).toBeUndefined();
   });
 
-  it('nano-gpt flag-mode keeps slug and forwards thinking on body', async () => {
+  it('nano-gpt flag-mode keeps slug and forwards reasoning struct on body', async () => {
     let capturedBody: unknown = null;
     const oldFetch = globalThis.fetch;
     globalThis.fetch = mock(async (req: Request) => {
@@ -103,15 +109,15 @@ describe('streamCompletion', () => {
       corsProxyKey: null,
       model: kimiModel,
       messages: [],
-      bodyExtras: { thinking: true },
+      bodyExtras: { reasoning: { enabled: true } },
     };
     for await (const _ of streamCompletion(args)) {
       /* drain */
     }
     globalThis.fetch = oldFetch;
-    const body = capturedBody as { model: string; thinking?: boolean };
+    const body = capturedBody as { model: string; reasoning?: { enabled: boolean } };
     expect(body.model).toBe('moonshotai/kimi-k2.6');
-    expect(body.thinking).toBe(true);
+    expect(body.reasoning).toEqual({ enabled: true });
   });
 
   it('non-ok response yields an error chunk', async () => {
@@ -136,5 +142,61 @@ describe('streamCompletion', () => {
     globalThis.fetch = oldFetch;
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toMatchObject({ type: 'error' });
+  });
+});
+
+describe('stream-completion.buildBody', () => {
+  it('routes extras.reasoning through applyReasoningToBody (novita)', () => {
+    const flashModel = novita.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
+    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in novita models');
+    const body = buildBodyForTest({
+      provider: novita,
+      providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
+      apiKey: '',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model: flashModel,
+      messages: [{ role: 'user', content: 'hi' }],
+      bodyExtras: { reasoning: { enabled: true, effort: 'high' } },
+    });
+    expect(body.reasoning).toEqual({ enabled: true, effort: 'high' });
+    expect(body.model).toBe('deepseek/deepseek-v4-flash');
+    expect(body.stream).toBe(true);
+  });
+
+  it('does NOT consume the legacy boolean thinking extra (drops silently)', () => {
+    const flashModel = novita.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
+    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in novita models');
+    const body = buildBodyForTest({
+      provider: novita,
+      providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
+      apiKey: '',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model: flashModel,
+      messages: [{ role: 'user', content: 'hi' }],
+      // `thinking` is the legacy Phase 3.1 boolean — should be dropped without
+      // contributing a reasoning struct.
+      bodyExtras: { thinking: true } as Record<string, unknown>,
+    });
+    expect(body).not.toHaveProperty('thinking');
+    expect(body).not.toHaveProperty('reasoning');
+  });
+
+  it('preserves unrelated bodyExtras (e.g. temperature)', () => {
+    const flashModel = novita.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
+    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in novita models');
+    const body = buildBodyForTest({
+      provider: novita,
+      providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
+      apiKey: '',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model: flashModel,
+      messages: [{ role: 'user', content: 'hi' }],
+      bodyExtras: { temperature: 0.7, reasoning: { enabled: true } },
+    });
+    expect(body.temperature).toBe(0.7);
+    expect(body.reasoning).toEqual({ enabled: true });
   });
 });

@@ -11,6 +11,7 @@ export type {
   ProbeResult,
   ReasoningCapability,
   ReasoningEffortSpec,
+  ReasoningIntent,
 } from './types.js';
 
 export { registerProvider, getProvider, listProviders } from './registry.js';

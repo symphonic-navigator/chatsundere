@@ -1,5 +1,5 @@
 import { fireEvent, render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow, PersonaRow } from '../../src/boot/client-data-db';
 import { ChatStream } from '../../src/components/chat/ChatStream';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
@@ -115,6 +115,50 @@ describe('ChatStream', () => {
     Object.defineProperty(stream, 'scrollTop', { value: 500, configurable: true, writable: true });
     fireEvent.scroll(stream);
     expect(useCurrentChatStore.getState().autoFollowEnabled).toBe(false);
+  });
+
+  it('copyMessageText excludes reasoning blocks from the clipboard', () => {
+    useCurrentChatStore.getState().reset();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const message: MessageRow = {
+      id: 'm-clip',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'reasoning', text: 'inner thought' },
+        { type: 'text', text: 'visible answer' },
+      ],
+      streamingState: 'complete',
+      bookmarked: false,
+      createdAt: Date.now(),
+    };
+
+    const { container } = render(
+      <ChatStream
+        chatId="c1"
+        messages={[message]}
+        pills={[]}
+        persona={aurum}
+        displayName="Chris"
+        streamHandle={null}
+      />,
+    );
+
+    // Expand the message so its MessageControls (with the Copy button) mount.
+    const msg = container.querySelector('[data-msg-id="m-clip"] .msg') as HTMLElement;
+    fireEvent.click(msg);
+
+    const copyBtn = container.querySelector(
+      '[data-msg-id="m-clip"] [data-ctrl="copy"]',
+    ) as HTMLButtonElement;
+    fireEvent.click(copyBtn);
+
+    expect(writeText).toHaveBeenCalledWith('visible answer');
   });
 
   it('scrolling back into the bottom band re-enables auto-follow', () => {

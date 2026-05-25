@@ -78,6 +78,8 @@ interface OpenAiDeltaPayload {
   choices?: Array<{
     delta?: {
       content?: string;
+      reasoning?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         id?: string;
         function?: { name?: string; arguments?: string };
@@ -92,6 +94,16 @@ function openAiPayloadToChunks(payload: unknown): StreamChunk[] {
   const choice = p.choices?.[0];
   if (!choice) return [];
   const out: StreamChunk[] = [];
+
+  // Reasoning emits *before* the token in the same event — matches
+  // upstream temporal ordering (the model thinks, then speaks).
+  const reasoningModern = choice.delta?.reasoning ?? '';
+  const reasoningLegacy = choice.delta?.reasoning_content ?? '';
+  const reasoning = reasoningModern + reasoningLegacy;
+  if (reasoning) {
+    out.push({ type: 'reasoning', text: reasoning });
+  }
+
   if (choice.delta?.content) {
     out.push({ type: 'token', text: choice.delta.content });
   }

@@ -16,6 +16,7 @@ import type {
   PersonaRow,
   PillRow,
 } from '../boot/client-data-db.js';
+import { flattenAnswerText } from './content-blocks.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
 
 export interface StartStreamArgs {
@@ -86,6 +87,8 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
 
     if (chunk.type === 'token') {
       appendText(contentBuffer, chunk.text);
+    } else if (chunk.type === 'reasoning') {
+      appendReasoning(contentBuffer, chunk.text);
     } else if (chunk.type === 'tool-call') {
       const pill: PillRow = {
         id: uuidv7(),
@@ -122,15 +125,22 @@ function appendText(buf: ContentBlock[], text: string): void {
   }
 }
 
+/** Append reasoning to the tail of the content buffer, coalescing adjacent reasoning blocks. */
+function appendReasoning(buf: ContentBlock[], text: string): void {
+  const last = buf[buf.length - 1];
+  if (last && last.type === 'reasoning') {
+    last.text += text;
+  } else {
+    buf.push({ type: 'reasoning', text });
+  }
+}
+
 /**
  * Collapse a persisted MessageRow to a single WireMessage for context replay.
  * Pill-blocks are dropped — Phase 3 doesn't execute tools from history.
  */
 function toWireMessage(m: MessageRow): WireMessage {
-  const text = m.contentBlocks
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
+  const text = flattenAnswerText(m.contentBlocks);
   if (m.role === 'persona') return { role: 'assistant', content: text };
   if (m.role === 'system') return { role: 'system', content: text };
   return { role: 'user', content: text };

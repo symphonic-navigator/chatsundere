@@ -92,7 +92,10 @@ export interface ChatRow {
   draftInput: string; // NEW — Phase 3 cockpit autosave
 }
 
-export type ContentBlock = { type: 'text'; text: string } | { type: 'pill'; pillId: string };
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'pill'; pillId: string }
+  | { type: 'reasoning'; text: string };
 
 export interface MessageRow {
   id: string;
@@ -248,6 +251,21 @@ class ClientDataDb extends Dexie {
           }
         }
       });
+
+    // v7 — Phase 4 chain-of-thought display. Schema-structurally identical
+    // to v6: `contentBlocks` is a non-indexed JSON column and accepts the
+    // widened ContentBlock union (now including `{type:'reasoning',text}`)
+    // without any index changes. The bump is a code-capability marker:
+    // "this build knows about reasoning blocks". No upgrade callback needed.
+    this.version(7).stores({
+      settings: 'id',
+      providers: 'id, templateId, enabled',
+      mindspaces: 'id, builtIn, displayName',
+      personas: 'id, providerId',
+      chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+      messages: 'id, chatId, [chatId+createdAt]',
+      pills: 'id, messageId',
+    });
   }
 }
 

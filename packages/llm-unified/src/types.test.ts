@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { describe, expect, it } from 'bun:test';
-import type { KnownModel, ReasoningCapability, ReasoningEffortSpec } from './types.js';
+import type { KnownModel, ReasoningCapability, ReasoningEffortSpec, StreamChunk } from './types.js';
 
 describe('ReasoningCapability discriminator', () => {
   it('accepts no_reasoning kind', () => {
@@ -58,5 +58,13 @@ describe('KnownModel shape', () => {
       tools: false,
     };
     expect(m.contextWindow).toBe(1000);
+  });
+});
+
+describe('StreamChunk variants', () => {
+  it('StreamChunk accepts a reasoning variant with text payload', () => {
+    const chunk = { type: 'reasoning' as const, text: 'let me think …' } satisfies StreamChunk;
+    expect(chunk.type).toBe('reasoning');
+    expect(chunk.text).toBe('let me think …');
   });
 });

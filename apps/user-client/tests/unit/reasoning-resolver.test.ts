@@ -3,7 +3,6 @@
 import type { KnownModel } from '@chatsundere/llm-unified';
 import { describe, expect, it } from 'vitest';
 import {
-  type ReasoningState,
   initialReasoningState,
   resolveReasoningBodyExtras,
 } from '../../src/lib/reasoning-resolver';
@@ -67,24 +66,72 @@ describe('resolveReasoningBodyExtras', () => {
   it('no_reasoning → empty object', () => {
     expect(resolveReasoningBodyExtras(noReason, { mode: 'off' })).toEqual({});
   });
-  it('optional + bucket → reasoning_effort key', () => {
+
+  it('optional + bucket → reasoning intent with effort', () => {
     expect(resolveReasoningBodyExtras(optBucket, { mode: 'bucket', bucket: 'high' })).toEqual({
-      reasoning_effort: 'high',
+      reasoning: { enabled: true, effort: 'high' },
     });
   });
-  it('optional + effort + off → thinking false', () => {
-    expect(resolveReasoningBodyExtras(optBucket, { mode: 'off' })).toEqual({ thinking: false });
-  });
-  it('optional bool on → thinking true', () => {
-    expect(resolveReasoningBodyExtras(optBool, { mode: 'on' })).toEqual({ thinking: true });
-  });
-  it('optional bool off → thinking false', () => {
-    expect(resolveReasoningBodyExtras(optBool, { mode: 'off' })).toEqual({ thinking: false });
-  });
-  it('always_on + bucket → reasoning_effort key, no off-state', () => {
-    expect(resolveReasoningBodyExtras(alwaysOnBucket, { mode: 'bucket', bucket: 'low' })).toEqual({
-      reasoning_effort: 'low',
+
+  it('optional + effort + off → reasoning intent disabled', () => {
+    expect(resolveReasoningBodyExtras(optBucket, { mode: 'off' })).toEqual({
+      reasoning: { enabled: false },
     });
+  });
+
+  it('optional bool on → reasoning intent enabled', () => {
+    expect(resolveReasoningBodyExtras(optBool, { mode: 'on' })).toEqual({
+      reasoning: { enabled: true },
+    });
+  });
+
+  it('optional bool off → reasoning intent disabled', () => {
+    expect(resolveReasoningBodyExtras(optBool, { mode: 'off' })).toEqual({
+      reasoning: { enabled: false },
+    });
+  });
+
+  it('always_on + bucket → empty (no toggling possible on always_on)', () => {
+    expect(resolveReasoningBodyExtras(alwaysOnBucket, { mode: 'bucket', bucket: 'low' })).toEqual(
+      {},
+    );
+  });
+
+  // Phase-4 ReasoningIntent migration — these four cases use the new flat
+  // `{ mode, effort? }` cockpit state shape and assert the resolver emits
+  // the canonical `{ reasoning: ReasoningIntent }` extras the engine layer
+  // and per-provider `applyReasoningToBody` consume.
+
+  it('produces { reasoning: ReasoningIntent } in extras for capability-optional models with effort', () => {
+    const model = {
+      reasoning: { kind: 'optional', defaultOn: true, replayReasoning: false },
+    } as unknown as KnownModel;
+    const extras = resolveReasoningBodyExtras(model, { mode: 'on', effort: 'medium' });
+    expect(extras.reasoning).toEqual({ enabled: true, effort: 'medium' });
+  });
+
+  it('produces { reasoning: { enabled: false } } when mode is off', () => {
+    const model = {
+      reasoning: { kind: 'optional', defaultOn: true, replayReasoning: false },
+    } as unknown as KnownModel;
+    const extras = resolveReasoningBodyExtras(model, { mode: 'off' });
+    expect(extras.reasoning).toEqual({ enabled: false });
+  });
+
+  it('omits reasoning entirely for no_reasoning models', () => {
+    const model = {
+      reasoning: { kind: 'no_reasoning', defaultOn: false, replayReasoning: false },
+    } as unknown as KnownModel;
+    const extras = resolveReasoningBodyExtras(model, { mode: 'off' });
+    expect(extras).not.toHaveProperty('reasoning');
+  });
+
+  it('omits reasoning entirely for always_on models', () => {
+    const model = {
+      reasoning: { kind: 'always_on', defaultOn: true, replayReasoning: false },
+    } as unknown as KnownModel;
+    const extras = resolveReasoningBodyExtras(model, { mode: 'on' });
+    expect(extras).not.toHaveProperty('reasoning');
   });
 });
 
