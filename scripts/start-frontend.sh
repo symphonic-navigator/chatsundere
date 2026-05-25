@@ -2,4 +2,4 @@
 
 SCRIPT_DIR=$(dirname "$0")
 
-cd ../apps/user-client/ && pnpm dev
+cd $SCRIPT_DIR/../apps/user-client/ && pnpm dev
