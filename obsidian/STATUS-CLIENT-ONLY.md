@@ -1,8 +1,17 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-25 night (Phase 4 squashed at `3efc12b`).
-Chain-of-thought display landed: a closed-by-default mindspace-tinted
-pill renders next to each persona-message that carries reasoning, with
+**Last updated:** 2026-05-26 morning (Phase 4 polish-iter 1 squashed at
+`f8fa23c`). Reasoning-pill smoke caught two interaction bugs:
+`display: inline-flex` had response text clinging to the pill's right
+edge, and the button's click bubbled to the `.msg` container so opening
+a trace also activated the message (controls + scroll). Pill is now
+`display: flex` + `width: fit-content` (block-level, content-sized) and
+the button `stopPropagation`s — same pattern documented for future
+clickable in-message affordances.
+
+Phase 4 itself (squashed at `3efc12b`, 2026-05-25 night) landed
+chain-of-thought display: a closed-by-default mindspace-tinted pill
+renders next to each persona-message that carries reasoning, with
 sequential dot-pulse animation while live, opening to stream the trace
 in the persona font with `white-space: pre-wrap`. Pill renders only
 when a trace exists (no empty stub). Reasoning-OFF translation
@@ -890,6 +899,28 @@ update the relevant one at the end.
   `useImportType`/`organizeImports` may reorder `ChatStream`'s
   `MINDSPACE_FALLBACK` declaration on next format.
 
+- **Phase 4 polish-iter 1 — reasoning-pill click + layout (2026-05-26,
+  squashed at `f8fa23c`)**. Two interaction bugs from Chris's smoke
+  after the Phase-4 squash.
+  - **Layout — text following the pill clung to its right edge.**
+    `.reasoning-pill` and `.reasoning-pill-open` were `display:
+    inline-flex`, so subsequent text in `.msg-text` flowed inline next
+    to the pill instead of starting on a new paragraph. Switched both
+    to `display: flex` with `width: fit-content` — block-level so the
+    pill occupies its own line, content-sized so it keeps its pill
+    look and doesn't stretch across the bubble. Also restores the
+    effective `margin-block` (which only partly applied on inline-flex).
+  - **Click — opening the pill activated the message.** The button's
+    `onClick` bubbled to the `.msg` container's `onToggleExpand`, so
+    a tap on the pill flipped the message into expanded mode (controls
+    visible, `scrollIntoView` forced) on top of opening the trace.
+    Added `e.stopPropagation()` to the pill button's handler so the
+    open/close gesture is purely local to the pill. Inline comment
+    documents this as the convention for any future clickable in-
+    message affordance — message activation must come from a direct
+    tap on the message itself, not from one of its pills.
+  - 5/5 ReasoningPill + 16/16 MessageBlock Vitest cases green.
+
 ## Briefed, awaiting implementation
 
 - **Phase 4.x — Full History page + Setup-Hints** (still gated on
@@ -916,9 +947,10 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(between sessions — Phase 4 CoT-display squashed; ready for the
-simple My History page, then first versioned very-early-alpha build,
-then full Phase-4.x History/Setup-Hints when Lyra's wireframe lands)*
+*(between sessions — Phase 4 CoT-display + reasoning-pill polish-iter 1
+squashed; ready for the simple My History page, then first versioned
+very-early-alpha build, then full Phase-4.x History/Setup-Hints when
+Lyra's wireframe lands)*
 
 ---
 
