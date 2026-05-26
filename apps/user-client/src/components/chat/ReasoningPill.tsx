@@ -46,7 +46,14 @@ export function ReasoningPill(p: ReasoningPillProps): JSX.Element {
       data-state={open ? 'open' : 'closed'}
       data-live={p.isLive ? 'true' : 'false'}
       aria-expanded={open}
-      onClick={() => setOpen((v) => !v)}
+      onClick={(e) => {
+        // Pills are inside the message-block tap target — stop the click from
+        // bubbling so opening the trace never also expands/activates the
+        // message. Same pattern applies to any future clickable in-message
+        // affordance.
+        e.stopPropagation();
+        setOpen((v) => !v);
+      }}
     >
       <span className="reasoning-pill-dots" data-testid="reasoning-pill-dots" aria-hidden="true">
         <span className="dot">·</span>

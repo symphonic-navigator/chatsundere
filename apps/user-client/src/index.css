@@ -1201,7 +1201,11 @@ h1 {
 }
 
 .reasoning-pill {
-  display: inline-flex;
+  /* Block-level flex (not inline) so subsequent text wraps onto a new
+   * paragraph instead of clinging to the pill's right edge. width:fit-content
+   * keeps the pill content-sized — it doesn't stretch across the bubble. */
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 0.45rem;
   padding: 0.3rem 0.7rem;
@@ -1259,7 +1263,10 @@ h1 {
 }
 
 .reasoning-pill-open {
-  display: inline-flex;
+  /* Same block-level treatment as the closed handle (see .reasoning-pill) —
+   * the open trace also occupies its own line so following text drops below. */
+  display: flex;
+  width: fit-content;
   flex-direction: column;
   align-items: stretch;
   max-width: 100%;
