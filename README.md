@@ -90,6 +90,24 @@ Every service has its own `.env.example`. After `scripts/setup-dev.sh` runs, you
 | `VITE_SYNC_URL` | Sync-service base URL | `http://localhost:3200` |
 | `VITE_PROXY_URL` | Proxy-service base URL | `http://localhost:3300` |
 
+## Versioning & deployment
+
+This repo follows a `version.txt`-driven scheme adapted from
+[chatsune](https://github.com/symphonic-navigator/chatsune). The base
+version lives in `version.txt` at the repo root.
+
+- A push to `master` builds `<base>-pre.<run-number>` and deploys to
+  `https://teaser.chatsundere.me/alpha/`.
+- A push of an annotated tag `vX.Y.Z` (matching `version.txt`) builds
+  `X.Y.Z` and replaces the `/alpha/` deployment.
+
+The current alpha-deploy is a PWA served from GitHub Pages alongside
+the public teaser site. There is intentionally no link from the teaser
+to the alpha — access is invite-only by URL.
+
+See `superpowers/specs/2026-05-26-phase-4-alpha-prep-design.md` for
+the full design.
+
 ## Licensing
 
 | Path | Licence | Why |

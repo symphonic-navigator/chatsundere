@@ -8,11 +8,36 @@ import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
 
-// Stub used only before the mindspace store has resolved (first paint, or
-// in tests that don't seed the store). ReasoningPill reads its palette via
-// the CSS var written by MindspaceLayer, not via these fields directly, so
-// an empty shell is a safe fallback for the prop contract.
-const MINDSPACE_FALLBACK = {} as ResolvedMindspace;
+/**
+ * Load-bearing default — survives the brief window between component mount
+ * and the global mindspace store being populated. Any consumer that reads
+ * `mindspace.accent`, `mindspace.palette.text.*`, etc. before the store
+ * hydrates lands on these neutral values rather than `undefined`.
+ */
+export const MINDSPACE_FALLBACK: ResolvedMindspace = {
+  id: 'fallback',
+  displayName: 'Fallback',
+  palette: {
+    bg: '#1a1a1a',
+    surfaceBase: '#222222',
+    surfaceRaised: '#2a2a2a',
+    surfaceInput: '#1e1e1e',
+    accent: '#888888',
+    accentSubtle: 'rgba(136,136,136,0.06)',
+    accentBorder: 'rgba(136,136,136,0.3)',
+    accentBorderActive: 'rgba(136,136,136,0.6)',
+    accentGlow: 'rgba(136,136,136,0.5)',
+    text: {
+      primary: '#e6e6e6',
+      secondary: '#bdbdbd',
+      muted: '#8a8a8a',
+      ghost: '#5a5a5a',
+    },
+  },
+  texture: 'grain',
+  builtIn: true,
+  createdAt: 0,
+};
 import { DateSeparator } from './DateSeparator.js';
 import { MessageBlock } from './MessageBlock.js';
 import { ScrollToEnd } from './ScrollToEnd.js';
@@ -157,7 +182,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
           </div>
         );
       })}
-      {!autoFollow && sorted.length > 0 ? <ScrollToEnd onTap={() => setAutoFollow(true)} /> : null}
+      <ScrollToEnd visible={!autoFollow && sorted.length > 0} onTap={() => setAutoFollow(true)} />
     </div>
   );
 }

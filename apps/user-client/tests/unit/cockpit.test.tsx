@@ -203,4 +203,34 @@ describe('Cockpit', () => {
     const btn = container.querySelector('[data-dual="action"]') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
+
+  it('renders data-pinned="true" when pinned, "false" when not', () => {
+    useCurrentChatStore.getState().reset();
+    useCurrentChatStore.setState({ isPinned: true });
+    let { container, unmount } = render(
+      <Cockpit
+        persona={aurum}
+        model={model}
+        draftValue=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        isStreamLive={false}
+      />,
+    );
+    expect(container.querySelector('.cockpit')?.getAttribute('data-pinned')).toBe('true');
+    unmount();
+
+    useCurrentChatStore.setState({ isPinned: false });
+    ({ container } = render(
+      <Cockpit
+        persona={aurum}
+        model={model}
+        draftValue=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        isStreamLive={false}
+      />,
+    ));
+    expect(container.querySelector('.cockpit')?.getAttribute('data-pinned')).toBe('false');
+  });
 });

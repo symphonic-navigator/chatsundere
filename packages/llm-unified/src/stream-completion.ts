@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
+import {
+  MAX_RETRY_ATTEMPTS,
+  computeRetryDelay,
+  parseRetryAfter,
+  shouldRetryStatus,
+} from './retry.js';
 import { parseOpenAiSseStream } from './streaming.js';
 import { buildRequest } from './transport.js';
 import type {
@@ -55,32 +61,69 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
     body,
   });
 
-  // Couple a TTFB timeout to the user-supplied abort signal. The timer
-  // is cleared as soon as the response headers arrive, so a slow generation
-  // (long reply, deep reasoning) never triggers it.
+  // TTFB timeout: cleared as soon as response headers arrive, so a long
+  // generation never triggers it. Wraps every fetch attempt in the retry loop.
   const timeoutMs = args.initialResponseTimeoutMs ?? DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS;
-  const timeoutCtrl = new AbortController();
-  const timeoutId = setTimeout(
-    () =>
-      timeoutCtrl.abort(
-        new DOMException(`upstream did not respond within ${timeoutMs}ms`, 'TimeoutError'),
-      ),
-    timeoutMs,
-  );
-  const fetchSignal = args.signal
-    ? AbortSignal.any([args.signal, timeoutCtrl.signal])
-    : timeoutCtrl.signal;
 
-  let response: Response;
-  try {
-    response = await fetch(request, { signal: fetchSignal });
-  } finally {
+  let response: Response | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+    if (args.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    const timeoutCtrl = new AbortController();
+    const timeoutId = setTimeout(
+      () =>
+        timeoutCtrl.abort(
+          new DOMException(`upstream did not respond within ${timeoutMs}ms`, 'TimeoutError'),
+        ),
+      timeoutMs,
+    );
+    const fetchSignal = args.signal
+      ? AbortSignal.any([args.signal, timeoutCtrl.signal])
+      : timeoutCtrl.signal;
+
+    let attemptResponse: Response;
+    try {
+      attemptResponse = await fetch(request, { signal: fetchSignal });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      // Treat network-level failures (TypeError per WHATWG fetch spec) as
+      // retryable; anything else (e.g. AbortError) propagates immediately.
+      if (err instanceof TypeError && attempt < MAX_RETRY_ATTEMPTS && !args.signal?.aborted) {
+        lastError = err;
+        const delay = computeRetryDelay(attempt, null);
+        await new Promise<void>((r) => setTimeout(r, delay * 1000));
+        continue;
+      }
+      throw err;
+    }
     clearTimeout(timeoutId);
+
+    if (attemptResponse.ok) {
+      response = attemptResponse;
+      break;
+    }
+    // Non-2xx response: retry if the status is transient, else propagate.
+    if (!shouldRetryStatus(attemptResponse.status) || attempt >= MAX_RETRY_ATTEMPTS) {
+      response = attemptResponse;
+      break;
+    }
+    const retryAfter = parseRetryAfter(attemptResponse.headers);
+    // Consume the body so the connection can be reused.
+    await attemptResponse.body?.cancel();
+    const delay = computeRetryDelay(attempt, retryAfter);
+    if (args.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    await new Promise<void>((r) => setTimeout(r, delay * 1000));
+  }
+  if (!response) {
+    throw lastError ?? new Error('streamCompletion: exhausted without response');
   }
 
-  if (!response.ok || !response.body) {
-    yield { type: 'error', message: `upstream ${response.status}` };
-    return;
+  if (!response.ok) {
+    throw new Error(`streamCompletion: upstream ${response.status}`);
+  }
+  if (!response.body) {
+    throw new Error(`streamCompletion: upstream ${response.status} returned no body`);
   }
   yield* parseOpenAiSseStream(response.body, { signal: args.signal });
 }

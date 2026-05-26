@@ -57,8 +57,11 @@ function dbDumpReceiver(): Plugin {
 }
 
 export default defineConfig({
+  base: process.env.VITE_BASE ?? '/',
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0-dev'),
+    __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? 'dev'),
+    __APP_SHA__: JSON.stringify(process.env.APP_SHA ?? 'dev'),
+    __APP_BUILT_AT__: JSON.stringify(process.env.APP_BUILT_AT ?? 'dev'),
   },
   plugins: [
     react(),
@@ -66,14 +69,16 @@ export default defineConfig({
     dbDumpReceiver(),
     VitePWA({
       registerType: 'prompt',
+      base: process.env.VITE_BASE ?? '/',
+      scope: process.env.VITE_BASE ?? '/',
       devOptions: { enabled: true },
       manifest: {
         id: '/',
         name: 'Chatsundere',
         short_name: 'Chatsundere',
         description: 'A local-first AI companion you control end to end.',
-        start_url: '/',
-        scope: '/',
+        start_url: process.env.VITE_BASE ?? '/',
+        scope: process.env.VITE_BASE ?? '/',
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#050210',

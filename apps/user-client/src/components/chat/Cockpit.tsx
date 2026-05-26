@@ -55,7 +55,7 @@ export function Cockpit(p: Props): JSX.Element {
   };
 
   return (
-    <div className="cockpit">
+    <div className="cockpit" data-pinned={isPinned ? 'true' : 'false'}>
       <div className="cockpit-row-controls">
         <button
           type="button"

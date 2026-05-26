@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow, PersonaRow } from '../../src/boot/client-data-db';
-import { ChatStream } from '../../src/components/chat/ChatStream';
+import { ChatStream, MINDSPACE_FALLBACK } from '../../src/components/chat/ChatStream';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
 import type { StreamHandle } from '../../src/state/stream-manager.store';
 
@@ -181,5 +181,25 @@ describe('ChatStream', () => {
     // distance from bottom = 1000 - (590 + 400) = 10 → within 30 band
     fireEvent.scroll(stream);
     expect(useCurrentChatStore.getState().autoFollowEnabled).toBe(true);
+  });
+});
+
+describe('MINDSPACE_FALLBACK', () => {
+  it('has all ResolvedMindspace fields populated (no undefined)', () => {
+    expect(MINDSPACE_FALLBACK.id).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.displayName).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.texture).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.bg).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.surfaceBase).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accent).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentSubtle).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentBorder).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentBorderActive).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentGlow).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.primary).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.secondary).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.muted).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.ghost).toBeTruthy();
   });
 });

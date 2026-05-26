@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { relativeTimeLabel } from '../../lib/relative-time.js';
+import { StreamingOrb } from '../StreamingOrb.js';
 import { HistoryRowConfirmTray } from './HistoryRowConfirmTray.js';
 import { HistoryRowRenameInput } from './HistoryRowRenameInput.js';
 
@@ -20,7 +21,8 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
 
   if (mode === 'confirm-delete') {
     return (
-      <li className="history-row rounded-lg">
+      <li className="history-row relative rounded-lg">
+        <StreamingOrb personaId={persona.id} colour={persona.colour} />
         <HistoryRowConfirmTray
           onCancel={() => setMode('idle')}
           onDelete={() => {
@@ -33,7 +35,8 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
   }
 
   return (
-    <li className="history-row rounded-lg border border-white/5 bg-white/[0.02]">
+    <li className="history-row relative rounded-lg border border-white/5 bg-white/[0.02]">
+      <StreamingOrb personaId={persona.id} colour={persona.colour} />
       <div className="flex items-stretch">
         {/* Row body — navigates to chat in idle mode; shows rename input in rename mode */}
         {mode === 'rename' ? (

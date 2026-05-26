@@ -2,7 +2,7 @@
 
 import { InlineMarker } from '@chatsundere/ui-shared';
 import { copy } from '../../../lib/copy.js';
-import { APP_VERSION } from '../../../version.js';
+import { APP_VERSION } from '../../../lib/version.js';
 
 /**
  * About accordion body.
@@ -13,13 +13,25 @@ import { APP_VERSION } from '../../../version.js';
 export function AboutSection() {
   return (
     <div className="space-y-8">
+      <div className="mb-3 rounded-md border border-paper-soft/20 bg-black/20 p-3 font-mono text-xs text-paper-soft">
+        <div>
+          Version <span className="text-paper">{APP_VERSION.version}</span>
+        </div>
+        <div>
+          sha <span className="text-paper">{APP_VERSION.sha}</span>
+        </div>
+        <div>
+          built <span className="text-paper">{APP_VERSION.builtAt}</span>
+        </div>
+      </div>
+
       <dl className="space-y-4">
         <div className="flex items-baseline justify-between gap-4">
           <dt className="text-xs font-medium uppercase tracking-wider text-paper-soft">
             {copy.settings.about.versionLabel}
           </dt>
           <dd>
-            <InlineMarker tone="default">{APP_VERSION}</InlineMarker>
+            <InlineMarker tone="default">{APP_VERSION.version}</InlineMarker>
           </dd>
         </div>
 

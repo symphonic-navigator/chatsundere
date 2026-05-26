@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { NANO_GPT_PAIRS } from './providers/_nano-gpt-pairs.js';
+import { parseRetryAfter, shouldRetryStatus, withRetry } from './retry.js';
 import { buildRequest } from './transport.js';
 import type { KnownModel, ProviderConfig, ProviderDefinition, WireMessage } from './types.js';
 
@@ -20,11 +21,13 @@ interface OneShotResponse {
 }
 
 /**
- * Non-streaming completion. Used by background jobs (title generation,
- * memory extraction, etc.) where streaming token-by-token is unnecessary.
- * Honours the same nano-gpt pair-map quirks as streamCompletion.
+ * Internal helper for testing. Allows injection of a custom sleep function.
+ * Not part of the public API.
  */
-export async function runOneShotCompletion(args: OneShotArgs): Promise<string> {
+export async function runOneShotCompletionWithSleep(
+  args: OneShotArgs,
+  sleepFn: (ms: number) => Promise<void>,
+): Promise<string> {
   let modelId = args.model.id;
   const extras = { ...args.bodyExtras };
   if (args.provider.id === 'nano-gpt') {
@@ -44,14 +47,50 @@ export async function runOneShotCompletion(args: OneShotArgs): Promise<string> {
     method: 'POST',
     body: { model: modelId, messages: args.messages, stream: false, ...extras },
   });
-  const response = await fetch(request, { signal: args.signal });
-  if (!response.ok) {
-    throw new Error(`one-shot upstream returned ${response.status}`);
-  }
-  const json = (await response.json()) as OneShotResponse;
-  const content = json.choices?.[0]?.message?.content;
-  if (typeof content !== 'string' || content.length === 0) {
-    throw new Error('one-shot returned empty content');
-  }
-  return content;
+
+  return withRetry<string>(
+    async () => {
+      if (args.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const response = await fetch(request, { signal: args.signal });
+      if (!response.ok) {
+        const err = new Error(`one-shot upstream returned ${response.status}`) as Error & {
+          status?: number;
+          retryAfter?: number | null;
+        };
+        err.status = response.status;
+        err.retryAfter = parseRetryAfter(response.headers);
+        await response.body?.cancel();
+        throw err;
+      }
+      const json = (await response.json()) as OneShotResponse;
+      const content = json.choices?.[0]?.message?.content;
+      if (typeof content !== 'string' || content.length === 0) {
+        throw new Error('one-shot returned empty content');
+      }
+      return content;
+    },
+    {
+      signal: args.signal,
+      sleepFn,
+      isRetriable: (err) => {
+        if (err instanceof TypeError) return true;
+        const e = err as { status?: number };
+        return typeof e.status === 'number' && shouldRetryStatus(e.status);
+      },
+      extractRetryAfter: (err) => {
+        const e = err as { retryAfter?: number | null };
+        return e.retryAfter ?? null;
+      },
+    },
+  );
+}
+
+/**
+ * Non-streaming completion. Used by background jobs (title generation,
+ * memory extraction, etc.) where streaming token-by-token is unnecessary.
+ * Honours the same nano-gpt pair-map quirks as streamCompletion.
+ */
+export async function runOneShotCompletion(args: OneShotArgs): Promise<string> {
+  const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  return runOneShotCompletionWithSleep(args, defaultSleep);
 }

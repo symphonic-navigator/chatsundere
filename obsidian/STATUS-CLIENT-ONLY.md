@@ -1,24 +1,48 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-26 evening (Phase 4 simple-history landed as
-15 sequential task-commits `f89fef2 → 061b28e`, awaiting manual smoke
-+ squash). Bridge release between Phase 4 CoT-display and the first
-versioned alpha. New `/app/history` route lists chats sorted by
-`lastMessageAt` desc with title-substring search, persona-filter chips
-(NSFW-aware), inline rename, inline delete-tray (6 s auto-collapse) and
-constructive empty states. Chat-View Topbar's centre is now a two-row
-title+persona stack — tap-to-inline-edit the title with `🖎` pencil
-affordance, persona-name row below remains the tap-target to the
-Persona Editor. Persona-Editor quick-actions row switched from
-`grid-cols-3` to `grid-cols-2` 2×2 with a new `History` button that
-navigates to `/app/history?personaId=<id>` (disabled when the persona
-has no chats). Title-generator upgraded to the chatsune-style prompt
-(inline NSFW unlocker + conversation-language) and gained a race-guard
-re-read in both success and catch branches so an auto-title never
-overwrites a manually-set one under load. No Dexie bump — re-uses
-`ChatRow.title: string | null`. Spec Decision 13 (Today/Yesterday/
-Earlier date-group headers) was prototyped and dropped per its own
-LOC budget (54 net new lines vs ~30 cap); deferred to Phase 4.x.
+**Last updated:** 2026-05-26 late evening (Phase 4 alpha-prep landed as
+14 sequential task-commits `76c333e → 9eb83b4` plus two follow-up fixes
+`88b7067` + `7536037`; awaiting Chris's manual smoke + Pages-source flip
++ squash + `v0.0.1` tag). Bridge between Phase 4 simple-history and the
+first versioned alpha. Three streams of work in one cycle: (a) Polish —
+chatsune-style retry helper in `packages/llm-unified/src/retry.ts`
+consumed by `stream-completion.ts`'s initial-fetch loop AND wrapping the
+one-shot title-gen via `withRetry`; affordance breathing / scroll-to-end
+swap-in-out / cockpit pin-glow CSS; new `<StreamingOrb>` 8 px pulsing
+indicator on `PersonaCard` and `HistoryRow` when their persona has a
+live stream; `MINDSPACE_FALLBACK` defensive harden in `ChatStream.tsx`
+(replaced empty cast with fully-populated `ResolvedMindspace`).
+(b) Build pipeline — `version.txt` at repo root = "0.0.1"; chatsune-
+style version computation in `.github/workflows/pages.yml`; Vite-time
+`__APP_VERSION__` / `__APP_SHA__` / `__APP_BUILT_AT__` injection;
+`VITE_BASE` env-var switches Vite/PWA between `/` (dev) and `/alpha/`
+(GH Pages). (c) Version display — Entrance-Hall footer (compact `v0.0.1
+· sha 1234567` text-[10px] at the section bottom) + Account About
+section (monospace block with full Version + sha + built-at). Test
+counts: ~36 new Vitest + Bun cases — user-client 503 pass / 8 fail (the
+8 are the pre-existing cockpit-draft localStorage cascade, unchanged);
+`packages/llm-unified` 252/252 pass. Pre-alpha-prep simple-history
+landed at `ec7c1f3`; the smoke-test fixes from that cycle (`1796752`)
+included.
+
+**Phase 4 simple-history (2026-05-26 evening, squashed at `ec7c1f3`):**
+Bridge release between Phase 4 CoT-display and the alpha-prep cycle.
+New `/app/history` route lists chats sorted by `lastMessageAt` desc with
+title-substring search, persona-filter chips (NSFW-aware), inline
+rename, inline delete-tray (6 s auto-collapse) and constructive empty
+states. Chat-View Topbar's centre became a two-row title+persona stack
+— tap-to-inline-edit the title with `🖎` pencil affordance, persona-name
+row below remains the tap-target to the Persona Editor. Persona-Editor
+quick-actions row switched from `grid-cols-3` to `grid-cols-2` 2×2 with
+a new `History` button that navigates to `/app/history?personaId=<id>`
+(disabled when the persona has no chats). Title-generator upgraded to
+the chatsune-style prompt (inline NSFW unlocker + conversation-
+language) and gained a race-guard re-read in both success and catch
+branches so an auto-title never overwrites a manually-set one under
+load. No Dexie bump — re-uses `ChatRow.title: string | null`. Spec
+Decision 13 (Today/Yesterday/Earlier date-group headers) was prototyped
+and dropped per its own LOC budget (54 net new lines vs ~30 cap);
+deferred to Phase 5.
 
 Phase 4 itself (squashed at `3efc12b`, 2026-05-25 night) landed
 chain-of-thought display: a closed-by-default mindspace-tinted pill
@@ -1029,13 +1053,14 @@ update the relevant one at the end.
 
 ## Briefed, awaiting implementation
 
-- **Phase 4.x — Full History page + Setup-Hints** (still gated on
-  Lyra's My-History wireframe per the original Phase-4 brief).
-  List + search, Setup-Hints (deferred from Phase 2 per Decision 27),
-  scroll-to-end micro-animation, affordance glow tuning, network-loss
-  / abort / partial-stream-on-tab-close edge cases. Phase 4 above
-  delivered the CoT-display half of the original Phase-4 brief;
-  History is the remaining half.
+- **Phase 5 — Bookmarks tab + Setup-Hints** (gated on Lyra's wireframe
+  + invited-alpha-tester feedback). The simple-history surface now
+  covers list/search/rename/delete; Bookmarks is the second tab; Setup-
+  Hints needs separate design once we see how invited testers actually
+  encounter the empty provider/persona state.
+- **Date-group headers in My History** (`Today / Yesterday / Earlier`)
+  — prototyped during simple-history Task 13 and dropped per LOC budget.
+  Phase 5 candidate when we have more room.
 
 ## Open design questions / blockers
 
@@ -1053,30 +1078,39 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(Phase 4 simple-history is implemented across 15 task-commits
-`f89fef2 → 061b28e` on master; awaiting Chris's manual smoke of spec
-§8 items 1-10 before the squash into one Phase-4-history commit. After
-smoke + squash: first versioned very-early-alpha build.)*
+*(Phase 4 alpha-prep implemented across 16 sequential commits on
+master `76c333e → 9eb83b4` plus two follow-ups `88b7067` (drop legacy
+ScrollToEnd test) + `7536037` (Biome CSS auto-format); awaiting Chris's
+manual smoke of spec §7, the one-time Pages-source flip in GitHub
+Settings, the squash into one `Phase 4 alpha-prep squashed` commit,
+and the `v0.0.1` annotated tag that triggers the first released
+alpha-build at `teaser.chatsundere.me/alpha/`.)*
 
 ---
 
 ## Next session
 
-1. **Manual smoke of simple-history** — Chris runs spec §8 items 1-10
-   on a real device. Of particular interest: auto-title under load
-   (item 1), manual-title precedence under race (item 2), inline-rename
-   in Topbar (item 3), NSFW-flip auto-reset behaviour (item 6),
-   delete-tray auto-collapse (item 9).
-2. **Squash + commit** — once smoke is clean, squash all 15 task-commits
-   into a single `Phase 4 simple-history squashed` commit per ADR 0003
-   and Plan Task 18. The pre-squash STATUS update commit will fold in
-   too (this commit).
-3. **First versioned alpha build** — Chris cuts v0.0.1 (or similar
-   pre-`v0.1.0` marker). v0.1.0 itself still gated on the public-
-   release criteria in CLAUDE.md §12.
-4. **Phase 4.x (My History full + Setup-Hints)** — still blocked on
-   Lyra's My-History wireframe per spec §7. The simple history above
-   is a deliberate placeholder, not the briefed Phase-4 surface.
+1. **Manual smoke of alpha-prep** — Chris runs spec §7 items 1-10 on
+   a real device. Of particular interest: retry behaviour under
+   transient 5xx (item 5), retry-on-abort cleanup (item 6), affordance
+   breathing + scroll-to-end + pin glow animations (item 7), per-card
+   streaming orb when a stream is live (item 8), reduced-motion respect
+   (item 9).
+2. **Pages-source flip** — one-time GitHub Settings change: Source
+   "Deploy from a branch" → "GitHub Actions" at
+   `github.com/symphonic-navigator/chatsundere/settings/pages`. The
+   `pages.yml` workflow will succeed at build but fail at deploy until
+   this is flipped.
+3. **Squash + commit** — squash the 16 commits + the STATUS commit into
+   a single `Phase 4 alpha-prep squashed` commit per ADR 0003.
+4. **Tag v0.0.1 and verify the released deploy** — `git tag -a v0.0.1
+   -m "First alpha release" && git push origin v0.0.1`. The workflow
+   re-runs with the tag context; `/alpha/` updates to read `v0.0.1 ·
+   sha <short>` in the Entrance-Hall footer.
+5. **Invite first alpha testers** — Chris's call. The spec calls them
+   "ausgewählt, technisch sehr affine User" who don't need Setup-Hints.
+6. **Phase 5 (Bookmarks + Setup-Hints)** — gated on Lyra's wireframe +
+   first-tester feedback.
    Date-group headers (dropped in Task 13 above) should be revisited
    here.
 

@@ -11,6 +11,7 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { APP_VERSION } from '../../src/lib/version.js';
 import { EntranceHall } from '../../src/routes/app/entrance-hall.js';
 
 function wrap(initial: string) {
@@ -187,5 +188,21 @@ describe('EntranceHall', () => {
     // Assert clicking navigates to /app/history
     fireEvent.click(historyTile);
     await waitFor(() => expect(screen.getByTestId('history')).toBeInTheDocument());
+  });
+
+  it('renders the version footer with the current pre-version + sha', async () => {
+    await _resetClientDataDbForTests();
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/app']}>
+          <EntranceHall />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const footer = document.querySelector('footer');
+    expect(footer).not.toBeNull();
+    expect(footer?.textContent).toContain(`v${APP_VERSION.version}`);
+    expect(footer?.textContent).toContain(`sha ${APP_VERSION.sha}`);
   });
 });

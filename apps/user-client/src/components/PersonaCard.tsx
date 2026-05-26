@@ -5,6 +5,7 @@ import type { PersonaRow } from '../boot/client-data-db.js';
 import { monogramFor } from '../lib/monogram.js';
 import type { ResolvedMindspace } from '../state/mindspace-resolver.js';
 import { MindspaceTexture } from './MindspaceTexture.js';
+import { StreamingOrb } from './StreamingOrb.js';
 
 interface Props {
   persona: PersonaRow;
@@ -58,6 +59,7 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
         ['--persona-shimmer-delay' as unknown as string]: `${shimmerDelaySeconds}s`,
       }}
     >
+      <StreamingOrb personaId={persona.id} colour={mindspace.palette.accent} />
       <MindspaceTexture
         texture={mindspace.texture}
         accent={mindspace.palette.accent}

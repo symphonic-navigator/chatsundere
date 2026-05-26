@@ -633,6 +633,30 @@ h1 {
     opacity: 1;
   }
 }
+
+@keyframes affordance-breath {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+
+.bottom-affordance {
+  animation: affordance-breath 3.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-affordance {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /*
  * ScrollToEnd lives inside the chat-stream now (rendered as its first
  * child when auto-follow is off). Sticky positioning pins it to the
@@ -640,6 +664,29 @@ h1 {
  * scrolled. Because chat-stream is flex-col, `align-self: center`
  * centres it on the cross-axis.
  */
+
+@keyframes scroll-to-end-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scroll-to-end-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 .scroll-to-end {
   position: sticky;
   bottom: 1rem;
@@ -663,7 +710,26 @@ h1 {
 .scroll-to-end:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+
+.scroll-to-end[data-visible="true"] {
+  animation: scroll-to-end-in 240ms ease-out forwards;
+}
+
+.scroll-to-end[data-visible="false"] {
+  animation: scroll-to-end-out 180ms ease-in forwards;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .scroll-to-end[data-visible="true"] {
+    animation: none;
+    opacity: 1;
+  }
+  .scroll-to-end[data-visible="false"] {
+    animation: none;
+    opacity: 0;
+    pointer-events: none;
+  }
   .affordance-bar {
     animation: none;
     opacity: 0.7;
@@ -969,6 +1035,10 @@ h1 {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding: 0.5rem;
   z-index: 6;
+}
+.cockpit[data-pinned="true"] {
+  border-top: 1px solid var(--mindspace-accent-border-active, rgba(201, 168, 76, 0.6));
+  box-shadow: 0 0 8px 0 color-mix(in srgb, var(--mindspace-accent, #c9a84c) 15%, transparent);
 }
 .cockpit-row-controls {
   display: flex;
@@ -1323,5 +1393,37 @@ h1 {
   }
   .reasoning-pill-chevron {
     transition: none;
+  }
+}
+
+/* ===== Streaming Orb ===== */
+
+.streaming-orb {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: orb-breath 1.5s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes orb-breath {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-orb {
+    animation: none;
+    opacity: 1;
   }
 }

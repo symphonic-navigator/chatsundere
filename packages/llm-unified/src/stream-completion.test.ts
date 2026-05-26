@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, mock, spyOn } from 'bun:test';
 import { nanoGpt } from './providers/nano-gpt.js';
 import { novita } from './providers/novita.js';
+import { shouldRetryStatus } from './retry.js';
 import {
   type StreamCompletionArgs,
   buildBodyForTest,
   streamCompletion,
 } from './stream-completion.js';
+import type { StreamChunk } from './types.js';
 
 const sseBody = [
   'data: {"choices":[{"delta":{"content":"Hi "}}]}',
@@ -120,10 +122,13 @@ describe('streamCompletion', () => {
     expect(body.reasoning).toEqual({ enabled: true });
   });
 
-  it('non-ok response yields an error chunk', async () => {
+  it('non-ok response throws (non-retryable 401)', async () => {
     const oldFetch = globalThis.fetch;
+    // Use a non-retryable status (401) so the test does not trigger the retry
+    // loop and remains fast. Non-ok responses now throw rather than yielding
+    // an error chunk, so the engine layer handles them via try/catch.
     globalThis.fetch = mock(
-      async () => new Response('nope', { status: 500 }),
+      async () => new Response('nope', { status: 401 }),
     ) as unknown as typeof fetch;
     const firstModel = nanoGpt.knownModels[0];
     if (!firstModel) throw new Error('nano-gpt has no known models');
@@ -137,11 +142,16 @@ describe('streamCompletion', () => {
       messages: [],
       bodyExtras: {},
     };
-    const chunks = [];
-    for await (const c of streamCompletion(args)) chunks.push(c);
+    let threw = false;
+    try {
+      for await (const _c of streamCompletion(args)) {
+        /* drain */
+      }
+    } catch {
+      threw = true;
+    }
     globalThis.fetch = oldFetch;
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]).toMatchObject({ type: 'error' });
+    expect(threw).toBe(true);
   });
 });
 
@@ -198,5 +208,121 @@ describe('stream-completion.buildBody', () => {
     });
     expect(body.temperature).toBe(0.7);
     expect(body.reasoning).toEqual({ enabled: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Retry test helpers
+// ---------------------------------------------------------------------------
+
+/** Returns a minimal valid StreamCompletionArgs using the nano-gpt provider. */
+function streamArgs(): StreamCompletionArgs {
+  const firstModel = nanoGpt.knownModels[0];
+  if (!firstModel) throw new Error('nano-gpt has no known models');
+  return {
+    provider: nanoGpt,
+    providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+    apiKey: 'test-key',
+    corsProxyUrl: null,
+    corsProxyKey: null,
+    model: firstModel,
+    messages: [{ role: 'user', content: 'hi' }],
+    bodyExtras: {},
+    // Keep the TTFB timeout short so tests don't hang on slow paths.
+    initialResponseTimeoutMs: 5_000,
+  };
+}
+
+describe('streamCompletion retry on transient initial-fetch failure', () => {
+  it('retries on 503 then succeeds with streamed content', async () => {
+    let attempts = 0;
+    const fetchMock = mock(async () => {
+      attempts++;
+      if (attempts < 3) {
+        return new Response('upstream busy', { status: 503 });
+      }
+      return new Response(
+        new ReadableStream({
+          start(ctrl) {
+            ctrl.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            ctrl.close();
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      );
+    });
+    spyOn(globalThis, 'fetch').mockImplementation(fetchMock as never);
+
+    const chunks: StreamChunk[] = [];
+    for await (const c of streamCompletion(streamArgs())) {
+      chunks.push(c);
+    }
+    expect(attempts).toBe(3);
+  });
+
+  it('does not retry once the response body is being read', async () => {
+    let bodyReads = 0;
+    const stream = new ReadableStream({
+      start(ctrl) {
+        ctrl.enqueue(
+          new TextEncoder().encode('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'),
+        );
+        bodyReads++;
+        ctrl.error(new TypeError('network gone'));
+      },
+    });
+    spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    );
+    let threw = false;
+    try {
+      for await (const _c of streamCompletion(streamArgs())) {
+        // consume
+      }
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    expect(bodyReads).toBe(1);
+  });
+
+  it('does not retry on non-retryable status codes (401)', async () => {
+    let attempts = 0;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock — full fetch signature not needed
+    (spyOn(globalThis, 'fetch') as any).mockImplementation(async () => {
+      attempts++;
+      return new Response('unauthorised', { status: 401 });
+    });
+    let threw = false;
+    try {
+      for await (const _c of streamCompletion(streamArgs())) {
+        /* consume */
+      }
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    expect(attempts).toBe(1);
+  });
+
+  it('aborts cleanly when signal fires during retry backoff', async () => {
+    const ctrl = new AbortController();
+    let attempts = 0;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock — full fetch signature not needed
+    (spyOn(globalThis, 'fetch') as any).mockImplementation(async () => {
+      attempts++;
+      queueMicrotask(() => ctrl.abort());
+      return new Response('busy', { status: 503 });
+    });
+    let threw = false;
+    try {
+      for await (const _c of streamCompletion({ ...streamArgs(), signal: ctrl.signal })) {
+        /* consume */
+      }
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    expect(attempts).toBeLessThanOrEqual(2);
   });
 });

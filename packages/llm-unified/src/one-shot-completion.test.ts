@@ -31,24 +31,33 @@ describe('runOneShotCompletion', () => {
 
   it('throws on non-200', async () => {
     const oldFetch = globalThis.fetch;
-    globalThis.fetch = mock(
-      async () => new Response('nope', { status: 500 }),
-    ) as unknown as typeof fetch;
+    let attempts = 0;
+    globalThis.fetch = mock(async () => {
+      attempts++;
+      return new Response('nope', { status: 500 });
+    }) as unknown as typeof fetch;
     const model = nanoGpt.knownModels[0];
     if (!model) throw new Error('no model');
+
+    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
+
     await expect(
-      runOneShotCompletion({
-        provider: nanoGpt,
-        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-        apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
-        model,
-        messages: [],
-        bodyExtras: {},
-      }),
+      runOneShotCompletionWithSleep(
+        {
+          provider: nanoGpt,
+          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+          apiKey: 'k',
+          corsProxyUrl: null,
+          corsProxyKey: null,
+          model,
+          messages: [],
+          bodyExtras: {},
+        },
+        async () => {}, // instant test sleep
+      ),
     ).rejects.toThrow();
     globalThis.fetch = oldFetch;
+    expect(attempts).toBe(5); // 500 is retryable, so should retry 4 times (5 total)
   });
 
   it('throws on empty content', async () => {
@@ -72,5 +81,109 @@ describe('runOneShotCompletion', () => {
       }),
     ).rejects.toThrow();
     globalThis.fetch = oldFetch;
+  });
+});
+
+describe('runOneShotCompletion retry on transient failure', () => {
+  it('retries on 429 then returns the eventual content', async () => {
+    const oldFetch = globalThis.fetch;
+    let attempts = 0;
+    const model = nanoGpt.knownModels[0];
+    if (!model) throw new Error('no model');
+    globalThis.fetch = mock(async () => {
+      attempts++;
+      if (attempts < 2) {
+        return new Response('rate limited', {
+          status: 429,
+          headers: { 'retry-after': '0' },
+        });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'recovered' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    // Import at test scope to allow dependency injection in next test
+    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
+
+    const result = await runOneShotCompletionWithSleep(
+      {
+        provider: nanoGpt,
+        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+        apiKey: 'test-key',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+        bodyExtras: {},
+      },
+      async () => {}, // instant test sleep
+    );
+    globalThis.fetch = oldFetch;
+    expect(result).toBe('recovered');
+    expect(attempts).toBe(2);
+  });
+
+  it('does not retry non-retryable 401', async () => {
+    const oldFetch = globalThis.fetch;
+    let attempts = 0;
+    const model = nanoGpt.knownModels[0];
+    if (!model) throw new Error('no model');
+    globalThis.fetch = mock(async () => {
+      attempts++;
+      return new Response('unauthorised', { status: 401 });
+    }) as unknown as typeof fetch;
+
+    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
+
+    await expect(
+      runOneShotCompletionWithSleep(
+        {
+          provider: nanoGpt,
+          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+          apiKey: 'test-key',
+          corsProxyUrl: null,
+          corsProxyKey: null,
+          model,
+          messages: [{ role: 'user', content: 'hi' }],
+          bodyExtras: {},
+        },
+        async () => {}, // instant test sleep
+      ),
+    ).rejects.toThrow();
+    globalThis.fetch = oldFetch;
+    expect(attempts).toBe(1);
+  });
+
+  it('throws after exhausting retries', async () => {
+    const oldFetch = globalThis.fetch;
+    let attempts = 0;
+    const model = nanoGpt.knownModels[0];
+    if (!model) throw new Error('no model');
+    globalThis.fetch = mock(async () => {
+      attempts++;
+      return new Response('busy', { status: 503 });
+    }) as unknown as typeof fetch;
+
+    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
+
+    await expect(
+      runOneShotCompletionWithSleep(
+        {
+          provider: nanoGpt,
+          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+          apiKey: 'test-key',
+          corsProxyUrl: null,
+          corsProxyKey: null,
+          model,
+          messages: [{ role: 'user', content: 'hi' }],
+          bodyExtras: {},
+        },
+        async () => {}, // instant test sleep
+      ),
+    ).rejects.toThrow();
+    globalThis.fetch = oldFetch;
+    expect(attempts).toBe(5); // initial + 4 retries
   });
 });

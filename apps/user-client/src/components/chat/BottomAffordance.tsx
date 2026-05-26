@@ -4,7 +4,7 @@ export function BottomAffordance({ onTap }: { onTap: () => void }): JSX.Element 
   return (
     <button
       type="button"
-      className="affordance"
+      className="affordance bottom-affordance"
       aria-label="Enter interaction mode"
       onClick={onTap}
     >

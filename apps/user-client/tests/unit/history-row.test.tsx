@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatRow, PersonaRow } from '../../src/boot/client-data-db';
 import { HistoryRow } from '../../src/components/history/HistoryRow';
+import { useStreamManagerStore } from '../../src/state/stream-manager.store';
 
 const persona: PersonaRow = {
   id: 'p1',
@@ -108,5 +109,42 @@ describe('HistoryRow', () => {
     // biome-ignore lint/style/noNonNullAssertion: selector is guaranteed present when row renders
     fireEvent.click(container.querySelector('[data-rename-btn]')!);
     expect(queryByTestId('chat-mounted')).toBeNull();
+  });
+});
+
+describe('HistoryRow streaming orb', () => {
+  beforeEach(() => {
+    useStreamManagerStore.setState({ streams: new Map() });
+  });
+
+  it("shows the streaming orb when the row's persona has a live stream", () => {
+    useStreamManagerStore.setState({
+      streams: new Map([
+        [
+          'cX',
+          {
+            chatId: 'cX',
+            personaId: 'p1',
+            draftMessageId: 'd1',
+            controller: new AbortController(),
+            status: 'streaming',
+            contentBuffer: [],
+            pillBuffer: [],
+            startedAt: 0,
+          },
+        ],
+      ]),
+    });
+    const { container } = render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
+    );
+    expect(container.querySelector('[data-streaming-orb]')).not.toBeNull();
+  });
+
+  it('does NOT show the orb when no live stream', () => {
+    const { container } = render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
+    );
+    expect(container.querySelector('[data-streaming-orb]')).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db.js';
 import { PersonaCard } from '../../src/components/PersonaCard.js';
 import type { ResolvedMindspace } from '../../src/state/mindspace-resolver.js';
+import { useStreamManagerStore } from '../../src/state/stream-manager.store.js';
 
 function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
   return {
@@ -168,5 +169,46 @@ describe('PersonaCard', () => {
     expect(li.className).toContain('persona-card-sfw');
     expect(li.className).not.toContain('persona-card-nsfw');
     expect(li.dataset.adult).toBe('false');
+  });
+});
+
+describe('PersonaCard streaming orb', () => {
+  beforeEach(() => {
+    useStreamManagerStore.setState({ streams: new Map() });
+  });
+
+  it('shows the streaming orb when this persona has a live stream', () => {
+    const persona = makePersona({ id: 'p1' });
+    const mindspace = makeMindspace();
+    useStreamManagerStore.setState({
+      streams: new Map([
+        [
+          'c1',
+          {
+            chatId: 'c1',
+            personaId: 'p1',
+            draftMessageId: 'd1',
+            controller: new AbortController(),
+            status: 'streaming',
+            contentBuffer: [],
+            pillBuffer: [],
+            startedAt: 0,
+          },
+        ],
+      ]),
+    });
+    const { container } = wrap(
+      <PersonaCard persona={persona} mindspace={mindspace} hasProvider onChat={vi.fn()} />,
+    );
+    expect(container.querySelector('[data-streaming-orb]')).not.toBeNull();
+  });
+
+  it('does NOT show the streaming orb when no stream exists', () => {
+    const persona = makePersona({ id: 'p1' });
+    const mindspace = makeMindspace();
+    const { container } = wrap(
+      <PersonaCard persona={persona} mindspace={mindspace} hasProvider onChat={vi.fn()} />,
+    );
+    expect(container.querySelector('[data-streaming-orb]')).toBeNull();
   });
 });
