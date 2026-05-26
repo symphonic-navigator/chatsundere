@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ChatRow, getClientDataDb } from '../boot/client-data-db.js';
+import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import { QK } from './queryKeys.js';
 
 /** List all chat rows ordered by most-recently-active first. */
@@ -120,6 +121,37 @@ export function useToggleBookmark() {
       // Broad invalidation — we don't know which chat query is mounted.
       void qc.invalidateQueries({ queryKey: QK.chats });
       void qc.invalidateQueries({ queryKey: ['chats'] });
+    },
+  });
+}
+
+/**
+ * Delete a chat and cascade-delete its messages + pills inside a single
+ * Dexie transaction. Pre-step: abort any live background stream for this
+ * chat via `useStreamManagerStore.abortDiscard` (no-op when no stream).
+ *
+ * Invalidates the chat list on success. Per spec §3.7.
+ */
+export function useDeleteChat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (chatId: string): Promise<void> => {
+      // Abort any live stream first so we don't leave a controller dangling.
+      await useStreamManagerStore.getState().abortDiscard(chatId);
+
+      const db = getClientDataDb();
+      await db.transaction('rw', db.chats, db.messages, db.pills, async () => {
+        const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+        const msgIds = msgs.map((m) => m.id);
+        if (msgIds.length > 0) {
+          await db.pills.where('messageId').anyOf(msgIds).delete();
+        }
+        await db.messages.where('chatId').equals(chatId).delete();
+        await db.chats.delete(chatId);
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: QK.chats });
     },
   });
 }

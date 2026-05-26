@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db';
 import { InteractionTopbar } from '../../src/components/chat/InteractionTopbar';
+import { displayTitle } from '../../src/lib/chat-title';
 
 const aurum: PersonaRow = {
   id: 'p1',
@@ -22,12 +23,30 @@ const aurum: PersonaRow = {
   updatedAt: 1,
 };
 
+const chatRow: import('../../src/boot/client-data-db').ChatRow = {
+  id: 'c1',
+  personaId: 'p1',
+  title: null,
+  resolvedMindspaceId: 'm1',
+  createdAt: new Date('2026-05-26T10:00:00').getTime(),
+  lastMessageAt: 0,
+  bookmarkedMessageCount: 0,
+  draftInput: '',
+};
+
 describe('InteractionTopbar', () => {
   it('hamburger triggers onExit', () => {
     const onExit = vi.fn();
     const { container } = render(
       <MemoryRouter>
-        <InteractionTopbar persona={aurum} usedTokens={0} contextWindow={1000} onExit={onExit} />
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={onExit}
+          onRenameChat={vi.fn()}
+        />
       </MemoryRouter>,
     );
     const btn = container.querySelector('.hamburger-btn') as HTMLButtonElement;
@@ -35,22 +54,17 @@ describe('InteractionTopbar', () => {
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
-  it('renders "Chat with" + persona name in persona colour', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar persona={aurum} usedTokens={0} contextWindow={1000} onExit={vi.fn()} />
-      </MemoryRouter>,
-    );
-    expect(container.textContent).toContain('Chat with');
-    const nameEl = container.querySelector('.context-name') as HTMLElement;
-    expect(nameEl.textContent).toBe('Aurum');
-    expect(nameEl.style.color.replace(/\s/g, '')).toBe('rgb(201,168,76)');
-  });
-
   it('journal stub shows 0', () => {
     const { container } = render(
       <MemoryRouter>
-        <InteractionTopbar persona={aurum} usedTokens={0} contextWindow={1000} onExit={vi.fn()} />
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+        />
       </MemoryRouter>,
     );
     expect(container.querySelector('.journal-indicator')?.textContent).toContain('0');
@@ -59,7 +73,14 @@ describe('InteractionTopbar', () => {
   it('context gauge shows the right percentage', () => {
     const { container } = render(
       <MemoryRouter>
-        <InteractionTopbar persona={aurum} usedTokens={250} contextWindow={1000} onExit={vi.fn()} />
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={250}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+        />
       </MemoryRouter>,
     );
     expect(container.querySelector('.context-gauge-text')?.textContent).toBe('25%');
@@ -72,42 +93,233 @@ describe('InteractionTopbar', () => {
       <MemoryRouter>
         <InteractionTopbar
           persona={aurum}
+          chat={chatRow}
           usedTokens={5000}
           contextWindow={1000}
           onExit={vi.fn()}
+          onRenameChat={vi.fn()}
         />
       </MemoryRouter>,
     );
     expect(container.querySelector('.context-gauge-text')?.textContent).toBe('100%');
   });
+});
 
-  it('persona-name button fires onOpenPersonaEditor when callback is provided', () => {
-    const onOpenPersonaEditor = vi.fn();
+describe('InteractionTopbar — title row (chat exists)', () => {
+  it('renders displayTitle(chat) as a tappable button with a pencil glyph', () => {
     const { container } = render(
       <MemoryRouter>
         <InteractionTopbar
           persona={aurum}
+          chat={chatRow}
           usedTokens={0}
           contextWindow={1000}
           onExit={vi.fn()}
-          onOpenPersonaEditor={onOpenPersonaEditor}
+          onRenameChat={vi.fn()}
         />
       </MemoryRouter>,
     );
-    const btn = container.querySelector('.topbar-center-btn') as HTMLButtonElement;
-    expect(btn).not.toBeNull();
-    expect(btn.disabled).toBe(false);
-    fireEvent.click(btn);
-    expect(onOpenPersonaEditor).toHaveBeenCalledTimes(1);
+    const titleBtn = container.querySelector('.topbar-title-btn') as HTMLButtonElement;
+    expect(titleBtn).not.toBeNull();
+    expect(titleBtn.textContent).toContain(displayTitle(chatRow));
+    expect(titleBtn.querySelector('.topbar-pencil')).not.toBeNull();
   });
 
-  it('persona-name button is disabled when no onOpenPersonaEditor callback', () => {
+  it('renders persona-name row below title as a separate tap target', () => {
+    const onOpen = vi.fn();
     const { container } = render(
       <MemoryRouter>
-        <InteractionTopbar persona={aurum} usedTokens={0} contextWindow={1000} onExit={vi.fn()} />
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+          onOpenPersonaEditor={onOpen}
+        />
       </MemoryRouter>,
     );
-    const btn = container.querySelector('.topbar-center-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    const personaBtn = container.querySelector('.topbar-persona-name-btn') as HTMLButtonElement;
+    expect(personaBtn).not.toBeNull();
+    expect(personaBtn.textContent).toContain('Aurum');
+    fireEvent.click(personaBtn);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('tapping the title swaps to an input pre-filled with the current title (or empty when null)', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
+    const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.value).toBe('');
+    expect(input.getAttribute('maxlength')).toBe('60');
+  });
+
+  it('Enter commits sanitised value via onRenameChat', () => {
+    const onRename = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={onRename}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
+    const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '  My new title  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledWith('My new title');
+  });
+
+  it('Escape cancels without invoking onRenameChat', () => {
+    const onRename = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={onRename}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
+    const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'discard me' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onRename).not.toHaveBeenCalled();
+    expect(container.querySelector('.topbar-title-input')).toBeNull();
+  });
+
+  it('Blur commits the sanitised value', () => {
+    const onRename = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={chatRow}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={onRename}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
+    const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'blurred title' } });
+    fireEvent.blur(input);
+    expect(onRename).toHaveBeenCalledWith('blurred title');
+  });
+
+  it('empty / whitespace-only commits null (= back to fallback)', () => {
+    const onRename = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={{ ...chatRow, title: 'existing' }}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={onRename}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
+    const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('InteractionTopbar — lazy mode (no chat yet)', () => {
+  it('renders "New chat" placeholder when chat is null, no pencil, not interactive', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={null}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const placeholder = container.querySelector('.topbar-title-placeholder') as HTMLElement;
+    expect(placeholder).not.toBeNull();
+    expect(placeholder.textContent).toContain('New chat');
+    expect(container.querySelector('.topbar-pencil')).toBeNull();
+    expect(container.querySelector('.topbar-title-btn')).toBeNull();
+  });
+
+  it('persona-name row remains functional in lazy mode', () => {
+    const onOpen = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionTopbar
+          persona={aurum}
+          chat={null}
+          usedTokens={0}
+          contextWindow={1000}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+          onOpenPersonaEditor={onOpen}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-persona-name-btn') as HTMLButtonElement);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+import { InteractionMode } from '../../src/components/chat/InteractionMode';
+
+describe('InteractionMode → InteractionTopbar plumbing', () => {
+  it('forwards `chat` and `onRenameChat` to the Topbar', () => {
+    const onRename = vi.fn();
+    const { container } = render(
+      <MemoryRouter>
+        <InteractionMode
+          persona={aurum}
+          chat={chatRow}
+          model={{ contextWindow: 8000 } as never}
+          usedTokens={0}
+          draftValue=""
+          onDraftChange={vi.fn()}
+          isStreamLive={false}
+          onSend={vi.fn()}
+          onExit={vi.fn()}
+          onRenameChat={onRename}
+          onOpenPersonaEditor={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
+    const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'piped through' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledWith('piped through');
   });
 });

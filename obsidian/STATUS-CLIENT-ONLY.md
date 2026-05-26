@@ -1,13 +1,24 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-26 morning (Phase 4 polish-iter 1 squashed at
-`f8fa23c`). Reasoning-pill smoke caught two interaction bugs:
-`display: inline-flex` had response text clinging to the pill's right
-edge, and the button's click bubbled to the `.msg` container so opening
-a trace also activated the message (controls + scroll). Pill is now
-`display: flex` + `width: fit-content` (block-level, content-sized) and
-the button `stopPropagation`s — same pattern documented for future
-clickable in-message affordances.
+**Last updated:** 2026-05-26 evening (Phase 4 simple-history landed as
+15 sequential task-commits `f89fef2 → 061b28e`, awaiting manual smoke
++ squash). Bridge release between Phase 4 CoT-display and the first
+versioned alpha. New `/app/history` route lists chats sorted by
+`lastMessageAt` desc with title-substring search, persona-filter chips
+(NSFW-aware), inline rename, inline delete-tray (6 s auto-collapse) and
+constructive empty states. Chat-View Topbar's centre is now a two-row
+title+persona stack — tap-to-inline-edit the title with `🖎` pencil
+affordance, persona-name row below remains the tap-target to the
+Persona Editor. Persona-Editor quick-actions row switched from
+`grid-cols-3` to `grid-cols-2` 2×2 with a new `History` button that
+navigates to `/app/history?personaId=<id>` (disabled when the persona
+has no chats). Title-generator upgraded to the chatsune-style prompt
+(inline NSFW unlocker + conversation-language) and gained a race-guard
+re-read in both success and catch branches so an auto-title never
+overwrites a manually-set one under load. No Dexie bump — re-uses
+`ChatRow.title: string | null`. Spec Decision 13 (Today/Yesterday/
+Earlier date-group headers) was prototyped and dropped per its own
+LOC budget (54 net new lines vs ~30 cap); deferred to Phase 4.x.
 
 Phase 4 itself (squashed at `3efc12b`, 2026-05-25 night) landed
 chain-of-thought display: a closed-by-default mindspace-tinted pill
@@ -23,8 +34,7 @@ Novita unified `{reasoning:{enabled,effort}}`, Ollama-Cloud
 so it never leaks to clipboard, wire, or context-gauge. Dexie at v7.
 Pre-Phase-4 hotfix `832aa79` preserved the NSFW-Panic draft (was
 discard, now keeps the partial buffer for StreamInterruptedFooter
-Retry/Discard on re-visit). Next session: simple My History page (no
-bookmarks yet) → first versioned alpha build.
+Retry/Discard on re-visit).
 
 ---
 
@@ -899,6 +909,102 @@ update the relevant one at the end.
   `useImportType`/`organizeImports` may reorder `ChatStream`'s
   `MINDSPACE_FALLBACK` declaration on next format.
 
+- **Phase 4 simple-history (2026-05-26, 15 task-commits `f89fef2 →
+  061b28e`, awaiting manual smoke + squash)**. The "simple My History
+  page (no bookmarks yet)" Next-session item delivered as 15 sequential
+  TDD-paired task-commits via subagent-driven-development. Plan
+  Task 13 (Today/Yesterday/Earlier date-group headers) was prototyped
+  and dropped per its own LOC budget (54 net new lines vs ~30 cap) —
+  deferred to Phase 4.x; tests passed before revert, no design issue
+  surfaced. What landed:
+  - `apps/user-client/src/lib/chat-title.ts` (new) — `displayTitle(chat)`
+    helper, single source of truth for the "real title or fallback"
+    decision. Consumed by InteractionTopbar, HistoryRow, and (via
+    follow-up) the Entrance-Hall continue-card.
+  - `apps/user-client/src/lib/relative-time.ts` (new) —
+    `relativeTimeLabel(ts, now)` returning "just now" / "Xm ago" /
+    "Xh ago" / "D MMM" per spec §4.3.
+  - `apps/user-client/src/lib/title-generator.ts` — TITLE_INSTRUCTION
+    rewritten to the chatsune-style prompt (inline-NSFW-unlocker +
+    "use the language of the conversation" instead of forced British
+    English) AND exported. `generateTitleAsync` gained a race-guard:
+    `db.chats.get` re-read immediately before both the success-path
+    `db.chats.update({ title: cleaned })` and the catch-path
+    `db.chats.update({ title: fallbackTitle(...) })`. If the user
+    manually titled mid-call (`current?.title != null`), the writer
+    bails out — no overwrite. No Dexie bump needed.
+  - `apps/user-client/src/data/chats.ts` — new `useDeleteChat`
+    mutation. Pre-step: `useStreamManagerStore.getState().abortDiscard(chatId)`
+    (existing method, no-op when no stream). Then cascades pills →
+    messages → chat row inside one Dexie `'rw'` transaction.
+    Invalidates `QK.chats` on success.
+  - `apps/user-client/src/components/chat/InteractionTopbar.tsx` —
+    full centre-region rewrite. Props gain `chat: ChatRow | null`
+    and `onRenameChat: (next: string | null) => void`. Centre is now
+    a two-row stack: title row (with `🖎` pencil affordance) on top
+    + persona-name row below. Tap on the title → swap to inline
+    `<input>` (autofocus, `maxLength={60}`, controlled). Enter or
+    Blur commit via `onRenameChat(sanitiseTitle(value))`; Escape
+    cancels (`discardRef` guards the post-unmount blur). Lazy-mode
+    (`chat === null`) shows a non-interactive `.topbar-title-placeholder`
+    reading "New chat" — no pencil, no input. Persona-name row stays
+    a separate tap-target. Old `.context-label` / `.context-name` /
+    `.topbar-center-btn` CSS rules removed (confirmed unused elsewhere).
+  - `apps/user-client/src/components/chat/InteractionMode.tsx` —
+    forwards `chat` + `onRenameChat` from `ChatPage` into the Topbar.
+  - `apps/user-client/src/routes/app/chat/chat-page.tsx` — derives
+    `const chat = chatQuery.data?.chat ?? null`; new defensive
+    `useEffect` navigates to `/app/history` (replace) when the
+    chat row vanishes from another surface (`!isLazy && chatId &&
+    chatQuery.isFetched && !chatQuery.data?.chat`). New `onRenameChat`
+    callback wires to the existing `useUpdateChat` mutation.
+  - `apps/user-client/src/components/history/` (new sub-folder, 5
+    files): `HistorySearchBar` (controlled search input, live filter,
+    no debounce), `PersonaFilterChips` (horizontal-scroll
+    `[All]`-first chip row using persona accents), `HistoryRowRenameInput`
+    (autofocused inline input, Enter/Esc/Blur semantics matching the
+    Topbar), `HistoryRowConfirmTray` (inline confirm strip with 6s
+    `setTimeout` auto-collapse), `HistoryRow` (assembled — title +
+    persona-name + relative-time, trailing `🖎` and `🗑` icons, mode
+    state-machine: `idle | rename | confirm-delete`).
+  - `apps/user-client/src/routes/app/history.tsx` (new) — assembled
+    `HistoryPage`. Reuses `useChats` (sorted `lastMessageAt` desc),
+    `useFilteredPersonas` (the existing NSFW-aware hook drives both
+    the chip row and row visibility — single source of truth), and
+    `useAdultMode`. Local `searchQuery` + `filterPersonaId` state;
+    `?personaId=` URL param mirrored both ways via `useSearchParams`.
+    Auto-reset effect: when the selected `filterPersonaId` is no
+    longer in `personas.data` (e.g. `nsfw → sfw` flip while an NSFW
+    persona was selected), filter falls back to `null` (`All`) and
+    the URL param is dropped. Mindspace reset-to-user-default on
+    mount (matches Circle pattern). Empty-state component renders
+    three constructive variants per spec §4.4: no chats at all
+    (link to `/app/circle`), persona-filter has no matches (link to
+    `/app/chat/new?personaId=…`), search miss (no action link).
+  - `apps/user-client/src/App.tsx` — registers `/app/history` route.
+  - `apps/user-client/src/routes/app/entrance-hall.tsx` — "My History"
+    tile flipped from `disabled` to active, `to="/app/history"`, meta
+    reads `${chats.data?.length ?? 0} chats`.
+  - `apps/user-client/src/routes/app/persona-editor.tsx` — quick-actions
+    grid switched from `grid-cols-3` to `grid-cols-2` (2×2 — matches
+    the neurodivergent-audience 2×2-matrix guidance). Fourth button
+    "History" navigates to `/app/history?personaId=<id>` after
+    `persistDraft()` if dirty; disabled when this persona has no chats,
+    with tooltip "No chats with this persona yet".
+  - Tests: ~72 new Vitest cases across 12 new test files (chat-title,
+    title-generator race-guard, data-chats useDeleteChat, interaction-
+    topbar refactor + lazy-mode, interaction-mode plumbing, chat-page
+    stale-chat + rename, history-search-bar, persona-filter-chips,
+    history-row-confirm-tray, history-row-rename-input, relative-time,
+    history-row, history-route, persona-editor history-button, app-
+    routes, entrance-hall my-history-tile). User-client suite: 486
+    pass / 8 fail (pre-existing cockpit-draft localStorage cascade,
+    unchanged). `pnpm typecheck`, `pnpm lint`, `pnpm --filter
+    user-client run build`, `pnpm --filter @chatsundere/llm-unified
+    test` (172/172) all clean.
+  - Spec: [`superpowers/specs/2026-05-26-phase-4-simple-history-design.md`](../superpowers/specs/2026-05-26-phase-4-simple-history-design.md).
+  - Plan: [`superpowers/plans/2026-05-26-phase-4-simple-history.md`](../superpowers/plans/2026-05-26-phase-4-simple-history.md).
+
 - **Phase 4 polish-iter 1 — reasoning-pill click + layout (2026-05-26,
   squashed at `f8fa23c`)**. Two interaction bugs from Chris's smoke
   after the Phase-4 squash.
@@ -947,24 +1053,32 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(between sessions — Phase 4 CoT-display + reasoning-pill polish-iter 1
-squashed; ready for the simple My History page, then first versioned
-very-early-alpha build, then full Phase-4.x History/Setup-Hints when
-Lyra's wireframe lands)*
+*(Phase 4 simple-history is implemented across 15 task-commits
+`f89fef2 → 061b28e` on master; awaiting Chris's manual smoke of spec
+§8 items 1-10 before the squash into one Phase-4-history commit. After
+smoke + squash: first versioned very-early-alpha build.)*
 
 ---
 
 ## Next session
 
-1. **Simple My History page (no bookmarks yet)** — minimal list of
-   chats sufficient for a very-early-alpha hand-off. Bookmarks +
-   search + Setup-Hints come later in proper Phase 4.x.
-2. **First versioned alpha build** — Chris cuts v0.0.1 (or similar
-   pre-`v0.1.0` marker) once the simple history lands. v0.1.0 itself
-   still gated on the public-release criteria in CLAUDE.md §12.
-3. **Phase 4.x (My History full + Setup-Hints)** — still blocked on
+1. **Manual smoke of simple-history** — Chris runs spec §8 items 1-10
+   on a real device. Of particular interest: auto-title under load
+   (item 1), manual-title precedence under race (item 2), inline-rename
+   in Topbar (item 3), NSFW-flip auto-reset behaviour (item 6),
+   delete-tray auto-collapse (item 9).
+2. **Squash + commit** — once smoke is clean, squash all 15 task-commits
+   into a single `Phase 4 simple-history squashed` commit per ADR 0003
+   and Plan Task 18. The pre-squash STATUS update commit will fold in
+   too (this commit).
+3. **First versioned alpha build** — Chris cuts v0.0.1 (or similar
+   pre-`v0.1.0` marker). v0.1.0 itself still gated on the public-
+   release criteria in CLAUDE.md §12.
+4. **Phase 4.x (My History full + Setup-Hints)** — still blocked on
    Lyra's My-History wireframe per spec §7. The simple history above
    is a deliberate placeholder, not the briefed Phase-4 surface.
+   Date-group headers (dropped in Task 13 above) should be revisited
+   here.
 
 **Known follow-ups (non-blocking):**
 

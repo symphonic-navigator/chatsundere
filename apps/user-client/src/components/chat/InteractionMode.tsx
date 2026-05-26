@@ -1,7 +1,7 @@
 import type { KnownModel } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
-import type { PersonaRow } from '../../boot/client-data-db.js';
+import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { Cockpit } from './Cockpit.js';
 import { DimOverlay } from './DimOverlay.js';
@@ -9,6 +9,7 @@ import { InteractionTopbar } from './InteractionTopbar.js';
 
 interface Props {
   persona: PersonaRow;
+  chat: ChatRow | null;
   model: KnownModel;
   usedTokens: number;
   draftValue: string;
@@ -16,6 +17,7 @@ interface Props {
   onSend: (text: string) => void;
   isStreamLive: boolean;
   onExit: () => void;
+  onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
 }
 
@@ -99,9 +101,11 @@ export function InteractionMode(p: Props): JSX.Element {
     <div ref={containerRef} className="interaction-mode">
       <InteractionTopbar
         persona={p.persona}
+        chat={p.chat}
         usedTokens={p.usedTokens}
         contextWindow={p.model.contextWindow}
         onExit={p.onExit}
+        onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}
       />
       <DimOverlay active={inputFocused} />

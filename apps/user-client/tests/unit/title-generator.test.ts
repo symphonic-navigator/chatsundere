@@ -5,7 +5,12 @@ import { uuidv7 } from 'uuidv7';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import type { ChatRow, PersonaRow } from '../../src/boot/client-data-db';
-import { fallbackTitle, generateTitleAsync, sanitiseTitle } from '../../src/lib/title-generator';
+import {
+  TITLE_INSTRUCTION,
+  fallbackTitle,
+  generateTitleAsync,
+  sanitiseTitle,
+} from '../../src/lib/title-generator';
 
 describe('sanitiseTitle', () => {
   it('strips surrounding straight + smart quotes', () => {
@@ -84,7 +89,11 @@ async function seed() {
     bookmarkedMessageCount: 0,
     draftInput: '',
   });
-  return { db, chatId, personaId };
+  const chat = (await db.chats.get(chatId)) as ChatRow;
+  const persona = (await db.personas.get(personaId)) as PersonaRow;
+  const provider = nanoGpt;
+  const providerConfig = { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' as const } };
+  return { db, chatId, personaId, chat, persona, provider, providerConfig, model };
 }
 
 describe('generateTitleAsync', () => {
@@ -181,5 +190,156 @@ describe('generateTitleAsync', () => {
     });
     const updated = await db.chats.get(chatId);
     expect(updated?.title).toMatch(/^New chat — /);
+  });
+});
+
+describe('TITLE_INSTRUCTION (chatsune-style prompt)', () => {
+  it('contains the inline NSFW unlocker reinforcement', () => {
+    expect(TITLE_INSTRUCTION).toMatch(/fully uncensored/i);
+    expect(TITLE_INSTRUCTION).toMatch(/do not censor/i);
+  });
+  it('asks the model to use the conversation language (not forced EN)', () => {
+    expect(TITLE_INSTRUCTION).toMatch(/language of the conversation/i);
+    expect(TITLE_INSTRUCTION).not.toMatch(/British English/i);
+  });
+  it('caps the title at 60 characters in the instruction text', () => {
+    expect(TITLE_INSTRUCTION).toMatch(/60/);
+  });
+});
+
+describe('generateTitleAsync race-guard', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('skips the title write when the chat was manually titled mid-call', async () => {
+    const { chat, persona, provider, providerConfig, model, db } = await seed();
+    let release!: (s: string) => void;
+    const blocker = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(llm, 'runOneShotCompletion').mockReturnValue(blocker as unknown as Promise<string>);
+
+    const inFlight = generateTitleAsync({
+      chat,
+      persona,
+      provider,
+      providerConfig,
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model,
+      firstUserMessage: 'hi',
+      firstPersonaResponse: 'hello',
+      globalUnlocker: 'unlock',
+      globalAboutMe: '',
+    });
+
+    // While the LLM call is in flight, the user manually titles the chat.
+    await db.chats.update(chat.id, { title: 'manual' });
+
+    // Now let the LLM return.
+    release('AI generated');
+    await inFlight;
+
+    const after = await db.chats.get(chat.id);
+    expect(after?.title).toBe('manual');
+  });
+
+  it('skips the fallback write when the chat was manually titled before failure', async () => {
+    const { chat, persona, provider, providerConfig, model, db } = await seed();
+    let reject!: (err: Error) => void;
+    const blocker = new Promise<string>((_resolve, rej) => {
+      reject = rej;
+    });
+    vi.spyOn(llm, 'runOneShotCompletion').mockReturnValue(blocker as unknown as Promise<string>);
+
+    const inFlight = generateTitleAsync({
+      chat,
+      persona,
+      provider,
+      providerConfig,
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model,
+      firstUserMessage: 'hi',
+      firstPersonaResponse: 'hello',
+      globalUnlocker: 'unlock',
+      globalAboutMe: '',
+    });
+
+    await db.chats.update(chat.id, { title: 'manual' });
+    reject(new Error('boom'));
+    await inFlight;
+
+    const after = await db.chats.get(chat.id);
+    expect(after?.title).toBe('manual');
+  });
+});
+
+describe('generateTitleAsync invalidates TanStack queries', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('invalidates QK.chat(id) and QK.chats on the success path', async () => {
+    const { chat, persona, provider, providerConfig, model } = await seed();
+    vi.spyOn(llm, 'runOneShotCompletion').mockResolvedValue('AI title');
+
+    const { queryClient } = await import('../../src/lib/queryClient');
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await generateTitleAsync({
+      chat,
+      persona,
+      provider,
+      providerConfig,
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model,
+      firstUserMessage: 'hi',
+      firstPersonaResponse: 'hello',
+      globalUnlocker: 'unlock',
+      globalAboutMe: '',
+    });
+
+    const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
+    expect(keys).toContainEqual(['chats', chat.id]);
+    expect(keys).toContainEqual(['chats']);
+  });
+
+  it('invalidates on the fallback path too', async () => {
+    const { chat, persona, provider, providerConfig, model } = await seed();
+    vi.spyOn(llm, 'runOneShotCompletion').mockRejectedValue(new Error('boom'));
+
+    const { queryClient } = await import('../../src/lib/queryClient');
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await generateTitleAsync({
+      chat,
+      persona,
+      provider,
+      providerConfig,
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      model,
+      firstUserMessage: 'hi',
+      firstPersonaResponse: 'hello',
+      globalUnlocker: 'unlock',
+      globalAboutMe: '',
+    });
+
+    const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
+    expect(keys).toContainEqual(['chats', chat.id]);
+    expect(keys).toContainEqual(['chats']);
   });
 });

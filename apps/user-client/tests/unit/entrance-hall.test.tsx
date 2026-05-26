@@ -22,6 +22,7 @@ function wrap(initial: string) {
           <Route path="/app" element={<EntranceHall />} />
           <Route path="/app/circle" element={<div data-testid="circle" />} />
           <Route path="/app/settings" element={<div data-testid="settings" />} />
+          <Route path="/app/history" element={<div data-testid="history" />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -63,13 +64,17 @@ describe('EntranceHall', () => {
     });
   });
 
-  it('renders disabled-stubs for Projects / History / Treasury', async () => {
+  it('renders disabled-stubs for Projects / Treasury (not History)', async () => {
     wrap('/app');
-    for (const label of ['My Projects', 'My History', 'My Treasury']) {
+    for (const label of ['My Projects', 'My Treasury']) {
       const tile = await screen.findByText(label);
       const card = tile.closest('[aria-disabled="true"]');
       expect(card).not.toBeNull();
     }
+    // History is no longer disabled in the zero-state
+    const historyTile = await screen.findByText('My History');
+    const historyCard = historyTile.closest('[aria-disabled="true"]');
+    expect(historyCard).toBeNull();
   });
 
   it('navigates to /app/circle when My Circle is tapped', async () => {
@@ -119,5 +124,68 @@ describe('EntranceHall', () => {
     await waitFor(() => {
       expect(screen.getByText(/continue chat/i)).toBeInTheDocument();
     });
+  });
+
+  it('activates My History tile when chats exist', async () => {
+    const db = getClientDataDb();
+    const now = Date.now();
+    const aurum = await db.mindspaces.where('displayName').equals('Aurum').first();
+
+    // Seed a persona
+    await db.personas.add({
+      id: 'p1',
+      name: 'Aurum',
+      tagline: '',
+      colour: '#c9a84c',
+      font: 'serif',
+      instructions: 'i',
+      providerId: 'pv',
+      modelId: 'm',
+      mindspaceId: null,
+      aboutMeOverride: null,
+      textureOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Seed 2 chats
+    await db.chats.add({
+      id: 'c1',
+      personaId: 'p1',
+      title: 'Test chat 1',
+      resolvedMindspaceId: aurum?.id ?? 'aurum',
+      createdAt: now,
+      lastMessageAt: now,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    await db.chats.add({
+      id: 'c2',
+      personaId: 'p1',
+      title: 'Test chat 2',
+      resolvedMindspaceId: aurum?.id ?? 'aurum',
+      createdAt: now + 1000,
+      lastMessageAt: now + 1000,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+
+    wrap('/app');
+
+    // Wait for the My History tile to render and the chat count to appear
+    const metaText = await screen.findByText('2 chats');
+    expect(metaText).toBeInTheDocument();
+
+    const historyTile = screen.getByText('My History');
+    const card = historyTile.closest('[role="button"]');
+
+    // Assert it is NOT disabled
+    expect(card).not.toHaveAttribute('aria-disabled', 'true');
+
+    // Assert clicking navigates to /app/history
+    fireEvent.click(historyTile);
+    await waitFor(() => expect(screen.getByTestId('history')).toBeInTheDocument());
   });
 });

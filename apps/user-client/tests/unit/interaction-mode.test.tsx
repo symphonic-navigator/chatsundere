@@ -39,6 +39,7 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
       <div data-testid="outside">outside</div>
       <InteractionMode
         persona={aurum}
+        chat={null}
         model={model}
         usedTokens={0}
         draftValue={extra.draftValue ?? 'hi'}
@@ -46,6 +47,7 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
         onSend={vi.fn()}
         isStreamLive={false}
         onExit={vi.fn()}
+        onRenameChat={vi.fn()}
         {...extra}
       />
     </MemoryRouter>,

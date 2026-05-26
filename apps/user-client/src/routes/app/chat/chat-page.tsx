@@ -66,6 +66,26 @@ export function ChatPage(): JSX.Element {
     }
   }, [chatId, personaIdFromQuery]);
 
+  // Guard: if the route specifies a chatId but the query has resolved to "no
+  // chat", the row was deleted from another surface. Navigate back to History
+  // so the user isn't stranded on a blank page.
+  useEffect(() => {
+    if (!isLazy && chatId && chatQuery.isFetched && !chatQuery.data?.chat) {
+      navigate('/app/history', { replace: true });
+    }
+  }, [isLazy, chatId, chatQuery.isFetched, chatQuery.data?.chat, navigate]);
+
+  // Clear the current-chat store when ChatPage unmounts. Without this, the
+  // chatId persists across navigation to /app/history etc., and nsfwPanic
+  // sees a stale "active chat" — incorrectly navigating the user away from
+  // wherever they are. The store should reflect the actual chat-view state.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: setChatId is a stable Zustand reference
+  useEffect(() => {
+    return () => {
+      setChatId(null);
+    };
+  }, []);
+
   // Resolve persona for lazy mode.
   const lazyPersonaQuery = useQuery({
     queryKey: ['persona', personaIdFromQuery],
@@ -205,6 +225,11 @@ export function ChatPage(): JSX.Element {
     }
   };
 
+  const onRenameChat = (next: string | null): void => {
+    if (!chatId) return;
+    void updateChat.mutateAsync({ id: chatId, patch: { title: next } });
+  };
+
   const onExitToEntranceHall = (): void => {
     setInteractionMode(false);
     navigate('/app');
@@ -216,6 +241,7 @@ export function ChatPage(): JSX.Element {
     navigate(`/app/persona/${effectivePersona.id}?return=${encodeURIComponent(returnUrl)}`);
   };
 
+  const chat = chatQuery.data?.chat ?? null;
   const messages = chatQuery.data?.messages ?? [];
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
@@ -317,6 +343,7 @@ export function ChatPage(): JSX.Element {
       {isInteractionMode && effectivePersona && model ? (
         <InteractionMode
           persona={effectivePersona}
+          chat={chat}
           model={model}
           usedTokens={usedTokens}
           draftValue={draft}
@@ -324,6 +351,7 @@ export function ChatPage(): JSX.Element {
           onSend={(t) => void onSend(t)}
           isStreamLive={isStreamLive}
           onExit={onExitToEntranceHall}
+          onRenameChat={onRenameChat}
           onOpenPersonaEditor={onOpenPersonaEditor}
         />
       ) : null}

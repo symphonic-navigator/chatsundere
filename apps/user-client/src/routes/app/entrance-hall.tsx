@@ -115,9 +115,8 @@ export function EntranceHall(): JSX.Element {
         <RoomTile
           label="My History"
           icon="◯"
-          meta="Coming in Phase 4"
-          disabled
-          tooltip="Coming in Phase 4"
+          meta={`${chats.data?.length ?? 0} chats`}
+          to="/app/history"
         />
         <RoomTile
           label="My Treasury"

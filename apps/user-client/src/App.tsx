@@ -8,6 +8,7 @@ import { AccountPage } from './routes/app/account.js';
 import { ChatPage } from './routes/app/chat/chat-page.js';
 import { Circle } from './routes/app/circle.js';
 import { EntranceHall } from './routes/app/entrance-hall.js';
+import { HistoryPage } from './routes/app/history.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
@@ -92,6 +93,7 @@ export function App() {
                   <Route path="/app/persona/:id" element={<PersonaEditor />} />
                   <Route path="/app/chat/new" element={<ChatPage />} />
                   <Route path="/app/chat/:chatId" element={<ChatPage />} />
+                  <Route path="/app/history" element={<HistoryPage />} />
                   <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />

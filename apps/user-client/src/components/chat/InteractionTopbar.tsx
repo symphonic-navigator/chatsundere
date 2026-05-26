@@ -1,17 +1,50 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { PersonaRow } from '../../boot/client-data-db.js';
+import { useEffect, useRef, useState } from 'react';
+import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
+import { displayTitle } from '../../lib/chat-title.js';
+import { sanitiseTitle } from '../../lib/title-generator.js';
 import { contextUtilisation } from '../../lib/token-estimator.js';
 
 interface Props {
   persona: PersonaRow;
+  chat: ChatRow | null;
   usedTokens: number;
   contextWindow: number;
   onExit: () => void;
+  onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
 }
 
 export function InteractionTopbar(p: Props): JSX.Element {
   const pct = contextUtilisation(p.usedTokens, p.contextWindow);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // Escape sets this to true so the blur handler that immediately
+  // follows the unmount doesn't re-save the in-progress draft.
+  const discardRef = useRef(false);
+
+  function startEdit(): void {
+    if (!p.chat) return;
+    discardRef.current = false;
+    setDraft(p.chat.title ?? '');
+    setIsEditing(true);
+  }
+
+  function commit(value: string): void {
+    p.onRenameChat(sanitiseTitle(value));
+    setIsEditing(false);
+  }
+
+  function cancel(): void {
+    discardRef.current = true;
+    setIsEditing(false);
+  }
+
+  useEffect(() => {
+    if (isEditing) inputRef.current?.focus();
+  }, [isEditing]);
+
   return (
     <div className="interaction-topbar">
       <div className="topbar-left">
@@ -34,18 +67,55 @@ export function InteractionTopbar(p: Props): JSX.Element {
           </svg>
         </button>
       </div>
-      <button
-        type="button"
-        className="topbar-center topbar-center-btn"
-        aria-label={`Open ${p.persona.name} settings`}
-        onClick={p.onOpenPersonaEditor}
-        disabled={!p.onOpenPersonaEditor}
-      >
-        <div className="context-label">Chat with</div>
-        <div className="context-name" style={{ color: p.persona.colour }}>
+
+      <div className="topbar-center">
+        {p.chat ? (
+          isEditing ? (
+            <input
+              ref={inputRef}
+              className="topbar-title-input"
+              type="text"
+              value={draft}
+              maxLength={60}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commit(draft);
+                else if (e.key === 'Escape') cancel();
+              }}
+              onBlur={() => {
+                if (!discardRef.current) commit(draft);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="topbar-title-btn"
+              aria-label="Rename chat"
+              onClick={startEdit}
+            >
+              <span className="topbar-title">{displayTitle(p.chat)}</span>
+              <span aria-hidden className="topbar-pencil">
+                🖎
+              </span>
+            </button>
+          )
+        ) : (
+          <div className="topbar-title-placeholder" aria-hidden>
+            New chat
+          </div>
+        )}
+        <button
+          type="button"
+          className="topbar-persona-name-btn"
+          aria-label={`Open ${p.persona.name} settings`}
+          style={{ color: p.persona.colour }}
+          onClick={p.onOpenPersonaEditor}
+          disabled={!p.onOpenPersonaEditor}
+        >
           {p.persona.name}
-        </div>
-      </button>
+        </button>
+      </div>
+
       <div className="topbar-right">
         <div className="status-group">
           <div className="journal-indicator" title="Uncommitted journal entries">

@@ -221,7 +221,7 @@ export function PersonaEditor(): JSX.Element {
         />
 
         {!isCreate ? (
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2" data-quick-actions>
             <button
               type="button"
               disabled={!recentChatForThisPersona || personaInvalid}
@@ -251,6 +251,18 @@ export function PersonaEditor(): JSX.Element {
               className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
             >
               Incognito
+            </button>
+            <button
+              type="button"
+              disabled={!recentChatForThisPersona}
+              title={!recentChatForThisPersona ? 'No chats with this persona yet' : undefined}
+              onClick={async () => {
+                if (isDirty) await persistDraft();
+                if (id) navigate(`/app/history?personaId=${id}`);
+              }}
+              className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper disabled:text-paper-soft/40"
+            >
+              History
             </button>
           </div>
         ) : null}
