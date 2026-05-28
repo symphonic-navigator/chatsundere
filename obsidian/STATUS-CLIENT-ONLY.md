@@ -1021,7 +1021,7 @@ update the relevant one at the end.
   - Spec: [`superpowers/specs/2026-05-26-phase-4-simple-history-design.md`](../superpowers/specs/2026-05-26-phase-4-simple-history-design.md).
   - Plan: [`superpowers/plans/2026-05-26-phase-4-simple-history.md`](../superpowers/plans/2026-05-26-phase-4-simple-history.md).
 
-- **About — disclaimer + licences (2026-05-28, squashed at <hash>)**.
+- **About — disclaimer + licences (2026-05-28, squashed at `d591128`)**.
   Single squashed commit on master replacing My Account → About's
   compact `dl` with three richer blocks: a Privacy & data handling
   disclosure (three paragraphs), a Third-party libraries disclosure
