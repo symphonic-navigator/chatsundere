@@ -1,29 +1,21 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-26 late evening (Phase 4 alpha-prep landed as
-14 sequential task-commits `76c333e → 9eb83b4` plus two follow-up fixes
-`88b7067` + `7536037`; awaiting Chris's manual smoke + Pages-source flip
-+ squash + `v0.0.1` tag). Bridge between Phase 4 simple-history and the
-first versioned alpha. Three streams of work in one cycle: (a) Polish —
-chatsune-style retry helper in `packages/llm-unified/src/retry.ts`
-consumed by `stream-completion.ts`'s initial-fetch loop AND wrapping the
-one-shot title-gen via `withRetry`; affordance breathing / scroll-to-end
-swap-in-out / cockpit pin-glow CSS; new `<StreamingOrb>` 8 px pulsing
-indicator on `PersonaCard` and `HistoryRow` when their persona has a
-live stream; `MINDSPACE_FALLBACK` defensive harden in `ChatStream.tsx`
-(replaced empty cast with fully-populated `ResolvedMindspace`).
-(b) Build pipeline — `version.txt` at repo root = "0.0.1"; chatsune-
-style version computation in `.github/workflows/pages.yml`; Vite-time
-`__APP_VERSION__` / `__APP_SHA__` / `__APP_BUILT_AT__` injection;
-`VITE_BASE` env-var switches Vite/PWA between `/` (dev) and `/alpha/`
-(GH Pages). (c) Version display — Entrance-Hall footer (compact `v0.0.1
-· sha 1234567` text-[10px] at the section bottom) + Account About
-section (monospace block with full Version + sha + built-at). Test
-counts: ~36 new Vitest + Bun cases — user-client 503 pass / 8 fail (the
-8 are the pre-existing cockpit-draft localStorage cascade, unchanged);
-`packages/llm-unified` 252/252 pass. Pre-alpha-prep simple-history
-landed at `ec7c1f3`; the smoke-test fixes from that cycle (`1796752`)
-included.
+**Last updated:** 2026-05-28 (About-disclaimer-and-licences squashed
+following Chris's review of the Phase-4 alpha-prep build). Replaces the
+old Version/Licence/Documentation `dl` in My Account → About with: a
+Privacy & data handling disclosure (three paragraphs — where data lives,
+what the app cannot see, external providers), a Third-party libraries
+disclosure (12 curated entries — React, Tailwind, Dexie, Valibot, … —
+each with version, SPDX licence, and homepage link), and a flat
+licence-and-links footer with four external links (FSF AGPL-3.0 text,
+GitHub source, Our Provider Integration Policy at
+teaser.chatsundere.me/policy, chatsune.me docs). Native `<details>`
+disclosures, no new component; the AGPL text is **not** bundled —
+[ADR 0030](decisions/0030-link-to-fsf-licence-text.md) explains why.
+~11 new Vitest cases on `account.about.test.tsx` (privacy ×2 +
+third-party ×4 + licence footer ×4 + existing mono-box). Pre-Phase-4
+alpha-prep baseline at `b6ba252` plus ALPHA-DEPLOY walkthrough at
+`381184c` remain the foundation under this work.
 
 **Phase 4 simple-history (2026-05-26 evening, squashed at `ec7c1f3`):**
 Bridge release between Phase 4 CoT-display and the alpha-prep cycle.
@@ -1028,6 +1020,25 @@ update the relevant one at the end.
     test` (172/172) all clean.
   - Spec: [`superpowers/specs/2026-05-26-phase-4-simple-history-design.md`](../superpowers/specs/2026-05-26-phase-4-simple-history-design.md).
   - Plan: [`superpowers/plans/2026-05-26-phase-4-simple-history.md`](../superpowers/plans/2026-05-26-phase-4-simple-history.md).
+
+- **About — disclaimer + licences (2026-05-28, squashed at <hash>)**.
+  Single squashed commit on master replacing My Account → About's
+  compact `dl` with three richer blocks: a Privacy & data handling
+  disclosure (three paragraphs), a Third-party libraries disclosure
+  (12 curated entries from a new `lib/third-party-licences.ts`
+  module), and a flat licence-and-links footer linking to the
+  FSF-hosted AGPL-3.0 text, the GitHub source, the Provider
+  Integration Policy on `teaser.chatsundere.me/policy`, and the
+  chatsune.me docs. Native `<details>` disclosures (no JS state, no
+  `AccordionCard` nesting). ADR 0030 documents the FSF-link
+  decision. `copy.settings.about.{versionLabel,licenceLabel,
+  licenceValue,docsLabel,docsValue}` retired in favour of three
+  subtrees (`privacy.*`, `thirdParty.*`, `licence.*`). 11 new Vitest
+  cases on `account.about.test.tsx`. No dep changes, no Dexie bump,
+  no Larissa (frontend-only). Spec:
+  [`superpowers/specs/2026-05-28-about-disclaimer-licences-design.md`](../superpowers/specs/2026-05-28-about-disclaimer-licences-design.md).
+  Plan:
+  [`superpowers/plans/2026-05-28-about-disclaimer-licences.md`](../superpowers/plans/2026-05-28-about-disclaimer-licences.md).
 
 - **Phase 4 polish-iter 1 — reasoning-pill click + layout (2026-05-26,
   squashed at `f8fa23c`)**. Two interaction bugs from Chris's smoke

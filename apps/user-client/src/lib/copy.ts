@@ -140,11 +140,40 @@ export const copy = {
     },
     about: {
       title: 'About',
-      versionLabel: 'Version',
-      licenceLabel: 'Licence',
-      licenceValue: 'GNU AGPL v3.0',
-      docsLabel: 'Documentation',
-      docsValue: 'chatsune.me',
+      privacy: {
+        label: 'Privacy & data handling',
+        whereTitle: 'Where your data lives.',
+        whereBody:
+          "Chatsundere stores everything on this device. Your chats, personas, drafts, and provider credentials live in the browser's local storage (IndexedDB). Nothing is uploaded.",
+        cannotSeeTitle: 'What we cannot see.',
+        cannotSeeBody:
+          'This alpha runs entirely in your browser. There is no Chatsundere server in the picture — we receive no telemetry, no analytics, and no account data. Clearing your browser storage wipes everything irrecoverably.',
+        externalTitle: 'When you talk to external providers.',
+        externalBody:
+          'Models live with their providers (nano-gpt, Novita AI, Ollama Cloud, or any custom endpoint you configure). Your prompts, attachments, and replies travel directly from your browser to that provider — their privacy policy and terms of service apply to that traffic. Chatsundere never sees it; we also cannot enforce anything against it.',
+      },
+      thirdParty: {
+        label: 'Third-party libraries',
+        intro:
+          'Chatsundere bundles the following open-source projects. Their licences govern their respective code; full licence texts are available at the homepage of each project.',
+        versionPrefix: 'v',
+      },
+      licence: {
+        copyright: 'Copyright © 2026 Chatsundere contributors.',
+        noWarranty: 'No warranty — see the licence for details.',
+        licenceLabel: 'Licence',
+        licenceValue: 'GNU AGPL v3.0',
+        licenceHref: 'https://www.gnu.org/licenses/agpl-3.0.html',
+        sourceLabel: 'Source code',
+        sourceValue: 'github.com/symphonic-navigator/chatsundere',
+        sourceHref: 'https://github.com/symphonic-navigator/chatsundere',
+        policyLabel: 'Our Provider Integration Policy',
+        policyValue: 'teaser.chatsundere.me/policy',
+        policyHref: 'https://teaser.chatsundere.me/policy',
+        docsLabel: 'Documentation',
+        docsValue: 'chatsune.me',
+        docsHref: 'https://chatsune.me',
+      },
     },
   },
   recovery: {
