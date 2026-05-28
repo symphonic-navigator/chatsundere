@@ -32,9 +32,11 @@ Licence / Documentation) with a three-part composition:
      what the app cannot see, external-provider caveat).
    - *Third-party libraries* — curated list from a new TS module
      `lib/third-party-licences.ts`.
-3. **A flat licence-and-links footer** — copyright line + four external
-   links: AGPL-3.0 full text on gnu.org, source on GitHub, no-warranty
-   disclaimer, project documentation at chatsune.me.
+3. **A flat licence-and-links footer** — copyright line, no-warranty
+   sentence, and four external links: AGPL-3.0 full text on gnu.org,
+   source on GitHub, our Provider Integration Policy at
+   teaser.chatsundere.me/policy, and project documentation at
+   chatsune.me.
 
 No new route. No new accordion-card nesting. No bundled licence text — the
 AGPL full text is referenced via the canonical FSF URL, which is a standard
@@ -136,14 +138,21 @@ Flat — no disclosure. Layout:
 ```
 Copyright © 2026 Chatsundere contributors. No warranty — see the licence for details.
 
-Licence       →  gnu.org/licenses/agpl-3.0.html
-Source code   →  github.com/symphonic-navigator/chatsundere
-Documentation →  chatsune.me
+Licence                       →  gnu.org/licenses/agpl-3.0.html
+Source code                   →  github.com/symphonic-navigator/chatsundere
+Our Provider Integration Policy  →  teaser.chatsundere.me/policy
+Documentation                 →  chatsune.me
 ```
 
 Each link opens in a new tab (`target="_blank"`, `rel="noopener noreferrer"`).
 The arrow glyph is rendered via CSS (`::before` content) so it stays separate
 from the link text for screen-readers.
+
+The Provider Integration Policy link is verbatim "Our Provider Integration
+Policy" — phrased in the first person plural on purpose. It is the
+public statement of how Chatsundere (and its forthcoming NGO host) decides
+which model providers to integrate; it is the mission-statement surface,
+not a technical document. Treat the label text as fixed copy.
 
 ---
 
@@ -268,6 +277,7 @@ this aligns with ADR 0007 and CLAUDE.md §13 ("No-recovery is a feature").
   noWarranty: 'No warranty — see the licence for details.',
   licenceLink: { label: 'Licence', value: 'GNU AGPL v3.0', href: 'https://www.gnu.org/licenses/agpl-3.0.html' },
   sourceLink: { label: 'Source code', value: 'github.com/symphonic-navigator/chatsundere', href: 'https://github.com/symphonic-navigator/chatsundere' },
+  policyLink: { label: 'Our Provider Integration Policy', value: 'teaser.chatsundere.me/policy', href: 'https://teaser.chatsundere.me/policy' },
   docsLink: { label: 'Documentation', value: 'chatsune.me', href: 'https://chatsune.me' },
 }
 ```
@@ -343,10 +353,13 @@ New file `apps/user-client/tests/unit/about-section.test.tsx`. Four cases:
 3. **Third-party disclosure renders one row per entry** — count
    `[data-third-party-row]` elements and compare to
    `THIRD_PARTY_LICENCES.length`. Spot-check that React and Tailwind appear.
-4. **Licence footer renders the three external links** — assert each
-   `<a>` has the right `href`, `target="_blank"`, and
+4. **Licence footer renders the four external links** — assert each
+   `<a>` (Licence, Source code, Provider Integration Policy,
+   Documentation) has the right `href`, `target="_blank"`, and
    `rel="noopener noreferrer"`. Assert the copyright and no-warranty
-   strings are present as plain text.
+   strings are present as plain text. Spot-check the Policy link label
+   text reads "Our Provider Integration Policy" verbatim — it is the
+   mission-statement surface and the wording is load-bearing.
 
 No new tests needed for `third-party-licences.ts` itself — pure data, no
 logic to test.
@@ -383,12 +396,17 @@ After the squash:
 4. Tap the FSF licence link — opens `gnu.org/licenses/agpl-3.0.html` in
    a new tab.
 5. Tap the GitHub source link — opens the repo in a new tab.
-6. Keyboard test: tab through the section, confirm both disclosures
-   open/close on Space and Enter, and that all four external links are
-   focusable in document order.
-7. Scroll the About body up and down on mobile (380 px width) — no
+6. Tap "Our Provider Integration Policy" — opens
+   `teaser.chatsundere.me/policy` in a new tab. Confirm the link label
+   reads "Our Provider Integration Policy" verbatim (it is the
+   mission-statement surface for the forthcoming NGO).
+7. Keyboard test: tab through the section, confirm both disclosures
+   open/close on Space and Enter, and that all four external links
+   (Licence, Source, Policy, Documentation) are focusable in document
+   order.
+8. Scroll the About body up and down on mobile (380 px width) — no
    horizontal overflow, third-party rows stay legible.
-8. Verify the screen still reads calmly: nothing flickers, no aurora
+9. Verify the screen still reads calmly: nothing flickers, no aurora
    pollution from the dimmed-ambient class on `/app/*`.
 
 ---
