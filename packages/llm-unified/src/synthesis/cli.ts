@@ -2,9 +2,9 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { runOneShotCompletion } from '../one-shot-completion.js';
 import { registerBuiltinProviders } from '../providers/_register-builtins.js';
 import { getProvider } from '../registry.js';
+import { streamCompletion } from '../stream-completion.js';
 import { buildAnalyzerPrompt, extractAdapterModule } from './analyzer.js';
 import { runProbe } from './capture.js';
 import { deriveObservedProfile } from './derive-profile.js';
@@ -73,7 +73,13 @@ async function main(): Promise<void> {
         fixtures,
         priorFailures,
       });
-      const reply = await runOneShotCompletion({
+      // Stream the analyzer's reply. A non-streaming call to a reasoning model
+      // holds an idle connection for the whole (multi-minute) generation and
+      // gets killed by a TimeoutError; streaming keeps bytes flowing. We only
+      // need the final answer text (the code block), so reasoning chunks are
+      // ignored. `reasoning: { enabled: true }` selects the :thinking slug.
+      let reply = '';
+      for await (const chunk of streamCompletion({
         provider,
         providerConfig: { baseUrl: BASE_URL, routing: { kind: 'direct' } },
         apiKey,
@@ -81,8 +87,17 @@ async function main(): Promise<void> {
         corsProxyKey: null,
         model: analyzerModel,
         messages: [{ role: 'user', content: prompt }],
-        bodyExtras: { thinking: true },
-      });
+        bodyExtras: { reasoning: { enabled: true } },
+        initialResponseTimeoutMs: 120_000,
+      })) {
+        if (chunk.type === 'token') {
+          reply += chunk.text;
+          process.stdout.write('.');
+        } else if (chunk.type === 'error') {
+          console.warn(`\n  (stream error chunk: ${chunk.message})`);
+        }
+      }
+      process.stdout.write('\n');
       return extractAdapterModule(reply);
     },
     validate: async (source): Promise<Verdict> => {

@@ -34,4 +34,15 @@ describe('buildProbeSuite', () => {
     const tc = probes.find((p) => p.dimension === 'tool-call');
     expect(Array.isArray(tc?.body.tools)).toBe(true);
   });
+
+  it('forces a large tool-call argument so streaming is observable, not a false negative', () => {
+    const probes = buildProbeSuite({ thinkingSlug: 't', bareSlug: 'b' });
+    const tc = probes.find((p) => p.dimension === 'tool-call');
+    const tools = tc?.body.tools as Array<{ function: { name: string } }>;
+    expect(tools[0]?.function.name).toBe('save_note');
+    const userText = (tc?.body.messages as Array<{ content: string }>)[0]?.content ?? '';
+    // The prompt must demand a long payload — a tiny argument fits one delta and
+    // would read as block even on a streaming model.
+    expect(userText).toMatch(/\b80 words\b/);
+  });
 });

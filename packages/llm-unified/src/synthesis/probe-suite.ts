@@ -19,6 +19,27 @@ const WEATHER_TOOL = {
   },
 };
 
+// A tool whose natural call carries a LARGE argument payload. A small payload
+// (e.g. {"city":"Vienna"}) fits in one SSE delta even on a streaming model, so
+// it cannot tell streaming from block. Forcing a long `body` string makes a
+// streaming model fragment the arguments across many deltas — only then is
+// `toolCallsStreaming` observable rather than a false negative.
+const SAVE_NOTE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'save_note',
+    description: "Persist a note to the user's notebook.",
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        body: { type: 'string', description: 'The full note text.' },
+      },
+      required: ['title', 'body'],
+    },
+  },
+};
+
 const userMsg = (content: string) => [{ role: 'user', content }];
 
 /**
@@ -76,8 +97,13 @@ export function buildProbeSuite(slugs: SlugPair): Probe[] {
       body: {
         ...base,
         model: slugs.bareSlug,
-        tools: [WEATHER_TOOL],
-        messages: userMsg('What is the weather in Vienna?'),
+        tools: [SAVE_NOTE_TOOL],
+        // Force a long `body` argument so streamed tool-call arguments
+        // fragment across multiple deltas and become observable.
+        messages: userMsg(
+          'Call save_note with title "Vienna" and a body of at least 80 words ' +
+            'describing the city of Vienna in vivid detail.',
+        ),
       },
     },
     {
