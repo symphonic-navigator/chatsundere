@@ -1,6 +1,25 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-29 — **Agentic adapter-synthesis spike** landed
+**Last updated:** 2026-05-29 (later) — **Catalogue data model** landed
+(`2042be6`). New `packages/llm-unified/src/catalogue/` two-level layer:
+`CanonicalModel` (curated identity + T/R/V `requiredCaps` + `freedomOriented`)
+groups per-provider `Offering`s, each carrying its own measured `ModelProfile`,
+`AdapterRef`, `context {recommended, max}`, `trust` (TEE/ZDR), and
+`freedomOrientedDeployment`. Valibot `parseCatalogueEntry` enforces the
+capability gate; `effectiveFreedom` is the three-state (free/restricted/unknown)
+AND of model + deployment freedom. `ModelProfile` migrated off the spike's shape
+— `reasoning` is now the UI-driving `ReasoningControl` union
+(none/fixed-on/toggle/steps); context+confidence moved to the Offering. 168
+Bun tests green; typecheck + build clean. This is the foundation; the **Curation
+CLI** (maintainer factory) is the next plan. Two new specs landed:
+[[../superpowers/specs/2026-05-29-model-catalogue-data-model-design]] and
+[[../superpowers/specs/2026-05-29-curation-cli-design]] (plan:
+[[../superpowers/plans/2026-05-29-catalogue-data-model]]). Provider-integration
+strategy decided: model-first curated catalogue + provider-first "Your Endpoints"
+for local/uncurated; build-time generation (no signing/feed yet); two badges
+(🔒 Privacy, 🕊️ Freedom).
+
+**Earlier today (2026-05-29):** **Agentic adapter-synthesis spike** landed
 (squashed at `ac40a3e`). New `packages/llm-unified/src/synthesis/` subsystem:
 an analyzer model (GLM-5.1 via nano-gpt) empirically probes a target model,
 captures raw SSE fixtures, then writes a per-model adapter — pure `buildRequest`
