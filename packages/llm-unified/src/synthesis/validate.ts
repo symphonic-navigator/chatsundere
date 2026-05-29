@@ -53,7 +53,7 @@ function controlToKind(
  * not asserted here; those belong to injected provider metadata, not
  * behavioural synthesis.
  */
-function checkProfile(
+export function checkProfile(
   profile: ModelProfile | undefined,
   observed: ObservedFacts,
   probed: Set<ProbeDimension>,
