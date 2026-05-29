@@ -1,6 +1,25 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-29 (later) — **Catalogue data model** landed
+**Last updated:** 2026-05-29 (evening) — **Curation CLI (model-support factory)**
+landed (`c5217b6`). Maintainer-only `packages/llm-unified/src/curate/` (not
+shipped to clients): one YAML per model (human identity + offerings above,
+machine `built:` block below), commands `provider list` / `model list` / `model
+template` / `model build [--verify]` / `model report` / `model verify` (stubbed).
+`build` probes the target, GLM-5.1 writes a per-offering adapter, validated
+**baseline-free** via `validateAgainstFixtures` (structural: reflects the real
+evidence + profile-gate; generalises to any target) with self-repair; writes the
+adapter as a sibling `.ts`, the `built:` block back (comment-preserving), and a
+deterministic report to `obsidian/models/<id>.md`. nano-gpt `ProviderScanner`
+tames the `:thinking`/`-thinking`/`TEE/` slug zoo. 188 Bun tests green; typecheck
++ build clean; help + template smoke-tested offline. **Live `build` is Chris's
+manual verification** (needs `NANO_GPT_API_KEY`). Tracked deferrals: per-provider
+API key (single `NANO_GPT_API_KEY` today — split before a differently-keyed
+target), the `--verify` post-build re-probe, `model list` badges, signing/feed,
+Ollama catch-all, `model verify` drift. Plan:
+[[../superpowers/plans/2026-05-29-curation-cli]]. This completes the
+provider-integration tooling arc started this morning with the synthesis spike.
+
+**Earlier 2026-05-29 (later):** **Catalogue data model** landed
 (`2042be6`). New `packages/llm-unified/src/catalogue/` two-level layer:
 `CanonicalModel` (curated identity + T/R/V `requiredCaps` + `freedomOriented`)
 groups per-provider `Offering`s, each carrying its own measured `ModelProfile`,
