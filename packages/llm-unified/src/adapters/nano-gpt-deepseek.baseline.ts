@@ -9,16 +9,16 @@ import type {
 import type { StreamChunk } from '../types.js';
 
 const PROFILE: ModelProfile = {
+  // DeepSeek V4 Pro on nano-gpt: reasoning-off honoured + effort steps → steps with an explicit off.
   reasoning: {
-    kind: 'optional',
-    effort: { buckets: ['low', 'medium', 'high'], defaultBucket: 'medium' },
-    defaultOn: true,
-    replayReasoning: false,
+    mode: 'steps',
+    steps: ['off', 'low', 'medium', 'high'],
+    offStep: 'off',
+    defaultStep: 'medium',
   },
-  toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
+  toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
   vision: false,
-  contextWindow: 200_000,
-  confidence: 'verified',
+  replayReasoning: false,
 };
 
 /** Accumulator for one fragmented tool call, keyed by its stream index. */

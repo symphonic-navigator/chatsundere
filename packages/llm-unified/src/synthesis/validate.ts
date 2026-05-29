@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ModelProfile, ParseState } from '../adapter-contract.js';
+import type { ReasoningControl } from '../catalogue/types.js';
 import type { StreamChunk } from '../types.js';
 import { type ObservedFacts, deriveObservedProfile } from './derive-profile.js';
 import type { CapturedFixture, ProbeDimension } from './fixture-types.js';
@@ -28,13 +29,29 @@ async function replay(handle: AdapterHandle, deltas: unknown[]): Promise<StreamC
   return events;
 }
 
+function controlToKind(
+  c: ReasoningControl | undefined,
+): 'no_reasoning' | 'optional' | 'always_on' | undefined {
+  switch (c?.mode) {
+    case 'none':
+      return 'no_reasoning';
+    case 'fixed-on':
+      return 'always_on';
+    case 'toggle':
+    case 'steps':
+      return 'optional';
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Compare the candidate's declared profile against the facts the fixtures
  * actually demonstrate. ONLY fields whose probe dimension is present are
  * checked — absence of a reasoning probe is not evidence of 'no_reasoning'.
- * Fields that no probe can determine (contextWindow, vision, replayReasoning)
- * are deliberately not asserted here; those belong to injected provider
- * metadata, not behavioural synthesis.
+ * Fields that no probe can determine (vision, replayReasoning) are deliberately
+ * not asserted here; those belong to injected provider metadata, not
+ * behavioural synthesis.
  */
 function checkProfile(
   profile: ModelProfile | undefined,
@@ -45,10 +62,11 @@ function checkProfile(
   if (!profile) return ['adapter exposes no `profile` object'];
 
   if (probed.has('reasoning-on') || probed.has('reasoning-off')) {
-    if (profile.reasoning?.kind !== observed.reasoningKind) {
+    const profileKind = controlToKind(profile.reasoning);
+    if (profileKind !== observed.reasoningKind) {
       const note = observed.reasoningKind === 'always_on' ? 'still emitted' : 'did not emit';
       out.push(
-        `profile.reasoning.kind is "${profile.reasoning?.kind}" but the evidence shows "${observed.reasoningKind}" (reasoning-off ${note} reasoning).`,
+        `profile.reasoning implies "${profileKind}" but the evidence shows "${observed.reasoningKind}" (reasoning-off ${note} reasoning).`,
       );
     }
   }

@@ -10,6 +10,8 @@ function sse(...deltas: object[]): string {
   return `${deltas.map((d) => `data: ${JSON.stringify(d)}`).join('\n\n')}\n\ndata: [DONE]\n\n`;
 }
 
+// Block-style tool call: empty initialiser delta followed by one full-args delta.
+// Matches the baseline profile (streaming: false) — arguments arrive in a single block.
 const toolFixture: CapturedFixture = {
   probeId: 'tool-call',
   dimension: 'tool-call',
@@ -20,14 +22,16 @@ const toolFixture: CapturedFixture = {
       choices: [
         {
           delta: {
-            tool_calls: [
-              { index: 0, id: 'c1', function: { name: 'get_weather', arguments: '{"city":' } },
-            ],
+            tool_calls: [{ index: 0, id: 'c1', function: { name: 'get_weather', arguments: '' } }],
           },
         },
       ],
     },
-    { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"Wien"}' } }] } }] },
+    {
+      choices: [
+        { delta: { tool_calls: [{ index: 0, function: { arguments: '{"city":"Wien"}' } }] } },
+      ],
+    },
     { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
   ),
 };
@@ -44,8 +48,8 @@ describe('validateAdapter', () => {
   });
 
   it('fails when the candidate profile contradicts the captured evidence', async () => {
-    // The baseline adapter declares reasoning.kind = 'optional'. These fixtures
-    // show reasoning-OFF still emitting reasoning, so the evidence says
+    // The baseline declares reasoning.mode = 'steps' (→ 'optional'). These
+    // fixtures show reasoning-OFF still emitting reasoning, so the evidence says
     // 'always_on' — exactly the mismatch GLM shipped on the first live run.
     // Events are identical (candidate IS the baseline), so only the profile
     // check can catch this.
@@ -69,7 +73,7 @@ describe('validateAdapter', () => {
     ];
     const verdict = await validateAdapter({ candidate, baseline, fixtures });
     expect(verdict.passed).toBe(false);
-    expect(verdict.failures.some((f) => f.includes('reasoning.kind'))).toBe(true);
+    expect(verdict.failures.some((f) => f.includes('reasoning'))).toBe(true);
     candidate.dispose();
     baseline.dispose();
   });

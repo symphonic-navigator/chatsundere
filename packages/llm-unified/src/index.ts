@@ -28,6 +28,9 @@ export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js
 
 export { probeProvider, type ProbeArgs } from './probe.js';
 
+// Catalogue data model (CanonicalModel, Offering, ModelProfile, validation, freedom).
+export * from './catalogue/index.js';
+
 // Register Block-1 built-in providers on first import.
 import { registerBuiltinProviders } from './providers/_register-builtins.js';
 registerBuiltinProviders();
