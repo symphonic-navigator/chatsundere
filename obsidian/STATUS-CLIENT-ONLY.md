@@ -1,6 +1,28 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-28 (About-disclaimer-and-licences squashed
+**Last updated:** 2026-05-29 — **Agentic adapter-synthesis spike** landed
+(squashed at `ac40a3e`). New `packages/llm-unified/src/synthesis/` subsystem:
+an analyzer model (GLM-5.1 via nano-gpt) empirically probes a target model,
+captures raw SSE fixtures, then writes a per-model adapter — pure `buildRequest`
++ `parseChunk` + declarative `ModelProfile` per the new `adapter-contract.ts` —
+accepted only after replay-validation reproduces the captured behaviour AND
+matches a hand-ported DeepSeek baseline (which doubles as the validation oracle
+and correctly reassembles fragmented streamed tool calls — the case the live
+`streaming.ts:112` parser still gets wrong). ≤3 self-repair rounds, then a
+conservative heuristic fallback. Generated adapters run in a **Bun Worker**
+isolation stand-in (watchdog + teardown) — explicitly NOT the production
+security boundary; the production sandboxed-iframe boundary and a Larissa pass
+on the execution model are **deferred** follow-ups. The probe suite targets the
+empirical unknowns: slug-vs-flag reasoning, effort/`max` acceptance,
+off-is-off-vs-hidden (→ `always_on`), streaming-vs-block tool calls,
+reasoning+tools concurrency. 155 source Bun tests green (`bunfig.toml` roots the
+runner at `./src` so stale `dist/` copies no longer pollute the run); typecheck
++ build clean. **Live run is Chris's manual verification**: `bun run synthesise`
+from `packages/llm-unified` with `NANO_GPT_API_KEY` set (see `.env.example`).
+Spec: [[../superpowers/specs/2026-05-29-agentic-adapter-synthesis-design]];
+plan: [[../superpowers/plans/2026-05-29-agentic-adapter-synthesis]].
+
+**Earlier:** 2026-05-28 (About-disclaimer-and-licences squashed
 following Chris's review of the Phase-4 alpha-prep build). Replaces the
 old Version/Licence/Documentation `dl` in My Account → About with: a
 Privacy & data handling disclosure (three paragraphs — where data lives,
