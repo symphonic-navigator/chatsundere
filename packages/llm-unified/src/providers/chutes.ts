@@ -41,6 +41,7 @@ function chutesOffering(
 const offerings: Offering[] = [
   chutesOffering('deepseek-v3.2', 'deepseek-ai/DeepSeek-V3.2-TEE', false, 131_072),
   chutesOffering('kimi-k2.6', 'moonshotai/Kimi-K2.6-TEE', true, 262_144),
+  chutesOffering('glm-5', 'zai-org/GLM-5-TEE', false, 202_752),
   chutesOffering('glm-5.1', 'zai-org/GLM-5.1-TEE', false, 202_752),
   chutesOffering('gemma-4-31b', 'google/gemma-4-31B-turbo-TEE', true, 131_072),
 ];

@@ -43,15 +43,27 @@ export const coreScenario: ConversationScenario = {
     },
     {
       // This turn injects a `system` message mid-conversation (third in the
-      // accumulated history) deliberately, to exercise memory carry. Many
-      // OpenAI-compatible providers only accept `system` as the FIRST message
-      // and may 400 or silently strip a later one. A red `no-http-error` here
-      // therefore reflects a provider limitation, not necessarily an adapter
-      // fault — a future curator should read it with that caveat in mind.
+      // accumulated history) deliberately, to exercise memory carry, then asks
+      // a DIRECT recall question. The directness is the point: it keeps the
+      // assertion a pure protocol check (design D8 — validate the pipe, never
+      // the intelligence). An open-ended prompt ("suggest a weekend activity")
+      // made `memory-echoed` flaky — it measured whether the model chose to
+      // weave the fact in, i.e. its intelligence, not whether the fact was
+      // carried through. A direct question removes that: a working pipe always
+      // surfaces the fact, and a model that never received it cannot fabricate
+      // it. Two caveats remain and are now CORRECT signals, not noise: many
+      // OpenAI-compatible providers accept `system` only as the FIRST message
+      // and may 400 (caught by `no-http-error`) or silently strip a later one
+      // — a stripped fact now deterministically fails `memory-echoed`, which is
+      // exactly the protocol fault we want surfaced.
       id: 'memory-echo',
       send: [
         { role: 'system', content: 'Known fact about the user: the user is a cat lover.' },
-        { role: 'user', content: 'Suggest a weekend activity for me.' },
+        {
+          role: 'user',
+          content:
+            'What is the single fact you have been told about me? Reply in one short sentence.',
+        },
       ],
       assertions: [assertNoHttpError, assertMemoryEchoed('cat'), assertUsagePresent],
     },

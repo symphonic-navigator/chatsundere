@@ -29,14 +29,18 @@ export const CANONICALS: CanonicalModel[] = [
     displayName: 'GLM 5',
     family: 'glm',
     requiredCaps: { tools: true, reasoning: true, vision: false },
-    freedomOriented: null,
+    freedomOriented: true,
+    freedomNote:
+      'z-ai/Zhipu open-weight model; judged freedom-oriented for Chatsundere by Chris (2026-05-30).',
   },
   {
     id: 'glm-5.1',
     displayName: 'GLM 5.1',
     family: 'glm',
     requiredCaps: { tools: true, reasoning: true, vision: false },
-    freedomOriented: null,
+    freedomOriented: true,
+    freedomNote:
+      'z-ai/Zhipu open-weight model; judged freedom-oriented for Chatsundere by Chris (2026-05-30).',
   },
   {
     id: 'kimi-k2.6',

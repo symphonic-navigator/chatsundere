@@ -59,7 +59,7 @@ Chutes exposes `supported_sampling_parameters` per model. chatsune filters the
 request body against that whitelist before sending so engine/quant drift drops
 fields silently rather than returning HTTP 400. Our adapter sends a minimal body
 (model, messages, stream, stream_options, reasoning_effort, tools, temperature —
-temperature is whitelisted on all four curated models), so no filter is needed
+temperature is whitelisted on all curated models), so no filter is needed
 today; adopt the whitelist technique if a future model rejects a field.
 
 ## Why chutes (the relationship)
@@ -72,8 +72,8 @@ freedom-oriented stance.
 
 ## Curated offerings
 
-The four blockbuster TEE models — see the model records:
-[[../models/deepseek-v3.2]], [[../models/kimi-k2.6]], [[../models/glm-5.1]],
-[[../models/gemma-4-31b-turbo]].
+The five curated TEE models — see the model records:
+[[../models/deepseek-v3.2]], [[../models/kimi-k2.6]], [[../models/glm-5]],
+[[../models/glm-5.1]], [[../models/gemma-4-31b-turbo]].
 
 Spec: [[../../superpowers/specs/2026-05-30-chutes-curation-and-live-suite-design]].

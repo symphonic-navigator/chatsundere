@@ -25,12 +25,12 @@ describe('built-in providers', () => {
     }
   });
 
-  it('chutes has direct CORS hint, four TEE models, and sortPriority 10', () => {
+  it('chutes has direct CORS hint, five TEE models, and sortPriority 10', () => {
     const p = getProvider('chutes');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(4);
+      expect(p.offerings).toHaveLength(5);
       expect(p.sortPriority).toBe(10);
     }
   });

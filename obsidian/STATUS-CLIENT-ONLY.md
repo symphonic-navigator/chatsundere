@@ -3,8 +3,24 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-30 (latest) — **Slice 2 shipped: the client is
-canonical-first, end-to-end live-verified, and chutes works for real.** Four
+**Last updated:** 2026-05-30 (latest) — **GLM family curated across three
+providers via `/curate` (first batch).** `glm-5` + `glm-5.1` live-verified on
+**chutes, nano-gpt, novita** (ollama-cloud out — currently down). Six offerings
+now `confidence: 'verified'` with hand-written catalogue adapters: new
+`nano-gpt-glm` (slug-swap reasoning) + `novita-glm` (`enable_thinking` toggle)
+adapters; `glm-5` added to chutes; `glm-5.1` re-confirmed. **Three heuristics were
+wrong and are fixed:** nano-gpt is slug-swap not body-flag; novita's off-switch is
+`enable_thinking:false` (the heuristic `reasoning:{enabled}` doesn't disable);
+nano-gpt's `glm-5` cannot disable reasoning at all → `fixed-on`. **Suite improved:**
+the `memory-echo` turn was flaky (open prompt measured intelligence, not the pipe —
+violated D8); now a deterministic recall question, green across all providers.
+Freedom (Chris, 2026-05-30): GLM `freedomOriented: true`, nano-gpt + novita
+deployments `true` → 🕊️ free. `obsidian/models/glm-5.md` (new) + `glm-5.1.md`
+(rewritten) Records. 168 src + 32 curation Bun tests green; repo typecheck clean.
+**Follow-up candidate:** `runner.ts` does not replay the `assistant(tool_calls)`
+message before a tool result (WireMessage lacks the field) → malformed multi-turn
+history. **Prior entry —** Slice 2 shipped: the client is
+canonical-first, end-to-end live-verified, and chutes works for real. Four
 squash-merged feature commits on master (pushed): (1) **Slice 2 — client
 catalogue migration** (`3a31278`): the client moved off `KnownModel`/`knownModels`
 onto `CanonicalModel`/`Offering`; model selection is **canonical-first** (pick a

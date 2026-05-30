@@ -23,14 +23,24 @@ describe('provider offerings', () => {
     }
   });
 
-  test('chutes offerings are TEE + catalogue-adapter, others generic', () => {
+  test('chutes is all TEE; adapter kind tracks confidence (verified↔catalogue, heuristic↔generic)', () => {
     for (const o of chutes.offerings) {
       expect(o.trust.tee).toBe(true);
       expect(o.adapter).toEqual({ kind: 'catalogue', adapterId: `chutes:${o.upstreamSlug}` });
     }
+    // The non-TEE providers are mixed: live-curated GLM offerings carry a
+    // hand-written catalogue adapter and `confidence: 'verified'`; the rest are
+    // still on the generic path at `confidence: 'heuristic'`.
     for (const o of [...nanoGpt.offerings, ...novita.offerings, ...ollamaCloud.offerings]) {
       expect(o.trust.tee).toBe(false);
-      expect(o.adapter).toEqual({ kind: 'generic' });
+      if (o.confidence === 'verified') {
+        expect(o.adapter).toEqual({
+          kind: 'catalogue',
+          adapterId: `${o.providerId}:${o.upstreamSlug}`,
+        });
+      } else {
+        expect(o.adapter).toEqual({ kind: 'generic' });
+      }
     }
   });
 });
