@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Plugin, defineConfig } from 'vite';
@@ -137,6 +138,18 @@ export default defineConfig({
         changeOrigin: false,
         ws: true,
       },
+    },
+  },
+  resolve: {
+    alias: {
+      // Resolve @chatsundere/llm-unified to its TypeScript source rather than
+      // the built dist/, so curation/adapter changes are live in the dev server
+      // without a manual `pnpm --filter @chatsundere/llm-unified build`. Vite
+      // resolves the package's `.js`-extension imports to their `.ts` siblings,
+      // so the NodeNext-style source works under the bundler.
+      '@chatsundere/llm-unified': fileURLToPath(
+        new URL('../../packages/llm-unified/src/index.ts', import.meta.url),
+      ),
     },
   },
   optimizeDeps: { exclude: ['qr-scanner/qr-scanner-worker.min.js'] },
