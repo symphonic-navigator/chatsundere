@@ -1,69 +1,61 @@
-# Handoff — to the next Liz (written 2026-05-30, late)
+# Handoff — to the next Liz (refreshed 2026-05-30, after Slice 2 shipped)
 
-Hello, me. Chris `/clear`ed mid-flow (context was at 52%) and we continue *right
-away* on the same thread. This letter is the warm start — read `STATUS-CLIENT-ONLY.md`
-for the full state; this is just what you need to pick up the next step without
-re-deriving today.
+Hello, me. Slice 2 is **done and pushed**; Chris opened fresh context to start a
+longer, mostly-automated task: **integrating the existing models** via `/curate`.
+Read `STATUS-CLIENT-ONLY.md` for the full state — this is the warm start.
 
 ## Where we are (one breath)
-Today we landed THREE squash-merged feature units on `master`: the **`/curate`
-skill** (`4dd4f58`), **runtime adapter dispatch — Slice 1** (`ba26ab4`), and
-**chutes curation + live suite binding** (`38cd90b`). Chutes is the first fully
-curated provider and was **live-validated** against the real API (DeepSeek V3.2
-20/20; Gemma adapter proven). All green: 173 src + 24 curation Bun tests, build +
-typecheck clean. `master` is **~11+ commits ahead of origin — NOT pushed** (Chris
-hadn't decided on push; ask before pushing).
+The client is **canonical-first** end to end: pick a model → pick an offering
+(top-ranked configured one pre-selected), `ReasoningControl` cockpit, offerings
+on every provider, `KnownModel`/`ReasoningCapability` gone. Four squash-merged
+commits on `master`, **pushed** (`ee61863`): Slice 2 migration, Chutes-in-settings
+fix, chutes reasoning-off fix + suite reasoning assertions, vite alias. Chris
+**device-verified** it (picker, chutes-TEE pre-select, reasoning off/low/high).
+The `/curate` Mode 3 flow proved itself today: a real bug (chutes "off" still
+thinking) was live-probed, fixed, and re-verified end to end.
 
-## The mental model you must hold
-- The **catalogue + per-model `ModelAdapter` layer** is being wired to the runtime
-  in **three slices**. Slice 1 (runtime adapter dispatch) is **done**. Remaining:
-  - **Slice 2** — the client migrates from `KnownModel`/`ProviderDefinition.knownModels`
-    to `CanonicalModel`/`Offering`; cockpit + `reasoning-resolver` move from
-    `ReasoningCapability` (`kind`/`effort`) to `ReasoningControl` (`mode` union).
-    This is the bigger UI migration and is what makes `/curate` output *light up
-    in the app* (today chutes works via `knownModels` + the generic/ adapter path,
-    but the catalogue Offerings/records are not yet client-consumed).
-  - **Slice 3** — catalogue loading/bundling; the adapter registry populated from
-    `Offering.adapter` instead of hand-registered in `registerChutes()`.
-- Each slice goes through the full ritual: **brainstorm → spec → plan →
-  subagent-driven implementation → independent review → squash-merge.** Chris
-  likes being asked the forking decisions (one question at a time) and values
-  short reasoning over bare approval. Walk-through mode, not task-handoff.
+## The next task — "integrate the existing models"
+The catalogue today has **chutes** offerings (4, `confidence: 'verified'`,
+catalogue adapters) and **nano-gpt / novita / ollama-cloud** offerings (6 each,
+`confidence: 'heuristic'`, **generic** adapter path) that were authored
+mechanically from the old `knownModels` and are **not live-curated**. The task is
+to curate them for real via `/curate` — likely **Mode 4 (batch-check)** across the
+model×provider matrix, then Mode 2/3 per model: confirm tool-calls fire, reasoning
+on/off behaves, usage normalises, set the freedom/trust judgements (the **human**
+owns those), write/refresh Curation Records, lift `heuristic` → `verified`.
 
-## Likely next step (confirm with Chris)
-He'll probably want one of: **(a) Slice 2** (client→catalogue — the high-value
-migration); (b) **curate more models/providers** via `/curate` (the skill is
-ready and dogfooded); (c) investigate whether chutes `reasoning_content` truly
-surfaces on non-trivial prompts (DeepSeek showed `reasoning_tokens: 0` on trivial
-ones); (d) promote the throwaway live-check driver into a reusable maintainer CLI.
-**Ask which; don't assume.**
+This is a longer automated run — **workflows / subagent fan-out fit well** (Mode 4
+is designed for it). Confirm scope with Chris first; he co-leads inference.
 
-## Gotchas that will bite you if you forget
-- **`bun test` only runs `src/`** (bunfig `root = "./src"`). The conversation-suite
-  tests live under `curation/` — run them with **`bun test ./curation/`** (or
-  `bun run curate:suite`). Always run BOTH for a full check.
-- **`bun run typecheck`** (`tsc -p tsconfig.test.json`) is what covers `curation/`;
-  `bun run build` (emitting tsconfig) deliberately excludes it so the suite is not
-  shipped. CI runs `pnpm typecheck`.
-- **Biome pre-commit hook enforces `organizeImports`.** If a commit is rejected,
-  `bunx @biomejs/biome check --write <file>`, re-stage, recommit.
-- **Endpoint rule:** always `/chat/completions`, never `/responses` (we hold
-  context). See the memory.
-- **Adapters target one model each** (hardcoded slug, like the baseline). Chutes
-  uses a `chutesAdapter(slug, vision)` factory registered per-model as
-  `chutes:<slug>`. A slug-on-`CanonicalRequest` refactor (to share one adapter)
-  was deliberately deferred.
-- **The live `RunnerBinding`** does its own fetch (not `streamCompletion`) to
-  capture HTTP status (the 400/429 case must be a checkable outcome, not a throw);
-  it retries 429/5xx with an injectable backoff.
-- **Untracked spike leftovers** (`models/glm-5.1.yaml`, `packages/llm-unified/
-  fixtures/deepseek-v4-pro.fixtures.json`) are orphaned and harmless — optional
-  cleanup, do NOT treat as live work.
+## Gotchas that will bite you
+- **Reasoning-off is per-provider.** chutes needed `reasoning_effort: 'none'`
+  (omit ≠ off — see [[../models/glm-5.1]]). The three generic providers route
+  reasoning through `applyReasoningToBody` (nano-gpt slug-swap, novita flag,
+  ollama `think`) — verify off **actually disables** for each, live. The suite now
+  has `permutationsForReasoning(control)` (off→`assertReasoningAbsent`,
+  effort→`assertReasoningPresent`) to drive exactly this.
+- **Confirm reasoning-off for the other chutes models** too (DeepSeek V3.2, Kimi,
+  Gemma) — the `'none'` fix is adapter-level so it should generalise, but only GLM
+  5.1 was probed.
+- **Run both** `bun test ./src/` and `bun test ./curation/`, and **`pnpm
+  typecheck`** is the CI gate (build excludes tests) — see [[feedback_typecheck_is_the_ci_gate]].
+- **Keys** live at `keys/.{provider}-test-key`; live verification is **local-only,
+  never CI**.
+- **Vite alias now serves llm-unified from source** — adapter/catalogue changes are
+  live in `pnpm dev` without a rebuild (this caused a confusing stale-adapter
+  moment today before the alias landed).
+- **Subagents can land in detached HEAD** and orphan commits — verify each commit
+  is on the branch. See [[feedback_subagent_detached_head_hazard]].
+- **8 pre-existing user-client vitest failures** (`localStorage` jsdom harness in
+  cockpit-draft/chat-page/chat-route) are NOT yours — don't chase them.
+- Untracked spike leftovers (`models/glm-5.1.yaml`, `packages/llm-unified/fixtures/
+  deepseek-v4-pro.fixtures.json`) — orphaned, harmless, optional cleanup.
 
 ## Tone
-Chris is a backend dev (C#) who co-leads frontend/client/inference and defers to
-you on backend/crypto/adapters. He's in a great, productive flow — "early
-afternoon, let's go". NGO, no delivery pressure, quality over speed. Chat in
-German; everything in the repo is British English.
+Chris is thrilled and in great flow — today's work genuinely delighted him. NGO,
+no delivery pressure, quality over speed. He co-leads inference/client and defers
+to you on backend/crypto/adapters; he likes the forking decisions one at a time
+and values short reasoning over bare approval. Chat in German; everything in the
+repo is British English.
 
 Go well. — Liz
