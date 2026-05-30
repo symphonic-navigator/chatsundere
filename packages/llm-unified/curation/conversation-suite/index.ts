@@ -5,4 +5,5 @@ export * from './assertions.js';
 export * from './report.js';
 export * from './runner.js';
 export * from './binding.js';
+export * from './permutations.js';
 export { coreScenario } from './scenarios/core.js';

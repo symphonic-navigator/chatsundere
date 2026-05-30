@@ -6,7 +6,7 @@ import { chutesAdapter } from './chutes-openai.js';
 const a = chutesAdapter('deepseek-ai/DeepSeek-V3.2-TEE', false);
 
 describe('chutesAdapter buildRequest', () => {
-  it('sets stream_options.include_usage and the slug, omits reasoning_effort when off', () => {
+  it('sets stream_options.include_usage and the slug, sends reasoning_effort:none when off', () => {
     const wire = a.buildRequest({
       messages: [{ role: 'user', content: 'hi' }],
       reasoning: { enabled: false },
@@ -15,7 +15,9 @@ describe('chutesAdapter buildRequest', () => {
     expect(wire.body.model).toBe('deepseek-ai/DeepSeek-V3.2-TEE');
     expect(wire.body.stream).toBe(true);
     expect(wire.body.stream_options).toEqual({ include_usage: true });
-    expect(wire.body.reasoning_effort).toBeUndefined();
+    // Omitting the field would NOT disable thinking on GLM-family models; the
+    // explicit 'none' is what turns it off (probed live — see glm-5.1 Record).
+    expect(wire.body.reasoning_effort).toBe('none');
   });
 
   it('sets reasoning_effort from the intent when reasoning is on', () => {

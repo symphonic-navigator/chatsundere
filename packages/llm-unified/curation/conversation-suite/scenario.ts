@@ -19,6 +19,13 @@ export interface ReasoningPermutation {
   /** e.g. 'reasoning-off', 'reasoning-on', 'effort:low'. */
   label: string;
   intent: ReasoningIntent;
+  /**
+   * Permutation-scoped assertions applied to the FIRST turn's outcome — checks
+   * whose verdict depends on the permutation's intent rather than the scenario
+   * turn (e.g. reasoning present vs absent). Run on the clean plain-completion
+   * turn, before tool/memory turns complicate the reasoning channel. Optional.
+   */
+  assertions?: Assertion[];
 }
 
 export interface ConversationScenario {

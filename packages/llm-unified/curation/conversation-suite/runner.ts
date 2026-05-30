@@ -44,10 +44,14 @@ async function runPermutation(
 ): Promise<PermutationRun> {
   const history: WireMessage[] = [];
   const turns: TurnRun[] = [];
-  for (const turn of scenario.turns) {
+  for (const [i, turn] of scenario.turns.entries()) {
     history.push(...turn.send);
     const outcome = await binding.runTurn(history, perm.intent);
-    turns.push({ turnId: turn.id, results: turn.assertions.map((a) => a(outcome)) });
+    const results = turn.assertions.map((a) => a(outcome));
+    // Permutation-scoped assertions (e.g. reasoning present/absent) run on the
+    // first turn — the clean reasoning probe, before tools/memory complicate it.
+    if (i === 0 && perm.assertions) results.push(...perm.assertions.map((a) => a(outcome)));
+    turns.push({ turnId: turn.id, results });
     if (outcome.text) history.push({ role: 'assistant', content: outcome.text });
     // Known limitation: `WireMessage` carries no `tool_calls` field, so we
     // cannot replay the assistant's tool-call turn before its tool result.

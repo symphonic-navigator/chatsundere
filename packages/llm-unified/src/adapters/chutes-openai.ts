@@ -75,17 +75,20 @@ function normaliseUsage(u: ChutesUsage): NormalisedUsage {
 
 /**
  * Build a chutes adapter bound to one model slug. Chutes is uniformly
- * OpenAI-compatible: reasoning via `reasoning_effort` (omitted = off),
- * usage requested via `stream_options.include_usage` and delivered on a
- * final `choices: []` event. `vision` feeds only the recorded profile
- * (the catalogue profile is not yet runtime-consumed).
+ * OpenAI-compatible: reasoning via `reasoning_effort` — `low`/`medium`/`high`
+ * select effort, and the explicit value `'none'` disables thinking. Omitting
+ * the field does NOT disable it: GLM-family models reason by default, so off
+ * must send `reasoning_effort: 'none'` (probed live against GLM 5.1 — see
+ * obsidian/models/glm-5.1.md). Usage is requested via
+ * `stream_options.include_usage` and delivered on a final `choices: []` event.
+ * `vision` feeds only the recorded profile.
  */
 export function chutesAdapter(slug: string, vision: boolean): ModelAdapter {
   const profile: ModelProfile = {
     reasoning: {
       mode: 'steps',
       steps: ['low', 'medium', 'high'],
-      offStep: null,
+      offStep: 'off',
       defaultStep: 'medium',
     },
     toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
@@ -103,7 +106,9 @@ export function chutesAdapter(slug: string, vision: boolean): ModelAdapter {
         stream: true,
         stream_options: { include_usage: true },
       };
-      if (req.reasoning.enabled) body.reasoning_effort = req.reasoning.effort ?? 'medium';
+      // GLM-family models reason by default; omitting reasoning_effort does NOT
+      // turn thinking off. The explicit value 'none' disables it.
+      body.reasoning_effort = req.reasoning.enabled ? (req.reasoning.effort ?? 'medium') : 'none';
       if (req.tools?.length) {
         body.tools = req.tools.map((t) => ({
           type: 'function',
