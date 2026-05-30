@@ -1,7 +1,29 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-29 (evening) — **Curation CLI (model-support factory)**
-landed (`c5217b6`). Maintainer-only `packages/llm-unified/src/curate/` (not
+**Last updated:** 2026-05-30 — **`/curate` skill landed; synthesis pipeline +
+curation CLI retired** (squash `4dd4f58` on master). The fixed-prompt machine
+synthesis loop is replaced by an interactive `.claude/skills/curate/` skill in
+which Claude authors adapters (one router `SKILL.md` + 7 reference playbooks:
+provider-onboarding, model-curation, verify-offering, batch-check,
+conversation-suite, + shared catalogue-model/conventions). `src/synthesis/` and
+the `src/curate/` CLI driver are deleted; the hand-written `provider-scanner` +
+`model-file` moved to `src/providers/curation/`. Adapter verification is now a
+deterministic **conversation-suite** (`packages/llm-unified/curation/conversation-suite/`):
+pure protocol/mechanical asserts (no intelligence judgement), run **locally,
+never in CI** (provider keys never in CI); the suite grows with the
+inference-runner (new CLAUDE.md §10 rule). `NormalisedUsage` + a `usage`
+`StreamChunk` variant added. Adapters live in `src/adapters/` implementing the
+`ModelAdapter` contract (`adapter-contract.ts`); the `nano-gpt-deepseek.baseline`
+is the reference. typecheck + build clean; 150 Bun tests green. master is 3
+commits ahead of origin — **not pushed yet**. **Next session (with Chris):** play
+`/curate` through end-to-end for one provider, then for a model (this is the live
+manual verification, needs `NANO_GPT_API_KEY`); confirm the `src/adapters/`
+location convention in practice. Spec/plan:
+[[../superpowers/specs/2026-05-30-curate-skill-design]] /
+[[../superpowers/plans/2026-05-30-curate-skill]].
+
+**Earlier — 2026-05-29 (evening):** **Curation CLI (model-support factory)**
+landed (`c5217b6`) — now retired (see above). Maintainer-only `packages/llm-unified/src/curate/` (not
 shipped to clients): one YAML per model (human identity + offerings above,
 machine `built:` block below), commands `provider list` / `model list` / `model
 template` / `model build [--verify]` / `model report` / `model verify` (stubbed).
