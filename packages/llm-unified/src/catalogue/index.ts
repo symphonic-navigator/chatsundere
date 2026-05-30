@@ -9,3 +9,5 @@ export type {
 export { isReasoningControl } from './types.js';
 export { effectiveFreedom, type FreedomState } from './freedom.js';
 export { parseCatalogueEntry, type CatalogueEntry, type ParseResult } from './schema.js';
+export { CANONICALS, listCanonicals, getCanonical } from './canonical-registry.js';
+export { type CompletionTarget, offeringToTarget } from './target.js';

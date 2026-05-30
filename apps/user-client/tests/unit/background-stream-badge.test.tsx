@@ -70,6 +70,7 @@ describe('BackgroundStreamBadge', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: '',
+      canonicalId: null,
       providerId: 'pr',
       modelId: 'm',
       mindspaceId: null,

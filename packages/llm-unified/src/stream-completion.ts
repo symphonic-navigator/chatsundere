@@ -3,6 +3,7 @@ import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
 import type { CanonicalRequest, ModelAdapter, ToolDef } from './adapter-contract.js';
 import { getAdapter } from './adapter-registry.js';
 import { parseWithAdapter } from './adapter-stream.js';
+import type { CompletionTarget } from './catalogue/target.js';
 import {
   MAX_RETRY_ATTEMPTS,
   computeRetryDelay,
@@ -12,7 +13,6 @@ import {
 import { parseOpenAiSseStream } from './streaming.js';
 import { buildRequest } from './transport.js';
 import type {
-  KnownModel,
   ProviderConfig,
   ProviderDefinition,
   ReasoningIntent,
@@ -26,7 +26,7 @@ export interface StreamCompletionArgs {
   apiKey: string;
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
-  model: KnownModel;
+  target: CompletionTarget;
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
   /**
@@ -52,14 +52,14 @@ const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
  * parsed StreamChunks.
  *
  * Body composition rules:
- *   - `model` defaults to args.model.id. nano-gpt slug-mode models may
+ *   - `model` defaults to args.target.slug. nano-gpt slug-mode models may
  *     rewrite it when extras.reasoning is enabled.
  *   - bodyExtras is shallow-merged into the request body. The engine layer
  *     puts the unified `reasoning: ReasoningIntent` field plus things like
  *     temperature in here. Legacy boolean `thinking` is silently dropped.
  */
 export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterable<StreamChunk> {
-  const adapter = args.model.adapterId ? getAdapter(args.model.adapterId) : undefined;
+  const adapter = args.target.adapterId ? getAdapter(args.target.adapterId) : undefined;
   const body = adapter ? buildAdapterBody(args, adapter) : buildBody(args);
   const request = buildRequest({
     provider: args.providerConfig,
@@ -149,10 +149,15 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
   // re-emits whatever the wire wants.
   const { thinking: _thinking, reasoning: rawReasoning, ...extras } = args.bodyExtras;
 
-  let modelId = args.model.id;
+  let modelId = args.target.slug;
   const intent = rawReasoning as ReasoningIntent | undefined;
   if (intent) {
-    const applied = applyReasoningToBody(args.provider.id as ProviderId, args.model.id, intent, {});
+    const applied = applyReasoningToBody(
+      args.provider.id as ProviderId,
+      args.target.slug,
+      intent,
+      {},
+    );
     modelId = applied.modelId;
     Object.assign(extras, applied.body);
   }

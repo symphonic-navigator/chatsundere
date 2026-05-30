@@ -58,6 +58,7 @@ describe('Circle route', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: 'be present',
+      canonicalId: null,
       providerId: 'nope',
       modelId: 'm',
       mindspaceId: null,

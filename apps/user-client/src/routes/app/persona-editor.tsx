@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { getProvider } from '@chatsundere/llm-unified';
+import { getCanonical, getProvider, listCanonicals, listOfferings } from '@chatsundere/llm-unified';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -47,6 +47,7 @@ function defaultDraft(
     colour: defaultMindspace?.palette.accent ?? '#c9a84c',
     font: 'serif',
     instructions: '',
+    canonicalId: null,
     providerId: firstEnabled?.id ?? '',
     modelId: '',
     mindspaceId: null,
@@ -119,13 +120,12 @@ export function PersonaEditor(): JSX.Element {
   }
 
   // Dynamic accordion metas
+  const selectedCanonical = draft.canonicalId ? getCanonical(draft.canonicalId) : undefined;
   const selectedProvider = providers.data?.find((p) => p.id === draft.providerId);
-  const selectedProviderDef = selectedProvider ? getProvider(selectedProvider.templateId) : null;
-  const selectedModelDef = selectedProviderDef?.knownModels.find((m) => m.id === draft.modelId);
   const modelMeta: ReactNode =
-    draft.modelId && selectedProviderDef
-      ? `${selectedProviderDef.displayName} · ${selectedModelDef?.displayName ?? draft.modelId}`
-      : 'Pick a provider/model pair';
+    selectedCanonical && selectedProvider
+      ? `${selectedCanonical.displayName} · via ${getProvider(selectedProvider.templateId)?.displayName ?? selectedProvider.templateId}`
+      : 'Pick a model';
 
   const behaviourMeta: ReactNode = (
     <span>
@@ -166,7 +166,8 @@ export function PersonaEditor(): JSX.Element {
     navigate(returnPath);
   }
 
-  const personaInvalid = !draft.name || !draft.instructions || !draft.providerId || !draft.modelId;
+  const personaInvalid =
+    !draft.name || !draft.instructions || !draft.canonicalId || !draft.providerId || !draft.modelId;
 
   // Most recent chat for this persona, if any. `useChats` returns rows sorted
   // by `lastMessageAt` descending, so `find` picks the freshest.
@@ -210,12 +211,18 @@ export function PersonaEditor(): JSX.Element {
           onSaveAndBack={() => {
             void onSaveAndBack();
           }}
-          saveDisabled={!draft.name || !draft.instructions || !draft.providerId || !draft.modelId}
+          saveDisabled={
+            !draft.name ||
+            !draft.instructions ||
+            !draft.canonicalId ||
+            !draft.providerId ||
+            !draft.modelId
+          }
           saveTooltip={
-            !draft.providerId
-              ? 'Add a provider in Settings first'
-              : !draft.modelId
-                ? 'Pick a model'
+            !draft.canonicalId
+              ? 'Pick a model'
+              : !draft.providerId || !draft.modelId
+                ? 'Choose a deployment (or add its provider in Settings)'
                 : 'Fill in name and instructions'
           }
         />
@@ -327,13 +334,16 @@ export function PersonaEditor(): JSX.Element {
         icon="⬡"
         label="Model"
         meta={modelMeta}
-        requiredMarker={!draft.providerId || !draft.modelId}
+        requiredMarker={!draft.canonicalId || !draft.providerId || !draft.modelId}
       >
         <ModelList
           providers={providers.data ?? []}
+          selectedCanonicalId={draft.canonicalId}
           selectedProviderId={draft.providerId}
           selectedModelId={draft.modelId}
-          onSelect={(providerId, modelId) => patch({ providerId, modelId })}
+          onSelect={(canonicalId, providerId, modelId) =>
+            patch({ canonicalId, providerId, modelId })
+          }
         />
       </AccordionCard>
 
@@ -485,64 +495,107 @@ export function PersonaEditor(): JSX.Element {
 
 function ModelList({
   providers,
+  selectedCanonicalId,
   selectedProviderId,
   selectedModelId,
   onSelect,
 }: {
   providers: ProviderRow[];
+  selectedCanonicalId: string | null;
   selectedProviderId: string;
   selectedModelId: string;
-  onSelect: (providerId: string, modelId: string) => void;
+  onSelect: (canonicalId: string, providerId: string, upstreamSlug: string) => void;
 }): JSX.Element {
-  const [customInput, setCustomInput] = useState('');
+  const enabled = providers.filter((p) => p.enabled);
+  // Provider templates the user has configured, for intersecting offerings.
+  const configuredByTemplate = new Map(enabled.map((p) => [p.templateId, p]));
 
   return (
-    <div className="flex flex-col gap-2">
-      {providers
-        .filter((p) => p.enabled)
-        .flatMap((p) => {
-          const def = getProvider(p.templateId);
-          if (!def) return [];
-          return def.knownModels.map((km) => (
+    <div className="flex flex-col gap-4">
+      {/* Stage 1: canonical models */}
+      <div className="flex flex-col gap-2">
+        {listCanonicals().map((c) => {
+          const offers = listOfferings(c.id);
+          const teeAvailable = offers.some((o) => o.trust.tee);
+          const active = selectedCanonicalId === c.id;
+          return (
             <button
-              key={`${p.id}:${km.id}`}
+              key={c.id}
               type="button"
-              onClick={() => onSelect(p.id, km.id)}
+              onClick={() => {
+                // Pre-select the top-ranked *configured* offering. If the user
+                // has no configured provider for this canonical, set the
+                // canonical but clear the deployment — stage 2 then shows every
+                // offering disabled with a CTA, and the persona stays invalid
+                // until a configured deployment is chosen (never a stale pair).
+                const suggested = offers.find((o) => configuredByTemplate.has(o.providerId));
+                if (suggested) {
+                  const row = configuredByTemplate.get(suggested.providerId);
+                  onSelect(c.id, row?.id ?? '', suggested.upstreamSlug);
+                } else {
+                  onSelect(c.id, '', '');
+                }
+              }}
               className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left ${
-                selectedProviderId === p.id && selectedModelId === km.id
+                active
                   ? 'border-paper bg-white/[0.04]'
                   : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
               }`}
             >
-              <div>
-                <div className="font-display text-sm text-paper">{km.displayName}</div>
-                <div className="text-xs text-paper-soft">via {def.displayName}</div>
+              <div className="font-display text-sm text-paper">{c.displayName}</div>
+              <div className="flex items-center gap-2 text-xs text-paper-soft">
+                {teeAvailable ? (
+                  <span className="rounded bg-white/10 px-1.5 py-0.5">TEE</span>
+                ) : null}
+                <span>
+                  {offers.length} provider{offers.length === 1 ? '' : 's'}
+                </span>
               </div>
-              {selectedProviderId === p.id && selectedModelId === km.id ? <span>✓</span> : null}
             </button>
-          ));
+          );
         })}
-
-      <div className="mt-2 flex gap-2">
-        <input
-          type="text"
-          placeholder="Custom model id"
-          value={customInput}
-          onChange={(e) => setCustomInput(e.target.value)}
-          className="flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
-        />
-        <button
-          type="button"
-          disabled={!customInput || !selectedProviderId}
-          onClick={() => {
-            onSelect(selectedProviderId, customInput);
-            setCustomInput('');
-          }}
-          className="rounded-md border border-paper-soft/30 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper disabled:opacity-40"
-        >
-          Add
-        </button>
       </div>
+
+      {/* Stage 2: offerings for the chosen canonical */}
+      {selectedCanonicalId ? (
+        <div className="flex flex-col gap-2">
+          <div className="text-xs uppercase tracking-wider text-paper-soft">Deployment</div>
+          {listOfferings(selectedCanonicalId).map((o) => {
+            const row = configuredByTemplate.get(o.providerId);
+            const configured = !!row;
+            const def = getProvider(o.providerId);
+            const active =
+              configured && selectedProviderId === row.id && selectedModelId === o.upstreamSlug;
+            return (
+              <button
+                key={`${o.providerId}:${o.upstreamSlug}`}
+                type="button"
+                disabled={!configured}
+                onClick={() => configured && onSelect(selectedCanonicalId, row.id, o.upstreamSlug)}
+                className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left disabled:opacity-50 ${
+                  active
+                    ? 'border-paper bg-white/[0.04]'
+                    : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
+                }`}
+              >
+                <div>
+                  <div className="font-display text-sm text-paper">
+                    {def?.displayName ?? o.providerId}
+                  </div>
+                  <div className="text-xs text-paper-soft">
+                    {o.trust.tee ? 'TEE · ' : ''}
+                    {o.context.recommended.toLocaleString()} ctx
+                    {configured
+                      ? ''
+                      : ` · add ${def?.displayName ?? o.providerId} to use this deployment`}
+                  </div>
+                </div>
+                {active ? <span>✓</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

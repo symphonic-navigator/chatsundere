@@ -13,6 +13,7 @@ const persona: PersonaRow = {
   colour: '#c9a84c',
   font: 'serif',
   instructions: '',
+  canonicalId: null,
   providerId: '',
   modelId: '',
   mindspaceId: null,

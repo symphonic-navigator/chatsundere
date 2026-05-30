@@ -70,6 +70,8 @@ export interface PersonaRow {
   colour: string;
   font: 'sans' | 'serif' | 'cursive';
   instructions: string;
+  /** Canonical model id (Slice 2). null = not set → user must re-pick. */
+  canonicalId: string | null;
   providerId: string;
   modelId: string;
   mindspaceId: string | null;
@@ -258,6 +260,19 @@ class ClientDataDb extends Dexie {
     // without any index changes. The bump is a code-capability marker:
     // "this build knows about reasoning blocks". No upgrade callback needed.
     this.version(7).stores({
+      settings: 'id',
+      providers: 'id, templateId, enabled',
+      mindspaces: 'id, builtIn, displayName',
+      personas: 'id, providerId',
+      chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+      messages: 'id, chatId, [chatId+createdAt]',
+      pills: 'id, messageId',
+    });
+
+    // Version 8 — Slice 2: personas gain a non-indexed `canonicalId`. Clean
+    // break: rows from v7 have no canonicalId; the editor treats that as
+    // "model not set" and prompts a re-pick. No upgrade callback needed.
+    this.version(8).stores({
       settings: 'id',
       providers: 'id, templateId, enabled',
       mindspaces: 'id, builtIn, displayName',

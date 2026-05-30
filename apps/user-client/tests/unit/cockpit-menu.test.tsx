@@ -1,153 +1,102 @@
-import type { KnownModel } from '@chatsundere/llm-unified';
-import { fireEvent, render } from '@testing-library/react';
+import type { ReasoningControl } from '@chatsundere/llm-unified';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { CockpitMenu } from '../../src/components/chat/CockpitMenu';
-import type { ReasoningState } from '../../src/lib/reasoning-resolver';
+import { CockpitMenu } from '../../src/components/chat/CockpitMenu.js';
+import type { ReasoningState } from '../../src/lib/reasoning-resolver.js';
 
-function mkModel(reasoning: KnownModel['reasoning']): KnownModel {
-  return { id: 'x', displayName: 'X', contextWindow: 1000, reasoning, vision: false, tools: false };
+const noop = () => {};
+
+function renderMenu(
+  control: ReasoningControl,
+  reasoning: ReasoningState = { kind: 'off' },
+  onReasoningChange: (r: ReasoningState) => void = noop,
+) {
+  return render(
+    <CockpitMenu
+      control={control}
+      reasoning={reasoning}
+      onReasoningChange={onReasoningChange}
+      onClose={noop}
+    />,
+  );
 }
 
-const noReason = mkModel({ kind: 'no_reasoning', defaultOn: false, replayReasoning: false });
-const alwaysOnPlain = mkModel({ kind: 'always_on', defaultOn: true, replayReasoning: true });
-const alwaysOnBuckets = mkModel({
-  kind: 'always_on',
-  effort: { buckets: ['low', 'high'], defaultBucket: 'high' },
-  defaultOn: true,
-  replayReasoning: true,
+describe('CockpitMenu reasoning', () => {
+  it('none → renders nothing', () => {
+    const { container } = renderMenu({ mode: 'none' });
+    expect(container.firstChild).toBeNull();
+  });
+  it('fixed-on → a single disabled lit On indicator', () => {
+    renderMenu({ mode: 'fixed-on' }, { kind: 'on' });
+    const on = screen.getByRole('button', { name: /on/i });
+    expect(on).toBeDisabled();
+    expect(on.getAttribute('data-active')).toBe('true');
+  });
+  it('toggle → On/Off chips', () => {
+    renderMenu({ mode: 'toggle', defaultOn: true });
+    expect(screen.getByRole('button', { name: /^on$/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^off$/i })).toBeEnabled();
+  });
+  it('steps → one chip per step plus Off', () => {
+    renderMenu({
+      mode: 'steps',
+      steps: ['low', 'medium', 'high'],
+      offStep: 'off',
+      defaultStep: 'medium',
+    });
+    for (const s of ['low', 'medium', 'high']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${s}$`, 'i') })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: /^off$/i })).toBeInTheDocument();
+  });
+  it('steps with offStep null → no Off chip', () => {
+    renderMenu({
+      mode: 'steps',
+      steps: ['low', 'medium', 'high'],
+      offStep: null,
+      defaultStep: 'medium',
+    });
+    expect(screen.queryByRole('button', { name: /^off$/i })).toBeNull();
+  });
 });
-const optionalPlain = mkModel({ kind: 'optional', defaultOn: true, replayReasoning: false });
-const optionalBuckets = mkModel({
-  kind: 'optional',
-  effort: { buckets: ['low', 'medium', 'high'], defaultBucket: 'medium' },
-  defaultOn: true,
-  replayReasoning: false,
-});
 
-describe('CockpitMenu', () => {
-  it('no_reasoning → renders null section (entire menu may still wrap something but no reasoning UI)', () => {
-    const { container } = render(
-      <CockpitMenu
-        model={noReason}
-        reasoning={{ mode: 'off' }}
-        onReasoningChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    expect(container.querySelector('[data-section="reasoning"]')).toBeNull();
-  });
-
-  it('always_on without effort → no reasoning section', () => {
-    const { container } = render(
-      <CockpitMenu
-        model={alwaysOnPlain}
-        reasoning={{ mode: 'on' }}
-        onReasoningChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    expect(container.querySelector('[data-section="reasoning"]')).toBeNull();
-  });
-
-  it('always_on + buckets → bucket selector, no Off button', () => {
-    const { container } = render(
-      <CockpitMenu
-        model={alwaysOnBuckets}
-        reasoning={{ mode: 'bucket', bucket: 'high' }}
-        onReasoningChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    expect(container.querySelector('[data-section="reasoning"]')).not.toBeNull();
-    expect(container.querySelector('[data-bucket="low"]')).not.toBeNull();
-    expect(container.querySelector('[data-bucket="high"]')).not.toBeNull();
-    expect(container.querySelector('[data-action="off"]')).toBeNull();
-  });
-
-  it('optional without effort → on/off toggle', () => {
-    const { container } = render(
-      <CockpitMenu
-        model={optionalPlain}
-        reasoning={{ mode: 'on' }}
-        onReasoningChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    expect(container.querySelector('[data-action="on"]')).not.toBeNull();
-    expect(container.querySelector('[data-action="off"]')).not.toBeNull();
-    expect(container.querySelector('[data-bucket]')).toBeNull();
-  });
-
-  it('optional + effort → buckets + Off button', () => {
-    const { container } = render(
-      <CockpitMenu
-        model={optionalBuckets}
-        reasoning={{ mode: 'bucket', bucket: 'medium' }}
-        onReasoningChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    expect(container.querySelector('[data-section="reasoning"]')).not.toBeNull();
-    expect(container.querySelector('[data-bucket="low"]')).not.toBeNull();
-    expect(container.querySelector('[data-bucket="medium"]')).not.toBeNull();
-    expect(container.querySelector('[data-bucket="high"]')).not.toBeNull();
-    expect(container.querySelector('[data-action="off"]')).not.toBeNull();
-  });
-
-  it('clicking a bucket fires onReasoningChange with bucket state', () => {
-    const onChange = vi.fn<(r: ReasoningState) => void>();
-    const { container } = render(
-      <CockpitMenu
-        model={optionalBuckets}
-        reasoning={{ mode: 'bucket', bucket: 'medium' }}
-        onReasoningChange={onChange}
-        onClose={vi.fn()}
-      />,
-    );
-    fireEvent.click(container.querySelector('[data-bucket="high"]') as HTMLElement);
-    expect(onChange).toHaveBeenCalledWith({ mode: 'bucket', bucket: 'high' });
-  });
-
-  it('clicking Off fires onReasoningChange with off state', () => {
+describe('CockpitMenu reasoning — interaction', () => {
+  it('toggle On click fires onReasoningChange({ kind: "on" })', () => {
     const onChange = vi.fn();
-    const { container } = render(
-      <CockpitMenu
-        model={optionalBuckets}
-        reasoning={{ mode: 'bucket', bucket: 'medium' }}
-        onReasoningChange={onChange}
-        onClose={vi.fn()}
-      />,
-    );
-    fireEvent.click(container.querySelector('[data-action="off"]') as HTMLElement);
-    expect(onChange).toHaveBeenCalledWith({ mode: 'off' });
+    renderMenu({ mode: 'toggle', defaultOn: false }, { kind: 'off' }, onChange);
+    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    expect(onChange).toHaveBeenCalledWith({ kind: 'on' });
   });
-
-  it('clicking On (in optional/no-effort) fires onReasoningChange with on state', () => {
+  it('toggle Off click fires onReasoningChange({ kind: "off" })', () => {
     const onChange = vi.fn();
-    const { container } = render(
-      <CockpitMenu
-        model={optionalPlain}
-        reasoning={{ mode: 'off' }}
-        onReasoningChange={onChange}
-        onClose={vi.fn()}
-      />,
-    );
-    fireEvent.click(container.querySelector('[data-action="on"]') as HTMLElement);
-    expect(onChange).toHaveBeenCalledWith({ mode: 'on' });
+    renderMenu({ mode: 'toggle', defaultOn: true }, { kind: 'on' }, onChange);
+    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    expect(onChange).toHaveBeenCalledWith({ kind: 'off' });
   });
-
-  it('active bucket has data-active="true"', () => {
-    const { container } = render(
-      <CockpitMenu
-        model={optionalBuckets}
-        reasoning={{ mode: 'bucket', bucket: 'high' }}
-        onReasoningChange={vi.fn()}
-        onClose={vi.fn()}
-      />,
+  it('steps bucket click fires onReasoningChange({ kind: "step", step })', () => {
+    const onChange = vi.fn();
+    renderMenu(
+      { mode: 'steps', steps: ['low', 'medium', 'high'], offStep: 'off', defaultStep: 'medium' },
+      { kind: 'step', step: 'medium' },
+      onChange,
     );
-    const high = container.querySelector('[data-bucket="high"]') as HTMLElement;
-    const low = container.querySelector('[data-bucket="low"]') as HTMLElement;
-    expect(high.getAttribute('data-active')).toBe('true');
-    expect(low.getAttribute('data-active')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^high$/i }));
+    expect(onChange).toHaveBeenCalledWith({ kind: 'step', step: 'high' });
+  });
+  it('steps Off click fires onReasoningChange({ kind: "off" })', () => {
+    const onChange = vi.fn();
+    renderMenu(
+      { mode: 'steps', steps: ['low', 'medium', 'high'], offStep: 'off', defaultStep: 'medium' },
+      { kind: 'step', step: 'medium' },
+      onChange,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    expect(onChange).toHaveBeenCalledWith({ kind: 'off' });
+  });
+  it('fixed-on On chip is non-interactive (no handler fires)', () => {
+    const onChange = vi.fn();
+    renderMenu({ mode: 'fixed-on' }, { kind: 'on' }, onChange);
+    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

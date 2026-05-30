@@ -3,19 +3,23 @@
 export type {
   Capability,
   ConfigField,
-  KnownModel,
   ProviderDefinition,
   ProviderConfig,
   WireMessage,
   StreamChunk,
   NormalisedUsage,
   ProbeResult,
-  ReasoningCapability,
-  ReasoningEffortSpec,
   ReasoningIntent,
 } from './types.js';
 
-export { registerProvider, getProvider, listProviders } from './registry.js';
+export {
+  registerProvider,
+  getProvider,
+  listProviders,
+  rankOfferings,
+  listOfferings,
+  getOffering,
+} from './registry.js';
 export { registerAdapter, getAdapter } from './adapter-registry.js';
 
 export { composeSystemPrompt, type CompositionLayers } from './composition.js';

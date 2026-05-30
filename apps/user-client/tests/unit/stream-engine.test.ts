@@ -1,4 +1,4 @@
-import type { StreamChunk } from '@chatsundere/llm-unified';
+import { type StreamChunk, getOffering } from '@chatsundere/llm-unified';
 import * as llm from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it, vi } from 'vitest';
@@ -10,13 +10,17 @@ import {
   runStreamEngine,
 } from '../../src/lib/stream-engine';
 
+// nano-gpt deepseek-v4-flash offering (steps reasoning)
+// biome-ignore lint/style/noNonNullAssertion: test fixture — this slug is guaranteed to exist in the catalogue
+const baseOffering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
+
 /**
  * Build a minimal StartStreamArgs for the engine. Tests override only the
  * fields they exercise; everything else comes from this baseline.
  */
 function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
-  const model = nanoGpt.knownModels[0];
-  if (!model) throw new Error('no model');
+  const model = nanoGpt.offerings[0];
+  if (!model) throw new Error('nano-gpt has no offerings');
   return {
     chat: {
       id: 'c1',
@@ -35,8 +39,9 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
       colour: '#fff',
       font: 'serif',
       instructions: 'You are A.',
+      canonicalId: null,
       providerId: 'pr1',
-      modelId: model.id,
+      modelId: model.upstreamSlug,
       mindspaceId: null,
       aboutMeOverride: null,
       textureOverride: null,
@@ -50,10 +55,10 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
     apiKey: 'k',
     corsProxyUrl: null,
     corsProxyKey: null,
-    model,
+    offering: baseOffering,
     priorMessages: [],
     userMessageText: 'hi',
-    reasoning: { mode: 'on' },
+    reasoning: { kind: 'on' },
     globalUnlocker: '',
     globalAboutMe: '',
     signal: new AbortController().signal,
@@ -76,50 +81,9 @@ describe('runStreamEngine', () => {
       for (const c of fakeChunks) yield c;
     });
     const onChunk = vi.fn();
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
-    const result: StreamEngineResult = await runStreamEngine({
-      chat: {
-        id: 'c1',
-        personaId: 'p1',
-        title: null,
-        resolvedMindspaceId: 'm1',
-        createdAt: 1,
-        lastMessageAt: 1,
-        bookmarkedMessageCount: 0,
-        draftInput: '',
-      },
-      persona: {
-        id: 'p1',
-        name: 'Aurum',
-        tagline: '',
-        colour: '#c9a84c',
-        font: 'serif',
-        instructions: 'You are Aurum.',
-        providerId: 'pr1',
-        modelId: model.id,
-        mindspaceId: null,
-        aboutMeOverride: null,
-        textureOverride: null,
-        temperature: 0.85,
-        adultPersona: false,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-      provider: nanoGpt,
-      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-      apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
-      model,
-      priorMessages: [],
-      userMessageText: 'Hi',
-      reasoning: { mode: 'on' },
-      globalUnlocker: 'unlock!',
-      globalAboutMe: '',
-      signal: new AbortController().signal,
-      onChunk,
-    });
+    const result: StreamEngineResult = await runStreamEngine(
+      makeArgs({ userMessageText: 'Hi', globalUnlocker: 'unlock!', onChunk }),
+    );
     expect(result.finishReason).toBe('stop');
     expect(result.finalContentBlocks.map((b) => b.type)).toEqual(['text', 'pill', 'text']);
     expect(result.finalContentBlocks[0]).toEqual({ type: 'text', text: 'Hello world' });
@@ -137,50 +101,30 @@ describe('runStreamEngine', () => {
       capturedMessages = (args as { messages: unknown }).messages;
       yield { type: 'finish', reason: 'stop' };
     });
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
-    await runStreamEngine({
-      chat: {
-        id: 'c1',
-        personaId: 'p1',
-        title: null,
-        resolvedMindspaceId: 'm1',
-        createdAt: 1,
-        lastMessageAt: 1,
-        bookmarkedMessageCount: 0,
-        draftInput: '',
-      },
-      persona: {
-        id: 'p1',
-        name: 'A',
-        tagline: '',
-        colour: '#fff',
-        font: 'serif',
-        instructions: 'persona body',
-        providerId: 'pr1',
-        modelId: model.id,
-        mindspaceId: null,
-        aboutMeOverride: null,
-        textureOverride: null,
-        temperature: 0.5,
-        adultPersona: false,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-      provider: nanoGpt,
-      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-      apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
-      model,
-      priorMessages: [],
-      userMessageText: 'hi',
-      reasoning: { mode: 'on' },
-      globalUnlocker: 'GLOBAL-UNLOCK',
-      globalAboutMe: 'about-me',
-      signal: new AbortController().signal,
-      onChunk: vi.fn(),
-    });
+    await runStreamEngine(
+      makeArgs({
+        persona: {
+          id: 'p1',
+          name: 'A',
+          tagline: '',
+          colour: '#fff',
+          font: 'serif',
+          instructions: 'persona body',
+          canonicalId: null,
+          providerId: 'pr1',
+          modelId: 'deepseek/deepseek-v4-flash',
+          mindspaceId: null,
+          aboutMeOverride: null,
+          textureOverride: null,
+          temperature: 0.5,
+          adultPersona: false,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        globalUnlocker: 'GLOBAL-UNLOCK',
+        globalAboutMe: 'about-me',
+      }),
+    );
     const msgs = capturedMessages as Array<{ role: string; content: string }>;
     expect(msgs[0]?.role).toBe('system');
     expect(msgs[0]?.content).toContain('GLOBAL-UNLOCK');
@@ -192,52 +136,7 @@ describe('runStreamEngine', () => {
     vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* () {
       yield { type: 'error', message: 'rate limited' };
     });
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
-    await expect(
-      runStreamEngine({
-        chat: {
-          id: 'c1',
-          personaId: 'p1',
-          title: null,
-          resolvedMindspaceId: 'm1',
-          createdAt: 1,
-          lastMessageAt: 1,
-          bookmarkedMessageCount: 0,
-          draftInput: '',
-        },
-        persona: {
-          id: 'p1',
-          name: 'A',
-          tagline: '',
-          colour: '#fff',
-          font: 'serif',
-          instructions: 'You are A.',
-          providerId: 'pr1',
-          modelId: model.id,
-          mindspaceId: null,
-          aboutMeOverride: null,
-          textureOverride: null,
-          temperature: 0.5,
-          adultPersona: false,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-        provider: nanoGpt,
-        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-        apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
-        model,
-        priorMessages: [],
-        userMessageText: 'hi',
-        reasoning: { mode: 'on' },
-        globalUnlocker: '',
-        globalAboutMe: '',
-        signal: new AbortController().signal,
-        onChunk: vi.fn(),
-      }),
-    ).rejects.toThrow(/rate limited/);
+    await expect(runStreamEngine(makeArgs())).rejects.toThrow(/rate limited/);
   });
 
   it('coalesces adjacent reasoning chunks into a single reasoning block in finalContentBlocks', async () => {

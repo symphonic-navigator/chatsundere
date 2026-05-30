@@ -99,10 +99,10 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('reports verno === 7 after open on a fresh install', async () => {
+  it('reports verno === 8 after open on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
   });
 
   it('round-trips a message with a reasoning ContentBlock', async () => {
@@ -139,12 +139,12 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
     expect(readBack?.contentBlocks).toEqual(row.contentBlocks);
   });
 
-  it('preserves existing v6 text/pill messages across the v7 bump', async () => {
+  it('preserves existing v6 text/pill messages across the v7/v8 bump', async () => {
     await plantV6DatabaseWithLegacyMessage();
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     const row = await db.messages.get('msg-legacy');
     expect(row).toBeDefined();
     expect(row?.contentBlocks).toEqual([

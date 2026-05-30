@@ -11,7 +11,7 @@ vi.mock('@chatsundere/llm-unified', () => ({
     displayName: id === 'ollama-cloud' ? 'Ollama Cloud' : 'nano-gpt.com',
     baseUrl: 'https://example.com/v1',
     corsHint: id === 'ollama-cloud' ? 'requires-proxy' : 'inofficial',
-    knownModels: [],
+    offerings: [],
   }),
   probeProvider: vi.fn(async () => ({ ok: true })),
 }));

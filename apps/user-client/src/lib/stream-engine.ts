@@ -1,10 +1,11 @@
 import {
-  type KnownModel,
+  type Offering,
   type ProviderConfig,
   type ProviderDefinition,
   type StreamChunk,
   type WireMessage,
   composeSystemPrompt,
+  offeringToTarget,
   streamCompletion,
 } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -27,7 +28,7 @@ export interface StartStreamArgs {
   apiKey: string;
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
-  model: KnownModel;
+  offering: Offering;
   priorMessages: MessageRow[];
   userMessageText: string;
   reasoning: ReasoningState;
@@ -64,7 +65,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
   ];
 
   const extras: Record<string, unknown> = {
-    ...resolveReasoningBodyExtras(args.model, args.reasoning),
+    ...resolveReasoningBodyExtras(args.offering.profile.reasoning, args.reasoning),
     temperature: args.persona.temperature,
   };
 
@@ -78,7 +79,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     apiKey: args.apiKey,
     corsProxyUrl: args.corsProxyUrl,
     corsProxyKey: args.corsProxyKey,
-    model: args.model,
+    target: offeringToTarget(args.offering),
     messages: wireMessages,
     bodyExtras: extras,
     signal: args.signal,

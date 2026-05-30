@@ -44,7 +44,7 @@ const initial: InitialState = {
   autoFollowEnabled: true,
   isInteractionMode: false,
   isPinned: false,
-  reasoning: { mode: 'on' },
+  reasoning: { kind: 'off' },
 };
 
 export const useCurrentChatStore = create<CurrentChatStore>((set) => ({

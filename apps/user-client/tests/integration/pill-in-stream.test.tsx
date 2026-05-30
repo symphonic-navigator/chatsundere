@@ -45,6 +45,7 @@ describe('Pill rendering integration', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: 'inst',
+      canonicalId: null,
       providerId: 'pr',
       modelId: 'deepseek/deepseek-v4-flash',
       mindspaceId: null,

@@ -1,4 +1,4 @@
-import { composeSystemPrompt, getProvider } from '@chatsundere/llm-unified';
+import { composeSystemPrompt, getOffering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -111,24 +111,24 @@ export function ChatPage(): JSX.Element {
     ? (lazyPersonaQuery.data ?? null)
     : (chatPersonaQuery.data ?? null);
 
-  // Resolve KnownModel via provider lookup keyed to the effective persona.
+  // Resolve Offering via provider lookup keyed to the effective persona.
   const modelQuery = useQuery({
-    queryKey: ['known-model-for-persona', effectivePersona?.id],
+    queryKey: ['offering-for-persona', effectivePersona?.id],
     enabled: !!effectivePersona,
     queryFn: async () => {
       if (!effectivePersona) return null;
       const provider = await getClientDataDb().providers.get(effectivePersona.providerId);
       if (!provider) return null;
-      const def = getProvider(provider.templateId);
-      return def?.knownModels.find((m) => m.id === effectivePersona.modelId) ?? null;
+      const slug = effectivePersona.modelId;
+      return slug ? (getOffering(provider.templateId, slug) ?? null) : null;
     },
   });
-  const model = modelQuery.data ?? null;
+  const offering = modelQuery.data ?? null;
 
-  // Initialise reasoning state once the model resolves.
+  // Initialise reasoning state once the offering resolves.
   useEffect(() => {
-    if (model) setReasoning(initialReasoningState(model));
-  }, [model, setReasoning]);
+    if (offering) setReasoning(initialReasoningState(offering.profile.reasoning));
+  }, [offering, setReasoning]);
 
   // Settings (for displayName and token estimate).
   const settingsQuery = useQuery({
@@ -191,7 +191,7 @@ export function ChatPage(): JSX.Element {
 
   // Token estimate for the context gauge.
   const usedTokens = useMemo(() => {
-    if (!model || !effectivePersona || !settingsQuery.data) return 0;
+    if (!offering || !effectivePersona || !settingsQuery.data) return 0;
     // Guard against personas with empty instructions — composeSystemPrompt throws on empty.
     if (!effectivePersona.instructions.trim()) return 0;
     const sys = composeSystemPrompt({
@@ -208,7 +208,7 @@ export function ChatPage(): JSX.Element {
         .join(''),
     );
     return estimateTokens([sys, ...msgTexts]);
-  }, [model, effectivePersona, settingsQuery.data, chatQuery.data?.messages]);
+  }, [offering, effectivePersona, settingsQuery.data, chatQuery.data?.messages]);
 
   const onSend = async (text: string): Promise<void> => {
     if (!effectivePersona) return;
@@ -340,11 +340,11 @@ export function ChatPage(): JSX.Element {
         />
       ) : null}
 
-      {isInteractionMode && effectivePersona && model ? (
+      {isInteractionMode && effectivePersona && offering ? (
         <InteractionMode
           persona={effectivePersona}
           chat={chat}
-          model={model}
+          offering={offering}
           usedTokens={usedTokens}
           draftValue={draft}
           onDraftChange={setDraft}

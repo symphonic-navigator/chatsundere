@@ -48,6 +48,7 @@ const PERSONA_DATA = {
     colour: '#c9a84c',
     font: 'serif' as const,
     instructions: 'be vela',
+    canonicalId: 'glm-5.1',
     providerId: 'pv1',
     modelId: 'm1',
     mindspaceId: null,
@@ -76,8 +77,11 @@ vi.mock('@chatsundere/llm-unified', () => ({
     id: 'pv1',
     displayName: 'P',
     baseUrl: 'x',
-    knownModels: [{ id: 'm1', displayName: 'M1', contextWindow: 1000 }],
+    offerings: [],
   }),
+  getCanonical: () => ({ id: 'glm-5.1', displayName: 'GLM 5.1' }),
+  listCanonicals: () => [],
+  listOfferings: () => [],
 }));
 
 vi.mock('../../src/data/personas.js', () => ({

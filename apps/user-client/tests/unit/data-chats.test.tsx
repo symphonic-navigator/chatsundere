@@ -36,6 +36,7 @@ async function seedPersonaWithMindspace() {
     colour: '#fff',
     font: 'serif',
     instructions: '',
+    canonicalId: null,
     providerId: 'pr',
     modelId: 'm',
     mindspaceId: first.id,

@@ -1,61 +1,49 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { registerAdapter } from '../adapter-registry.js';
 import { chutesAdapter } from '../adapters/chutes-openai.js';
+import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
-import type { KnownModel, ProviderDefinition } from '../types.js';
+import type { ProviderDefinition } from '../types.js';
 import { apiKeyField } from './_helpers.js';
 
-const REASONING = {
-  kind: 'optional' as const,
-  effort: { buckets: ['low', 'medium', 'high'], defaultBucket: 'medium' },
-  defaultOn: false,
-  replayReasoning: false,
+const STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
 };
 
-/** The curated chutes TEE models (all confidential_compute === true). */
-const MODELS: Array<Omit<KnownModel, 'adapterId' | 'reasoning'> & { vision: boolean }> = [
-  {
-    id: 'deepseek-ai/DeepSeek-V3.2-TEE',
-    displayName: 'DeepSeek V3.2 (TEE)',
-    contextWindow: 131_072,
-    vision: false,
-    tools: true,
-  },
-  {
-    id: 'moonshotai/Kimi-K2.6-TEE',
-    displayName: 'Kimi K2.6 (TEE)',
-    notes: 'QAT model',
-    contextWindow: 262_144,
-    vision: true,
-    tools: true,
-  },
-  {
-    id: 'zai-org/GLM-5.1-TEE',
-    displayName: 'GLM 5.1 (TEE)',
-    contextWindow: 202_752,
-    vision: false,
-    tools: true,
-  },
-  {
-    id: 'google/gemma-4-31B-turbo-TEE',
-    displayName: 'Gemma 4 31B Turbo (TEE)',
-    notes: 'FP4 quant',
-    contextWindow: 131_072,
-    vision: true,
-    tools: true,
-  },
-];
+function chutesOffering(
+  canonicalRef: string,
+  slug: string,
+  vision: boolean,
+  ctx: number,
+): Offering {
+  return {
+    canonicalRef,
+    providerId: 'chutes',
+    upstreamSlug: slug,
+    adapter: { kind: 'catalogue', adapterId: `chutes:${slug}` },
+    profile: {
+      reasoning: STEPS,
+      toolCalls: { supported: true, streaming: true, concurrentWithReasoning: false },
+      vision,
+      replayReasoning: false,
+    },
+    context: { recommended: ctx, max: ctx },
+    trust: { tee: true, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified',
+  };
+}
 
-const knownModels: KnownModel[] = MODELS.map((m) => ({
-  id: m.id,
-  displayName: m.displayName,
-  ...(m.notes ? { notes: m.notes } : {}),
-  contextWindow: m.contextWindow,
-  reasoning: REASONING,
-  vision: m.vision,
-  tools: m.tools,
-  adapterId: `chutes:${m.id}`,
-}));
+const offerings: Offering[] = [
+  chutesOffering('deepseek-v3.2', 'deepseek-ai/DeepSeek-V3.2-TEE', false, 131_072),
+  chutesOffering('kimi-k2.6', 'moonshotai/Kimi-K2.6-TEE', true, 262_144),
+  chutesOffering('glm-5.1', 'zai-org/GLM-5.1-TEE', false, 202_752),
+  chutesOffering('gemma-4-31b', 'google/gemma-4-31B-turbo-TEE', true, 131_072),
+];
 
 export const chutes: ProviderDefinition = {
   id: 'chutes',
@@ -68,13 +56,15 @@ export const chutes: ProviderDefinition = {
   probe: { path: '/models', method: 'GET' },
   secretFields: new Set(['api_key']),
   corsHint: 'direct',
-  knownModels,
+  offerings,
   sortPriority: 10,
 };
 
 export function registerChutes(): void {
   registerProvider(chutes);
-  for (const m of MODELS) {
-    registerAdapter(`chutes:${m.id}`, chutesAdapter(m.id, m.vision));
+  for (const o of offerings) {
+    if (o.adapter.kind === 'catalogue') {
+      registerAdapter(o.adapter.adapterId, chutesAdapter(o.upstreamSlug, o.profile.vision));
+    }
   }
 }

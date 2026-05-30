@@ -47,7 +47,7 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
       apiKey: args.apiKey,
       corsProxyUrl: args.corsProxyUrl,
       corsProxyKey: args.corsProxyKey,
-      model: args.model,
+      offering: args.offering,
       firstUserMessage: args.userText,
       firstPersonaResponse,
       globalUnlocker: args.globalUnlocker,

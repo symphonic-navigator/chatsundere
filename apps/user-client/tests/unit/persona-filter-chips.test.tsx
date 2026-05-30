@@ -12,6 +12,7 @@ function p(over: Partial<PersonaRow>): PersonaRow {
     colour: '#fff',
     font: 'serif',
     instructions: '',
+    canonicalId: null,
     providerId: '',
     modelId: '',
     mindspaceId: null,

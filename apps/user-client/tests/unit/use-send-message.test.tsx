@@ -42,8 +42,8 @@ async function seed() {
     updatedAt: 1,
   });
 
-  const model = nanoGpt.knownModels[0];
-  if (!model) throw new Error('nano-gpt has no known models');
+  const offering = nanoGpt.offerings[0];
+  if (!offering) throw new Error('nano-gpt has no offerings');
 
   await db.personas.add({
     id: personaId,
@@ -52,8 +52,9 @@ async function seed() {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'instr',
+    canonicalId: null,
     providerId,
-    modelId: model.id,
+    modelId: offering.upstreamSlug,
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
@@ -94,7 +95,7 @@ describe('useSendMessage', () => {
         chatId: null,
         personaId,
         text: 'Hello',
-        reasoning: { mode: 'on' },
+        reasoning: { kind: 'on' },
       });
     });
 
@@ -143,7 +144,7 @@ describe('useSendMessage', () => {
         chatId: existing,
         personaId,
         text: 'Hi',
-        reasoning: { mode: 'on' },
+        reasoning: { kind: 'on' },
       });
     });
 

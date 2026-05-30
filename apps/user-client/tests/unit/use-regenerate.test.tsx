@@ -37,8 +37,8 @@ async function seedChatWithExchange() {
     createdAt: 1,
     updatedAt: 1,
   });
-  const model = nanoGpt.knownModels[0];
-  if (!model) throw new Error('no model');
+  const offering = nanoGpt.offerings[0];
+  if (!offering) throw new Error('nano-gpt has no offerings');
   await db.personas.add({
     id: personaId,
     name: 'Aurum',
@@ -46,8 +46,9 @@ async function seedChatWithExchange() {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'instr',
+    canonicalId: null,
     providerId,
-    modelId: model.id,
+    modelId: offering.upstreamSlug,
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
@@ -108,7 +109,7 @@ describe('useRegenerate', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
     await act(async () => {
-      await result.current.mutateAsync({ chatId, reasoning: { mode: 'on' } });
+      await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
     });
     // After regenerate, the old user + persona messages are gone; stream-manager.start re-inserts them.
     expect(startSpy).toHaveBeenCalledTimes(1);
@@ -147,7 +148,7 @@ describe('useRegenerate', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
     await act(async () => {
-      await result.current.mutateAsync({ chatId, reasoning: { mode: 'on' } });
+      await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
     });
     expect(abortSpy).toHaveBeenCalledWith(chatId);
   });
@@ -167,7 +168,7 @@ describe('useRegenerate', () => {
     });
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
-    await expect(result.current.mutateAsync({ chatId, reasoning: { mode: 'on' } })).rejects.toThrow(
+    await expect(result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } })).rejects.toThrow(
       /prior user-message/,
     );
   });

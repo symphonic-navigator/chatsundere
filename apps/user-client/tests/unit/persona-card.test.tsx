@@ -16,6 +16,7 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'i',
+    canonicalId: null,
     providerId: 'np',
     modelId: 'm',
     mindspaceId: null,

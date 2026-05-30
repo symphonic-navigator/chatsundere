@@ -1,4 +1,4 @@
-import type { KnownModel } from '@chatsundere/llm-unified';
+import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import type { PersonaRow } from '../../boot/client-data-db.js';
@@ -10,7 +10,7 @@ import { DualActionBtn } from './DualActionBtn.js';
 
 interface Props {
   persona: PersonaRow;
-  model: KnownModel;
+  offering: Offering;
   draftValue: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
@@ -102,7 +102,7 @@ export function Cockpit(p: Props): JSX.Element {
           </button>
           {menuOpen ? (
             <CockpitMenu
-              model={p.model}
+              control={p.offering.profile.reasoning}
               reasoning={reasoning}
               onReasoningChange={onReasoningChange}
               onClose={() => setMenuOpen(false)}

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import * as llm from '@chatsundere/llm-unified';
+import { getOffering } from '@chatsundere/llm-unified';
 import { uuidv7 } from 'uuidv7';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
@@ -48,8 +49,10 @@ describe('fallbackTitle', () => {
 async function seed() {
   const db = await openClientDataDb();
   const personaId = uuidv7();
-  const model = nanoGpt.knownModels[0];
-  if (!model) throw new Error('no model');
+  const firstOffering = nanoGpt.offerings[0];
+  if (!firstOffering) throw new Error('nano-gpt has no offerings');
+  const offering = getOffering('nano-gpt', firstOffering.upstreamSlug);
+  if (!offering) throw new Error(`no offering for nano-gpt / ${firstOffering.upstreamSlug}`);
   await db.personas.add({
     id: personaId,
     name: 'Aurum',
@@ -57,8 +60,9 @@ async function seed() {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'inst',
+    canonicalId: null,
     providerId: 'pr',
-    modelId: model.id,
+    modelId: firstOffering.upstreamSlug,
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
@@ -93,7 +97,7 @@ async function seed() {
   const persona = (await db.personas.get(personaId)) as PersonaRow;
   const provider = nanoGpt;
   const providerConfig = { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' as const } };
-  return { db, chatId, personaId, chat, persona, provider, providerConfig, model };
+  return { db, chatId, personaId, chat, persona, provider, providerConfig, offering };
 }
 
 describe('generateTitleAsync', () => {
@@ -106,7 +110,7 @@ describe('generateTitleAsync', () => {
   });
 
   it('success path writes sanitised title', async () => {
-    const { db, chatId } = await seed();
+    const { db, chatId, offering } = await seed();
     const oneShotSpy = vi
       .spyOn(llm, 'runOneShotCompletion')
       .mockResolvedValue(' "Aurum and Chris on textures" ');
@@ -114,8 +118,6 @@ describe('generateTitleAsync', () => {
     const persona = (await db.personas.get(chat.personaId)) as PersonaRow;
     const provider = await db.providers.get(persona.providerId);
     if (!provider) throw new Error('no provider');
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
     await generateTitleAsync({
       chat,
       persona,
@@ -124,7 +126,7 @@ describe('generateTitleAsync', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'tell me about textures',
       firstPersonaResponse: 'There are three options...',
       globalUnlocker: 'UNLOCK',
@@ -143,12 +145,10 @@ describe('generateTitleAsync', () => {
   });
 
   it('error path writes fallback title', async () => {
-    const { db, chatId } = await seed();
+    const { db, chatId, offering } = await seed();
     vi.spyOn(llm, 'runOneShotCompletion').mockRejectedValue(new Error('500'));
     const chat = (await db.chats.get(chatId)) as ChatRow;
     const persona = (await db.personas.get(chat.personaId)) as PersonaRow;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
     await generateTitleAsync({
       chat,
       persona,
@@ -157,7 +157,7 @@ describe('generateTitleAsync', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'x',
       firstPersonaResponse: 'y',
       globalUnlocker: '',
@@ -168,12 +168,10 @@ describe('generateTitleAsync', () => {
   });
 
   it('empty-content result falls back', async () => {
-    const { db, chatId } = await seed();
+    const { db, chatId, offering } = await seed();
     vi.spyOn(llm, 'runOneShotCompletion').mockResolvedValue('   ');
     const chat = (await db.chats.get(chatId)) as ChatRow;
     const persona = (await db.personas.get(chat.personaId)) as PersonaRow;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
     await generateTitleAsync({
       chat,
       persona,
@@ -182,7 +180,7 @@ describe('generateTitleAsync', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'x',
       firstPersonaResponse: 'y',
       globalUnlocker: '',
@@ -216,7 +214,7 @@ describe('generateTitleAsync race-guard', () => {
   });
 
   it('skips the title write when the chat was manually titled mid-call', async () => {
-    const { chat, persona, provider, providerConfig, model, db } = await seed();
+    const { chat, persona, provider, providerConfig, offering, db } = await seed();
     let release!: (s: string) => void;
     const blocker = new Promise<string>((resolve) => {
       release = resolve;
@@ -231,7 +229,7 @@ describe('generateTitleAsync race-guard', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
       globalUnlocker: 'unlock',
@@ -250,7 +248,7 @@ describe('generateTitleAsync race-guard', () => {
   });
 
   it('skips the fallback write when the chat was manually titled before failure', async () => {
-    const { chat, persona, provider, providerConfig, model, db } = await seed();
+    const { chat, persona, provider, providerConfig, offering, db } = await seed();
     let reject!: (err: Error) => void;
     const blocker = new Promise<string>((_resolve, rej) => {
       reject = rej;
@@ -265,7 +263,7 @@ describe('generateTitleAsync race-guard', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
       globalUnlocker: 'unlock',
@@ -290,7 +288,7 @@ describe('generateTitleAsync invalidates TanStack queries', () => {
   });
 
   it('invalidates QK.chat(id) and QK.chats on the success path', async () => {
-    const { chat, persona, provider, providerConfig, model } = await seed();
+    const { chat, persona, provider, providerConfig, offering } = await seed();
     vi.spyOn(llm, 'runOneShotCompletion').mockResolvedValue('AI title');
 
     const { queryClient } = await import('../../src/lib/queryClient');
@@ -304,7 +302,7 @@ describe('generateTitleAsync invalidates TanStack queries', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
       globalUnlocker: 'unlock',
@@ -317,7 +315,7 @@ describe('generateTitleAsync invalidates TanStack queries', () => {
   });
 
   it('invalidates on the fallback path too', async () => {
-    const { chat, persona, provider, providerConfig, model } = await seed();
+    const { chat, persona, provider, providerConfig, offering } = await seed();
     vi.spyOn(llm, 'runOneShotCompletion').mockRejectedValue(new Error('boom'));
 
     const { queryClient } = await import('../../src/lib/queryClient');
@@ -331,7 +329,7 @@ describe('generateTitleAsync invalidates TanStack queries', () => {
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
       globalUnlocker: 'unlock',

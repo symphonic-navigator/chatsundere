@@ -1,4 +1,4 @@
-import type { KnownModel } from '@chatsundere/llm-unified';
+import { getOffering } from '@chatsundere/llm-unified';
 import { act, fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -14,6 +14,7 @@ const aurum: PersonaRow = {
   colour: '#c9a84c',
   font: 'serif',
   instructions: '',
+  canonicalId: null,
   providerId: '',
   modelId: '',
   mindspaceId: null,
@@ -24,14 +25,9 @@ const aurum: PersonaRow = {
   createdAt: 1,
   updatedAt: 1,
 };
-const model: KnownModel = {
-  id: 'm',
-  displayName: 'M',
-  contextWindow: 1000,
-  reasoning: { kind: 'no_reasoning', defaultOn: false, replayReasoning: false },
-  vision: false,
-  tools: false,
-};
+// nano-gpt deepseek-v4-flash: steps reasoning, 200_000 context
+// biome-ignore lint/style/noNonNullAssertion: test fixture — this slug is guaranteed to exist in the catalogue
+const offering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
 
 function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
   return render(
@@ -40,7 +36,7 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
       <InteractionMode
         persona={aurum}
         chat={null}
-        model={model}
+        offering={offering}
         usedTokens={0}
         draftValue={extra.draftValue ?? 'hi'}
         onDraftChange={vi.fn()}

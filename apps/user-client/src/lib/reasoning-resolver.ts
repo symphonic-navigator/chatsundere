@@ -1,68 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { KnownModel, ReasoningIntent } from '@chatsundere/llm-unified';
+import type { ReasoningControl, ReasoningIntent } from '@chatsundere/llm-unified';
 
 /**
- * Cockpit-side reasoning state. Three arms cover the UI surfaces:
- *
- *   - `off` — user explicitly disabled reasoning (only on capability-optional
- *     models — the toggle is gated upstream).
- *   - `on` — reasoning is enabled; an optional `effort` hint may be supplied
- *     for providers that honour low/medium/high (nano-gpt-flag, Novita).
- *   - `bucket` — legacy nano-gpt-pair-style selection where the model exposes
- *     a discrete bucket list (e.g. `low`, `medium`, `high`). The resolver
- *     normalises this onto the same ReasoningIntent shape, treating
- *     `bucket` as `effort` for the three canonical labels.
- *
- * The dual shape is deliberate during the Phase-4 transition: the cockpit
- * still emits the bucket form for effort-list models, while newer surfaces
- * may emit the flat `{ mode: 'on', effort }` directly.
+ * Cockpit-side reasoning selection, mirroring the ReasoningControl modes:
+ *   - `off`  — reasoning disabled (toggle-off or the steps `offStep`)
+ *   - `on`   — reasoning enabled, no granular step (toggle / fixed-on)
+ *   - `step` — a chosen effort step (steps mode)
  */
-export type ReasoningState =
-  | { mode: 'off' }
-  | { mode: 'on'; effort?: 'low' | 'medium' | 'high' }
-  | { mode: 'bucket'; bucket: string };
+export type ReasoningState = { kind: 'off' } | { kind: 'on' } | { kind: 'step'; step: string };
+
+/** Derive the initial UI reasoning state from the offering's control. */
+export function initialReasoningState(control: ReasoningControl): ReasoningState {
+  switch (control.mode) {
+    case 'none':
+      return { kind: 'off' };
+    case 'fixed-on':
+      return { kind: 'on' };
+    case 'toggle':
+      return control.defaultOn ? { kind: 'on' } : { kind: 'off' };
+    case 'steps':
+      return { kind: 'step', step: control.defaultStep };
+  }
+}
 
 /**
- * Map cockpit reasoning state + KnownModel capability onto a request-body
- * extras object the engine layer will shallow-merge.
- *
- *   - `optional` models receive `{ reasoning: ReasoningIntent }`; the
- *     per-provider translation (Novita flag, nano-gpt slug-swap, ollama
- *     `think`, …) happens later in `applyReasoningToBody`.
- *   - `no_reasoning` and `always_on` models receive an empty extras object;
- *     the capability-gated cockpit UI ensures no toggling can occur for
- *     those, so there is no intent to emit.
+ * Map control + state onto request-body extras the engine shallow-merges.
+ * `none`/`fixed-on` are unsteerable → no intent emitted. Steps map the chosen
+ * label onto the canonical low/medium/high effort; anything else falls back to
+ * a bare enabled intent. The per-provider wire translation stays in
+ * `applyReasoningToBody`.
  */
 export function resolveReasoningBodyExtras(
-  model: KnownModel,
+  control: ReasoningControl,
   state: ReasoningState,
 ): Record<string, unknown> {
-  if (model.reasoning.kind !== 'optional') return {};
-  const intent: ReasoningIntent = stateToIntent(state);
-  return { reasoning: intent };
-}
-
-function stateToIntent(state: ReasoningState): ReasoningIntent {
-  if (state.mode === 'off') return { enabled: false };
-  if (state.mode === 'bucket') {
-    // Bucket labels coming from the cockpit's effort-list rendering match
-    // the canonical low/medium/high triplet for every model we ship.
-    // Anything outside that is silently dropped to a bare enabled intent
-    // rather than smuggled into the wire shape.
-    const bucket = state.bucket;
-    if (bucket === 'low' || bucket === 'medium' || bucket === 'high') {
-      return { enabled: true, effort: bucket };
-    }
-    return { enabled: true };
+  if (control.mode === 'none' || control.mode === 'fixed-on') return {};
+  if (control.mode === 'toggle') {
+    const intent: ReasoningIntent = { enabled: state.kind !== 'off' };
+    return { reasoning: intent };
   }
-  return state.effort ? { enabled: true, effort: state.effort } : { enabled: true };
-}
-
-/** Derive the initial UI reasoning state from a model's capability declaration. */
-export function initialReasoningState(model: KnownModel): ReasoningState {
-  const cap = model.reasoning;
-  if (cap.kind === 'no_reasoning') return { mode: 'off' };
-  if (cap.effort)
-    return cap.defaultOn ? { mode: 'bucket', bucket: cap.effort.defaultBucket } : { mode: 'off' };
-  return cap.defaultOn ? { mode: 'on' } : { mode: 'off' };
+  // steps
+  if (state.kind === 'off') {
+    const intent: ReasoningIntent = { enabled: false };
+    return { reasoning: intent };
+  }
+  const step = state.kind === 'step' ? state.step : control.defaultStep;
+  const intent: ReasoningIntent =
+    step === 'low' || step === 'medium' || step === 'high'
+      ? { enabled: true, effort: step }
+      : { enabled: true };
+  return { reasoning: intent };
 }

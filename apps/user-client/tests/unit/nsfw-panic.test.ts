@@ -33,6 +33,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     colour: '#fff',
     font: 'serif',
     instructions: '',
+    canonicalId: null,
     providerId: 'pr',
     modelId: 'm',
     mindspaceId: null,

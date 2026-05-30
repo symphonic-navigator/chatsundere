@@ -1,4 +1,4 @@
-import type { KnownModel } from '@chatsundere/llm-unified';
+import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
@@ -10,7 +10,7 @@ import { InteractionTopbar } from './InteractionTopbar.js';
 interface Props {
   persona: PersonaRow;
   chat: ChatRow | null;
-  model: KnownModel;
+  offering: Offering;
   usedTokens: number;
   draftValue: string;
   onDraftChange: (v: string) => void;
@@ -103,7 +103,7 @@ export function InteractionMode(p: Props): JSX.Element {
         persona={p.persona}
         chat={p.chat}
         usedTokens={p.usedTokens}
-        contextWindow={p.model.contextWindow}
+        contextWindow={p.offering.context.recommended}
         onExit={p.onExit}
         onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}
@@ -126,7 +126,7 @@ export function InteractionMode(p: Props): JSX.Element {
       >
         <Cockpit
           persona={p.persona}
-          model={p.model}
+          offering={p.offering}
           draftValue={p.draftValue}
           onDraftChange={p.onDraftChange}
           onSend={handleSend}

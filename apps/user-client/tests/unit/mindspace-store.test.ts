@@ -34,6 +34,7 @@ function persona(id: string, mindspaceId: string | null): PersonaRow {
     colour: '#fff',
     font: 'serif',
     instructions: 'i',
+    canonicalId: null,
     providerId: 'pv',
     modelId: 'm',
     mindspaceId,

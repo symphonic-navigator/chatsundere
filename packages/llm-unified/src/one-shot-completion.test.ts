@@ -12,15 +12,15 @@ describe('runOneShotCompletion', () => {
     globalThis.fetch = mock(
       async () => new Response(successBody, { status: 200 }),
     ) as unknown as typeof fetch;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
     const args: OneShotArgs = {
       provider: nanoGpt,
       providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
       apiKey: 'test-key',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model,
+      target: { slug: model.upstreamSlug },
       messages: [{ role: 'user', content: 'hi' }],
       bodyExtras: { temperature: 0.3, max_tokens: 20 },
     };
@@ -36,8 +36,8 @@ describe('runOneShotCompletion', () => {
       attempts++;
       return new Response('nope', { status: 500 });
     }) as unknown as typeof fetch;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
 
     const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
 
@@ -49,7 +49,7 @@ describe('runOneShotCompletion', () => {
           apiKey: 'k',
           corsProxyUrl: null,
           corsProxyKey: null,
-          model,
+          target: { slug: model.upstreamSlug },
           messages: [],
           bodyExtras: {},
         },
@@ -66,8 +66,8 @@ describe('runOneShotCompletion', () => {
       async () =>
         new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 }),
     ) as unknown as typeof fetch;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
     await expect(
       runOneShotCompletion({
         provider: nanoGpt,
@@ -75,7 +75,7 @@ describe('runOneShotCompletion', () => {
         apiKey: 'k',
         corsProxyUrl: null,
         corsProxyKey: null,
-        model,
+        target: { slug: model.upstreamSlug },
         messages: [],
         bodyExtras: {},
       }),
@@ -88,8 +88,8 @@ describe('runOneShotCompletion retry on transient failure', () => {
   it('retries on 429 then returns the eventual content', async () => {
     const oldFetch = globalThis.fetch;
     let attempts = 0;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
     globalThis.fetch = mock(async () => {
       attempts++;
       if (attempts < 2) {
@@ -114,7 +114,7 @@ describe('runOneShotCompletion retry on transient failure', () => {
         apiKey: 'test-key',
         corsProxyUrl: null,
         corsProxyKey: null,
-        model,
+        target: { slug: model.upstreamSlug },
         messages: [{ role: 'user', content: 'hi' }],
         bodyExtras: {},
       },
@@ -128,8 +128,8 @@ describe('runOneShotCompletion retry on transient failure', () => {
   it('does not retry non-retryable 401', async () => {
     const oldFetch = globalThis.fetch;
     let attempts = 0;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
     globalThis.fetch = mock(async () => {
       attempts++;
       return new Response('unauthorised', { status: 401 });
@@ -145,7 +145,7 @@ describe('runOneShotCompletion retry on transient failure', () => {
           apiKey: 'test-key',
           corsProxyUrl: null,
           corsProxyKey: null,
-          model,
+          target: { slug: model.upstreamSlug },
           messages: [{ role: 'user', content: 'hi' }],
           bodyExtras: {},
         },
@@ -159,8 +159,8 @@ describe('runOneShotCompletion retry on transient failure', () => {
   it('throws after exhausting retries', async () => {
     const oldFetch = globalThis.fetch;
     let attempts = 0;
-    const model = nanoGpt.knownModels[0];
-    if (!model) throw new Error('no model');
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
     globalThis.fetch = mock(async () => {
       attempts++;
       return new Response('busy', { status: 503 });
@@ -176,7 +176,7 @@ describe('runOneShotCompletion retry on transient failure', () => {
           apiKey: 'test-key',
           corsProxyUrl: null,
           corsProxyKey: null,
-          model,
+          target: { slug: model.upstreamSlug },
           messages: [{ role: 'user', content: 'hi' }],
           bodyExtras: {},
         },

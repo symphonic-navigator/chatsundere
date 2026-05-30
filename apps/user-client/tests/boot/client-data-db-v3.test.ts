@@ -86,6 +86,7 @@ describe('client-data-db v3 migration', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: 'x',
+      canonicalId: null,
       providerId: 'pr-1',
       modelId: 'm-1',
       mindspaceId: null,

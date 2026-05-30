@@ -20,8 +20,7 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // knownModels populated in Task 3 — six curated models
-      expect(p.knownModels).toHaveLength(6);
+      expect(p.offerings).toHaveLength(6);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -31,7 +30,7 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.knownModels).toHaveLength(4);
+      expect(p.offerings).toHaveLength(4);
       expect(p.sortPriority).toBe(10);
     }
   });
@@ -41,8 +40,7 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      // knownModels populated in Task 3 — six curated models
-      expect(p.knownModels).toHaveLength(6);
+      expect(p.offerings).toHaveLength(6);
     }
   });
 
@@ -51,8 +49,7 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      // knownModels populated in Task 3 — six curated models
-      expect(p.knownModels).toHaveLength(6);
+      expect(p.offerings).toHaveLength(6);
     }
   });
 

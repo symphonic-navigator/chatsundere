@@ -37,7 +37,7 @@ describe('useCurrentChatStore', () => {
     s.setInteractionMode(true);
     s.togglePin();
     s.setAutoFollow(false);
-    s.setReasoning({ mode: 'off' });
+    s.setReasoning({ kind: 'off' });
     s.reset();
     const after = useCurrentChatStore.getState();
     expect(after.chatId).toBeNull();
@@ -45,6 +45,6 @@ describe('useCurrentChatStore', () => {
     expect(after.isInteractionMode).toBe(false);
     expect(after.isPinned).toBe(false);
     expect(after.autoFollowEnabled).toBe(true);
-    expect(after.reasoning).toEqual({ mode: 'on' });
+    expect(after.reasoning).toEqual({ kind: 'off' });
   });
 });

@@ -17,8 +17,9 @@ async function seedChat() {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'You are Aurum.',
+    canonicalId: null,
     providerId: 'pr1',
-    modelId: nanoGpt.knownModels[0]?.id ?? '',
+    modelId: nanoGpt.offerings[0]?.upstreamSlug ?? '',
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
@@ -93,7 +94,7 @@ describe('stream-manager.store', () => {
   it('start inserts user-msg + draft, engine resolve persists final', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'text', text: 'Hi' }],
       pillRows: [],
@@ -114,7 +115,7 @@ describe('stream-manager.store', () => {
   it('start persists pills with the right messageId', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'pill', pillId: 'pill-uuid-1' }],
       pillRows: [
@@ -147,7 +148,7 @@ describe('stream-manager.store', () => {
     // growing span and the fade would never re-fire on later chunks.
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     type OnChunk = (c: { type: 'token'; text: string }) => void;
     let captured: OnChunk | null = null;
     vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
@@ -187,7 +188,7 @@ describe('stream-manager.store', () => {
     // those leaks and intermittently wipe our freshly-started handle.
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const myChatId = 'c-mirror-reasoning';
     await db.chats.add({
       id: myChatId,
@@ -225,7 +226,7 @@ describe('stream-manager.store', () => {
     // on fresh-mounted spans inside the open ReasoningPill body.
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
     let captured: OnChunk | null = null;
     vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
@@ -266,7 +267,7 @@ describe('stream-manager.store', () => {
     // after every reasoning delta, otherwise ReasoningPill won't re-render.
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
     let captured: OnChunk | null = null;
     vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
@@ -307,7 +308,7 @@ describe('stream-manager.store', () => {
   it('abortDiscard removes the draft, keeps the user message', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockImplementation(
       () =>
         new Promise(() => {
@@ -328,7 +329,7 @@ describe('stream-manager.store', () => {
   it('fires title-gen after the first persona response (no-await)', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'text', text: 'Hi there' }],
@@ -351,7 +352,7 @@ describe('stream-manager.store', () => {
   it('does not fire title-gen for subsequent persona responses', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     // Plant a prior completed persona message so this is the "second" response.
     await db.messages.add({
       id: 'prior-p',
@@ -378,7 +379,7 @@ describe('stream-manager.store', () => {
     const { db, chatId, personaId } = await seedChat();
     await db.chats.update(chatId, { title: 'pre-set title' });
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'text', text: 'whatever' }],
@@ -395,7 +396,7 @@ describe('stream-manager.store', () => {
     // seedChat sets up persona p1; add a second chat against same persona
     const { db, chatId: c1, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const c2 = 'c2';
     await db.chats.add({
       id: c2,

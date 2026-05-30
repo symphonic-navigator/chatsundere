@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { getProvider } from '@chatsundere/llm-unified';
+import { getOffering, getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
@@ -22,7 +22,7 @@ export interface SendMessageArgs {
  *
  * 1. For lazy chats (`chatId === null`): create the ChatRow, snapshotting the
  *    persona's mindspace at the time of first send.
- * 2. Resolve the persona → provider → ProviderDefinition → KnownModel chain.
+ * 2. Resolve the persona → provider → ProviderDefinition → Offering chain.
  * 3. Decrypt the api-key and (if configured) the CORS-proxy shared key via
  *    `openSecret` using the master key held in `useSessionStore`.
  * 4. Delegate to `useStreamManagerStore.start(...)` for the actual streaming.
@@ -65,7 +65,7 @@ export function useSendMessage() {
         });
       }
 
-      // ── Step 2: Resolve persona → provider → model chain ────────────────
+      // ── Step 2: Resolve persona → provider → offering chain ─────────────
       const chat = await db.chats.get(chatId);
       if (!chat) throw new Error('useSendMessage: chat vanished after creation');
 
@@ -82,10 +82,10 @@ export function useSendMessage() {
       if (!providerDef)
         throw new Error(`useSendMessage: unknown provider template "${provider.templateId}"`);
 
-      const model = providerDef.knownModels.find((m) => m.id === persona.modelId);
-      if (!model)
+      const offering = getOffering(provider.templateId, persona.modelId);
+      if (!offering)
         throw new Error(
-          `useSendMessage: model "${persona.modelId}" not found in provider "${provider.templateId}"`,
+          `useSendMessage: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
         );
 
       // ── Step 3: Decrypt secrets ─────────────────────────────────────────
@@ -116,7 +116,7 @@ export function useSendMessage() {
         apiKey,
         corsProxyUrl,
         corsProxyKey,
-        model,
+        offering,
         priorMessages,
         userMessageText: args.text,
         reasoning: args.reasoning,
@@ -198,10 +198,10 @@ export function useRegenerate() {
       if (!providerDef)
         throw new Error(`useRegenerate: unknown provider template "${provider.templateId}"`);
 
-      const model = providerDef.knownModels.find((m) => m.id === persona.modelId);
-      if (!model)
+      const offering = getOffering(provider.templateId, persona.modelId);
+      if (!offering)
         throw new Error(
-          `useRegenerate: model "${persona.modelId}" not found in provider "${provider.templateId}"`,
+          `useRegenerate: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
         );
 
       const mk = useSessionStore.getState().mk;
@@ -237,7 +237,7 @@ export function useRegenerate() {
         apiKey,
         corsProxyUrl,
         corsProxyKey,
-        model,
+        offering,
         priorMessages,
         userMessageText: text,
         reasoning: args.reasoning,

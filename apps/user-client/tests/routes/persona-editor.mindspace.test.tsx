@@ -26,6 +26,7 @@ async function seedPersonaWithMindspace() {
     colour: '#fff',
     font: 'serif',
     instructions: 'i',
+    canonicalId: null,
     providerId: 'np',
     modelId: 'm',
     mindspaceId: verdan.id,

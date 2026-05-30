@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
-  type KnownModel,
+  type Offering,
   type ProviderConfig,
   type ProviderDefinition,
   type WireMessage,
   composeSystemPrompt,
+  offeringToTarget,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
 import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
@@ -70,7 +71,7 @@ export interface TitleGenArgs {
   apiKey: string;
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
-  model: KnownModel;
+  offering: Offering;
   firstUserMessage: string;
   firstPersonaResponse: string;
   globalUnlocker: string;
@@ -78,7 +79,7 @@ export interface TitleGenArgs {
 }
 
 /**
- * Background title generation. Calls the active persona's provider+model
+ * Background title generation. Calls the active persona's provider+offering
  * with a tiny prompt that asks for a 3-5 word title. The global unlocker
  * is composed into the system prompt — see `background-jobs-prompt-composition`
  * memory note. On any failure, writes the fallback string.
@@ -105,7 +106,7 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
       apiKey: args.apiKey,
       corsProxyUrl: args.corsProxyUrl,
       corsProxyKey: args.corsProxyKey,
-      model: args.model,
+      target: offeringToTarget(args.offering),
       messages,
       bodyExtras: { temperature: 0.3, max_tokens: 20 },
     });

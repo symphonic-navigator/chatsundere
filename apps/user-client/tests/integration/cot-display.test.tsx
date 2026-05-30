@@ -1,3 +1,4 @@
+import { getOffering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // End-to-end Chain-of-Thought display integration.
@@ -131,8 +132,9 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
     // composeSystemPrompt rejects empty persona instructions, so any
     // non-trivial string keeps the engine happy.
     instructions: 'You are Aurum.',
+    canonicalId: null,
     providerId: 'pr-it',
-    modelId: nanoGpt.knownModels[0]?.id ?? '',
+    modelId: nanoGpt.offerings[0]?.upstreamSlug ?? '',
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
@@ -157,8 +159,10 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
 }
 
 function startArgs(persona: PersonaRow, chat: ChatRow): Record<string, unknown> {
-  const model = nanoGpt.knownModels[0];
-  if (!model) throw new Error('nanoGpt has no known models');
+  const firstOffering = nanoGpt.offerings[0];
+  if (!firstOffering) throw new Error('nano-gpt has no offerings');
+  const offering = getOffering('nano-gpt', firstOffering.upstreamSlug);
+  if (!offering) throw new Error(`no offering for nano-gpt / ${firstOffering.upstreamSlug}`);
   return {
     chatId: chat.id,
     userText: 'Hello',
@@ -169,10 +173,10 @@ function startArgs(persona: PersonaRow, chat: ChatRow): Record<string, unknown> 
     apiKey: 'not-used-because-stream-is-mocked',
     corsProxyUrl: null,
     corsProxyKey: null,
-    model,
+    offering,
     priorMessages: [] as MessageRow[],
     userMessageText: 'Hello',
-    reasoning: { mode: 'on' as const },
+    reasoning: { kind: 'on' as const },
     globalUnlocker: '',
     globalAboutMe: '',
   };

@@ -1,3 +1,4 @@
+import { getOffering } from '@chatsundere/llm-unified';
 import { fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,7 @@ const aurum: PersonaRow = {
   colour: '#c9a84c',
   font: 'serif',
   instructions: '',
+  canonicalId: null,
   providerId: '',
   modelId: '',
   mindspaceId: null,
@@ -296,6 +298,10 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
 
 import { InteractionMode } from '../../src/components/chat/InteractionMode';
 
+// nano-gpt deepseek-v4-flash offering for InteractionMode plumbing test
+// biome-ignore lint/style/noNonNullAssertion: test fixture — this slug is guaranteed to exist in the catalogue
+const imOffering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
+
 describe('InteractionMode → InteractionTopbar plumbing', () => {
   it('forwards `chat` and `onRenameChat` to the Topbar', () => {
     const onRename = vi.fn();
@@ -304,7 +310,7 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
         <InteractionMode
           persona={aurum}
           chat={chatRow}
-          model={{ contextWindow: 8000 } as never}
+          offering={imOffering}
           usedTokens={0}
           draftValue=""
           onDraftChange={vi.fn()}

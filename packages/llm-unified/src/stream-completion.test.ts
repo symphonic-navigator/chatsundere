@@ -16,7 +16,7 @@ import {
   buildBodyForTest,
   streamCompletion,
 } from './stream-completion.js';
-import type { KnownModel, ProviderConfig, ProviderDefinition, StreamChunk } from './types.js';
+import type { ProviderConfig, ProviderDefinition, StreamChunk } from './types.js';
 
 const sseBody = [
   'data: {"choices":[{"delta":{"content":"Hi "}}]}',
@@ -43,15 +43,15 @@ describe('streamCompletion', () => {
   it('emits chunks parsed from the SSE response', async () => {
     const oldFetch = globalThis.fetch;
     globalThis.fetch = mockFetch(sseBody) as unknown as typeof fetch;
-    const firstModel = nanoGpt.knownModels[0];
-    if (!firstModel) throw new Error('nano-gpt has no known models');
+    const firstOffering = nanoGpt.offerings[0];
+    if (!firstOffering) throw new Error('nano-gpt has no offerings');
     const args: StreamCompletionArgs = {
       provider: nanoGpt,
       providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
       apiKey: 'test-key',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: firstModel,
+      target: { slug: firstOffering.upstreamSlug },
       messages: [{ role: 'user', content: 'hi' }],
       bodyExtras: {},
     };
@@ -77,15 +77,18 @@ describe('streamCompletion', () => {
         headers: { 'Content-Type': 'text/event-stream' },
       });
     }) as unknown as typeof fetch;
-    const flashModel = nanoGpt.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
-    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in nano-gpt models');
+    const flashOffering = nanoGpt.offerings.find(
+      (o) => o.upstreamSlug === 'deepseek/deepseek-v4-flash',
+    );
+    if (!flashOffering)
+      throw new Error('deepseek/deepseek-v4-flash not found in nano-gpt offerings');
     const args: StreamCompletionArgs = {
       provider: nanoGpt,
       providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: flashModel,
+      target: { slug: flashOffering.upstreamSlug },
       messages: [],
       bodyExtras: { reasoning: { enabled: true } },
     };
@@ -109,15 +112,15 @@ describe('streamCompletion', () => {
         headers: { 'Content-Type': 'text/event-stream' },
       });
     }) as unknown as typeof fetch;
-    const kimiModel = nanoGpt.knownModels.find((m) => m.id === 'moonshotai/kimi-k2.6');
-    if (!kimiModel) throw new Error('moonshotai/kimi-k2.6 not found in nano-gpt models');
+    const kimiOffering = nanoGpt.offerings.find((o) => o.upstreamSlug === 'moonshotai/kimi-k2.6');
+    if (!kimiOffering) throw new Error('moonshotai/kimi-k2.6 not found in nano-gpt offerings');
     const args: StreamCompletionArgs = {
       provider: nanoGpt,
       providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: kimiModel,
+      target: { slug: kimiOffering.upstreamSlug },
       messages: [],
       bodyExtras: { reasoning: { enabled: true } },
     };
@@ -138,15 +141,15 @@ describe('streamCompletion', () => {
     globalThis.fetch = mock(
       async () => new Response('nope', { status: 401 }),
     ) as unknown as typeof fetch;
-    const firstModel = nanoGpt.knownModels[0];
-    if (!firstModel) throw new Error('nano-gpt has no known models');
+    const firstOffering = nanoGpt.offerings[0];
+    if (!firstOffering) throw new Error('nano-gpt has no offerings');
     const args: StreamCompletionArgs = {
       provider: nanoGpt,
       providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
       apiKey: 'k',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: firstModel,
+      target: { slug: firstOffering.upstreamSlug },
       messages: [],
       bodyExtras: {},
     };
@@ -165,15 +168,17 @@ describe('streamCompletion', () => {
 
 describe('stream-completion.buildBody', () => {
   it('routes extras.reasoning through applyReasoningToBody (novita)', () => {
-    const flashModel = novita.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
-    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in novita models');
+    const flashOffering = novita.offerings.find(
+      (o) => o.upstreamSlug === 'deepseek/deepseek-v4-flash',
+    );
+    if (!flashOffering) throw new Error('deepseek/deepseek-v4-flash not found in novita offerings');
     const body = buildBodyForTest({
       provider: novita,
       providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
       apiKey: '',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: flashModel,
+      target: { slug: flashOffering.upstreamSlug },
       messages: [{ role: 'user', content: 'hi' }],
       bodyExtras: { reasoning: { enabled: true, effort: 'high' } },
     });
@@ -183,15 +188,17 @@ describe('stream-completion.buildBody', () => {
   });
 
   it('does NOT consume the legacy boolean thinking extra (drops silently)', () => {
-    const flashModel = novita.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
-    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in novita models');
+    const flashOffering = novita.offerings.find(
+      (o) => o.upstreamSlug === 'deepseek/deepseek-v4-flash',
+    );
+    if (!flashOffering) throw new Error('deepseek/deepseek-v4-flash not found in novita offerings');
     const body = buildBodyForTest({
       provider: novita,
       providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
       apiKey: '',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: flashModel,
+      target: { slug: flashOffering.upstreamSlug },
       messages: [{ role: 'user', content: 'hi' }],
       // `thinking` is the legacy Phase 3.1 boolean — should be dropped without
       // contributing a reasoning struct.
@@ -202,15 +209,17 @@ describe('stream-completion.buildBody', () => {
   });
 
   it('preserves unrelated bodyExtras (e.g. temperature)', () => {
-    const flashModel = novita.knownModels.find((m) => m.id === 'deepseek/deepseek-v4-flash');
-    if (!flashModel) throw new Error('deepseek/deepseek-v4-flash not found in novita models');
+    const flashOffering = novita.offerings.find(
+      (o) => o.upstreamSlug === 'deepseek/deepseek-v4-flash',
+    );
+    if (!flashOffering) throw new Error('deepseek/deepseek-v4-flash not found in novita offerings');
     const body = buildBodyForTest({
       provider: novita,
       providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
       apiKey: '',
       corsProxyUrl: null,
       corsProxyKey: null,
-      model: flashModel,
+      target: { slug: flashOffering.upstreamSlug },
       messages: [{ role: 'user', content: 'hi' }],
       bodyExtras: { temperature: 0.7, reasoning: { enabled: true } },
     });
@@ -225,15 +234,15 @@ describe('stream-completion.buildBody', () => {
 
 /** Returns a minimal valid StreamCompletionArgs using the nano-gpt provider. */
 function streamArgs(): StreamCompletionArgs {
-  const firstModel = nanoGpt.knownModels[0];
-  if (!firstModel) throw new Error('nano-gpt has no known models');
+  const firstOffering = nanoGpt.offerings[0];
+  if (!firstOffering) throw new Error('nano-gpt has no offerings');
   return {
     provider: nanoGpt,
     providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
     apiKey: 'test-key',
     corsProxyUrl: null,
     corsProxyKey: null,
-    model: firstModel,
+    target: { slug: firstOffering.upstreamSlug },
     messages: [{ role: 'user', content: 'hi' }],
     bodyExtras: {},
     // Keep the TTFB timeout short so tests don't hang on slow paths.
@@ -358,15 +367,11 @@ const recordingAdapter: ModelAdapter = {
 
 const provider = { id: 'p' } as ProviderDefinition;
 const providerConfig = {} as ProviderConfig;
-const model: KnownModel = {
+// Stub target — adapterId and slug feed the adapter routing.
+const modelStub = {
   id: 'slug',
-  displayName: 'M',
-  contextWindow: 100_000,
-  reasoning: { kind: 'optional', defaultOn: false, replayReasoning: false },
-  vision: false,
-  tools: true,
   adapterId: 'rec',
-};
+} as const;
 
 afterEach(() => {
   _resetAdapterRegistryForTests();
@@ -383,7 +388,7 @@ describe('buildAdapterBody', () => {
         apiKey: 'k',
         corsProxyUrl: null,
         corsProxyKey: null,
-        model,
+        target: { slug: modelStub.id, adapterId: modelStub.adapterId },
         messages: [{ role: 'user', content: 'hi' }],
         bodyExtras: { reasoning: { enabled: true, effort: 'high' }, temperature: 0.4 },
       },
@@ -405,7 +410,7 @@ describe('buildAdapterBody', () => {
         apiKey: 'k',
         corsProxyUrl: null,
         corsProxyKey: null,
-        model,
+        target: { slug: modelStub.id, adapterId: modelStub.adapterId },
         messages: [{ role: 'user', content: 'hi' }],
         bodyExtras: {},
         tools: [
@@ -427,7 +432,7 @@ describe('buildAdapterBody', () => {
         apiKey: 'k',
         corsProxyUrl: null,
         corsProxyKey: null,
-        model,
+        target: { slug: modelStub.id, adapterId: modelStub.adapterId },
         messages: [],
         bodyExtras: {},
       },

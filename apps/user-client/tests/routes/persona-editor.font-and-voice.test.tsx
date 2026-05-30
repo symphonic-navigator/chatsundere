@@ -6,7 +6,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@chatsundere/llm-unified', () => ({
-  getProvider: () => ({ id: 'p', displayName: 'P', baseUrl: 'x', knownModels: [] }),
+  getProvider: () => ({ id: 'p', displayName: 'P', baseUrl: 'x', offerings: [] }),
+  getCanonical: () => undefined,
+  listCanonicals: () => [],
+  listOfferings: () => [],
 }));
 
 vi.mock('../../src/data/personas.js', () => ({
