@@ -73,17 +73,18 @@ describe('Settings route — Providers list', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('renders three built-in provider rows (nano-gpt, Novita AI, Ollama Cloud) with status', async () => {
+  it('renders four built-in provider rows (Chutes, nano-gpt, Novita AI, Ollama Cloud) with status', async () => {
     wrap(<Settings />);
     // Open the Upstream Providers accordion (no longer defaultOpen)
     const providerHeader = await screen.findByText(/upstream providers/i);
     fireEvent.click(providerHeader);
     await waitFor(() => {
+      expect(screen.getByText(/chutes/i)).toBeInTheDocument();
       expect(screen.getByText(/nano-gpt/i)).toBeInTheDocument();
       expect(screen.getByText(/novita ai/i)).toBeInTheDocument();
       expect(screen.getByText(/ollama cloud/i)).toBeInTheDocument();
     });
-    expect(screen.getAllByText(/not connected/i).length).toBe(3);
+    expect(screen.getAllByText(/not connected/i).length).toBe(4);
   });
 
   it('counts connected providers in the card meta line', async () => {
@@ -111,6 +112,6 @@ describe('Settings route — Providers list', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(screen.getByText(/1 of 3 connected/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/1 of 4 connected/i)).toBeInTheDocument());
   });
 });

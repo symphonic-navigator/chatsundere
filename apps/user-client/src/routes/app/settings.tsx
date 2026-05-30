@@ -16,10 +16,13 @@ import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 const BUILT_IN_PROVIDERS = [
+  { id: 'chutes', name: 'Chutes', monogram: 'Ch' },
   { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
   { id: 'novita', name: 'Novita AI', monogram: 'No' },
   { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
 ] as const;
+
+type ProviderTemplateId = (typeof BUILT_IN_PROVIDERS)[number]['id'];
 
 interface SettingsDraft {
   globalAboutMe: string;
@@ -48,7 +51,7 @@ function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
 
 function ProvidersList(): JSX.Element {
   const providers = useProviders();
-  const [openSheet, setOpenSheet] = useState<'nano-gpt' | 'novita' | 'ollama-cloud' | null>(null);
+  const [openSheet, setOpenSheet] = useState<ProviderTemplateId | null>(null);
 
   return (
     <div className="flex flex-col gap-2">
@@ -227,7 +230,7 @@ export function Settings(): JSX.Element {
       <AccordionCard
         icon="⬢"
         label="Upstream Providers"
-        meta={`${(providers.data ?? []).filter((p) => p.enabled).length} of 3 connected`}
+        meta={`${(providers.data ?? []).filter((p) => p.enabled).length} of ${BUILT_IN_PROVIDERS.length} connected`}
       >
         <ProvidersList />
       </AccordionCard>
