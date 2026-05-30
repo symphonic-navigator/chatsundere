@@ -172,6 +172,7 @@ Critical and high findings are not deferrable without explicit Chris sign-off in
 - Backend tests via Bun's built-in runner. Frontend tests via Vitest.
 - No comments that restate the code. Comments explain non-obvious *why*, not *what*.
 - Every feature spec ends with a "Manual verification" section listing device-tested steps Chris will run himself.
+- **Curation fixtures grow with inference.** The curation verification harness (the standardised conversation-suite) grows with the capabilities of the inference-runner. Adapters are validated against real end-to-end protocol behaviour, never merely structurally, and never in CI (provider keys never enter CI). See the [`/curate` skill](.claude/skills/curate/).
 
 ---
 

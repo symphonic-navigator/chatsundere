@@ -8,6 +8,7 @@ export type {
   ProviderConfig,
   WireMessage,
   StreamChunk,
+  NormalisedUsage,
   ProbeResult,
   ReasoningCapability,
   ReasoningEffortSpec,

@@ -1,22 +1,22 @@
 # @chatsundere/llm-unified
 
-The unified LLM layer for Chatsundere — and the **model adapter factory** behind
-it. It does three things:
+The unified LLM layer for Chatsundere. It does three things:
 
 1. **Speaks to upstream LLMs** through a small set of hand-written provider
-   connections and a canonical streaming interface.
-2. **Synthesises per-model adapters automatically** — an analyzer model
-   empirically probes a target model, then writes the adapter that mediates
-   between Chatsundere's canonical API and that model's real wire behaviour.
-   The adapter is accepted only after it reproduces the captured evidence.
-3. **Models a curated catalogue** the user picks from — model-first, with each
+   connections and a canonical streaming interface (`buildRequest` → transport →
+   `streamCompletion` → normalised `StreamChunk`s).
+2. **Models a curated catalogue** the user picks from — model-first, with each
    model's providers, trade-offs, and trust/freedom signals.
+3. **Supports interactive curation** — onboarding providers and integrating
+   models is now a hands-on workflow driven by the `/curate` skill, with a
+   deterministic conversation-suite as the behavioural oracle.
 
-The novel idea: rather than hand-maintaining a brittle table of every model's
-quirks (which drifts and never covers the long tail), Chatsundere lets a trusted
-model **discover and encode another model's behaviour from real probes**, and
-trusts the result because it is *validated against that evidence*, not because
-the analyzer asserts it.
+The earlier machine-synthesis loop (a weak analyser model babysat by byte-level
+fixture replay) has been **retired**: fixture replay could go green while a model
+was functionally broken (the MiMo-V2.5-via-chutes `generate_image` HTTP 400
+case). Real correctness needs end-to-end behavioural validation, so the adapter
+author is now Claude, working interactively through the `/curate` skill and
+proving each offering against the conversation-suite.
 
 ---
 
@@ -28,9 +28,9 @@ in one block; what "reasoning off" really means (genuinely off, or merely
 hidden — we treat hidden as always-on and refuse the charade); the four-plus
 distinct `reasoning_effort` semantics; whether reasoning and tool calls can
 coexist in one request; slug zoos like nano-gpt's `:thinking` / `-thinking` /
-`TEE/`. Encoding all of that by hand was the old approach, and it was a
-treadmill. This package replaces it with **empirical synthesis + a declarative
-catalogue**.
+`TEE/`. Encoding all of that by hand is a treadmill, but machine-synthesising it
+blind proved unreliable. The current approach pairs a **declarative catalogue**
+with **interactive, behaviourally-validated curation**.
 
 ## The three pillars
 
@@ -51,11 +51,12 @@ it at what trade-offs:
 The **capability gate** (`parseCatalogueEntry`, Valibot-validated) requires every
 offering to deliver the canonical's `requiredCaps` — a provider that drops vision
 on a vision model yields no valid offering. **Effective freedom**
-(`effectiveFreedom`) is the three-state (`free` / `restricted` / `unknown`) AND
-of model-intrinsic and deployment freedom.
+(`effectiveFreedom`, returning a `FreedomState`) is the three-state (`free` /
+`restricted` / `unknown`) AND of model-intrinsic and deployment freedom.
 
-`ModelProfile.reasoning` is a `ReasoningControl` union that drives the cockpit UI
-directly: `none` (always-off) / `fixed-on` / `toggle` / `steps`.
+`ModelProfile.reasoning` is a `ReasoningControl` union (`isReasoningControl`
+guards it) that drives the cockpit UI directly: `none` (always-off) /
+`fixed-on` / `toggle` / `steps`.
 
 **Freedom** is Chatsundere's anti-censorship signal. A model is *freedom-oriented*
 when it does not patronise/hedge/fear the user, does not suppress legal (ordinary
@@ -64,46 +65,41 @@ being anything legally purchasable in the adult section of an EU bookshop.
 Political refusals are a tolerated exception. The full definition lives in the
 Provider Integration Policy.
 
-### 2. Synthesis engine (`src/synthesis/`)
+### 2. Interactive curation via the `/curate` skill
 
-The agentic loop, reusable wherever an adapter must be generated:
+Adapters and catalogue entries are produced by **Claude as the interactive
+adapter author**, at maintain-time, never at the user's runtime. The workflow —
+onboarding a provider, integrating a model, verifying & repairing a misbehaving
+offering, or batch-checking a sub-selection — lives entirely in the skill at
+[`.claude/skills/curate/SKILL.md`](../../.claude/skills/curate/SKILL.md). It uses
+progressive discovery: the intent router there points to one playbook per task,
+so the playbooks are not duplicated here.
 
-`probe → capture → generate → validate → self-repair → accept | fallback`
+The maintain-time helpers the curator leans on live in
+`src/providers/curation/` — `provider-scanner.ts` (enumerate a provider's live
+model list) and `model-file.ts` (read/write the per-model catalogue files under
+`models/`).
 
-- **Probe** the target with deterministic synthetic prompts; **capture** the raw
-  SSE responses as golden fixtures (empirical truth).
-- **Generate**: the analyzer model receives the contract + the captured evidence
-  and writes the adapter (pure `buildRequest` + `parseChunk` + profile).
-- **Validate** *baseline-free* (`validateAgainstFixtures`): replay the candidate
-  through the fixtures and require it to *reflect what the evidence contains*
-  (reasoning → reasoning events; content → tokens; tool calls → a `tool-call`
-  event with **valid-JSON** arguments — the reassembly-correctness check), plus a
-  profile-gate (declared profile must match observed facts). This generalises to
-  any target; a hand-ported DeepSeek baseline remains as a regression oracle for
-  that model.
-- **Self-repair** ≤ 3 rounds, then a conservative heuristic fallback.
+### 3. Deterministic conversation-suite (`curation/conversation-suite/`)
 
-Adapters are **pure transformations** (no I/O, no storage, no keys) so they can
-later run in a sandboxed iframe with no exfiltration channel. Today they execute
-in a Bun Worker (a functional isolation stand-in for tooling — **not** the
-production security boundary; that iframe boundary and a security audit are
-deferred before any generated code runs in the PWA).
+The behavioural oracle that replaces byte-level fixture replay. It runs a model
+through a scripted conversation — plain completion, a `generate_image` tool call
+with a tool-result round-trip, and a mid-conversation memory echo — and applies
+pure, deterministic assertions to each turn's outcome (`assertNoHttpError`,
+`assertToolCallFired`, `assertToolArgsValidJson`, `assertUsagePresent`,
+`assertReasoningPresent` / `assertReasoningAbsent`, `assertMemoryEchoed`,
+`assertNoStreamError`).
 
-### 3. Curation CLI — the factory (`src/curate/`)
+The suite has two roles:
 
-A maintainer-only CLI (**not** shipped to clients) that turns the engine into a
-declarative model-support factory. One YAML per model: human-curated identity +
-offerings above, machine-generated `built:` block below. See
-[`src/curate/README.md`](src/curate/README.md) for the full workflow. In short:
+- Its own logic ships with **unit tests** — assertions, report assembly, and
+  scenario shape — run via `bun run curate:suite`. These are pure and key-free.
+- The same scenarios are driven **live against a provider** by the `/curate`
+  skill during curation, binding `streamCompletion` + the offering's adapter +
+  the provider's key.
 
-```
-bun run curate model template nano-gpt:zai-org/glm-6 > models/glm-6.yaml
-# fill in the judgement fields (freedom, trust, context)
-bun run curate model build models/glm-6.yaml
-# → per offering: probe target, GLM-5.1 writes the adapter, validate + self-repair;
-#   writes the adapter .ts, the built: block (comments preserved), and
-#   obsidian/models/glm-6.md (a deterministic, no-LLM report)
-```
+**Live verification is local-only.** Provider keys live under `keys/` and never
+enter CI; no test that hits a live provider runs in GitHub Actions.
 
 ## Public API (highlights)
 
@@ -111,41 +107,46 @@ bun run curate model build models/glm-6.yaml
 import {
   // catalogue
   type CanonicalModel, type Offering, type ModelProfile, type ReasoningControl,
-  parseCatalogueEntry, effectiveFreedom,
+  type AdapterRef, type FreedomState,
+  parseCatalogueEntry, effectiveFreedom, isReasoningControl,
   // providers + transport
-  getProvider, listProviders, buildRequest,
+  getProvider, listProviders, registerProvider, buildRequest,
   // streaming + completions
   streamCompletion, runOneShotCompletion, parseOpenAiSseStream,
   composeSystemPrompt, probeProvider,
+  // wire types
+  type StreamChunk, type NormalisedUsage, type WireMessage, type ReasoningIntent,
 } from '@chatsundere/llm-unified';
 ```
 
-The `synthesis/` and `curate/` subtrees are internal (not exported from the
-index) — the factory runs from the package scripts, not from client code.
+`StreamChunk` is the normalised streaming union: `token` / `reasoning` /
+`tool-call` / `usage` (carrying a `NormalisedUsage`) / `finish` / `error`.
+Adapters extract `NormalisedUsage` from each provider's idiosyncratic `usage`
+object inside their `parseChunk`. The `curation/` subtree and
+`src/providers/curation/` helpers are maintain-time only and are not exported
+from the package index.
 
 ## Scripts
 
 ```bash
 bun test                                   # Bun test runner (rooted at ./src via bunfig.toml)
+bun run curate:suite                       # conversation-suite unit tests (pure, key-free)
 pnpm --filter @chatsundere/llm-unified typecheck
 pnpm --filter @chatsundere/llm-unified build
-bun run synthesise <provider> <model>      # the original synthesis spike CLI
-bun run curate <command>                   # the model-support factory (see src/curate/README.md)
 ```
 
-`synthesise` and `curate` need `NANO_GPT_API_KEY` (see `.env.example`).
+There is no longer a `synthesise` or `curate` package script — curation is the
+`/curate` skill's job, and its live verification runs locally with keys from
+`keys/`, never from a package script and never in CI.
 
 ## Status
 
-Built and on `master`: the catalogue data model, the synthesis engine
-(live-verified), and the curation CLI. Deferred (tracked in the client-only
-STATUS and `src/curate/README.md`): the production iframe sandbox + security
-audit, the client-side catalogue surfaces (model-first Catalogue + provider-first
-"Your Endpoints"), catalogue signing/feed delivery, per-provider API keys, an
-Ollama catch-all adapter, and `model verify` drift detection.
+Built: the catalogue data model, the deterministic
+conversation-suite, and the `/curate` skill (with its provider-onboarding,
+model-curation, verify-offering and batch-check playbooks). The machine
+synthesis engine and the old curation CLI have been removed.
 
-Design specs and plans live in `superpowers/specs/` and `superpowers/plans/`
-(the `2026-05-29-*` set).
+Design specs and plans live in `superpowers/specs/` and `superpowers/plans/`.
 
 ## Licence
 

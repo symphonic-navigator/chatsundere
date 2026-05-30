@@ -161,8 +161,12 @@ Ownership: the human owns the freedom/trust judgement; I own the
 measured/authored parts. We write it together — the rigid "machine-only writes
 the lower block" split from the old design relaxes, but Valibot remains the gate.
 
-Adapter `.ts` stays a sibling file per offering
-(`models/<id>.<provider>.adapter.ts`), reviewable/editable in Rider.
+The adapter `.ts` per offering lives at `src/adapters/<id>.<provider>.ts`,
+reviewable/editable in Rider. (Correction to the original draft: adapters must
+sit under `src/` to be compiled into the package — `rootDir` is `./src`, so a
+`models/`-sibling file would never reach `dist/`. They implement the
+`ModelAdapter` contract in `src/adapter-contract.ts`; the catalogue Offering's
+`AdapterRef` points to them.)
 
 ### Mode 3 — Verify / repair an offering (reactive)
 Trigger: "MiMo V2.5 Pro on chutes seems broken — take a look." Re-run the
@@ -232,7 +236,8 @@ agent-driven; verdicts are deterministic.
 - One model YAML per model: human judgement + authored parts; written
   collaboratively; Valibot `parseCatalogueEntry` is the gate.
 - `usage` normalised in the adapter (`parseChunk`); quirk in the record.
-- Adapter `.ts` per offering as a sibling file, editor-reviewable.
+- Adapter `.ts` per offering at `src/adapters/<id>.<provider>.ts` (under `src/`
+  so it compiles into the package), editor-reviewable.
 
 ## 10. Testing Strategy
 

@@ -90,6 +90,18 @@ Every service has its own `.env.example`. After `scripts/setup-dev.sh` runs, you
 | `VITE_SYNC_URL` | Sync-service base URL | `http://localhost:3200` |
 | `VITE_PROXY_URL` | Proxy-service base URL | `http://localhost:3300` |
 
+## Curating model & provider support
+
+Model and provider support in `packages/llm-unified` is curated by maintainers
+with the **`/curate` skill** ([`.claude/skills/curate/`](.claude/skills/curate/)) —
+an interactive Claude Code workflow rather than a one-shot CLI. Reach for it to
+onboard a provider, integrate a model, or verify and repair a misbehaving
+offering (e.g. a tool call failing on a given provider). Adapters are validated
+against real end-to-end protocol behaviour via a deterministic conversation-suite,
+run locally — never in CI, since provider keys never enter CI. The skill's
+`references/` hold the per-mode playbooks; start at
+[`SKILL.md`](.claude/skills/curate/SKILL.md).
+
 ## Versioning & deployment
 
 This repo follows a `version.txt`-driven scheme adapted from
@@ -126,3 +138,4 @@ See [ADR 0002](obsidian/decisions/0002-agplv3-for-apps.md) for the AGPL choice.
 - [ADRs](obsidian/decisions/)
 - [Project journal](obsidian/insights/)
 - [Architecture](obsidian/ARCHITECTURE.md) _(skeleton, filled as services land)_
+- [The `/curate` skill](.claude/skills/curate/) — curating model & provider support
