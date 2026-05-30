@@ -62,6 +62,13 @@ the highest-trust one (e.g. the chutes TEE deployment of GLM 5.1).
 4. **Clean break for existing personas.** No migration mapper. A persona without a
    `canonicalId` is treated as "model not set" and the user re-picks. Acceptable
    pre-v0.1.0 / private.
+6. **The custom-model input is removed.** Today `ModelList` lets a user type an
+   arbitrary slug bound to the selected provider — an uncatalogued escape hatch.
+   Canonical-first has no place for it without a fallback-offering design, so it is
+   removed outright in Slice 2 (only curated canonicals are selectable). It can
+   return later as a properly-designed uncatalogued offering. Consequence: clean
+   break stays simple — a persona without a `canonicalId` always means "model not
+   set, re-pick".
 5. **`fixed-on` reasoning is shown, lit, and non-interactive.** Rather than hiding
    the reasoning control for always-on models (today's behaviour), render a single
    lit-but-disabled "On" indicator. Rationale (Chris): this is transparency *and* UI
@@ -190,6 +197,7 @@ Used to author the non-chutes offerings:
   **unconfigured providers are shown disabled with a constructive CTA** ("Add chutes
   to use the TEE deployment"). Badges: TEE, jurisdiction, context, freedom.
 - On confirm, the editor patches `{ canonicalId, providerId, modelId }`.
+- The custom-model input (`ModelList`, today's lines 526–545) is removed (Decision §2.6).
 
 ## 6. Testing
 
