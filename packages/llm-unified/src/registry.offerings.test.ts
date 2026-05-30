@@ -48,7 +48,7 @@ describe('listOfferings', () => {
 describe('getOffering', () => {
   test('finds an offering by provider template + slug', () => {
     expect(getOffering('chutes', 'zai-org/GLM-5.1-TEE')?.canonicalRef).toBe('glm-5.1');
-    expect(getOffering('nano-gpt', 'deepseek/deepseek-v4-pro')?.adapter.kind).toBe('generic');
+    expect(getOffering('ollama-cloud', 'deepseek-v4-pro')?.adapter.kind).toBe('generic');
     expect(getOffering('nano-gpt', 'zai-org/glm-5.1')?.adapter.kind).toBe('catalogue');
   });
 

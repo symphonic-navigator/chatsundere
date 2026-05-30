@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { registerAdapter } from '../adapter-registry.js';
-import { nanoGptGlmAdapter } from '../adapters/nano-gpt-glm.js';
+import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
 import { apiKeyField } from './_helpers.js';
 
-const TOGGLE_ON: ReasoningControl = { mode: 'toggle', defaultOn: true };
 const STEPS: ReasoningControl = {
   mode: 'steps',
   steps: ['low', 'medium', 'high'],
@@ -20,7 +19,9 @@ const STEPS: ReasoningControl = {
 // share the slug-swap adapter; only the declared control differs.
 const GLM_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 
-function genericOffering(
+// A live-curated nano-gpt offering: hand-written slug-swap adapter, verified.
+// Serves the GLM, DeepSeek, Kimi and Gemma families (all slug-swap on nano-gpt).
+function slugSwapOffering(
   canonicalRef: string,
   slug: string,
   reasoning: ReasoningControl,
@@ -31,37 +32,11 @@ function genericOffering(
     canonicalRef,
     providerId: 'nano-gpt',
     upstreamSlug: slug,
-    adapter: { kind: 'generic' },
-    profile: {
-      reasoning,
-      toolCalls: { supported: true, streaming: true, concurrentWithReasoning: false },
-      vision,
-      replayReasoning: false,
-    },
-    context: { recommended: ctx, max: ctx },
-    trust: { tee: false, zdr: false },
-    freedomOrientedDeployment: null,
-    source: 'curated',
-    confidence: 'heuristic',
-  };
-}
-
-// A live-curated GLM offering: hand-written slug-swap adapter, verified.
-function glmOffering(
-  canonicalRef: string,
-  slug: string,
-  reasoning: ReasoningControl,
-  ctx: number,
-): Offering {
-  return {
-    canonicalRef,
-    providerId: 'nano-gpt',
-    upstreamSlug: slug,
     adapter: { kind: 'catalogue', adapterId: `nano-gpt:${slug}` },
     profile: {
       reasoning,
       toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
-      vision: false,
+      vision,
       replayReasoning: false,
     },
     context: { recommended: ctx, max: ctx },
@@ -73,12 +48,12 @@ function glmOffering(
 }
 
 const offerings: Offering[] = [
-  genericOffering('deepseek-v4-flash', 'deepseek/deepseek-v4-flash', STEPS, false, 200_000),
-  genericOffering('deepseek-v4-pro', 'deepseek/deepseek-v4-pro', STEPS, false, 200_000),
-  glmOffering('glm-5', 'zai-org/glm-5', GLM_FIXED_ON, 200_000),
-  glmOffering('glm-5.1', 'zai-org/glm-5.1', STEPS, 200_000),
-  genericOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', TOGGLE_ON, true, 256_000),
-  genericOffering('gemma-4-31b', 'google/gemma-4-31b-it', TOGGLE_ON, true, 262_144),
+  slugSwapOffering('deepseek-v4-flash', 'deepseek/deepseek-v4-flash', STEPS, false, 200_000),
+  slugSwapOffering('deepseek-v4-pro', 'deepseek/deepseek-v4-pro', STEPS, false, 200_000),
+  slugSwapOffering('glm-5', 'zai-org/glm-5', GLM_FIXED_ON, false, 200_000),
+  slugSwapOffering('glm-5.1', 'zai-org/glm-5.1', STEPS, false, 200_000),
+  slugSwapOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', STEPS, true, 256_000),
+  slugSwapOffering('gemma-4-31b', 'google/gemma-4-31b-it', STEPS, true, 262_144),
 ];
 
 export const nanoGpt: ProviderDefinition = {
@@ -102,7 +77,7 @@ export function registerNanoGpt(): void {
     if (o.adapter.kind === 'catalogue') {
       registerAdapter(
         o.adapter.adapterId,
-        nanoGptGlmAdapter(o.upstreamSlug, o.profile.vision, o.profile.reasoning),
+        nanoGptSlugSwapAdapter(o.upstreamSlug, o.profile.vision, o.profile.reasoning),
       );
     }
   }

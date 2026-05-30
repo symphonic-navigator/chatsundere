@@ -3,8 +3,24 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-30 (latest) — **GLM family curated across three
-providers via `/curate` (first batch).** `glm-5` + `glm-5.1` live-verified on
+**Last updated:** 2026-05-30 (latest) — **Batch 2: DeepSeek V4 + Kimi + Gemma
+curated on nano-gpt & novita; vision suite added.** `deepseek-v4-flash`,
+`deepseek-v4-pro`, `kimi-k2.6`, `gemma-4-31b` all live-verified on nano-gpt +
+novita (8 new offerings, `heuristic`→`verified`); `glm-5` added to chutes earlier.
+**Adapters generalised** (`nanoGptGlmAdapter`→`nanoGptSlugSwapAdapter`,
+`novitaGlmAdapter`→`novitaThinkingAdapter`) — one adapter per provider now serves
+all four families; dead `genericOffering` removed from nano-gpt/novita (every
+offering there is verified). **Vision suite added** (`WireMessage` gained a
+multimodal `content` union + `WireToolCall`; `visionScenario` + `assertVisionDescribed`
++ embedded 128x128 test image): Kimi & Gemma vision verified on nano-gpt + novita,
+Gemma on chutes too. **Two findings:** (1) the vision test image must be ≥~128px —
+a 24x24 was mis-perceived as black by Kimi; (2) **chutes Kimi-K2.6-TEE 400s on
+image + `reasoning_effort`** (chutes Gemma is fine) — a follow-up (omit effort on
+image turns). Freedom (Chris, 2026-05-30): DeepSeek/Kimi/Gemma all
+`freedomOriented: true`, nano-gpt/novita deployments `true` → 🕊️ free. Records
+written/updated for all five. 168 src + 34 curation Bun tests green; repo
+typecheck clean. **Prior entry —** GLM family curated across three
+providers via `/curate` (first batch). `glm-5` + `glm-5.1` live-verified on
 **chutes, nano-gpt, novita** (ollama-cloud out — currently down). Six offerings
 now `confidence: 'verified'` with hand-written catalogue adapters: new
 `nano-gpt-glm` (slug-swap reasoning) + `novita-glm` (`enable_thinking` toggle)

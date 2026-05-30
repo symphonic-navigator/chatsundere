@@ -12,7 +12,7 @@
 - **context:** recommended/max 131 072 (single value from `/models`)
 - **reasoning control:** `reasoning_effort` (low/medium/high), off = omit
 - 🔒 **Privacy:** yes (chutes TEE / confidential compute, attested per chunk)
-- 🕊️ **Freedom:** pending live judgement — DeepSeek is generally freedom-oriented; the chutes deployment adds no censorship layer we have observed, but confirm against the freedom guidelines.
+- 🕊️ **Freedom:** free — `freedomOriented: true` (Chris, 2026-05-30: DeepSeek open-weight); the chutes TEE deployment is `freedomOrientedDeployment: true`.
 
 ## Probe findings (2026-05-30)
 

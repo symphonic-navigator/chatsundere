@@ -7,3 +7,4 @@ export * from './runner.js';
 export * from './binding.js';
 export * from './permutations.js';
 export { coreScenario } from './scenarios/core.js';
+export { visionScenario } from './scenarios/vision.js';

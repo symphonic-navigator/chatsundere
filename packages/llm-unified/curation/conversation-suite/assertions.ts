@@ -93,6 +93,26 @@ export function assertReasoningAbsent(outcome: TurnOutcome): AssertionResult {
   };
 }
 
+/**
+ * An image's expected content was described in the reply — i.e. the image was
+ * carried through the protocol to the model. Like `memory-echoed`, the directness
+ * of the prompt keeps this a PIPE check, not an intelligence judgement: a model
+ * that never received the image answers "I can't see an image" (no token), while
+ * any model that received it names the unambiguous content.
+ */
+export function assertVisionDescribed(token: string): Assertion {
+  return (outcome) => {
+    const ok = outcome.text.toLowerCase().includes(token.toLowerCase());
+    return {
+      assertion: `vision-described:${token}`,
+      status: ok ? 'pass' : 'fail',
+      detail: ok
+        ? `reply references "${token}"`
+        : `reply does not reference "${token}" (image not carried through the protocol)`,
+    };
+  };
+}
+
 /** A memory token was echoed through the protocol into the reply. */
 export function assertMemoryEchoed(token: string): Assertion {
   return (outcome) => {

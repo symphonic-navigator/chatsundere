@@ -79,18 +79,20 @@ function normaliseUsage(u: NanoGptUsage): NormalisedUsage {
 }
 
 /**
- * Build a nano-gpt adapter for a GLM-family base slug. nano-gpt steers GLM
- * reasoning by a MODEL-SLUG SWAP, not a body flag (probed live — see
- * obsidian/models/glm-5.1.md and glm-5.md): the `:thinking` sibling reasons and
- * honours `reasoning_effort`. Whether the BARE slug truly disables thinking is
- * per-model: glm-5.1 bare is cleanly off (→ `steps` with an off step), but
- * glm-5 bare reasons regardless (→ `fixed-on`, the "off only hides" case). The
- * caller therefore passes the probed `reasoning` control. Thinking text streams
- * on the `reasoning` delta channel (not `reasoning_content`). Tool calls arrive
- * as a single block but the fragment buffer is kept for safety. Usage is
- * requested via `stream_options.include_usage` on a final `choices: []` event.
+ * Build a nano-gpt adapter for any base slug whose reasoning is steered by a
+ * MODEL-SLUG SWAP rather than a body flag — nano-gpt's uniform mechanism for
+ * the GLM and DeepSeek families (probed live; see obsidian/models/glm-5.1.md,
+ * glm-5.md, deepseek-v4-flash.md, deepseek-v4-pro.md). The `:thinking` sibling
+ * reasons and honours `reasoning_effort`. Whether the BARE slug truly disables
+ * thinking is per-model: most (glm-5.1, both DeepSeek V4) are cleanly off
+ * (→ `steps` with an off step), but glm-5 bare reasons regardless (→ `fixed-on`,
+ * the "off only hides" case). The caller passes the probed `reasoning` control.
+ * Thinking text streams on the `reasoning` delta channel (not `reasoning_content`,
+ * which is read defensively). Tool calls arrive as a single block but the
+ * fragment buffer is kept for safety. Usage is requested via
+ * `stream_options.include_usage` on a final `choices: []` event.
  */
-export function nanoGptGlmAdapter(
+export function nanoGptSlugSwapAdapter(
   baseSlug: string,
   vision: boolean,
   reasoning: ReasoningControl,
@@ -99,7 +101,7 @@ export function nanoGptGlmAdapter(
     reasoning,
     toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
     vision,
-    replayReasoning: false, // GLM is soft-CoT — never replays its own thinking
+    replayReasoning: false, // GLM/DeepSeek are soft-CoT — never replay their thinking
   };
 
   return {

@@ -1,28 +1,53 @@
-# Model Curation Record — Kimi K2.6 (TEE)
+# Model Curation Record — Kimi K2.6
 
-> Curation record. See [[../providers/chutes]] for the shared provider mechanics.
+> Curation record. See [[../providers/chutes]] for the shared chutes mechanics.
 
 - **Identity:** Kimi K2.6 · family `kimi`
-- **T/R/V:** tools ✅ · reasoning ✅ (optional, effort buckets) · vision ✅ (input text + image + video)
+- **T/R/V:** tools ✅ · reasoning ✅ · vision ✅ (input image; output text-only)
 - **replayReasoning:** false (soft-CoT)
+- **🕊️ Freedom:** free — `freedomOriented: true` (Chris, 2026-05-30: Moonshot
+  open-weight) and every deployment below is `freedomOrientedDeployment: true`.
+
+Offered on chutes, nano-gpt and novita, each with a hand-written catalogue adapter
+(`confidence: 'verified'`). **QAT model** — quantisation-aware training (Chris is a
+fan; quantised weights behave close to full precision). Output is text-only; vision
+is input-side.
 
 ## Offering — chutes
 
 - **slug:** `moonshotai/Kimi-K2.6-TEE` · **adapterId:** `chutes:moonshotai/Kimi-K2.6-TEE`
-- **context:** recommended/max 262 144 (the widest of the four)
-- **reasoning control:** `reasoning_effort` (low/medium/high), off = omit
+- **context:** recommended/max 262 144 (the widest curated)
+- **reasoning control:** `reasoning_effort` steps; off = `reasoning_effort: "none"`.
 - 🔒 **Privacy:** yes (chutes TEE)
-- 🕊️ **Freedom:** pending live judgement
+- ⚠️ **Vision limitation:** chutes Kimi-K2.6-TEE returns **HTTP 400 when an image
+  is sent together with `reasoning_effort`** (probed: image + `reasoning_effort`
+  → 400; image + no effort field → 200). Since `chutesAdapter` always sends
+  `reasoning_effort`, image turns on this offering currently fail. chutes **Gemma**
+  does not have this problem. Tracked as a follow-up (omit `reasoning_effort` on
+  image turns, or a Kimi-specific chutes path); text + tools + reasoning are fully
+  verified.
 
-## Notes
+## Offering — nano-gpt
 
-- **QAT model** — quantisation-aware training (Chris is a fan of QAT; more
-  providers should do it). Output is text-only; vision is input-side.
-- Live validation should exercise the wide context and a tool turn; record the
-  `generate_image` tool-fire result and whether `reasoning_content` surfaces.
+- **slug:** `moonshotai/kimi-k2.6` · **adapterId:** `nano-gpt:moonshotai/kimi-k2.6`
+- **context:** recommended/max 256 000
+- **reasoning control:** model-slug swap (`steps`, `offStep: 'off'`); bare cleanly
+  off, `:thinking` + `reasoning_effort` on the `reasoning` channel.
+- 🔒 no TEE / no ZDR.
 
-## Why
+## Offering — novita
 
-A QAT model in TEE with a 256k-class context — a strong, distinctive privacy-first
-offering. QAT means the quantised weights behave close to full precision, which is
-exactly the quality-per-byte trade chatsundere wants to surface.
+- **slug:** `moonshotai/kimi-k2.6` · **adapterId:** `novita:moonshotai/kimi-k2.6`
+- **context:** recommended/max 256 000
+- **reasoning control:** `enable_thinking` boolean (`toggle`); off via
+  `enable_thinking: false`. `reasoning_content` channel. 🔒 no TEE / no ZDR.
+
+## Validation (2026-05-30, conversation-suite)
+
+- **Core scenario:** nano-gpt 44/44, novita 22/22 — all green (tools, reasoning
+  on/off, usage, memory).
+- **Vision scenario:** nano-gpt ✅ and novita ✅ describe the test image ("red").
+  chutes ❌ — the `reasoning_effort` + image 400 above (a chutes-side quirk, not a
+  Kimi capability gap). **Image-size lesson:** a 24x24 test image was mis-perceived
+  by Kimi as "black"; at 128x128 it reports "red" correctly — the vision scenario
+  now embeds a 128x128 image.

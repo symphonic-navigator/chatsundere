@@ -9,6 +9,7 @@ import {
   assertToolArgsValidJson,
   assertToolCallFired,
   assertUsagePresent,
+  assertVisionDescribed,
 } from './assertions.js';
 import type { TurnOutcome } from './types.js';
 
@@ -122,6 +123,17 @@ describe('assertMemoryEchoed', () => {
   });
   test('fails when the memory token is absent', () => {
     const r = assertMemoryEchoed('cat lover')(outcome({ text: 'Hello there.' }));
+    expect(r.status).toBe('fail');
+  });
+});
+
+describe('assertVisionDescribed', () => {
+  test('passes when the expected image content appears in the reply', () => {
+    const r = assertVisionDescribed('red')(outcome({ text: 'The image is red.' }));
+    expect(r.status).toBe('pass');
+  });
+  test('fails when the content is absent (image not carried through)', () => {
+    const r = assertVisionDescribed('red')(outcome({ text: "I can't see an image." }));
     expect(r.status).toBe('fail');
   });
 });

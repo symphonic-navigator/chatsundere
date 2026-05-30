@@ -74,23 +74,24 @@ function normaliseUsage(u: NovitaUsage): NormalisedUsage {
 }
 
 /**
- * Build a novita adapter for a GLM-family slug. novita steers GLM reasoning by
- * a TOP-LEVEL BOOLEAN body flag `enable_thinking` (probed live): the
- * heuristic `reasoning: { enabled }` flag, `chat_template_kwargs.enable_thinking`
- * and `reasoning_effort: 'none'` were ALL found NOT to disable thinking;
- * `enable_thinking: false` is the only switch that does, and it works for both
- * glm-5 and glm-5.1. There are no granular effort buckets, so the control is a
+ * Build a novita adapter for any slug whose reasoning is steered by the
+ * TOP-LEVEL BOOLEAN body flag `enable_thinking` — novita's mechanism for the
+ * GLM and DeepSeek families (probed live across glm-5, glm-5.1,
+ * deepseek-v4-flash, deepseek-v4-pro). The heuristic `reasoning: { enabled }`
+ * flag, `chat_template_kwargs.enable_thinking` and `reasoning_effort: 'none'`
+ * were ALL found NOT to disable thinking; `enable_thinking: false` is the only
+ * switch that does. There are no granular effort buckets, so the control is a
  * plain toggle. Thinking streams on `reasoning_content`. Tool calls arrive as a
  * single block (buffer kept for safety) and may run concurrently with reasoning.
  * Usage via `stream_options.include_usage` with reasoning_tokens nested under
  * completion_tokens_details.
  */
-export function novitaGlmAdapter(slug: string, vision: boolean): ModelAdapter {
+export function novitaThinkingAdapter(slug: string, vision: boolean): ModelAdapter {
   const profile: ModelProfile = {
     reasoning: { mode: 'toggle', defaultOn: true },
     toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
     vision,
-    replayReasoning: false, // GLM is soft-CoT — never replays its own thinking
+    replayReasoning: false, // GLM/DeepSeek are soft-CoT — never replay their thinking
   };
 
   return {

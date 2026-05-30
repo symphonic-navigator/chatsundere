@@ -42,9 +42,20 @@ export interface WireToolCall {
   function: { name: string; arguments: string };
 }
 
+/**
+ * One part of a multimodal message body (OpenAI shape). A plain-text message
+ * uses the `string` content form; a message carrying an image uses the array
+ * form with one `text` part and one or more `image_url` parts (data URL or
+ * remote URL). Every provider we curate accepts this on a `user` message.
+ */
+export type WireContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface WireMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  /** Plain text, or the multimodal array form for image input. */
+  content: string | WireContentPart[];
   name?: string;
   /** Set on a `tool` message: the id of the assistant tool call it answers. */
   tool_call_id?: string;

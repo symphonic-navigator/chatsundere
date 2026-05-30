@@ -1,48 +1,53 @@
-# Model Curation Record — Gemma 4 31B Turbo (TEE)
+# Model Curation Record — Gemma 4 31B
 
-> Curation record. See [[../providers/chutes]] for the shared provider mechanics.
+> Curation record. See [[../providers/chutes]] for the shared chutes mechanics.
+> File named `gemma-4-31b-turbo` historically; the canonical id is `gemma-4-31b`.
 
-- **Identity:** Gemma 4 31B Turbo · family `gemma`
-- **T/R/V:** tools ✅ · reasoning ✅ (optional, effort buckets) · vision ✅ (input text + image)
+- **Identity:** Gemma 4 31B · family `gemma`
+- **T/R/V:** tools ✅ · reasoning ✅ · vision ✅ (input image; output text-only)
 - **replayReasoning:** false (soft-CoT)
+- **🕊️ Freedom:** free — `freedomOriented: true` (Chris, 2026-05-30: Google
+  open-weight) and every deployment below is `freedomOrientedDeployment: true`.
+
+Offered on chutes, nano-gpt and novita, each with a hand-written catalogue adapter
+(`confidence: 'verified'`).
 
 ## Offering — chutes
 
 - **slug:** `google/gemma-4-31B-turbo-TEE` · **adapterId:** `chutes:google/gemma-4-31B-turbo-TEE`
 - **context:** recommended/max 131 072
-- **reasoning control:** `reasoning_effort` (low/medium/high), off = omit
+- **reasoning control:** `reasoning_effort` steps; off = `reasoning_effort: "none"`.
 - 🔒 **Privacy:** yes (chutes TEE)
-- 🕊️ **Freedom:** pending live judgement
+- **FP4 quant** — an FP4-quantised deployment (recorded for honesty; conjecture:
+  squeezed onto spare H100 capacity). Despite FP4 reportedly very good (Chris).
 
-## Notes
+## Offering — nano-gpt
 
-- **FP4 quant.** Gemma 4 31B Turbo on chutes is an FP4-quantised deployment —
-  recorded explicitly so the trade-off is honest. Conjecture: squeezed onto
-  spare H100 capacity as an extra offering. Despite FP4 it is reportedly very
-  good (Chris).
-- ⚠️ **Tool-invocation reliability is the watch case.** Per the model-curation
-  playbook, Gemma (and DeepSeek V4 Flash) have historically called tools only
-  when the tool is named explicitly in the prompt — in chatsune, Gemma sometimes
-  produced an image *prompt* without firing `generate_image`. The live
-  conversation-suite must assert `tool-call-fired:generate_image`; if it goes
-  red, record the mitigation (explicit tool-mention in prompt composition).
+- **slug:** `google/gemma-4-31b-it` · **adapterId:** `nano-gpt:google/gemma-4-31b-it`
+- **context:** recommended/max 262 144
+- **reasoning control:** model-slug swap (`steps`, `offStep: 'off'`); bare cleanly
+  off, `:thinking` + `reasoning_effort` on the `reasoning` channel. 🔒 no TEE / no ZDR.
 
-## Live validation (2026-05-30, conversation-suite)
+## Offering — novita
 
-- **reasoning-off: 10/10 PASS** — including `tool-call-fired:generate_image`.
-  The feared tool-reluctance did **not** materialise on chutes: Gemma fired
-  `generate_image` with valid JSON. Memory carried; usage surfaced.
-- **reasoning-on: failed on HTTP 429 (rate-limit), not an adapter fault.** The
-  tool and memory turns hit chutes rate-limiting under load; the dependent
-  checks cascade from the 429. The RunnerBinding **captured** the 429 as a
-  checkable outcome (it did not throw) — the status-capture design working as
-  intended. The adapter itself is proven (reasoning-off green).
-- **Follow-up:** the live binding does its own fetch with no retry; a
-  retry-on-429 (backoff) would make live validation under load robust. Tracked
-  as a refinement, not a blocker.
+- **slug:** `google/gemma-4-31b-it` · **adapterId:** `novita:google/gemma-4-31b-it`
+- **context:** recommended/max 262 144
+- **reasoning control:** `enable_thinking` boolean (`toggle`); off via
+  `enable_thinking: false`. `reasoning_content` channel. **novita streams Gemma's
+  tool calls FRAGMENTED** (88 SSE deltas in one probe) — the adapter's fragment
+  buffer reassembles them; the generic path would have dropped the arguments.
+  🔒 no TEE / no ZDR.
 
-## Why
+## Tool-reluctance watch (did not reproduce)
 
-A strong open-weight model with vision, in TEE, at a low price point (FP4). The
-tool-reliability caveat is exactly what the deterministic conversation-suite
-exists to catch.
+The chatsune-era note flagged Gemma producing an image *prompt* without firing
+`generate_image`. Across all three providers it **fired** `generate_image` with
+valid JSON on the core scenario prompt — `tool-call-fired:generate_image` green.
+Empirical truth over the documented gotcha; no mitigation needed at present.
+
+## Validation (2026-05-30, conversation-suite)
+
+- **Core:** nano-gpt 44/44, novita 22/22, chutes 44/44 — all green (tools,
+  reasoning on/off, usage, memory). (chutes was re-confirmed on the new suite.)
+- **Vision:** Gemma describes the 128x128 test image as "red" on **all three**
+  providers — vision pipe verified everywhere.
