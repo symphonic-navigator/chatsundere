@@ -1,5 +1,8 @@
 # Chatsundere Status — Client-only
 
+> **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
+> [[insights/2026-05-30-handoff-to-next-session]].
+
 **Last updated:** 2026-05-30 (late) — **Chutes live-curated; catalogue→runtime
 Slice 1 wired.** Three feature units landed on master today, all squash-merged:
 (1) the **`/curate` skill** (`4dd4f58`); (2) **runtime adapter dispatch — Slice 1**
