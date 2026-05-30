@@ -1,6 +1,46 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-30 — **`/curate` skill landed; synthesis pipeline +
+**Last updated:** 2026-05-30 (late) — **Chutes live-curated; catalogue→runtime
+Slice 1 wired.** Three feature units landed on master today, all squash-merged:
+(1) the **`/curate` skill** (`4dd4f58`); (2) **runtime adapter dispatch — Slice 1**
+(`ba26ab4`): `streamCompletion` now routes through a per-model `ModelAdapter` via
+an `adapter-registry` when a model carries `adapterId`, gaining correct fragmented
+tool-call reassembly, `usage` emission, and a tools-capable `buildRequest`;
+adapter-less models keep the byte-identical generic path (`_reasoning-body` +
+`parseOpenAiSseStream`); a shared SSE framer (`frameSseEvents`/`eventToTokens`)
+backs both; (3) **chutes curation** (`38cd90b`): the `chutes-openai` adapter
+factory, the `chutes` provider with 4 TEE models (DeepSeek V3.2, Kimi K2.6, GLM
+5.1, Gemma 4 31B Turbo) wired to per-model adapters, the chutes `ProviderScanner`,
+a **live conversation-suite `RunnerBinding`** (own fetch → captures HTTP status,
+no throw; retries transient 429/5xx), and Curation Records. Provider order now
+**chutes < novita < ollama-cloud < nano-gpt**. **Live-validated** against real
+chutes: DeepSeek V3.2 20/20 (usage + `generate_image` tool fire + memory all
+green); Gemma adapter proven (reasoning-off green incl. tool fire — no
+tool-reluctance), reasoning-on hit chutes rate-limiting (429, captured correctly).
+173 src + 24 curation Bun tests green; build + typecheck clean. master is 11
+commits ahead of origin — **not pushed**.
+
+**Decided today:** the catalogue + per-model `ModelAdapter` layer (and the
+`/curate` skill) target a layer that was **not** runtime-wired — the client used
+`ProviderDefinition.knownModels` + the generic parser. We decided to **wire it in
+three slices**: Slice 1 (runtime adapter dispatch) ✅ done; **Slice 2** (client:
+`KnownModel`→`Offering`/`CanonicalModel`; cockpit + reasoning-resolver
+`ReasoningCapability`→`ReasoningControl`) and **Slice 3** (catalogue
+loading/bundling; registry populated from `Offering.adapter`) remain. Endpoint
+rule fixed: always `/chat/completions`, never `/responses` (we hold context).
+Specs/plans: [[../superpowers/specs/2026-05-30-runtime-adapter-dispatch-design]],
+[[../superpowers/specs/2026-05-30-chutes-curation-and-live-suite-design]].
+
+**Next session:** options — (a) **Slice 2** (client→catalogue, the bigger UI
+migration, makes `/curate` output light up in-app); (b) curate more chutes models
+or another provider via `/curate`; (c) investigate whether chutes
+`reasoning_content` truly surfaces on non-trivial prompts (DeepSeek showed little
+visible thinking); (d) promote the ad-hoc live-check driver into a reusable
+maintainer CLI. Push to origin is pending Chris's word.
+
+---
+
+**Earlier 2026-05-30 — `/curate` skill landed; synthesis pipeline +
 curation CLI retired** (squash `4dd4f58` on master). The fixed-prompt machine
 synthesis loop is replaced by an interactive `.claude/skills/curate/` skill in
 which Claude authors adapters (one router `SKILL.md` + 7 reference playbooks:
