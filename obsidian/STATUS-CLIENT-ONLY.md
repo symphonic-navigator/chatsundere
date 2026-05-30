@@ -3,8 +3,35 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-30 (late) — **Chutes live-curated; catalogue→runtime
-Slice 1 wired.** Three feature units landed on master today, all squash-merged:
+**Last updated:** 2026-05-30 (latest) — **Slice 2 shipped: the client is
+canonical-first, end-to-end live-verified, and chutes works for real.** Four
+squash-merged feature commits on master (pushed): (1) **Slice 2 — client
+catalogue migration** (`3a31278`): the client moved off `KnownModel`/`knownModels`
+onto `CanonicalModel`/`Offering`; model selection is **canonical-first** (pick a
+model → pick an offering, top-ranked configured one pre-selected, unconfigured
+providers disabled with a CTA); cockpit + reasoning-resolver moved to
+`ReasoningControl`; context gauge reads `Offering.context.recommended`; an in-code
+canonical registry + per-provider `offerings` + `rankOfferings`/`listOfferings`/
+`getOffering`; runtime takes a minimal `CompletionTarget`; persona gained
+`canonicalId` (DB v8, clean break); `KnownModel`/`ReasoningCapability` removed.
+(2) **Add Chutes to the settings provider list** (`be623a1`): a pre-existing gap —
+chutes was registered but the settings UI hard-coded only the three older
+providers, so its key could not be entered. (3) **Fix chutes reasoning-off + suite
+reasoning assertions** (`6b25ac5`): live-probe found GLM-family models on chutes
+reason by default — `reasoning_effort:'none'` is the true off-switch (omitting
+does **not** disable); adapter repaired and re-verified e2e via `makeLiveBinding`;
+the conversation-suite grew `permutationsForReasoning` so it now catches this
+class. (4) **Alias llm-unified to source** (`42d9d2b`): the user-client resolved
+llm-unified via stale `dist/`; aliased to TS source so curation/adapter changes are
+live in dev without a rebuild. **Manual verification passed on device** (picker,
+chutes-TEE pre-select, reasoning off/low/high all live). 168 src + 32 curation Bun
+tests green; `pnpm typecheck` 13/13; both builds clean. (8 pre-existing user-client
+vitest env failures — `localStorage` jsdom harness in cockpit-draft/chat-page/
+chat-route — are unrelated to this work.) The `/curate` Mode 3 flow proved itself:
+a real bug, live-diagnosed and repaired.
+
+**Earlier 2026-05-30 — Chutes live-curated; catalogue→runtime Slice 1 wired.**
+Three feature units landed on master, all squash-merged:
 (1) the **`/curate` skill** (`4dd4f58`); (2) **runtime adapter dispatch — Slice 1**
 (`ba26ab4`): `streamCompletion` now routes through a per-model `ModelAdapter` via
 an `adapter-registry` when a model carries `adapterId`, gaining correct fragmented
@@ -34,12 +61,17 @@ rule fixed: always `/chat/completions`, never `/responses` (we hold context).
 Specs/plans: [[../superpowers/specs/2026-05-30-runtime-adapter-dispatch-design]],
 [[../superpowers/specs/2026-05-30-chutes-curation-and-live-suite-design]].
 
-**Next session:** options — (a) **Slice 2** (client→catalogue, the bigger UI
-migration, makes `/curate` output light up in-app); (b) curate more chutes models
-or another provider via `/curate`; (c) investigate whether chutes
-`reasoning_content` truly surfaces on non-trivial prompts (DeepSeek showed little
-visible thinking); (d) promote the ad-hoc live-check driver into a reusable
-maintainer CLI. Push to origin is pending Chris's word.
+**Next session:** options — (a) **Slice 3** (catalogue loading/bundling; the
+adapter registry populated from `Offering.adapter` instead of hand-registered in
+`registerChutes()`; YAML model files → bundled runtime catalogue); (b) **confirm
+reasoning-off for the other chutes models** (DeepSeek V3.2, Kimi K2.6, Gemma) — the
+`reasoning_effort:'none'` fix is adapter-level so it should generalise, but only
+GLM 5.1 was live-probed; a quick `/curate` verify (now with the suite's reasoning
+assertions) closes it; (c) curate more chutes models or another provider via
+`/curate`; (d) optional cleanup of the orphaned untracked spike leftovers
+(`models/glm-5.1.yaml`, `packages/llm-unified/fixtures/deepseek-v4-pro.fixtures.json`).
+Slice 2's two minor follow-ups were both done this session (vite alias, suite
+reasoning assertion). master is pushed to origin.
 
 ---
 
