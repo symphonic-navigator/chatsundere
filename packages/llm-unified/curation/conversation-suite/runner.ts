@@ -15,21 +15,21 @@ export interface RunnerBinding {
    */
   runTurn(messages: WireMessage[], reasoning: ReasoningIntent): Promise<TurnOutcome>;
   /** Synthesise a tool-result message to feed back after a tool call. */
-  toolResultFor(toolName: string, argumentsJson: string): WireMessage;
+  toolResultFor(call: { id: string; name: string; argumentsJson: string }): WireMessage;
 }
 
 /** Assemble a TurnOutcome from a sequence of StreamChunks + an HTTP status. */
 export function assembleOutcome(httpStatus: number, chunks: StreamChunk[]): TurnOutcome {
   let text = '';
   let reasoning = '';
-  const toolCalls: { name: string; argumentsJson: string }[] = [];
+  const toolCalls: { id: string; name: string; argumentsJson: string }[] = [];
   let usage: TurnOutcome['usage'] = null;
   let finishReason: string | null = null;
   for (const c of chunks) {
     if (c.type === 'token') text += c.text;
     else if (c.type === 'reasoning') reasoning += c.text;
     else if (c.type === 'tool-call')
-      toolCalls.push({ name: c.name, argumentsJson: c.argumentsJson });
+      toolCalls.push({ id: c.toolCallId, name: c.name, argumentsJson: c.argumentsJson });
     else if (c.type === 'usage') usage = c.usage;
     else if (c.type === 'finish') finishReason = c.reason;
   }
@@ -52,16 +52,24 @@ async function runPermutation(
     // first turn — the clean reasoning probe, before tools/memory complicate it.
     if (i === 0 && perm.assertions) results.push(...perm.assertions.map((a) => a(outcome)));
     turns.push({ turnId: turn.id, results });
-    if (outcome.text) history.push({ role: 'assistant', content: outcome.text });
-    // Known limitation: `WireMessage` carries no `tool_calls` field, so we
-    // cannot replay the assistant's tool-call turn before its tool result.
-    // Providers that strictly require the `assistant(tool_calls) → tool`
-    // sequence may reject a turn that *continues* after a tool call. The seed
-    // scenario avoids this (its tool-call turn is terminal); a scenario that
-    // continues past a tool call must wait for `WireMessage` to gain the field.
-    if (turn.expectToolCall) {
-      const call = outcome.toolCalls.find((t) => t.name === turn.expectToolCall);
-      if (call) history.push(binding.toolResultFor(call.name, call.argumentsJson));
+    // Replay the assistant's turn into history. When it made tool calls, the
+    // assistant message must carry them (OpenAI shape) and EVERY call must be
+    // answered by a `tool` message before the next turn — otherwise the history
+    // is malformed and a strict provider rejects the continuation. Verified live
+    // across chutes, nano-gpt and novita (2026-05-30).
+    if (outcome.toolCalls.length > 0) {
+      history.push({
+        role: 'assistant',
+        content: outcome.text,
+        tool_calls: outcome.toolCalls.map((t) => ({
+          id: t.id,
+          type: 'function',
+          function: { name: t.name, arguments: t.argumentsJson },
+        })),
+      });
+      for (const call of outcome.toolCalls) history.push(binding.toolResultFor(call));
+    } else if (outcome.text) {
+      history.push({ role: 'assistant', content: outcome.text });
     }
   }
   return { label: perm.label, turns };

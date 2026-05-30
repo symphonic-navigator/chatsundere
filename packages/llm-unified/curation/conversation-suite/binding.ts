@@ -73,8 +73,13 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
       for await (const c of parseWithAdapter(response.body, args.adapter)) chunks.push(c);
       return assembleOutcome(response.status, chunks);
     },
-    toolResultFor(toolName: string): ReturnType<RunnerBinding['toolResultFor']> {
-      return { role: 'tool', content: JSON.stringify({ ok: true }), name: toolName };
+    toolResultFor(call): ReturnType<RunnerBinding['toolResultFor']> {
+      return {
+        role: 'tool',
+        tool_call_id: call.id,
+        name: call.name,
+        content: JSON.stringify({ ok: true }),
+      };
     },
   };
 }

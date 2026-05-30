@@ -86,7 +86,12 @@ describe('runPermutation applies a permutation assertion to the first turn', () 
         finishReason: 'stop',
       };
     },
-    toolResultFor: (name) => ({ role: 'tool', content: '{}', name }),
+    toolResultFor: (call) => ({
+      role: 'tool',
+      tool_call_id: call.id,
+      content: '{}',
+      name: call.name,
+    }),
   };
 
   const scenario: ConversationScenario = {

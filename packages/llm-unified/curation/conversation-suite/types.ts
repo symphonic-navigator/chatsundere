@@ -11,8 +11,8 @@ export interface TurnOutcome {
   text: string;
   /** Concatenated `reasoning` chunk text. */
   reasoning: string;
-  /** Tool calls the model emitted this turn. */
-  toolCalls: { name: string; argumentsJson: string }[];
+  /** Tool calls the model emitted this turn (id preserved for history replay). */
+  toolCalls: { id: string; name: string; argumentsJson: string }[];
   /** Normalised usage if the adapter surfaced it, else null. */
   usage: NormalisedUsage | null;
   /** Finish reason if seen, else null. */

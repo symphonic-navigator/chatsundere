@@ -63,7 +63,9 @@ describe('assertToolCallFired', () => {
   });
   test('passes when the tool fired', () => {
     const r = assertToolCallFired('generate_image')(
-      outcome({ toolCalls: [{ name: 'generate_image', argumentsJson: '{"prompt":"x"}' }] }),
+      outcome({
+        toolCalls: [{ id: 'call_1', name: 'generate_image', argumentsJson: '{"prompt":"x"}' }],
+      }),
     );
     expect(r.status).toBe('pass');
   });
@@ -72,13 +74,15 @@ describe('assertToolCallFired', () => {
 describe('assertToolArgsValidJson', () => {
   test('fails on malformed arguments', () => {
     const r = assertToolArgsValidJson('generate_image')(
-      outcome({ toolCalls: [{ name: 'generate_image', argumentsJson: '{prompt:' }] }),
+      outcome({ toolCalls: [{ id: 'call_1', name: 'generate_image', argumentsJson: '{prompt:' }] }),
     );
     expect(r.status).toBe('fail');
   });
   test('passes on valid JSON args', () => {
     const r = assertToolArgsValidJson('generate_image')(
-      outcome({ toolCalls: [{ name: 'generate_image', argumentsJson: '{"prompt":"x"}' }] }),
+      outcome({
+        toolCalls: [{ id: 'call_1', name: 'generate_image', argumentsJson: '{"prompt":"x"}' }],
+      }),
     );
     expect(r.status).toBe('pass');
   });

@@ -28,11 +28,28 @@ export interface ProviderDefinition {
   sortPriority: number;
 }
 
+/**
+ * One tool call as it appears ON an assistant message in the wire history
+ * (OpenAI shape). Distinct from the streamed `tool-call` StreamChunk: this is
+ * the request the assistant made, replayed back into history so the subsequent
+ * `tool` result can reference it by `id`. Every provider we curate requires the
+ * `assistant(tool_calls) → tool(tool_call_id)` pairing for a valid multi-turn
+ * history (verified live, 2026-05-30).
+ */
+export interface WireToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
 export interface WireMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   name?: string;
+  /** Set on a `tool` message: the id of the assistant tool call it answers. */
   tool_call_id?: string;
+  /** Set on an `assistant` message: the tool calls it made this turn. */
+  tool_calls?: WireToolCall[];
 }
 
 /**

@@ -17,9 +17,11 @@ violated D8); now a deterministic recall question, green across all providers.
 Freedom (Chris, 2026-05-30): GLM `freedomOriented: true`, nano-gpt + novita
 deployments `true` → 🕊️ free. `obsidian/models/glm-5.md` (new) + `glm-5.1.md`
 (rewritten) Records. 168 src + 32 curation Bun tests green; repo typecheck clean.
-**Follow-up candidate:** `runner.ts` does not replay the `assistant(tool_calls)`
-message before a tool result (WireMessage lacks the field) → malformed multi-turn
-history. **Prior entry —** Slice 2 shipped: the client is
+**Runner fix (done):** `WireMessage` gained `tool_calls` (+ `WireToolCall`), and
+the suite runner now replays the `assistant(tool_calls)` message and answers every
+call with a `tool` result before continuing — well-formed multi-turn history.
+Verified live (glm-5.1 on all three providers green). **Prior entry —** Slice 2
+shipped: the client is
 canonical-first, end-to-end live-verified, and chutes works for real. Four
 squash-merged feature commits on master (pushed): (1) **Slice 2 — client
 catalogue migration** (`3a31278`): the client moved off `KnownModel`/`knownModels`

@@ -107,10 +107,13 @@ describe('makeLiveBinding', () => {
 
   test('toolResultFor synthesises a tool-role message', () => {
     const binding = makeLiveBinding({ offeringRef: 'r', providerConfig, apiKey: 'k', adapter });
-    expect(binding.toolResultFor('generate_image', '{}')).toEqual({
+    expect(
+      binding.toolResultFor({ id: 'call_1', name: 'generate_image', argumentsJson: '{}' }),
+    ).toEqual({
       role: 'tool',
-      content: JSON.stringify({ ok: true }),
+      tool_call_id: 'call_1',
       name: 'generate_image',
+      content: JSON.stringify({ ok: true }),
     });
   });
 });
