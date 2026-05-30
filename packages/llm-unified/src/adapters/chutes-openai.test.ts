@@ -6,7 +6,7 @@ import { chutesAdapter } from './chutes-openai.js';
 const a = chutesAdapter('deepseek-ai/DeepSeek-V3.2-TEE', false);
 
 describe('chutesAdapter buildRequest', () => {
-  it('sets stream_options.include_usage and the slug, sends reasoning_effort:none when off', () => {
+  it('disables thinking via chat_template_kwargs (NOT reasoning_effort:none) when off', () => {
     const wire = a.buildRequest({
       messages: [{ role: 'user', content: 'hi' }],
       reasoning: { enabled: false },
@@ -15,19 +15,38 @@ describe('chutesAdapter buildRequest', () => {
     expect(wire.body.model).toBe('deepseek-ai/DeepSeek-V3.2-TEE');
     expect(wire.body.stream).toBe(true);
     expect(wire.body.stream_options).toEqual({ include_usage: true });
-    // Omitting the field would NOT disable thinking on GLM-family models; the
-    // explicit 'none' is what turns it off (probed live — see glm-5.1 Record).
-    expect(wire.body.reasoning_effort).toBe('none');
+    // The off switch is chat_template_kwargs.enable_thinking, not
+    // reasoning_effort:'none' (which 400s Kimi-K2.6-TEE). Probed live 2026-05-30.
+    expect(wire.body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect('reasoning_effort' in wire.body).toBe(false);
   });
 
-  it('sets reasoning_effort from the intent when reasoning is on', () => {
+  it('sets reasoning_effort (not chat_template_kwargs) from the intent when on', () => {
     const wire = a.buildRequest({ messages: [], reasoning: { enabled: true, effort: 'high' } });
     expect(wire.body.reasoning_effort).toBe('high');
+    expect('chat_template_kwargs' in wire.body).toBe(false);
   });
 
   it('defaults reasoning_effort to medium when on without an explicit effort', () => {
     const wire = a.buildRequest({ messages: [], reasoning: { enabled: true } });
     expect(wire.body.reasoning_effort).toBe('medium');
+  });
+
+  it('uses the same off switch on an image turn (the case that 400d Kimi)', () => {
+    const wire = a.buildRequest({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'colour?' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+          ],
+        },
+      ],
+      reasoning: { enabled: false },
+    });
+    expect(wire.body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect('reasoning_effort' in wire.body).toBe(false);
   });
 
   it('maps tools to the OpenAI function shape, omits when empty', () => {

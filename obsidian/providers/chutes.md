@@ -33,15 +33,23 @@ no `:thinking`/`-thinking` sibling to group. The `ProviderScanner`
 
 ## Reasoning control
 
-`reasoning_effort` body parameter with buckets (`low` / `medium` / `high`);
-**off = omit the parameter** (no slug swap, no `enabled` flag). Reasoning text
-surfaces on the response as **`reasoning_content`** (not `reasoning`).
+- **On:** `reasoning_effort` body parameter with buckets (`low` / `medium` / `high`).
+- **Off:** `chat_template_kwargs: { enable_thinking: false }`. This is the correct
+  off switch (probed 2026-05-30, disables every chutes model: GLM, DeepSeek, Kimi,
+  Gemma). It is **NOT** `reasoning_effort: 'none'` — that 400s **Kimi-K2.6-TEE**
+  (especially together with an image input), and omitting the field entirely does
+  NOT disable thinking (these models reason by default). Earlier records said
+  "off = omit" / "off = reasoning_effort: none"; both are superseded by the
+  uniform `chat_template_kwargs` switch, which also works on image turns.
 
-Empirical note (DeepSeek V3.2, 2026-05-30): `reasoning_effort: "high"` is
-accepted (HTTP 200), but a *trivial* prompt returned `reasoning_content: null`
-and `reasoning_tokens: 0` — the model only thinks visibly on non-trivial work.
-The conversation-suite (reasoning-on, a harder prompt) is the place to confirm
-reasoning truly surfaces per model; record the finding in each model record.
+Reasoning text surfaces on **`reasoning_content`** (not `reasoning`) — **but only
+for some models.** Probed 2026-05-30: chutes **GLM and Kimi** stream
+`reasoning_content`; chutes **DeepSeek V3.2 and Gemma** emit `reasoning_tokens`
+(counted in usage) but **no `reasoning_content` text** even on a hard prompt at
+`effort: high` — their reasoning is effectively hidden. The conversation-suite's
+`reasoning-present` assertion therefore fails for those two; this is a per-model
+visibility characteristic to capture in each model record (follow-up: decide
+whether their `reasoning` should be modelled as visible at all).
 
 ## `usage` quirk
 

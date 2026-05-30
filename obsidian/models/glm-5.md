@@ -19,7 +19,9 @@ nano-gpt's GLM 5 deployment reasons regardless, so there it is `fixed-on`.
 - **slug:** `zai-org/GLM-5-TEE` · **adapterId:** `chutes:zai-org/GLM-5-TEE`
 - **context:** recommended/max 202 752
 - **reasoning control:** `reasoning_effort` steps — `low`/`medium`/`high`; **off =
-  `reasoning_effort: "none"`** (`offStep: 'off'`). Probed live: off truly off.
+  `chat_template_kwargs: { enable_thinking: false }`** (`offStep: 'off'`) — the
+  uniform chutes off switch (not `reasoning_effort: 'none'`; see
+  [[../providers/chutes]]). Probed live: off truly off.
 - **tool calls:** single block, concurrent with reasoning.
 - 🔒 **Privacy:** yes (chutes TEE)
 

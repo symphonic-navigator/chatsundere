@@ -16,7 +16,15 @@ Offered on chutes, nano-gpt and novita, each with a hand-written catalogue adapt
 
 - **slug:** `google/gemma-4-31B-turbo-TEE` · **adapterId:** `chutes:google/gemma-4-31B-turbo-TEE`
 - **context:** recommended/max 131 072
-- **reasoning control:** `reasoning_effort` steps; off = `reasoning_effort: "none"`.
+- **reasoning control:** `reasoning_effort` (low/medium/high) to enable; off =
+  `chat_template_kwargs: { enable_thinking: false }` (the uniform chutes off
+  switch — see [[../providers/chutes]]).
+- ⚠️ **Hidden reasoning:** chutes Gemma emits `reasoning_tokens` (counted) but **no
+  `reasoning_content` text**, even on a hard prompt at `effort: high` (probed
+  2026-05-30) — so the suite's `reasoning-present` assertion fails for the chutes
+  offering. Reasoning works (token-counted) but is not surfaced. Follow-up: decide
+  whether the chutes Gemma `reasoning` should be modelled as visible at all. The
+  nano-gpt and novita Gemma offerings DO surface reasoning normally.
 - 🔒 **Privacy:** yes (chutes TEE)
 - **FP4 quant** — an FP4-quantised deployment (recorded for honesty; conjecture:
   squeezed onto spare H100 capacity). Despite FP4 reportedly very good (Chris).
@@ -47,7 +55,9 @@ Empirical truth over the documented gotcha; no mitigation needed at present.
 
 ## Validation (2026-05-30, conversation-suite)
 
-- **Core:** nano-gpt 44/44, novita 22/22, chutes 44/44 — all green (tools,
-  reasoning on/off, usage, memory). (chutes was re-confirmed on the new suite.)
+- **Core:** nano-gpt 44/44, novita 22/22 — all green (tools, reasoning on/off,
+  usage, memory). **chutes 41/44** — the only reds are `reasoning-present` (the
+  hidden-reasoning characteristic above: chutes Gemma surfaces no `reasoning_content`
+  text); tools, usage, memory and reasoning-off are green.
 - **Vision:** Gemma describes the 128x128 test image as "red" on **all three**
   providers — vision pipe verified everywhere.

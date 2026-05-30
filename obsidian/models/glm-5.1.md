@@ -17,8 +17,11 @@ provider — this is the whole reason the offerings are not on the generic path.
 - **slug:** `zai-org/GLM-5.1-TEE` · **adapterId:** `chutes:zai-org/GLM-5.1-TEE`
 - **context:** recommended/max 202 752
 - **reasoning control:** `reasoning_effort` — `low`/`medium`/`high` select effort;
-  **off = `reasoning_effort: "none"`** (steps, `offStep: 'off'`). Omitting the
-  field does **not** disable thinking.
+  **off = `chat_template_kwargs: { enable_thinking: false }`** (steps,
+  `offStep: 'off'`). Omitting the field does **not** disable thinking, and the
+  chutes off switch is `chat_template_kwargs`, NOT `reasoning_effort: 'none'` —
+  the latter 400s Kimi, so it was replaced uniformly (see [[../providers/chutes]]).
+  GLM (unlike chutes DeepSeek/Gemma) does surface `reasoning_content`.
 - **tool calls:** single block, concurrent with reasoning.
 - 🔒 **Privacy:** yes (chutes TEE)
 
@@ -70,6 +73,11 @@ Symptom: choosing "off" in the cockpit still produced a CoT trace. The forward
 plumbing was correct (cockpit → `{enabled:false}` → adapter), but the
 `chutesAdapter` *omitted* `reasoning_effort` for off, assuming "omitted = off".
 Probed live: baseline (no field) → reasoning present; `reasoning_effort: "none"`
-→ absent. So GLM-family models on chutes reason by default;
-**`reasoning_effort: "none"`** is the true off-switch. Fix landed adapter-level
-(applies to every chutes offering); re-verified end to end.
+→ absent. So GLM-family models on chutes reason by default. The first fix used
+**`reasoning_effort: "none"`** as the off-switch.
+
+**Superseded (later 2026-05-30):** `reasoning_effort: "none"` turned out to 400
+chutes Kimi-K2.6-TEE (especially with an image). The chutes off switch was
+therefore moved uniformly to **`chat_template_kwargs: { enable_thinking: false }`**,
+which disables every chutes model (GLM included) and works on image turns. GLM
+behaviour is unchanged (still off when off); see [[../providers/chutes]].

@@ -75,11 +75,15 @@ function normaliseUsage(u: ChutesUsage): NormalisedUsage {
 
 /**
  * Build a chutes adapter bound to one model slug. Chutes is uniformly
- * OpenAI-compatible: reasoning via `reasoning_effort` — `low`/`medium`/`high`
- * select effort, and the explicit value `'none'` disables thinking. Omitting
- * the field does NOT disable it: GLM-family models reason by default, so off
- * must send `reasoning_effort: 'none'` (probed live against GLM 5.1 — see
- * obsidian/models/glm-5.1.md). Usage is requested via
+ * OpenAI-compatible: reasoning ON via `reasoning_effort` (`low`/`medium`/`high`),
+ * and reasoning OFF via `chat_template_kwargs: { enable_thinking: false }`.
+ *
+ * The off mechanism is NOT `reasoning_effort: 'none'`: that 400s on
+ * Kimi-K2.6-TEE (especially together with an image), whereas
+ * `chat_template_kwargs.enable_thinking: false` disables thinking uniformly
+ * across every chutes model (GLM, DeepSeek, Kimi, Gemma) and works on image
+ * turns too (probed live 2026-05-30). Omitting the field does NOT disable
+ * thinking — these models reason by default. Usage is requested via
  * `stream_options.include_usage` and delivered on a final `choices: []` event.
  * `vision` feeds only the recorded profile.
  */
@@ -106,9 +110,13 @@ export function chutesAdapter(slug: string, vision: boolean): ModelAdapter {
         stream: true,
         stream_options: { include_usage: true },
       };
-      // GLM-family models reason by default; omitting reasoning_effort does NOT
-      // turn thinking off. The explicit value 'none' disables it.
-      body.reasoning_effort = req.reasoning.enabled ? (req.reasoning.effort ?? 'medium') : 'none';
+      // Reasoning steering: effort to enable, chat_template_kwargs to disable
+      // (the off switch is NOT reasoning_effort:'none' — see the factory doc).
+      if (req.reasoning.enabled) {
+        body.reasoning_effort = req.reasoning.effort ?? 'medium';
+      } else {
+        body.chat_template_kwargs = { enable_thinking: false };
+      }
       if (req.tools?.length) {
         body.tools = req.tools.map((t) => ({
           type: 'function',

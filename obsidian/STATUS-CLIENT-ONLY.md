@@ -13,10 +13,14 @@ all four families; dead `genericOffering` removed from nano-gpt/novita (every
 offering there is verified). **Vision suite added** (`WireMessage` gained a
 multimodal `content` union + `WireToolCall`; `visionScenario` + `assertVisionDescribed`
 + embedded 128x128 test image): Kimi & Gemma vision verified on nano-gpt + novita,
-Gemma on chutes too. **Two findings:** (1) the vision test image must be ≥~128px —
-a 24x24 was mis-perceived as black by Kimi; (2) **chutes Kimi-K2.6-TEE 400s on
-image + `reasoning_effort`** (chutes Gemma is fine) — a follow-up (omit effort on
-image turns). Freedom (Chris, 2026-05-30): DeepSeek/Kimi/Gemma all
+Gemma on chutes too. **Findings:** (1) the vision test image must be ≥~128px —
+a 24x24 was mis-perceived as black by Kimi; (2) the chutes off switch is actually
+`chat_template_kwargs: { enable_thinking: false }`, **not** `reasoning_effort:'none'`
+(which 400s Kimi, esp. with an image) — now FIXED uniformly in `chutesAdapter`, so
+chutes Kimi reasoning-off + vision both work (Kimi core 44/44, vision green); (3)
+chutes DeepSeek-V3.2 and Gemma emit `reasoning_tokens` but **no `reasoning_content`
+text** → `reasoning-present` fails for those two (a visibility characteristic, open
+follow-up: model their `reasoning` as visible-or-not). Freedom (Chris, 2026-05-30): DeepSeek/Kimi/Gemma all
 `freedomOriented: true`, nano-gpt/novita deployments `true` → 🕊️ free. Records
 written/updated for all five. 168 src + 34 curation Bun tests green; repo
 typecheck clean. **Prior entry —** GLM family curated across three

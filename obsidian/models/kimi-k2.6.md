@@ -17,15 +17,14 @@ is input-side.
 
 - **slug:** `moonshotai/Kimi-K2.6-TEE` · **adapterId:** `chutes:moonshotai/Kimi-K2.6-TEE`
 - **context:** recommended/max 262 144 (the widest curated)
-- **reasoning control:** `reasoning_effort` steps; off = `reasoning_effort: "none"`.
+- **reasoning control:** `reasoning_effort` (low/medium/high) to enable; **off =
+  `chat_template_kwargs: { enable_thinking: false }`**. Kimi-K2.6-TEE is the
+  reason the chutes off switch is NOT `reasoning_effort: 'none'`: that value 400s
+  on this model (and harder still with an image). See [[../providers/chutes]].
 - 🔒 **Privacy:** yes (chutes TEE)
-- ⚠️ **Vision limitation:** chutes Kimi-K2.6-TEE returns **HTTP 400 when an image
-  is sent together with `reasoning_effort`** (probed: image + `reasoning_effort`
-  → 400; image + no effort field → 200). Since `chutesAdapter` always sends
-  `reasoning_effort`, image turns on this offering currently fail. chutes **Gemma**
-  does not have this problem. Tracked as a follow-up (omit `reasoning_effort` on
-  image turns, or a Kimi-specific chutes path); text + tools + reasoning are fully
-  verified.
+- **Vision:** verified — image input describes the test image correctly once the
+  off switch moved to `chat_template_kwargs` (the earlier `reasoning_effort: 'none'`
+  + image 400 is resolved).
 
 ## Offering — nano-gpt
 
@@ -44,10 +43,10 @@ is input-side.
 
 ## Validation (2026-05-30, conversation-suite)
 
-- **Core scenario:** nano-gpt 44/44, novita 22/22 — all green (tools, reasoning
-  on/off, usage, memory).
-- **Vision scenario:** nano-gpt ✅ and novita ✅ describe the test image ("red").
-  chutes ❌ — the `reasoning_effort` + image 400 above (a chutes-side quirk, not a
-  Kimi capability gap). **Image-size lesson:** a 24x24 test image was mis-perceived
-  by Kimi as "black"; at 128x128 it reports "red" correctly — the vision scenario
-  now embeds a 128x128 image.
+- **Core scenario:** nano-gpt 44/44, novita 22/22, chutes 44/44 — all green
+  (tools, reasoning on/off, usage, memory). chutes off now uses
+  `chat_template_kwargs`, which fixed the previously-broken reasoning-off.
+- **Vision scenario:** nano-gpt ✅, novita ✅ and chutes ✅ describe the test image
+  ("red"). **Image-size lesson:** a 24x24 test image was mis-perceived by Kimi as
+  "black"; at 128x128 it reports "red" correctly — the vision scenario now embeds
+  a 128x128 image.
