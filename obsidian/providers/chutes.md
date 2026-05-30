@@ -33,23 +33,31 @@ no `:thinking`/`-thinking` sibling to group. The `ProviderScanner`
 
 ## Reasoning control
 
-- **On:** `reasoning_effort` body parameter with buckets (`low` / `medium` / `high`).
-- **Off:** `chat_template_kwargs: { enable_thinking: false }`. This is the correct
-  off switch (probed 2026-05-30, disables every chutes model: GLM, DeepSeek, Kimi,
-  Gemma). It is **NOT** `reasoning_effort: 'none'` — that 400s **Kimi-K2.6-TEE**
-  (especially together with an image input), and omitting the field entirely does
-  NOT disable thinking (these models reason by default). Earlier records said
-  "off = omit" / "off = reasoning_effort: none"; both are superseded by the
-  uniform `chat_template_kwargs` switch, which also works on image turns.
+Reasoning is a **symmetric `chat_template_kwargs` toggle** — the same key both ways:
 
-Reasoning text surfaces on **`reasoning_content`** (not `reasoning`) — **but only
-for some models.** Probed 2026-05-30: chutes **GLM and Kimi** stream
-`reasoning_content`; chutes **DeepSeek V3.2 and Gemma** emit `reasoning_tokens`
-(counted in usage) but **no `reasoning_content` text** even on a hard prompt at
-`effort: high` — their reasoning is effectively hidden. The conversation-suite's
-`reasoning-present` assertion therefore fails for those two; this is a per-model
-visibility characteristic to capture in each model record (follow-up: decide
-whether their `reasoning` should be modelled as visible at all).
+- **On:** `chat_template_kwargs: { enable_thinking: true }`.
+- **Off:** `chat_template_kwargs: { enable_thinking: false }`.
+
+This is the correct switch for **every** chutes model (GLM, DeepSeek, Kimi, Gemma),
+re-probed live 2026-05-31. It is **NOT** `reasoning_effort`:
+
+- `reasoning_effort: 'none'` 400s **Kimi-K2.6-TEE** (especially with an image), so
+  it is never used to disable.
+- `reasoning_effort: low/high` is **not the on-switch** and does **not** modulate
+  the trace (low/medium/high are flat). GLM and Kimi happen to reason by default
+  and surface `reasoning_content` regardless, which masked the bug; but
+  **DeepSeek V3.2 and Gemma-4-31B-turbo emit zero `reasoning_content` AND zero
+  `reasoning_tokens` under `reasoning_effort` alone** — they reason in bare
+  `content` prose. Setting `enable_thinking: true` makes all four stream the
+  channel. Because effort does not modulate, reasoning is modelled as a `toggle`,
+  not `steps`; the adapter still forwards an `effort` hint when one is supplied,
+  for any future model that honours it.
+
+Reasoning text surfaces on **`reasoning_content`** (not `reasoning`) for every
+curated chutes model once `enable_thinking: true` is set. The earlier per-model
+"DeepSeek/Gemma have no visible channel" finding (2026-05-30) was an artefact of
+the wrong on-switch and is **superseded** — see
+[[../insights/2026-05-31-chutes-reasoning-on-switch]].
 
 ## `usage` quirk
 

@@ -3,7 +3,27 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-30 (latest) — **Batch 2: DeepSeek V4 + Kimi + Gemma
+**Last updated:** 2026-05-31 (latest) — **chutes reasoning on-switch fixed; the
+"hidden reasoning" finding was an adapter bug.** Re-probing the two `reasoning-present`
+reds (chutes DeepSeek-V3.2 + Gemma-turbo) overturned the 2026-05-30 premise: both
+DO have working `reasoning_content` channels — the `chutesAdapter` just enabled
+reasoning with `reasoning_effort`, which GLM/Kimi honour by default (masking the
+bug) but DeepSeek-V3.2/Gemma ignore (they reason in bare `content` prose, 0
+`reasoning_content` + 0 `reasoning_tokens`). Fix: symmetric `chat_template_kwargs`
+toggle — ON `{enable_thinking:true}`, OFF `{enable_thinking:false}`. Effort does
+not modulate (flat low/med/high), so **chutes reasoning is now a `toggle`, not
+`steps`** (Chris's call). **All 5 chutes offerings live-green** (DeepSeek-V3.2 +
+Gemma now pass `reasoning-present`; GLM/Kimi unaffected, no 400; Kimi+Gemma vision
+green); nano-gpt + novita glm-5.1 spot-checked green with the new reasoning probe.
+The suite's reasoning probe moved off the trivial greeting onto a non-famous
+arithmetic word problem (conceptually right; the adapter fix is what cleared the
+reds). Insight: [[insights/2026-05-31-chutes-reasoning-on-switch]] (supersedes the
+2026-05-30 visibility note). Records + `providers/chutes.md` corrected. 169 src +
+34 curation Bun tests green; repo typecheck 13/13. **Not pushed** (ask Chris). A
+mid-session modelling spike — a `gemma-4-31b-turbo` canonical — was reverted once
+the bug was found; Gemma stays one canonical (reasoning:true).
+
+**Earlier 2026-05-30 — Batch 2: DeepSeek V4 + Kimi + Gemma
 curated on nano-gpt & novita; vision suite added.** `deepseek-v4-flash`,
 `deepseek-v4-pro`, `kimi-k2.6`, `gemma-4-31b` all live-verified on nano-gpt +
 novita (8 new offerings, `heuristic`→`verified`); `glm-5` added to chutes earlier.

@@ -75,26 +75,30 @@ function normaliseUsage(u: ChutesUsage): NormalisedUsage {
 
 /**
  * Build a chutes adapter bound to one model slug. Chutes is uniformly
- * OpenAI-compatible: reasoning ON via `reasoning_effort` (`low`/`medium`/`high`),
- * and reasoning OFF via `chat_template_kwargs: { enable_thinking: false }`.
+ * OpenAI-compatible. Reasoning is a symmetric `chat_template_kwargs` toggle:
+ * ON via `{ enable_thinking: true }`, OFF via `{ enable_thinking: false }`.
+ *
+ * `reasoning_effort` is NOT the on-switch: probed live 2026-05-31, GLM and Kimi
+ * happen to reason by default and surface `reasoning_content` regardless, but
+ * DeepSeek-V3.2 and Gemma-4-31B-turbo emit ZERO `reasoning_content` (and zero
+ * `reasoning_tokens`) under `reasoning_effort` alone — they reason in bare
+ * `content` prose. Setting `chat_template_kwargs.enable_thinking: true` makes
+ * all four surface the reasoning channel. The effort buckets do not measurably
+ * modulate the trace (low/medium/high are flat), so reasoning is modelled as a
+ * toggle, not steps; an `effort` hint is still forwarded when present, for any
+ * future model that honours it. The earlier "DeepSeek/Gemma have no reasoning
+ * channel" finding (2026-05-30) was an artefact of the wrong on-switch.
  *
  * The off mechanism is NOT `reasoning_effort: 'none'`: that 400s on
  * Kimi-K2.6-TEE (especially together with an image), whereas
  * `chat_template_kwargs.enable_thinking: false` disables thinking uniformly
- * across every chutes model (GLM, DeepSeek, Kimi, Gemma) and works on image
- * turns too (probed live 2026-05-30). Omitting the field does NOT disable
- * thinking — these models reason by default. Usage is requested via
- * `stream_options.include_usage` and delivered on a final `choices: []` event.
- * `vision` feeds only the recorded profile.
+ * across every chutes model and works on image turns too. Usage is requested
+ * via `stream_options.include_usage` and delivered on a final `choices: []`
+ * event. `vision` feeds only the recorded profile.
  */
 export function chutesAdapter(slug: string, vision: boolean): ModelAdapter {
   const profile: ModelProfile = {
-    reasoning: {
-      mode: 'steps',
-      steps: ['low', 'medium', 'high'],
-      offStep: 'off',
-      defaultStep: 'medium',
-    },
+    reasoning: { mode: 'toggle', defaultOn: true },
     toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
     vision,
     replayReasoning: false,
@@ -110,10 +114,12 @@ export function chutesAdapter(slug: string, vision: boolean): ModelAdapter {
         stream: true,
         stream_options: { include_usage: true },
       };
-      // Reasoning steering: effort to enable, chat_template_kwargs to disable
-      // (the off switch is NOT reasoning_effort:'none' — see the factory doc).
+      // Reasoning steering is a symmetric chat_template_kwargs toggle (see the
+      // factory doc). An effort hint is forwarded when present, but it does not
+      // gate or modulate thinking on chutes — enable_thinking does.
       if (req.reasoning.enabled) {
-        body.reasoning_effort = req.reasoning.effort ?? 'medium';
+        body.chat_template_kwargs = { enable_thinking: true };
+        if (req.reasoning.effort) body.reasoning_effort = req.reasoning.effort;
       } else {
         body.chat_template_kwargs = { enable_thinking: false };
       }

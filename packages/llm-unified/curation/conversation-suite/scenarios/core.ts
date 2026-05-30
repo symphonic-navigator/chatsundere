@@ -21,8 +21,23 @@ export const coreScenario: ConversationScenario = {
   description: 'Tool call (generate_image), tool-result round-trip, and memory echo.',
   turns: [
     {
-      id: 'plain-completion',
-      send: [{ role: 'user', content: 'Reply with a one-sentence greeting.' }],
+      // The reasoning probe AND the base-completion turn in one. The
+      // permutation-scoped reasoning assertions (present/absent) run on this
+      // first turn (see runner.ts), so the prompt should genuinely warrant
+      // reasoning rather than being a one-word greeting — asserting
+      // `reasoning-present` on "say hello" was always conceptually wrong. A
+      // non-famous arithmetic word problem exercises the channel without being a
+      // memorised riddle answered reflexively. We assert only that the channel
+      // is populated (on) or empty (off) — NEVER whether the answer (3 hardbacks)
+      // is correct (D8: validate the pipe, never the intelligence).
+      id: 'reasoning-probe',
+      send: [
+        {
+          role: 'user',
+          content:
+            'A bookshop sells paperbacks for £8 and hardbacks for £14. On Monday it sold 7 books for a total of £74. How many hardbacks were sold?',
+        },
+      ],
       assertions: [assertNoHttpError, assertNoStreamError, assertUsagePresent],
     },
     {

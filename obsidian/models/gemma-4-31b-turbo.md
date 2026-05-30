@@ -16,15 +16,17 @@ Offered on chutes, nano-gpt and novita, each with a hand-written catalogue adapt
 
 - **slug:** `google/gemma-4-31B-turbo-TEE` · **adapterId:** `chutes:google/gemma-4-31B-turbo-TEE`
 - **context:** recommended/max 131 072
-- **reasoning control:** `reasoning_effort` (low/medium/high) to enable; off =
-  `chat_template_kwargs: { enable_thinking: false }` (the uniform chutes off
-  switch — see [[../providers/chutes]]).
-- ⚠️ **Hidden reasoning:** chutes Gemma emits `reasoning_tokens` (counted) but **no
-  `reasoning_content` text**, even on a hard prompt at `effort: high` (probed
-  2026-05-30) — so the suite's `reasoning-present` assertion fails for the chutes
-  offering. Reasoning works (token-counted) but is not surfaced. Follow-up: decide
-  whether the chutes Gemma `reasoning` should be modelled as visible at all. The
-  nano-gpt and novita Gemma offerings DO surface reasoning normally.
+- **reasoning control:** symmetric `chat_template_kwargs` toggle — on =
+  `{ enable_thinking: true }`, off = `{ enable_thinking: false }` (see
+  [[../providers/chutes]]). `reasoning_effort` is **not** the on-switch and does
+  not modulate the trace; reasoning is a `toggle`.
+- ✅ **Visible reasoning channel.** Streams `reasoning_content` (with
+  `reasoning_tokens`) whenever `enable_thinking: true` is set — re-probed live
+  2026-05-31 (463–614 reasoning chars). The earlier "hidden reasoning / no
+  `reasoning_content`" record (2026-05-30) was an artefact of the **wrong
+  on-switch** (`reasoning_effort` alone); under it chutes Gemma-turbo emits zero
+  `reasoning_content` *and* zero `reasoning_tokens`. See
+  [[../insights/2026-05-31-chutes-reasoning-on-switch]].
 - 🔒 **Privacy:** yes (chutes TEE)
 - **FP4 quant** — an FP4-quantised deployment (recorded for honesty; conjecture:
   squeezed onto spare H100 capacity). Despite FP4 reportedly very good (Chris).
@@ -53,11 +55,12 @@ The chatsune-era note flagged Gemma producing an image *prompt* without firing
 valid JSON on the core scenario prompt — `tool-call-fired:generate_image` green.
 Empirical truth over the documented gotcha; no mitigation needed at present.
 
-## Validation (2026-05-30, conversation-suite)
+## Validation (conversation-suite)
 
-- **Core:** nano-gpt 44/44, novita 22/22 — all green (tools, reasoning on/off,
-  usage, memory). **chutes 41/44** — the only reds are `reasoning-present` (the
-  hidden-reasoning characteristic above: chutes Gemma surfaces no `reasoning_content`
-  text); tools, usage, memory and reasoning-off are green.
+- **Core:** nano-gpt + novita all green (tools, reasoning on/off, usage, memory).
+  **chutes** now all green too (2026-05-31): with the on-switch fix
+  (`enable_thinking: true`) `reasoning-present` passes; tools, usage, memory and
+  reasoning-off green. (The 2026-05-30 "chutes 41/44" run predated the fix — the
+  three reds were the wrong-on-switch artefact, not a missing channel.)
 - **Vision:** Gemma describes the 128x128 test image as "red" on **all three**
   providers — vision pipe verified everywhere.

@@ -49,7 +49,7 @@ async function runPermutation(
     const outcome = await binding.runTurn(history, perm.intent);
     const results = turn.assertions.map((a) => a(outcome));
     // Permutation-scoped assertions (e.g. reasoning present/absent) run on the
-    // first turn — the clean reasoning probe, before tools/memory complicate it.
+    // first turn — the reasoning probe, before tools/memory complicate it.
     if (i === 0 && perm.assertions) results.push(...perm.assertions.map((a) => a(outcome)));
     turns.push({ turnId: turn.id, results });
     // Replay the assistant's turn into history. When it made tool calls, the

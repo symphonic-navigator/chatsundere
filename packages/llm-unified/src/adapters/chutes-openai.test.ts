@@ -21,15 +21,19 @@ describe('chutesAdapter buildRequest', () => {
     expect('reasoning_effort' in wire.body).toBe(false);
   });
 
-  it('sets reasoning_effort (not chat_template_kwargs) from the intent when on', () => {
-    const wire = a.buildRequest({ messages: [], reasoning: { enabled: true, effort: 'high' } });
-    expect(wire.body.reasoning_effort).toBe('high');
-    expect('chat_template_kwargs' in wire.body).toBe(false);
+  it('enables thinking via chat_template_kwargs when on (NOT reasoning_effort alone)', () => {
+    // Probed live 2026-05-31: reasoning_effort alone leaves DeepSeek-V3.2 and
+    // Gemma-turbo with zero reasoning_content; enable_thinking:true is the real
+    // on-switch across every chutes model.
+    const wire = a.buildRequest({ messages: [], reasoning: { enabled: true } });
+    expect(wire.body.chat_template_kwargs).toEqual({ enable_thinking: true });
+    expect('reasoning_effort' in wire.body).toBe(false);
   });
 
-  it('defaults reasoning_effort to medium when on without an explicit effort', () => {
-    const wire = a.buildRequest({ messages: [], reasoning: { enabled: true } });
-    expect(wire.body.reasoning_effort).toBe('medium');
+  it('forwards an effort hint alongside enable_thinking when one is given', () => {
+    const wire = a.buildRequest({ messages: [], reasoning: { enabled: true, effort: 'high' } });
+    expect(wire.body.chat_template_kwargs).toEqual({ enable_thinking: true });
+    expect(wire.body.reasoning_effort).toBe('high');
   });
 
   it('uses the same off switch on an image turn (the case that 400d Kimi)', () => {

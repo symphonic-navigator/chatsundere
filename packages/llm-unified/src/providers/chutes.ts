@@ -6,12 +6,11 @@ import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
 import { apiKeyField } from './_helpers.js';
 
-const STEPS: ReasoningControl = {
-  mode: 'steps',
-  steps: ['low', 'medium', 'high'],
-  offStep: 'off',
-  defaultStep: 'medium',
-};
+// Reasoning on chutes is a symmetric chat_template_kwargs toggle, not steps:
+// the effort buckets do not measurably modulate the trace (probed live
+// 2026-05-31), so a toggle is the honest control. The on-switch
+// (enable_thinking:true) and channel parsing live in `chutesAdapter`.
+const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
 function chutesOffering(
   canonicalRef: string,
@@ -25,7 +24,7 @@ function chutesOffering(
     upstreamSlug: slug,
     adapter: { kind: 'catalogue', adapterId: `chutes:${slug}` },
     profile: {
-      reasoning: STEPS,
+      reasoning: TOGGLE,
       toolCalls: { supported: true, streaming: true, concurrentWithReasoning: false },
       vision,
       replayReasoning: false,

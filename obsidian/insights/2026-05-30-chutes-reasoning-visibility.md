@@ -1,3 +1,16 @@
+> [!warning] SUPERSEDED 2026-05-31 — the central premise here is WRONG.
+> This note concluded chutes DeepSeek-V3.2 has a real-but-adaptive
+> `reasoning_content` channel and Gemma-turbo has none. Re-probing on 2026-05-31
+> showed BOTH have working channels; the apparent absence was the **wrong
+> on-switch** — `reasoning_effort` alone does not enable thinking on these models
+> (they reason in bare `content` prose), whereas `chat_template_kwargs:
+> { enable_thinking: true }` makes all four chutes models stream `reasoning_content`.
+> The "318 reasoning_content deltas on bat-and-ball" claim below was never
+> reproducible (an unverified assertion, like the earlier "44/44"). Read
+> [[2026-05-31-chutes-reasoning-on-switch]] for the corrected picture. The one
+> durable rule below — only `<think>`/`<thinking>`-delimited content counts as
+> reasoning — still stands.
+
 # Reasoning visibility is per-deployment — and chutes hides nothing (2026-05-30)
 
 Teed up for a fresh context. Started from "chutes hides reasoning on some models /
