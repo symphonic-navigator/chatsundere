@@ -127,6 +127,11 @@ The transport layer (`src/transport.ts`) and the SSE framing are not
 adapter-specific and stay generic; only request-body shaping and per-event
 interpretation move into the adapter.
 
+**Endpoint constraint (always):** adapters target the **chat-completions**
+endpoint (`/chat/completions`), never the newer stateful `/responses` API.
+Chatsundere holds the conversation context itself, so the stateless
+completions shape is what we standardise on across every provider and adapter.
+
 ## 5. usage & tools
 
 - **usage:** adapters emit `{ type: 'usage'; usage: NormalisedUsage }` (chutes via
