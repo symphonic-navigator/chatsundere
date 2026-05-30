@@ -105,8 +105,11 @@ place. (A slug-on-CanonicalRequest refactor is deferred — not needed now.)
   `shape: 'openai-chat-completions'`, `capabilities: ['llm','streaming','tools']`,
   `configFields: [apiKeyField('Chutes API key')]`, `probe: { path: '/models', method: 'GET' }`,
   `secretFields: new Set(['api_key'])`, `corsHint: 'direct'` (chatsune confirms
-  browser CORS), `sortPriority: 5` (a privacy-first partner ranks ahead of
-  nano-gpt's 10), and `knownModels` (§5).
+  browser CORS), `sortPriority: 10`, and `knownModels` (§5).
+- **Provider ordering (Chris's call):** chutes → novita → ollama-cloud →
+  nano-gpt. Set chutes `sortPriority: 10` and move **nano-gpt 10 → 40** (to the
+  end); novita (20) and ollama-cloud (30) are unchanged. Final ascending order:
+  chutes 10 < novita 20 < ollama-cloud 30 < nano-gpt 40.
 - **`ProviderScanner`** (`src/providers/curation/chutes-scanner.ts`):
   `groupChutesModels(models: { id: string; confidential_compute?: boolean }[]): DiscoveredOffering[]`
   — one offering per model, `teeVariant = confidential_compute === true`, no

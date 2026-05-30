@@ -10,9 +10,9 @@ beforeAll(() => {
 });
 
 describe('built-in providers', () => {
-  it('registers nano-gpt, novita, ollama-cloud — exactly three', () => {
+  it('registers chutes, novita, ollama-cloud, nano-gpt — exactly four, in sortPriority order', () => {
     const ids = listProviders().map((p) => p.id);
-    expect(ids).toEqual(['nano-gpt', 'novita', 'ollama-cloud']);
+    expect(ids).toEqual(['chutes', 'novita', 'ollama-cloud', 'nano-gpt']);
   });
 
   it('nano-gpt has inofficial CORS hint and openai-chat-completions shape', () => {
@@ -23,6 +23,16 @@ describe('built-in providers', () => {
       // knownModels populated in Task 3 — six curated models
       expect(p.knownModels).toHaveLength(6);
       expect(p.shape).toBe('openai-chat-completions');
+    }
+  });
+
+  it('chutes has direct CORS hint, four TEE models, and sortPriority 10', () => {
+    const p = getProvider('chutes');
+    expect(p).toBeDefined();
+    if (p) {
+      expect(p.corsHint).toBe('direct');
+      expect(p.knownModels).toHaveLength(4);
+      expect(p.sortPriority).toBe(10);
     }
   });
 

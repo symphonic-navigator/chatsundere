@@ -79,7 +79,7 @@ export const nanoGpt: ProviderDefinition = {
       tools: true,
     },
   ],
-  sortPriority: 10,
+  sortPriority: 40,
 };
 
 export function registerNanoGpt(): void {

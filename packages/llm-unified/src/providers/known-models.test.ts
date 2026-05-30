@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, it } from 'bun:test';
+import { chutes } from './chutes.js';
 import { nanoGpt } from './nano-gpt.js';
 import { novita } from './novita.js';
 import { ollamaCloud } from './ollama-cloud.js';
@@ -30,4 +31,27 @@ describe('knownModels per provider', () => {
       expect(gemma?.vision).toBe(true);
     });
   }
+});
+
+describe('chutes knownModels (four curated TEE models)', () => {
+  it('carries four models, each with an adapterId, reasoning, tools, contextWindow, vision', () => {
+    expect(chutes.knownModels.length).toBe(4);
+    expect(new Set(chutes.knownModels.map((m) => m.id)).size).toBe(4);
+    for (const m of chutes.knownModels) {
+      expect(m.adapterId).toBe(`chutes:${m.id}`);
+      expect(m.reasoning).toBeDefined();
+      expect(typeof m.contextWindow).toBe('number');
+      expect(m.tools).toBe(true);
+      expect(typeof m.vision).toBe('boolean');
+    }
+  });
+
+  it('Kimi and Gemma are vision-capable; DeepSeek and GLM are not', () => {
+    const vision = (frag: string) =>
+      chutes.knownModels.find((m) => m.id.toLowerCase().includes(frag))?.vision;
+    expect(vision('kimi')).toBe(true);
+    expect(vision('gemma')).toBe(true);
+    expect(vision('deepseek')).toBe(false);
+    expect(vision('glm')).toBe(false);
+  });
 });
