@@ -16,6 +16,7 @@ export type {
 } from './types.js';
 
 export { registerProvider, getProvider, listProviders } from './registry.js';
+export { registerAdapter, getAdapter } from './adapter-registry.js';
 
 export { composeSystemPrompt, type CompositionLayers } from './composition.js';
 

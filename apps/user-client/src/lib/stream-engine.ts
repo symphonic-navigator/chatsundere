@@ -107,6 +107,9 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       contentBuffer.push({ type: 'pill', pillId: pill.id });
     } else if (chunk.type === 'finish') {
       finishReason = chunk.reason;
+    } else if (chunk.type === 'usage') {
+      // Usage display is a later feature (a subsequent catalogue-runtime slice).
+      // Adapters emit usage chunks; we deliberately ignore them here for now.
     } else if (chunk.type === 'error') {
       throw new Error(`stream-engine: upstream ${chunk.message}`);
     }

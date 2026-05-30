@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, it, mock, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it, mock, spyOn, test } from 'bun:test';
+import type {
+  CanonicalRequest,
+  ModelAdapter,
+  ParseState,
+  WireRequest,
+} from './adapter-contract.js';
+import { _resetAdapterRegistryForTests, registerAdapter } from './adapter-registry.js';
 import { nanoGpt } from './providers/nano-gpt.js';
 import { novita } from './providers/novita.js';
 import { shouldRetryStatus } from './retry.js';
 import {
   type StreamCompletionArgs,
+  buildAdapterBodyForTest,
   buildBodyForTest,
   streamCompletion,
 } from './stream-completion.js';
-import type { StreamChunk } from './types.js';
+import type { KnownModel, ProviderConfig, ProviderDefinition, StreamChunk } from './types.js';
 
 const sseBody = [
   'data: {"choices":[{"delta":{"content":"Hi "}}]}',
@@ -324,5 +332,107 @@ describe('streamCompletion retry on transient initial-fetch failure', () => {
     }
     expect(threw).toBe(true);
     expect(attempts).toBeLessThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildAdapterBody tests
+// ---------------------------------------------------------------------------
+
+let lastReq: CanonicalRequest | null = null;
+const recordingAdapter: ModelAdapter = {
+  profile: {
+    reasoning: { mode: 'toggle', defaultOn: false },
+    toolCalls: { supported: true, streaming: true, concurrentWithReasoning: false },
+    vision: false,
+    replayReasoning: false,
+  },
+  buildRequest(req: CanonicalRequest): WireRequest {
+    lastReq = req;
+    return { model: 'slug', body: { model: 'slug', messages: req.messages, stream: true } };
+  },
+  parseChunk(_raw: unknown, state: ParseState) {
+    return { events: [], state };
+  },
+};
+
+const provider = { id: 'p' } as ProviderDefinition;
+const providerConfig = {} as ProviderConfig;
+const model: KnownModel = {
+  id: 'slug',
+  displayName: 'M',
+  contextWindow: 100_000,
+  reasoning: { kind: 'optional', defaultOn: false, replayReasoning: false },
+  vision: false,
+  tools: true,
+  adapterId: 'rec',
+};
+
+afterEach(() => {
+  _resetAdapterRegistryForTests();
+  lastReq = null;
+});
+
+describe('buildAdapterBody', () => {
+  test('assembles a CanonicalRequest with reasoning intent and preserves temperature', () => {
+    registerAdapter('rec', recordingAdapter);
+    const body = buildAdapterBodyForTest(
+      {
+        provider,
+        providerConfig,
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+        bodyExtras: { reasoning: { enabled: true, effort: 'high' }, temperature: 0.4 },
+      },
+      recordingAdapter,
+    );
+    expect(lastReq?.reasoning).toEqual({ enabled: true, effort: 'high' });
+    expect(lastReq?.messages).toEqual([{ role: 'user', content: 'hi' }]);
+    // temperature is a generic sampling param layered onto the adapter body.
+    expect(body.temperature).toBe(0.4);
+    expect(body.model).toBe('slug');
+  });
+
+  test('includes tools when provided, omits when absent', () => {
+    registerAdapter('rec', recordingAdapter);
+    buildAdapterBodyForTest(
+      {
+        provider,
+        providerConfig,
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+        bodyExtras: {},
+        tools: [
+          { name: 'generate_image', description: 'make an image', parameters: { type: 'object' } },
+        ],
+      },
+      recordingAdapter,
+    );
+    expect(lastReq?.tools).toHaveLength(1);
+    expect(lastReq?.tools?.[0]?.name).toBe('generate_image');
+  });
+
+  test('defaults reasoning to disabled when no intent is supplied', () => {
+    registerAdapter('rec', recordingAdapter);
+    buildAdapterBodyForTest(
+      {
+        provider,
+        providerConfig,
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        model,
+        messages: [],
+        bodyExtras: {},
+      },
+      recordingAdapter,
+    );
+    expect(lastReq?.reasoning).toEqual({ enabled: false });
   });
 });

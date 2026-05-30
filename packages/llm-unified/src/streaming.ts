@@ -6,14 +6,14 @@ export interface ParseOpts {
 }
 
 /**
- * Parse an OpenAI-compatible SSE stream into a structured StreamChunk
- * AsyncIterable. Handles split chunks, comments, blank lines, the [DONE]
- * terminator, and abort signals.
+ * Frame an SSE byte stream into raw event strings (the text between `\n\n`
+ * separators). Generic — no payload interpretation. Shared by the generic
+ * and adapter parse paths.
  */
-export async function* parseOpenAiSseStream(
+export async function* frameSseEvents(
   stream: ReadableStream<Uint8Array>,
   opts: ParseOpts = {},
-): AsyncIterable<StreamChunk> {
+): AsyncIterable<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -30,16 +30,10 @@ export async function* parseOpenAiSseStream(
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE events end at \n\n. Process every complete event in the buffer.
       let sep = buffer.indexOf('\n\n');
       while (sep !== -1) {
-        const event = buffer.slice(0, sep);
+        yield buffer.slice(0, sep);
         buffer = buffer.slice(sep + 2);
-        const chunks = parseEvent(event);
-        for (const c of chunks) {
-          if (c === DONE) return;
-          yield c;
-        }
         sep = buffer.indexOf('\n\n');
       }
     }
@@ -49,29 +43,51 @@ export async function* parseOpenAiSseStream(
   }
 }
 
-const DONE = Symbol('done');
-type EventOut = StreamChunk | typeof DONE;
+/** One SSE `data:` line, interpreted up to (but not including) payload shape. */
+export type SsePayloadToken =
+  | { kind: 'data'; data: unknown }
+  | { kind: 'done' }
+  | { kind: 'malformed'; message: string };
 
-function parseEvent(event: string): EventOut[] {
-  const out: EventOut[] = [];
+/** Split one SSE event into its payload tokens (data lines, [DONE], malformed). */
+export function eventToTokens(event: string): SsePayloadToken[] {
+  const out: SsePayloadToken[] = [];
   for (const line of event.split('\n')) {
     if (line === '' || line.startsWith(':')) continue;
     if (!line.startsWith('data:')) continue;
     const data = line.slice(5).trimStart();
     if (data === '[DONE]') {
-      out.push(DONE);
+      out.push({ kind: 'done' });
       continue;
     }
-    let parsed: unknown;
     try {
-      parsed = JSON.parse(data);
+      out.push({ kind: 'data', data: JSON.parse(data) });
     } catch (e) {
-      out.push({ type: 'error', message: `malformed SSE payload: ${(e as Error).message}` });
-      continue;
+      out.push({ kind: 'malformed', message: (e as Error).message });
     }
-    out.push(...openAiPayloadToChunks(parsed));
   }
   return out;
+}
+
+/**
+ * Parse an OpenAI-compatible SSE stream into a structured StreamChunk
+ * AsyncIterable. Handles split chunks, comments, blank lines, the [DONE]
+ * terminator, and abort signals.
+ */
+export async function* parseOpenAiSseStream(
+  stream: ReadableStream<Uint8Array>,
+  opts: ParseOpts = {},
+): AsyncIterable<StreamChunk> {
+  for await (const event of frameSseEvents(stream, opts)) {
+    for (const tok of eventToTokens(event)) {
+      if (tok.kind === 'done') return;
+      if (tok.kind === 'malformed') {
+        yield { type: 'error', message: `malformed SSE payload: ${tok.message}` };
+        continue;
+      }
+      yield* openAiPayloadToChunks(tok.data);
+    }
+  }
 }
 
 interface OpenAiDeltaPayload {

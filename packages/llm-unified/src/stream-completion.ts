@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
+import type { CanonicalRequest, ModelAdapter, ToolDef } from './adapter-contract.js';
+import { getAdapter } from './adapter-registry.js';
+import { parseWithAdapter } from './adapter-stream.js';
 import {
   MAX_RETRY_ATTEMPTS,
   computeRetryDelay,
@@ -26,6 +29,12 @@ export interface StreamCompletionArgs {
   model: KnownModel;
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
+  /**
+   * Canonical tool definitions. Only the adapter path sends them (the generic
+   * path ignores them). The client passes none today; the conversation-suite
+   * populates this for verification.
+   */
+  tools?: ToolDef[];
   signal?: AbortSignal;
   /**
    * Cap on how long we wait for the upstream to begin responding (TTFB).
@@ -50,7 +59,8 @@ const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
  *     temperature in here. Legacy boolean `thinking` is silently dropped.
  */
 export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterable<StreamChunk> {
-  const body = buildBody(args);
+  const adapter = args.model.adapterId ? getAdapter(args.model.adapterId) : undefined;
+  const body = adapter ? buildAdapterBody(args, adapter) : buildBody(args);
   const request = buildRequest({
     provider: args.providerConfig,
     apiKey: args.apiKey,
@@ -125,7 +135,11 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
   if (!response.body) {
     throw new Error(`streamCompletion: upstream ${response.status} returned no body`);
   }
-  yield* parseOpenAiSseStream(response.body, { signal: args.signal });
+  if (adapter) {
+    yield* parseWithAdapter(response.body, adapter, { signal: args.signal });
+  } else {
+    yield* parseOpenAiSseStream(response.body, { signal: args.signal });
+  }
 }
 
 function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
@@ -151,6 +165,34 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
   };
 }
 
+/**
+ * Build the wire body via a ModelAdapter. The adapter owns model/messages/
+ * stream/reasoning/tools; generic sampling params (e.g. temperature) carried in
+ * bodyExtras are layered on afterwards so they are never lost, and never
+ * override the adapter's keys.
+ */
+function buildAdapterBody(
+  args: StreamCompletionArgs,
+  adapter: ModelAdapter,
+): Record<string, unknown> {
+  const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
+  const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
+  const req: CanonicalRequest = {
+    messages: args.messages,
+    reasoning: intent,
+    ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
+  };
+  const wire = adapter.buildRequest(req);
+  // Sampling first, adapter body second: the adapter's structural keys
+  // (model/messages/stream/reasoning/tools) always win on any clash, while
+  // generic sampling params (e.g. temperature) the adapter does not set survive.
+  return { ...sampling, ...wire.body };
+}
+
 // Test-only re-export so unit tests can exercise body composition without
 // running the full streaming fetch path.
 export const buildBodyForTest = buildBody;
+
+// Test-only re-export so unit tests can exercise adapter-body composition
+// without the network.
+export const buildAdapterBodyForTest = buildAdapterBody;

@@ -40,6 +40,12 @@ export interface KnownModel {
   reasoning: ReasoningCapability;
   vision: boolean;
   tools: boolean;
+  /**
+   * When set, streamCompletion routes through getAdapter(adapterId) for
+   * wire-body building and parsing; otherwise the generic path is used.
+   * Many models may share one id (e.g. all chutes models → 'chutes-openai').
+   */
+  adapterId?: string;
 }
 
 export interface ProviderDefinition {
