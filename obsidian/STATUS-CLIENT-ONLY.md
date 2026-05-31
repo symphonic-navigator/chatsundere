@@ -1377,41 +1377,66 @@ update the relevant one at the end.
 
 ## Doing now
 
-*(Phase 4 alpha-prep implemented across 16 sequential commits on
-master `76c333e → 9eb83b4` plus two follow-ups `88b7067` (drop legacy
-ScrollToEnd test) + `7536037` (Biome CSS auto-format); awaiting Chris's
-manual smoke of spec §7, the one-time Pages-source flip in GitHub
-Settings, the squash into one `Phase 4 alpha-prep squashed` commit,
-and the `v0.0.1` annotated tag that triggers the first released
-alpha-build at `teaser.chatsundere.me/alpha/`.)*
+*(between sessions — curation phase)*
+
+Phase 4 alpha-prep landed across 15 sequential commits on master
+(`76c333e → 9eb83b4`) plus follow-ups `88b7067` / `7536037`, and is
+**pushed to `origin/master` unsquashed**. The originally-planned
+squash + `v0.0.1` tag + Pages-source flip was **never executed** —
+work continued straight into provider/model curation instead. Decided
+with Chris on 2026-05-31: the squash is **abandoned** (the commits are
+pushed and buried under 60+ later commits; a rewrite has no value), and
+the **alpha release ceremony (v0.0.1 tag + Pages flip + alpha deploy at
+`teaser.chatsundere.me/alpha/`) is deferred into the forthcoming
+4-week roadmap** (alpha-tester invitations live there). The alpha is
+therefore **not yet deployed**.
+
+Since alpha-prep, the active work has been **curation**: 6 providers
+onboarded/curated (chutes, nano-gpt, novita, wafer, tensorix, …) with
+the conversation-suite as the verification harness. Latest: Tensorix
+(5 EU-sovereign ZDR offerings) — see the Last-updated header above.
+
+Next concrete implementation step (pre-roadmap): **retry
+observability** — wire the `onRetry`/logging seam into
+`packages/llm-unified/src/retry.ts` and its three call-sites, per
+[[insights/2026-05-31-retry-helper-brief]]. Then a roadmap discussion
+with Chris (clear 4-week picture in hand: ship a chat client people
+already enjoy — not every feature, but something that delights and
+doesn't annoy).
 
 ---
 
 ## Next session
 
-1. **Manual smoke of alpha-prep** — Chris runs spec §7 items 1-10 on
-   a real device. Of particular interest: retry behaviour under
-   transient 5xx (item 5), retry-on-abort cleanup (item 6), affordance
-   breathing + scroll-to-end + pin glow animations (item 7), per-card
-   streaming orb when a stream is live (item 8), reduced-motion respect
-   (item 9).
-2. **Pages-source flip** — one-time GitHub Settings change: Source
-   "Deploy from a branch" → "GitHub Actions" at
-   `github.com/symphonic-navigator/chatsundere/settings/pages`. The
-   `pages.yml` workflow will succeed at build but fail at deploy until
-   this is flipped.
-3. **Squash + commit** — squash the 16 commits + the STATUS commit into
-   a single `Phase 4 alpha-prep squashed` commit per ADR 0003.
-4. **Tag v0.0.1 and verify the released deploy** — `git tag -a v0.0.1
-   -m "First alpha release" && git push origin v0.0.1`. The workflow
-   re-runs with the tag context; `/alpha/` updates to read `v0.0.1 ·
-   sha <short>` in the Entrance-Hall footer.
-5. **Invite first alpha testers** — Chris's call. The spec calls them
-   "ausgewählt, technisch sehr affine User" who don't need Setup-Hints.
-6. **Phase 5 (Bookmarks + Setup-Hints)** — gated on Lyra's wireframe +
-   first-tester feedback.
-   Date-group headers (dropped in Task 13 above) should be revisited
-   here.
+1. **Retry observability** — the only concrete pre-roadmap
+   implementation item. Wire an `onRetry`/logging seam into
+   `packages/llm-unified/src/retry.ts` and its three call-sites
+   (`stream-completion`, `one-shot-completion`, suite `binding`) so
+   transient 5xx/429s stop failing silently (today's Tensorix
+   timeouts were invisible at the retry layer). Logging half is doable
+   immediately; metrics half + loop consolidation hang on the
+   client-sink design question. Full brief:
+   [[insights/2026-05-31-retry-helper-brief]].
+2. **Roadmap discussion** — Chris has a clear 4-week picture: ship a
+   chat client people already enjoy (not every feature, but something
+   that delights and doesn't annoy). Sequence the items below against
+   that goal.
+
+**Deferred into the 4-week roadmap (was the abandoned alpha ceremony):**
+
+- **Alpha release** — `v0.0.1` tag, one-time Pages-source flip
+  ("Deploy from a branch" → "GitHub Actions" at
+  `github.com/symphonic-navigator/chatsundere/settings/pages`), verify
+  the deploy at `teaser.chatsundere.me/alpha/`, then invite the first
+  testers ("ausgewählt, technisch sehr affine User" who don't need
+  Setup-Hints). Re-sequence as a roadmap milestone.
+- **Manual smoke of alpha-prep** — spec §7 items 1-10 on a real
+  device (retry under transient 5xx, retry-on-abort cleanup, affordance
+  breathing + scroll-to-end + pin glow, per-card streaming orb,
+  reduced-motion respect). Fold into the alpha milestone.
+- **Phase 5 (Bookmarks + Setup-Hints)** — gated on Lyra's wireframe +
+  first-tester feedback. Date-group headers (dropped in Task 13) revisit
+  here.
 
 **Known follow-ups (non-blocking):**
 
