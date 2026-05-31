@@ -72,7 +72,7 @@ describe('PersonaCard', () => {
     expect(screen.getByText(/quiet companion/i)).toBeInTheDocument();
   });
 
-  it('fires onChat when the primary Chat button is clicked', () => {
+  it('labels the button "New Chat" and fires onChat with a null chat id when no chat exists', () => {
     const onChat = vi.fn();
     wrap(
       <PersonaCard
@@ -82,8 +82,23 @@ describe('PersonaCard', () => {
         onChat={onChat}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^chat$/i }));
-    expect(onChat).toHaveBeenCalledWith(makePersona().id);
+    fireEvent.click(screen.getByRole('button', { name: /new chat/i }));
+    expect(onChat).toHaveBeenCalledWith(makePersona().id, null);
+  });
+
+  it('labels the button "Continue" and fires onChat with the last chat id when one exists', () => {
+    const onChat = vi.fn();
+    wrap(
+      <PersonaCard
+        persona={makePersona()}
+        mindspace={makeMindspace()}
+        hasProvider
+        lastChatId="chat-123"
+        onChat={onChat}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    expect(onChat).toHaveBeenCalledWith(makePersona().id, 'chat-123');
   });
 
   it('shows "Provider missing" badge when hasProvider is false', () => {
@@ -96,7 +111,7 @@ describe('PersonaCard', () => {
       />,
     );
     expect(screen.getByText(/provider missing/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^chat$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /new chat/i })).toBeDisabled();
   });
 
   it('renders persona name in persona colour', () => {

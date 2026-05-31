@@ -12,12 +12,24 @@ interface Props {
   className?: string;
   id?: string;
   'aria-label'?: string;
+  /** Optional key-down passthrough — e.g. the chat cockpit's desktop Enter-to-send. */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
 const LINE_HEIGHT_PX = 22;
 
 export function AutoSizeTextarea(props: Props): JSX.Element {
-  const { value, onChange, onBlur, placeholder, minRows = 3, maxRows, className = '', id } = props;
+  const {
+    value,
+    onChange,
+    onBlur,
+    placeholder,
+    minRows = 3,
+    maxRows,
+    className = '',
+    id,
+    onKeyDown,
+  } = props;
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: value is necessary for resize effect
@@ -37,6 +49,7 @@ export function AutoSizeTextarea(props: Props): JSX.Element {
       aria-label={props['aria-label']}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
       onBlur={(e) => onBlur?.(e.target.value)}
       placeholder={placeholder}
       rows={minRows}

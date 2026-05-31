@@ -54,6 +54,19 @@ export function Cockpit(p: Props): JSX.Element {
     setMenuOpen(false);
   };
 
+  // Desktop-only affordance (ADR/CLAUDE.md §4: 1024px is the single desktop
+  // boundary): Enter sends, Shift+Enter inserts a newline. On mobile, Enter
+  // always inserts a newline — sending is the DualActionBtn's job. We never
+  // send while a stream is live or the draft is blank (mirrors the button's
+  // enabled state).
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    if (!window.matchMedia('(min-width: 1024px)').matches) return;
+    if (p.isStreamLive || p.draftValue.trim().length === 0) return;
+    e.preventDefault();
+    p.onSend(p.draftValue);
+  };
+
   return (
     <div className="cockpit" data-pinned={isPinned ? 'true' : 'false'}>
       <div className="cockpit-row-controls">
@@ -150,6 +163,7 @@ export function Cockpit(p: Props): JSX.Element {
           placeholder={`Speak to ${p.persona.name}…`}
           maxRows={6}
           className="cockpit-input"
+          onKeyDown={onInputKeyDown}
         />
         <DualActionBtn
           hasText={p.draftValue.trim().length > 0}

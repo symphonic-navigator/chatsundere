@@ -7,6 +7,7 @@ import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
+import { toastStore } from '../../state/toast.store.js';
 
 /**
  * Load-bearing default — survives the brief window between component mount
@@ -195,5 +196,13 @@ function dayKey(ts: number): string {
 
 function copyMessageText(m: MessageRow): void {
   const text = flattenAnswerText(m.contentBlocks);
-  void navigator.clipboard.writeText(text);
+  navigator.clipboard.writeText(text).then(
+    () => toastStore.show({ message: 'Copied to clipboard', tone: 'success', durationMs: 2000 }),
+    () =>
+      toastStore.show({
+        message: 'Could not copy — your browser blocked clipboard access',
+        tone: 'warn',
+        durationMs: 3500,
+      }),
+  );
 }

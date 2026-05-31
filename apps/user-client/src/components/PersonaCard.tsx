@@ -11,7 +11,10 @@ interface Props {
   persona: PersonaRow;
   mindspace: ResolvedMindspace;
   hasProvider: boolean;
-  onChat: (personaId: string) => void;
+  /** The persona's most-recent chat, or null when none exists yet. Drives the
+   *  Continue/New-Chat affordance. */
+  lastChatId?: string | null;
+  onChat: (personaId: string, lastChatId: string | null) => void;
 }
 
 /**
@@ -37,8 +40,17 @@ interface Props {
  * so multiple cards do not glitter in unison. prefers-reduced-motion
  * disables the shimmer; the static glow ring remains visible.
  */
-export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props): JSX.Element {
+export function PersonaCard({
+  persona,
+  mindspace,
+  hasProvider,
+  lastChatId,
+  onChat,
+}: Props): JSX.Element {
   const monogram = monogramFor(persona.name);
+  // Continue the most-recent chat if one exists, otherwise start fresh.
+  const lastChat = lastChatId ?? null;
+  const chatLabel = lastChat ? 'Continue' : 'New Chat';
   const tagline = persona.tagline || persona.instructions.slice(0, 60);
   // 0–4 second random animation delay so cards don't shimmer in unison.
   const shimmerDelaySeconds = (hashStringToInt(persona.id) % 4000) / 1000;
@@ -92,11 +104,11 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
         {hasProvider ? (
           <button
             type="button"
-            aria-label="Chat"
-            onClick={() => onChat(persona.id)}
+            aria-label={chatLabel}
+            onClick={() => onChat(persona.id, lastChat)}
             className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper hover:border-paper"
           >
-            Chat
+            {chatLabel}
           </button>
         ) : (
           <>
@@ -105,11 +117,11 @@ export function PersonaCard({ persona, mindspace, hasProvider, onChat }: Props):
             </span>
             <button
               type="button"
-              aria-label="Chat"
+              aria-label={chatLabel}
               disabled
               className="rounded-md border border-paper-soft/20 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft/40"
             >
-              Chat
+              {chatLabel}
             </button>
           </>
         )}
