@@ -60,7 +60,15 @@ const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
  */
 export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterable<StreamChunk> {
   const adapter = args.target.adapterId ? getAdapter(args.target.adapterId) : undefined;
-  const body = adapter ? buildAdapterBody(args, adapter) : buildBody(args);
+  let body: Record<string, unknown>;
+  let extraHeaders: Record<string, string> | undefined;
+  if (adapter) {
+    const wire = buildWire(args, adapter);
+    body = wire.body;
+    extraHeaders = wire.headers;
+  } else {
+    body = buildBody(args);
+  }
   const request = buildRequest({
     provider: args.providerConfig,
     apiKey: args.apiKey,
@@ -69,6 +77,7 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
     path: '/chat/completions',
     method: 'POST',
     body,
+    extraHeaders,
   });
 
   // TTFB timeout: cleared as soon as response headers arrive, so a long
@@ -171,15 +180,16 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
 }
 
 /**
- * Build the wire body via a ModelAdapter. The adapter owns model/messages/
- * stream/reasoning/tools; generic sampling params (e.g. temperature) carried in
- * bodyExtras are layered on afterwards so they are never lost, and never
- * override the adapter's keys.
+ * Build the wire body AND any adapter-supplied headers via a ModelAdapter. The
+ * adapter owns model/messages/stream/reasoning/tools and its own headers (e.g.
+ * wafer's `Wafer-ZDR: required`); generic sampling params (e.g. temperature)
+ * carried in bodyExtras are layered on afterwards so they are never lost, and
+ * never override the adapter's keys.
  */
-function buildAdapterBody(
+function buildWire(
   args: StreamCompletionArgs,
   adapter: ModelAdapter,
-): Record<string, unknown> {
+): { body: Record<string, unknown>; headers?: Record<string, string> } {
   const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
   const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
   const req: CanonicalRequest = {
@@ -191,7 +201,15 @@ function buildAdapterBody(
   // Sampling first, adapter body second: the adapter's structural keys
   // (model/messages/stream/reasoning/tools) always win on any clash, while
   // generic sampling params (e.g. temperature) the adapter does not set survive.
-  return { ...sampling, ...wire.body };
+  return { body: { ...sampling, ...wire.body }, headers: wire.headers };
+}
+
+/** The wire body via a ModelAdapter (headers dropped). Retained for tests. */
+function buildAdapterBody(
+  args: StreamCompletionArgs,
+  adapter: ModelAdapter,
+): Record<string, unknown> {
+  return buildWire(args, adapter).body;
 }
 
 // Test-only re-export so unit tests can exercise body composition without

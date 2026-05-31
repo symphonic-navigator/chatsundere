@@ -10,9 +10,9 @@ beforeAll(() => {
 });
 
 describe('built-in providers', () => {
-  it('registers chutes, novita, ollama-cloud, nano-gpt — exactly four, in sortPriority order', () => {
+  it('registers chutes, wafer, novita, ollama-cloud, nano-gpt — exactly five, in sortPriority order', () => {
     const ids = listProviders().map((p) => p.id);
-    expect(ids).toEqual(['chutes', 'novita', 'ollama-cloud', 'nano-gpt']);
+    expect(ids).toEqual(['chutes', 'wafer', 'novita', 'ollama-cloud', 'nano-gpt']);
   });
 
   it('nano-gpt has inofficial CORS hint and openai-chat-completions shape', () => {
@@ -32,6 +32,17 @@ describe('built-in providers', () => {
       expect(p.corsHint).toBe('direct');
       expect(p.offerings).toHaveLength(5);
       expect(p.sortPriority).toBe(10);
+    }
+  });
+
+  it('wafer requires a proxy (no CORS), has three ZDR offerings, and sortPriority 15', () => {
+    const p = getProvider('wafer');
+    expect(p).toBeDefined();
+    if (p) {
+      expect(p.corsHint).toBe('requires-proxy');
+      expect(p.offerings).toHaveLength(3);
+      expect(p.sortPriority).toBe(15);
+      for (const o of p.offerings) expect(o.trust.zdr).toBe(true);
     }
   });
 

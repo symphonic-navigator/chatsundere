@@ -4,6 +4,7 @@ import { registerChutes } from './chutes.js';
 import { registerNanoGpt } from './nano-gpt.js';
 import { registerNovita } from './novita.js';
 import { registerOllamaCloud } from './ollama-cloud.js';
+import { registerWafer } from './wafer.js';
 
 /**
  * Register all built-in providers. Called once at package import
@@ -11,6 +12,7 @@ import { registerOllamaCloud } from './ollama-cloud.js';
  */
 export function registerBuiltinProviders(): void {
   registerChutes();
+  registerWafer();
   registerNanoGpt();
   registerNovita();
   registerOllamaCloud();

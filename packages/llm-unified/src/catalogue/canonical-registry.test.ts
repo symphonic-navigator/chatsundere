@@ -3,12 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { CANONICALS, getCanonical, listCanonicals } from './canonical-registry.js';
 
 describe('canonical-registry', () => {
-  test('lists seven canonicals with unique ids', () => {
+  test('lists eight canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(7);
-    expect(new Set(ids).size).toBe(7);
+    expect(ids).toHaveLength(8);
+    expect(new Set(ids).size).toBe(8);
     expect(ids).toContain('glm-5.1');
     expect(ids).toContain('deepseek-v3.2');
+    expect(ids).toContain('qwen3.5-397b-a17b');
   });
 
   test('getCanonical returns by id and undefined for unknown', () => {

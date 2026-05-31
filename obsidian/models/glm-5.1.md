@@ -54,12 +54,30 @@ provider — this is the whole reason the offerings are not on the generic path.
 - **usage:** `reasoning_tokens` nested under `completion_tokens_details`.
 - 🔒 **Privacy:** no TEE / no ZDR.
 
+## Offering — wafer
+
+- **slug:** `GLM-5.1` · **adapterId:** `wafer:GLM-5.1`
+- **context:** recommended/max 202 752
+- **reasoning control:** **`reasoning_effort`** — `'none'` is the genuine off
+  (reasoning-absent green), `low`/`medium`/`high` enable. Effort does **not**
+  modulate the trace (probed: low 1102 / med 808 / high 943 reasoning tokens,
+  non-monotonic), so a **`toggle`** (defaultOn), not steps. Thinking streams on
+  the `reasoning_content` channel.
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under
+  `completion_tokens_details`, cached under `prompt_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention). The adapter sends
+  `Wafer-ZDR: required` so the badge is truthful (always on — Chris, 2026-05-31).
+  No TEE. See [[../providers/wafer]].
+
 ## Validation
 
 Full conversation-suite live (`makeLiveBinding`, keys under `keys/`) across every
 reasoning permutation: chutes 44/44, nano-gpt 44/44, novita 22/22 — all green
 (no HTTP/stream error, tool fires + valid JSON args, usage normalised, reasoning
 present/absent on the correct channel per permutation, memory carried through).
+**wafer (2026-05-31):** core 22/22 green (reasoning off + on, tools, memory,
+usage).
 
 ## Notes
 

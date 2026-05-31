@@ -6,8 +6,9 @@ import { chutes } from './chutes.js';
 import { nanoGpt } from './nano-gpt.js';
 import { novita } from './novita.js';
 import { ollamaCloud } from './ollama-cloud.js';
+import { wafer } from './wafer.js';
 
-const PROVIDERS = [chutes, nanoGpt, novita, ollamaCloud];
+const PROVIDERS = [chutes, wafer, nanoGpt, novita, ollamaCloud];
 
 describe('provider offerings', () => {
   test('every offering references a known canonical and passes the capability gate', () => {
@@ -31,7 +32,12 @@ describe('provider offerings', () => {
     // The non-TEE providers are mixed: live-curated GLM offerings carry a
     // hand-written catalogue adapter and `confidence: 'verified'`; the rest are
     // still on the generic path at `confidence: 'heuristic'`.
-    for (const o of [...nanoGpt.offerings, ...novita.offerings, ...ollamaCloud.offerings]) {
+    for (const o of [
+      ...wafer.offerings,
+      ...nanoGpt.offerings,
+      ...novita.offerings,
+      ...ollamaCloud.offerings,
+    ]) {
       expect(o.trust.tee).toBe(false);
       if (o.confidence === 'verified') {
         expect(o.adapter).toEqual({

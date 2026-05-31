@@ -23,6 +23,14 @@ export interface CanonicalRequest {
 export interface WireRequest {
   model: string;
   body: Record<string, unknown>;
+  /**
+   * Optional extra HTTP request headers the adapter needs on the wire (beyond
+   * the transport's Authorisation/Content-Type). Merged on top of the base
+   * headers in `transport.buildRequest`. Used e.g. by wafer to send
+   * `Wafer-ZDR: required` for ZDR offerings; reusable for any provider needing
+   * per-request header steering.
+   */
+  headers?: Record<string, string>;
 }
 
 /**

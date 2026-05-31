@@ -3,7 +3,33 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-31 (latest) — **chutes reasoning on-switch fixed; the
+**Last updated:** 2026-05-31 (latest) — **wafer.ai onboarded + 3 ZDR flagship
+models curated (GLM-5.1, Kimi-K2.6, Qwen3.5-397B-A17B).** New provider `wafer`
+(`https://pass.wafer.ai/v1`, OpenAI chat-completions). Headline: **ZDR** modelled
+as an always-on 🔒 trust badge (Chris's call) — the adapter sends
+`Wafer-ZDR: required` for ZDR offerings only (non-ZDR models 422 the header).
+**Adapter-contract extension:** `WireRequest.headers?` → `transport.extraHeaders`
+(merged on the base headers), threaded via `stream-completion`'s new `buildWire`
+— general/additive, reusable (e.g. OpenRouter attribution), all existing tests
+unchanged. **Empirical findings (probe over docs):** reasoning is OpenAI-standard
+`reasoning_effort` (`'none'`=off, low/med/high=on) but effort does **not**
+modulate → modelled `toggle`; `Qwen3.5-397B-A17B` reasons despite `/models`
+claiming `reasoning:false` → **new canonical** with `requiredCaps.reasoning:true`
+(adapter always sends an explicit effort — *omitting* it hung the model 90 s);
+`Kimi-K2.6` reasoning cannot be turned off on the adapter path — the live suite
+emits a trace on every reasoning-off run despite `reasoning_effort:'none'` (2/2
+runs; curl probes oddly silent, but the suite is the authoritative gate) → modelled
+**`fixed-on`** (no reliable off; `enable_thinking:false` is a no-op). **CORS:**
+wafer answers OPTIONS with 405 / no ACAO → `corsHint: 'requires-proxy'` (Bun-side
+suite unaffected). **Live conversation-suite:** GLM-5.1 core 22/22; Qwen3.5 core
+22/22 + vision; Kimi-K2.6 vision 4/4 + tools/memory/reasoning-on green (reasoning-off
+not offered under `fixed-on`). `sortPriority:15`; `freedomOrientedDeployment:true` (Chris);
+Qwen `freedomOriented:null` (pending Chris). Client `settings.tsx` +
+`ProviderSheet` gained wafer; `builtins`/`canonical-registry`/`offerings` tests
+updated. Records: `providers/wafer.md` + `models/qwen3.5-397b-a17b.md` (new),
+`glm-5.1` + `kimi-k2.6` updated. **Not pushed** (ask Chris).
+
+**Earlier 2026-05-31 — chutes reasoning on-switch fixed; the
 "hidden reasoning" finding was an adapter bug.** Re-probing the two `reasoning-present`
 reds (chutes DeepSeek-V3.2 + Gemma-turbo) overturned the 2026-05-30 premise: both
 DO have working `reasoning_content` channels — the `chutesAdapter` just enabled
