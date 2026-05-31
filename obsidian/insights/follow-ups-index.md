@@ -69,6 +69,7 @@ Items that have been decided but not yet implemented in code.
 | Tier-4 step-up integration in admin-client | After admin-client invitation-creation UI exists (Squash C) | Reuses `<StepUpModal />` with 5-minute grace window |
 | HTTPS-required + server-at-root + `/api` prefix enforcement in user-client | Per ADR 0023 | Likely already true; verify and document |
 | Theming squash | After Squash C (admin-client) | See design-deferrals |
+| Remove alpha CORS-proxy scaffolding (`CorsProxyBlock`, `SettingsRow.corsProxy`, `✗ Needs proxy` status, `requires-proxy` client routing, the proxy-missing save guard) | Beta proxy-service (Phase 2) lands — proxied providers then reach upstream over the user's server connection | [[../../superpowers/specs/2026-05-31-provider-model-handling-rework-design]] §13 |
 
 ## Active — Hygiene & Tooling
 
