@@ -3,6 +3,8 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
+> **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
+
 **Last updated:** 2026-05-31 (latest) — **Retry observability shipped + latent
 `ERR_BODY_ALREADY_USED` bug fixed across all three provider-call sites** (commit
 `7402231`): sink-agnostic `onRetry` hook, pure `formatRetryEvent`, new

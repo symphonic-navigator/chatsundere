@@ -194,7 +194,9 @@ These are not nice-to-haves; they are how Chatsundere differentiates from generi
 
 ## 12. Versioning & Releases
 
-- The project is **private** until we can chat through 2-3 mainstream upstream providers with a few popular models. First public release at that point is **v0.1.0**.
+- The project is **private** until the Block-2 tool/upload/artifact scope is complete. First public release at that point is **v0.1.0**, a deliberately **local-only alpha** (no account, no sync). See [ADR 0031](obsidian/decisions/0031-eight-block-roadmap-to-beta.md) and the living [ROADMAP](obsidian/ROADMAP.md).
+- The original "2-3 *mainstream* providers" gate is **relaxed**: freedom-/privacy-oriented providers are a deliberate identity, not a stopgap. v0.1.0 is gated on feature scope, not on onboarding OpenAI/Anthropic/Google.
+- Version gates: **v0.1.0** (Block 2, local-only alpha), **v0.2.0** (Block 5, knowledge base), **v0.3.0** (Block 6, encrypted backend live), **v0.4.0** (Block 8, beta).
 - SemVer from v0.1.0 onwards.
 - Manual release notes per release; format will be locked in when we hit v0.1.0.
 - Versioning automation: Chris has ideas in flight. A future ADR will fix the approach.
