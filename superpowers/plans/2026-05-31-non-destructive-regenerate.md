@@ -293,25 +293,16 @@ git commit -m "Extract runIntoDraft from stream-manager.start (no behaviour chan
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `tests/unit/stream-manager-store.test.ts`. Reuse the file's existing `seedArgs` helper and `vi.mocked(runStreamEngine)` mock. This seeds a complete exchange, then regenerates into the persona row and asserts the user row is untouched and the persona row gets the new content.
+Add to `tests/unit/stream-manager-store.test.ts`. Reuse the file's existing `seedChat()` + `baseStartArgs(chatId, persona, model)` helpers and the file's `vi.spyOn(engine, 'runStreamEngine')` mock pattern (the file imports `* as engine`). Seed a complete exchange (and set the chat title to a non-null value so the success path's first-response title-gen branch does **not** fire — `generateTitleAsync` is not mocked in this case), then regenerate into the persona row and assert the user row is untouched and the persona row gets the new content.
 
 ```ts
   it('regenerate re-rolls into the target persona message, leaving the user row intact', async () => {
-    const db = await openClientDataDb();
-    const chatId = uuidv7();
-    const personaId = uuidv7();
-    await db.chats.add({
-      id: chatId,
-      personaId,
-      title: 'kept',
-      resolvedMindspaceId: 'm1',
-      createdAt: 1,
-      lastMessageAt: 3,
-      bookmarkedMessageCount: 0,
-      draftInput: '',
-    } as never);
-    const userId = uuidv7();
-    const personaMsgId = uuidv7();
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' }); // suppress first-response title-gen
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const userId = 'u1';
+    const personaMsgId = 'pm1';
     await db.messages.add({
       id: userId,
       chatId,
@@ -331,29 +322,29 @@ Add to `tests/unit/stream-manager-store.test.ts`. Reuse the file's existing `see
       streamingState: 'complete',
     });
 
-    vi.mocked(runStreamEngine).mockImplementation(async (a: never) => {
-      (a as { onChunk: (c: unknown) => void }).onChunk({ type: 'token', text: 'new answer' });
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation((async (a: {
+      onChunk: (c: unknown) => void;
+    }) => {
+      a.onChunk({ type: 'token', text: 'new answer' });
       return {
         finalContentBlocks: [{ type: 'text', text: 'new answer' }],
         pillRows: [],
         finishReason: 'stop',
       };
-    });
+    }) as never);
 
-    await useStreamManagerStore.getState().regenerate({
-      ...seedArgs(chatId, personaId, {
-        userText: 'tell me a joke',
-        userMessageText: 'tell me a joke',
-        priorMessages: [],
-      }),
+    const store = useStreamManagerStore.getState();
+    await store.regenerate({
+      ...baseStartArgs(chatId, persona, model),
+      userMessageText: 'tell me a joke',
+      priorMessages: [],
       targetMessageId: personaMsgId,
     } as never);
+    await new Promise((r) => setTimeout(r, 50));
 
-    await vi.waitFor(async () => {
-      const persona = await db.messages.get(personaMsgId);
-      expect(persona?.streamingState).toBe('complete');
-      expect(persona?.contentBlocks).toEqual([{ type: 'text', text: 'new answer' }]);
-    });
+    const personaRow = await db.messages.get(personaMsgId);
+    expect(personaRow?.streamingState).toBe('complete');
+    expect(personaRow?.contentBlocks).toEqual([{ type: 'text', text: 'new answer' }]);
     // User row never touched: same id, same content, still present.
     const user = await db.messages.get(userId);
     expect(user?.contentBlocks).toEqual([{ type: 'text', text: 'tell me a joke' }]);
@@ -418,21 +409,12 @@ Append this case — on engine failure the target stays `incomplete` (footer sta
 
 ```ts
   it('regenerate leaves target incomplete and user row intact on engine failure', async () => {
-    const db = await openClientDataDb();
-    const chatId = uuidv7();
-    const personaId = uuidv7();
-    await db.chats.add({
-      id: chatId,
-      personaId,
-      title: 'kept',
-      resolvedMindspaceId: 'm1',
-      createdAt: 1,
-      lastMessageAt: 3,
-      bookmarkedMessageCount: 0,
-      draftInput: '',
-    } as never);
-    const userId = uuidv7();
-    const personaMsgId = uuidv7();
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const userId = 'u1';
+    const personaMsgId = 'pm1';
     await db.messages.add({
       id: userId,
       chatId,
@@ -452,21 +434,19 @@ Append this case — on engine failure the target stays `incomplete` (footer sta
       streamingState: 'complete',
     });
 
-    vi.mocked(runStreamEngine).mockRejectedValue(new Error('upstream down'));
+    vi.spyOn(engine, 'runStreamEngine').mockRejectedValue(new Error('upstream down'));
 
-    await useStreamManagerStore.getState().regenerate({
-      ...seedArgs(chatId, personaId, {
-        userText: 'q',
-        userMessageText: 'q',
-        priorMessages: [],
-      }),
+    const store = useStreamManagerStore.getState();
+    await store.regenerate({
+      ...baseStartArgs(chatId, persona, model),
+      userMessageText: 'q',
+      priorMessages: [],
       targetMessageId: personaMsgId,
     } as never);
+    await new Promise((r) => setTimeout(r, 50));
 
-    await vi.waitFor(async () => {
-      const persona = await db.messages.get(personaMsgId);
-      expect(persona?.streamingState).toBe('incomplete');
-    });
+    const personaRow = await db.messages.get(personaMsgId);
+    expect(personaRow?.streamingState).toBe('incomplete');
     const user = await db.messages.get(userId);
     expect(user?.contentBlocks).toEqual([{ type: 'text', text: 'q' }]);
     const count = await db.messages.where('chatId').equals(chatId).count();
