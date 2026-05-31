@@ -30,6 +30,9 @@ export interface CanonicalModel {
 
 export type AdapterRef = { kind: 'catalogue'; adapterId: string } | { kind: 'generic' };
 
+/** A modality a provider contributes, derived from its curated offerings. */
+export type ServiceKind = 'llm' | 'web' | 'tts' | 'stt' | 'tti';
+
 /** One upstream endpoint: provider × slug × variant. Curated or discovered. */
 export interface Offering {
   canonicalRef: string | null;
@@ -42,6 +45,8 @@ export interface Offering {
   freedomOrientedDeployment: boolean | null;
   source: 'curated' | 'discovered';
   confidence: 'verified' | 'partial' | 'heuristic';
+  /** Modality this offering provides. Currently always 'llm'. */
+  serviceKind: ServiceKind;
 }
 
 const MODES = new Set(['none', 'fixed-on', 'toggle', 'steps']);

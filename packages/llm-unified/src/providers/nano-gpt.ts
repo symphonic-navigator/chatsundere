@@ -54,6 +54,7 @@ function slugSwapOffering(
     freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
   };
 }
 

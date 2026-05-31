@@ -58,6 +58,7 @@ function tensorixOffering(
     freedomOrientedDeployment: true, // Chris (2026-05-31): adult-friendly AUP, no censorship added
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
   };
 }
 

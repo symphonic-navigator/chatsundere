@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
-import type { Offering } from './catalogue/types.js';
+import type { Offering, ServiceKind } from './catalogue/types.js';
 import type { ProviderDefinition } from './types.js';
 
 interface Entry {
@@ -79,4 +79,32 @@ export function getOffering(
   upstreamSlug: string,
 ): Offering | undefined {
   return getProvider(providerTemplateId)?.offerings.find((o) => o.upstreamSlug === upstreamSlug);
+}
+
+/** Canonical modality ordering used everywhere modalities are listed. */
+export const MODALITY_ORDER: ServiceKind[] = ['llm', 'web', 'tts', 'stt', 'tti'];
+
+function orderKinds(set: Set<ServiceKind>): ServiceKind[] {
+  return MODALITY_ORDER.filter((k) => set.has(k));
+}
+
+/** Distinct modalities of a provider's offerings, in MODALITY_ORDER; [] if unknown. */
+export function providerServiceKinds(providerId: string): ServiceKind[] {
+  const defn = getProvider(providerId);
+  if (!defn) return [];
+  return orderKinds(new Set(defn.offerings.map((o) => o.serviceKind)));
+}
+
+/** Union of modalities across the given providers, in MODALITY_ORDER. */
+export function aggregateServiceKinds(templateIds: string[]): ServiceKind[] {
+  const set = new Set<ServiceKind>();
+  for (const id of templateIds) for (const k of providerServiceKinds(id)) set.add(k);
+  return orderKinds(set);
+}
+
+/** Template ids of registered providers with at least one offering of the kind. */
+export function providersContributing(kind: ServiceKind): string[] {
+  return listProviders()
+    .filter((p) => p.offerings.some((o) => o.serviceKind === kind))
+    .map((p) => p.id);
 }

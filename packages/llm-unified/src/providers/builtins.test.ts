@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { beforeAll, describe, expect, it } from 'bun:test';
+import { _resetAdapterRegistryForTests } from '../adapter-registry.js';
 import { _resetRegistryForTests, getProvider, listProviders } from '../registry.js';
 import { registerBuiltinProviders } from './_register-builtins.js';
 
 beforeAll(() => {
+  // Reset both registries: registerBuiltinProviders also registers catalogue
+  // adapters, which throw on duplicate ids if a prior test file registered
+  // builtins without clearing them. Resetting here keeps this file order-independent.
   _resetRegistryForTests();
+  _resetAdapterRegistryForTests();
   registerBuiltinProviders();
 });
 

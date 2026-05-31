@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { getCanonical, getProvider, listCanonicals, listOfferings } from '@chatsundere/llm-unified';
+import {
+  availableCanonicals,
+  getCanonical,
+  getProvider,
+  listOfferings,
+} from '@chatsundere/llm-unified';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -26,6 +31,7 @@ import {
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
+import { usableTemplateIds } from '../../lib/usable-providers.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 type DraftPersona = Omit<PersonaRow, 'id' | 'createdAt' | 'updatedAt'>;
@@ -338,12 +344,17 @@ export function PersonaEditor(): JSX.Element {
       >
         <ModelList
           providers={providers.data ?? []}
+          configuredTemplateIds={usableTemplateIds(
+            providers.data ?? [],
+            !!settings.data?.corsProxy,
+          )}
           selectedCanonicalId={draft.canonicalId}
           selectedProviderId={draft.providerId}
           selectedModelId={draft.modelId}
           onSelect={(canonicalId, providerId, modelId) =>
             patch({ canonicalId, providerId, modelId })
           }
+          onBrowseProviders={() => navigate('/app/settings')}
         />
       </AccordionCard>
 
@@ -521,27 +532,74 @@ function TrustBadge({ kind }: { kind: 'tee' | 'zdr' }): JSX.Element {
   );
 }
 
+/**
+ * Jurisdiction badge — the legal home of the deployment (e.g. EU), in the same
+ * aurora palette as ZDR so trust signals read as a set. The title spells it out.
+ */
+function JurisdictionBadge({ code }: { code: string }): JSX.Element {
+  return (
+    <span
+      title={`Jurisdiction: ${code}`}
+      className="rounded border border-aurora-500/40 bg-aurora-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-aurora-200"
+    >
+      {code}
+    </span>
+  );
+}
+
 function ModelList({
   providers,
+  configuredTemplateIds,
   selectedCanonicalId,
   selectedProviderId,
   selectedModelId,
   onSelect,
+  onBrowseProviders,
 }: {
   providers: ProviderRow[];
+  configuredTemplateIds: string[];
   selectedCanonicalId: string | null;
   selectedProviderId: string;
   selectedModelId: string;
   onSelect: (canonicalId: string, providerId: string, upstreamSlug: string) => void;
+  onBrowseProviders: () => void;
 }): JSX.Element {
   const enabled = providers.filter((p) => p.enabled);
   // Provider templates the user has configured, for intersecting offerings.
   const configuredByTemplate = new Map(enabled.map((p) => [p.templateId, p]));
+  // Only canonicals with a usable offering are shown; the rest are counted for
+  // the quiet footer that points the user at My Settings.
+  const { available, hiddenCount } = availableCanonicals(configuredTemplateIds);
 
   return (
     <div className="flex flex-col gap-2">
-      {listCanonicals().map((c) => {
-        const offers = listOfferings(c.id);
+      {/* If the persona's chosen model is no longer reachable (its provider was
+          removed or disabled), surface it as a quiet danger row with the
+          constructive next step rather than silently dropping the selection. */}
+      {selectedCanonicalId && !available.some((c) => c.id === selectedCanonicalId)
+        ? (() => {
+            const stale = getCanonical(selectedCanonicalId);
+            const anyOffer = listOfferings(selectedCanonicalId)[0];
+            const provName = anyOffer
+              ? (getProvider(anyOffer.providerId)?.displayName ?? anyOffer.providerId)
+              : null;
+            return (
+              <div className="rounded-md border border-danger/30 bg-danger/[0.04] p-3">
+                <div className="font-display text-sm text-paper">
+                  {stale?.displayName ?? selectedCanonicalId}
+                </div>
+                <div className="text-xs text-danger">
+                  Currently unavailable
+                  {provName ? ` — add ${provName} or pick another model` : ' — pick another model'}
+                </div>
+              </div>
+            );
+          })()
+        : null}
+      {available.map((c) => {
+        // Configured-only offerings — every deployment row is now reachable,
+        // and the trust badges and provider count reflect what the user can use.
+        const offers = listOfferings(c.id).filter((o) => configuredByTemplate.has(o.providerId));
         const teeAvailable = offers.some((o) => o.trust.tee);
         const zdrAvailable = offers.some((o) => o.trust.zdr);
         const active = selectedCanonicalId === c.id;
@@ -550,19 +608,13 @@ function ModelList({
             <button
               type="button"
               onClick={() => {
-                // Pre-select the top-ranked *configured* offering. If the user
-                // has no configured provider for this canonical, set the
-                // canonical but clear the deployment — the inline list then
-                // shows every offering disabled with a CTA, and the persona
-                // stays invalid until a configured deployment is chosen (never
-                // a stale pair).
-                const suggested = offers.find((o) => configuredByTemplate.has(o.providerId));
-                if (suggested) {
-                  const row = configuredByTemplate.get(suggested.providerId);
-                  onSelect(c.id, row?.id ?? '', suggested.upstreamSlug);
-                } else {
-                  onSelect(c.id, '', '');
-                }
+                // Pre-select the top-ranked offering. The list only shows
+                // canonicals with a configured offering, so `offers` is never
+                // empty and a configured provider row always exists.
+                const suggested = offers[0];
+                if (!suggested) return;
+                const row = configuredByTemplate.get(suggested.providerId);
+                onSelect(c.id, row?.id ?? '', suggested.upstreamSlug);
               }}
               className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left ${
                 active
@@ -586,20 +638,19 @@ function ModelList({
               <div className="flex flex-col gap-2 border-l border-white/10 pl-3">
                 <div className="text-xs uppercase tracking-wider text-paper-soft">Deployment</div>
                 {offers.map((o) => {
+                  // `offers` is configured-only, so the provider row always
+                  // exists for every deployment shown here.
                   const row = configuredByTemplate.get(o.providerId);
-                  const configured = !!row;
+                  if (!row) return null;
                   const def = getProvider(o.providerId);
                   const isActive =
-                    configured &&
-                    selectedProviderId === row.id &&
-                    selectedModelId === o.upstreamSlug;
+                    selectedProviderId === row.id && selectedModelId === o.upstreamSlug;
                   return (
                     <button
                       key={`${o.providerId}:${o.upstreamSlug}`}
                       type="button"
-                      disabled={!configured}
-                      onClick={() => configured && onSelect(c.id, row.id, o.upstreamSlug)}
-                      className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left disabled:opacity-50 ${
+                      onClick={() => onSelect(c.id, row.id, o.upstreamSlug)}
+                      className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left ${
                         isActive
                           ? 'border-paper bg-white/[0.04]'
                           : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
@@ -612,12 +663,26 @@ function ModelList({
                           </span>
                           {o.trust.tee ? <TrustBadge kind="tee" /> : null}
                           {o.trust.zdr ? <TrustBadge kind="zdr" /> : null}
+                          {o.trust.jurisdiction ? (
+                            <JurisdictionBadge code={o.trust.jurisdiction} />
+                          ) : null}
                         </div>
-                        <div className="text-xs text-paper-soft">
-                          {o.context.recommended.toLocaleString()} ctx
-                          {configured
-                            ? ''
-                            : ` · add ${def?.displayName ?? o.providerId} to use this deployment`}
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-paper-soft">
+                          <span>{o.context.recommended.toLocaleString()} ctx</span>
+                          {/* Every offering here is configured/reachable, so these
+                              capability hints describe what the user can actually use. */}
+                          <span className="flex gap-1">
+                            {o.profile.toolCalls.supported ? (
+                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
+                                Tools
+                              </span>
+                            ) : null}
+                            {o.profile.vision ? (
+                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
+                                Vision
+                              </span>
+                            ) : null}
+                          </span>
                         </div>
                       </div>
                       {isActive ? <span>✓</span> : null}
@@ -629,6 +694,16 @@ function ModelList({
           </div>
         );
       })}
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={onBrowseProviders}
+          className="mt-1 text-left text-[11px] text-paper-soft/70 hover:text-paper-soft"
+        >
+          ＋{hiddenCount} more model{hiddenCount === 1 ? '' : 's'} once you add providers → My
+          Settings
+        </button>
+      ) : null}
     </div>
   );
 }

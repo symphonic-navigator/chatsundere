@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { listOfferings } from '../registry.js';
 import type { CanonicalModel } from './types.js';
 
 /** Curated, provider-independent identities. The user picks one of these. */
@@ -143,4 +144,21 @@ export function listCanonicals(): CanonicalModel[] {
 /** Returns the canonical with the given id, or `undefined` if not registered. */
 export function getCanonical(id: string): CanonicalModel | undefined {
   return CANONICALS.find((c) => c.id === id);
+}
+
+/**
+ * Canonicals the user can actually use: those with >= 1 offering on a
+ * configured (usable) provider. Returns the available list plus the count of
+ * hidden canonicals, for the model picker's quiet footer.
+ */
+export function availableCanonicals(configuredTemplateIds: string[]): {
+  available: CanonicalModel[];
+  hiddenCount: number;
+} {
+  const configured = new Set(configuredTemplateIds);
+  const all = listCanonicals();
+  const available = all.filter((c) =>
+    listOfferings(c.id).some((o) => configured.has(o.providerId)),
+  );
+  return { available, hiddenCount: all.length - available.length };
 }

@@ -49,6 +49,7 @@ function waferOffering(canonicalRef: string, slug: string, args: WaferOfferingAr
     freedomOrientedDeployment: true, // Chris (2026-05-31): wafer adds no censorship
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
   };
 }
 

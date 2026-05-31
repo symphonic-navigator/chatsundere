@@ -51,6 +51,7 @@ function mistralOffering(canonicalRef: string, slug: string, args: MistralOfferi
     freedomOrientedDeployment: true,
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
   };
 }
 

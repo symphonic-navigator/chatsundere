@@ -19,6 +19,10 @@ export {
   rankOfferings,
   listOfferings,
   getOffering,
+  MODALITY_ORDER,
+  providerServiceKinds,
+  aggregateServiceKinds,
+  providersContributing,
 } from './registry.js';
 export { registerAdapter, getAdapter } from './adapter-registry.js';
 

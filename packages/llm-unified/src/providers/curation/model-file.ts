@@ -106,6 +106,7 @@ export function assembleOfferings(file: ModelFile): Offering[] {
       freedomOrientedDeployment: h.freedomOrientedDeployment,
       source: 'curated',
       confidence: b.confidence,
+      serviceKind: 'llm',
     };
   });
 }

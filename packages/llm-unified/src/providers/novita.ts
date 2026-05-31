@@ -38,6 +38,7 @@ function thinkingOffering(
     freedomOrientedDeployment: true, // Chris (2026-05-30): novita adds no censorship
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
   };
 }
 

@@ -1,10 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  type ServiceKind,
+  aggregateServiceKinds,
+  getProvider,
+  providerServiceKinds,
+  providersContributing,
+} from '@chatsundere/llm-unified';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { MindspaceTexture, SettingsRow } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
+import { AddProviderPicker } from '../../components/AddProviderPicker.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { CapBadgeRow } from '../../components/CapBadgeRow.js';
+import { CorsProxyBlock } from '../../components/CorsProxyBlock.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
@@ -13,20 +23,9 @@ import { SaveBar } from '../../components/SaveBar.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
+import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../lib/built-in-providers.js';
+import { usableTemplateIds } from '../../lib/usable-providers.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
-
-const BUILT_IN_PROVIDERS = [
-  { id: 'chutes', name: 'Chutes', monogram: 'Ch' },
-  { id: 'tensorix', name: 'Tensorix', monogram: 'Te' },
-  { id: 'mistral', name: 'Mistral AI', monogram: 'Mi' },
-  { id: 'wafer', name: 'Wafer', monogram: 'Wa' },
-  { id: 'novita', name: 'Novita AI', monogram: 'No' },
-  { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
-  { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
-  { id: 'openrouter', name: 'OpenRouter', monogram: 'OR' },
-] as const;
-
-type ProviderTemplateId = (typeof BUILT_IN_PROVIDERS)[number]['id'];
 
 interface SettingsDraft {
   globalAboutMe: string;
@@ -53,43 +52,100 @@ function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
   );
 }
 
-function ProvidersList(): JSX.Element {
+/** Upstream Providers: proxy block, summary, configured list, add-picker. */
+export function ProvidersSection(): JSX.Element {
   const providers = useProviders();
+  const settings = useSettings();
   const [openSheet, setOpenSheet] = useState<ProviderTemplateId | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  const rows = providers.data ?? [];
+  const hasProxy = !!settings.data?.corsProxy;
+  const usable = usableTemplateIds(rows, hasProxy);
+  const lit = aggregateServiceKinds(usable);
+
+  const tooltipFor = (k: ServiceKind): string => {
+    const contributors = providersContributing(k).filter(
+      (id) => !rows.some((r) => r.templateId === id),
+    );
+    if (contributors.length === 0) return 'Coming soon';
+    const names = contributors.map((id) => getProvider(id)?.displayName ?? id);
+    return `Add ${names.join(', ')} to unlock ${k.toUpperCase()}`;
+  };
+
+  function statusOf(row: { templateId: string; enabled: boolean }): string {
+    if (!row.enabled) return '✗ Not connected';
+    const needsProxy = getProvider(row.templateId)?.corsHint === 'requires-proxy';
+    if (needsProxy && !hasProxy) return '✗ Needs proxy';
+    return '● Connected';
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      {BUILT_IN_PROVIDERS.map((b) => {
-        const row = providers.data?.find((p) => p.templateId === b.id);
-        const connected = !!row?.enabled;
-        return (
-          <button
-            key={b.id}
-            type="button"
-            className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-3 text-left hover:bg-white/[0.04]"
-            onClick={() => setOpenSheet(b.id)}
-          >
-            <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
-              {b.monogram}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-display text-sm text-paper">{b.name}</div>
-              <div className="text-xs text-paper-soft">
-                {connected ? '● Connected · Key valid' : 'Not connected'}
+    <div className="flex flex-col gap-3">
+      <CorsProxyBlock />
+
+      <div>
+        <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">
+          What you have
+        </div>
+        <CapBadgeRow lit={lit} tooltipFor={tooltipFor} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="rounded-md border border-white/5 bg-white/[0.02] p-4 text-sm text-paper-soft">
+          Your Circle has no voice yet — add a provider to begin.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => setOpenSheet(row.templateId as ProviderTemplateId)}
+              className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-3 text-left hover:bg-white/[0.04]"
+            >
+              <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
+                {BUILT_IN_PROVIDERS.find((b) => b.id === row.templateId)?.monogram ??
+                  row.templateId.slice(0, 2)}
               </div>
-              <div className="mt-1 flex gap-1">
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
-                  Text
-                </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-sm text-paper">
+                  {getProvider(row.templateId)?.displayName ?? row.templateId}
+                </div>
+                <div className="text-xs text-paper-soft">{statusOf(row)}</div>
+                <div className="mt-1">
+                  <CapBadgeRow lit={providerServiceKinds(row.templateId)} />
+                </div>
               </div>
-            </div>
-            <span className="text-paper-soft">▸</span>
-          </button>
-        );
-      })}
-      <p className="mt-2 text-[11px] text-paper-soft">
-        Keys are tested automatically on save. Each provider can be added once.
-      </p>
+              <span className="text-paper-soft">▸</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setPicking(true)}
+        className="rounded-md border border-dashed border-white/15 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
+      >
+        + Add provider
+      </button>
+
+      {picking ? (
+        <AddProviderPicker
+          configuredTemplateIds={rows.map((r) => r.templateId)}
+          hasProxy={hasProxy}
+          onPick={(id) => {
+            setPicking(false);
+            setOpenSheet(id);
+          }}
+          onNeedProxy={() => {
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
+
       {openSheet ? (
         <ProviderSheet templateId={openSheet} onClose={() => setOpenSheet(null)} />
       ) : null}
@@ -234,9 +290,9 @@ export function Settings(): JSX.Element {
       <AccordionCard
         icon="⬢"
         label="Upstream Providers"
-        meta={`${(providers.data ?? []).filter((p) => p.enabled).length} of ${BUILT_IN_PROVIDERS.length} connected`}
+        meta={`${(providers.data ?? []).length} provider(s)`}
       >
-        <ProvidersList />
+        <ProvidersSection />
       </AccordionCard>
 
       <SaveBar

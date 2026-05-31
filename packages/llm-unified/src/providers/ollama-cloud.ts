@@ -36,6 +36,7 @@ function genericOffering(
     freedomOrientedDeployment: null,
     source: 'curated',
     confidence: 'heuristic',
+    serviceKind: 'llm',
   };
 }
 

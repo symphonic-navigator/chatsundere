@@ -51,6 +51,9 @@ const OfferingSchema = v.object({
   freedomOrientedDeployment: v.nullable(v.boolean()),
   source: v.picklist(['curated', 'discovered']),
   confidence: v.picklist(['verified', 'partial', 'heuristic']),
+  // Modality defaults to 'llm' when absent, so external/discovered catalogue
+  // entries predating ServiceKind remain valid.
+  serviceKind: v.optional(v.picklist(['llm', 'web', 'tts', 'stt', 'tti']), 'llm'),
 });
 
 const EntrySchema = v.object({ canonical: CanonicalSchema, offerings: v.array(OfferingSchema) });

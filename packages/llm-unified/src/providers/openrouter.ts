@@ -52,6 +52,7 @@ function openRouterOffering(
     freedomOrientedDeployment: true,
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
   };
 }
 
