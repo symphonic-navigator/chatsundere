@@ -87,6 +87,42 @@ describe('makeLiveBinding', () => {
     expect(outcome.text).toBe('hi');
   });
 
+  test('builds a fresh Request per attempt — retry does not reuse a consumed body', async () => {
+    // Regression: the request was built once outside the retry loop, so the
+    // second fetch reused a Request whose body stream was already consumed,
+    // throwing ERR_BODY_ALREADY_USED. A mock that reads the body (as real fetch
+    // does) reproduces it; the fix rebuilds the Request each attempt.
+    let calls = 0;
+    const bodies: string[] = [];
+    const binding = makeLiveBinding({
+      offeringRef: 'chutes:deepseek',
+      providerConfig,
+      apiKey: 'k',
+      adapter,
+      sleepImpl: async () => {},
+      fetchImpl: (async (req: Request) => {
+        calls += 1;
+        bodies.push(await req.text()); // consume the body, like real fetch
+        if (calls === 1) return new Response('rate limited', { status: 429 });
+        return new Response(
+          sseStream([
+            'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+            'data: [DONE]\n\n',
+          ]),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    const outcome = await binding.runTurn([{ role: 'user', content: 'hi' }], { enabled: false });
+    expect(calls).toBe(2);
+    expect(outcome.httpStatus).toBe(200);
+    expect(outcome.text).toBe('ok');
+    // Each attempt sent the identical body — proof the rebuild is faithful.
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toBe(bodies[1]);
+  });
+
   test('captures the final 429 as an outcome after exhausting retries (no throw)', async () => {
     let calls = 0;
     const binding = makeLiveBinding({

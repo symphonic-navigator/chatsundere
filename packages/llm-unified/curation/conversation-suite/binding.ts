@@ -44,18 +44,20 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
         reasoning,
         ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
       });
-      const request = buildRequest({
-        provider: args.providerConfig,
-        apiKey: args.apiKey,
-        corsProxyUrl: args.corsProxyUrl ?? null,
-        corsProxyKey: args.corsProxyKey ?? null,
-        path: '/chat/completions',
-        method: 'POST',
-        body: wire.body,
-      });
-
       let response: Response | null = null;
       for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+        // Build a FRESH Request each attempt: a Request's body stream is consumed
+        // on the first fetch, so reusing the same object on a retry throws
+        // ERR_BODY_ALREADY_USED. buildRequest is a pure factory, so this is cheap.
+        const request = buildRequest({
+          provider: args.providerConfig,
+          apiKey: args.apiKey,
+          corsProxyUrl: args.corsProxyUrl ?? null,
+          corsProxyKey: args.corsProxyKey ?? null,
+          path: '/chat/completions',
+          method: 'POST',
+          body: wire.body,
+        });
         response = await doFetch(request);
         if (response.ok) break;
         if (!shouldRetryStatus(response.status) || attempt >= MAX_RETRY_ATTEMPTS) break;
