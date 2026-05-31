@@ -61,17 +61,21 @@ is input-side.
   cached under `prompt_tokens_details`.
 - 🔒 **Privacy:** **ZDR** — adapter sends `Wafer-ZDR: required` (always on). No TEE.
   See [[../providers/wafer]].
-- **Vision:** verified (suite `vision` green — describes the test image as "red").
+- **Vision:** verified (suite `vision` green — names the clothing colour "green"
+  on the Sylvir test image).
 
 ## Validation (2026-05-30, conversation-suite)
 
 - **Core scenario:** nano-gpt 44/44, novita 22/22, chutes 44/44 — all green
   (tools, reasoning on/off, usage, memory). chutes off now uses
   `chat_template_kwargs`, which fixed the previously-broken reasoning-off.
-- **Vision scenario:** nano-gpt ✅, novita ✅ and chutes ✅ describe the test image
-  ("red"). **Image-size lesson:** a 24x24 test image was mis-perceived by Kimi as
-  "black"; at 128x128 it reports "red" correctly — the vision scenario now embeds
-  a 128x128 image.
-- **wafer (2026-05-31):** vision 4/4 green; core tools / memory / reasoning-on /
+- **Vision scenario:** nano-gpt ✅, novita ✅ and chutes ✅ name the clothing
+  colour ("green") on the Sylvir test image. **Image-size lesson (historical):**
+  a 24x24 solid-red test image was mis-perceived by Kimi as "black", and at
+  128x128 the solid red read correctly — but the solid-colour image was retired
+  on 2026-05-31 (it made MiMo V2.5 leak reasoning past the colour word). The
+  scenario now embeds a content-rich photo; see [[mimo-v2.5-omni]] and
+  `scenarios/_test-image.ts`.
+- **wafer (2026-05-31):** vision green; core tools / memory / reasoning-on /
   usage all green. Reasoning-off is **not** offered (`fixed-on`) because the
   adapter path cannot suppress it — see the wafer offering above.

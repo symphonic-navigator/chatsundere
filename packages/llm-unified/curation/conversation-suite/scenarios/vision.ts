@@ -6,15 +6,7 @@ import {
   assertVisionDescribed,
 } from '../assertions.js';
 import type { ConversationScenario } from '../scenario.js';
-
-// A 128x128 solid pure-red (#FF0000) PNG as a data URL. Solid + unambiguous so
-// the expected description ("red") is reliable. SIZE MATTERS: a 24x24 version was
-// mis-perceived as "black" by Kimi K2.6 (its vision preprocessing mangled the
-// tiny image) and even 400'd chutes streaming — at 128x128 every vision offering
-// reports "red". Generated deterministically (zlib + struct), embedded so the
-// suite needs no asset file.
-const RED_PNG_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAAxElEQVR42u3RMQ0AAAjAsPk3DTLgaDIFa1M6zAIAAAQAgAAAEAAAAgBAAAAIAAABACAAAAQAgAAAEAAAAgBAAAAIAAABACAAAAQAgAAAEAAAAgBAAAAIAAABACAAAAQAgAAAEAAAAgBAAAAIAAABAADAAgAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAjAixYgaMOy89oM6gAAAABJRU5ErkJggg==';
+import { SYLVIR_IMAGE_DATA_URL } from './_test-image.js';
 
 /**
  * The vision scenario — run ONLY against offerings whose `profile.vision` is
@@ -23,10 +15,19 @@ const RED_PNG_DATA_URL =
  * is carried through and the model names the image's unambiguous content. Purely
  * a protocol check (design D8): it judges that the bytes flow, not the model's
  * visual acuity.
+ *
+ * The image is a content-rich photo (a half-elf bard in a green cloak), NOT a
+ * synthetic solid-colour block. A uniform colour gave MiMo V2.5 nothing to
+ * perceive, so it leaked chain-of-thought into the content channel and rambled
+ * past the bare colour word (~88% pass); the real photo lands "green" reliably
+ * (12/12 live on MiMo Omni) because the question — the colour of the clothing —
+ * has an unambiguous answer the model states even when verbose. See
+ * `_test-image.ts`.
  */
 export const visionScenario: ConversationScenario = {
   id: 'vision',
-  description: 'Single image-input turn: the image is carried through and its colour described.',
+  description:
+    'Single image-input turn: the image is carried through and the clothing colour described.',
   turns: [
     {
       id: 'image-colour',
@@ -36,16 +37,16 @@ export const visionScenario: ConversationScenario = {
           content: [
             {
               type: 'text',
-              text: 'What is the dominant colour of this image? Reply with the single colour word.',
+              text: 'What is the dominant colour of the clothing worn by the figure in this image? Reply with the single colour word.',
             },
-            { type: 'image_url', image_url: { url: RED_PNG_DATA_URL } },
+            { type: 'image_url', image_url: { url: SYLVIR_IMAGE_DATA_URL } },
           ],
         },
       ],
       assertions: [
         assertNoHttpError,
         assertNoStreamError,
-        assertVisionDescribed('red'),
+        assertVisionDescribed('green'),
         assertUsagePresent,
       ],
     },

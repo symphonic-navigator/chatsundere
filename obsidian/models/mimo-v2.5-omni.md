@@ -30,23 +30,21 @@ V2.5 Omni** to set it apart from the larger text-only `mimo-v2.5-pro` sibling.
 - **tool calls:** single block (one SSE event carried `id` + `name` + full
   `arguments`); args valid JSON; `generate_image` fires reliably; reasoning and
   tool calls coexist (`concurrentWithReasoning`).
-- **vision:** **works**, with one documented test-image artefact. On **real
-  photos** it is reliable and concise — a Samoyed photo is named correctly every
-  run (`image_tokens` counted, `finish_reason: stop`). On the suite's
-  **synthetic solid-colour** test image the pass rate is **~88% (23/26 live
-  runs)**; the misses are not a perception failure (the model always sees red)
-  but a **reasoning-leak**: with `enable_thinking: false` MiMo sometimes spills
-  its chain-of-thought into the `content` channel ("Thinking Process: ...") and
-  rambles without landing the bare word "red". This is the same class as Kimi's
-  24px-image edge — a synthetic-image artefact of the deterministic oracle, not a
-  product fault. Two further empirical gotchas, both probe-confirmed:
+- **vision:** **works** — the suite vision scenario passes **12/12** live runs.
+  This drove a fix to the suite itself: the original synthetic solid-colour test
+  image made MiMo leak chain-of-thought into the `content` channel ("Thinking
+  Process: ...") and ramble past the bare colour word (~88%, 23/26) — a uniform
+  block gives the model nothing to perceive (the Kimi-24px class). The shared
+  test image is now a content-rich photo (the Sylvir bard, green cloak); MiMo
+  names "green" reliably even when verbose, because the question has an
+  unambiguous answer. See `scenarios/_test-image.ts`. Two further empirical
+  gotchas, both probe-confirmed:
   1. **Image must be a base64 data URL** — a remote image URL 400s on novita
      ("invalid request error"). The product sends base64, so the pipe is fine;
      the suite's embedded data-URL image exercises exactly this path.
-  2. **Do not under-cap `max_tokens` on image turns.** On the synthetic image
-     MiMo is verbose before answering, so a tight cap (e.g. 80) truncates before
-     the answer. The adapter sends **no** `max_tokens`, so this never bites the
-     product path.
+  2. **Do not under-cap `max_tokens` on image turns.** MiMo can be verbose before
+     answering, so a tight cap (e.g. 80) truncates before the answer. The adapter
+     sends **no** `max_tokens`, so this never bites the product path.
 - **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`,
   `cached_tokens` under `prompt_tokens_details`. Handled by the shared
   `novitaThinkingAdapter` unchanged.
@@ -70,7 +68,7 @@ end-to-end — empirical proof that the deployment matters, not just the weights
 - **Core scenario:** PASS on both reasoning permutations (on + off), 22/22 —
   tools (`generate_image` fired, args valid JSON), memory echo, usage all green;
   reasoning-present on, reasoning-absent off.
-- **Vision scenario:** PASS on real photos (100%); ~88% (23/26) on the synthetic
-  solid-colour test image — the rare miss is a reasoning-leak artefact, see the
-  vision note above.
+- **Vision scenario:** PASS **12/12** on the new content-rich Sylvir test image.
+  (The retired synthetic solid-colour image flaked ~88% on a reasoning-leak; the
+  swap fixed it — see the vision note above.)
 - Run via `curation/run-novita-mimo-suite.ts` (local-only, never CI).

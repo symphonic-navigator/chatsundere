@@ -62,5 +62,6 @@ Empirical truth over the documented gotcha; no mitigation needed at present.
   (`enable_thinking: true`) `reasoning-present` passes; tools, usage, memory and
   reasoning-off green. (The 2026-05-30 "chutes 41/44" run predated the fix — the
   three reds were the wrong-on-switch artefact, not a missing channel.)
-- **Vision:** Gemma describes the 128x128 test image as "red" on **all three**
-  providers — vision pipe verified everywhere.
+- **Vision:** Gemma names the clothing colour "green" on the Sylvir test image on
+  **all three** providers — vision pipe verified everywhere. (The earlier
+  128x128 solid-red image was retired on 2026-05-31; see [[mimo-v2.5-omni]].)
