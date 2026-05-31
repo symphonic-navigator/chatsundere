@@ -125,8 +125,9 @@ adapters do **not** set them by default.
 All `confidence: 'verified'`, `source: 'curated'`, adapter
 `openrouter:<slug>`, reasoning `toggle` (defaultOn), trust
 `{ tee: false, zdr: false, jurisdiction: 'US' }`,
-`freedomOrientedDeployment: null` (pending Chris). `recommended` follows our
-project sweet-spots where it differs from OpenRouter's reported `max`.
+`freedomOrientedDeployment: true` (Chris, 2026-05-31 — OpenRouter routes
+verbatim, no censorship layer). `recommended` follows our project sweet-spots
+where it differs from OpenRouter's reported `max`.
 
 | Canonical | OpenRouter slug | vision | recommended / max |
 |---|---|---|---|
@@ -151,26 +152,34 @@ built-in censorship, and Chatsundere will not surface a censored route
 (anti-censorship stance). Chris's explicit call (2026-05-31). This is not a
 "could not route" — it is a values decision to exclude.
 
-## Slugs that could NOT be curated this round (registry gap)
+## Mistral flagships — investigated, NOT curated via OpenRouter
 
-The onboarding brief targeted **11** canonicals (the 13-canonical registry minus
-the two MiMo). This worktree's `canonical-registry.ts` holds only **10**
-canonicals and is **missing the three Mistral canonicals** (`mistral-small-4`,
-`mistral-medium-3-5`, `mistral-large-3`) the brief references. OpenRouter **can**
-route them — candidate slugs from `/models` (2026-05-31):
+The three Mistral flagships exist on OpenRouter `/models`, but live probing
+(2026-05-31) showed they are **not reliably routable** for our key, so they are
+deliberately **not offered** here. Mistral is already covered reliably by the
+direct Mistral provider (CORS-direct) and via nano-gpt — the OpenRouter route
+adds only breakage.
 
-| Brief canonical | Candidate OpenRouter slug(s) | modality |
+Probed against `chat/completions` with `keys/.or-test-key`:
+
+| Slug | Result | Why |
 |---|---|---|
-| `mistral-small-4` | `mistralai/mistral-small-2603` (newest small) | text+image |
-| `mistral-medium-3-5` | `mistralai/mistral-medium-3-5` (exact) | text+image+file |
-| `mistral-large-3` | `mistralai/mistral-large-2512` (newest large) | text+image+file |
+| `mistralai/mistral-small-2603` | **429** | rate-limited on the free route (Venice); flaps to 404 when no compliant endpoint is free |
+| `mistralai/mistral-medium-3-5` | **404** | "No endpoints available matching your guardrail restrictions and data policy" |
+| `mistralai/mistral-large-2512` | **404** | same data-policy gate (also reports no `reasoning` param — consistent with the `mistral-large-3` canonical) |
 
-No offerings were authored for these because there is no canonical to reference
-(`parseCatalogueEntry` would reject a dangling `canonicalRef`). **Flagged for
-Liz:** once the Mistral canonicals land in the registry, the slugs above are
-ready to wire (note `mistral-large-2512` reports **no** `reasoning` /
-`include_reasoning` in `supported_parameters`, unlike the small/medium variants —
-re-probe its reasoning capability before assuming a toggle).
+The 404 is an **account-level OpenRouter setting**, not a code fault: a
+privacy-oriented data/guardrail policy filters out the few (proprietary-Mistral)
+providers serving Medium/Large. **Most of our users run privacy-oriented keys —
+that is the audience** — so they could not route these even if we offered them,
+and an offering that 404s for most users is worse than none. Same class of
+decision as DeepSeek V4 Flash's exclusion: a well-evidenced negative finding.
+
+**General heads-up (applies to every OpenRouter offering):** OpenRouter routing
+is account-dependent — a user's privacy/data-policy can filter endpoints, so a
+model that routes for one key may 404 for another. The 8 curated offerings above
+are open-weight models with many compliant providers, so they pass a
+privacy-oriented policy; proprietary models with few providers may not.
 
 ## Validation (live conversation-suite, 2026-05-31)
 
@@ -195,6 +204,8 @@ image through and name the clothing colour.
 
 ## Sort priority
 
-`sortPriority: 30` — below the privacy-forward curated tier (chutes TEE 10ish,
-Tensorix ZDR 12, wafer ZDR 15) because OpenRouter is a US aggregator with no
-default ZDR/TEE. Final placement is Chris's call; this is a conservative default.
+`sortPriority: 45` — last, in the router tier alongside nano-gpt (40), because
+OpenRouter is a US aggregator with no default ZDR/TEE. 45 (not the subagent's
+provisional 30) avoids a tie with ollama-cloud (30) that would make the
+provider-list order non-deterministic. Chris approved "below the privacy tier"
+(2026-05-31); this honours that without the tie.
