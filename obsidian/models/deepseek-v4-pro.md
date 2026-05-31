@@ -68,6 +68,20 @@ Curated on nano-gpt and novita with hand-written catalogue adapters
   tool fires + valid JSON, memory, usage); text-only, no vision. Rare reasoning
   flukes under rapid back-to-back load resolved on repeat (40/40 isolated).
 
+## Offering — openrouter
+
+- **slug:** `deepseek/deepseek-v4-pro` · **adapterId:** `openrouter:deepseek/deepseek-v4-pro`
+- **context:** recommended 200 000 / max 1 048 576 (OpenRouter 1M ceiling;
+  recommended at our DeepSeek-V4 sweet-spot, matching wafer).
+- **reasoning control:** **`toggle`** (defaultOn). Unified `reasoning: { enabled }`
+  — off genuine (0 tokens), on ~81 reasoning tokens on the **`reasoning`**
+  channel. See [[../providers/openrouter]].
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 green; text-only.
+
 ## Validation (2026-05-30, conversation-suite)
 
 nano-gpt 44/44, novita 22/22 — all green across every reasoning permutation

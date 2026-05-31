@@ -42,6 +42,23 @@
 - **Validation (2026-05-31, conversation-suite):** core green (reasoning off + on,
   tool fires + valid JSON, memory, usage); text-only.
 
+## Offering — openrouter
+
+- **slug:** `deepseek/deepseek-v3.2` · **adapterId:** `openrouter:deepseek/deepseek-v3.2`
+- **context:** recommended/max 131 072 (OpenRouter reported context).
+- **reasoning control:** **`toggle`** (defaultOn). OpenRouter's unified
+  `reasoning: { enabled }` param — off is genuine (0 reasoning tokens), on emits
+  ~201 reasoning tokens. Thinking streams on the **`reasoning`** channel
+  (OpenRouter normalises every upstream onto it). See [[../providers/openrouter]].
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`,
+  cached under `prompt_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris) — OpenRouter
+  adds no censorship but the judgement is his.
+- **Validation (2026-05-31):** core 22/22 green (reasoning off + on, tool fires +
+  valid JSON, memory, usage); text-only.
+
 ## Live validation (2026-05-31, conversation-suite)
 
 Full core scenario green across the toggle permutations (reasoning on + off):

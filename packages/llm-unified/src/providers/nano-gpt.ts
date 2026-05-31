@@ -19,6 +19,16 @@ const STEPS: ReasoningControl = {
 // share the slug-swap adapter; only the declared control differs.
 const GLM_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 
+// Mistral on nano-gpt: reasoning is a binary on/off via the `:thinking` slug
+// swap (no effort buckets — Mistral's reasoning toggle is binary), so a `toggle`
+// rather than `steps`. The bare slug is cleanly reasoning-off and the `:thinking`
+// sibling streams thinking on the standard `reasoning` channel — NOT the
+// polymorphic content-array Mistral's own API uses (probed live 2026-05-31), so
+// the existing nanoGptSlugSwapAdapter handles it unchanged. Large 3 has no
+// `:thinking` sibling on nano-gpt → reasoning `none`.
+const MISTRAL_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: false };
+const MISTRAL_NONE: ReasoningControl = { mode: 'none' };
+
 // A live-curated nano-gpt offering: hand-written slug-swap adapter, verified.
 // Serves the GLM, DeepSeek, Kimi and Gemma families (all slug-swap on nano-gpt).
 function slugSwapOffering(
@@ -54,6 +64,30 @@ const offerings: Offering[] = [
   slugSwapOffering('glm-5.1', 'zai-org/glm-5.1', STEPS, false, 200_000),
   slugSwapOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', STEPS, true, 256_000),
   slugSwapOffering('gemma-4-31b', 'google/gemma-4-31b-it', STEPS, true, 262_144),
+  // Mistral family on nano-gpt (anonymous-router path). Small 4 and Medium 3.5
+  // have `:thinking` siblings → binary toggle; Large 3 has none → no reasoning.
+  // Vision is supported across the family (matches the direct-Mistral offerings).
+  slugSwapOffering(
+    'mistral-small-4',
+    'mistralai/mistral-small-4-119b-2603',
+    MISTRAL_TOGGLE,
+    true,
+    262_144,
+  ),
+  slugSwapOffering(
+    'mistral-medium-3-5',
+    'mistral/mistral-medium-3.5',
+    MISTRAL_TOGGLE,
+    true,
+    262_144,
+  ),
+  slugSwapOffering(
+    'mistral-large-3',
+    'mistralai/mistral-large-3-675b-instruct-2512',
+    MISTRAL_NONE,
+    true,
+    262_144,
+  ),
 ];
 
 export const nanoGpt: ProviderDefinition = {

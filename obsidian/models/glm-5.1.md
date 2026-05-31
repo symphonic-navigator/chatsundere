@@ -88,6 +88,24 @@ provider — this is the whole reason the offerings are not on the generic path.
 - **Validation (2026-05-31):** reasons reliably on unique prompts (4/4 medium);
   tools + memory + usage green; text-only. Off not offered (fixed-on).
 
+## Offering — openrouter — `toggle` (clean off, unlike tensorix/wafer)
+
+- **slug:** `z-ai/glm-5.1` · **adapterId:** `openrouter:z-ai/glm-5.1`
+- **context:** recommended/max 202 752 (OpenRouter reported context).
+- **reasoning control:** **`toggle`** (defaultOn). The notable divergence: on
+  Tensorix and wafer GLM 5.1 is `fixed-on` (its off only hides — reasoning leaks
+  6/6), but on OpenRouter the unified `reasoning: { enabled: false }` is a
+  **genuine off** (0 reasoning tokens, empty channel — probed live 2026-05-31).
+  On emits ~153 reasoning tokens on the **`reasoning`** channel (OpenRouter
+  normalises GLM's native `reasoning_content` onto `reasoning`). See
+  [[../providers/openrouter]].
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 green, including `reasoning-absent` on
+  the off permutation (the clean off confirmed end-to-end); text-only.
+
 ## Validation
 
 Full conversation-suite live (`makeLiveBinding`, keys under `keys/`) across every

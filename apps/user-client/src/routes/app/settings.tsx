@@ -17,10 +17,13 @@ import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 const BUILT_IN_PROVIDERS = [
   { id: 'chutes', name: 'Chutes', monogram: 'Ch' },
+  { id: 'tensorix', name: 'Tensorix', monogram: 'Te' },
+  { id: 'mistral', name: 'Mistral AI', monogram: 'Mi' },
   { id: 'wafer', name: 'Wafer', monogram: 'Wa' },
-  { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
   { id: 'novita', name: 'Novita AI', monogram: 'No' },
   { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
+  { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
+  { id: 'openrouter', name: 'OpenRouter', monogram: 'OR' },
 ] as const;
 
 type ProviderTemplateId = (typeof BUILT_IN_PROVIDERS)[number]['id'];

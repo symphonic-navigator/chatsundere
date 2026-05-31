@@ -47,6 +47,25 @@ the 🕊️ badge resolves to *unknown* until judged.
 - **Verification:** conversation-suite live, 2026-05-31 — `core` 22/22 + `vision`
   4/4, both PASS.
 
+### openrouter — `qwen/qwen3.5-397b-a17b` · `confidence: verified`
+
+- **Trust:** 🔒 **no** — US router/aggregator, `trust: { tee: false, zdr: false,
+  jurisdiction: 'US' }`. Not ZDR/TEE; trust is per-route. See
+  [[../providers/openrouter]].
+- **Reasoning control:** `toggle` (default on). OpenRouter's unified
+  `reasoning: { enabled }` — off genuine (0 reasoning tokens), on ~214 reasoning
+  tokens on the **`reasoning`** channel. Confirms the wafer/probe finding that
+  this model reasons despite some `/models` metadata claiming otherwise. Unlike
+  wafer, OpenRouter does **not** hang when reasoning is omitted; the adapter
+  still always sends the unified param for reasoning-on.
+- **Tool calls:** streaming (fragmented args, reassembled), fire correctly.
+  **Vision:** green (image carried through, clothing colour named).
+- **Context:** `recommended` = `max` = 262 144 (OpenRouter reported context).
+- **Freedom (deployment):** `freedomOrientedDeployment: null` (pending Chris);
+  effective freedom **unknown** while both judgements are open.
+- **Verification:** conversation-suite live, 2026-05-31 — `core` 22/22 + `vision`
+  4/4, both PASS.
+
 ## Notes
 
 - The `/models` `reasoning:false` mislabel is recorded in the [[../providers/wafer]]

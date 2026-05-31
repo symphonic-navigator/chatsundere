@@ -8,7 +8,15 @@ import { useSettings, useUpdateSettings } from '../data/settings.js';
 import { openSecret, sealSecret } from '../lib/secrets.js';
 
 interface Props {
-  templateId: 'chutes' | 'nano-gpt' | 'novita' | 'ollama-cloud' | 'wafer';
+  templateId:
+    | 'chutes'
+    | 'tensorix'
+    | 'mistral'
+    | 'wafer'
+    | 'novita'
+    | 'ollama-cloud'
+    | 'nano-gpt'
+    | 'openrouter';
   onClose: () => void;
 }
 

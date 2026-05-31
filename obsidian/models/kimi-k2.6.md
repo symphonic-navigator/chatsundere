@@ -82,6 +82,24 @@ is input-side.
 - **Validation (2026-05-31, conversation-suite):** core green (tools, memory,
   usage, reasoning-on) and vision green; reasoning-off not offered (fixed-on).
 
+## Offering — openrouter — `toggle` (clean off, unlike wafer/tensorix/chutes)
+
+- **slug:** `moonshotai/kimi-k2.6` · **adapterId:** `openrouter:moonshotai/kimi-k2.6`
+- **context:** recommended/max 262 144 (OpenRouter reported context).
+- **reasoning control:** **`toggle`** (defaultOn). Like GLM 5.1, Kimi is
+  `fixed-on` on wafer/tensorix/chutes (off only hides), but on OpenRouter the
+  unified `reasoning: { enabled: false }` is a **genuine off** (0 reasoning
+  tokens — probed live 2026-05-31). On emits ~169 reasoning tokens on the
+  **`reasoning`** channel (OpenRouter normalises Kimi's native `reasoning_content`
+  onto `reasoning`). See [[../providers/openrouter]].
+- **vision:** ✅ — image-input pipe carries through (suite vision green).
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 + vision 4/4 green, including
+  `reasoning-absent` on the off permutation (clean off confirmed end-to-end).
+
 ## Validation (2026-05-30, conversation-suite)
 
 - **Core scenario:** nano-gpt 44/44, novita 22/22, chutes 44/44 — all green

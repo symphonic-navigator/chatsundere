@@ -44,6 +44,21 @@ Curated on nano-gpt and novita with hand-written catalogue adapters
   option without a privacy guarantee. 🕊️ free (model + deployment). See
   [[../providers/wafer]].
 
+## Offering — openrouter
+
+- **slug:** `deepseek/deepseek-v4-flash` · **adapterId:** `openrouter:deepseek/deepseek-v4-flash`
+- **context:** recommended 200 000 / max 1 048 576 (OpenRouter reports a 1M
+  ceiling; recommended stays at our DeepSeek-V4 sweet-spot, matching wafer).
+- **reasoning control:** **`toggle`** (defaultOn). OpenRouter's unified
+  `reasoning: { enabled }` — off genuine (0 tokens), on ~41 reasoning tokens, on
+  the **`reasoning`** channel (unlike tensorix, OpenRouter DOES expose a real
+  separable channel for V4 Flash). See [[../providers/openrouter]].
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 green; tool-reluctance did not appear.
+
 ## Not curated on tensorix
 
 DeepSeek V4 Flash is **deliberately not offered on tensorix.** Probed live

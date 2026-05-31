@@ -48,6 +48,23 @@ Offered on chutes, nano-gpt and novita, each with a hand-written catalogue adapt
   buffer reassembles them; the generic path would have dropped the arguments.
   🔒 no TEE / no ZDR.
 
+## Offering — openrouter
+
+- **slug:** `google/gemma-4-31b-it` · **adapterId:** `openrouter:google/gemma-4-31b-it`
+  (canonicalRef `gemma-4-31b` — the instruction-tuned variant; OpenRouter has no
+  `-turbo` slug).
+- **context:** recommended/max 262 144 (OpenRouter reported context).
+- **reasoning control:** **`toggle`** (defaultOn). OpenRouter's unified
+  `reasoning: { enabled }` — off genuine (0 tokens), on ~153 reasoning tokens on
+  the **`reasoning`** channel. See [[../providers/openrouter]].
+- **vision:** ✅ — image-input pipe carries through (suite vision green).
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 + vision 4/4 green. The first vision run
+  hit a transient HTTP 429 (rate limit); the retry was green — not a vision fault.
+
 ## Tool-reluctance watch (did not reproduce)
 
 The chatsune-era note flagged Gemma producing an image *prompt* without firing

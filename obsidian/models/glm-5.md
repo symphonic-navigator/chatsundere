@@ -65,6 +65,21 @@ nano-gpt's GLM 5 deployment reasons regardless, so there it is `fixed-on`.
 - **Validation (2026-05-31, conversation-suite):** core green (reasoning off + on,
   tool fires + valid JSON, memory, usage); text-only.
 
+## Offering — openrouter
+
+- **slug:** `z-ai/glm-5` · **adapterId:** `openrouter:z-ai/glm-5`
+- **context:** recommended/max 202 752 (OpenRouter reported context).
+- **reasoning control:** **`toggle`** (defaultOn). Unified `reasoning: { enabled }`
+  — off genuine (0 tokens), on ~304 reasoning tokens on the **`reasoning`**
+  channel (OpenRouter normalises GLM's native `reasoning_content` onto
+  `reasoning`). Clean off, unlike nano-gpt's `fixed-on` GLM 5. See
+  [[../providers/openrouter]].
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 green; text-only.
+
 ## Validation
 
 Full conversation-suite live across every supported reasoning permutation:

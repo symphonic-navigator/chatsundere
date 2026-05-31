@@ -10,9 +10,18 @@ beforeAll(() => {
 });
 
 describe('built-in providers', () => {
-  it('registers chutes, tensorix, wafer, novita, ollama-cloud, nano-gpt — exactly six, in sortPriority order', () => {
+  it('registers all eight built-ins in sortPriority order', () => {
     const ids = listProviders().map((p) => p.id);
-    expect(ids).toEqual(['chutes', 'tensorix', 'wafer', 'novita', 'ollama-cloud', 'nano-gpt']);
+    expect(ids).toEqual([
+      'chutes',
+      'tensorix',
+      'mistral',
+      'wafer',
+      'novita',
+      'ollama-cloud',
+      'nano-gpt',
+      'openrouter',
+    ]);
   });
 
   it('nano-gpt has inofficial CORS hint and openai-chat-completions shape', () => {
@@ -20,8 +29,29 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      expect(p.offerings).toHaveLength(6);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) = 9.
+      expect(p.offerings).toHaveLength(9);
       expect(p.shape).toBe('openai-chat-completions');
+    }
+  });
+
+  it('mistral has direct CORS hint, three offerings, and sortPriority 14', () => {
+    const p = getProvider('mistral');
+    expect(p).toBeDefined();
+    if (p) {
+      expect(p.corsHint).toBe('direct');
+      expect(p.offerings).toHaveLength(3);
+      expect(p.sortPriority).toBe(14);
+    }
+  });
+
+  it('openrouter has direct CORS hint, eight offerings, and sortPriority 45', () => {
+    const p = getProvider('openrouter');
+    expect(p).toBeDefined();
+    if (p) {
+      expect(p.corsHint).toBe('direct');
+      expect(p.offerings).toHaveLength(8);
+      expect(p.sortPriority).toBe(45);
     }
   });
 
