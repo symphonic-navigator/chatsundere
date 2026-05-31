@@ -24,7 +24,10 @@ interface WaferOfferingArgs {
   vision: boolean;
   zdr: boolean;
   reasoning: ReasoningControl;
-  ctx: number;
+  /** Where the model stays smart — drives the context gauge. */
+  recommended: number;
+  /** Hard ceiling; defaults to `recommended` when the two coincide. */
+  max?: number;
 }
 
 function waferOffering(canonicalRef: string, slug: string, args: WaferOfferingArgs): Offering {
@@ -39,7 +42,7 @@ function waferOffering(canonicalRef: string, slug: string, args: WaferOfferingAr
       vision: args.vision,
       replayReasoning: false,
     },
-    context: { recommended: args.ctx, max: args.ctx },
+    context: { recommended: args.recommended, max: args.max ?? args.recommended },
     // ZDR (zero data retention), not TEE. The adapter sends `Wafer-ZDR: required`
     // for these, so the 🔒 badge is truthful: we both can and do request it.
     trust: { tee: false, zdr: args.zdr },
@@ -49,13 +52,13 @@ function waferOffering(canonicalRef: string, slug: string, args: WaferOfferingAr
   };
 }
 
-// The three ZDR-capable flagship offerings (wafer /models, zdr_supported:true).
 const offerings: Offering[] = [
+  // --- ZDR-capable flagships (wafer /models, zdr_supported:true) ---
   waferOffering('glm-5.1', 'GLM-5.1', {
     vision: false,
     zdr: true,
     reasoning: TOGGLE,
-    ctx: 202_752,
+    recommended: 202_752,
   }),
   // Kimi reasoning-off does not suppress on the adapter path (suite-confirmed) —
   // see FIXED_ON above.
@@ -63,7 +66,7 @@ const offerings: Offering[] = [
     vision: true,
     zdr: true,
     reasoning: FIXED_ON,
-    ctx: 262_144,
+    recommended: 262_144,
   }),
   // Qwen3.5 reasons despite /models claiming reasoning:false — toggle confirmed
   // live (none=off, medium=~4.7k reasoning tokens). The adapter ALWAYS sends an
@@ -72,7 +75,25 @@ const offerings: Offering[] = [
     vision: true,
     zdr: true,
     reasoning: TOGGLE,
-    ctx: 262_144,
+    recommended: 262_144,
+  }),
+  // --- Non-ZDR serverless DeepSeek V4 (zdr_supported:false) ---
+  // Serverless, NOT China-routed (Chris 2026-05-31). No ZDR/TEE → no 🔒 badge,
+  // but freedom-oriented. wafer exposes a 1M ceiling; recommended stays at our
+  // DeepSeek-V4 sweet-spot of 200k (Chris). Reasoning toggle (suite-verified).
+  waferOffering('deepseek-v4-flash', 'deepseek-v4-flash', {
+    vision: false,
+    zdr: false,
+    reasoning: TOGGLE,
+    recommended: 200_000,
+    max: 1_000_000,
+  }),
+  waferOffering('deepseek-v4-pro', 'deepseek-v4-pro', {
+    vision: false,
+    zdr: false,
+    reasoning: TOGGLE,
+    recommended: 200_000,
+    max: 1_000_000,
   }),
 ];
 

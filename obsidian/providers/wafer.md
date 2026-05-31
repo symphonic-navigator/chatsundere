@@ -52,7 +52,10 @@ object on each entry carries `display_name`, `tier`, `provider`, `context_length
 
 Current catalogue (7): **ZDR ✅** GLM-5.1, Kimi-K2.6, Qwen3.5-397B-A17B ·
 **ZDR ❌** Qwen3.6-35B-A3B, deepseek-v4-flash, qwen3.7-max, deepseek-v4-pro. We
-curated the three ZDR flagships; the four non-ZDR models are deferred.
+curated the three ZDR flagships, then the two **DeepSeek V4** offerings
+(deepseek-v4-flash, deepseek-v4-pro — non-ZDR serverless, not China-routed; no
+🔒 badge, `reasoning_effort` toggle with a clean off). The remaining two non-ZDR
+models (Qwen3.6-35B-A3B, qwen3.7-max) are deferred.
 
 ## Reasoning mechanism (empirical)
 

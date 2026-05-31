@@ -3,7 +3,20 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-31 (latest) — **wafer.ai onboarded + 3 ZDR flagship
+**Last updated:** 2026-05-31 (latest) — **wafer DeepSeek V4 added (flash + pro,
+non-ZDR serverless).** Two new wafer offerings on the existing
+`deepseek-v4-flash`/`deepseek-v4-pro` canonicals — **non-ZDR** (zdr_supported:false;
+no 🔒 badge, no `Wafer-ZDR` header), serverless & not China-routed (Chris).
+Reasoning `toggle` with a **clean off** (`reasoning_effort:'none'` → 3/3 silent
+incl. with tools — unlike Kimi). Context **recommended 200k / max 1M** (wafer's 1M
+ceiling; recommended at our DeepSeek-V4 sweet-spot, Chris) — the offering helper now
+carries separate recommended/max. (wafer reports `reasoning_tokens:0` even with a
+trace; usage-present holds via total.) Live suite (`deepseek` filter) green;
+`builtins.test` → 5 wafer offerings (3 ZDR); the suite runner gained an argv slug
+filter. Records: `deepseek-v4-flash`/`-pro` + `providers/wafer` updated. **Not
+pushed.**
+
+**Earlier 2026-05-31 — wafer.ai onboarded + 3 ZDR flagship
 models curated (GLM-5.1, Kimi-K2.6, Qwen3.5-397B-A17B).** New provider `wafer`
 (`https://pass.wafer.ai/v1`, OpenAI chat-completions). Headline: **ZDR** modelled
 as an always-on 🔒 trust badge (Chris's call) — the adapter sends

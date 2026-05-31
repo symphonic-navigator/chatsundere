@@ -35,14 +35,15 @@ describe('built-in providers', () => {
     }
   });
 
-  it('wafer requires a proxy (no CORS), has three ZDR offerings, and sortPriority 15', () => {
+  it('wafer requires a proxy (no CORS), has five offerings (3 ZDR), and sortPriority 15', () => {
     const p = getProvider('wafer');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(3);
+      expect(p.offerings).toHaveLength(5);
       expect(p.sortPriority).toBe(15);
-      for (const o of p.offerings) expect(o.trust.zdr).toBe(true);
+      // GLM-5.1, Kimi-K2.6, Qwen3.5 are ZDR; the two DeepSeek V4 are not.
+      expect(p.offerings.filter((o) => o.trust.zdr).length).toBe(3);
     }
   });
 

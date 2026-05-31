@@ -49,7 +49,14 @@ const tools: ToolDef[] = [
 // reasoning, so we exercise it once without re-asserting the reasoning channel.
 const VISION_PERM: ReasoningPermutation[] = [{ label: 'default', intent: { enabled: false } }];
 
-for (const o of wafer.offerings) {
+// Optional argv[2] substring filter, e.g. `bun run … deepseek` runs only the
+// DeepSeek offerings — handy when re-verifying a newly added subset.
+const slugFilter = process.argv[2];
+const targets = slugFilter
+  ? wafer.offerings.filter((o) => o.upstreamSlug.toLowerCase().includes(slugFilter.toLowerCase()))
+  : wafer.offerings;
+
+for (const o of targets) {
   const adapter = waferAdapter(o.upstreamSlug, {
     vision: o.profile.vision,
     zdr: o.trust.zdr,
