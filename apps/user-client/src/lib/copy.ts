@@ -232,10 +232,6 @@ export const copy = {
     rolledBack: "Your previous passphrase change didn't complete. Please try again when ready.",
     dismissCta: 'Dismiss',
   },
-  update: {
-    message: 'A new version is ready.',
-    refreshCta: 'Refresh now',
-  },
   biometricPrompt: {
     title: 'Set up biometric unlock?',
     body: "Future unlocks can use your device's biometric instead of typing your passphrase.",

@@ -8,7 +8,6 @@ import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
 import { Toast } from '../components/Toast.js';
-import { UpdateBanner } from '../components/UpdateBanner.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
 import { useStagingBannerStore } from '../state/staging-banner.store.js';
@@ -17,7 +16,6 @@ import { useStagingBannerStore } from '../state/staging-banner.store.js';
  * Root layout wrapper. Renders the header, global banners, and the page outlet.
  *
  * Banners rendered here appear across every route inside the Root layout:
- * - UpdateBanner: service-worker update available.
  * - StagingRollbackBanner: shown once per boot when the previous passphrase
  *   change did not complete and was silently rolled back on start-up.
  *
@@ -115,7 +113,6 @@ export function Root() {
             <ConnectivityBadge />
           </div>
         </header>
-        <UpdateBanner />
         {showRolledBackBanner && (
           <div className="flex items-center justify-between gap-4 bg-warning/10 px-6 py-2 ring-1 ring-inset ring-warning/30">
             <p className="font-mono text-xs text-warning">{copy.stagingBanner.rolledBack}</p>
