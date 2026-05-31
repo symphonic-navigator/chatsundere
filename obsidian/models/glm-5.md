@@ -51,6 +51,20 @@ nano-gpt's GLM 5 deployment reasons regardless, so there it is `fixed-on`.
   `reasoning` channel; `reasoning_tokens` reported top-level + nested.
 - 🔒 **Privacy:** no TEE / no ZDR.
 
+## Offering — tensorix
+
+- **slug:** `z-ai/glm-5` · **adapterId:** `tensorix:z-ai/glm-5`
+- **context:** recommended/max 131 072
+- **reasoning control:** **`toggle`** (defaultOn). Off = `reasoning_effort: 'none'`
+  — clean; `medium` reasons. Effort does not modulate → toggle. `reasoning_content`
+  channel. (Note: unlike nano-gpt's `fixed-on` GLM 5, tensorix suppresses cleanly.)
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention, EU-sovereign, always-on per
+  policy). No TEE. See [[../providers/tensorix]].
+- **Validation (2026-05-31, conversation-suite):** core green (reasoning off + on,
+  tool fires + valid JSON, memory, usage); text-only.
+
 ## Validation
 
 Full conversation-suite live across every supported reasoning permutation:

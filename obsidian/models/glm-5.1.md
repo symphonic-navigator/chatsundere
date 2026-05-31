@@ -70,6 +70,24 @@ provider — this is the whole reason the offerings are not on the generic path.
   `Wafer-ZDR: required` so the badge is truthful (always on — Chris, 2026-05-31).
   No TEE. See [[../providers/wafer]].
 
+## Offering — tensorix — `fixed-on` (reasoning cannot be disabled)
+
+- **slug:** `z-ai/glm-5.1` · **adapterId:** `tensorix:z-ai/glm-5.1`
+- **context:** recommended/max 131 072
+- **reasoning control:** **`fixed-on`.** `reasoning_effort: 'none'` does **not**
+  suppress reasoning — an off-leak probe with **unique** prompts reasoned 6/6
+  (the "off only hides" case, exactly like wafer's Kimi). Earlier suite runs that
+  showed `reasoning-absent` green were **Tensorix response-cache artefacts** (the
+  repeated off-prompt returned a cached trace-free reply); with unique prompts the
+  off is not real. Modelled `fixed-on` rather than a toggle that would falsely
+  promise an off. `reasoning_content` channel.
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention, EU-sovereign, always-on per
+  policy). No TEE. See [[../providers/tensorix]].
+- **Validation (2026-05-31):** reasons reliably on unique prompts (4/4 medium);
+  tools + memory + usage green; text-only. Off not offered (fixed-on).
+
 ## Validation
 
 Full conversation-suite live (`makeLiveBinding`, keys under `keys/`) across every

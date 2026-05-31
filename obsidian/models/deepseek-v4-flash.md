@@ -44,6 +44,18 @@ Curated on nano-gpt and novita with hand-written catalogue adapters
   option without a privacy guarantee. 🕊️ free (model + deployment). See
   [[../providers/wafer]].
 
+## Not curated on tensorix
+
+DeepSeek V4 Flash is **deliberately not offered on tensorix.** Probed live
+2026-05-31: on tensorix it reasons only in bare `content` prose — the
+`reasoning_content` channel is **empty under every switch tried** (`reasoning_effort`
+low/medium/high, `chat_template_kwargs.enable_thinking`, `thinking`, none). It
+*does* reason (a full step-by-step appears inline in the answer), but with no
+separable, steerable channel it does not fit the channel-based reasoning model the
+canonical requires, and adds nothing over the wafer / nano-gpt / novita offerings
+that expose a real channel. So tensorix carries the other DeepSeek (V3.2, V4 Pro)
+but not Flash. See [[../providers/tensorix]].
+
 ## Validation (2026-05-30, conversation-suite)
 
 nano-gpt 44/44, novita 22/22 — all green across every reasoning permutation.

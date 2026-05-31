@@ -24,6 +24,24 @@
 - 🔒 **Privacy:** yes (chutes TEE / confidential compute, attested per chunk)
 - 🕊️ **Freedom:** free — `freedomOriented: true` (Chris, 2026-05-30: DeepSeek open-weight); the chutes TEE deployment is `freedomOrientedDeployment: true`.
 
+## Offering — tensorix
+
+- **slug:** `deepseek/deepseek-v3.2` · **adapterId:** `tensorix:deepseek/deepseek-v3.2`
+- **context:** recommended/max 163 840 (tensorix input window)
+- **reasoning control:** **`toggle`** (defaultOn). Off = `reasoning_effort: 'none'`
+  — clean; `medium` reasons. Effort does not modulate → toggle. **Unlike chutes
+  (where the on-switch is `enable_thinking` and `reasoning_effort` leaves it
+  reasoning in bare prose), tensorix honours the standard `reasoning_effort`
+  directly.** DeepSeek emits the same text on both `reasoning` and
+  `reasoning_content`; the adapter prefers `reasoning_content` (no double-count).
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention, EU-sovereign, always-on per
+  policy). No TEE (contrast the chutes TEE offering). See [[../providers/tensorix]].
+- 🕊️ **Freedom:** free (model + deployment).
+- **Validation (2026-05-31, conversation-suite):** core green (reasoning off + on,
+  tool fires + valid JSON, memory, usage); text-only.
+
 ## Live validation (2026-05-31, conversation-suite)
 
 Full core scenario green across the toggle permutations (reasoning on + off):

@@ -4,6 +4,7 @@ import { registerChutes } from './chutes.js';
 import { registerNanoGpt } from './nano-gpt.js';
 import { registerNovita } from './novita.js';
 import { registerOllamaCloud } from './ollama-cloud.js';
+import { registerTensorix } from './tensorix.js';
 import { registerWafer } from './wafer.js';
 
 /**
@@ -12,6 +13,7 @@ import { registerWafer } from './wafer.js';
  */
 export function registerBuiltinProviders(): void {
   registerChutes();
+  registerTensorix();
   registerWafer();
   registerNanoGpt();
   registerNovita();

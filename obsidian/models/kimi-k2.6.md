@@ -64,6 +64,24 @@ is input-side.
 - **Vision:** verified (suite `vision` green — names the clothing colour "green"
   on the Sylvir test image).
 
+## Offering — tensorix — `fixed-on` (reasoning cannot be disabled)
+
+- **slug:** `moonshotai/kimi-k2.6` · **adapterId:** `tensorix:moonshotai/kimi-k2.6`
+- **context:** recommended/max 262 144
+- **reasoning control:** **`fixed-on`.** `reasoning_effort: 'none'` does **not**
+  suppress reasoning — an off-leak probe with **unique** prompts reasoned 6/6.
+  So the per-deployment divergence is: chutes `toggle`, **wafer + tensorix
+  `fixed-on`** (both "off only hides"). Earlier suite `reasoning-absent` greens
+  were Tensorix response-cache artefacts (cached trace-free reply to a repeated
+  off-prompt); unique prompts expose the real behaviour. `reasoning_content` channel.
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention, EU-sovereign, always-on per
+  policy). No TEE. See [[../providers/tensorix]].
+- **Vision:** verified (suite `vision` green — names the clothing colour).
+- **Validation (2026-05-31, conversation-suite):** core green (tools, memory,
+  usage, reasoning-on) and vision green; reasoning-off not offered (fixed-on).
+
 ## Validation (2026-05-30, conversation-suite)
 
 - **Core scenario:** nano-gpt 44/44, novita 22/22, chutes 44/44 — all green

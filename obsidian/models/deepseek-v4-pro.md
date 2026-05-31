@@ -46,6 +46,28 @@ Curated on nano-gpt and novita with hand-written catalogue adapters
   **not** China-routed (Chris, 2026-05-31). 🕊️ free (model + deployment). See
   [[../providers/wafer]].
 
+## Offering — tensorix
+
+- **slug:** `deepseek/deepseek-v4-pro` · **adapterId:** `tensorix:deepseek/deepseek-v4-pro`
+- **context:** recommended/max 163 840 (tensorix input window; contrast wafer's
+  1 M ceiling / 200k recommended)
+- **reasoning control:** **`toggle`** (defaultOn). Off = `reasoning_effort: 'none'`
+  — genuine off (off-leak probe 0/6 with unique prompts); `medium` reasons (4/4
+  unique). Effort does not modulate → toggle. **DeepSeek emits the same text on
+  both `reasoning` and `reasoning_content`; the adapter prefers `reasoning_content`
+  so the trace is not double-counted.** (Tensorix response-caches identical
+  prompts, so a repeated suite prompt can read trace-free — a cache artefact, not
+  the model; see [[../providers/tensorix]].)
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention, EU-sovereign, always-on per
+  policy). No TEE — the privacy upgrade over the non-ZDR wafer offering. See
+  [[../providers/tensorix]].
+- 🕊️ **Freedom:** free (model + deployment).
+- **Validation (2026-05-31, conversation-suite):** core green (reasoning off + on,
+  tool fires + valid JSON, memory, usage); text-only, no vision. Rare reasoning
+  flukes under rapid back-to-back load resolved on repeat (40/40 isolated).
+
 ## Validation (2026-05-30, conversation-suite)
 
 nano-gpt 44/44, novita 22/22 — all green across every reasoning permutation

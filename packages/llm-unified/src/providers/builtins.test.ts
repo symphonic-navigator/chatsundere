@@ -10,9 +10,9 @@ beforeAll(() => {
 });
 
 describe('built-in providers', () => {
-  it('registers chutes, wafer, novita, ollama-cloud, nano-gpt — exactly five, in sortPriority order', () => {
+  it('registers chutes, tensorix, wafer, novita, ollama-cloud, nano-gpt — exactly six, in sortPriority order', () => {
     const ids = listProviders().map((p) => p.id);
-    expect(ids).toEqual(['chutes', 'wafer', 'novita', 'ollama-cloud', 'nano-gpt']);
+    expect(ids).toEqual(['chutes', 'tensorix', 'wafer', 'novita', 'ollama-cloud', 'nano-gpt']);
   });
 
   it('nano-gpt has inofficial CORS hint and openai-chat-completions shape', () => {

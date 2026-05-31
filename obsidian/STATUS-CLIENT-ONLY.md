@@ -3,7 +3,24 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-31 (latest) — **MiMo V2.5 Omni + Pro curated on novita
+**Last updated:** 2026-05-31 (latest) — **Tensorix onboarded: 5 EU-sovereign ZDR
+offerings curated.** New provider `tensorix` (`https://api.tensorix.ai/v1`, OpenAI
+chat-completions, `corsHint: direct`, sortPriority 12). ZDR is policy-default &
+EU-sovereign (Irish co. 796387, Dublin+Helsinki, GDPR Art. 44) — `trust:
+{tee:false, zdr:true, jurisdiction:'EU'}`, always-on (no per-request header,
+unlike wafer). Curated: deepseek-v3.2, deepseek-v4-pro, glm-5 (`toggle`, clean off
+0/6) + glm-5.1, kimi-k2.6 (`fixed-on` — off leaks 6/6 on unique prompts, like
+wafer's Kimi). **DeepSeek V4 Flash excluded** — reasons only in bare `content`, no
+steerable channel. Key trap: Tensorix **response-caches identical prompts**, which
+made the conversation-suite read false reasoning verdicts (a repeated off-prompt
+returns a cached trace-free reply); the per-model off-switch was settled by a
+**unique-prompt off-leak probe**, not the suite. AUP not machine-verifiable
+(client-rendered 404) — freedom rests on Chris's chatsune experience.
+`builtins.test` → 6 providers + a tensorix case; new `tensorix-scanner` (+test),
+`tensorix-openai` adapter, `run-tensorix-suite.ts`. Records: `providers/tensorix.md`
+(new) + the six model records updated. **Not pushed.**
+
+**Earlier 2026-05-31 — MiMo V2.5 Omni + Pro curated on novita
 (novita-exclusive).** Xiaomi's open-weight MiMo family — genuinely strong, but
 scarce western compute outside China, so novita is the only workable home (Chris).
 Two new canonicals (`mimo-v2.5-omni`, `mimo-v2.5-pro`) + two novita offerings, both
