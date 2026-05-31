@@ -493,6 +493,34 @@ export function PersonaEditor(): JSX.Element {
   );
 }
 
+/**
+ * Coloured trust badge — TEE (trusted execution, mint) and ZDR (zero data
+ * retention, lavender). The title attribute spells out the acronym so the
+ * user never has to guess (Don't make me think).
+ */
+function TrustBadge({ kind }: { kind: 'tee' | 'zdr' }): JSX.Element {
+  const cfg =
+    kind === 'tee'
+      ? {
+          label: 'TEE',
+          title: 'Trusted Execution Environment — the host cannot read your data',
+          cls: 'bg-success/15 text-success border-success/40',
+        }
+      : {
+          label: 'ZDR',
+          title: 'Zero Data Retention — the provider stores nothing after the request',
+          cls: 'bg-aurora-500/20 text-aurora-200 border-aurora-500/50',
+        };
+  return (
+    <span
+      title={cfg.title}
+      className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${cfg.cls}`}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
 function ModelList({
   providers,
   selectedCanonicalId,
@@ -511,23 +539,23 @@ function ModelList({
   const configuredByTemplate = new Map(enabled.map((p) => [p.templateId, p]));
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Stage 1: canonical models */}
-      <div className="flex flex-col gap-2">
-        {listCanonicals().map((c) => {
-          const offers = listOfferings(c.id);
-          const teeAvailable = offers.some((o) => o.trust.tee);
-          const active = selectedCanonicalId === c.id;
-          return (
+    <div className="flex flex-col gap-2">
+      {listCanonicals().map((c) => {
+        const offers = listOfferings(c.id);
+        const teeAvailable = offers.some((o) => o.trust.tee);
+        const zdrAvailable = offers.some((o) => o.trust.zdr);
+        const active = selectedCanonicalId === c.id;
+        return (
+          <div key={c.id} className="flex flex-col gap-2">
             <button
-              key={c.id}
               type="button"
               onClick={() => {
                 // Pre-select the top-ranked *configured* offering. If the user
                 // has no configured provider for this canonical, set the
-                // canonical but clear the deployment — stage 2 then shows every
-                // offering disabled with a CTA, and the persona stays invalid
-                // until a configured deployment is chosen (never a stale pair).
+                // canonical but clear the deployment — the inline list then
+                // shows every offering disabled with a CTA, and the persona
+                // stays invalid until a configured deployment is chosen (never
+                // a stale pair).
                 const suggested = offers.find((o) => configuredByTemplate.has(o.providerId));
                 if (suggested) {
                   const row = configuredByTemplate.get(suggested.providerId);
@@ -544,58 +572,63 @@ function ModelList({
             >
               <div className="font-display text-sm text-paper">{c.displayName}</div>
               <div className="flex items-center gap-2 text-xs text-paper-soft">
-                {teeAvailable ? (
-                  <span className="rounded bg-white/10 px-1.5 py-0.5">TEE</span>
-                ) : null}
+                {teeAvailable ? <TrustBadge kind="tee" /> : null}
+                {zdrAvailable ? <TrustBadge kind="zdr" /> : null}
                 <span>
                   {offers.length} provider{offers.length === 1 ? '' : 's'}
                 </span>
               </div>
             </button>
-          );
-        })}
-      </div>
 
-      {/* Stage 2: offerings for the chosen canonical */}
-      {selectedCanonicalId ? (
-        <div className="flex flex-col gap-2">
-          <div className="text-xs uppercase tracking-wider text-paper-soft">Deployment</div>
-          {listOfferings(selectedCanonicalId).map((o) => {
-            const row = configuredByTemplate.get(o.providerId);
-            const configured = !!row;
-            const def = getProvider(o.providerId);
-            const active =
-              configured && selectedProviderId === row.id && selectedModelId === o.upstreamSlug;
-            return (
-              <button
-                key={`${o.providerId}:${o.upstreamSlug}`}
-                type="button"
-                disabled={!configured}
-                onClick={() => configured && onSelect(selectedCanonicalId, row.id, o.upstreamSlug)}
-                className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left disabled:opacity-50 ${
-                  active
-                    ? 'border-paper bg-white/[0.04]'
-                    : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
-                }`}
-              >
-                <div>
-                  <div className="font-display text-sm text-paper">
-                    {def?.displayName ?? o.providerId}
-                  </div>
-                  <div className="text-xs text-paper-soft">
-                    {o.trust.tee ? 'TEE · ' : ''}
-                    {o.context.recommended.toLocaleString()} ctx
-                    {configured
-                      ? ''
-                      : ` · add ${def?.displayName ?? o.providerId} to use this deployment`}
-                  </div>
-                </div>
-                {active ? <span>✓</span> : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+            {/* Deployments inline, directly under the chosen model — not below
+                the whole list. */}
+            {active ? (
+              <div className="flex flex-col gap-2 border-l border-white/10 pl-3">
+                <div className="text-xs uppercase tracking-wider text-paper-soft">Deployment</div>
+                {offers.map((o) => {
+                  const row = configuredByTemplate.get(o.providerId);
+                  const configured = !!row;
+                  const def = getProvider(o.providerId);
+                  const isActive =
+                    configured &&
+                    selectedProviderId === row.id &&
+                    selectedModelId === o.upstreamSlug;
+                  return (
+                    <button
+                      key={`${o.providerId}:${o.upstreamSlug}`}
+                      type="button"
+                      disabled={!configured}
+                      onClick={() => configured && onSelect(c.id, row.id, o.upstreamSlug)}
+                      className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left disabled:opacity-50 ${
+                        isActive
+                          ? 'border-paper bg-white/[0.04]'
+                          : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-display text-sm text-paper">
+                            {def?.displayName ?? o.providerId}
+                          </span>
+                          {o.trust.tee ? <TrustBadge kind="tee" /> : null}
+                          {o.trust.zdr ? <TrustBadge kind="zdr" /> : null}
+                        </div>
+                        <div className="text-xs text-paper-soft">
+                          {o.context.recommended.toLocaleString()} ctx
+                          {configured
+                            ? ''
+                            : ` · add ${def?.displayName ?? o.providerId} to use this deployment`}
+                        </div>
+                      </div>
+                      {isActive ? <span>✓</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
