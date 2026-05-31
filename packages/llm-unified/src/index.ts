@@ -34,6 +34,15 @@ export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js
 
 export { probeProvider, type ProbeArgs } from './probe.js';
 
+export {
+  formatRetryEvent,
+  withStreamingRetry,
+  type RetryEvent,
+  type OnRetry,
+  type RetryErrorKind,
+  type StreamingRetryOpts,
+} from './retry.js';
+
 // Catalogue data model (CanonicalModel, Offering, ModelProfile, validation, freedom).
 export * from './catalogue/index.js';
 

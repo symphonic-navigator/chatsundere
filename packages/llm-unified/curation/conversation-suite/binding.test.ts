@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, test } from 'bun:test';
 import { chutesAdapter } from '../../src/adapters/chutes-openai.js';
+import type { RetryEvent } from '../../src/retry.js';
 import type { ProviderConfig } from '../../src/types.js';
 import { makeLiveBinding } from './binding.js';
 
@@ -151,5 +152,37 @@ describe('makeLiveBinding', () => {
       name: 'generate_image',
       content: JSON.stringify({ ok: true }),
     });
+  });
+
+  test('fires onRetry on a transient 503 and captures the eventual outcome', async () => {
+    let calls = 0;
+    const events: RetryEvent[] = [];
+    const binding = makeLiveBinding({
+      offeringRef: 'prov/model',
+      providerConfig,
+      apiKey: 'k',
+      adapter,
+      fetchImpl: (async (req: Request) => {
+        calls++;
+        await req.text();
+        if (calls < 2) return new Response('busy', { status: 503 });
+        return new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              c.close();
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        );
+      }) as unknown as typeof fetch,
+      sleepImpl: async () => {},
+      onRetry: (e) => events.push(e),
+    });
+    const outcome = await binding.runTurn([{ role: 'user', content: 'hi' }], { enabled: false });
+    expect(calls).toBe(2);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: 503, errorKind: 'status' });
+    expect(outcome.httpStatus).toBe(200);
   });
 });

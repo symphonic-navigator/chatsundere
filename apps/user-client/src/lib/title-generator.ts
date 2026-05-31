@@ -5,6 +5,7 @@ import {
   type ProviderDefinition,
   type WireMessage,
   composeSystemPrompt,
+  formatRetryEvent,
   offeringToTarget,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
@@ -109,6 +110,7 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
       target: offeringToTarget(args.offering),
       messages,
       bodyExtras: { temperature: 0.3, max_tokens: 20 },
+      onRetry: (e) => console.warn(formatRetryEvent(e)),
     });
     const cleaned = sanitiseTitle(raw);
     if (!cleaned) throw new Error('empty title');

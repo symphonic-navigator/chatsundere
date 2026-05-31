@@ -2,14 +2,17 @@
 import type { ModelAdapter, ToolDef } from '../../src/adapter-contract.js';
 import { parseWithAdapter } from '../../src/adapter-stream.js';
 import {
-  MAX_RETRY_ATTEMPTS,
-  computeRetryDelay,
-  parseRetryAfter,
-  shouldRetryStatus,
+  type OnRetry,
+  type RetryEvent,
+  formatRetryEvent,
+  withStreamingRetry,
 } from '../../src/retry.js';
 import { buildRequest } from '../../src/transport.js';
 import type { ProviderConfig, StreamChunk } from '../../src/types.js';
 import { type RunnerBinding, assembleOutcome } from './runner.js';
+
+/** Default retry sink for suite runs: a structured CLI line. */
+const logRetryToConsole: OnRetry = (e: RetryEvent) => console.warn(formatRetryEvent(e));
 
 export interface LiveBindingArgs {
   offeringRef: string;
@@ -23,6 +26,8 @@ export interface LiveBindingArgs {
   fetchImpl?: typeof fetch;
   /** Injectable backoff (ms); defaults to a real setTimeout. Lets tests run instantly. */
   sleepImpl?: (ms: number) => Promise<void>;
+  /** Optional retry sink; defaults to a structured console line. */
+  onRetry?: OnRetry;
 }
 
 /**
@@ -34,8 +39,6 @@ export interface LiveBindingArgs {
  * captured immediately, and an exhausted retry returns the final status.
  */
 export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
-  const doFetch = args.fetchImpl ?? fetch;
-  const sleep = args.sleepImpl ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   return {
     offeringRef: args.offeringRef,
     async runTurn(messages, reasoning) {
@@ -44,28 +47,24 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
         reasoning,
         ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
       });
-      let response: Response | null = null;
-      for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-        // Build a FRESH Request each attempt: a Request's body stream is consumed
-        // on the first fetch, so reusing the same object on a retry throws
-        // ERR_BODY_ALREADY_USED. buildRequest is a pure factory, so this is cheap.
-        const request = buildRequest({
-          provider: args.providerConfig,
-          apiKey: args.apiKey,
-          corsProxyUrl: args.corsProxyUrl ?? null,
-          corsProxyKey: args.corsProxyKey ?? null,
-          path: '/chat/completions',
-          method: 'POST',
-          body: wire.body,
-        });
-        response = await doFetch(request);
-        if (response.ok) break;
-        if (!shouldRetryStatus(response.status) || attempt >= MAX_RETRY_ATTEMPTS) break;
-        const retryAfter = parseRetryAfter(response.headers);
-        await response.body?.cancel().catch(() => {});
-        await sleep(computeRetryDelay(attempt, retryAfter) * 1000);
-      }
-      if (!response) return assembleOutcome(0, []);
+
+      const response = await withStreamingRetry({
+        buildRequest: () =>
+          buildRequest({
+            provider: args.providerConfig,
+            apiKey: args.apiKey,
+            corsProxyUrl: args.corsProxyUrl ?? null,
+            corsProxyKey: args.corsProxyKey ?? null,
+            path: '/chat/completions',
+            method: 'POST',
+            body: wire.body,
+          }),
+        doFetch: args.fetchImpl,
+        operation: `suite-binding:${args.offeringRef}`,
+        initialResponseTimeoutMs: null,
+        sleepFn: args.sleepImpl,
+        onRetry: args.onRetry ?? logRetryToConsole,
+      });
 
       if (!response.ok || !response.body) {
         await response.body?.cancel().catch(() => {});

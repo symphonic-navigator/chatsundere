@@ -3,10 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:te
 import {
   RETRY_BASE_DELAY_SECONDS,
   RETRY_MAX_DELAY_SECONDS,
+  type RetryEvent,
   computeRetryDelay,
+  formatRetryEvent,
   parseRetryAfter,
   shouldRetryStatus,
   withRetry,
+  withStreamingRetry,
 } from './retry';
 
 describe('shouldRetryStatus', () => {
@@ -161,5 +164,177 @@ describe('withRetry', () => {
       }),
     ).rejects.toThrow(/aborted|abort/i);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('formatRetryEvent', () => {
+  it('renders a status event with status and backoff', () => {
+    const e: RetryEvent = {
+      operation: 'one-shot',
+      attempt: 1,
+      delaySeconds: 2.5,
+      status: 503,
+      errorKind: 'status',
+    };
+    expect(formatRetryEvent(e)).toBe(
+      '[llm-retry] one-shot attempt=1 status=503 kind=status backoff=2.50s',
+    );
+  });
+
+  it('omits status for a network event', () => {
+    const e: RetryEvent = {
+      operation: 'stream-completion',
+      attempt: 0,
+      delaySeconds: 1,
+      errorKind: 'network',
+    };
+    expect(formatRetryEvent(e)).toBe(
+      '[llm-retry] stream-completion attempt=0 kind=network backoff=1.00s',
+    );
+  });
+});
+
+describe('withRetry onRetry hook', () => {
+  it('fires onRetry once per retry with a classified event', async () => {
+    const events: RetryEvent[] = [];
+    let calls = 0;
+    const result = await withRetry<string>(
+      async () => {
+        calls++;
+        if (calls < 3) {
+          const err = new Error('boom') as Error & { status?: number };
+          err.status = 503;
+          throw err;
+        }
+        return 'ok';
+      },
+      {
+        operation: 'unit',
+        sleepFn: async () => {},
+        classifyError: (err) => {
+          const e = err as { status?: number };
+          return typeof e.status === 'number'
+            ? { errorKind: 'status', status: e.status }
+            : { errorKind: 'network' };
+        },
+        onRetry: (e) => events.push(e),
+      },
+    );
+    expect(result).toBe('ok');
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      operation: 'unit',
+      attempt: 0,
+      status: 503,
+      errorKind: 'status',
+    });
+    expect(events[1]).toMatchObject({ attempt: 1, status: 503, errorKind: 'status' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// withStreamingRetry
+// ---------------------------------------------------------------------------
+
+function okStream(): Response {
+  return new Response(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+        c.close();
+      },
+    }),
+    { status: 200, headers: { 'content-type': 'text/event-stream' } },
+  );
+}
+
+describe('withStreamingRetry', () => {
+  it('retries a transient 503 then returns the ok response, firing onRetry', async () => {
+    let attempts = 0;
+    const events: RetryEvent[] = [];
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test', { method: 'POST', body: '{}' }),
+      doFetch: (async () => {
+        attempts++;
+        return attempts < 2 ? new Response('busy', { status: 503 }) : okStream();
+      }) as unknown as typeof fetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      sleepFn: async () => {},
+      onRetry: (e) => events.push(e),
+    });
+    expect(res.ok).toBe(true);
+    expect(attempts).toBe(2);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      operation: 'unit-stream',
+      attempt: 0,
+      status: 503,
+      errorKind: 'status',
+    });
+    expect(typeof events[0]?.delaySeconds).toBe('number');
+  });
+
+  it('builds a FRESH Request per attempt (regression: real fetch consumes the body)', async () => {
+    const bodies: string[] = [];
+    let attempts = 0;
+    // Mock that READS the body, exactly as real fetch does — the old reuse bug
+    // would surface here as the second read throwing on an already-used body.
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test', { method: 'POST', body: '{"n":1}' }),
+      doFetch: (async (req: Request) => {
+        attempts++;
+        bodies.push(await req.text()); // consumes the body
+        return attempts < 2 ? new Response('busy', { status: 503 }) : okStream();
+      }) as unknown as typeof fetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      sleepFn: async () => {},
+    });
+    expect(res.ok).toBe(true);
+    expect(bodies).toEqual(['{"n":1}', '{"n":1}']); // both attempts sent the same body, no throw
+  });
+
+  it('returns the final non-ok response on a non-retryable status (no throw)', async () => {
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test', { method: 'POST', body: '{}' }),
+      doFetch: (async () => new Response('nope', { status: 401 })) as unknown as typeof fetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      sleepFn: async () => {},
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('throws AbortError when the signal is already aborted', async () => {
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(
+      withStreamingRetry({
+        buildRequest: () => new Request('https://x.test', { method: 'POST', body: '{}' }),
+        doFetch: (async () => okStream()) as unknown as typeof fetch,
+        operation: 'unit-stream',
+        initialResponseTimeoutMs: null,
+        signal: ctrl.signal,
+        sleepFn: async () => {},
+      }),
+    ).rejects.toThrow(/abort/i);
+  });
+
+  it('retries a network TypeError then succeeds', async () => {
+    let attempts = 0;
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test', { method: 'POST', body: '{}' }),
+      doFetch: (async () => {
+        attempts++;
+        if (attempts < 2) throw new TypeError('network gone');
+        return okStream();
+      }) as unknown as typeof fetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      sleepFn: async () => {},
+    });
+    expect(res.ok).toBe(true);
+    expect(attempts).toBe(2);
   });
 });

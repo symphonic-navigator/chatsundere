@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CompletionTarget } from './catalogue/target.js';
 import { NANO_GPT_PAIRS } from './providers/_nano-gpt-pairs.js';
-import { parseRetryAfter, shouldRetryStatus, withRetry } from './retry.js';
+import { type OnRetry, parseRetryAfter, shouldRetryStatus, withRetry } from './retry.js';
 import { buildRequest } from './transport.js';
 import type { ProviderConfig, ProviderDefinition, WireMessage } from './types.js';
+
+const DEFAULT_ONE_SHOT_TIMEOUT_MS = 30_000;
 
 export interface OneShotArgs {
   provider: ProviderDefinition;
@@ -15,6 +17,10 @@ export interface OneShotArgs {
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
   signal?: AbortSignal;
+  /** Overall timeout for the whole call (default 30 000 ms). Background jobs must not hang forever. */
+  timeoutMs?: number;
+  /** Optional sink for retry decisions. Caller (apps/) wires the console line. */
+  onRetry?: OnRetry;
 }
 
 interface OneShotResponse {
@@ -39,20 +45,25 @@ export async function runOneShotCompletionWithSleep(
       extras.thinking = undefined;
     }
   }
-  const request = buildRequest({
-    provider: args.providerConfig,
-    apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
-    path: '/chat/completions',
-    method: 'POST',
-    body: { model: modelId, messages: args.messages, stream: false, ...extras },
-  });
+  const timeoutMs = args.timeoutMs ?? DEFAULT_ONE_SHOT_TIMEOUT_MS;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
 
   return withRetry<string>(
     async () => {
-      if (args.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      const response = await fetch(request, { signal: args.signal });
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      // Fresh Request each attempt: a Request's body is consumed on first fetch,
+      // so reusing it on retry throws ERR_BODY_ALREADY_USED. buildRequest is pure.
+      const request = buildRequest({
+        provider: args.providerConfig,
+        apiKey: args.apiKey,
+        corsProxyUrl: args.corsProxyUrl,
+        corsProxyKey: args.corsProxyKey,
+        path: '/chat/completions',
+        method: 'POST',
+        body: { model: modelId, messages: args.messages, stream: false, ...extras },
+      });
+      const response = await fetch(request, { signal });
       if (!response.ok) {
         const err = new Error(`one-shot upstream returned ${response.status}`) as Error & {
           status?: number;
@@ -71,8 +82,16 @@ export async function runOneShotCompletionWithSleep(
       return content;
     },
     {
-      signal: args.signal,
+      signal,
       sleepFn,
+      operation: 'one-shot',
+      onRetry: args.onRetry,
+      classifyError: (err) => {
+        const e = err as { status?: number };
+        return typeof e.status === 'number'
+          ? { errorKind: 'status', status: e.status }
+          : { errorKind: 'network' };
+      },
       isRetriable: (err) => {
         if (err instanceof TypeError) return true;
         const e = err as { status?: number };

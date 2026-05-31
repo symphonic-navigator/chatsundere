@@ -5,6 +5,7 @@ import {
   type StreamChunk,
   type WireMessage,
   composeSystemPrompt,
+  formatRetryEvent,
   offeringToTarget,
   streamCompletion,
 } from '@chatsundere/llm-unified';
@@ -83,6 +84,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     messages: wireMessages,
     bodyExtras: extras,
     signal: args.signal,
+    onRetry: (e) => console.warn(formatRetryEvent(e)),
   })) {
     args.onChunk(chunk);
 

@@ -126,6 +126,15 @@ object inside their `parseChunk`. The `curation/` subtree and
 `src/providers/curation/` helpers are maintain-time only and are not exported
 from the package index.
 
+## Retry & background jobs
+
+Every background / non-interactive provider call goes through
+`runOneShotCompletion` (or `withRetry` directly) — never a bare `fetch`. This
+gives it transient-failure retry and the `onRetry` observability hook for free.
+Interactive streaming uses `withStreamingRetry` (owned by `streamCompletion`).
+The retry helpers are sink-agnostic: pass an `onRetry` callback and choose where
+the signal lands (`console`, a metrics sink, …). The library itself never logs.
+
 ## Scripts
 
 ```bash

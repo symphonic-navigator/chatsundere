@@ -1,5 +1,9 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { type OneShotArgs, runOneShotCompletion } from './one-shot-completion.js';
+import {
+  type OneShotArgs,
+  runOneShotCompletion,
+  runOneShotCompletionWithSleep,
+} from './one-shot-completion.js';
 import { nanoGpt } from './providers/nano-gpt.js';
 
 const successBody = JSON.stringify({
@@ -185,5 +189,45 @@ describe('runOneShotCompletion retry on transient failure', () => {
     ).rejects.toThrow();
     globalThis.fetch = oldFetch;
     expect(attempts).toBe(5); // initial + 4 retries
+  });
+});
+
+describe('one-shot fresh Request per attempt (regression)', () => {
+  it('retries a 503 sending a readable body each time, then succeeds', async () => {
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
+    let attempts = 0;
+    const bodies: string[] = [];
+    const oldFetch = globalThis.fetch;
+    globalThis.fetch = (async (req: Request) => {
+      attempts++;
+      bodies.push(await req.text()); // consume body as real fetch does
+      if (attempts < 2) return new Response('busy', { status: 503 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'Hi' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const out = await runOneShotCompletionWithSleep(
+        {
+          provider: nanoGpt,
+          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+          apiKey: 'test-key',
+          corsProxyUrl: null,
+          corsProxyKey: null,
+          target: { slug: model.upstreamSlug },
+          messages: [{ role: 'user', content: 'hi' }],
+          bodyExtras: {},
+        },
+        async () => {},
+      );
+      expect(out).toBe('Hi');
+      expect(attempts).toBe(2);
+      expect(new Set(bodies).size).toBe(1); // identical body both attempts, no throw
+    } finally {
+      globalThis.fetch = oldFetch;
+    }
   });
 });

@@ -4,12 +4,7 @@ import type { CanonicalRequest, ModelAdapter, ToolDef } from './adapter-contract
 import { getAdapter } from './adapter-registry.js';
 import { parseWithAdapter } from './adapter-stream.js';
 import type { CompletionTarget } from './catalogue/target.js';
-import {
-  MAX_RETRY_ATTEMPTS,
-  computeRetryDelay,
-  parseRetryAfter,
-  shouldRetryStatus,
-} from './retry.js';
+import { type OnRetry, withStreamingRetry } from './retry.js';
 import { parseOpenAiSseStream } from './streaming.js';
 import { buildRequest } from './transport.js';
 import type {
@@ -42,6 +37,8 @@ export interface StreamCompletionArgs {
    * run as long as it needs to. Defaults to 15 000 ms.
    */
   initialResponseTimeoutMs?: number;
+  /** Optional sink for retry decisions. Caller (apps/) wires the console line. */
+  onRetry?: OnRetry;
 }
 
 const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
@@ -69,74 +66,25 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
   } else {
     body = buildBody(args);
   }
-  const request = buildRequest({
-    provider: args.providerConfig,
-    apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
-    path: '/chat/completions',
-    method: 'POST',
-    body,
-    extraHeaders,
-  });
-
-  // TTFB timeout: cleared as soon as response headers arrive, so a long
-  // generation never triggers it. Wraps every fetch attempt in the retry loop.
   const timeoutMs = args.initialResponseTimeoutMs ?? DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS;
 
-  let response: Response | null = null;
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-    if (args.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-
-    const timeoutCtrl = new AbortController();
-    const timeoutId = setTimeout(
-      () =>
-        timeoutCtrl.abort(
-          new DOMException(`upstream did not respond within ${timeoutMs}ms`, 'TimeoutError'),
-        ),
-      timeoutMs,
-    );
-    const fetchSignal = args.signal
-      ? AbortSignal.any([args.signal, timeoutCtrl.signal])
-      : timeoutCtrl.signal;
-
-    let attemptResponse: Response;
-    try {
-      attemptResponse = await fetch(request, { signal: fetchSignal });
-    } catch (err) {
-      clearTimeout(timeoutId);
-      // Treat network-level failures (TypeError per WHATWG fetch spec) as
-      // retryable; anything else (e.g. AbortError) propagates immediately.
-      if (err instanceof TypeError && attempt < MAX_RETRY_ATTEMPTS && !args.signal?.aborted) {
-        lastError = err;
-        const delay = computeRetryDelay(attempt, null);
-        await new Promise<void>((r) => setTimeout(r, delay * 1000));
-        continue;
-      }
-      throw err;
-    }
-    clearTimeout(timeoutId);
-
-    if (attemptResponse.ok) {
-      response = attemptResponse;
-      break;
-    }
-    // Non-2xx response: retry if the status is transient, else propagate.
-    if (!shouldRetryStatus(attemptResponse.status) || attempt >= MAX_RETRY_ATTEMPTS) {
-      response = attemptResponse;
-      break;
-    }
-    const retryAfter = parseRetryAfter(attemptResponse.headers);
-    // Consume the body so the connection can be reused.
-    await attemptResponse.body?.cancel();
-    const delay = computeRetryDelay(attempt, retryAfter);
-    if (args.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    await new Promise<void>((r) => setTimeout(r, delay * 1000));
-  }
-  if (!response) {
-    throw lastError ?? new Error('streamCompletion: exhausted without response');
-  }
+  const response = await withStreamingRetry({
+    buildRequest: () =>
+      buildRequest({
+        provider: args.providerConfig,
+        apiKey: args.apiKey,
+        corsProxyUrl: args.corsProxyUrl,
+        corsProxyKey: args.corsProxyKey,
+        path: '/chat/completions',
+        method: 'POST',
+        body,
+        extraHeaders,
+      }),
+    operation: 'stream-completion',
+    initialResponseTimeoutMs: timeoutMs,
+    signal: args.signal,
+    onRetry: args.onRetry,
+  });
 
   if (!response.ok) {
     throw new Error(`streamCompletion: upstream ${response.status}`);

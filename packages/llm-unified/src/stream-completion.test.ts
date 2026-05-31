@@ -9,7 +9,6 @@ import type {
 import { _resetAdapterRegistryForTests, registerAdapter } from './adapter-registry.js';
 import { nanoGpt } from './providers/nano-gpt.js';
 import { novita } from './providers/novita.js';
-import { shouldRetryStatus } from './retry.js';
 import {
   type StreamCompletionArgs,
   buildAdapterBodyForTest,
@@ -253,8 +252,10 @@ function streamArgs(): StreamCompletionArgs {
 describe('streamCompletion retry on transient initial-fetch failure', () => {
   it('retries on 503 then succeeds with streamed content', async () => {
     let attempts = 0;
-    const fetchMock = mock(async () => {
+    const bodies: string[] = [];
+    const fetchMock = mock(async (req: Request) => {
       attempts++;
+      bodies.push(await req.text()); // consume the body, as real fetch does
       if (attempts < 3) {
         return new Response('upstream busy', { status: 503 });
       }
@@ -275,6 +276,9 @@ describe('streamCompletion retry on transient initial-fetch failure', () => {
       chunks.push(c);
     }
     expect(attempts).toBe(3);
+    // All three attempts sent an identical, fully-readable body.
+    expect(bodies).toHaveLength(3);
+    expect(new Set(bodies).size).toBe(1);
   });
 
   it('does not retry once the response body is being read', async () => {
