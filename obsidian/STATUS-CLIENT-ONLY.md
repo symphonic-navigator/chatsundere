@@ -5,7 +5,38 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-05-31 (latest) — **Retry observability shipped + latent
+**Last updated:** 2026-05-31 (latest) — **Roadmap locked + UI-polish round +
+Mistral & OpenRouter onboarded.** Six commits on master, not yet pushed (pushing
+as one package). (1) **Roadmap to beta locked** — [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md)
++ [[ROADMAP]]; v0.1.0 is a local-only alpha at Block 2; "mainstream provider"
+gate relaxed. (2) **UI-polish round, all device-verified by Chris:** copy-toast,
+desktop-only Enter-to-send (Shift+Enter = newline), and My-Circle Continue/New-Chat
+(`ab34528`); offering picker now renders deployments **inline under the chosen
+model** + **coloured TEE/ZDR badges** with tooltips (`dfa469e`); PWA updates apply
+**silently on next cold start** (banner removed — a mid-session reload would drop
+the in-memory MK and force re-unlock) (`a1b9782`). (3) **#5 Regenerate wired then
+REVERTED** — `useRegenerate` is destructive + non-atomic (deletes the last user
+message too, then re-sends; nukes single-exchange chats and loses the prompt if
+the re-send fails — Chris hit this on smoke). Deferred for a non-destructive
+rebuild: keep the user message, re-roll only the response, via a new "reuse
+existing user message" mode on `stream-manager.start` (+ finally a chat-route
+test — that path only ever ran in the localStorage-jsdom pre-existing failures).
+(4) **Mistral + OpenRouter onboarded** (`e00de39` canonicals, `3bb3ebb` providers,
+`d027e9a` doc): 3 Mistral flagship canonicals; **Mistral direct** (`mistral-openai`
+adapter handles the polymorphic thinking-in-`delta.content`, reasoning toggle
+high/none, usage on finish_reason; **CORS-direct, no proxy**) + **via nano-gpt**
+(fully green 22/22 +vision); **OpenRouter** re-offers our 8-model canonical set
+(MiMo excluded; all clean `toggle` incl. GLM-5.1/Kimi which are fixed-on elsewhere;
+CORS-direct). Both freedom-oriented (Chris). Closed the **tensorix client-list gap**
+(registered but never in settings); client provider list now matches all 8
+built-ins. **Mistral via OpenRouter investigated + EXCLUDED** — proprietary
+Mistral 404s under a privacy-oriented OR data-policy (which most of our users
+run) + free-tier rate-limit; documented in `providers/openrouter.md`.
+typecheck 13/13; llm-unified 204 Bun; user-client 518 (the 8 cockpit-draft/
+chat-page/chat-route localStorage-jsdom failures remain pre-existing). **Next:**
+regenerate non-destructive rebuild, then Block-1 memory (chatsune port).
+
+**Earlier 2026-05-31 — Retry observability shipped + latent
 `ERR_BODY_ALREADY_USED` bug fixed across all three provider-call sites** (commit
 `7402231`): sink-agnostic `onRetry` hook, pure `formatRetryEvent`, new
 `withStreamingRetry` helper consolidating the streaming loops, console sinks at
