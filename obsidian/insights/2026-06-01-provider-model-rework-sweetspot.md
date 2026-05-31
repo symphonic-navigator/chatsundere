@@ -1,6 +1,6 @@
 # 2026-06-01 — Provider/model rework: the multi-upstream sweet spot
 
-Squashed to `9362ad7`. What we achieved, and why it matters beyond the diff.
+Squashed to `4c54661`. What we achieved, and why it matters beyond the diff.
 
 ## What landed
 

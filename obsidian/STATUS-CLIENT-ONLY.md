@@ -6,7 +6,7 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-01 (latest) — **Provider & model handling rework
-landed, squashed to `9362ad7` on master (not yet pushed; awaiting Chris's device
+landed, squashed to `4c54661` on master (not yet pushed; awaiting Chris's device
 test).** Spec/plan: [[../superpowers/specs/2026-05-31-provider-model-handling-rework-design]]
 / [[../superpowers/plans/2026-05-31-provider-model-handling-rework]]. What
 changed: (1) **Modality `ServiceKind`** (`llm`/`web`/`tts`/`stt`/`tti`) added to
@@ -37,13 +37,15 @@ adapter-collision in `builtins.test.ts` was fixed with a shared
 vitest **546 pass / 8 fail across 3 files** — the 8 fails are the **pre-existing**
 `chat-page`/`chat-route`/`cockpit-draft` localStorage-jsdom failures (unchanged
 baseline, unrelated), confirmed stable across three full runs; **every new/modified
-test file in this rework passes in the full suite**. **Process note:** the rework
-was produced by an over-eager *batched* subagent dispatch that raced on the shared
-`master` tree — HEAD churn, a dropped-then-reflog-recovered Task-1 commit, and a
-duplicated CapBadgeRow commit resulted; history is correct but messier than the
-planned one-commit-per-task. New [[feedback_serial_subagent_dispatch]] memory
-records the lesson. **Next:** Chris device-tests the 7 manual steps (spec §12) →
-Liz squashes the rework commits into one + pushes.
+test file in this rework passes in the full suite**. **Process note:** the
+intermediate task-commits were produced by an over-eager *batched* subagent
+dispatch that raced on the shared `master` tree — HEAD churn, a
+dropped-then-reflog-recovered Task-1 commit, and a duplicated CapBadgeRow commit
+resulted. All cleaned up and **squashed to a single commit `4c54661`** (spec
+`c8de708` + plan `564cb07` remain as their own `[skip ci]` doc commits). New
+[[feedback_serial_subagent_dispatch]] memory records the lesson. **Next:** Chris
+device-tests the 7 manual steps (spec §12) → Liz pushes. Next session also: the
+usability polish Chris spotted while using the chat, then the [[ROADMAP]].
 
 **Earlier 2026-05-31 — Roadmap locked + UI-polish round +
 Mistral & OpenRouter onboarded.** Six commits on master, not yet pushed (pushing
