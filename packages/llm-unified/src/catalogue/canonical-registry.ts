@@ -99,6 +99,40 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: true,
     freedomNote: 'Xiaomi open-weight agentic model; judged freedom-oriented by Chris (2026-05-31).',
   },
+  {
+    id: 'mistral-small-4',
+    displayName: 'Mistral Small 4',
+    family: 'mistral',
+    // Reasoning is a binary toggle on the Mistral API (reasoning_effort
+    // high/none); thinking arrives inside delta.content as a polymorphic
+    // typed-item array, not in reasoning_content. Vision + tools confirmed in
+    // the chatsune integration. Context window 256k.
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression (more so than the open-weight Chinese models), with licences permissive enough for our API integration.',
+  },
+  {
+    id: 'mistral-medium-3-5',
+    displayName: 'Mistral Medium 3.5',
+    family: 'mistral',
+    // Same reasoning toggle as Small 4. Note the upstream slug is the literal
+    // `mistral-medium-3-5`, NOT `-latest` (small/large use `-latest`).
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
+  },
+  {
+    id: 'mistral-large-3',
+    displayName: 'Mistral Large 3',
+    family: 'mistral',
+    // Large 3 has NO reasoning (chatsune: has_reasoning=False). Vision + tools.
+    requiredCaps: { tools: true, reasoning: false, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */
