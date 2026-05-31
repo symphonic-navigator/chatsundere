@@ -52,6 +52,21 @@ the binding's old test.
 The retry-helper brief is **wrong** where it claims stream-completion "never
 reuses the Request object". This spec corrects that.
 
+**The same bug exists in `one-shot-completion.ts`.** It builds the `request`
+once at `:42`, *outside* the `withRetry` callback, and `fetch(request)`s inside
+the callback (`:55`). `withRetry` re-runs the whole callback on each retry — but
+the callback closes over the *same* `request` object, so the second attempt
+throws `ERR_BODY_ALREADY_USED`. The brief's claim that "one-shot is safe because
+withRetry re-runs the whole fn" is wrong: re-running the callback does not
+rebuild the Request. In practice title-gen retries against a flaky provider
+never succeed — they burn all attempts throwing "body already used" and fall
+into the fallback title, the `try/catch` masking it. **All three** call-sites
+had/have this fault; only binding (`3c0642d`) was fixed.
+
+The fix everywhere is the same: build a fresh `Request` *inside* each attempt.
+For the streaming pair this is owned by `withStreamingRetry` (§4.2); for one-shot
+it means moving `buildRequest` inside the `withRetry` callback.
+
 ---
 
 ## 3. Decisions captured during brainstorm
@@ -155,7 +170,13 @@ improvement (a transient network blip in a suite run is now retried) but a real
 change in binding semantics. Recorded here so it is not a surprise.
 
 `one-shot-completion` stays on `withRetry` (non-streaming; the high-level wrapper
-fits) and only gains the `onRetry` wiring.
+fits) and gains: the `onRetry` wiring **and** the fresh-Request fix — `buildRequest`
+moves *inside* the `withRetry` callback so each attempt sends a new Request (§2).
+Because `withRetry` is generic over error types, it builds the `RetryEvent` via two
+new opts: `operation: string` and `classifyError?: (err) => { errorKind; status? }`
+(default `() => ({ errorKind: 'network' })`). one-shot passes a classifier that
+reads `err.status`. `withStreamingRetry` needs neither — it inspects
+`response.status` / catches `TypeError` directly and builds the event itself.
 
 ### 4.3 Sinks (at the three call-sites)
 
@@ -193,6 +214,8 @@ fits) and only gains the `onRetry` wiring.
    The `3c0642d` equivalent for the streaming path.
 2. **Un-mask the existing 503 test:** rebuild `stream-completion.test.ts:256`'s
    mock so it reads the body and asserts both attempts send the identical body.
+   Add the equivalent body-reading regression test for `one-shot-completion`
+   (its retry path has the same fault).
 3. **`onRetry` fires correctly:** asserted at all three sites — correct
    `operation`, `attempt`, `delaySeconds`, `status`, `errorKind`.
 4. **`withStreamingRetry` unit tests:** TTFB-timeout path; `null`-timeout path
