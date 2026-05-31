@@ -57,10 +57,14 @@ these together. Order roughly by priority / dependency.
 
 ## Carried over from today (2026-05-31)
 
-- **GLM / Kimi reasoning-effort probe (chutes).** We modelled chutes reasoning as a
-  `toggle` because effort does not modulate the trace for DeepSeek-V3.2 / Gemma; GLM
-  and Kimi were not probed for effort modulation. If they DO modulate, consider
-  whether `steps` is more honest for those two specifically. ~2-minute live probe.
+- **GLM / Kimi reasoning-effort probe (chutes).** ✅ **RESOLVED 2026-06-01.**
+  Probed `zai-org/GLM-5.1-TEE` and `moonshotai/Kimi-K2.6-TEE` across low/medium/high
+  (`enable_thinking:true` + `reasoning_effort`, 2 samples each). Effort does **not**
+  modulate the trace: GLM-5.1 reasoning tokens *decline* with higher effort
+  (low ~6.3k → medium ~4.9k → high ~3.8k — noise/inverse); Kimi-K2.6 is flat
+  (~4.0k / 4.1k / 3.7k). So **`toggle` is confirmed correct** for both — no change.
+  Conclusion: chutes uniformly accepts `reasoning_effort` but does not granularly
+  modulate, so every chutes offering is honestly a toggle, not steps.
   See [[2026-05-31-chutes-reasoning-on-switch]].
 
 ## Chris's parallel track (not Liz)
