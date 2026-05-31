@@ -3,8 +3,15 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-31 (latest) — **Tensorix onboarded: 5 EU-sovereign ZDR
-offerings curated.** New provider `tensorix` (`https://api.tensorix.ai/v1`, OpenAI
+**Last updated:** 2026-05-31 (latest) — **Retry observability shipped + latent
+`ERR_BODY_ALREADY_USED` bug fixed across all three provider-call sites** (commit
+`7402231`): sink-agnostic `onRetry` hook, pure `formatRetryEvent`, new
+`withStreamingRetry` helper consolidating the streaming loops, console sinks at
+every call-site, 30s one-shot timeout; `llm-unified` stays dependency-free;
+prom-client metrics deferred to the Phase-2 proxy. 192 tests green. Stale Phase-4
+status corrected: alpha-release ceremony deferred into the 4-week roadmap (squash
+abandoned — already pushed + buried). See "Doing now". **Prior entry —** Tensorix
+onboarded: 5 EU-sovereign ZDR offerings curated. New provider `tensorix` (`https://api.tensorix.ai/v1`, OpenAI
 chat-completions, `corsHint: direct`, sortPriority 12). ZDR is policy-default &
 EU-sovereign (Irish co. 796387, Dublin+Helsinki, GDPR Art. 44) — `trust:
 {tee:false, zdr:true, jurisdiction:'EU'}`, always-on (no per-request header,
@@ -1396,13 +1403,26 @@ onboarded/curated (chutes, nano-gpt, novita, wafer, tensorix, …) with
 the conversation-suite as the verification harness. Latest: Tensorix
 (5 EU-sovereign ZDR offerings) — see the Last-updated header above.
 
-Next concrete implementation step (pre-roadmap): **retry
-observability** — wire the `onRetry`/logging seam into
-`packages/llm-unified/src/retry.ts` and its three call-sites, per
-[[insights/2026-05-31-retry-helper-brief]]. Then a roadmap discussion
-with Chris (clear 4-week picture in hand: ship a chat client people
-already enjoy — not every feature, but something that delights and
-doesn't annoy).
+**Retry observability — done** (commit `7402231`, 2026-05-31). Added a
+sink-agnostic `onRetry` hook + pure `formatRetryEvent` to
+`packages/llm-unified/src/retry.ts` (stays dependency-free) and a new
+`withStreamingRetry` helper that consolidates the two hand-rolled
+streaming loops. Structured `console` sinks wired at all three
+call-sites (stream-completion, one-shot/title-gen, suite binding) —
+transient 5xx/429s are no longer invisible at the retry layer.
+**Bonus:** the refactor killed a latent `ERR_BODY_ALREADY_USED` bug that
+existed in stream-completion AND one-shot (Request built once then
+reused on retry; both retry paths were silently broken — masked by tests
+whose mocks never read the body; binding was the only site fixed, in
+`3c0642d`). one-shot also gained a 30s overall timeout. Subagent-driven
+TDD across 8 tasks, each spec+quality-reviewed; 192 tests green,
+typecheck clean. prom-client metrics half deferred to the Phase-2 proxy
+([[insights/follow-ups-index]]). Per [[insights/2026-05-31-retry-helper-brief]]
++ spec `superpowers/specs/2026-05-31-retry-observability-design.md`.
+
+Next: **roadmap discussion** with Chris (clear 4-week picture in hand:
+ship a chat client people already enjoy — not every feature, but
+something that delights and doesn't annoy).
 
 ---
 
