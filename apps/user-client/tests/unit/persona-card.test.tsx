@@ -209,6 +209,7 @@ describe('PersonaCard streaming orb', () => {
             contentBuffer: [],
             pillBuffer: [],
             startedAt: 0,
+            reusedDraft: false,
           },
         ],
       ]),

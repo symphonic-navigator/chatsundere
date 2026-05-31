@@ -83,6 +83,7 @@ describe('ChatStream', () => {
       contentBuffer: [],
       pillBuffer: [],
       startedAt: Date.now(),
+      reusedDraft: false,
     };
     const { container } = render(
       <ChatStream

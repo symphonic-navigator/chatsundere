@@ -53,6 +53,8 @@ export interface ChatStreamProps {
   persona: PersonaRow | null;
   displayName: string;
   streamHandle: StreamHandle | null;
+  /** Re-roll the last persona answer. Wired only to the last persona message. */
+  onRegenerate?: () => void;
 }
 
 /** Scroll container that sorts messages chronologically, inserts DateSeparators
@@ -169,13 +171,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 onBookmark={() => {
                   // Stubbed — wired to useToggleBookmark in Task 27 (ChatPage assembly).
                 }}
-                onRegenerate={
-                  isLastPersona
-                    ? () => {
-                        // Stubbed — wired to useRegenerate in Task 27 (ChatPage assembly).
-                      }
-                    : undefined
-                }
+                onRegenerate={isLastPersona ? p.onRegenerate : undefined}
                 isStreamingDraft={isDraft}
               />
               {isDraft ? <StreamingCursor /> : null}

@@ -132,6 +132,7 @@ describe('HistoryRow streaming orb', () => {
             contentBuffer: [],
             pillBuffer: [],
             startedAt: 0,
+            reusedDraft: false,
           },
         ],
       ]),

@@ -12,7 +12,7 @@ import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { useChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
-import { useSendMessage } from '../../../data/send-message.js';
+import { useRegenerate, useSendMessage } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
@@ -36,6 +36,7 @@ export function ChatPage(): JSX.Element {
 
   const chatQuery = useChat(activeChatId);
   const sendMessage = useSendMessage();
+  const regenerate = useRegenerate();
   const updateChat = useUpdateChat();
 
   const setChatId = useCurrentChatStore((s) => s.setChatId);
@@ -210,6 +211,11 @@ export function ChatPage(): JSX.Element {
     return estimateTokens([sys, ...msgTexts]);
   }, [offering, effectivePersona, settingsQuery.data, chatQuery.data?.messages]);
 
+  const onRegenerate = (): void => {
+    if (!activeChatId) return;
+    void regenerate.mutateAsync({ chatId: activeChatId, reasoning });
+  };
+
   const onSend = async (text: string): Promise<void> => {
     if (!effectivePersona) return;
     const newChatId = await sendMessage.mutateAsync({
@@ -262,6 +268,7 @@ export function ChatPage(): JSX.Element {
           persona={effectivePersona}
           displayName={displayName}
           streamHandle={streamHandle}
+          onRegenerate={onRegenerate}
         />
       ) : null}
 

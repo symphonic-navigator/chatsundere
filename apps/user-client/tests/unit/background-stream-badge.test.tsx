@@ -49,6 +49,7 @@ function plant(streams: Array<{ chatId: string; personaId: string }>): void {
       contentBuffer: [],
       pillBuffer: [],
       startedAt: Date.now() + i,
+      reusedDraft: false,
     });
   }
   useStreamManagerStore.setState({ streams: map });

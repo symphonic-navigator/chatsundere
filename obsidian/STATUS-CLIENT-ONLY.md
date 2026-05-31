@@ -14,13 +14,20 @@ desktop-only Enter-to-send (Shift+Enter = newline), and My-Circle Continue/New-C
 (`ab34528`); offering picker now renders deployments **inline under the chosen
 model** + **coloured TEE/ZDR badges** with tooltips (`dfa469e`); PWA updates apply
 **silently on next cold start** (banner removed — a mid-session reload would drop
-the in-memory MK and force re-unlock) (`a1b9782`). (3) **#5 Regenerate wired then
-REVERTED** — `useRegenerate` is destructive + non-atomic (deletes the last user
-message too, then re-sends; nukes single-exchange chats and loses the prompt if
-the re-send fails — Chris hit this on smoke). Deferred for a non-destructive
-rebuild: keep the user message, re-roll only the response, via a new "reuse
-existing user message" mode on `stream-manager.start` (+ finally a chat-route
-test — that path only ever ran in the localStorage-jsdom pre-existing failures).
+the in-memory MK and force re-unlock) (`a1b9782`). (3) **#5 Regenerate rebuilt
+non-destructively — DONE on branch `feature/regenerate-non-destructive`, awaiting
+Chris's device test before squash to master.** `useRegenerate` now re-rolls only
+the last persona answer in place and never touches the user message. The streaming
+core was extracted into `stream-manager.runIntoDraft`, shared by `start` (fresh
+send) and a new `stream-manager.regenerate` (clears the target persona row,
+re-streams into it). On stream failure the target stays `incomplete` so the
+existing `StreamInterruptedFooter` offers Retry; on abort mid-regenerate the
+target is preserved (not deleted) via a `reusedDraft` flag on the handle.
+Persona/secret resolution is now a shared `resolvePersonaContext` helper. The
+chat-route regenerate test that was missing now exists and genuinely clicks the
+button. Spec + plan under `superpowers/` (2026-05-31). 6 commits on the branch;
+the 8 cockpit-draft/chat-page/chat-route localStorage-jsdom failures remain
+pre-existing (verified identical on master).
 (4) **Mistral + OpenRouter onboarded** (`e00de39` canonicals, `3bb3ebb` providers,
 `d027e9a` doc): 3 Mistral flagship canonicals; **Mistral direct** (`mistral-openai`
 adapter handles the polymorphic thinking-in-`delta.content`, reasoning toggle
@@ -34,7 +41,8 @@ Mistral 404s under a privacy-oriented OR data-policy (which most of our users
 run) + free-tier rate-limit; documented in `providers/openrouter.md`.
 typecheck 13/13; llm-unified 204 Bun; user-client 518 (the 8 cockpit-draft/
 chat-page/chat-route localStorage-jsdom failures remain pre-existing). **Next:**
-regenerate non-destructive rebuild, then Block-1 memory (chatsune port).
+Chris device-tests `feature/regenerate-non-destructive` (5 manual-verification
+steps in the plan) → squash to master, then Block-1 memory (chatsune port).
 
 **Earlier 2026-05-31 — Retry observability shipped + latent
 `ERR_BODY_ALREADY_USED` bug fixed across all three provider-call sites** (commit

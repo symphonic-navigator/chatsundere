@@ -68,8 +68,9 @@ async function seedChatWithExchange() {
     bookmarkedMessageCount: 0,
     draftInput: '',
   });
+  const userMsgId = uuidv7();
   await db.messages.add({
-    id: uuidv7(),
+    id: userMsgId,
     chatId,
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'tell me a joke' }],
@@ -77,8 +78,9 @@ async function seedChatWithExchange() {
     bookmarked: false,
     streamingState: 'complete',
   });
+  const personaMsgId = uuidv7();
   await db.messages.add({
-    id: uuidv7(),
+    id: personaMsgId,
     chatId,
     role: 'persona',
     contentBlocks: [{ type: 'text', text: 'why did the chicken' }],
@@ -86,10 +88,10 @@ async function seedChatWithExchange() {
     bookmarked: false,
     streamingState: 'complete',
   });
-  return { db, chatId, personaId };
+  return { db, chatId, personaId, userMsgId, personaMsgId };
 }
 
-describe('useRegenerate', () => {
+describe('useRegenerate (non-destructive)', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests({ keepData: false });
   });
@@ -101,29 +103,32 @@ describe('useRegenerate', () => {
     useSessionStore.setState({ mk: null, session: null });
   });
 
-  it('deletes last persona + user, re-sends with prior user-text', async () => {
-    const { db, chatId } = await seedChatWithExchange();
-    const startSpy = vi
-      .spyOn(useStreamManagerStore.getState(), 'start')
+  it('reuses the user message and re-rolls into the last persona message', async () => {
+    const { db, chatId, userMsgId, personaMsgId } = await seedChatWithExchange();
+    const regenSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'regenerate')
       .mockResolvedValue(undefined);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+
     await act(async () => {
       await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
     });
-    // After regenerate, the old user + persona messages are gone; stream-manager.start re-inserts them.
-    expect(startSpy).toHaveBeenCalledTimes(1);
-    const callArg = startSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArg.userText).toBe('tell me a joke');
+
+    expect(regenSpy).toHaveBeenCalledTimes(1);
+    const arg = regenSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.targetMessageId).toBe(personaMsgId);
+    expect(arg.userMessageText).toBe('tell me a joke');
+    expect(arg.priorMessages).toEqual([]);
+
     const remaining = await db.messages.where('chatId').equals(chatId).count();
-    // Pre-regenerate the chat had 2 msgs. After deletion: 0. start() inserts 2 (user + draft persona).
-    // The mock didn't actually run start(), so we expect 0 messages (deletion only).
-    expect(remaining).toBe(0);
+    expect(remaining).toBe(2);
+    const userStill = await db.messages.get(userMsgId);
+    expect(userStill?.contentBlocks).toEqual([{ type: 'text', text: 'tell me a joke' }]);
   });
 
   it('aborts an in-flight stream before regenerating', async () => {
     const { chatId, personaId } = await seedChatWithExchange();
-    // Plant a live handle
     useStreamManagerStore.setState({
       streams: new Map([
         [
@@ -136,7 +141,8 @@ describe('useRegenerate', () => {
             status: 'streaming' as const,
             contentBuffer: [],
             pillBuffer: [],
-            startedAt: Date.now(),
+            startedAt: 1,
+            reusedDraft: false,
           },
         ],
       ]),
@@ -144,9 +150,10 @@ describe('useRegenerate', () => {
     const abortSpy = vi
       .spyOn(useStreamManagerStore.getState(), 'abortDiscard')
       .mockResolvedValue(undefined);
-    vi.spyOn(useStreamManagerStore.getState(), 'start').mockResolvedValue(undefined);
+    vi.spyOn(useStreamManagerStore.getState(), 'regenerate').mockResolvedValue(undefined);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+
     await act(async () => {
       await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
     });
@@ -169,7 +176,7 @@ describe('useRegenerate', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
     await expect(result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } })).rejects.toThrow(
-      /prior user-message/,
+      /no last persona message|no prior user-message/,
     );
   });
 });

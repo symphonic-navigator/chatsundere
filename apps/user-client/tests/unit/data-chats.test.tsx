@@ -239,6 +239,7 @@ describe('useDeleteChat', () => {
             contentBuffer: [],
             pillBuffer: [],
             startedAt: 0,
+            reusedDraft: false,
           },
         ],
       ]),

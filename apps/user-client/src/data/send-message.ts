@@ -1,12 +1,90 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getOffering, getProvider } from '@chatsundere/llm-unified';
+import type { Offering, ProviderConfig, ProviderDefinition } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
-import { getClientDataDb } from '../boot/client-data-db.js';
+import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import type { ReasoningState } from '../lib/reasoning-resolver.js';
 import { openSecret } from '../lib/secrets.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resolvePersonaContext — shared helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PersonaContext {
+  chat: ChatRow;
+  persona: PersonaRow;
+  providerDef: ProviderDefinition;
+  providerConfig: ProviderConfig;
+  apiKey: string;
+  corsProxyUrl: string | null;
+  corsProxyKey: string | null;
+  offering: Offering;
+  globalUnlocker: string;
+  globalAboutMe: string;
+}
+
+/**
+ * Resolve the persona → provider → ProviderDefinition → Offering chain for a
+ * chat and decrypt its api-key + (optional) CORS-proxy key via the master key.
+ * Shared by useSendMessage and useRegenerate. `who` prefixes error messages so
+ * the originating hook is identifiable.
+ */
+async function resolvePersonaContext(chatId: string, who: string): Promise<PersonaContext> {
+  const db = getClientDataDb();
+  const mk = useSessionStore.getState().mk;
+  if (!mk) throw new Error(`${who}: master key unavailable — re-authenticate`);
+
+  const chat = await db.chats.get(chatId);
+  if (!chat) throw new Error(`${who}: chat not found`);
+
+  const persona = await db.personas.get(chat.personaId);
+  if (!persona) throw new Error(`${who}: persona not found`);
+
+  const provider = await db.providers.get(persona.providerId);
+  if (!provider) throw new Error(`${who}: provider not found`);
+
+  const settings = await db.settings.get(1);
+  if (!settings) throw new Error(`${who}: settings row missing`);
+
+  const providerDef = getProvider(provider.templateId);
+  if (!providerDef) throw new Error(`${who}: unknown provider template "${provider.templateId}"`);
+
+  const offering = getOffering(provider.templateId, persona.modelId);
+  if (!offering)
+    throw new Error(
+      `${who}: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
+    );
+
+  const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
+  const corsProxyUrl = settings.corsProxy?.url ?? null;
+  const corsProxyKey = settings.corsProxy
+    ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
+    : null;
+
+  return {
+    chat,
+    persona,
+    providerDef,
+    providerConfig: {
+      baseUrl: providerDef.baseUrl,
+      routing:
+        providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+    },
+    apiKey,
+    corsProxyUrl,
+    corsProxyKey,
+    offering,
+    globalUnlocker: settings.globalUnlockerPrompt,
+    globalAboutMe: settings.globalAboutMe,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useSendMessage
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface SendMessageArgs {
   /** `null` for lazy chats — the hook creates the ChatRow inline. */
@@ -65,66 +143,33 @@ export function useSendMessage() {
         });
       }
 
-      // ── Step 2: Resolve persona → provider → offering chain ─────────────
-      const chat = await db.chats.get(chatId);
-      if (!chat) throw new Error('useSendMessage: chat vanished after creation');
+      // ── Resolve persona chain + decrypt secrets ─────────────────────────
+      const ctx = await resolvePersonaContext(chatId, 'useSendMessage');
 
-      const persona = await db.personas.get(chat.personaId);
-      if (!persona) throw new Error('useSendMessage: persona not found');
-
-      const provider = await db.providers.get(persona.providerId);
-      if (!provider) throw new Error('useSendMessage: provider not found');
-
-      const settings = await db.settings.get(1);
-      if (!settings) throw new Error('useSendMessage: settings row missing');
-
-      const providerDef = getProvider(provider.templateId);
-      if (!providerDef)
-        throw new Error(`useSendMessage: unknown provider template "${provider.templateId}"`);
-
-      const offering = getOffering(provider.templateId, persona.modelId);
-      if (!offering)
-        throw new Error(
-          `useSendMessage: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
-        );
-
-      // ── Step 3: Decrypt secrets ─────────────────────────────────────────
-      const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
-
-      const corsProxyUrl = settings.corsProxy?.url ?? null;
-      const corsProxyKey = settings.corsProxy
-        ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
-        : null;
-
-      // ── Step 4: Fetch prior messages and hand off to stream-manager ──────
+      // ── Fetch prior messages and hand off to stream-manager ─────────────
       const priorMessages = await db.messages.where('chatId').equals(chatId).sortBy('createdAt');
 
       await useStreamManagerStore.getState().start({
         chatId,
         userText: args.text,
-        chat,
-        persona,
-        provider: providerDef,
+        chat: ctx.chat,
+        persona: ctx.persona,
+        provider: ctx.providerDef,
         // Per Decision 22: baseUrl + routing are derived from the static
         // ProviderDefinition, not from the persisted ProviderRow (which only
         // stores templateId, apiKey and the enabled flag authoritatively).
-        providerConfig: {
-          baseUrl: providerDef.baseUrl,
-          routing:
-            providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
-        },
-        apiKey,
-        corsProxyUrl,
-        corsProxyKey,
-        offering,
+        providerConfig: ctx.providerConfig,
+        apiKey: ctx.apiKey,
+        corsProxyUrl: ctx.corsProxyUrl,
+        corsProxyKey: ctx.corsProxyKey,
+        offering: ctx.offering,
         priorMessages,
         userMessageText: args.text,
         reasoning: args.reasoning,
-        globalUnlocker: settings.globalUnlockerPrompt,
-        globalAboutMe: settings.globalAboutMe,
+        globalUnlocker: ctx.globalUnlocker,
+        globalAboutMe: ctx.globalAboutMe,
       });
 
-      // ── Step 5: Return chatId ────────────────────────────────────────────
       return chatId;
     },
 
@@ -136,7 +181,7 @@ export function useSendMessage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useRegenerate
+// useRegenerate — non-destructive re-roll of the last persona answer
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RegenerateArgs {
@@ -145,17 +190,17 @@ export interface RegenerateArgs {
 }
 
 /**
- * Regenerate the last persona response by:
+ * Re-roll the last persona response without touching the user message:
  *
- * 1. Aborting any live stream for the chat (discard the draft).
- * 2. Finding the last user-message to obtain the original prompt text.
- * 3. Deleting the last user-message and every message after it (the
- *    stale persona response).
- * 4. Re-delegating to `useStreamManagerStore.start`, which inserts a
- *    fresh user-message + draft persona-message and opens a new stream.
- *
- * The stream-manager remains unmodified — no `reuseUserMessage` flag
- * needed. Subtractive deletion keeps the implementation simple.
+ * 1. Abort any live stream for the chat (discard its draft).
+ * 2. Find the last complete persona message `T` (the answer to re-roll) and the
+ *    last user message before it (the prompt to replay). No `T` → no-op (throw).
+ * 3. Build the wire context: priorMessages = everything before that user
+ *    message; userMessageText = that user message's text. The old answer `T`
+ *    is excluded, so the model answers as if the prompt were new.
+ * 4. Delegate to `stream-manager.regenerate`, which clears `T` and streams the
+ *    fresh answer into it. On failure `T` stays incomplete → the existing
+ *    StreamInterruptedFooter offers Retry. The user message is never at risk.
  */
 export function useRegenerate() {
   const qc = useQueryClient();
@@ -164,85 +209,49 @@ export function useRegenerate() {
     mutationFn: async (args: RegenerateArgs): Promise<void> => {
       const db = getClientDataDb();
 
-      // ── Step 1: Abort any live stream for this chat ──────────────────────
+      // Abort any live stream for this chat.
       const mgr = useStreamManagerStore.getState();
       if (mgr.has(args.chatId)) await mgr.abortDiscard(args.chatId);
 
-      // ── Step 2: Find the last user-message — its text is the prompt to replay ──
+      // Locate the answer to re-roll + the prompt to replay.
       const msgs = await db.messages.where('chatId').equals(args.chatId).sortBy('createdAt');
-      const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
+      const target = [...msgs]
+        .reverse()
+        .find((m) => m.role === 'persona' && m.streamingState === 'complete');
+      if (!target) throw new Error('useRegenerate: no last persona message');
+
+      const lastUser = [...msgs]
+        .reverse()
+        .find((m) => m.role === 'user' && m.createdAt < target.createdAt);
       if (!lastUser) throw new Error('useRegenerate: no prior user-message');
-      const text = lastUser.contentBlocks
+      const userMessageText = lastUser.contentBlocks
         .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
         .map((b) => b.text)
         .join('');
 
-      // ── Step 3: Delete the last user-message + everything after it ───────
-      const toDelete = msgs.filter((m) => m.createdAt >= lastUser.createdAt).map((m) => m.id);
-      await db.messages.bulkDelete(toDelete);
+      // Prior context excludes that user message and everything after it.
+      const priorMessages = msgs.filter((m) => m.createdAt < lastUser.createdAt);
 
-      // ── Step 4: Resolve the provider chain, decrypt secrets, re-send ─────
-      const chat = await db.chats.get(args.chatId);
-      if (!chat) throw new Error('useRegenerate: chat vanished');
+      // Resolve persona chain + decrypt, then re-roll.
+      const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
 
-      const persona = await db.personas.get(chat.personaId);
-      if (!persona) throw new Error('useRegenerate: persona vanished');
-
-      const provider = await db.providers.get(persona.providerId);
-      if (!provider) throw new Error('useRegenerate: provider vanished');
-
-      const settings = await db.settings.get(1);
-      if (!settings) throw new Error('useRegenerate: settings vanished');
-
-      const providerDef = getProvider(provider.templateId);
-      if (!providerDef)
-        throw new Error(`useRegenerate: unknown provider template "${provider.templateId}"`);
-
-      const offering = getOffering(provider.templateId, persona.modelId);
-      if (!offering)
-        throw new Error(
-          `useRegenerate: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
-        );
-
-      const mk = useSessionStore.getState().mk;
-      if (!mk) throw new Error('useRegenerate: master key unavailable — re-authenticate');
-
-      const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
-
-      const corsProxyUrl = settings.corsProxy?.url ?? null;
-      const corsProxyKey = settings.corsProxy
-        ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
-        : null;
-
-      // Prior messages are now the cleaned history (without the deleted exchange).
-      const priorMessages = await db.messages
-        .where('chatId')
-        .equals(args.chatId)
-        .sortBy('createdAt');
-
-      await useStreamManagerStore.getState().start({
+      await useStreamManagerStore.getState().regenerate({
         chatId: args.chatId,
-        userText: text,
-        chat,
-        persona,
-        provider: providerDef,
-        // Per Decision 22: baseUrl + routing are derived from the static
-        // ProviderDefinition, not from the persisted ProviderRow (which only
-        // stores templateId, apiKey and the enabled flag authoritatively).
-        providerConfig: {
-          baseUrl: providerDef.baseUrl,
-          routing:
-            providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
-        },
-        apiKey,
-        corsProxyUrl,
-        corsProxyKey,
-        offering,
+        targetMessageId: target.id,
+        userText: userMessageText,
+        chat: ctx.chat,
+        persona: ctx.persona,
+        provider: ctx.providerDef,
+        providerConfig: ctx.providerConfig,
+        apiKey: ctx.apiKey,
+        corsProxyUrl: ctx.corsProxyUrl,
+        corsProxyKey: ctx.corsProxyKey,
+        offering: ctx.offering,
         priorMessages,
-        userMessageText: text,
+        userMessageText,
         reasoning: args.reasoning,
-        globalUnlocker: settings.globalUnlockerPrompt,
-        globalAboutMe: settings.globalAboutMe,
+        globalUnlocker: ctx.globalUnlocker,
+        globalAboutMe: ctx.globalAboutMe,
       });
     },
 
