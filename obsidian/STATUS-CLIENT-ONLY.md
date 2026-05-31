@@ -1436,9 +1436,17 @@ alpha-build at `teaser.chatsundere.me/alpha/`.)*
   `{} as ResolvedMindspace` — load-bearing because `ReasoningPill`
   currently `void`s the prop. Will NPE if a future consumer reads
   `mindspace.accent` etc. without the store populated first.
-- Port chatsune's `_retry.py` to a TS retry helper for
-  `stream-completion` — exponential back-off on 429/503, honour
-  `Retry-After`, ±25% jitter. Defer to Phase 4.x polish.
+- ~~Port chatsune's `_retry.py` to a TS retry helper for
+  `stream-completion`~~ **Done** — `packages/llm-unified/src/retry.ts`
+  is the full port (low-level `shouldRetryStatus`/`computeRetryDelay`/
+  `parseRetryAfter` + high-level `withRetry<T>`), wired into
+  `stream-completion`, `one-shot-completion` (background path, e.g.
+  title-gen), and the suite `binding`. **What remains** (not the port):
+  make retries *observable* (the helper logs/counts nothing — chatsune's
+  did; CLAUDE.md §6), consolidate the two inline loops, and lock the
+  "background calls go through `withRetry`/`runOneShotCompletion`, never
+  bare `fetch`" convention so memory-extraction etc. inherit it. Brief:
+  [[insights/2026-05-31-retry-helper-brief]].
 
 ---
 
