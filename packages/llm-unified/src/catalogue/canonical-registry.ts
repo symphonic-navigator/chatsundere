@@ -74,6 +74,31 @@ export const CANONICALS: CanonicalModel[] = [
     // 'unknown' until judged. Alibaba open-weight family.
     freedomOriented: null,
   },
+  {
+    id: 'mimo-v2.5-omni',
+    displayName: 'MiMo V2.5 Omni',
+    family: 'mimo',
+    // Omni is natively multimodal and vision works on novita: 100% on real
+    // photos, ~88% on the suite's synthetic solid-colour image (the rare miss is
+    // a reasoning-leak artefact of that image, not a fault — see the Model
+    // Curation Record). Caveats: image input must be a base64 data URL (remote
+    // URLs 400), and the model is verbose on synthetic images so a tight
+    // max_tokens can truncate before the answer — the adapter sends none.
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'Xiaomi open-weight omni-modal model; judged freedom-oriented by Chris (2026-05-31).',
+  },
+  {
+    id: 'mimo-v2.5-pro',
+    displayName: 'MiMo V2.5 Pro',
+    family: 'mimo',
+    // Pro is TEXT-ONLY — novita rejects image_url with "model features vision
+    // not support" (input_modalities: [text]). Agentic/long-horizon coding focus.
+    requiredCaps: { tools: true, reasoning: true, vision: false },
+    freedomOriented: true,
+    freedomNote: 'Xiaomi open-weight agentic model; judged freedom-oriented by Chris (2026-05-31).',
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */

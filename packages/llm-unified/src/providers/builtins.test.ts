@@ -52,7 +52,7 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(6);
+      expect(p.offerings).toHaveLength(8);
     }
   });
 

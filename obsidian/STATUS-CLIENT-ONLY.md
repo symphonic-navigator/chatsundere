@@ -3,7 +3,24 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-**Last updated:** 2026-05-31 (latest) — **wafer DeepSeek V4 added (flash + pro,
+**Last updated:** 2026-05-31 (latest) — **MiMo V2.5 Omni + Pro curated on novita
+(novita-exclusive).** Xiaomi's open-weight MiMo family — genuinely strong, but
+scarce western compute outside China, so novita is the only workable home (Chris).
+Two new canonicals (`mimo-v2.5-omni`, `mimo-v2.5-pro`) + two novita offerings, both
+reusing the existing `novitaThinkingAdapter` (`enable_thinking` toggle with a clean
+off, single-block tool calls, `reasoning_content` channel) — no new adapter.
+**Omni** is vision-capable; **Pro** is text-only (novita 400s `image_url` →
+"vision not support"). Context **recommended 200k / max 1M** (novita reports a 1M
+ceiling; recommended at the smart non-agentic window per Chris) — the novita helper
+now carries a separate `maxCtx`. Live suite green: both core permutations 16/16
+(on+off) across both models; Omni **vision works** — 100% on real photos, ~88%
+(23/26) on the synthetic solid-colour test image (a reasoning-leak artefact of that
+image, the Kimi-24px class, not a product fault). `builtins.test` → 8 novita
+offerings; `canonical-registry.test` → 10 canonicals. Records:
+`models/mimo-v2.5-omni`/`-pro` (new) + `run-novita-mimo-suite.ts`. typecheck +
+181 Bun tests green. **Not pushed.**
+
+**Earlier 2026-05-31 — wafer DeepSeek V4 added (flash + pro,
 non-ZDR serverless).** Two new wafer offerings on the existing
 `deepseek-v4-flash`/`deepseek-v4-pro` canonicals — **non-ZDR** (zdr_supported:false;
 no 🔒 badge, no `Wafer-ZDR` header), serverless & not China-routed (Chris).
