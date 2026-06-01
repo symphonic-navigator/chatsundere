@@ -5,7 +5,41 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Claude models live via nano-gpt
+**Last updated:** 2026-06-01 (latest) — **Credential bus landed (squashed on
+master `7ca7425`, NOT pushed).** A forward-looking client-side structure
+(`apps/user-client/src/credentials/`) that answers "does the user have an API
+key for credential X?" and, MasterKey-gated, returns it — anticipatory
+scaffolding for future **integrations** (e.g. a nano-gpt usage/balance
+surface), with no consumer yet. Four decisions (all Chris's): (1) **pass
+through existing enabled provider keys** — no duplicate entry, no separate
+store; (2) **abstract `CredentialId`** over a `CredentialSource` registry —
+only `providerKeySource` today (`credentialId === templateId`), a
+standalone-key/LAN-actuator source is the documented future extension; (3)
+**query + reactive surface** — `hasCredential`/`getCredentialKey` (imperative)
+plus a presence-only `useCredential` hook keyed `QK.credential(id)` under the
+`providers` prefix, so provider mutations invalidate it for free; (4)
+**enabled-gating** — presence is false for a disabled provider (conscious
+coupling: disabling a chat route hides its integration; revisitable by dropping
+the `enabled` filter). Presence is MasterKey-free; retrieval is MasterKey-gated
+via `openSecret` on the same slot the chat path uses (`provider/<rowId>/api-key`);
+the reactive hook **never exposes plaintext**. No new persistence, no Dexie
+migration, no wiring into existing call sites — the bus only adds the surface.
+Built subagent-driven (4 tasks, spec+quality review each + a final holistic
+**READY-TO-MERGE** pass on a `feature/credential-bus` branch, then squashed).
+15 unit tests; `pnpm typecheck` 13/13; full user-client vitest **561 pass / 8
+fail** (the unchanged pre-existing `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline). **Not a Larissa change** — it *uses* `secrets.ts`
+but touches no crypto primitive and no auth-/sync-/proxy-service; logged in the
+security journal as a new unsealed-key access surface (follow-up when the first
+integration lands: retrieve keys only at the outbound-call point, never persist/
+log plaintext). Spec/plan/ADR:
+[[../superpowers/specs/2026-06-01-credential-bus-design]],
+[[../superpowers/plans/2026-06-01-credential-bus]],
+[ADR 0033](decisions/0033-credential-bus.md). **Next:** Chris pushes the master
+backlog when ready (now 10 commits ahead of origin); then Block-1 memory
+(chatsune port) per [[ROADMAP]].
+
+**Earlier 2026-06-01 — Claude models live via nano-gpt
 (squashed on master `153a926`, NOT pushed; awaiting Chris's device test).**
 Seven Claude offerings (Haiku 4.5; Sonnet 4.5/4.6; Opus 4.5/4.6/4.7/4.8) — the
 first `freedomOriented:false` models, surfaced with a **CENSORED** badge derived
