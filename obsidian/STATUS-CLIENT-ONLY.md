@@ -5,7 +5,35 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Credential bus landed (squashed on
+**Last updated:** 2026-06-01 (latest) — **Bookmarks & table-of-contents landed
+(squashed on master `51931d4`, NOT pushed; awaiting Chris's device test).**
+Block-1 chat-core feature, brainstormed end-to-end with Chris. One unified model:
+a message has a `bookmarked` flag (the **star** = global bookmark) and an optional
+`bookmarkLabel` (default = text snippet). The per-chat **ToC is derived** —
+`buildToc()` yields a *timeline* of every user message (ChatGPT-style auto-index)
+plus a *pinned* section of all starred messages (user + persona; a starred user
+message intentionally shows in both, keeping the timeline lossless). Two triggers,
+one data op: the message-level `◈` (now wired — it was a no-op stub) and the ToC
+star. Surfaces: a ghostly **reading-mode floating control** (`ReadingToolStrip`,
+collapse-on-outside-interaction, pin to keep open — its own store state, *not* the
+cockpit `isPinned`) opens a **`TocSheet`** overlay (pinned + timeline, inline
+rename, star, tap-to-jump → lands in Reading Mode at the message with a highlight
+pulse); a **`Chats | Bookmarks` segmented tab** in `/app/history` aggregates
+starred messages grouped by chat, jumping cross-chat via `?focus=<messageId>`.
+**No Dexie migration** (`bookmarkLabel` non-indexed). Design rationale (Chris):
+**Reading Mode is the central surface** (chatting ≈ 80% reading / 20% typing), so
+navigation lives there and jumps land there. Built subagent-driven (10 TDD tasks,
+serial, on `feature/bookmarks-and-toc`, squashed) + final holistic review
+**APPROVED** (no critical/important findings). **Not a Larissa change** —
+client-only, no auth/sync/proxy/crypto. Verification: `pnpm typecheck` 13/13;
+user-client vitest **592 pass / 8 fail** (the unchanged pre-existing
+`cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline); build clean.
+Spec/plan: [[../superpowers/specs/2026-06-01-bookmarks-and-toc-design]],
+[[../superpowers/plans/2026-06-01-bookmarks-and-toc]]. **Next:** Chris device-tests
+the 6 manual steps (spec §9), then pushes the master backlog; then Block-1 memory
+(chatsune port) per [[ROADMAP]].
+
+**Earlier 2026-06-01 — Credential bus landed (squashed on
 master `7ca7425`, NOT pushed).** A forward-looking client-side structure
 (`apps/user-client/src/credentials/`) that answers "does the user have an API
 key for credential X?" and, MasterKey-gated, returns it — anticipatory
