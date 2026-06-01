@@ -5,7 +5,24 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Chat-UI smoothness polish round
+**Last updated:** 2026-06-01 (latest) — **Claude models live via nano-gpt
+(squashed on master `153a926`, NOT pushed; awaiting Chris's device test).**
+Seven Claude offerings (Haiku 4.5; Sonnet 4.5/4.6; Opus 4.5/4.6/4.7/4.8) — the
+first `freedomOriented:false` models, surfaced with a **CENSORED** badge derived
+from `effectiveFreedom='restricted'`. Delivered via **nano-gpt, not OpenRouter**
+(OpenRouter's limited-keys path routes Anthropic to Amazon Bedrock → no
+`cache_control`; ADR 0032). New deterministic **Anthropic cache-breakpoint
+module** (stable-prefix 1h / token-anchored history anchor 1h / rolling tail 5m)
+injected by a `claudeAdapter` wrapping the nano-gpt slug-swap adapter; reasoning
+is a clean **toggle** (effort does not modulate — live-measured). Signature
+replay deferred build-when-needed (no tool-loop consumer). Live-verified: all 7
+**22/22 + cache engaged**. Spec/ADR/records:
+[[../superpowers/specs/2026-06-01-premium-model-integration-design]],
+[ADR 0032](decisions/0032-premium-censored-models-via-routers.md),
+[[models/claude-4]], [[providers/nano-gpt]]. **Manual verification pending:** the
+CENSORED badge in the picker + falling prompt cost on a multi-turn Claude chat.
+
+**Earlier 2026-06-01 — Chat-UI smoothness polish round
 (squashed on master, not yet pushed; device-verified by Chris).** Seven items,
 all client-only (no Larissa path). (1) **Ctrl/Cmd+Enter sends** everywhere
 (desktop + mobile); plain Enter still sends on desktop only (`Cockpit.tsx`). (2)
