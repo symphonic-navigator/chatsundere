@@ -19,7 +19,11 @@
 - `apps/user-client/src/components/chat/ReadingToolStrip.tsx` — the floating control.
 - `apps/user-client/src/components/chat/TocSheet.tsx` — the per-chat ToC overlay.
 - `apps/user-client/src/components/history/BookmarksList.tsx` — global grouped view.
-- One `*.test.ts(x)` per file above.
+- One test per file above. **Test-location convention (firm in this repo):**
+  tests live under `apps/user-client/tests/<mirror>/…` (NOT co-located in
+  `src/`), importing source via `../../src/…`. E.g. `lib/toc.ts` → test at
+  `tests/lib/toc.test.ts`. The per-task `Test:` paths below say `src/…` for
+  brevity but MUST be created under `tests/<mirror>/`.
 
 **Modify:**
 - `apps/user-client/src/boot/client-data-db.ts` — add `bookmarkLabel?: string | null` to `MessageRow` (type-only; no migration).
