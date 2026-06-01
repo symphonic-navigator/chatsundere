@@ -55,6 +55,7 @@ Items that have been decided but not yet implemented in code.
 |---|---|---|
 | ~~Wire UV-relaxation in code (3 sites)~~ | Resolved 2026-05-21 — UV-relaxation-wiring squash (commit `e814e87`). All three ceremony sites now use UV='preferred'; PRF gate (ADR 0005) intact. Larissa-approved. | — |
 | Onboarding three-path UI rewrite (QR / Manual / Local) | Brief landed (2026-05-20); awaiting API-endpoint curl-verification (Open #3) | User-client polish squash |
+| Claude extended-thinking signature replay | When the agentic tool loop lands (own integrations + MCP-over-REST) — no live consumer until then; plain chat needs no replay | Build-when-needed; full rationale in [[../../superpowers/specs/2026-06-01-premium-model-integration-design]] §5.2 |
 | ~~`/api/admin/invitations` endpoint~~ | Resolved 2026-05-22 — Squash α (commit `9b170c1`); reshape returns `code` + `qr_url` and accepts `suggested_username` + `note`; Tier 4 step-up gate wired. | — |
 | ~~`/api/me/pairing-codes` endpoints~~ | Resolved 2026-05-22 — Squash β (commit `7a01697`); POST Tier 1 gated, GET surfaces code/qr_url as null (HMAC-only storage, spec §4.5 deviation tracked below), DELETE with 404 foreign / 409 already-revoked. | — |
 | ~~`/api/join` endpoint with atomic code validation~~ | Resolved 2026-05-22 — Squash β (commit `7a01697`); unified two-round flow per ADR 0028, kind discriminator (invitation \| pairing), atomic UPDATE-WHERE redemption, `assertOpaqueWrappingPresent` defence-in-depth on pairing finish. | — |

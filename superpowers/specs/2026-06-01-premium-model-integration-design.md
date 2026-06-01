@@ -53,6 +53,8 @@ extended-thinking signature replay (made correct for the tool-use loop).
   follows separately.
 - Replaying extended-thinking blocks across *plain* conversational turns —
   deliberately dropped, matching chatsune (see §6.4).
+- **Claude extended-thinking signature replay** — deferred build-when-needed;
+  no live consumer until the tool loop exists (full rationale in §5.2).
 
 ## 3. Decisions taken during brainstorming
 
@@ -127,30 +129,41 @@ to the existing `ReasoningIntent` (`{ enabled, effort?: 'low'|'medium'|'high' }`
   be re-probed). If they conflict, bring the trade-off to Chris (D2).
 - Per-model `steps` definitions live on the offering's `ModelProfile`.
 
-**Signature replay (Claude only, tool-loop scoped — D5).** Claude's extended
-thinking returns reasoning with an opaque `signature`. Within a tool-use
-exchange, the thinking block + signature must be replayed verbatim on the
-continuation request, or Anthropic rejects it. New plumbing:
+**Signature replay (Claude only) — DEFERRED, build-when-needed (decided
+2026-06-01).** Claude's extended thinking returns reasoning with an opaque
+`signature`. Within a tool-use exchange, that thinking block + signature must be
+replayed verbatim on the continuation request, or Anthropic rejects it. We are
+**not building this in Phase A.**
 
-- `StreamChunk` reasoning gains an optional `signature` (`types.ts:84`).
-- The tool-loop carrier (the engine's assistant→tool→continue cycle) preserves
-  the pre-tool-call thinking block + signature and the Claude adapter re-emits
-  it as an Anthropic `thinking` content block on the continuation request.
-- `WireMessage` gains an optional thinking-block carrier for the assistant role,
-  used only within the tool loop.
-- Strip-and-retry fallback on signature rejection (chatsune precedent), so an
-  expired signature degrades gracefully rather than failing the turn.
-- Claude offerings set `replayReasoning: true` (the generic OpenRouter adapter
-  hardcodes `false`, `openrouter-openai.ts:136` — hence a dedicated adapter).
+*Rationale (the part Chris asked be written down — we build it when we need
+it):* the consumer does not exist yet. Exploration confirmed the client tool
+loop is unbuilt — `toWireMessage()` (`apps/user-client/src/lib/stream-engine.ts:
+144-154`) flattens history to plain text and **drops both `tool_calls` and
+reasoning**, with the explicit comment "Phase 3 doesn't execute tools from
+history". Real tool execution (own integrations, MCP-over-REST) is a later
+phase. And for *plain* multi-turn chat — the only Claude path live today —
+Anthropic does **not** require thinking replay; we deliberately drop it (§6.4).
+So signature plumbing would have **zero live consumers** now; building it would
+be speculative (YAGNI). It is cheap to add at the adapter level later, and only
+then can it be verified end-to-end against a real tool round-trip rather than a
+synthetic one.
 
-The exact engine integration points are detailed in the plan after tracing the
-tool-loop code; this spec fixes the requirement and approach. **Design for the
-agentic-harness north star (Chris, 2026-06-01):** the carrier is
+*When we build it (forward note, so future-us has the shape):* the carrier is
 **tool-source-agnostic** — it lives at the engine's tool-loop level and
 preserves the thinking block across any tool round-trip, whether the tool is a
-built-in "integration" or an MCP server reached over REST. It must not be
-special-cased to one tool registry, so MCP-backed tools inherit correct Claude
-reasoning for free.
+built-in integration or an MCP server over REST, never special-cased to one
+registry, so MCP tools inherit correct Claude reasoning for free. Concretely:
+`StreamChunk` reasoning gains an optional `signature`; the Claude adapter
+captures OpenRouter's `delta.reasoning_details` (which carries the signature)
+and re-emits it as `reasoning_details` on the assistant message of the
+continuation request (OpenRouter's OpenAI-compatible passthrough — *not*
+Anthropic-native `thinking` blocks); `WireMessage` gains an optional
+`reasoning_details` carrier; `replayReasoning` flips to `true`; a
+strip-and-retry fallback handles an expired/rejected signature. Tracked in
+[[../../obsidian/insights/follow-ups-index]].
+
+The reasoning-steps plumbing above (effort mapping) is built in Phase A; only
+the signature/replay half is deferred.
 
 ### 5.3 CENSORED-badge derivation (D1)
 
@@ -249,10 +262,11 @@ future-us does not "rediscover" it as a bug.
 
 ## 9. Resolved since first draft
 
-- **Q1 (tool-loop) — Chris delegated to Liz.** Decided: tool-source-agnostic
-  carrier at the engine tool-loop level (§5.2), serving the agentic-harness
-  north star (own integrations + MCP via REST). Exact integration points still
-  traced in the plan.
+- **Q1 (tool-loop) — Chris delegated to Liz.** Decided: **defer** the
+  signature-replay half entirely (no live consumer; tool loop unbuilt; YAGNI —
+  §5.2), build-when-needed with a tool-source-agnostic carrier. Phase A ships
+  cache + reasoning-steps + CENSORED + the seven Claude models, all live-
+  verifiable today.
 - **Q2 (nano-gpt gpt-5.5 reasoning) — probed, resolved.** Top-level
   `reasoning_effort` with `none` as a genuine off (§6.2). New switching mode to
   add to `applyReasoningToBody`.
