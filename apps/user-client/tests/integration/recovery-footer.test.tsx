@@ -53,6 +53,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 1,
     updatedAt: 1,
   });

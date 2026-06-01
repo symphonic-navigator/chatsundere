@@ -113,7 +113,7 @@ import {
   getProvider, listProviders, registerProvider, buildRequest,
   // streaming + completions
   streamCompletion, runOneShotCompletion, parseOpenAiSseStream,
-  composeSystemPrompt, probeProvider,
+  buildPrompt, probeProvider,
   // wire types
   type StreamChunk, type NormalisedUsage, type WireMessage, type ReasoningIntent,
 } from '@chatsundere/llm-unified';

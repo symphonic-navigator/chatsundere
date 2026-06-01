@@ -53,6 +53,7 @@ describe('Pill rendering integration', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: 1,
       updatedAt: 1,
     });

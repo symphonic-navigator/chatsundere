@@ -41,6 +41,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     textureOverride: null,
     temperature: 0.85,
     adultPersona: true,
+    chatsundereTonality: true,
     createdAt: 1,
     updatedAt: 1,
   });

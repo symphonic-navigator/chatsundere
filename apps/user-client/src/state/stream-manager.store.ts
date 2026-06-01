@@ -59,7 +59,7 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
       offering: args.offering,
       firstUserMessage: args.userText,
       firstPersonaResponse,
-      globalUnlocker: args.globalUnlocker,
+      globalInstructions: args.globalInstructions,
       globalAboutMe: args.globalAboutMe,
     });
   } catch {

@@ -1,4 +1,4 @@
-import { composeSystemPrompt, getOffering } from '@chatsundere/llm-unified';
+import { buildPrompt, getOffering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -224,15 +224,22 @@ export function ChatPage(): JSX.Element {
   // Token estimate for the context gauge.
   const usedTokens = useMemo(() => {
     if (!offering || !effectivePersona || !settingsQuery.data) return 0;
-    // Guard against personas with empty instructions — composeSystemPrompt throws on empty.
+    // Guard against personas with empty instructions — buildPrompt throws on empty.
     if (!effectivePersona.instructions.trim()) return 0;
-    const sys = composeSystemPrompt({
-      globalUnlocker: settingsQuery.data.globalUnlockerPrompt,
-      aboutMe: settingsQuery.data.globalAboutMe,
-      personaInstructions: effectivePersona.instructions,
-      projectInstructions: '',
-      memoryContext: '',
-    });
+    const sys = buildPrompt(
+      {
+        tonalityEnabled: effectivePersona.chatsundereTonality,
+        nsfwEnabled: effectivePersona.adultPersona,
+        globalInstructions: settingsQuery.data.globalInstructions,
+        aboutMe: effectivePersona.aboutMeOverride?.trim()
+          ? effectivePersona.aboutMeOverride
+          : settingsQuery.data.globalAboutMe,
+        personaInstructions: effectivePersona.instructions,
+        projectInstructions: '',
+        memoryContext: '',
+      },
+      'chat',
+    );
     const msgTexts = (chatQuery.data?.messages ?? []).map((m) =>
       m.contentBlocks
         .filter((b): b is { type: 'text'; text: string } => b.type === 'text')

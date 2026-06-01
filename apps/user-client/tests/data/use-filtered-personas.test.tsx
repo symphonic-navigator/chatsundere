@@ -30,6 +30,7 @@ async function seedPersonas() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -48,6 +49,7 @@ async function seedPersonas() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: true,
+    chatsundereTonality: true,
     createdAt: now + 1,
     updatedAt: now + 1,
   });

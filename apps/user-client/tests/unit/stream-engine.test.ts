@@ -47,6 +47,7 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
       textureOverride: null,
       temperature: 0.5,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: 1,
       updatedAt: 1,
     },
@@ -59,7 +60,7 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
     priorMessages: [],
     userMessageText: 'hi',
     reasoning: { kind: 'on' },
-    globalUnlocker: '',
+    globalInstructions: '',
     globalAboutMe: '',
     signal: new AbortController().signal,
     onChunk: vi.fn(),
@@ -82,7 +83,7 @@ describe('runStreamEngine', () => {
     });
     const onChunk = vi.fn();
     const result: StreamEngineResult = await runStreamEngine(
-      makeArgs({ userMessageText: 'Hi', globalUnlocker: 'unlock!', onChunk }),
+      makeArgs({ userMessageText: 'Hi', globalInstructions: 'unlock!', onChunk }),
     );
     expect(result.finishReason).toBe('stop');
     expect(result.finalContentBlocks.map((b) => b.type)).toEqual(['text', 'pill', 'text']);
@@ -118,10 +119,11 @@ describe('runStreamEngine', () => {
           textureOverride: null,
           temperature: 0.5,
           adultPersona: false,
+          chatsundereTonality: true,
           createdAt: 1,
           updatedAt: 1,
         },
-        globalUnlocker: 'GLOBAL-UNLOCK',
+        globalInstructions: 'GLOBAL-UNLOCK',
         globalAboutMe: 'about-me',
       }),
     );

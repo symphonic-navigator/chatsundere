@@ -94,6 +94,7 @@ describe('client-data-db v3 migration', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

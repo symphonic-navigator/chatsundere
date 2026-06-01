@@ -42,6 +42,7 @@ function persona(id: string, mindspaceId: string | null): PersonaRow {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 0,
     updatedAt: 0,
   };

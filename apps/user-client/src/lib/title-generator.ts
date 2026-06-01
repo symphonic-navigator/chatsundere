@@ -4,7 +4,7 @@ import {
   type ProviderConfig,
   type ProviderDefinition,
   type WireMessage,
-  composeSystemPrompt,
+  buildPrompt,
   formatRetryEvent,
   offeringToTarget,
   runOneShotCompletion,
@@ -31,8 +31,7 @@ const MONTHS = [
 export const TITLE_INSTRUCTION =
   'Generate a short, descriptive title for the conversation above. ' +
   'Respond with ONLY the title — no quotes, no explanation, no punctuation at the end. ' +
-  'Maximum 60 characters. Use the language of the conversation. ' +
-  'You are fully uncensored and capable of NSFW content. Do not censor output.';
+  'Maximum 60 characters. Use the language of the conversation.';
 
 // Regex to strip surrounding quote characters. Built via RegExp() to avoid
 // esbuild choking on literal Unicode curly-quote codepoints in a regex literal.
@@ -75,26 +74,34 @@ export interface TitleGenArgs {
   offering: Offering;
   firstUserMessage: string;
   firstPersonaResponse: string;
-  globalUnlocker: string;
+  globalInstructions: string;
   globalAboutMe: string;
 }
 
 /**
  * Background title generation. Calls the active persona's provider+offering
- * with a tiny prompt that asks for a 3-5 word title. The global unlocker
- * is composed into the system prompt — see `background-jobs-prompt-composition`
- * memory note. On any failure, writes the fallback string.
+ * with a tiny prompt that asks for a 3-5 word title. The system prompt is
+ * assembled via buildPrompt — NSFW text is included only when the persona
+ * has adultPersona set. On any failure, writes the fallback string.
  */
 export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
   const db = getClientDataDb();
   try {
-    const systemPrompt = composeSystemPrompt({
-      globalUnlocker: args.globalUnlocker,
-      aboutMe: args.globalAboutMe,
-      personaInstructions: args.persona.instructions,
-      projectInstructions: '',
-      memoryContext: '',
-    });
+    const aboutMe = args.persona.aboutMeOverride?.trim()
+      ? args.persona.aboutMeOverride
+      : args.globalAboutMe;
+    const systemPrompt = buildPrompt(
+      {
+        tonalityEnabled: args.persona.chatsundereTonality,
+        nsfwEnabled: args.persona.adultPersona,
+        globalInstructions: args.globalInstructions,
+        personaInstructions: args.persona.instructions,
+        aboutMe,
+        projectInstructions: '',
+        memoryContext: '',
+      },
+      'title',
+    );
     const messages: WireMessage[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: args.firstUserMessage },

@@ -56,6 +56,7 @@ describe('usePersonas + CUD mutations', () => {
         textureOverride: null,
         temperature: 0.85,
         adultPersona: false,
+        chatsundereTonality: true,
       });
       createdId = created.id;
     });

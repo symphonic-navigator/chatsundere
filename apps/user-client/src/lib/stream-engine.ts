@@ -4,7 +4,7 @@ import {
   type ProviderDefinition,
   type StreamChunk,
   type WireMessage,
-  composeSystemPrompt,
+  buildPrompt,
   formatRetryEvent,
   offeringToTarget,
   streamCompletion,
@@ -33,7 +33,7 @@ export interface StartStreamArgs {
   priorMessages: MessageRow[];
   userMessageText: string;
   reasoning: ReasoningState;
-  globalUnlocker: string;
+  globalInstructions: string;
   globalAboutMe: string;
   signal: AbortSignal;
   onChunk: (chunk: StreamChunk) => void;
@@ -51,13 +51,21 @@ export interface StreamEngineResult {
  * responsible for persistence.
  */
 export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngineResult> {
-  const systemPrompt = composeSystemPrompt({
-    globalUnlocker: args.globalUnlocker,
-    aboutMe: args.globalAboutMe,
-    personaInstructions: args.persona.instructions,
-    projectInstructions: '',
-    memoryContext: '',
-  });
+  const aboutMe = args.persona.aboutMeOverride?.trim()
+    ? args.persona.aboutMeOverride
+    : args.globalAboutMe;
+  const systemPrompt = buildPrompt(
+    {
+      tonalityEnabled: args.persona.chatsundereTonality,
+      nsfwEnabled: args.persona.adultPersona,
+      globalInstructions: args.globalInstructions,
+      personaInstructions: args.persona.instructions,
+      aboutMe,
+      projectInstructions: '',
+      memoryContext: '',
+    },
+    'chat',
+  );
 
   const wireMessages: WireMessage[] = [
     { role: 'system', content: systemPrompt },

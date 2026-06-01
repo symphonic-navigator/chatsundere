@@ -63,6 +63,7 @@ function defaultDraft(
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
   };
 }
 
@@ -389,10 +390,37 @@ export function PersonaEditor(): JSX.Element {
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <div>
+            <div className="text-sm text-paper">Chatsundere Tonality</div>
+            <p className="text-[11px] text-paper-soft">
+              The curated Chatsundere voice — open, uncensored on topics, expressive. On by default.
+              Turn off for a plainer persona.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Chatsundere tonality"
+            aria-pressed={draft.chatsundereTonality}
+            onClick={() => patch({ chatsundereTonality: !draft.chatsundereTonality })}
+            className={`h-6 w-12 shrink-0 rounded-full border ${
+              draft.chatsundereTonality
+                ? 'border-paper bg-paper/30'
+                : 'border-paper-soft/30 bg-white/5'
+            }`}
+          >
+            <span
+              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                draft.chatsundereTonality ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div>
             <div className="text-sm text-paper">Adult Persona</div>
             <p className="text-[11px] text-paper-soft">
-              Hidden when sanitized mode is active. Adult content is governed by the system prompt
-              or custom instructions, not this flag.
+              Hidden when sanitised mode is active, and unlocks explicit content in this persona's
+              system prompt. Refine the tone further via custom instructions.
             </p>
           </div>
           <button

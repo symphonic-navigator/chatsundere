@@ -29,7 +29,7 @@ describe('useSettings + useUpdateSettings', () => {
   it('returns the seeded singleton settings row', async () => {
     const { result } = renderHook(() => useSettings(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.data).toBeDefined());
-    expect(result.current.data?.globalUnlockerPrompt).toBe('');
+    expect(result.current.data?.globalInstructions).toBe('');
   });
 
   it('persists user updates and invalidates the query', async () => {
@@ -38,10 +38,10 @@ describe('useSettings + useUpdateSettings', () => {
     const mut = renderHook(() => useUpdateSettings(), { wrapper: Wrapper });
     await waitFor(() => expect(settings.result.current.data).toBeDefined());
     await act(async () => {
-      await mut.result.current.mutateAsync({ globalUnlockerPrompt: 'unlocked' });
+      await mut.result.current.mutateAsync({ globalInstructions: 'unlocked' });
     });
     await waitFor(() => {
-      expect(settings.result.current.data?.globalUnlockerPrompt).toBe('unlocked');
+      expect(settings.result.current.data?.globalInstructions).toBe('unlocked');
     });
   });
 });

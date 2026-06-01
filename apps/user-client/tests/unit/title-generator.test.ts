@@ -68,6 +68,7 @@ async function seed() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -129,19 +130,22 @@ describe('generateTitleAsync', () => {
       offering,
       firstUserMessage: 'tell me about textures',
       firstPersonaResponse: 'There are three options...',
-      globalUnlocker: 'UNLOCK',
+      globalInstructions: 'UNLOCK',
       globalAboutMe: 'I am Chris.',
     });
     const updated = await db.chats.get(chatId);
     expect(updated?.title).toBe('Aurum and Chris on textures');
 
-    // verify globalUnlocker IS in the system prompt passed to runOneShotCompletion
+    // verify globalInstructions IS in the system prompt passed to runOneShotCompletion.
+    // Note: aboutMe is a band-2 (CHAT_ONLY) segment and is intentionally absent
+    // from title-job prompts — only band-1 segments (tonality, nsfw, global,
+    // persona) appear in the title job.
     const callArgs = oneShotSpy.mock.calls[0]?.[0] as {
       messages: Array<{ role: string; content: string }>;
     };
     const sysMsg = callArgs.messages.find((m) => m.role === 'system');
     expect(sysMsg?.content).toContain('UNLOCK');
-    expect(sysMsg?.content).toContain('I am Chris.');
+    expect(sysMsg?.content).not.toContain('I am Chris.');
   });
 
   it('error path writes fallback title', async () => {
@@ -160,7 +164,7 @@ describe('generateTitleAsync', () => {
       offering,
       firstUserMessage: 'x',
       firstPersonaResponse: 'y',
-      globalUnlocker: '',
+      globalInstructions: '',
       globalAboutMe: '',
     });
     const updated = await db.chats.get(chatId);
@@ -183,7 +187,7 @@ describe('generateTitleAsync', () => {
       offering,
       firstUserMessage: 'x',
       firstPersonaResponse: 'y',
-      globalUnlocker: '',
+      globalInstructions: '',
       globalAboutMe: '',
     });
     const updated = await db.chats.get(chatId);
@@ -191,10 +195,10 @@ describe('generateTitleAsync', () => {
   });
 });
 
-describe('TITLE_INSTRUCTION (chatsune-style prompt)', () => {
-  it('contains the inline NSFW unlocker reinforcement', () => {
-    expect(TITLE_INSTRUCTION).toMatch(/fully uncensored/i);
-    expect(TITLE_INSTRUCTION).toMatch(/do not censor/i);
+describe('TITLE_INSTRUCTION', () => {
+  it('does not contain any unconditional NSFW clause', () => {
+    expect(TITLE_INSTRUCTION).not.toMatch(/fully uncensored/i);
+    expect(TITLE_INSTRUCTION).not.toMatch(/do not censor/i);
   });
   it('asks the model to use the conversation language (not forced EN)', () => {
     expect(TITLE_INSTRUCTION).toMatch(/language of the conversation/i);
@@ -232,7 +236,7 @@ describe('generateTitleAsync race-guard', () => {
       offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
-      globalUnlocker: 'unlock',
+      globalInstructions: 'unlock',
       globalAboutMe: '',
     });
 
@@ -266,7 +270,7 @@ describe('generateTitleAsync race-guard', () => {
       offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
-      globalUnlocker: 'unlock',
+      globalInstructions: 'unlock',
       globalAboutMe: '',
     });
 
@@ -305,7 +309,7 @@ describe('generateTitleAsync invalidates TanStack queries', () => {
       offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
-      globalUnlocker: 'unlock',
+      globalInstructions: 'unlock',
       globalAboutMe: '',
     });
 
@@ -332,7 +336,7 @@ describe('generateTitleAsync invalidates TanStack queries', () => {
       offering,
       firstUserMessage: 'hi',
       firstPersonaResponse: 'hello',
-      globalUnlocker: 'unlock',
+      globalInstructions: 'unlock',
       globalAboutMe: '',
     });
 

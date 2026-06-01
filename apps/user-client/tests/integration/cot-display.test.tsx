@@ -129,7 +129,7 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
     tagline: '',
     colour: '#c9a84c',
     font: 'serif',
-    // composeSystemPrompt rejects empty persona instructions, so any
+    // buildPrompt rejects empty persona instructions, so any
     // non-trivial string keeps the engine happy.
     instructions: 'You are Aurum.',
     canonicalId: null,
@@ -140,6 +140,7 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 1,
     updatedAt: 1,
   };
@@ -177,7 +178,7 @@ function startArgs(persona: PersonaRow, chat: ChatRow): Record<string, unknown> 
     priorMessages: [] as MessageRow[],
     userMessageText: 'Hello',
     reasoning: { kind: 'on' as const },
-    globalUnlocker: '',
+    globalInstructions: '',
     globalAboutMe: '',
   };
 }

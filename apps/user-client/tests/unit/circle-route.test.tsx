@@ -66,6 +66,7 @@ describe('Circle route', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: now,
       updatedAt: now,
     });

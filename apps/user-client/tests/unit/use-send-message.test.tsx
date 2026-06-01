@@ -60,6 +60,7 @@ async function seed() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -111,8 +112,8 @@ describe('useSendMessage', () => {
     expect(callArg.chatId).toBe(chatId);
     expect(callArg.userText).toBe('Hello');
     expect(callArg.apiKey).toBe('test-key');
-    // No CORS proxy configured — globalUnlocker should be the empty default
-    expect(callArg.globalUnlocker).toBe('');
+    // No CORS proxy configured — globalInstructions should be the empty default
+    expect(callArg.globalInstructions).toBe('');
   });
 
   it('chat-mode: reuses existing ChatRow and does not create a new one', async () => {

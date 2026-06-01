@@ -11,7 +11,7 @@ const DB_NAME = 'chatsundere_client_data';
 export interface SettingsRow {
   id: 1;
   displayName: string;
-  globalUnlockerPrompt: string;
+  globalInstructions: string;
   globalAboutMe: string;
   defaultMindspaceId: string;
   userTexture: MindspaceTexture;
@@ -79,6 +79,7 @@ export interface PersonaRow {
   textureOverride: MindspaceTexture | null;
   temperature: number;
   adultPersona: boolean;
+  chatsundereTonality: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -285,6 +286,34 @@ class ClientDataDb extends Dexie {
       messages: 'id, chatId, [chatId+createdAt]',
       pills: 'id, messageId',
     });
+
+    // Version 9 — system-prompt builder v2. Rename the settings "unlocker"
+    // field and give personas a `chatsundereTonality` toggle (default on).
+    this.version(9)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            s.globalInstructions = s.globalUnlockerPrompt ?? '';
+            s.globalUnlockerPrompt = undefined;
+          });
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            p.chatsundereTonality = true;
+          });
+      });
   }
 }
 
@@ -386,7 +415,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
       await db.settings.add({
         id: 1,
         displayName: '',
-        globalUnlockerPrompt: '',
+        globalInstructions: '',
         globalAboutMe: '',
         defaultMindspaceId: aurumId,
         userTexture: 'cloudy',

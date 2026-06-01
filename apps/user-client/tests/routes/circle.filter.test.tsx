@@ -31,6 +31,7 @@ async function seedSfwAndNsfw() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -49,6 +50,7 @@ async function seedSfwAndNsfw() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: true,
+    chatsundereTonality: true,
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -143,6 +145,7 @@ describe('Circle filter (adult mode)', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: true,
+      chatsundereTonality: true,
       createdAt: now,
       updatedAt: now,
     });

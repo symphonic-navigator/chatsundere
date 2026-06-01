@@ -109,6 +109,7 @@ describe('EntranceHall', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -149,6 +150,7 @@ describe('EntranceHall', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: now,
       updatedAt: now,
     });

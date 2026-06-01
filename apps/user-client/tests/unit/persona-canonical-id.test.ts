@@ -35,6 +35,7 @@ describe('persona canonicalId column', () => {
       textureOverride: null,
       temperature: 0.8,
       adultPersona: false,
+      chatsundereTonality: true,
       createdAt: 1,
       updatedAt: 1,
     });

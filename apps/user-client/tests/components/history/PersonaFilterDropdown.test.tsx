@@ -19,6 +19,7 @@ function persona(id: string, name: string): PersonaRow {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 0,
     updatedAt: 0,
   };

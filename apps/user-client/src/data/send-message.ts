@@ -22,7 +22,7 @@ interface PersonaContext {
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
   offering: Offering;
-  globalUnlocker: string;
+  globalInstructions: string;
   globalAboutMe: string;
 }
 
@@ -77,7 +77,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     corsProxyUrl,
     corsProxyKey,
     offering,
-    globalUnlocker: settings.globalUnlockerPrompt,
+    globalInstructions: settings.globalInstructions,
     globalAboutMe: settings.globalAboutMe,
   };
 }
@@ -166,7 +166,7 @@ export function useSendMessage() {
         priorMessages,
         userMessageText: args.text,
         reasoning: args.reasoning,
-        globalUnlocker: ctx.globalUnlocker,
+        globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
       });
 
@@ -250,7 +250,7 @@ export function useRegenerate() {
         priorMessages,
         userMessageText,
         reasoning: args.reasoning,
-        globalUnlocker: ctx.globalUnlocker,
+        globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
       });
     },

@@ -33,7 +33,7 @@ describe('Settings route — About Me', () => {
     wrap(<Settings />);
     await waitFor(() => {
       expect(screen.getByText(/about me/i)).toBeInTheDocument();
-      expect(screen.getByText(/global system prompt/i)).toBeInTheDocument();
+      expect(screen.getByText(/global instructions/i)).toBeInTheDocument();
       expect(screen.getByText(/upstream providers/i)).toBeInTheDocument();
     });
   });

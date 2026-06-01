@@ -29,7 +29,7 @@ import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 interface SettingsDraft {
   globalAboutMe: string;
-  globalUnlockerPrompt: string;
+  globalInstructions: string;
   defaultMindspaceId: string;
   userTexture: MindspaceTexture;
 }
@@ -37,7 +37,7 @@ interface SettingsDraft {
 function draftFromRow(s: SettingsRow): SettingsDraft {
   return {
     globalAboutMe: s.globalAboutMe,
-    globalUnlockerPrompt: s.globalUnlockerPrompt,
+    globalInstructions: s.globalInstructions,
     defaultMindspaceId: s.defaultMindspaceId,
     userTexture: s.userTexture,
   };
@@ -46,7 +46,7 @@ function draftFromRow(s: SettingsRow): SettingsDraft {
 function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
   return (
     a.globalAboutMe === b.globalAboutMe &&
-    a.globalUnlockerPrompt === b.globalUnlockerPrompt &&
+    a.globalInstructions === b.globalInstructions &&
     a.defaultMindspaceId === b.defaultMindspaceId &&
     a.userTexture === b.userTexture
   );
@@ -196,8 +196,8 @@ export function Settings(): JSX.Element {
     const orig = draftFromRow(settings.data);
     const diff: Partial<SettingsDraft> = {};
     if (draft.globalAboutMe !== orig.globalAboutMe) diff.globalAboutMe = draft.globalAboutMe;
-    if (draft.globalUnlockerPrompt !== orig.globalUnlockerPrompt)
-      diff.globalUnlockerPrompt = draft.globalUnlockerPrompt;
+    if (draft.globalInstructions !== orig.globalInstructions)
+      diff.globalInstructions = draft.globalInstructions;
     if (draft.defaultMindspaceId !== orig.defaultMindspaceId)
       diff.defaultMindspaceId = draft.defaultMindspaceId;
     if (draft.userTexture !== orig.userTexture) diff.userTexture = draft.userTexture;
@@ -271,19 +271,19 @@ export function Settings(): JSX.Element {
 
       <AccordionCard
         icon="⚿"
-        label="Global System Prompt"
-        meta="The unlocker — prepended to every persona"
+        label="Global Instructions"
+        meta="Your own instructions — added to every persona"
       >
         <AutoSizeTextarea
-          aria-label="Global system prompt"
+          aria-label="Global instructions"
           minRows={4}
           maxRows={20}
-          value={draft.globalUnlockerPrompt}
-          onChange={(v) => patch({ globalUnlockerPrompt: v })}
+          value={draft.globalInstructions}
+          onChange={(v) => patch({ globalInstructions: v })}
         />
         <p className="mt-2 text-[11px] text-paper-soft">
-          This text is prepended to every persona's system prompt. Mainly useful for permissive but
-          cautious open-source models. Always global, no per-persona override.
+          Added to every persona's system prompt. Your own global wishes — the curated Chatsundere
+          tonality is a separate per-persona toggle. Always global, no per-persona override.
         </p>
       </AccordionCard>
 

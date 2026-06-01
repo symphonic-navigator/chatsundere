@@ -25,6 +25,7 @@ async function seedChat() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -77,7 +78,7 @@ function baseStartArgs(chatId: string, persona: unknown, model: unknown) {
     priorMessages: [],
     userMessageText: 'Hello',
     reasoning: { mode: 'on' as const },
-    globalUnlocker: '',
+    globalInstructions: '',
     globalAboutMe: '',
   };
 }
