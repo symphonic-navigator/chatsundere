@@ -239,3 +239,14 @@ Full audit run on the four functional commits of Squash β. Critical: none. High
 - **Severity:** unconfirmed; depends on key-rotation flow implementation.
 - **Rationale for deferral:** Belongs in the same Larissa audit that covers the join flows.
 - **Follow-up commitment:** Larissa audit task at end of onboarding-overhaul squash (Task 24) explicitly checks the AAD-source consistency between join, login, and key-rotation flows.
+
+## Credential bus — new access surface to unsealed keys (2026-06-01)
+
+The credential bus (`apps/user-client/src/credentials/`) is a new place that
+calls `openSecret` to return decrypted provider API keys to in-app consumers
+(future integrations). It changes no crypto primitive and adds no storage, but
+it widens *who* can request a decrypted key beyond the chat send path. Not a
+Larissa-gated change (no `auth-/sync-/proxy-service` or `packages/crypto`
+touch). Follow-up to watch when the first integration lands: ensure integration
+code retrieves keys only at the point of an outbound call and does not persist
+or log the plaintext.
