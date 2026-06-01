@@ -106,6 +106,10 @@ export interface MessageRow {
   contentBlocks: ContentBlock[];
   createdAt: number;
   bookmarked: boolean;
+  /** Custom bookmark name. `null`/absent ⇒ derive the default snippet from
+   *  the message text. Non-indexed: Dexie stores it schemalessly, so adding
+   *  it needs no version bump. */
+  bookmarkLabel?: string | null;
   streamingState: 'complete' | 'incomplete';
 }
 

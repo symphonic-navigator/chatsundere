@@ -9,6 +9,9 @@ interface CurrentChatStore {
   autoFollowEnabled: boolean;
   isInteractionMode: boolean;
   isPinned: boolean;
+  /** Reading-mode floating tool-strip: separate from `isPinned` (the cockpit). */
+  isToolStripExpanded: boolean;
+  isToolStripPinned: boolean;
   reasoning: ReasoningState;
 
   /** Open a persisted chat by ID. Clears any pending lazy-open persona. */
@@ -24,6 +27,10 @@ interface CurrentChatStore {
   setAutoFollow: (enabled: boolean) => void;
   setInteractionMode: (on: boolean) => void;
   togglePin: () => void;
+  setToolStripExpanded: (open: boolean) => void;
+  toggleToolStripPin: () => void;
+  /** Collapse the strip unless the user pinned it open. */
+  collapseToolStripIfUnpinned: () => void;
   setReasoning: (r: ReasoningState) => void;
   /** Reset all ephemeral state to initial defaults. */
   reset: () => void;
@@ -38,6 +45,9 @@ type InitialState = Omit<
   | 'setAutoFollow'
   | 'setInteractionMode'
   | 'togglePin'
+  | 'setToolStripExpanded'
+  | 'toggleToolStripPin'
+  | 'collapseToolStripIfUnpinned'
   | 'setReasoning'
   | 'reset'
 >;
@@ -49,6 +59,8 @@ const initial: InitialState = {
   autoFollowEnabled: true,
   isInteractionMode: false,
   isPinned: false,
+  isToolStripExpanded: false,
+  isToolStripPinned: false,
   reasoning: { kind: 'off' },
 };
 
@@ -67,6 +79,10 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
     // badly with scrollIntoView, which can fight cockpit-open layout shifts.
     set(on ? { isInteractionMode: true, expandedMessageId: null } : { isInteractionMode: false }),
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),
+  setToolStripExpanded: (open) => set({ isToolStripExpanded: open }),
+  toggleToolStripPin: () => set((s) => ({ isToolStripPinned: !s.isToolStripPinned })),
+  collapseToolStripIfUnpinned: () =>
+    set((s) => (s.isToolStripPinned ? {} : { isToolStripExpanded: false })),
   setReasoning: (r) => set({ reasoning: r }),
   reset: () => set({ ...initial }),
 }));

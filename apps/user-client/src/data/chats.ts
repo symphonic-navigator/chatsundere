@@ -121,6 +121,7 @@ export function useToggleBookmark() {
       // Broad invalidation — we don't know which chat query is mounted.
       void qc.invalidateQueries({ queryKey: QK.chats });
       void qc.invalidateQueries({ queryKey: ['chats'] });
+      void qc.invalidateQueries({ queryKey: QK.bookmarks });
     },
   });
 }

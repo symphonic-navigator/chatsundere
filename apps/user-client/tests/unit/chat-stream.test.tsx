@@ -1,9 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow, PersonaRow } from '../../src/boot/client-data-db';
 import { ChatStream, MINDSPACE_FALLBACK } from '../../src/components/chat/ChatStream';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
 import type { StreamHandle } from '../../src/state/stream-manager.store';
+
+/**
+ * ChatStream pulls in useToggleBookmark (a TanStack mutation), so every render
+ * needs a QueryClient in context. This helper wraps the element in a fresh,
+ * retry-disabled client to keep the unit tests isolated.
+ */
+function renderWithQuery(element: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{element}</QueryClientProvider>);
+}
 
 const aurum: PersonaRow = {
   id: 'p1',
@@ -56,7 +68,7 @@ describe('ChatStream', () => {
   it('renders messages in order with DateSeparator between days', () => {
     const day1 = new Date('2026-05-23T10:00:00').getTime();
     const day2 = new Date('2026-05-24T10:00:00').getTime();
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[userMsg('m1', 'first', day1), userMsg('m2', 'second', day2)]}
@@ -85,7 +97,7 @@ describe('ChatStream', () => {
       startedAt: Date.now(),
       reusedDraft: false,
     };
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[draftMsg]}
@@ -100,7 +112,7 @@ describe('ChatStream', () => {
 
   it('scrolling up > 30px disables auto-follow', () => {
     useCurrentChatStore.getState().reset();
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[userMsg('m1', 'hi', 1)]}
@@ -140,7 +152,7 @@ describe('ChatStream', () => {
       createdAt: Date.now(),
     };
 
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[message]}
@@ -166,7 +178,7 @@ describe('ChatStream', () => {
   it('scrolling back into the bottom band re-enables auto-follow', () => {
     useCurrentChatStore.getState().reset();
     useCurrentChatStore.getState().setAutoFollow(false);
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[userMsg('m1', 'hi', 1)]}

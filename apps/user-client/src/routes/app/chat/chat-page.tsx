@@ -9,13 +9,16 @@ import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
+import { ReadingToolStrip } from '../../../components/chat/ReadingToolStrip.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
+import { TocSheet } from '../../../components/chat/TocSheet.js';
 import { useChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRegenerate, useSendMessage } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
+import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
@@ -25,7 +28,7 @@ const DRAFT_DEBOUNCE_MS = 250;
 
 export function ChatPage(): JSX.Element {
   const { chatId } = useParams<{ chatId?: string }>();
-  const [search] = useSearchParams();
+  const [search, setSearchParams] = useSearchParams();
   const personaIdFromQuery = search.get('personaId');
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,6 +50,18 @@ export function ChatPage(): JSX.Element {
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
+
+  const [tocOpen, setTocOpen] = useState(false);
+
+  const jumpToMessage = (messageId: string): void => {
+    setInteractionMode(false);
+    requestAnimationFrame(() => {
+      // one retry — the message row may mount a frame later
+      if (!scrollToMessage(messageId)) {
+        requestAnimationFrame(() => scrollToMessage(messageId));
+      }
+    });
+  };
 
   // Sync store with route. Mount auto-opens Interaction Mode in lazy mode + pins cockpit.
   // On every chat-mode entry — including back from the persona-editor — we
@@ -271,6 +286,16 @@ export function ChatPage(): JSX.Element {
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
 
+  const focusId = search.get('focus');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot per focusId once messages are present
+  useEffect(() => {
+    if (!focusId || messages.length === 0) return;
+    jumpToMessage(focusId);
+    const next = new URLSearchParams(search);
+    next.delete('focus');
+    setSearchParams(next, { replace: true });
+  }, [focusId, messages.length]);
+
   return (
     <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
       {isLazy && !hasMessages && effectivePersona ? (
@@ -364,6 +389,14 @@ export function ChatPage(): JSX.Element {
             setInteractionMode(true);
           }}
         />
+      ) : null}
+
+      {!isInteractionMode && hasMessages ? (
+        <ReadingToolStrip onOpenToc={() => setTocOpen(true)} />
+      ) : null}
+
+      {tocOpen ? (
+        <TocSheet messages={messages} onClose={() => setTocOpen(false)} onJump={jumpToMessage} />
       ) : null}
 
       {isInteractionMode && effectivePersona && offering ? (

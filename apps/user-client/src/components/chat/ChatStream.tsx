@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef } from 'react';
 import type { MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { useToggleBookmark } from '../../data/chats.js';
 import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
@@ -73,6 +74,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   // stub before resolution lands — in practice ChatPage's effect populates
   // it on first render after mindspaces load.
   const resolvedMindspace = useMindspaceStore((s) => s.resolved);
+  const toggleBookmark = useToggleBookmark();
 
   const sorted = [...p.messages].sort((a, b) => a.createdAt - b.createdAt);
   const pillMap = new Map(p.pills.map((x) => [x.id, x]));
@@ -168,9 +170,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 expanded={expandedId === m.id}
                 onToggleExpand={() => toggleExpanded(m.id)}
                 onCopy={() => copyMessageText(m)}
-                onBookmark={() => {
-                  // Stubbed — wired to useToggleBookmark in Task 27 (ChatPage assembly).
-                }}
+                onBookmark={() => void toggleBookmark.mutateAsync(m.id)}
                 onRegenerate={isLastPersona ? p.onRegenerate : undefined}
                 isStreamingDraft={isDraft}
               />

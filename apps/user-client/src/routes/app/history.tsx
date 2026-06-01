@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
+import { BookmarksList } from '../../components/history/BookmarksList.js';
 import { HistoryRow } from '../../components/history/HistoryRow.js';
 import { HistorySearchBar } from '../../components/history/HistorySearchBar.js';
 import { PersonaFilterChips } from '../../components/history/PersonaFilterChips.js';
+import { useBookmarks } from '../../data/bookmarks.js';
 import { useChats, useDeleteChat, useUpdateChat } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
@@ -28,6 +30,8 @@ export function HistoryPage(): JSX.Element {
   const initialPersonaId = search.get('personaId');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPersonaId, setFilterPersonaId] = useState<string | null>(initialPersonaId);
+  const [tab, setTab] = useState<'chats' | 'bookmarks'>('chats');
+  const bookmarks = useBookmarks();
 
   // Reset mindspace to user-default on mount — History is a neutral surface.
   useEffect(() => {
@@ -96,38 +100,70 @@ export function HistoryPage(): JSX.Element {
         onSaveAndBack={() => {}}
         hideSaveAndBack
       />
-      <HistorySearchBar value={searchQuery} onChange={setSearchQuery} />
-      <PersonaFilterChips
-        personas={personas.data ?? []}
-        selectedId={filterPersonaId}
-        onChange={setFilterPersonaId}
-      />
+      <div className="history-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'chats'}
+          className="history-tab"
+          data-active={tab === 'chats' || undefined}
+          onClick={() => setTab('chats')}
+        >
+          Chats
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'bookmarks'}
+          className="history-tab"
+          data-active={tab === 'bookmarks' || undefined}
+          onClick={() => setTab('bookmarks')}
+        >
+          Bookmarks
+        </button>
+      </div>
 
-      {visibleChats.length === 0 ? (
-        <EmptyState
-          totalChats={(chats.data ?? []).length}
-          filterPersonaId={filterPersonaId}
-          filterPersonaName={filterPersonaName}
-          searchActive={searchQuery.trim() !== ''}
-        />
+      {tab === 'chats' ? (
+        <>
+          <HistorySearchBar value={searchQuery} onChange={setSearchQuery} />
+          <PersonaFilterChips
+            personas={personas.data ?? []}
+            selectedId={filterPersonaId}
+            onChange={setFilterPersonaId}
+          />
+
+          {visibleChats.length === 0 ? (
+            <EmptyState
+              totalChats={(chats.data ?? []).length}
+              filterPersonaId={filterPersonaId}
+              filterPersonaName={filterPersonaName}
+              searchActive={searchQuery.trim() !== ''}
+            />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {visibleChats.map((c) => {
+                const p = personaById.get(c.personaId);
+                if (!p) return null;
+                return (
+                  <HistoryRow
+                    key={c.id}
+                    chat={c}
+                    persona={p}
+                    onRename={(next) =>
+                      void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
+                    }
+                    onDelete={() => void deleteChat.mutateAsync(c.id)}
+                  />
+                );
+              })}
+            </ul>
+          )}
+        </>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {visibleChats.map((c) => {
-            const p = personaById.get(c.personaId);
-            if (!p) return null;
-            return (
-              <HistoryRow
-                key={c.id}
-                chat={c}
-                persona={p}
-                onRename={(next) =>
-                  void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
-                }
-                onDelete={() => void deleteChat.mutateAsync(c.id)}
-              />
-            );
-          })}
-        </ul>
+        <BookmarksList
+          groups={bookmarks.data ?? []}
+          onJump={(chatId, messageId) => navigate(`/app/chat/${chatId}?focus=${messageId}`)}
+        />
       )}
     </section>
   );
