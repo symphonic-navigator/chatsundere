@@ -41,6 +41,7 @@ interface Props {
 export function InteractionMode(p: Props): JSX.Element {
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
+  const clearExpanded = useCurrentChatStore((s) => s.clearExpanded);
   const [inputFocused, setInputFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -115,6 +116,10 @@ export function InteractionMode(p: Props): JSX.Element {
           if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
             setInputFocused(true);
             blurArmedRef.current = false;
+            // Reading and writing are separate mental modes: the moment the
+            // user starts composing, drop any message they had expanded for
+            // reading. Tidies the surface and keeps the two intents distinct.
+            clearExpanded();
           }
         }}
         onBlurCapture={(e) => {

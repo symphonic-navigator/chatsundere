@@ -109,7 +109,11 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
       corsProxyKey: args.corsProxyKey,
       target: offeringToTarget(args.offering),
       messages,
-      bodyExtras: { temperature: 0.3, max_tokens: 20 },
+      // Reasoning off: a title needs none, and on reasoning-capable models it
+      // would burn the token budget in the reasoning channel and leave `content`
+      // empty. `fixed-on` models (Kimi, GLM, …) reason regardless, so the budget
+      // is generous enough to survive a short trace and still emit the title.
+      bodyExtras: { temperature: 0.3, max_tokens: 256, reasoning: { enabled: false } },
       onRetry: (e) => console.warn(formatRetryEvent(e)),
     });
     const cleaned = sanitiseTitle(raw);

@@ -770,6 +770,44 @@ h1 {
 .chat-stream > :first-child {
   margin-top: auto;
 }
+
+/* ===== Scrollbars =====
+ * Touch devices overlay-hide their scrollbars (the "nice" mobile feel); desktop
+ * otherwise shows a wide native bar that breaks the calm. A thin neutral bar is
+ * the default for every scroll surface; the chat stream picks up the active
+ * mindspace accent so the conversation surface feels of-a-piece. Webkit ignores
+ * these on most touch browsers, so the mobile overlay behaviour is untouched. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  /* 2px transparent border + padding-box clip narrows the visible thumb to a
+   * restrained ~6px without changing the hit area. */
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+.chat-stream {
+  scrollbar-color: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 45%, transparent) transparent;
+}
+.chat-stream::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 38%, transparent);
+}
+.chat-stream::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 62%, transparent);
+}
 .streaming-cursor {
   display: inline-block;
   margin-left: 0.1em;

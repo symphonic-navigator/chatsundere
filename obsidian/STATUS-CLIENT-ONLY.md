@@ -5,7 +5,37 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Provider & model handling rework
+**Last updated:** 2026-06-01 (latest) — **Chat-UI smoothness polish round
+(squashed on master, not yet pushed; device-verified by Chris).** Seven items,
+all client-only (no Larissa path). (1) **Ctrl/Cmd+Enter sends** everywhere
+(desktop + mobile); plain Enter still sends on desktop only (`Cockpit.tsx`). (2)
+**Enter from reading mode** opens the cockpit, re-anchors to the latest message
+and focuses the input — via a new `autoFocus` on the cockpit textarea
+(`chat-page.tsx` keydown listener + `AutoSizeTextarea`/`Cockpit`). (3) **Focusing
+the prompt clears the message selection** — new `clearExpanded` store action
+fired from `InteractionMode`'s `onFocusCapture` (reading vs writing are separate
+intents). (4) **Title-gen bug fixed — root cause + proper fix:**
+`runOneShotCompletion` used a raw `{model,messages,stream:false,max_tokens:20}`
+body that *bypassed the per-model adapter entirely* — reasoning models (esp.
+`fixed-on` Kimi/GLM) burned the 20-token budget in their reasoning channel,
+leaving `content` empty → silent fallback (invisible, since the fallback string
+equals the null-title display). New `composeOneShotWire` routes one-shot through
+the same adapter as `streamCompletion` (reasoning `{enabled:false}`, provider
+headers, `stream:false`, drops `stream_options`); title-gen budget 20 → 256. (5)
+**Un-pinning with an empty draft drops back to reading mode** (`Cockpit`). (6)
+**Mindspace-tinted desktop scrollbar** — thin neutral default everywhere + accent
+on `.chat-stream`; touch overlay behaviour untouched (`index.css`). (7) **Prompt
+scrollbar gated on real overflow** — `overflow-y` set from measured height, no
+flash on a new line that still fits (`AutoSizeTextarea`). Verification: typecheck
+13/13; llm-unified bun 213/0; user-client vitest 546 pass / 8 fail (unchanged
+pre-existing localStorage-jsdom baseline, confirmed identical on `master`); build
+clean. One `interaction-mode` test updated for the new open-focused-by-default
+behaviour. **Watch on device:** `autoFocus` fires on *every* cockpit open (incl.
+reply-tap), so the mobile keyboard pops immediately — revisit if too aggressive.
+**Next:** Chris pushes when ready; then Block-1 memory (chatsune port) per
+[[ROADMAP]].
+
+**Earlier 2026-06-01 — Provider & model handling rework
 landed, squashed to `4c54661` on master (not yet pushed; awaiting Chris's device
 test).** Spec/plan: [[../superpowers/specs/2026-05-31-provider-model-handling-rework-design]]
 / [[../superpowers/plans/2026-05-31-provider-model-handling-rework]]. What

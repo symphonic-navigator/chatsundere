@@ -21,6 +21,7 @@ export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
+  const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
 
@@ -54,17 +55,34 @@ export function Cockpit(p: Props): JSX.Element {
     setMenuOpen(false);
   };
 
-  // Desktop-only affordance (ADR/CLAUDE.md §4: 1024px is the single desktop
-  // boundary): Enter sends, Shift+Enter inserts a newline. On mobile, Enter
-  // always inserts a newline — sending is the DualActionBtn's job. We never
-  // send while a stream is live or the draft is blank (mirrors the button's
-  // enabled state).
+  // Send affordances (ADR/CLAUDE.md §4: 1024px is the single desktop boundary):
+  //   - Desktop: plain Enter sends, Shift+Enter inserts a newline.
+  //   - Everywhere (desktop + mobile): Ctrl/Cmd+Enter sends — the fast keyboard
+  //     path Chris uses while testing the desktop build in the browser, and the
+  //     only keyboard send on mobile (plain Enter there inserts a newline; the
+  //     DualActionBtn is the touch send).
+  // We never send while a stream is live or the draft is blank (mirrors the
+  // button's enabled state).
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key !== 'Enter' || e.shiftKey) return;
-    if (!window.matchMedia('(min-width: 1024px)').matches) return;
+    if (e.key !== 'Enter') return;
+    const ctrlEnter = e.ctrlKey || e.metaKey;
+    const desktopPlainEnter =
+      !ctrlEnter && !e.shiftKey && window.matchMedia('(min-width: 1024px)').matches;
+    if (!ctrlEnter && !desktopPlainEnter) return;
     if (p.isStreamLive || p.draftValue.trim().length === 0) return;
     e.preventDefault();
     p.onSend(p.draftValue);
+  };
+
+  // Pin toggle. Un-pinning with an empty draft is a "let me just read" signal:
+  // drop straight back to reading mode rather than leaving an empty cockpit
+  // hovering. With text in the draft we keep the cockpit so nothing is lost.
+  const onTogglePin = (): void => {
+    const willUnpin = isPinned;
+    togglePin();
+    if (willUnpin && p.draftValue.trim().length === 0) {
+      setInteractionMode(false);
+    }
   };
 
   return (
@@ -141,7 +159,7 @@ export function Cockpit(p: Props): JSX.Element {
           data-control="pin"
           aria-label={isPinned ? 'Unpin cockpit' : 'Pin cockpit'}
           aria-pressed={isPinned}
-          onClick={togglePin}
+          onClick={onTogglePin}
         >
           <svg
             viewBox="0 0 24 24"
@@ -163,6 +181,7 @@ export function Cockpit(p: Props): JSX.Element {
           placeholder={`Speak to ${p.persona.name}…`}
           maxRows={6}
           className="cockpit-input"
+          autoFocus
           onKeyDown={onInputKeyDown}
         />
         <DualActionBtn

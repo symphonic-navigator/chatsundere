@@ -211,6 +211,25 @@ export function ChatPage(): JSX.Element {
     return estimateTokens([sys, ...msgTexts]);
   }, [offering, effectivePersona, settingsQuery.data, chatQuery.data?.messages]);
 
+  // Reading-mode Enter hotkey: a bare Enter (no modifiers) opens the cockpit
+  // and re-anchors to the latest message — symmetrical to Enter-to-send once
+  // you're composing. Ignored while already in interaction mode, while any
+  // other field/editable is focused (chat-title rename, etc.), and when there
+  // is no persona to compose to. The cockpit's autoFocus lands the caret.
+  useEffect(() => {
+    if (isInteractionMode || !effectivePersona) return undefined;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      setAutoFollow(true);
+      setInteractionMode(true);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isInteractionMode, effectivePersona, setAutoFollow, setInteractionMode]);
+
   const onRegenerate = (): void => {
     if (!activeChatId) return;
     void regenerate.mutateAsync({ chatId: activeChatId, reasoning });

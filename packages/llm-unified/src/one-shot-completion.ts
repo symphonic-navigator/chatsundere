@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
+import type { CanonicalRequest } from './adapter-contract.js';
+import { getAdapter } from './adapter-registry.js';
 import type { CompletionTarget } from './catalogue/target.js';
-import { NANO_GPT_PAIRS } from './providers/_nano-gpt-pairs.js';
 import { type OnRetry, parseRetryAfter, shouldRetryStatus, withRetry } from './retry.js';
 import { buildRequest } from './transport.js';
-import type { ProviderConfig, ProviderDefinition, WireMessage } from './types.js';
+import type { ProviderConfig, ProviderDefinition, ReasoningIntent, WireMessage } from './types.js';
 
 const DEFAULT_ONE_SHOT_TIMEOUT_MS = 30_000;
 
@@ -28,6 +30,50 @@ interface OneShotResponse {
 }
 
 /**
+ * Compose the non-streaming wire body + headers for a one-shot call. Reuses the
+ * same per-model adapter and reasoning translation as `streamCompletion`, so
+ * background jobs (title generation, …) honour per-model reasoning-off and any
+ * provider-required headers (e.g. wafer's `Wafer-ZDR`). Mirrors
+ * stream-completion's buildBody/buildWire but pins `stream: false` and drops
+ * the streaming-only `stream_options` rider.
+ *
+ * Without the adapter, reasoning-capable models reasoned by default and (under
+ * the previous raw `{ model, messages, stream: false }` body) consumed the
+ * whole `max_tokens` budget in their reasoning channel, leaving `content`
+ * empty — title-gen then silently fell back to "New chat — …".
+ */
+function composeOneShotWire(args: OneShotArgs): {
+  body: Record<string, unknown>;
+  headers?: Record<string, string>;
+} {
+  const adapter = args.target.adapterId ? getAdapter(args.target.adapterId) : undefined;
+  if (adapter) {
+    const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
+    const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
+    const req: CanonicalRequest = { messages: args.messages, reasoning: intent };
+    const wire = adapter.buildRequest(req);
+    // Sampling first, adapter structural keys second (as in streamCompletion);
+    // then force non-streaming and drop the streaming-only usage rider.
+    const { stream_options: _streamOptions, ...adapterBody } = wire.body;
+    return { body: { ...sampling, ...adapterBody, stream: false }, headers: wire.headers };
+  }
+  const { thinking: _thinking, reasoning: rawReasoning, ...extras } = args.bodyExtras;
+  let modelId = args.target.slug;
+  const intent = rawReasoning as ReasoningIntent | undefined;
+  if (intent) {
+    const applied = applyReasoningToBody(
+      args.provider.id as ProviderId,
+      args.target.slug,
+      intent,
+      {},
+    );
+    modelId = applied.modelId;
+    Object.assign(extras, applied.body);
+  }
+  return { body: { model: modelId, messages: args.messages, stream: false, ...extras } };
+}
+
+/**
  * Internal helper for testing. Allows injection of a custom sleep function.
  * Not part of the public API.
  */
@@ -35,16 +81,7 @@ export async function runOneShotCompletionWithSleep(
   args: OneShotArgs,
   sleepFn: (ms: number) => Promise<void>,
 ): Promise<string> {
-  let modelId = args.target.slug;
-  const extras = { ...args.bodyExtras };
-  if (args.provider.id === 'nano-gpt') {
-    const pair = NANO_GPT_PAIRS[args.target.slug];
-    if (pair && pair.switchingMode === 'slug') {
-      const thinkingOn = extras.thinking === true;
-      modelId = thinkingOn ? (pair.thinkingSlug ?? pair.nonThinkingSlug) : pair.nonThinkingSlug;
-      extras.thinking = undefined;
-    }
-  }
+  const { body, headers } = composeOneShotWire(args);
   const timeoutMs = args.timeoutMs ?? DEFAULT_ONE_SHOT_TIMEOUT_MS;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
@@ -61,7 +98,8 @@ export async function runOneShotCompletionWithSleep(
         corsProxyKey: args.corsProxyKey,
         path: '/chat/completions',
         method: 'POST',
-        body: { model: modelId, messages: args.messages, stream: false, ...extras },
+        body,
+        extraHeaders: headers,
       });
       const response = await fetch(request, { signal });
       if (!response.ok) {

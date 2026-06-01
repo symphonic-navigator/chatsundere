@@ -63,15 +63,17 @@ describe('InteractionMode lifecycle', () => {
     expect(container.querySelector('.dim-overlay')).not.toBeNull();
   });
 
-  it('DimOverlay activates only on textarea focus', () => {
+  it('DimOverlay follows textarea focus (cockpit autofocuses on open)', () => {
     const { container } = mount();
     const overlay = container.querySelector('.dim-overlay') as HTMLElement;
-    expect(overlay.getAttribute('data-active')).not.toBe('true');
     const ta = container.querySelector('textarea') as HTMLTextAreaElement;
-    fireEvent.focus(ta);
+    // The cockpit autofocuses its input on open so the user can type straight
+    // away, so the overlay starts active.
     expect(overlay.getAttribute('data-active')).toBe('true');
     fireEvent.blur(ta);
     expect(overlay.getAttribute('data-active')).not.toBe('true');
+    fireEvent.focus(ta);
+    expect(overlay.getAttribute('data-active')).toBe('true');
   });
 
   it('Send with non-empty input closes after a 100ms delay', async () => {
