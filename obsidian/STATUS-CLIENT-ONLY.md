@@ -5,7 +5,36 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Rich message rendering landed
+**Last updated:** 2026-06-01 (latest) — **Session branching landed
+(squashed on master `f1463d2`, NOT pushed; awaiting Chris's device test).**
+Block-1 chat-core feature, brainstormed end-to-end with Chris. The per-message
+`✎ Branch` control (previously a disabled "arrives later" stub) now forks a chat
+at any message into a **new, fully independent session**: a bottom-sheet collects
+a **mandatory** name, then `useBranchChat` copies the chat plus every message and
+pill **up to and including** the branch point with fresh ids — the load-bearing
+step is **rewriting the `pillId` references inside the copied `contentBlocks`** so
+they point at the new pills (the easy-to-miss correctness trap). Persona and
+mindspace are **referenced, not duplicated**; `draftInput` is reset;
+`createdAt` preserved while `lastMessageAt`/`bookmarkedMessageCount` are
+recomputed for the branch. Decisions (Chris's): (1) **inclusive** cut; (2) button
+**locked while a stream is live** (`branchDisabled = isStreamLive`, "disabled over
+hidden" with tooltip); (3) name **mandatory** (confirm disabled when empty); (4)
+an **incomplete** branch-point message is copied **verbatim** (not normalised) —
+pinned by a test. On a failed branch (race: branch point deleted) the sheet
+**stays open with the typed name + a constructive error** (spec §7, the *dere*
+half) — this gap was caught by the final holistic review and fixed before merge.
+Built subagent-driven (4 TDD tasks, serial, on `feat/session-branching`, squashed)
++ spec-review + code-quality review per task + a final holistic review. **Not a
+Larissa change** — client-only, no auth/sync/proxy/crypto. Verification: `pnpm
+typecheck` clean; user-client vitest **666 pass / 8 fail** (the unchanged
+pre-existing `cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline,
+identical on master); build **9/9**. Spec/plan:
+[[../superpowers/specs/2026-06-01-session-branching-design]],
+[[../superpowers/plans/2026-06-01-session-branching]]. **Next:** Chris
+device-tests the 7 manual-verification steps (spec §9), then pushes the master
+backlog.
+
+**Earlier 2026-06-01 — Rich message rendering landed
 (squashed on master `433cd79`, NOT pushed; awaiting Chris's device test).**
 Block-1 chat-core feature, brainstormed end-to-end with Chris, achieving parity
 with chatsune's renderer. Chat message text now renders as full **Markdown + GFM
