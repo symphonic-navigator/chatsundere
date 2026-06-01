@@ -6,7 +6,7 @@ import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { BookmarksList } from '../../components/history/BookmarksList.js';
 import { HistoryRow } from '../../components/history/HistoryRow.js';
 import { HistorySearchBar } from '../../components/history/HistorySearchBar.js';
-import { PersonaFilterChips } from '../../components/history/PersonaFilterChips.js';
+import { PersonaFilterDropdown } from '../../components/history/PersonaFilterDropdown.js';
 import { useBookmarks } from '../../data/bookmarks.js';
 import { useChats, useDeleteChat, useUpdateChat } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
@@ -91,6 +91,23 @@ export function HistoryPage(): JSX.Element {
 
   const filterPersonaName = filterPersonaId ? personaById.get(filterPersonaId)?.name : undefined;
 
+  // Bookmarks filtered by the same persona selector + a label substring search,
+  // NSFW-aware (groups whose persona is hidden in SFW mode drop out). Groups
+  // with no surviving bookmarks after the label filter are removed.
+  const visibleBookmarkGroups = useMemo(() => {
+    const all = bookmarks.data ?? [];
+    const q = searchQuery.trim().toLowerCase();
+    return all
+      .filter((g) => visiblePersonaIds.has(g.chat.personaId))
+      .filter((g) => filterPersonaId === null || g.chat.personaId === filterPersonaId)
+      .map((g) =>
+        q === ''
+          ? g
+          : { ...g, bookmarks: g.bookmarks.filter((b) => b.label.toLowerCase().includes(q)) },
+      )
+      .filter((g) => g.bookmarks.length > 0);
+  }, [bookmarks.data, visiblePersonaIds, filterPersonaId, searchQuery]);
+
   return (
     <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-12 pt-4">
       <EditorTopbar
@@ -123,45 +140,58 @@ export function HistoryPage(): JSX.Element {
         </button>
       </div>
 
-      {tab === 'chats' ? (
-        <>
-          <HistorySearchBar value={searchQuery} onChange={setSearchQuery} />
-          <PersonaFilterChips
-            personas={personas.data ?? []}
-            selectedId={filterPersonaId}
-            onChange={setFilterPersonaId}
-          />
+      <HistorySearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder={tab === 'chats' ? 'Search chats by title…' : 'Search bookmarks by title…'}
+      />
+      <PersonaFilterDropdown
+        personas={personas.data ?? []}
+        selectedId={filterPersonaId}
+        onChange={setFilterPersonaId}
+      />
 
-          {visibleChats.length === 0 ? (
-            <EmptyState
-              totalChats={(chats.data ?? []).length}
-              filterPersonaId={filterPersonaId}
-              filterPersonaName={filterPersonaName}
-              searchActive={searchQuery.trim() !== ''}
-            />
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {visibleChats.map((c) => {
-                const p = personaById.get(c.personaId);
-                if (!p) return null;
-                return (
-                  <HistoryRow
-                    key={c.id}
-                    chat={c}
-                    persona={p}
-                    onRename={(next) =>
-                      void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
-                    }
-                    onDelete={() => void deleteChat.mutateAsync(c.id)}
-                  />
-                );
-              })}
-            </ul>
-          )}
-        </>
+      {tab === 'chats' ? (
+        visibleChats.length === 0 ? (
+          <EmptyState
+            totalChats={(chats.data ?? []).length}
+            filterPersonaId={filterPersonaId}
+            filterPersonaName={filterPersonaName}
+            searchActive={searchQuery.trim() !== ''}
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {visibleChats.map((c) => {
+              const p = personaById.get(c.personaId);
+              if (!p) return null;
+              return (
+                <HistoryRow
+                  key={c.id}
+                  chat={c}
+                  persona={p}
+                  onRename={(next) =>
+                    void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
+                  }
+                  onDelete={() => void deleteChat.mutateAsync(c.id)}
+                />
+              );
+            })}
+          </ul>
+        )
+      ) : visibleBookmarkGroups.length === 0 ? (
+        <div className="mt-8 grid place-items-center text-center text-paper-soft">
+          <p className="font-display text-lg italic text-paper">
+            {(bookmarks.data ?? []).length === 0
+              ? 'No bookmarks yet.'
+              : 'No bookmarks match your filter.'}
+          </p>
+          {(bookmarks.data ?? []).length === 0 ? (
+            <p className="mt-2 max-w-xs text-sm">Star a message in any chat to find it here.</p>
+          ) : null}
+        </div>
       ) : (
         <BookmarksList
-          groups={bookmarks.data ?? []}
+          groups={visibleBookmarkGroups}
           onJump={(chatId, messageId) => navigate(`/app/chat/${chatId}?focus=${messageId}`)}
         />
       )}

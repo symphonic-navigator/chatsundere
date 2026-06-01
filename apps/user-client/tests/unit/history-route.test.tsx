@@ -136,34 +136,31 @@ describe('HistoryPage', () => {
     expect(document.querySelector('.history-row')?.textContent).toContain('about books');
   });
 
-  it('persona-filter chip narrows to one persona', async () => {
+  it('persona filter narrows to one persona', async () => {
     await seed();
     renderHistory();
     await screen.findByText('private chat');
-    const chips = document.querySelectorAll('[data-chip]');
-    const sageChip = Array.from(chips).find((c) => c.textContent === 'Sage') as HTMLButtonElement;
-    fireEvent.click(sageChip);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by persona' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sage' }));
     await waitFor(() => expect(document.querySelectorAll('.history-row').length).toBe(1));
     expect(document.querySelector('.history-row')?.textContent).toContain('about books');
   });
 
-  it('NSFW chip + NSFW chat hidden in SFW mode', async () => {
+  it('NSFW persona option + NSFW chat hidden in SFW mode', async () => {
     await seed({ adultMode: 'sfw' });
     renderHistory();
     await screen.findByText('about books');
     expect(screen.queryByText('private chat')).toBeNull();
-    const chipTexts = Array.from(document.querySelectorAll('[data-chip]')).map(
-      (c) => c.textContent,
-    );
-    expect(chipTexts).not.toContain('Lyra');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by persona' }));
+    expect(screen.queryByRole('button', { name: 'Lyra' })).toBeNull();
   });
 
-  it('flipping nsfw → sfw auto-resets persona-filter to All when the selection was NSFW', async () => {
+  it('flipping nsfw → sfw auto-resets persona filter to All when the selection was NSFW', async () => {
     const { nsfwId } = await seed();
     const { qc } = renderHistory(`/app/history?personaId=${nsfwId}`);
     await screen.findByText('private chat');
-    const sel = document.querySelector('[data-chip][data-selected="true"]') as HTMLElement;
-    expect(sel.textContent).toBe('Lyra');
+    const triggerEl = () => screen.getByRole('button', { name: 'Filter by persona' });
+    expect(triggerEl().textContent).toContain('Lyra');
 
     // Direct Dexie write bypasses the React Query mutation, so we must
     // manually invalidate the settings cache to trigger a refetch.
@@ -172,19 +169,61 @@ describe('HistoryPage', () => {
       await db.settings.update(1, { adultMode: 'sfw' });
       await qc.invalidateQueries({ queryKey: ['settings'] });
     });
-    await waitFor(() => {
-      const allSel = document.querySelector('[data-chip][data-selected="true"]') as HTMLElement;
-      expect(allSel.textContent).toBe('All');
-    });
+    await waitFor(() => expect(triggerEl().textContent).toContain('All personas'));
   });
 
   it('?personaId=<id> URL param initialises filter selection', async () => {
     const { sfwId } = await seed();
     renderHistory(`/app/history?personaId=${sfwId}`);
     await screen.findByText('about books');
-    const sel = document.querySelector('[data-chip][data-selected="true"]') as HTMLElement;
-    expect(sel.textContent).toBe('Sage');
+    expect(screen.getByRole('button', { name: 'Filter by persona' }).textContent).toContain('Sage');
     expect(document.querySelectorAll('.history-row').length).toBe(1);
+  });
+
+  it('bookmarks tab: persona filter and label search narrow the list', async () => {
+    const { chatA, chatB } = await seed();
+    const db = await openClientDataDb();
+    await db.messages.bulkAdd([
+      {
+        id: 'mA',
+        chatId: chatA,
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'apples' }],
+        createdAt: 1,
+        bookmarked: true,
+        streamingState: 'complete',
+      },
+      {
+        id: 'mB',
+        chatId: chatB,
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'oranges' }],
+        createdAt: 1,
+        bookmarked: true,
+        streamingState: 'complete',
+      },
+    ]);
+    renderHistory();
+    fireEvent.click(screen.getByRole('tab', { name: 'Bookmarks' }));
+    await screen.findByText('apples');
+    expect(screen.getByText('oranges')).toBeTruthy();
+
+    // Label search.
+    fireEvent.change(document.querySelector('input[type="search"]') as HTMLInputElement, {
+      target: { value: 'app' },
+    });
+    await waitFor(() => expect(screen.queryByText('oranges')).toBeNull());
+    expect(screen.getByText('apples')).toBeTruthy();
+
+    // Clear search, then narrow by persona instead.
+    fireEvent.change(document.querySelector('input[type="search"]') as HTMLInputElement, {
+      target: { value: '' },
+    });
+    await screen.findByText('oranges');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by persona' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sage' }));
+    await waitFor(() => expect(screen.queryByText('oranges')).toBeNull());
+    expect(screen.getByText('apples')).toBeTruthy();
   });
 
   it('empty state — no chats at all — links to /app/circle', async () => {

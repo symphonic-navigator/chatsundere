@@ -55,6 +55,10 @@ export function ChatPage(): JSX.Element {
 
   const jumpToMessage = (messageId: string): void => {
     setInteractionMode(false);
+    // Disable auto-follow first, otherwise ChatStream's scroll-to-bottom
+    // effect (and its ResizeObserver) snaps to the latest message and
+    // overrides our jump — landing the user at the end of the chat.
+    setAutoFollow(false);
     requestAnimationFrame(() => {
       // one retry — the message row may mount a frame later
       if (!scrollToMessage(messageId)) {
@@ -129,7 +133,16 @@ export function ChatPage(): JSX.Element {
 
   // Resolve Offering via provider lookup keyed to the effective persona.
   const modelQuery = useQuery({
-    queryKey: ['offering-for-persona', effectivePersona?.id],
+    // Key on provider + model too, not just the persona id — otherwise
+    // changing a persona's model mid-chat (same id) does not change the key,
+    // so the offering (and the reasoning UI derived from it) stays stale until
+    // a remount. See reasoning-UI-not-updating bug.
+    queryKey: [
+      'offering-for-persona',
+      effectivePersona?.id,
+      effectivePersona?.providerId,
+      effectivePersona?.modelId,
+    ],
     enabled: !!effectivePersona,
     queryFn: async () => {
       if (!effectivePersona) return null;
