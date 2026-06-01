@@ -5,7 +5,45 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Bookmarks & table-of-contents landed
+**Last updated:** 2026-06-01 (latest) — **Rich message rendering landed
+(squashed on master `433cd79`, NOT pushed; awaiting Chris's device test).**
+Block-1 chat-core feature, brainstormed end-to-end with Chris, achieving parity
+with chatsune's renderer. Chat message text now renders as full **Markdown + GFM
++ KaTeX maths + shiki-highlighted code + mermaid diagrams** (previously verbatim
+`pre-wrap` text, zero formatting). Architecture: Markdown renders **only over
+`text` ContentBlocks**; `pill`/`reasoning` blocks stay untouched React
+components — chatsune's inline-pill rehype plugins were deliberately **not**
+ported (our structured-block model supersedes them). The crown jewel is the
+ported **`preprocessMath()`** LaTeX-compatibility layer (`\(..\)`/`\[..\]`
+normalisation, code-masking so maths inside code survives, multiline display
+fences, `\\[Npt]` guard) carried over with chatsune's 45-case diagnostic suite.
+`shiki` (~18 langs) and `mermaid` load **lazily** (dynamic import — not in the
+initial bundle). Decisions (Chris's): (1) **live Markdown during streaming**
+(re-parse per token, memoised on `MarkdownContent`) — the per-token fade-in is
+replaced by the whole-bubble entrance animation; (2) **full parity** scope incl.
+mermaid; (3) **both user and persona messages render Markdown** — a deliberate
+divergence from chatsune (which keeps user bubbles plain); consequence:
+user-typed single newlines collapse and `# ` becomes a heading (see
+[[project_user_and_persona_both_markdown]]). `.msg-text` lost its verbatim
+`pre-wrap` in favour of opulent Aurora markdown styling: ink-soft code
+surfaces with a single restrained aurora glow, `--font-display` (serif)
+headings, accent-lilac links, marker-pill inline code, KaTeX display blocks
+(opulent styling pass applied 2026-06-01). Built
+subagent-driven (10 TDD tasks, serial, on `feat/message-rendering`, squashed) +
+spec-review per task + a final holistic **opus review** that caught the
+`pre-wrap` double-spacing blocker (fixed before merge). **Not a Larissa
+change** — client-only, no auth/sync/proxy/crypto. Verification: `pnpm
+typecheck` clean; user-client vitest **657 pass / 8 fail** (the unchanged
+pre-existing `cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom
+baseline); build clean with shiki/mermaid as lazy chunks. Spec/plan:
+[[../superpowers/specs/2026-06-01-message-rendering-design]],
+[[../superpowers/plans/2026-06-01-message-rendering]]. Deferred follow-ups:
+`MessageBlock` memo (streaming perf), main-chunk weight (katex synchronous) —
+both in [[insights/follow-ups-index]]. **Next:** Chris device-tests the
+manual-verification checklist (spec §Manual Verification), then pushes the
+master backlog.
+
+**Earlier 2026-06-01 — Bookmarks & table-of-contents landed
 (squashed on master `51931d4`, NOT pushed; awaiting Chris's device test).**
 Block-1 chat-core feature, brainstormed end-to-end with Chris. One unified model:
 a message has a `bookmarked` flag (the **star** = global bookmark) and an optional
