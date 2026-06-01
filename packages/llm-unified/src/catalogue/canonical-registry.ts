@@ -134,6 +134,71 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote:
       'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
   },
+  // --- Claude (Anthropic) — via OpenRouter only; censored at source → not
+  // freedom-oriented; surfaced with the CENSORED badge. See ADR 0032. ---
+  {
+    id: 'claude-haiku-4.5',
+    displayName: 'Claude Haiku 4.5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-sonnet-4.5',
+    displayName: 'Claude Sonnet 4.5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-sonnet-4.6',
+    displayName: 'Claude Sonnet 4.6',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-opus-4.5',
+    displayName: 'Claude Opus 4.5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-opus-4.6',
+    displayName: 'Claude Opus 4.6',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-opus-4.7',
+    displayName: 'Claude Opus 4.7',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-opus-4.8',
+    displayName: 'Claude Opus 4.8',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */

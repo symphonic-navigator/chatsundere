@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { registerAdapter } from '../adapter-registry.js';
+import { claudeAdapter } from '../adapters/anthropic-claude.js';
 import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
@@ -28,6 +29,104 @@ const GLM_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 // `:thinking` sibling on nano-gpt → reasoning `none`.
 const MISTRAL_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: false };
 const MISTRAL_NONE: ReasoningControl = { mode: 'none' };
+
+// Claude on nano-gpt (the anonymising-router path; OpenRouter is OUT for
+// Anthropic — its limited-keys convention routes to Amazon Bedrock, which does
+// not honour Anthropic prompt caching. See ADR 0032). Reasoning is a slug swap
+// (base = off, the thinking sibling = on); effort does NOT modulate the trace
+// (live-probed), so the control is a clean toggle. nano-gpt's Claude thinking
+// slugs are inconsistent — the dated Haiku/Sonnet 4.5 use a `-thinking` suffix,
+// the rest `:thinking` — so each offering carries its explicit thinking slug.
+const CLAUDE_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
+
+interface ClaudeSpec {
+  canonicalRef: string;
+  base: string;
+  thinking: string;
+  /** Hard context ceiling per Anthropic's published window. */
+  max: number;
+}
+
+const CLAUDE_SPECS: ClaudeSpec[] = [
+  {
+    canonicalRef: 'claude-haiku-4.5',
+    base: 'claude-haiku-4-5-20251001',
+    thinking: 'claude-haiku-4-5-20251001-thinking',
+    max: 200_000,
+  },
+  {
+    canonicalRef: 'claude-sonnet-4.5',
+    base: 'claude-sonnet-4-5-20250929',
+    thinking: 'claude-sonnet-4-5-20250929-thinking',
+    max: 200_000,
+  },
+  {
+    canonicalRef: 'claude-sonnet-4.6',
+    base: 'anthropic/claude-sonnet-4.6',
+    thinking: 'anthropic/claude-sonnet-4.6:thinking',
+    max: 1_000_000,
+  },
+  {
+    canonicalRef: 'claude-opus-4.5',
+    base: 'claude-opus-4-5-20251101',
+    thinking: 'claude-opus-4-5-20251101:thinking',
+    max: 200_000,
+  },
+  {
+    canonicalRef: 'claude-opus-4.6',
+    base: 'anthropic/claude-opus-4.6',
+    thinking: 'anthropic/claude-opus-4.6:thinking',
+    max: 1_000_000,
+  },
+  {
+    canonicalRef: 'claude-opus-4.7',
+    base: 'anthropic/claude-opus-4.7',
+    thinking: 'anthropic/claude-opus-4.7:thinking',
+    max: 1_000_000,
+  },
+  {
+    canonicalRef: 'claude-opus-4.8',
+    base: 'anthropic/claude-opus-4.8',
+    thinking: 'anthropic/claude-opus-4.8:thinking',
+    max: 1_000_000,
+  },
+];
+
+const claudeThinkingByBase: Record<string, string> = Object.fromEntries(
+  CLAUDE_SPECS.map((s) => [s.base, s.thinking]),
+);
+
+/**
+ * A Claude offering on nano-gpt. The model is censored by Anthropic
+ * (`canonical.freedomOriented=false`) while nano-gpt routes verbatim
+ * (`freedomOrientedDeployment=true`) → effectiveFreedom 'restricted' → CENSORED
+ * badge. Uses the dedicated Claude adapter (slug-swap reasoning + Anthropic
+ * cache_control injection). 200k recommended sweet-spot; max per Anthropic.
+ */
+function claudeOffering(spec: ClaudeSpec): Offering {
+  return {
+    canonicalRef: spec.canonicalRef,
+    providerId: 'nano-gpt',
+    upstreamSlug: spec.base,
+    // Convention: catalogue adapterId is `${providerId}:${upstreamSlug}`. The
+    // registration loop decides WHICH adapter to bind (Claude cache adapter vs
+    // generic slug-swap) by canonicalRef, not by a distinct id prefix.
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${spec.base}` },
+    profile: {
+      reasoning: CLAUDE_TOGGLE,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      // Signature replay deferred (spec §5.2) — no hard-CoT replay wired yet.
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: spec.max },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  };
+}
 
 // A live-curated nano-gpt offering: hand-written slug-swap adapter, verified.
 // Serves the GLM, DeepSeek, Kimi and Gemma families (all slug-swap on nano-gpt).
@@ -89,6 +188,7 @@ const offerings: Offering[] = [
     true,
     262_144,
   ),
+  ...CLAUDE_SPECS.map(claudeOffering),
 ];
 
 export const nanoGpt: ProviderDefinition = {
@@ -109,7 +209,17 @@ export const nanoGpt: ProviderDefinition = {
 export function registerNanoGpt(): void {
   registerProvider(nanoGpt);
   for (const o of offerings) {
-    if (o.adapter.kind === 'catalogue') {
+    if (o.adapter.kind !== 'catalogue') continue;
+    if (o.canonicalRef?.startsWith('claude-')) {
+      registerAdapter(
+        o.adapter.adapterId,
+        claudeAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
+          thinkingSlug: claudeThinkingByBase[o.upstreamSlug] ?? `${o.upstreamSlug}:thinking`,
+        }),
+      );
+    } else {
       registerAdapter(
         o.adapter.adapterId,
         nanoGptSlugSwapAdapter(o.upstreamSlug, o.profile.vision, o.profile.reasoning),

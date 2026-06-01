@@ -31,9 +31,14 @@ these together. Order roughly by priority / dependency.
 
 ## New models to curate
 
-- **Claude** (via **router only** — OpenRouter; policy reason below). Include
-  **older variants too** — Chris will give the shortlist by community preference
-  (he has them in his head). Don't enumerate yet; wait for his list.
+- **Claude** — ✅ **DONE 2026-06-01 (via nano-gpt, NOT OpenRouter).** Seven
+  models curated: Haiku 4.5; Sonnet 4.5/4.6; Opus 4.5/4.6/4.7/4.8. Reasoning =
+  slug-swap toggle; Anthropic `cache_control` injected and verified (cache reads
+  the full prefix next turn); CENSORED badge via `effectiveFreedom='restricted'`.
+  All seven pass the conversation-suite 22/22. **OpenRouter dropped for
+  Anthropic** — limited-keys → Amazon Bedrock → no caching (see below + ADR 0032).
+  See [[../../superpowers/specs/2026-06-01-premium-model-integration-design]],
+  [[../models/claude-4]], [[../providers/nano-gpt]].
 - **ChatGPT** (via **router** — nano-gpt and OpenRouter): **5.5**, **4o**.
 - **Mistral AI** — targeted integration of the *current* line only:
   **Small 4, Medium 3.5, Large 3**. Explicitly NOT the ~500 legacy models they

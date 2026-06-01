@@ -96,6 +96,10 @@ export function nanoGptSlugSwapAdapter(
   baseSlug: string,
   vision: boolean,
   reasoning: ReasoningControl,
+  /** Explicit reasoning-on slug. Defaults to `${baseSlug}:thinking` (GLM/
+   * DeepSeek/Mistral), but nano-gpt's Claude slugs are inconsistent — some use a
+   * `-thinking` suffix, some `:thinking` — so the caller can override it. */
+  thinkingSlug = `${baseSlug}:thinking`,
 ): ModelAdapter {
   const profile: ModelProfile = {
     reasoning,
@@ -109,7 +113,7 @@ export function nanoGptSlugSwapAdapter(
 
     buildRequest(req: CanonicalRequest): WireRequest {
       const thinking = req.reasoning.enabled;
-      const model = thinking ? `${baseSlug}:thinking` : baseSlug;
+      const model = thinking ? thinkingSlug : baseSlug;
       const body: Record<string, unknown> = {
         model,
         messages: req.messages,

@@ -2,6 +2,7 @@
 
 import { beforeAll, describe, expect, it } from 'bun:test';
 import { _resetAdapterRegistryForTests } from '../adapter-registry.js';
+import { effectiveFreedom, getCanonical } from '../catalogue/index.js';
 import { _resetRegistryForTests, getProvider, listProviders } from '../registry.js';
 import { registerBuiltinProviders } from './_register-builtins.js';
 
@@ -34,8 +35,8 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) = 9.
-      expect(p.offerings).toHaveLength(9);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 7 Claude = 16.
+      expect(p.offerings).toHaveLength(16);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -57,6 +58,33 @@ describe('built-in providers', () => {
       expect(p.corsHint).toBe('direct');
       expect(p.offerings).toHaveLength(8);
       expect(p.sortPriority).toBe(45);
+    }
+  });
+
+  it('registers the seven Claude offerings on nano-gpt with the cache adapter and CENSORED freedom', () => {
+    const p = getProvider('nano-gpt');
+    expect(p).toBeDefined();
+    const claude = p?.offerings.filter((o) => o.canonicalRef?.startsWith('claude-')) ?? [];
+    expect(claude.map((o) => o.canonicalRef).sort()).toEqual([
+      'claude-haiku-4.5',
+      'claude-opus-4.5',
+      'claude-opus-4.6',
+      'claude-opus-4.7',
+      'claude-opus-4.8',
+      'claude-sonnet-4.5',
+      'claude-sonnet-4.6',
+    ]);
+    for (const o of claude) {
+      expect(o.adapter.kind).toBe('catalogue');
+      if (o.adapter.kind === 'catalogue') {
+        expect(o.adapter.adapterId).toBe(`nano-gpt:${o.upstreamSlug}`);
+      }
+      expect(o.freedomOrientedDeployment).toBe(true);
+      const canonical = getCanonical(o.canonicalRef ?? '');
+      expect(canonical?.freedomOriented).toBe(false);
+      expect(
+        effectiveFreedom(canonical?.freedomOriented ?? null, o.freedomOrientedDeployment),
+      ).toBe('restricted');
     }
   });
 

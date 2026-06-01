@@ -19,10 +19,10 @@ beforeAll(() => {
 afterAll(() => _resetRegistryForTests());
 
 describe('canonical-registry', () => {
-  test('lists thirteen canonicals with unique ids', () => {
+  test('lists twenty canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(13);
-    expect(new Set(ids).size).toBe(13);
+    expect(ids).toHaveLength(20);
+    expect(new Set(ids).size).toBe(20);
     expect(ids).toContain('glm-5.1');
     expect(ids).toContain('deepseek-v3.2');
     expect(ids).toContain('qwen3.5-397b-a17b');
@@ -31,6 +31,10 @@ describe('canonical-registry', () => {
     expect(ids).toContain('mistral-small-4');
     expect(ids).toContain('mistral-medium-3-5');
     expect(ids).toContain('mistral-large-3');
+    // Claude family (ADR 0032)
+    expect(ids).toContain('claude-haiku-4.5');
+    expect(ids).toContain('claude-sonnet-4.6');
+    expect(ids).toContain('claude-opus-4.8');
   });
 
   test('getCanonical returns by id and undefined for unknown', () => {

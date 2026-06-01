@@ -2,8 +2,32 @@
 
 **Date:** 2026-06-01
 **Author:** Liz (brainstormed with Chris)
-**Status:** Design — awaiting review
+**Status:** Phase A (Claude) implemented & live-verified — see the as-built note.
 **Spec for:** the curation work in [[../../obsidian/insights/2026-06-01-curation-batch-plan]] (Claude + ChatGPT strands)
+
+---
+
+## Update 2026-06-01 — as-built: Claude via nano-gpt, not OpenRouter
+
+The body below designed delivery via **OpenRouter**. During implementation the
+live probe surfaced a blocker: the community uses OpenRouter with privacy-
+"limited keys", whose data policy excludes the Anthropic-direct endpoint, so
+requests route to **Amazon Bedrock** — which does **not** honour Anthropic
+`cache_control` (Opus 4.8 cached nothing and 400'd a multi-turn exchange).
+Chris's call: keep Anthropic *and* OpenAI off OpenRouter entirely.
+
+**Claude is therefore delivered via nano-gpt** (reasoning = slug-swap toggle;
+caching verified). Everything else in this spec held: the cache-breakpoint
+module, the CENSORED derivation, the canonicals, and the deferred signature
+replay are all route-agnostic and were reused unchanged. The adapter wraps the
+nano-gpt slug-swap adapter instead of the OpenRouter one. Reasoning is a
+**toggle** (effort does not modulate the trace — live-measured, GLM/Kimi-style),
+not steps. All seven Claude models pass the conversation-suite 22/22 with cache
+engaged. See [[../../obsidian/decisions/0032-premium-censored-models-via-routers]],
+[[../../obsidian/providers/nano-gpt]], [[../../obsidian/models/claude-4]].
+
+Where the sections below say "OpenRouter" for the Claude route, read "nano-gpt".
+The §5.1 cache strategy, §5.3 CENSORED, and §5.2 signature deferral are unchanged.
 
 ---
 

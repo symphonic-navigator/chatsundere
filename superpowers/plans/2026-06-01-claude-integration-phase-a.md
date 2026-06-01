@@ -1,5 +1,15 @@
 # Claude Integration (Phase A) Implementation Plan
 
+> **AS-BUILT NOTE (2026-06-01):** implemented, but the route changed mid-flight
+> from **OpenRouter to nano-gpt** — OpenRouter's limited-keys path routes
+> Anthropic to Amazon Bedrock, which does not honour `cache_control` (live-
+> probed). Read "OpenRouter" as "nano-gpt" below; the adapter wraps the nano-gpt
+> slug-swap adapter, and reasoning is a **toggle** (effort does not modulate —
+> measured), not steps. The cache module, canonicals, CENSORED badge, and
+> signature deferral were route-agnostic and landed as planned. All seven Claude
+> models verified 22/22 with cache engaged. See ADR 0032 and the spec's as-built
+> note.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Integrate seven Claude models (Haiku 4.5; Sonnet 4.5/4.6; Opus 4.5/4.6/4.7/4.8) via OpenRouter, with refined Anthropic prompt-cache breakpoints, reasoning-effort steps, and the honest CENSORED badge — all live-verifiable today.

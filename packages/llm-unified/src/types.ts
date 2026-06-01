@@ -42,15 +42,24 @@ export interface WireToolCall {
   function: { name: string; arguments: string };
 }
 
+/** Anthropic ephemeral prompt-cache marker. OpenRouter passes this through to
+ * Anthropic verbatim on the OpenAI-compatible surface. Only the Claude adapter
+ * ever sets it; every other adapter leaves content parts unmarked. */
+export interface CacheControl {
+  type: 'ephemeral';
+  ttl?: '5m' | '1h';
+}
+
 /**
  * One part of a multimodal message body (OpenAI shape). A plain-text message
  * uses the `string` content form; a message carrying an image uses the array
  * form with one `text` part and one or more `image_url` parts (data URL or
  * remote URL). Every provider we curate accepts this on a `user` message.
+ * The optional `cache_control` marker is Claude-only (see CacheControl).
  */
 export type WireContentPart =
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string } };
+  | { type: 'text'; text: string; cache_control?: CacheControl }
+  | { type: 'image_url'; image_url: { url: string }; cache_control?: CacheControl };
 
 export interface WireMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';

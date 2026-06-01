@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import {
+  type FreedomState,
   availableCanonicals,
+  effectiveFreedom,
   getCanonical,
   getProvider,
   listOfferings,
@@ -533,6 +535,26 @@ function TrustBadge({ kind }: { kind: 'tee' | 'zdr' }): JSX.Element {
 }
 
 /**
+ * The loud, honest signal for a censored model. Only 'restricted' carries a
+ * badge today (free/unknown stay unmarked); restricted means the model — or its
+ * deployment — applies content restrictions somewhere in the stack. For Claude
+ * and ChatGPT the model is censored at source while the router routes verbatim;
+ * we route via the anonymising router (LLM-VPN, ADR 0032), so the server still
+ * never sees plaintext, but the censorship is real and we name it.
+ */
+function FreedomBadge({ state }: { state: FreedomState }): JSX.Element | null {
+  if (state !== 'restricted') return null;
+  return (
+    <span
+      title="This model is censored by its maker. Reached via an anonymising router — the server never sees your data — but the model itself applies content restrictions."
+      className="rounded border border-danger/40 bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-danger"
+    >
+      Censored
+    </span>
+  );
+}
+
+/**
  * Jurisdiction badge — the legal home of the deployment (e.g. EU), in the same
  * aurora palette as ZDR so trust signals read as a set. The title spells it out.
  */
@@ -666,6 +688,9 @@ function ModelList({
                           {o.trust.jurisdiction ? (
                             <JurisdictionBadge code={o.trust.jurisdiction} />
                           ) : null}
+                          <FreedomBadge
+                            state={effectiveFreedom(c.freedomOriented, o.freedomOrientedDeployment)}
+                          />
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-paper-soft">
                           <span>{o.context.recommended.toLocaleString()} ctx</span>
