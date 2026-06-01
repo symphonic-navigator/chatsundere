@@ -550,11 +550,127 @@ h1 {
   font-size: 0.95rem;
   line-height: 1.5;
   word-wrap: break-word;
-  /* Preserve newlines and runs of whitespace — both the user's typed
-     structure (paragraph breaks via Shift-Enter) and the model's response
-     formatting depend on this. Without pre-wrap the HTML default collapses
-     them all into a single space. */
-  white-space: pre-wrap;
+}
+/* Opulent Markdown styling for rendered message content. All message text
+   renders through MarkdownContent, so block elements own their own spacing.
+   Tuned for the Aurora dark theme: ink-soft code surfaces with a single
+   restrained aurora glow, accent-lilac links, serif headings, marker-pill
+   inline code. */
+.msg-text p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+.msg-text p:first-child {
+  margin-top: 0;
+}
+.msg-text p:last-child {
+  margin-bottom: 0;
+}
+.msg-text ul,
+.msg-text ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 1.5em;
+}
+.msg-text li {
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+.msg-text ul {
+  list-style-type: disc;
+}
+.msg-text ol {
+  list-style-type: decimal;
+}
+/* Inline code as a subtle marker pill — rhymes with the .pill inline markers. */
+.msg-text code:not(pre code) {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+/* Fenced code blocks sit on the ink-soft elevated surface with one restrained
+   aurora glow. The !important overrides shiki's inline background-color so the
+   highlighted output rests on the theme surface, not shiki's own grey. */
+.msg-text pre {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+  padding: 0.85em 1em;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-ink-soft) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px -16px rgba(141, 109, 255, 0.4);
+  overflow-x: auto;
+}
+.msg-text pre code {
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.msg-text blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--color-aurora-500) 55%, transparent);
+  padding-left: 0.85em;
+  margin-left: 0;
+  opacity: 0.85;
+}
+/* Serif headings give model replies a touch of opulence (the §11 voice). */
+.msg-text h1,
+.msg-text h2,
+.msg-text h3,
+.msg-text h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.msg-text h1 {
+  font-size: 1.4em;
+}
+.msg-text h2 {
+  font-size: 1.2em;
+}
+.msg-text h3 {
+  font-size: 1.08em;
+}
+.msg-text hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 1em 0;
+}
+.msg-text table {
+  border-collapse: collapse;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.msg-text th,
+.msg-text td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.35em 0.65em;
+}
+.msg-text th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+/* Accent-lilac links with a quiet underline that brightens on hover. */
+.msg-text a {
+  color: var(--color-aurora-500);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-aurora-500) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.msg-text a:hover {
+  text-decoration-color: var(--color-aurora-500);
+}
+/* KaTeX display maths: a little vertical air, horizontal scroll on overflow. */
+.msg-text .katex-display {
+  margin: 0.6em 0;
+  padding: 0.25em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .msg.expanded {
   /* Full-width selection tint — edge to edge. The inner .msg-text inset box
@@ -824,30 +940,6 @@ h1 {
   .streaming-cursor {
     animation: none;
     opacity: 0.7;
-  }
-}
-
-/* Token fade-in. The stream-manager pushes one text block per upstream
- * chunk; MessageBlock renders each block as its own <span class="token-fade">
- * during the streaming draft. React mounts only the newly-arrived span on
- * each token, so the keyframe plays exactly once per chunk — gives the
- * "activating" Grok-style cadence without re-flashing already-rendered text. */
-.msg-text .token-fade {
-  animation: token-fade-in 280ms ease-out both;
-}
-@keyframes token-fade-in {
-  from {
-    opacity: 0;
-    filter: blur(1.5px);
-  }
-  to {
-    opacity: 1;
-    filter: blur(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .msg-text .token-fade {
-    animation: none;
   }
 }
 

@@ -340,16 +340,15 @@ function runIntoDraft(
 
 /**
  * Push a stream chunk as its own block in the live buffer. We
- * deliberately do NOT coalesce here so that the renderer sees one
- * DOM span per upstream chunk — that gives each newly-arrived token
- * a fresh-mount and lets the `.token-fade` CSS keyframe play exactly
- * once per chunk, without re-triggering on existing spans.
- * Coalescing happens once, engine-side, at stream finalise (see
- * stream-engine.appendText / appendReasoning).
+ * deliberately do NOT coalesce here so that the renderer sees the
+ * latest token append on each React reconcile — MarkdownContent
+ * re-parses the concatenated text on every update, giving a live
+ * preview as tokens arrive. Coalescing happens once, engine-side,
+ * at stream finalise (see stream-engine.appendText / appendReasoning).
  *
  * The same contract holds for reasoning chunks — every upstream
- * reasoning delta becomes its own sub-block so the body of an open
- * ReasoningPill also benefits from per-chunk fade-in.
+ * reasoning delta becomes its own sub-block so the ReasoningPill
+ * body also receives incremental updates.
  */
 function appendStreamChunk(
   buf: ContentBlock[],

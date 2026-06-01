@@ -144,14 +144,14 @@ describe('MessageBlock', () => {
     expect(userText.style.fontFamily).toBe('var(--font-display)');
   });
 
-  it('applies token-fade class to text spans only while message is the streaming draft', () => {
+  it('renders adjacent text chunks as joined markdown with no token-fade class', () => {
     const msg = personaMsg({
       contentBlocks: [
         { type: 'text', text: 'Hi' },
         { type: 'text', text: ' world' },
       ],
     });
-    const { container, rerender } = render(
+    const { container } = render(
       <MessageBlock
         message={msg}
         pills={new Map()}
@@ -165,31 +165,12 @@ describe('MessageBlock', () => {
         isStreamingDraft={true}
       />,
     );
-    // Adjacent text chunks coalesce into one group span; each chunk lives
-    // inside it as its own inner span carrying the token-fade class.
-    const innerSpans = container.querySelectorAll('.msg-text > span > span');
-    expect(innerSpans.length).toBe(2);
-    expect(innerSpans[0]?.className).toBe('token-fade');
-    expect(innerSpans[1]?.className).toBe('token-fade');
-
-    rerender(
-      <MessageBlock
-        message={msg}
-        pills={new Map()}
-        mindspace={mindspaceStub}
-        persona={aurum}
-        displayName="Chris"
-        expanded={false}
-        onToggleExpand={vi.fn()}
-        onCopy={vi.fn()}
-        onBookmark={vi.fn()}
-        isStreamingDraft={false}
-      />,
-    );
-    const after = container.querySelectorAll('.msg-text > span > span');
-    expect(after.length).toBe(2);
-    expect(after[0]?.className).toBe('');
-    expect(after[1]?.className).toBe('');
+    // Text blocks in a group are concatenated and rendered as Markdown — the
+    // two chunks become one continuous string, not two fade-in spans.
+    const text = container.querySelector('.msg-text') as HTMLElement;
+    expect(text.textContent).toBe('Hi world');
+    // The per-token fade-in mechanism has been removed.
+    expect(container.querySelector('.token-fade')).toBeNull();
   });
 
   it('renders contentBlocks in order with pills inline', () => {

@@ -7,6 +7,7 @@ import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
 import { ReasoningPill } from './ReasoningPill.js';
+import { MarkdownContent } from './markdown/MarkdownContent.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -23,9 +24,9 @@ export interface MessageBlockProps {
   onCopy: () => void;
   onBookmark: () => void;
   onRegenerate?: () => void;
-  /** True while this message is the active streaming draft. Text-block
-   *  spans rendered under this flag carry the `token-fade` class so each
-   *  freshly-mounted span plays the fade-in keyframe (Grok-style). */
+  /** True while this message is the active streaming draft. Used to mark the
+   *  last reasoning group as live; text now renders via MarkdownContent which
+   *  re-parses as tokens arrive (no per-token fade). */
   isStreamingDraft?: boolean;
 }
 
@@ -124,31 +125,15 @@ function renderBlocks(
     ? groups.map((g) => g.type).lastIndexOf('reasoning')
     : -1;
 
-  // During streaming, the stream-manager pushes one text block per upstream
-  // chunk (no coalescing). Each block becomes its own DOM span inside the
-  // group span; React mounts only the newest span on each token arrival, so
-  // the `.token-fade` keyframe plays exactly once per chunk.
-  const textClass = isStreamingDraft ? 'token-fade' : undefined;
   // Reasoning needs a font; the prop type allows persona=null (greeting /
   // empty chat surface), so fall back to 'serif' — the default user font.
   const reasoningFont: PersonaRow['font'] = persona?.font ?? 'serif';
 
   return groups.map((group, idx) => {
     if (group.type === 'text') {
-      return (
-        // biome-ignore lint/suspicious/noArrayIndexKey: groups have no stable id; the group index is stable across token appends (append-only)
-        <span key={`g-${idx}`}>
-          {group.blocks.map((b, j) => (
-            <span
-              // biome-ignore lint/suspicious/noArrayIndexKey: see above — per-chunk spans are append-only within their group
-              key={`t-${idx}-${j}`}
-              className={textClass}
-            >
-              {(b as { type: 'text'; text: string }).text}
-            </span>
-          ))}
-        </span>
-      );
+      const text = group.blocks.map((b) => (b as { type: 'text'; text: string }).text).join('');
+      // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across token appends (append-only)
+      return <MarkdownContent key={`g-${idx}`} text={text} />;
     }
     if (group.type === 'reasoning') {
       const trace = group.blocks
