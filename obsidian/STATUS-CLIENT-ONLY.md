@@ -700,8 +700,8 @@ update the relevant one at the end.
 
 - **Status-tracking split (2026-05-23)** — STATUS.md → STATUS-BACKEND.md;
   STATUS-CLIENT-ONLY.md established for the standalone-mode side; cross-
-  refs set; CLAUDE.md §6/§16 still reference the old single STATUS.md
-  and need an update on a later doc-touch commit.
+  refs set. CLAUDE.md §6/§15-layout/§16 updated to reference both split
+  files (2026-06-01) — the old single-STATUS.md references are gone.
 - **UX-CONCEPT.md landed (2026-05-23)** — full operating-concept brief
   by Chris + Lyra; serves as the North-Star concept document for the
   client-only work. Open Questions section flags Mindspace palette,
