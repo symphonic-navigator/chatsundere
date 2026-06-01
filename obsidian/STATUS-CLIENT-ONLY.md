@@ -33,6 +33,22 @@ Spec/plan: [[../superpowers/specs/2026-06-01-bookmarks-and-toc-design]],
 the 6 manual steps (spec §9), then pushes the master backlog; then Block-1 memory
 (chatsune port) per [[ROADMAP]].
 
+**Device-test polish (squashed `1c750eb`, NOT pushed)** — five device-found
+issues fixed after the feature landed. Notable: the reading tool-strip was
+invisible because `position:fixed` was trapped by the mindspace **transform**
+layers' containing block (the hazard already documented for the bottom
+affordance) — bound the strip + ToC sheet to `.chat-page` via `position:absolute`
+instead. Also: jump now disables auto-follow so it lands on the target message
+(not the chat end); pin active-state via background tint (emoji ignore `color`);
+visible inline rename field; rename/remove on the global Bookmarks list;
+reasoning UI refreshes on mid-chat model change (offering query keyed on
+provider+model, not just persona id); full-width message-selection tint (no
+inner inset box that narrowed text — Chris's "mobile-first = economical with
+space" insight, see [[feedback_economical_with_space]]); and **My History** now
+uses a custom themed persona dropdown (native `<select>` option lists can't match
+the dark surface) plus title-search + persona-filter on the **Bookmarks** tab,
+NSFW-aware.
+
 **Earlier 2026-06-01 — Credential bus landed (squashed on
 master `7ca7425`, NOT pushed).** A forward-looking client-side structure
 (`apps/user-client/src/credentials/`) that answers "does the user have an API
