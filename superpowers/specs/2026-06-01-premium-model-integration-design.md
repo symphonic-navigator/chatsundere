@@ -144,7 +144,13 @@ continuation request, or Anthropic rejects it. New plumbing:
   hardcodes `false`, `openrouter-openai.ts:136` — hence a dedicated adapter).
 
 The exact engine integration points are detailed in the plan after tracing the
-tool-loop code; this spec fixes the requirement and approach.
+tool-loop code; this spec fixes the requirement and approach. **Design for the
+agentic-harness north star (Chris, 2026-06-01):** the carrier is
+**tool-source-agnostic** — it lives at the engine's tool-loop level and
+preserves the thinking block across any tool round-trip, whether the tool is a
+built-in "integration" or an MCP server reached over REST. It must not be
+special-cased to one tool registry, so MCP-backed tools inherit correct Claude
+reasoning for free.
 
 ### 5.3 CENSORED-badge derivation (D1)
 
@@ -184,10 +190,20 @@ the client; we verify the surfacing path exists and add it if not.
   vision true. OpenAI auto-caches → no breakpoint work.
 - **`gpt-4.1` canonical** + offerings on both routers. `reasoning: none`,
   vision true.
-- **`gpt-5.5` canonical** + offerings on both routers. `reasoning: steps` via
-  `reasoning.effort` (probe whether nano-gpt uses the `flag` pairing or a
-  distinct shape; OpenRouter uses the unified object). `replayReasoning: false`
-  — OpenAI manages reasoning server-side; no signature plumbing.
+- **`gpt-5.5` canonical** + offerings on both routers. `reasoning: steps` with
+  a real off. **nano-gpt shape resolved by live probe (2026-06-01):** the
+  OpenAI-native **top-level `reasoning_effort`** ∈ {`none`, `minimal`, `low`,
+  `medium`, `high`}; `none` is a genuine off (32 completion tokens, correct
+  answer) and the levels modulate monotonically (none 32 → minimal 234 → low
+  ~274 → medium 364 → high ~535 completion tokens; visible answer ≈ constant,
+  so the rise is hidden reasoning). No `:thinking` slug. Two quirks to encode:
+  (a) this is a **new nano-gpt switching mode** — top-level `reasoning_effort`
+  with `none` as off — that `applyReasoningToBody` (`_reasoning-body.ts`) does
+  not yet handle (it knows only `slug`/`flag`/`none`); (b) nano-gpt rolls
+  reasoning into `completion_tokens` and reports `reasoning_tokens: 0`, so usage
+  accounting must not rely on a separate reasoning count for this route.
+  OpenRouter uses its unified `reasoning` object. `replayReasoning: false` —
+  OpenAI manages reasoning server-side; no signature plumbing.
 - All `freedomOriented: false` → CENSORED, same as Claude.
 
 ### 6.3 Data-model change
@@ -231,14 +247,18 @@ future-us does not "rediscover" it as a bug.
 - The missing `obsidian/providers/nano-gpt.md` provider record.
 - Updated `STATUS-CLIENT-ONLY.md` / batch-plan tick-off.
 
-## 9. Open questions for the plan
+## 9. Resolved since first draft
 
-1. Exact engine integration points for the tool-loop signature carrier (trace
-   the assistant→tool→continue cycle).
-2. nano-gpt's reasoning shape for `gpt-5.5` (`flag` pairing in `NANO_GPT_PAIRS`
-   vs a distinct shape) — probe.
-3. Whether the `'restricted'` freedom state is already surfaced to the client
-   catalogue, or needs a surfacing addition.
+- **Q1 (tool-loop) — Chris delegated to Liz.** Decided: tool-source-agnostic
+  carrier at the engine tool-loop level (§5.2), serving the agentic-harness
+  north star (own integrations + MCP via REST). Exact integration points still
+  traced in the plan.
+- **Q2 (nano-gpt gpt-5.5 reasoning) — probed, resolved.** Top-level
+  `reasoning_effort` with `none` as a genuine off (§6.2). New switching mode to
+  add to `applyReasoningToBody`.
+- **Q3 (`'restricted'` → client) — Chris: yes.** Surfacing the freedom state to
+  the client catalogue is now a definite task; the plan verifies the existing
+  path and adds the surfacing if absent.
 
 ## 10. Manual verification (Chris, on device)
 
