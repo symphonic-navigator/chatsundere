@@ -1692,6 +1692,71 @@ h1 {
   opacity: 0.7;
 }
 
+/* Branch-this-chat bottom-sheet — mirrors .toc-sheet structure */
+.branch-sheet-root {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+}
+.branch-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.branch-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-ink, #1a1a1a);
+  border-top: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.branch-sheet-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+.branch-sheet-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-surface-input, rgba(0, 0, 0, 0.3));
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 14%, transparent);
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.branch-sheet-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--color-accent, #c9a227) 55%, transparent);
+}
+.branch-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.branch-cancel,
+.branch-confirm {
+  padding: 0.45rem 1rem;
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.branch-confirm {
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 22%, transparent);
+}
+.branch-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.branch-sheet-error {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, #e06c75 82%, var(--color-paper, #e6e6e6));
+}
+
 /* Jump highlight pulse */
 .msg-focus-pulse {
   animation: msg-focus-pulse 1.6s ease-out;

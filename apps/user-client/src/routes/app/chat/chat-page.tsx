@@ -6,13 +6,14 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
+import { BranchSheet } from '../../../components/chat/BranchSheet.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { ReadingToolStrip } from '../../../components/chat/ReadingToolStrip.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { TocSheet } from '../../../components/chat/TocSheet.js';
-import { useChat, useUpdateChat } from '../../../data/chats.js';
+import { useBranchChat, useChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRegenerate, useSendMessage } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
@@ -41,6 +42,7 @@ export function ChatPage(): JSX.Element {
   const sendMessage = useSendMessage();
   const regenerate = useRegenerate();
   const updateChat = useUpdateChat();
+  const branchChat = useBranchChat();
 
   const setChatId = useCurrentChatStore((s) => s.setChatId);
   const setLazy = useCurrentChatStore((s) => s.setLazy);
@@ -52,6 +54,7 @@ export function ChatPage(): JSX.Element {
   const reasoning = useCurrentChatStore((s) => s.reasoning);
 
   const [tocOpen, setTocOpen] = useState(false);
+  const [branchPointId, setBranchPointId] = useState<string | null>(null);
 
   const jumpToMessage = (messageId: string): void => {
     setInteractionMode(false);
@@ -263,6 +266,17 @@ export function ChatPage(): JSX.Element {
     void regenerate.mutateAsync({ chatId: activeChatId, reasoning });
   };
 
+  const onConfirmBranch = async (title: string): Promise<void> => {
+    if (!activeChatId || !branchPointId) return;
+    const newChatId = await branchChat.mutateAsync({
+      sourceChatId: activeChatId,
+      branchPointMessageId: branchPointId,
+      title,
+    });
+    setBranchPointId(null);
+    navigate(`/app/chat/${newChatId}`);
+  };
+
   const onSend = async (text: string): Promise<void> => {
     if (!effectivePersona) return;
     const newChatId = await sendMessage.mutateAsync({
@@ -326,6 +340,11 @@ export function ChatPage(): JSX.Element {
           displayName={displayName}
           streamHandle={streamHandle}
           onRegenerate={onRegenerate}
+          onBranch={(messageId) => {
+            branchChat.reset();
+            setBranchPointId(messageId);
+          }}
+          branchDisabled={isStreamLive}
         />
       ) : null}
 
@@ -410,6 +429,21 @@ export function ChatPage(): JSX.Element {
 
       {tocOpen ? (
         <TocSheet messages={messages} onClose={() => setTocOpen(false)} onJump={jumpToMessage} />
+      ) : null}
+
+      {branchPointId ? (
+        <BranchSheet
+          onConfirm={(title) => {
+            // Swallow the rejection for the unhandled-promise lint only — the
+            // failure is captured in branchChat.isError and surfaced below.
+            void onConfirmBranch(title).catch(() => {});
+          }}
+          onClose={() => {
+            setBranchPointId(null);
+            branchChat.reset();
+          }}
+          error={branchChat.isError ? 'Could not branch — please try again.' : undefined}
+        />
       ) : null}
 
       {isInteractionMode && effectivePersona && offering ? (

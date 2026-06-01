@@ -265,7 +265,7 @@ describe('MessageBlock', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
-  it('Branch button is disabled with tooltip', () => {
+  it('Branch button is disabled while a stream is live', () => {
     const { container } = render(
       <MessageBlock
         message={personaMsg()}
@@ -278,11 +278,13 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
         onRegenerate={vi.fn()}
+        onBranch={vi.fn()}
+        branchDisabled
       />,
     );
     const branch = container.querySelector('[data-ctrl="branch"]') as HTMLButtonElement | null;
     expect(branch?.disabled).toBe(true);
-    expect(branch?.title).toMatch(/branching/i);
+    expect(branch?.title).toMatch(/branching paused/i);
   });
 
   it('Read button is disabled with tooltip', () => {

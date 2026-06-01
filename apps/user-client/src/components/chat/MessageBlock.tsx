@@ -24,6 +24,10 @@ export interface MessageBlockProps {
   onCopy: () => void;
   onBookmark: () => void;
   onRegenerate?: () => void;
+  /** Fork the chat at this message. */
+  onBranch?: () => void;
+  /** Disable branching (stream live for this chat). */
+  branchDisabled?: boolean;
   /** True while this message is the active streaming draft. Used to mark the
    *  last reasoning group as live; text now renders via MarkdownContent which
    *  re-parses as tokens arrive (no per-token fade). */
@@ -100,6 +104,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           onCopy={p.onCopy}
           onBookmark={p.onBookmark}
           onRegenerate={p.onRegenerate}
+          onBranch={p.onBranch}
+          branchDisabled={p.branchDisabled}
         />
       ) : null}
     </div>

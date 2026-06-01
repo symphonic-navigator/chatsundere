@@ -56,6 +56,10 @@ export interface ChatStreamProps {
   streamHandle: StreamHandle | null;
   /** Re-roll the last persona answer. Wired only to the last persona message. */
   onRegenerate?: () => void;
+  /** Fork the chat at a given message. Wired to every message. */
+  onBranch?: (messageId: string) => void;
+  /** Disable branching across all messages (stream live for this chat). */
+  branchDisabled?: boolean;
 }
 
 /** Scroll container that sorts messages chronologically, inserts DateSeparators
@@ -172,6 +176,8 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 onCopy={() => copyMessageText(m)}
                 onBookmark={() => void toggleBookmark.mutateAsync(m.id)}
                 onRegenerate={isLastPersona ? p.onRegenerate : undefined}
+                onBranch={p.onBranch ? () => p.onBranch?.(m.id) : undefined}
+                branchDisabled={p.branchDisabled}
                 isStreamingDraft={isDraft}
               />
               {isDraft ? <StreamingCursor /> : null}
