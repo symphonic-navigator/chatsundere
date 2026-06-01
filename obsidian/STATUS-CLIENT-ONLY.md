@@ -5,7 +5,45 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-01 (latest) — **Session branching landed
+**Last updated:** 2026-06-02 (latest) — **System-prompt builder v2 landed
+(squashed on master `c581a61`, NOT pushed; awaiting Chris's device test).**
+Brainstormed end-to-end with Chris. The fixed five-layer `composeSystemPrompt`
+is replaced by a banded, ordered **segment builder** `buildPrompt(inputs, job)`
+(`packages/llm-unified/src/composition.ts`): ten segments across **three bands**
+— Band 1 Behaviour & Voice (tonality → NSFW → global → persona) in **all** jobs;
+Band 2 Context & Knowledge (about-me → project → memories) **chat-only**; Band 3
+Technical reserved with **no producer** this cycle — resolved, job-filtered,
+empty-dropped, sorted by (band, order), joined with blank lines. Two curated,
+**non-editable** "Chatsundere identity" constants (`src/identity/chatsundere-identity.ts`):
+**Tonality** (anti-censorship voice; **default ON** per persona) and **NSFW**
+(explicit unlock; **default OFF**, driven by the existing `adultPersona` flag).
+Decisions (Chris's): (1) segment model with **only real producers** implemented,
+the rest reserved slots; (2) **3-band order**, generic→specific; (3) tonality on /
+NSFW off by default; (4) NSFW reuses the **one** `adultPersona` flag (visibility +
+prompt). Because Band 1 runs in every job, an adult persona's NSFW segment now
+reaches **title-gen + memory** by construction — and the old *unconditional* NSFW
+line that `title-generator.ts` wrongly applied to SFW personas is **gone** (the
+mitigated bug). The "unlocker" settings field → **`globalInstructions`** (Dexie
+**v9** migration copies the value + backfills `chatsundereTonality=true`). All
+three prompt sites — chat (`stream-engine.ts`), title (`title-generator.ts`),
+**context-gauge** (`chat-page.tsx`) — derive inputs identically incl. the
+about-me-override resolution (the final holistic review caught a gauge divergence
+where `chat-page` ignored `aboutMeOverride`; fixed pre-squash). Built
+**subagent-driven** (9 TDD tasks, serial, on `feat/system-prompt-builder`,
+squashed) + spec-review + quality-review per task + a final holistic **opus**
+review (**READY TO SQUASH**, no critical/important). **Not a Larissa change** —
+`llm-unified` + client only, no auth/sync/proxy/crypto. Verification: `pnpm
+typecheck` **13/13**; llm-unified `bun test` **237/0**; user-client vitest **671
+pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline, **verified identical on master**); build **9/9**.
+Spec/plan: [[../superpowers/specs/2026-06-01-system-prompt-builder-design]],
+[[../superpowers/plans/2026-06-01-system-prompt-builder]]. **Deferred** (spec §9):
+the final identity-text wording pass (initial British-English drafts shipped);
+producers for project/memories/formatting/tools/TTS slots. **Next:** Chris
+device-tests the 6 manual steps (spec §10), then pushes the master backlog (now 8
+ahead of origin).
+
+**Earlier 2026-06-01 — Session branching landed
 (squashed on master `f1463d2`, NOT pushed; awaiting Chris's device test).**
 Block-1 chat-core feature, brainstormed end-to-end with Chris. The per-message
 `✎ Branch` control (previously a disabled "arrives later" stub) now forks a chat
