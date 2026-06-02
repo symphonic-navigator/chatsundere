@@ -49,6 +49,13 @@ export type {
   WebInterfacingProvider,
 } from './integrations/web-interfacing.js';
 
+export {
+  registerWebAdapter,
+  resolveWebAdapter,
+  _resetWebAdapterRegistryForTests,
+  type WebAdapterFactory,
+} from './integrations/web-adapter-registry.js';
+
 export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js';
 
 export { probeProvider, type ProbeArgs } from './probe.js';
