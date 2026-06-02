@@ -5,7 +5,62 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-02 (latest) — **Frontend smoothness round landed
+**Last updated:** 2026-06-02 (latest) — **Tool-execution spine +
+`calculate_js` landed (squashed on master `ec3515f`, NOT pushed; awaiting
+Chris's device test).** Brainstormed end-to-end with Chris, built
+subagent-driven in an isolated worktree (12 tasks, serial implementers +
+per-task review + a final **opus** holistic review = READY TO SQUASH). The
+first of the planned "three tools"; `web_search`/`web_fetch` are a separate,
+larger nano-gpt **integration** axis (0..n keyed by the user's API keys),
+deliberately out of scope here. **What landed:** the missing *head and tail*
+of tool support — the wire layer was already tool-ready, but tool defs were
+never sent and a streamed tool-call became an inert `completed` pill that was
+never executed. Now: (1) an **always-on class-based tool registry**
+(`apps/user-client/src/tools/`) — each `Tool` carries its wire `ToolDef`, an
+optional `systemPromptInstruction: string | null`, and an `execute`; helpers
+`toolDefs()` / `systemPromptSegment()` / `dispatch()`. **No tool toggle**
+(omakase + curation — any model that misbehaves with reasoning+tools is a
+curation exclusion, not a feature). (2) **`calculate_js`** runs in a **fresh
+Web Worker per call** (dangerous globals nulled on `self` + function-locally,
+**4 KB** output cap, **10 s** timeout, terminated on success/timeout/abort);
+the contract returns captured `console.*` **plus the completion value of the
+final expression** (direct `eval` inside a `new Function` scope — kills
+chatsune's empty-output trap). (3) The **tool-execution loop**
+(`lib/tool-loop.ts`, pure + injected deps): inject defs → detect tool-call
+pills → `dispatch` → append `assistant(tool_calls)` + `tool` messages →
+re-stream; **capped at `MAX_TOOL_ROUNDS = 5` tool rounds** (counted globally
+across all future tools — Chris's Gardasee example), then a forced tools-less
+answer. (4) `stream-engine` gained `tools`/`toolExchange`/`toolsInstruction`
+(pills now default `pending`); `stream-manager` binds the loop (gated on
+`offering.profile.toolCalls.supported`) and **mirrors live pill status**
+(`pending→completed/failed`) into the streaming draft via `onPillUpdate` +
+`ChatStream` pill-buffer merge. (5) **Band-3 tools segment** in the prompt
+builder (chat-only) — finally a producer for the reserved slot. (6) **Pill is
+tap-to-expand** showing the executed code + result/error. **Persistence
+boundary (deliberate):** the result is persisted in the pill payload, but
+cross-turn replay of the tool exchange to the model stays **deferred** (like
+chatsune) — the final answer text carries the result. **Not a Larissa change**
+(no auth/sync/proxy/crypto); the JS-eval sandbox is logged in
+[[insights/security-deferrals]]. **Process note worth keeping:** the full
+vitest run (Task 11) caught a regression the per-task reviewers missed — they
+ran typecheck + the touched test dir, not the full suite. The store now reads
+`args.offering.profile`, which broke `stream-manager-store.test.ts`: its stub
+used a **stale `model` key** (pre-catalogue-migration) instead of `offering`,
+masked for ages by an `as never` cast because the store never read the
+offering directly. Reinforces [[feedback_per_task_review_runs_full_suite]] —
+per-task verification must run the **full** vitest. Verification: `pnpm
+typecheck` **13/13**; llm-unified `bun test` **251/0**; user-client vitest
+**738 pass / 8 fail** (the unchanged pre-existing `cockpit-draft`/`chat-page`/
+`chat-route` localStorage-jsdom baseline, confirmed identical on master);
+build **9/9** (`sandbox.worker.ts` emitted as its own chunk). Spec/plan:
+[[../superpowers/specs/2026-06-02-calculate-js-tool-spine-design]],
+[[../superpowers/plans/2026-06-02-calculate-js-tool-spine]]. **Next:** Chris
+device-tests the 6 manual steps (spec §11 — the strawberry question returns 3
+via an expandable pill; a provoked sandbox error recovers; a maths-free chat
+is unchanged); then `web_search`/`web_fetch` as the larger nano-gpt
+integration, and memory (the long-weekend item).
+
+**Earlier 2026-06-02 — Frontend smoothness round landed
 (squashed on master `8ef3501`, NOT pushed; awaiting Chris's device test).**
 An "inserted frontend-improvement day" (next up is memory, which Chris is still
 thinking through — slated for the long weekend). Five client-only polish items,
