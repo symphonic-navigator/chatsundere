@@ -5,7 +5,61 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-02 (latest) — **Tool-execution spine +
+**Last updated:** 2026-06-02 (latest) — **Frontend polish round (5 items)
+landed (squashed on master `fd30cb5`, NOT pushed; items 1-4 device-tested by
+Chris, item 5 awaiting his device test).** A second "frontend-improvement"
+pass, built conversationally with Chris (no spec/plan, no Larissa path — UI
+only). **(1) Per-token fade restored.** The rich-Markdown renderer had silently
+dropped it (it re-parses the whole text per token). Now a streaming-draft text
+group renders each *un-coalesced* chunk (`stream-manager.appendStreamChunk`
+deliberately doesn't merge) as its own `.stream-tok` span — a freshly-mounted
+span fades in (`@keyframes tok-fade`, 420ms, reduced-motion off), so the reply
+materialises token-by-token as **raw text**; on finalise the blocks coalesce
+and re-render once via `MarkdownContent`. No stream-engine/stream-manager change
+(kept off claude-web's parallel web-tools spine). **(2) Dim-overlay un-dim now
+fades.** It faded on dim (200ms) but the chat-page-conditional `InteractionMode`
+unmounted on close, so the dark layer vanished instantly. `DimOverlay` lifted to
+a permanent `.chat-page` child driven by `current-chat.store` `inputFocused`
+(`active={isInteractionMode && inputFocused}`); `InteractionMode` only drives the
+flag now, so the overlay outlives the unmount and the opacity transition runs
+both ways. **(3) Model-emitted Markdown images — privacy fix.** The renderer
+turned `![](url)` into a bare `<img>` the browser auto-fetched → IP/timing leak
+to a third party (a tracking/exfiltration vector, contradicts zero-knowledge).
+New `markdown/ImageMarker.tsx` (the `img` override) renders a tap-to-load pill
+naming the source host; loads only on consent with `referrer-policy:
+no-referrer`, never persisted. A **scheme allowlist** (only `http(s)` +
+`data:image/` are loadable) sends unsafe schemes
+(`javascript:`/`file:`/`blob:`/non-image `data:`/relative) to an inert,
+non-clickable marker — a background security review flagged the error-state
+recovery link as a `javascript:`-URL XSS vector; hardened (allowlist + the link
+only rendered for http(s)) and folded into the squash before finalising.
+Constructive error on failure. Phase-2 follow-up logged: route the consented load
+through `proxy-service` (no IP leak even then). **(4) Adult-mode pill hides in
+SFW chats.** `chat-page` publishes `chatPersonaIsAdult` to the store; the
+brand-bar `AdultModeToggle` renders `null` when `=== false` (chat + SFW persona)
+for a calmer screen — visible otherwise (`null` outside chats, `true` for adult
+personas). **(5) Brand-bar chrome trimmed inside a chat.** `root.tsx` derives
+`isChatRoute`/`isReadingChat`/`isLoginRoute`: username + connectivity ("LOCAL")
+drop in **both** chat sub-modes; reading mode **also** drops the "Chatsundere"
+logo and compacts the bar (`py-1`/`lg:py-1.5`) while
+`.chat-page[data-mode="reading"]` pulls `top` 3.5rem→2rem (mobile) /
+4rem→2.25rem (desktop) with a 180ms transition — the chat surface rises into the
+reclaimed space; the adult pill moved to the right cluster (off-centre, away from
+device cameras) and is suppressed on `/login`. **Tuning knobs (Chris, on
+device):** header `py-1`/`lg:py-1.5` + the reading `top` values. **Pre-existing
+biome fix folded in:** the `.pill-detail*` one-liner from the `calculate_js` work
+was reformatted so the lefthook staged-files check passed. **Not a Larissa
+change** (no auth/sync/proxy/crypto). Verification: `pnpm typecheck` **13/13**;
+user-client vitest **755 pass / 8 fail** (the unchanged
+`cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline, verified
+identical on master); build **9/9**; biome clean on all touched files. New tests:
+`image-marker` (7, incl. the unsafe-scheme refusal), `root.chat-chrome` (5) +
+`message-block`/`interaction-mode`/
+`current-chat-store`/`AdultModeToggle` updates. **Next:** Chris device-tests
+item 5 (top-bar) → Liz pushes the master backlog; then `web_search`/`web_fetch`
+(the larger nano-gpt integration) and memory (the long-weekend item).
+
+**Earlier 2026-06-02 — Tool-execution spine +
 `calculate_js` landed (squashed on master `ec3515f`, NOT pushed; awaiting
 Chris's device test).** Brainstormed end-to-end with Chris, built
 subagent-driven in an isolated worktree (12 tasks, serial implementers +
