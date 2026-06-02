@@ -94,18 +94,25 @@ Built per send by the stream-manager. Carries the NSFW and location context
 Chris flagged as essential, plus the selected offerings and a call-time key
 accessor.
 
+An offering has no single id — it is keyed by `(providerId, upstreamSlug)`
+(`getOffering(providerTemplateId, upstreamSlug)` at `registry.ts:77`). So the
+selection is an `OfferingRef`, not a string id:
+
 ```ts
+type OfferingRef = { providerId: string; upstreamSlug: string };
+
 interface IntegrationContext {
   nsfwAllowed: boolean;                 // from the active persona's adultPersona flag
   location: WebLocation | null;         // shape defined; source deferred (flows as null today)
-  webSearchOfferingId: string | null;   // from web settings
-  webFetchOfferingId: string | null;    // independently selectable
+  webSearch: OfferingRef | null;        // from web settings
+  webFetch: OfferingRef | null;         // independently selectable
   getKey: (providerTemplateId: string) => Promise<string | null>;  // credential-bus, MasterKey-gated, call-time only
 }
 ```
 
-`WebLocation` is a minimal, defined shape (e.g. `{ country?, region?, city? }`);
-its *source* is an explicit follow-up (§7).
+`WebLocation` is a minimal, defined shape (`{ country?, region?, city? }`) and
+lives in `llm-unified` so `WebContext` can reference it; its *source* is an
+explicit follow-up (§7).
 
 ### 3.3 Registry seam — `apps/user-client/src/tools/registry.ts`
 
@@ -125,15 +132,26 @@ active.
 
 ### 3.4 Web-interfacing concretisation
 
+**Capability metadata lives on the offering; behaviour lives on the adapter.**
+The precise split (a refinement of decision §2.3's "as metadata"): curated facts
+— *which backend can search/fetch, and its quality class* — are catalogue
+knowledge, so they sit on the `Offering`; the adapter is purely behavioural.
+Single source of truth, no duplication. The `Offering` type
+(`packages/llm-unified/src/catalogue/types.ts:37`) gains an optional block
+(additive, `undefined` for the existing `llm` offerings):
+
+```ts
+type WebQualityClass = 'classic' | 'ai-friendly';   // "dumb 2002-style" vs exa/linkup
+interface WebOfferingMeta { canSearch: boolean; canFetch: boolean; qualityClass: WebQualityClass; }
+// added to Offering:  web?: WebOfferingMeta;
+```
+
 **`WebInterfacingProvider` contract — in `packages/llm-unified`** (consistent
-with the LLM adapters and catalogue living there; the adapter is pure and does
-the network call given a key, so it belongs in the shared package):
+with the LLM adapters and catalogue living there; the adapter does the network
+call given a key, so it belongs in the shared package). Behaviour only:
 
 ```ts
 interface WebInterfacingProvider {
-  readonly canSearch: boolean;
-  readonly canFetch: boolean;
-  readonly qualityClass: 'classic' | 'ai-friendly';   // "dumb 2002-style" vs exa/linkup
   search?(query: string, ctx: WebContext, key: string, signal?: AbortSignal): Promise<WebSearchResult>;
   fetch?(url: string, ctx: WebContext, key: string, signal?: AbortSignal): Promise<WebFetchResult>;
 }
@@ -145,16 +163,19 @@ result types the tool serialises into the `ToolResult.output` string for the
 model.
 
 **`web-adapter-registry`** (mirror of the existing LLM `adapter-registry`): maps
-`offering.adapterId → WebInterfacingProvider`. **Empty today** → no backend
-resolves → integration inactive → tools dormant.
+`offering.adapter.adapterId → WebInterfacingProvider`. **Empty today** → no
+backend resolves → integration inactive → tools dormant. The UI reads capability
+badges from `offering.web` (so the settings section is meaningful the moment a
+`web` offering is curated, *before* any adapter exists).
 
 **The WebInterfacing integration — `integrations/web/`** owns the two tools:
 
-- `contributesTools(ctx)` resolves `webSearchOfferingId` via the
-  web-adapter-registry; if a provider with `canSearch` comes back, it
-  contributes `web_search`, whose `execute` pulls `getKey()` and calls
-  `provider.search(query, webCtx, key)`. Symmetrically `web_fetch` from
-  `webFetchOfferingId` / `canFetch`.
+- `contributesTools(ctx)` resolves the selected search offering via
+  `getOffering(providerId, upstreamSlug)`; if `offering.web?.canSearch` **and**
+  the resolved adapter exposes `search`, it contributes `web_search`, whose
+  `execute` pulls `getKey(offering.providerId)` and calls
+  `provider.search(query, webCtx, key)`. Symmetrically `web_fetch` from the fetch
+  offering / `offering.web?.canFetch` / adapter `fetch`.
 - The two are independent: a user who has chosen only a search-capable backend
   sees only `web_search`.
 
@@ -169,11 +190,11 @@ sees the web tools until the adapter lands tomorrow.
 gains:
 
 ```ts
-webInterfacing: { searchOfferingId: string | null; fetchOfferingId: string | null };
+webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
 ```
 
 **Dexie v11**: version bump + upgrade backfill to
-`{ searchOfferingId: null, fetchOfferingId: null }`. Non-indexed field → no
+`{ search: null, fetch: null }`. Non-indexed field → no
 `stores()` change. Default = nothing selected → integration inactive.
 
 **Visibility (hidden-until-unlocked).** The web settings section is invisible
