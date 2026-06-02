@@ -9,6 +9,16 @@ interface CurrentChatStore {
   autoFollowEnabled: boolean;
   isInteractionMode: boolean;
   isPinned: boolean;
+  /** True while the cockpit textarea holds focus. Drives the DimOverlay, which
+   *  lives at chat-page level (not inside InteractionMode) so the un-dim fade
+   *  survives the moment InteractionMode unmounts on close. */
+  inputFocused: boolean;
+  /** Whether the active chat's persona is adult, published by chat-page.
+   *  `null` = not in a chat. The brand-bar AdultModeToggle hides itself when
+   *  this is `false` (chat view + SFW persona) for a calmer screen — see
+   *  AdultModeToggle. Shown otherwise (`null` outside chats, `true` for an
+   *  adult persona where the mode indicator is still wanted). */
+  chatPersonaIsAdult: boolean | null;
   /** Reading-mode floating tool-strip: separate from `isPinned` (the cockpit). */
   isToolStripExpanded: boolean;
   isToolStripPinned: boolean;
@@ -26,6 +36,8 @@ interface CurrentChatStore {
   clearExpanded: () => void;
   setAutoFollow: (enabled: boolean) => void;
   setInteractionMode: (on: boolean) => void;
+  setInputFocused: (focused: boolean) => void;
+  setChatPersonaIsAdult: (isAdult: boolean | null) => void;
   togglePin: () => void;
   setToolStripExpanded: (open: boolean) => void;
   toggleToolStripPin: () => void;
@@ -44,6 +56,8 @@ type InitialState = Omit<
   | 'clearExpanded'
   | 'setAutoFollow'
   | 'setInteractionMode'
+  | 'setInputFocused'
+  | 'setChatPersonaIsAdult'
   | 'togglePin'
   | 'setToolStripExpanded'
   | 'toggleToolStripPin'
@@ -59,6 +73,8 @@ const initial: InitialState = {
   autoFollowEnabled: true,
   isInteractionMode: false,
   isPinned: false,
+  inputFocused: false,
+  chatPersonaIsAdult: null,
   isToolStripExpanded: false,
   isToolStripPinned: false,
   reasoning: { kind: 'off' },
@@ -77,7 +93,16 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
     // attention shifts to the new compose intent; leaving an old message
     // expanded would (a) clutter the smaller chat surface and (b) interact
     // badly with scrollIntoView, which can fight cockpit-open layout shifts.
-    set(on ? { isInteractionMode: true, expandedMessageId: null } : { isInteractionMode: false }),
+    // inputFocused is reset on every mode flip: opening starts un-dimmed until
+    // the cockpit autofocuses (which re-dims), and closing clears it so the
+    // chat-page-level DimOverlay fades back out cleanly.
+    set(
+      on
+        ? { isInteractionMode: true, expandedMessageId: null, inputFocused: false }
+        : { isInteractionMode: false, inputFocused: false },
+    ),
+  setInputFocused: (focused) => set({ inputFocused: focused }),
+  setChatPersonaIsAdult: (isAdult) => set({ chatPersonaIsAdult: isAdult }),
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),
   setToolStripExpanded: (open) => set({ isToolStripExpanded: open }),
   toggleToolStripPin: () => set((s) => ({ isToolStripPinned: !s.isToolStripPinned })),

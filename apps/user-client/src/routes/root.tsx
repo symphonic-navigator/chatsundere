@@ -10,6 +10,7 @@ import { SplashOverlay } from '../components/SplashOverlay.js';
 import { Toast } from '../components/Toast.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
+import { useCurrentChatStore } from '../state/current-chat.store.js';
 import { useStagingBannerStore } from '../state/staging-banner.store.js';
 
 /**
@@ -30,6 +31,16 @@ export function Root() {
   const dismissed = useStagingBannerStore((s) => s.dismissed);
   const dismissBanner = useStagingBannerStore((s) => s.dismiss);
   const location = useLocation();
+  const isInteractionMode = useCurrentChatStore((s) => s.isInteractionMode);
+
+  // Chrome trims down inside a chat: the username + connectivity badge drop
+  // away in both chat sub-modes (reading and cockpit-open); in read-only mode
+  // the logo also goes and the bar collapses to a thin strip to reclaim
+  // vertical space (paired with .chat-page[data-mode="reading"] top in CSS).
+  // The adult-mode pill is suppressed on the login screen.
+  const isChatRoute = location.pathname.startsWith('/app/chat');
+  const isReadingChat = isChatRoute && !isInteractionMode;
+  const isLoginRoute = location.pathname.startsWith('/login');
 
   // Dim the body aurora on /app subroutes (chat, circle, persona-editor,
   // settings, account) so the mindspace texture is the visually dominant
@@ -86,31 +97,44 @@ export function Root() {
   return (
     <SplashContext.Provider value={{ topbarLogoRef }}>
       <div className="relative isolate min-h-dvh overflow-x-clip">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-2 px-4 py-3 backdrop-blur-sm lg:px-6 lg:py-4">
-          {/* Logo — gradient wordmark + twinkle, sized via .brand-logo CSS */}
-          <Link to="/" className="brand-logo" style={{ opacity: topbarLogoVisible ? 1 : 0 }}>
-            <span
-              ref={(el) => {
-                topbarLogoRef.current = el;
-              }}
-              className="brand-logo-text"
-            >
-              Chatsundere
-            </span>
-            <span className="brand-logo-twinkle" aria-hidden="true">
-              ✦
-            </span>
-          </Link>
-          <BackgroundStreamBadge />
-          <AdultModeToggle />
+        <header
+          className={`sticky top-0 z-20 flex items-center justify-between gap-2 px-4 backdrop-blur-sm lg:px-6 ${
+            isReadingChat ? 'py-1 lg:py-1.5' : 'py-3 lg:py-4'
+          }`}
+        >
+          {/* Left cluster — logo + transient background-stream badge. The logo
+              is hidden in read-only chat mode so the bar can collapse and the
+              chat surface rises into the reclaimed space. */}
+          <div className="flex items-center gap-2">
+            {!isReadingChat && (
+              <Link to="/" className="brand-logo" style={{ opacity: topbarLogoVisible ? 1 : 0 }}>
+                <span
+                  ref={(el) => {
+                    topbarLogoRef.current = el;
+                  }}
+                  className="brand-logo-text"
+                >
+                  Chatsundere
+                </span>
+                <span className="brand-logo-twinkle" aria-hidden="true">
+                  ✦
+                </span>
+              </Link>
+            )}
+            <BackgroundStreamBadge />
+          </div>
+          {/* Right cluster — adult-mode pill kept off-centre (away from device
+              cameras), then identity. Username + connectivity drop away inside
+              a chat; the pill also hides on the login screen. */}
           <div className="flex items-center gap-2 lg:gap-3">
+            {!isLoginRoute && <AdultModeToggle />}
             {/* Username hidden on mobile — too cramped at 380 px */}
-            {session && (
+            {!isChatRoute && session && (
               <span className="hidden font-mono text-xs text-paper-soft lg:inline">
                 {session.username}
               </span>
             )}
-            <ConnectivityBadge />
+            {!isChatRoute && <ConnectivityBadge />}
           </div>
         </header>
         {showRolledBackBanner && (

@@ -146,7 +146,7 @@ describe('MessageBlock', () => {
     expect(userText.style.fontFamily).toBe('var(--font-display)');
   });
 
-  it('renders adjacent text chunks as joined markdown with no token-fade class', () => {
+  it('streaming draft renders each text chunk as its own fade-in span', () => {
     const msg = personaMsg({
       contentBlocks: [
         { type: 'text', text: 'Hi' },
@@ -167,12 +167,42 @@ describe('MessageBlock', () => {
         isStreamingDraft={true}
       />,
     );
-    // Text blocks in a group are concatenated and rendered as Markdown — the
-    // two chunks become one continuous string, not two fade-in spans.
+    // While streaming, each un-coalesced chunk becomes its own .stream-tok span
+    // so freshly-appended tokens can fade in individually.
+    const toks = container.querySelectorAll('.stream-tok');
+    expect(toks.length).toBe(2);
+    expect(toks[0]?.textContent).toBe('Hi');
+    expect(toks[1]?.textContent).toBe(' world');
     const text = container.querySelector('.msg-text') as HTMLElement;
     expect(text.textContent).toBe('Hi world');
-    // The per-token fade-in mechanism has been removed.
-    expect(container.querySelector('.token-fade')).toBeNull();
+  });
+
+  it('finalised message renders text as joined Markdown, no fade spans', () => {
+    const msg = personaMsg({
+      contentBlocks: [
+        { type: 'text', text: 'Hi' },
+        { type: 'text', text: ' world' },
+      ],
+    });
+    const { container } = render(
+      <MessageBlock
+        message={msg}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={false}
+      />,
+    );
+    const text = container.querySelector('.msg-text') as HTMLElement;
+    expect(text.textContent).toBe('Hi world');
+    // Once finalised the chunks coalesce into Markdown — no per-token spans.
+    expect(container.querySelector('.stream-tok')).toBeNull();
+    expect(text.querySelector('p')).not.toBeNull();
   });
 
   it('renders contentBlocks in order with pills inline', () => {

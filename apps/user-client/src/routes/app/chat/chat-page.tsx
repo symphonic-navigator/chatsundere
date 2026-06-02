@@ -8,6 +8,7 @@ import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
+import { DimOverlay } from '../../../components/chat/DimOverlay.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { ReadingToolStrip } from '../../../components/chat/ReadingToolStrip.js';
@@ -50,6 +51,8 @@ export function ChatPage(): JSX.Element {
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const isInteractionMode = useCurrentChatStore((s) => s.isInteractionMode);
+  const inputFocused = useCurrentChatStore((s) => s.inputFocused);
+  const setChatPersonaIsAdult = useCurrentChatStore((s) => s.setChatPersonaIsAdult);
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
@@ -134,6 +137,14 @@ export function ChatPage(): JSX.Element {
   const effectivePersona: PersonaRow | null = isLazy
     ? (lazyPersonaQuery.data ?? null)
     : (chatPersonaQuery.data ?? null);
+
+  // Publish whether this chat's persona is adult so the brand-bar
+  // AdultModeToggle can hide itself for SFW personas (a calmer chat screen).
+  // `null` while the persona is still resolving / on unmount → toggle shows.
+  useEffect(() => {
+    setChatPersonaIsAdult(effectivePersona ? effectivePersona.adultPersona : null);
+    return () => setChatPersonaIsAdult(null);
+  }, [effectivePersona, setChatPersonaIsAdult]);
 
   // Resolve Offering via provider lookup keyed to the effective persona.
   const modelQuery = useQuery({
@@ -463,6 +474,16 @@ export function ChatPage(): JSX.Element {
           error={branchChat.isError ? 'Could not branch — please try again.' : undefined}
         />
       ) : null}
+
+      {/*
+        DimOverlay lives here, always mounted, rather than inside
+        InteractionMode. Driven by `isInteractionMode && inputFocused`, it
+        keeps darkening the chat behind a focused cockpit — but because it
+        outlives InteractionMode's unmount-on-close, the un-dim transition
+        actually runs (opacity 1→0 over 200ms) instead of the overlay
+        vanishing instantly when the cockpit closes.
+      */}
+      <DimOverlay active={isInteractionMode && inputFocused} />
 
       {isInteractionMode && effectivePersona && offering ? (
         <InteractionMode

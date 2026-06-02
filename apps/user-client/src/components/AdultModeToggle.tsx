@@ -3,6 +3,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAdultMode } from '../data/settings.js';
 import { nsfwPanic } from '../lib/nsfw-panic.js';
+import { useCurrentChatStore } from '../state/current-chat.store.js';
 
 /**
  * Brand-bar pill toggling the global adult-mode filter.
@@ -16,11 +17,19 @@ import { nsfwPanic } from '../lib/nsfw-panic.js';
  * On the nsfw → sfw transition, nsfwPanic() runs first (Phase-3.2):
  * any in-flight streams against adult personas are aborted (discard
  * semantics) and the user is navigated away if they are in such a chat.
+ *
+ * Hidden entirely while in a chat with a SFW persona (`chatPersonaIsAdult`
+ * === false), published by chat-page — the toggle is irrelevant there and
+ * its absence keeps the chat screen calmer. It stays visible everywhere else
+ * and for adult-persona chats, where the mode indicator is still wanted.
  */
-export function AdultModeToggle(): JSX.Element {
+export function AdultModeToggle(): JSX.Element | null {
   const { mode, toggleMode } = useAdultMode();
   const navigate = useNavigate();
+  const chatPersonaIsAdult = useCurrentChatStore((s) => s.chatPersonaIsAdult);
   const isNsfw = mode === 'nsfw';
+
+  if (chatPersonaIsAdult === false) return null;
 
   async function handleToggle() {
     if (mode === 'nsfw') {

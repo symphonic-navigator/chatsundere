@@ -28,9 +28,11 @@ export interface MessageBlockProps {
   onBranch?: () => void;
   /** Disable branching (stream live for this chat). */
   branchDisabled?: boolean;
-  /** True while this message is the active streaming draft. Used to mark the
-   *  last reasoning group as live; text now renders via MarkdownContent which
-   *  re-parses as tokens arrive (no per-token fade). */
+  /** True while this message is the active streaming draft. Marks the last
+   *  reasoning group as live, and switches text rendering from Markdown to
+   *  per-chunk fade-in spans (each arriving token mounts a fresh span and
+   *  fades in). On finalisation the draft flips false and the same text
+   *  re-renders once through MarkdownContent. */
   isStreamingDraft?: boolean;
   /** True when the cockpit is pinned. While pinned and the prompt input holds
    *  focus, the first click on a message only sheds that focus (back to
@@ -170,6 +172,24 @@ function renderBlocks(
 
   return groups.map((group, idx) => {
     if (group.type === 'text') {
+      // While streaming, each upstream chunk is its own (un-coalesced) text
+      // block — see stream-manager.appendStreamChunk. Render one span per
+      // chunk so newly-appended spans mount and fade in individually, giving
+      // a live per-token fade. Raw text only (no Markdown re-parse per token);
+      // once the draft finalises the blocks coalesce and re-render as Markdown.
+      if (isStreamingDraft) {
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across token appends (append-only)
+          <span className="msg-stream-text" key={`g-${idx}`}>
+            {group.blocks.map((b, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: append-only chunk index; existing spans keep their key so only fresh ones animate
+              <span className="stream-tok" key={i}>
+                {(b as { type: 'text'; text: string }).text}
+              </span>
+            ))}
+          </span>
+        );
+      }
       const text = group.blocks.map((b) => (b as { type: 'text'; text: string }).text).join('');
       // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across token appends (append-only)
       return <MarkdownContent key={`g-${idx}`} text={text} />;

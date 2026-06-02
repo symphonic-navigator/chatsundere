@@ -678,6 +678,51 @@ h1 {
   overflow-x: auto;
   overflow-y: hidden;
 }
+/* Image marker — the privacy-preserving tap-to-load pill that stands in for a
+   model-emitted image until the user consents (see ImageMarker.tsx). Inline
+   marker aesthetic, matching the inline-code pill. */
+.image-marker {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  max-width: 100%;
+  padding: 0.1em 0.5em;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  text-align: left;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+.image-marker:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.image-marker[data-empty="true"],
+.image-marker--error {
+  cursor: default;
+}
+.image-marker-host {
+  opacity: 0.7;
+}
+.image-marker-cta {
+  opacity: 0.55;
+}
+.image-marker--error {
+  background: rgba(214, 102, 102, 0.12);
+}
+.image-marker--error a {
+  color: var(--color-aurora-500);
+}
+.image-marker-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0;
+  border-radius: 10px;
+}
 .msg.expanded {
   /* Full-width selection tint — edge to edge. The inner .msg-text inset box
    *  was removed: its padding narrowed the text on selection (lost width). */
@@ -942,10 +987,35 @@ h1 {
     opacity: 0;
   }
 }
+
+/* Streaming text — raw (pre-Markdown) chunks shown while a draft is live.
+   Each upstream chunk is its own un-coalesced block (see
+   stream-manager.appendStreamChunk), rendered as a .stream-tok span: a freshly
+   mounted span fades in, so the reply materialises token-by-token. pre-wrap
+   preserves the raw newlines until the draft finalises and re-renders as
+   Markdown. A pure opacity fade — no drift — keeps the text steady to read. */
+.msg-stream-text {
+  white-space: pre-wrap;
+}
+.stream-tok {
+  animation: tok-fade 420ms ease-out both;
+}
+@keyframes tok-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .streaming-cursor {
     animation: none;
     opacity: 0.7;
+  }
+  .stream-tok {
+    animation: none;
   }
 }
 
@@ -1307,16 +1377,13 @@ h1 {
 
 /* ===== InteractionMode wrapper =====
  * display: contents removes this element from layout entirely — its
- * children (InteractionTopbar / DimOverlay / Cockpit) appear directly
- * in the chat-page flex column. The React component still owns its
- * containerRef for outside-tap detection because the DOM node still
- * exists; CSS just skips it for layout. */
+ * children (InteractionTopbar / Cockpit) appear directly in the chat-page
+ * flex column. The React component still owns its containerRef for
+ * outside-tap detection because the DOM node still exists; CSS just skips
+ * it for layout. (The DimOverlay is a direct chat-page child, not nested
+ * here, so its un-dim fade survives this wrapper unmounting on close.) */
 .interaction-mode {
   display: contents;
-}
-/* DimOverlay must never intercept taps — only a visual layer. */
-.interaction-mode .dim-overlay {
-  pointer-events: none;
 }
 
 /* ===== Chat Page Layout ===== */
@@ -1341,11 +1408,27 @@ h1 {
   margin-right: auto;
   display: flex;
   flex-direction: column;
+  transition: top 180ms ease;
+}
+/* Read-only mode collapses the brand bar to a thin strip (logo hidden +
+   compact padding, see root.tsx) — pull the chat surface up into the
+   reclaimed space. The cockpit (interaction) mode keeps the full bar height.
+   These two values are the tuning knobs paired with the header's py-1 / lg:py-1.5. */
+.chat-page[data-mode="reading"] {
+  top: 2rem;
 }
 @media (min-width: 1024px) {
   .chat-page {
     top: 4rem;
     max-width: 640px;
+  }
+  .chat-page[data-mode="reading"] {
+    top: 2.25rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-page {
+    transition: none;
   }
 }
 
@@ -1933,11 +2016,29 @@ h1 {
 }
 
 /* ===== Expandable tool-call pill ===== */
-.pill-wrap { display: inline-flex; flex-direction: column; gap: 0.25rem; }
-.pill[data-pill-expandable] { cursor: pointer; }
-.pill[data-pill-status='pending'] .pill-icon { opacity: 0.6; }
-.pill[data-pill-status='failed'] { color: var(--colour-danger, #d66); }
-.pill-detail { display: flex; flex-direction: column; gap: 0.25rem; }
+.pill-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.pill[data-pill-expandable] {
+  cursor: pointer;
+}
+.pill[data-pill-status="pending"] .pill-icon {
+  opacity: 0.6;
+}
+.pill[data-pill-status="failed"] {
+  color: var(--colour-danger, #d66);
+}
+.pill-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 .pill-detail-code,
 .pill-detail-result,
-.pill-detail-error { font-family: var(--font-mono, monospace); white-space: pre-wrap; font-size: 0.85em; }
+.pill-detail-error {
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap;
+  font-size: 0.85em;
+}

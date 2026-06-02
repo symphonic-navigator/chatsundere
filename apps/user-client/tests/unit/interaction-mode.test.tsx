@@ -63,24 +63,25 @@ beforeEach(() => {
 });
 
 describe('InteractionMode lifecycle', () => {
-  it('renders Topbar + Cockpit + DimOverlay', () => {
+  it('renders Topbar + Cockpit (DimOverlay now lives at chat-page level)', () => {
     const { container } = mount();
     expect(container.querySelector('.interaction-topbar')).not.toBeNull();
     expect(container.querySelector('.cockpit')).not.toBeNull();
-    expect(container.querySelector('.dim-overlay')).not.toBeNull();
+    // The overlay was lifted out of InteractionMode so its un-dim fade
+    // survives this component unmounting on close — it renders in chat-page.
+    expect(container.querySelector('.dim-overlay')).toBeNull();
   });
 
-  it('DimOverlay follows textarea focus (cockpit autofocuses on open)', () => {
+  it('drives inputFocused from textarea focus (cockpit autofocuses on open)', () => {
     const { container } = mount();
-    const overlay = container.querySelector('.dim-overlay') as HTMLElement;
     const ta = container.querySelector('textarea') as HTMLTextAreaElement;
     // The cockpit autofocuses its input on open so the user can type straight
-    // away, so the overlay starts active.
-    expect(overlay.getAttribute('data-active')).toBe('true');
+    // away, so the focus flag (which drives the overlay) starts true.
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
     fireEvent.blur(ta);
-    expect(overlay.getAttribute('data-active')).not.toBe('true');
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
     fireEvent.focus(ta);
-    expect(overlay.getAttribute('data-active')).toBe('true');
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
   });
 
   it('Send with non-empty input closes after a 100ms delay', async () => {
@@ -123,17 +124,17 @@ describe('InteractionMode lifecycle', () => {
     vi.useRealTimers();
   });
 
-  it('Send while pinned releases input focus → reading mode (DimOverlay off)', () => {
+  it('Send while pinned releases input focus → reading mode (un-dims)', () => {
     useCurrentChatStore.getState().togglePin();
     const { container } = mount({ draftValue: 'hi' });
-    const overlay = container.querySelector('.dim-overlay') as HTMLElement;
     const ta = container.querySelector('textarea') as HTMLTextAreaElement;
     ta.focus();
     fireEvent.focus(ta);
-    expect(overlay.getAttribute('data-active')).toBe('true');
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
     fireEvent.click(container.querySelector('[data-dual="action"]') as HTMLButtonElement);
-    // The user is dropped back into reading mode so the streamed reply is legible.
-    expect(overlay.getAttribute('data-active')).not.toBe('true');
+    // The user is dropped back into reading mode so the streamed reply is
+    // legible — the focus flag clears, which un-dims the chat-page overlay.
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
     expect(document.activeElement).not.toBe(ta);
   });
 
