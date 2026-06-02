@@ -3,6 +3,7 @@ import {
   type ProviderConfig,
   type ProviderDefinition,
   type StreamChunk,
+  type ToolDef,
   type WireMessage,
   buildPrompt,
   formatRetryEvent,
@@ -36,6 +37,13 @@ export interface StartStreamArgs {
   reasoning: ReasoningState;
   globalInstructions: string;
   globalAboutMe: string;
+  /** Joined tool system-prompt instructions for the Band-3 tools segment. */
+  toolsInstruction?: string;
+  /** Canonical tool definitions to offer the model (empty = none). */
+  tools?: ToolDef[];
+  /** Accumulated assistant(tool_calls) / tool messages from prior loop rounds,
+   *  appended after the active user turn. */
+  toolExchange?: WireMessage[];
   signal: AbortSignal;
   onChunk: (chunk: StreamChunk) => void;
 }
@@ -64,15 +72,17 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       aboutMe,
       projectInstructions: '',
       memoryContext: '',
+      toolsInstruction: args.toolsInstruction ?? '',
     },
     'chat',
   );
 
-  const wireMessages: WireMessage[] = [
-    { role: 'system', content: systemPrompt },
-    ...args.priorMessages.map(toWireMessage),
-    { role: 'user', content: args.userMessageText },
-  ];
+  const wireMessages = buildEngineWireMessages(
+    systemPrompt,
+    args.priorMessages,
+    args.userMessageText,
+    args.toolExchange ?? [],
+  );
 
   const budget = resolveContextWindow(args.persona, args.offering);
   const { messages: sentMessages } = truncateToWindow(wireMessages, budget);
@@ -96,6 +106,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     messages: sentMessages,
     bodyExtras: extras,
     cacheKey: args.chat.id,
+    tools: args.tools,
     signal: args.signal,
     onRetry: (e) => console.warn(formatRetryEvent(e)),
   })) {
@@ -111,7 +122,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
         messageId: '', // filled by stream-manager when persisting
         kind: 'tool-call',
         positionHint: 'inline',
-        status: 'completed',
+        status: 'pending',
         payload: {
           name: chunk.name,
           argumentsJson: chunk.argumentsJson,
@@ -152,6 +163,25 @@ function appendReasoning(buf: ContentBlock[], text: string): void {
   } else {
     buf.push({ type: 'reasoning', text });
   }
+}
+
+/**
+ * Assemble the wire message list for one engine pass: system prompt, replayed
+ * history, the active user turn, then any accumulated tool exchange from prior
+ * loop rounds. Extracted so the tool-exchange placement is unit-testable.
+ */
+export function buildEngineWireMessages(
+  systemPrompt: string,
+  priorMessages: MessageRow[],
+  userMessageText: string,
+  toolExchange: WireMessage[],
+): WireMessage[] {
+  return [
+    { role: 'system', content: systemPrompt },
+    ...priorMessages.map(toWireMessage),
+    { role: 'user', content: userMessageText },
+    ...toolExchange,
+  ];
 }
 
 /**

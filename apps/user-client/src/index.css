@@ -483,6 +483,12 @@ h1 {
   font-size: 0.9em;
   opacity: 0.4;
   transition: opacity 200ms ease;
+  /* button element resets — .pill is now a <button> for expandable tool-calls.
+     No `font` reset: the explicit font-family/font-size above already overrides
+     the native button font, and a `font: inherit` shorthand here would clobber them. */
+  border: none;
+  color: inherit;
+  cursor: default;
 }
 .msg.expanded .pill {
   opacity: 1;
@@ -1925,3 +1931,13 @@ h1 {
   background: color-mix(in srgb, var(--color-accent, #c9a227) 18%, transparent);
   color: var(--color-accent, #c9a227);
 }
+
+/* ===== Expandable tool-call pill ===== */
+.pill-wrap { display: inline-flex; flex-direction: column; gap: 0.25rem; }
+.pill[data-pill-expandable] { cursor: pointer; }
+.pill[data-pill-status='pending'] .pill-icon { opacity: 0.6; }
+.pill[data-pill-status='failed'] { color: var(--colour-danger, #d66); }
+.pill-detail { display: flex; flex-direction: column; gap: 0.25rem; }
+.pill-detail-code,
+.pill-detail-result,
+.pill-detail-error { font-family: var(--font-mono, monospace); white-space: pre-wrap; font-size: 0.85em; }

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { StreamChunk } from '@chatsundere/llm-unified';
 import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
 import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
 import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
+import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
+import { dispatch as dispatchTool, systemPromptSegment, toolDefs } from '../tools/registry.js';
 import { toastStore } from './toast.store.js';
 
 export interface StreamHandle {
@@ -208,28 +211,60 @@ function runIntoDraft(
     return { streams: m };
   });
 
-  runStreamEngine({
-    ...args,
+  const toolsActive = args.offering.profile.toolCalls.supported;
+  const activeToolDefs = toolsActive ? toolDefs() : [];
+  const toolsInstruction = toolsActive ? (systemPromptSegment() ?? '') : '';
+
+  const onChunk = (chunk: StreamChunk): void => {
+    // Mirror tokens and reasoning deltas into the handle so ChatStream
+    // can render the draft as it grows. We *replace* the handle on
+    // each chunk so a zustand selector that returns `streams.get(chatId)`
+    // sees a fresh object reference — bumping just the Map identity
+    // isn't enough because selector subscribers compare via Object.is
+    // on the inner value.
+    if (chunk.type !== 'token' && chunk.type !== 'reasoning') return;
+    set((s) => {
+      const live = s.streams.get(args.chatId);
+      if (!live) return s;
+      const nextBuf = [...live.contentBuffer];
+      appendStreamChunk(nextBuf, {
+        kind: chunk.type === 'reasoning' ? 'reasoning' : 'text',
+        text: chunk.text,
+      });
+      const nextHandle = { ...live, contentBuffer: nextBuf };
+      const m = new Map(s.streams);
+      m.set(args.chatId, nextHandle);
+      return { streams: m };
+    });
+  };
+
+  runToolLoop({
+    toolDefs: activeToolDefs,
+    maxRounds: MAX_TOOL_ROUNDS,
+    dispatch: (name, toolArgs, signal) => dispatchTool(name, toolArgs, signal),
     signal: controller.signal,
-    onChunk: (chunk) => {
-      // Mirror tokens and reasoning deltas into the handle so ChatStream
-      // can render the draft as it grows. We *replace* the handle on
-      // each chunk so a zustand selector that returns `streams.get(chatId)`
-      // sees a fresh object reference — bumping just the Map identity
-      // isn't enough because selector subscribers compare via Object.is
-      // on the inner value.
-      if (chunk.type !== 'token' && chunk.type !== 'reasoning') return;
+    streamOnce: (toolExchange, tools) =>
+      runStreamEngine({
+        ...args,
+        toolsInstruction,
+        tools,
+        toolExchange,
+        signal: controller.signal,
+        onChunk,
+      }),
+    onPillUpdate: (pill) => {
       set((s) => {
         const live = s.streams.get(args.chatId);
         if (!live) return s;
-        const nextBuf = [...live.contentBuffer];
-        appendStreamChunk(nextBuf, {
-          kind: chunk.type === 'reasoning' ? 'reasoning' : 'text',
-          text: chunk.text,
-        });
-        const nextHandle = { ...live, contentBuffer: nextBuf };
+        const pillBuffer = live.pillBuffer.some((p) => p.id === pill.id)
+          ? live.pillBuffer.map((p) => (p.id === pill.id ? { ...pill } : p))
+          : [...live.pillBuffer, { ...pill }];
+        const hasBlock = live.contentBuffer.some((b) => b.type === 'pill' && b.pillId === pill.id);
+        const contentBuffer = hasBlock
+          ? live.contentBuffer
+          : [...live.contentBuffer, { type: 'pill' as const, pillId: pill.id }];
         const m = new Map(s.streams);
-        m.set(args.chatId, nextHandle);
+        m.set(args.chatId, { ...live, pillBuffer, contentBuffer });
         return { streams: m };
       });
     },

@@ -6,6 +6,7 @@ export type {
   ProviderDefinition,
   ProviderConfig,
   WireMessage,
+  WireToolCall,
   StreamChunk,
   NormalisedUsage,
   ProbeResult,
@@ -34,6 +35,8 @@ export { buildRequest, type BuildRequestArgs } from './transport.js';
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';
 
 export { streamCompletion, type StreamCompletionArgs } from './stream-completion.js';
+
+export type { ToolDef } from './adapter-contract.js';
 
 export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js';
 

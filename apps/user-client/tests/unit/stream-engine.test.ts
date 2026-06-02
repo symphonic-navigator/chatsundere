@@ -1,4 +1,4 @@
-import { type StreamChunk, getOffering } from '@chatsundere/llm-unified';
+import { type StreamChunk, type WireMessage, getOffering } from '@chatsundere/llm-unified';
 import * as llm from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import type { MessageRow } from '../../src/boot/client-data-db.js';
 import {
   type StartStreamArgs,
   type StreamEngineResult,
+  buildEngineWireMessages,
   runStreamEngine,
 } from '../../src/lib/stream-engine';
 
@@ -93,7 +94,7 @@ describe('runStreamEngine', () => {
     expect(result.pillRows.length).toBe(1);
     expect(result.pillRows[0]?.kind).toBe('tool-call');
     expect(result.pillRows[0]?.positionHint).toBe('inline');
-    expect(result.pillRows[0]?.status).toBe('completed');
+    expect(result.pillRows[0]?.status).toBe('pending');
     expect(onChunk).toHaveBeenCalledTimes(5);
   });
 
@@ -219,5 +220,61 @@ describe('runStreamEngine', () => {
     const msgs = capturedMessages as Array<{ role: string; content: string }>;
     const assistantEntry = msgs.find((m) => m.role === 'assistant');
     expect(assistantEntry?.content).toBe('past answer');
+  });
+});
+
+const prior: MessageRow[] = [
+  {
+    id: 'm1',
+    chatId: 'c1',
+    role: 'user',
+    contentBlocks: [{ type: 'text', text: 'hi' }],
+    createdAt: 1,
+    bookmarked: false,
+    streamingState: 'complete',
+  },
+  {
+    id: 'm2',
+    chatId: 'c1',
+    role: 'persona',
+    contentBlocks: [{ type: 'text', text: 'hello' }],
+    createdAt: 2,
+    bookmarked: false,
+    streamingState: 'complete',
+  },
+];
+
+describe('buildEngineWireMessages', () => {
+  it('produces system + history + active user turn with no tool exchange', () => {
+    const out = buildEngineWireMessages('SYS', prior, 'how many r in strawberry?', []);
+    expect(out.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(out.at(-1)).toEqual({ role: 'user', content: 'how many r in strawberry?' });
+  });
+
+  it('appends the tool exchange after the active user turn', () => {
+    const exchange: WireMessage[] = [
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 't1',
+            type: 'function',
+            function: { name: 'calculate_js', arguments: '{"code":"3"}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 't1', content: '3' },
+    ];
+    const out = buildEngineWireMessages('SYS', prior, 'q', exchange);
+    expect(out.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+      'tool',
+    ]);
+    expect(out.at(-1)).toEqual({ role: 'tool', tool_call_id: 't1', content: '3' });
   });
 });

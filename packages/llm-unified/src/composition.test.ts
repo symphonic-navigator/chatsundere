@@ -13,6 +13,7 @@ function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
     aboutMe: '',
     projectInstructions: '',
     memoryContext: '',
+    toolsInstruction: '',
     ...overrides,
   };
 }
@@ -100,5 +101,39 @@ describe('buildPrompt', () => {
     expect(() => buildPrompt(inputs({ personaInstructions: '' }), 'chat')).toThrow(
       /personaInstructions/,
     );
+  });
+});
+
+const baseInputs: BuildPromptInputs = {
+  tonalityEnabled: false,
+  nsfwEnabled: false,
+  globalInstructions: '',
+  personaInstructions: 'You are a helpful companion.',
+  aboutMe: '',
+  projectInstructions: '',
+  memoryContext: '',
+  toolsInstruction: '',
+};
+
+describe('tools segment', () => {
+  it('includes the tools instruction in a chat prompt when present', () => {
+    const out = buildPrompt(
+      { ...baseInputs, toolsInstruction: 'Use calculate_js for maths.' },
+      'chat',
+    );
+    expect(out).toContain('Use calculate_js for maths.');
+  });
+
+  it('omits the tools instruction for the title job (chat-only)', () => {
+    const out = buildPrompt(
+      { ...baseInputs, toolsInstruction: 'Use calculate_js for maths.' },
+      'title',
+    );
+    expect(out).not.toContain('calculate_js');
+  });
+
+  it('drops the segment when the instruction is empty', () => {
+    const out = buildPrompt(baseInputs, 'chat');
+    expect(out).toBe('You are a helpful companion.');
   });
 });

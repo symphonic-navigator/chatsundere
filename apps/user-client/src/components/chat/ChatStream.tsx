@@ -90,6 +90,9 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
 
   const sorted = [...p.messages].sort((a, b) => a.createdAt - b.createdAt);
   const pillMap = new Map(p.pills.map((x) => [x.id, x]));
+  if (p.streamHandle) {
+    for (const pill of p.streamHandle.pillBuffer) pillMap.set(pill.id, pill);
+  }
 
   const outCount =
     p.contextBudget != null

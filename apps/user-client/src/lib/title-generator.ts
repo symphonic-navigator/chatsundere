@@ -99,6 +99,7 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
         aboutMe,
         projectInstructions: '',
         memoryContext: '',
+        toolsInstruction: '',
       },
       'title',
     );

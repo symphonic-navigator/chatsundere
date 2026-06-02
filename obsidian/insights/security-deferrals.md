@@ -250,3 +250,28 @@ Larissa-gated change (no `auth-/sync-/proxy-service` or `packages/crypto`
 touch). Follow-up to watch when the first integration lands: ensure integration
 code retrieves keys only at the point of an outbound call and does not persist
 or log the plaintext.
+
+## calculate_js sandbox — client-side JS execution surface (2026-06-02)
+
+The `calculate_js` tool (`apps/user-client/src/tools/`) executes
+**model-generated** JavaScript in the browser. It is not a Larissa-gated change
+(no `auth-/sync-/proxy-service` or `packages/crypto` touch), but it is a new
+security-sensitive surface and is logged here deliberately.
+
+- **Boundary:** a fresh Web Worker per call (`sandbox.worker.ts` +
+  `sandbox-host.ts`), terminated after the reply or on a 10 s timeout / abort.
+  Dangerous globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `importScripts`,
+  timers, `Worker`, `indexedDB`, `caches`, …) are nulled on the Worker `self`
+  and additionally shadowed as function-local `var … = undefined` inside the
+  eval scope (`sandbox-exec.ts`). Pure compute only — no DOM, no network.
+- **Threat model:** the code is produced by the LLM (delivered over the provider
+  stream), not by an attacker directly, but a hostile or compromised provider
+  response could inject code — hence the Worker isolation + nulled
+  network/storage globals. Output is capped (4 KB) and the run is time-bounded.
+- **Why a Worker and not an iframe:** an origin-isolated iframe buys nothing for
+  pure compute (no DOM access is granted). Revisit the boundary (sandboxed
+  iframe / stricter isolation) only if a future tool needs DOM or richer
+  capabilities.
+- **Follow-up to watch:** when provider-side web-search integrations or any
+  DOM-touching tool land, re-evaluate the isolation model and consider a Larissa
+  pass on the execution boundary at that point.

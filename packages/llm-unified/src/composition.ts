@@ -22,9 +22,19 @@ export interface BuildPromptInputs {
   projectInstructions: string;
   /** Reserved slot — no producer yet. */
   memoryContext: string;
+  /** Band-3 tools segment — joined tool system-prompt instructions (chat only). */
+  toolsInstruction: string;
 }
 
-type SegmentId = 'tonality' | 'nsfw' | 'global' | 'persona' | 'aboutMe' | 'project' | 'memories';
+type SegmentId =
+  | 'tonality'
+  | 'nsfw'
+  | 'global'
+  | 'persona'
+  | 'aboutMe'
+  | 'project'
+  | 'memories'
+  | 'tools';
 
 interface SegmentSpec {
   id: SegmentId;
@@ -39,9 +49,9 @@ const CHAT_ONLY: readonly PromptJob[] = ['chat'];
 
 /**
  * Static segment registry. Band 1 (Behaviour & Voice) runs in every job;
- * Band 2 (Context & Knowledge) runs in chat only. Band 3 (Technical —
- * formatting/tools/voice) has no producer this cycle and is omitted here;
- * its position is documented in the spec and added when a producer lands.
+ * Band 2 (Context & Knowledge) runs in chat only; Band 3 (Technical —
+ * formatting/tools/voice) runs in chat only. The `tools` segment (band 3,
+ * order 0) carries joined tool system-prompt instructions when present.
  * See the system-prompt builder spec (2026-06-01) §4–§5.
  */
 const SEGMENTS: readonly SegmentSpec[] = [
@@ -64,6 +74,7 @@ const SEGMENTS: readonly SegmentSpec[] = [
   { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_ONLY, resolve: (i) => i.aboutMe },
   { id: 'project', band: 2, order: 1, jobs: CHAT_ONLY, resolve: (i) => i.projectInstructions },
   { id: 'memories', band: 2, order: 2, jobs: CHAT_ONLY, resolve: (i) => i.memoryContext },
+  { id: 'tools', band: 3, order: 0, jobs: CHAT_ONLY, resolve: (i) => i.toolsInstruction },
 ];
 
 /**

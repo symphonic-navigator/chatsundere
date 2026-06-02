@@ -75,7 +75,7 @@ function baseStartArgs(chatId: string, persona: unknown, model: unknown) {
     apiKey: 'k',
     corsProxyUrl: null,
     corsProxyKey: null,
-    model,
+    offering: model,
     priorMessages: [],
     userMessageText: 'Hello',
     reasoning: { mode: 'on' as const },
@@ -120,14 +120,17 @@ describe('stream-manager.store', () => {
     const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'pill', pillId: 'pill-uuid-1' }],
+      // A non-tool-call pill: this test exercises the pill-persistence wiring
+      // (messageId assignment), not tool execution — a tool-call pill would now
+      // drive the tool loop. Tool execution is covered in tool-loop.test.ts.
       pillRows: [
         {
           id: 'pill-uuid-1',
           messageId: '',
-          kind: 'tool-call',
+          kind: 'image-result',
           positionHint: 'inline',
           status: 'completed',
-          payload: { name: 'web_search' },
+          payload: {},
           createdAt: 1,
         },
       ],

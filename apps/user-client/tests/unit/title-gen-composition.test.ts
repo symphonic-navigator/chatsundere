@@ -16,6 +16,7 @@ describe('title-gen prompt composition', () => {
         aboutMe: '',
         projectInstructions: '',
         memoryContext: '',
+        toolsInstruction: '',
       },
       'title',
     );
@@ -32,6 +33,7 @@ describe('title-gen prompt composition', () => {
         aboutMe: '',
         projectInstructions: '',
         memoryContext: '',
+        toolsInstruction: '',
       },
       'title',
     );
