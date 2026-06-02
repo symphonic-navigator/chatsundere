@@ -5,7 +5,50 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-02 (latest) — **xAI / Grok 4.3 onboarded
+**Last updated:** 2026-06-02 (latest) — **Persona settings landed
+(squashed + merged to master `4093985`, NOT pushed; awaiting Chris's device
+test).** Brainstormed end-to-end with Chris (the "deredere" full-pamper pass),
+built subagent-driven in an isolated worktree (16 plan tasks, serial implementers
++ per-unit spec/quality review + a final **opus** holistic review). Three
+client-only features, no Larissa path. (1) **Per-persona context window**:
+`PersonaRow.contextWindow` + pure helpers (`resolveContextWindow` /
+`truncateToWindow` / `outOfWindowCount` in `lib/context-window.ts`; **64k floor**,
+4096 step). First **real history truncation** in `stream-engine.ts` (system prompt
++ active user turn always kept, oldest dropped until ≤ budget — chosen over
+gauge-only); the context gauge now reads the resolved per-persona window
+(`InteractionMode`); a quiet in-stream **`ContextMemoryMarker`** shows when earlier
+messages leave the model's memory (the *dere* half — placed by `ChatStream` from
+budget + systemTokens derived in `chat-page`; an honest approximation, not the exact
+wire trim); editor **slider** green→recommended / red→max with **Use default**,
+disabled when a model has no head-room. (2) **Persona avatar** — local-first /
+zero-knowledge (deliberate divergence from chatsune's server-side store): **Dexie
+v10** `personaAvatars` table holds the downscaled **full** image (512px WebP) **+
+crop `{x,y,zoom}`**, rendered via **CSS** so the crop stays **re-editable**.
+Rounded-square (matches the tiles) CSS pan/zoom **crop modal**, `<PersonaAvatar>`
+with **monogram fallback** in My-Circle cards + chat top-bar, picked/cropped in the
+editor and flushed on save; cascade-deleted with the persona. (3) **Substitute
+vision model** — Chris's idea re-scoped **global** (was per-persona in chatsune);
+this cycle ships only the **disabled, honest placeholder** in My Settings (no DB,
+no picker) — the real upload/routing waits on the image-attachment subsystem (its
+own spec). Decisions (Chris's): real truncation now; green/red slider; 64k floor;
+avatar on cards + top-bar; rounded-square; full-image + CSS crop; global vision
+substitute as a dormant shell. **Process notes worth keeping:** my plan shipped a
+`truncateToWindow` off-by-one (test wanted `trimmed=1` but that left the result
+**over** budget) — caught at the **first** review and corrected to drop-until-≤-budget.
+The **full** vitest run (not just touched dirs) caught 13 regressions the per-unit
+runs missed: verno assertions 9→10 after the v10 bump, and `interaction-mode.test`
+needing a `QueryClientProvider` (the top-bar now renders `PersonaAvatar`→`useQuery`).
+The opus review found + I fixed an object-URL leak in the editor's `AvatarField`.
+Verification: `pnpm typecheck` **13/13**; user-client vitest **701 pass / 8 fail**
+(the unchanged `cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline);
+build clean. Spec/plan: [[../superpowers/specs/2026-06-02-persona-settings-design]],
+[[../superpowers/plans/2026-06-02-persona-settings]]. **Deferred:** the whole
+image-attachment subsystem (upload/paste/drag-drop, attachment storage, a message
+image block, multimodal wire injection, thumbnails) + Feature 3's real behaviour;
+a per-model tokeniser (truncation keeps the 4-chars heuristic). **Next:** Chris
+device-tests the 6 manual steps (spec §9); bug-hunting happens on master.
+
+**Earlier 2026-06-02 — xAI / Grok 4.3 onboarded
 (squashed + merged to master `b055e85`, NOT pushed; awaiting Chris's device
 test).** Brainstormed end-to-end with Chris, built
 subagent-driven in an isolated worktree. New curated provider **`xai`** with one
