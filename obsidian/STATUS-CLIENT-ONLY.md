@@ -5,7 +5,52 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-02 (latest) — **Persona settings landed
+**Last updated:** 2026-06-02 (latest) — **Frontend smoothness round landed
+(squashed on master `8ef3501`, NOT pushed; awaiting Chris's device test).**
+An "inserted frontend-improvement day" (next up is memory, which Chris is still
+thinking through — slated for the long weekend). Five client-only polish items,
+built conversationally (no spec/plan, no Larissa path — UI only). (1)
+**Focus-led pinned cockpit**: sending while pinned now *releases* input focus
+→ the user drops back into reading mode (`DimOverlay` off via blur in
+`InteractionMode.handleSend`) so the streamed reply is bright/legible rather
+than dimmed behind a held focus. (2) **"Shed focus, then activate"**: while
+pinned + composing, the first tap on a message only sheds the input focus
+(detected at `onPointerDownCapture` while `.cockpit-input` is still
+`document.activeElement`, in `MessageBlock`; `isPinned` threaded via
+`ChatStream`); a second tap activates it — nothing snatched in one gesture.
+(3) **Top-bar redesign** (`InteractionTopbar` + `index.css`): persona avatar
+28→36px and wrapped in a `.topbar-avatar-btn` that is now the tap target into
+persona settings (name kept in `aria-label`); persona name removed; a
+`.topbar-project` slot takes its place (display font + persona accent inline),
+showing a muted italic "(no project)" placeholder (`data-empty`) until projects
+are modelled — new optional `projectName` prop, no data source yet; bar
+tightened (vertical padding 0.5→0.25rem) and `.topbar-left` made a flex row so
+the avatar sits *beside* the hamburger (it was a missing rule — the
+`display:flex` hamburger had been pushing the avatar onto its own line).
+(4) **Avatar-editor preview crop bug fixed**: the pending preview rendered
+`bg-cover` (whole, uncropped image) until a reload; it now reproduces the
+confirmed crop via `cropToBackground(...)` exactly as the saved `PersonaAvatar`
+does. (5) **Login focus after intro**: the passphrase field claims focus once
+the cold-start intro finishes — on `splash-flip-done` (~2s) **or** the new
+`chatsundere:splash-dismissed` event (added to `SplashOverlay`'s dismiss paths
+for the reduced-motion / skip cases), whichever first; immediately on a warm
+reload (`splashShown` already set). `PassphraseField` gained an optional
+`inputRef`. Also: British-English'd the `DualActionBtn` streaming tooltip
+("antwortet noch…" → "is still replying…") + its test; `.gitignore` ignores the
+local `visuals/` scratch dir (Chris's mockup lives there). **Watch on device:**
+(a) iOS Safari may place the caret without raising the on-screen keyboard for a
+programmatic focus outside a user gesture — desktop/Android-Chrome are fine;
+(b) when a **passkey** is the primary unlock, focus still lands in the
+(secondary) passphrase field — deliberate per Chris's literal ask, revisit if
+the keyboard-over-biometric feels off; (c) top-bar avatar size (`size={36}`)
+and bar padding are the two tuning knobs. Verification: `pnpm typecheck`
+**13/13**; user-client vitest **710 pass / 8 fail** (the unchanged pre-existing
+`cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline, confirmed
+identical on master); build clean. **Next:** Chris device-tests; then a new
+session for **three tools** — a frontend feature set he says will lift
+Chatsundere to a new level (memory deferred to the long weekend).
+
+**Earlier 2026-06-02 — Persona settings landed
 (squashed + merged to master `4093985`, NOT pushed; awaiting Chris's device
 test).** Brainstormed end-to-end with Chris (the "deredere" full-pamper pass),
 built subagent-driven in an isolated worktree (16 plan tasks, serial implementers
