@@ -275,3 +275,13 @@ security-sensitive surface and is logged here deliberately.
 - **Follow-up to watch:** when provider-side web-search integrations or any
   DOM-touching tool land, re-evaluate the isolation model and consider a Larissa
   pass on the execution boundary at that point.
+
+## 2026-06-02 — Web-interfacing integration: planned outbound surface
+
+The web-interfacing spine is dormant (no adapter), so there is no network call
+yet. When the nano-gpt web adapter lands, the integration will send the user's
+query/URL **plus the NSFW flag and location** to an upstream — privacy-sensitive
+context leaving the device. Discipline for the adapter: retrieve the provider key
+only at the outbound point via the credential bus (never persist or log it); never
+log the query, URL, or location. Not a Larissa item for the spine (client-only,
+no auth/sync/proxy/crypto path) — but the adapter that lights it up will be.
