@@ -20,11 +20,13 @@ import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
 import { SaveBar } from '../../components/SaveBar.js';
+import { WebInterfacingSection } from '../../components/WebInterfacingSection.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../lib/built-in-providers.js';
-import { usableTemplateIds } from '../../lib/usable-providers.js';
+import { usableTemplateIds, useUsableTemplateIds } from '../../lib/usable-providers.js';
+import { webBackendOptions } from '../../lib/web-backend-options.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 interface SettingsDraft {
@@ -180,6 +182,29 @@ export function ProvidersSection(): JSX.Element {
   );
 }
 
+/**
+ * Web-interfacing settings, hidden-until-unlocked: only mounts once a usable
+ * provider contributes a `web` offering (spec §2.5 — a deliberate exception to
+ * "disabled over hidden", which still applies *within* the section). Today no
+ * `web` offering is curated, so `lit` never includes `'web'` and this returns
+ * `null`. Owns the data wiring so `WebInterfacingSection` stays pure.
+ */
+function WebInterfacingSettings(): JSX.Element | null {
+  const usable = useUsableTemplateIds();
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  if (!aggregateServiceKinds(usable).includes('web')) return null;
+  const wi = settings.data?.webInterfacing ?? { search: null, fetch: null };
+  return (
+    <WebInterfacingSection
+      options={webBackendOptions(usable)}
+      search={wi.search}
+      fetch={wi.fetch}
+      onChange={(next) => update.mutate({ webInterfacing: next })}
+    />
+  );
+}
+
 export function Settings(): JSX.Element {
   const navigate = useNavigate();
   const settings = useSettings();
@@ -321,6 +346,8 @@ export function Settings(): JSX.Element {
       >
         <ProvidersSection />
       </AccordionCard>
+
+      <WebInterfacingSettings />
 
       <AccordionCard icon="◫" label="Image understanding" meta="For models without vision">
         <SubstituteVisionPlaceholder />

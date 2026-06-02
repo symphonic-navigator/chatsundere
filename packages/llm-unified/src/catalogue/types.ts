@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { WebOfferingMeta } from '../integrations/web-interfacing.js';
 
 /** How the user steers reasoning — drives the cockpit UI directly. */
 export type ReasoningControl =
@@ -47,6 +48,8 @@ export interface Offering {
   confidence: 'verified' | 'partial' | 'heuristic';
   /** Modality this offering provides. Currently always 'llm'. */
   serviceKind: ServiceKind;
+  /** Capability metadata when `serviceKind === 'web'`; undefined for `llm`. */
+  web?: WebOfferingMeta;
 }
 
 const MODES = new Set(['none', 'fixed-on', 'toggle', 'steps']);

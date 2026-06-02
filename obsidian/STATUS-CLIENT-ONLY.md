@@ -5,6 +5,56 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
+**Last updated:** 2026-06-02 (latest) — **Web-interfacing integration spine
+landed (branch `feat/web-interfacing-spine`, NOT merged/pushed to master; PR
+opened for Chris to device-test + integrate).** Implemented from the Liz/Lyra
+spec end-to-end, strict TDD per task. The dormant *integration spine* — a
+first-class `Integration` abstraction (the counterpart to `Tool`) — with web
+interfacing (`web_search` + `web_fetch`) as its first case, wired and gated but
+provider-less; the only work left to go live is the nano-gpt web adapter +
+curating the `web` offerings. **What landed:** (1) **llm-unified** type
+contracts (`WebContext`/`WebLocation`/`WebSearchResult`/`WebFetchResult`/
+`WebQualityClass`/`WebOfferingMeta`/`WebInterfacingProvider`), an optional
+`Offering.web` metadata block, and a `web-adapter-registry` (empty today →
+nothing resolves → dormant). (2) **user-client** `Integration`/
+`IntegrationContext`/`OfferingRef` types; the `WebInterfacing` integration
+(`integrations/web/`) owning both tools, contributing each only when a selected
+`web` offering's `canSearch`/`canFetch` **and** a resolved adapter agree; an
+`INTEGRATIONS` array. (3) The **tool registry** evolved from a static list to
+`resolveActiveTools(ctx)` = static (`calculate_js`) + active-integration tools;
+`toolDefs`/`systemPromptSegment`/`dispatch` are now pure over an explicit
+`Tool[]`. (4) **Dexie v11**: `SettingsRow.webInterfacing = { search, fetch }`,
+migration backfill + seed default `{ null, null }` (existing fresh-open verno
+assertions bumped 10→11). (5) `buildIntegrationContext(persona, web, mk)` per
+send (NSFW from `adultPersona`; location deferred → null; credential-bus
+`getKey`, MasterKey-gated, call-time only); the **stream-manager** builds it and
+threads the ctx-bound active tools into the existing tool-loop seam (loop logic
+unchanged); `send-message` threads `webInterfacing` from settings into
+`start`/`regenerate`. (6) A functional **unstyled** `WebInterfacingSection` in
+My Settings (two independent pickers, disabled-over-hidden *within*), gated
+**hidden-until-unlocked** on the `web` modality — invisible today because no
+`web` offering is curated. **Dormant + zero-regression:** at zero `web`
+offerings the model is offered only `calculate_js`, exactly as before. **Not a
+Larissa change** (client-only, no auth/sync/proxy/crypto); the *planned*
+outbound surface for the future adapter is recorded in
+[[insights/security-deferrals]]. **Deferred by design:** the nano-gpt adapter
+(next), the `WebLocation` *source* (shape threaded, flows `null`), the opulent
+styling pass. **One design fix during verification:** the default integration
+now references the live catalogue/registry resolvers *lazily* (arrow-wrapped) so
+unrelated tests that partially mock `@chatsundere/llm-unified` and merely import
+the integration chain don't trip on missing exports at module load.
+Verification: `pnpm typecheck` **13/13**; llm-unified `bun test` **248 pass / 1
+fail** (the pre-existing `canonical-registry` double-registration ordering flake
+— passes in isolation, identical on master); `pnpm run build` **9/9**;
+user-client vitest **764 pass / 0 fail** (fully green — the previously-noted
+`cockpit`/`chat` jsdom flakes did not manifest in a clean-container build).
+Spec/plan:
+[[../superpowers/specs/2026-06-02-web-interfacing-integration-spine-design]],
+[[../superpowers/plans/2026-06-02-web-interfacing-integration-spine]]. **Next:**
+the **nano-gpt web adapter** — write it, register it in the
+`web-adapter-registry`, curate the `web` offerings (brave/exa/linkup, each its
+own offering); the section then auto-appears and web search/fetch go live. Then
+memory (the long-weekend item).
 **Last updated:** 2026-06-02 (latest) — **Frontend polish round (5 items)
 landed (squashed on master `fd30cb5`, NOT pushed; items 1-4 device-tested by
 Chris, item 5 awaiting his device test).** A second "frontend-improvement"

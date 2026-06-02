@@ -38,6 +38,24 @@ export { streamCompletion, type StreamCompletionArgs } from './stream-completion
 
 export type { ToolDef } from './adapter-contract.js';
 
+export type {
+  WebLocation,
+  WebContext,
+  WebSearchHit,
+  WebSearchResult,
+  WebFetchResult,
+  WebQualityClass,
+  WebOfferingMeta,
+  WebInterfacingProvider,
+} from './integrations/web-interfacing.js';
+
+export {
+  registerWebAdapter,
+  resolveWebAdapter,
+  _resetWebAdapterRegistryForTests,
+  type WebAdapterFactory,
+} from './integrations/web-adapter-registry.js';
+
 export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js';
 
 export { probeProvider, type ProbeArgs } from './probe.js';
