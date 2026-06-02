@@ -5,7 +5,42 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-02 (latest) — **System-prompt builder v2 landed
+**Last updated:** 2026-06-02 (latest) — **xAI / Grok 4.3 onboarded
+(squashed + merged to master `b055e85`, NOT pushed; awaiting Chris's device
+test).** Brainstormed end-to-end with Chris, built
+subagent-driven in an isolated worktree. New curated provider **`xai`** with one
+first-class model **Grok 4.3** (reasoning + **vision** + tools) over
+`/chat/completions`. **Live-probed first (empirical truth over docs):** the
+encrypted/summarised-reasoning machinery the xAI docs describe is **Responses-API
+only**; on chat-completions Grok streams `delta.reasoning_content` that is
+**already a readable summary** (270 reasoning-tokens → a one-sentence trace), with
+**no opaque encrypted blob** — so reasoning is display-only (`replayReasoning:
+false`; Chris's "encrypted-only replay" decision resolves to *no* replay, no blob
+exists). Reasoning control is **`steps`** low/medium/high + off (default low,
+default-on); `none` is a **clean off** (live-confirmed — not the wafer/Kimi
+`fixed-on` leak). The one cross-cutting addition is **conversation-affinity
+caching**: a new optional `CanonicalRequest.cacheKey` threaded
+stream-engine(`args.chat.id`) → `streamCompletion` → `buildWire` → the adapter,
+emitted as the **`x-grok-conv-id`** header only when present (one-shot path
+deliberately omits it). Context **recommended 200k / max 1M** (above 200k xAI
+~doubles the price → "compact and continue"); `corsHint: requires-proxy` (no CORS
+headers); freedom-oriented model + deployment (🕊️), US jurisdiction, **no
+TEE/ZDR today** (future NGO-negotiated ZDR is a venice.ai-style possibility —
+[[insights/...]]/Records note it). Adapter mirrors `wafer-openai.ts`; client
+wired via `built-in-providers.ts` + `ProviderSheet`. **No new `StreamChunk`
+variant, no Dexie migration, no new persistence** — only the additive `cacheKey`.
+**Not a Larissa change** (llm-unified + client only). **Live conversation-suite
+PASS** (`run-xai-suite.ts`, the curation gate): core **44/44** + vision **4/4**,
+0 fail — flips the offering to `confidence: 'verified'`. Verification: `pnpm
+typecheck` **13/13**; llm-unified `bun test` **248/0**; build **9/9**;
+user-client vitest **673 pass / 8 fail** (the unchanged pre-existing
+`cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline). Spec/plan:
+[[../superpowers/specs/2026-06-02-xai-grok-integration-design]],
+[[../superpowers/plans/2026-06-02-xai-grok-integration]]. Records:
+[[providers/xai]], [[models/grok-4.3]]. **Next:** Chris device-tests the 6 manual
+steps (spec §9) → Liz pushes the backlog.
+
+**Earlier 2026-06-02 — System-prompt builder v2 landed
 (squashed on master `c581a61`, NOT pushed; awaiting Chris's device test).**
 Brainstormed end-to-end with Chris. The fixed five-layer `composeSystemPrompt`
 is replaced by a banded, ordered **segment builder** `buildPrompt(inputs, job)`
