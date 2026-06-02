@@ -92,10 +92,19 @@ export function InteractionMode(p: Props): JSX.Element {
 
   const handleSend = (text: string): void => {
     p.onSend(text);
-    // Trigger 1: delay 100 ms so the textarea clears visually before the
-    // overlay collapses. No-op when pinned.
     if (!isPinned) {
+      // Trigger 1: delay 100 ms so the textarea clears visually before the
+      // overlay collapses.
       setTimeout(() => setInteractionMode(false), 100);
+      return;
+    }
+    // Pinned: the cockpit stays open, but we deliberately release input focus so
+    // the user lands back in reading mode (DimOverlay off) and can read the reply
+    // as it streams — rather than the input holding focus and dimming the
+    // response. Focus returns only when the user taps the input again. This is
+    // our slower, focus-led approach: dim what the user is not currently using.
+    if (document.activeElement instanceof HTMLTextAreaElement) {
+      document.activeElement.blur();
     }
   };
 

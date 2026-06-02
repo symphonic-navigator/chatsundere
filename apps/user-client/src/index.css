@@ -959,10 +959,37 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  /* Slimmer than the original 0.5rem: the larger avatar now anchors the bar's
+   * height, so the surrounding padding is trimmed to keep it tight. */
+  padding: 0.25rem 0.75rem;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   z-index: 5;
+}
+.topbar-avatar-btn {
+  display: inline-flex;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  /* The avatar doubles as the "open persona" affordance — a faint accent ring
+   * appears on hover/focus so it reads as tappable without shouting. */
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 150ms ease;
+}
+.topbar-avatar-btn:hover:not(:disabled),
+.topbar-avatar-btn:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.35);
+}
+.topbar-avatar-btn:disabled {
+  cursor: default;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 .hamburger-btn {
   background: transparent;
@@ -1024,13 +1051,21 @@ h1 {
   color: var(--color-paper-soft);
   font-style: italic;
 }
-.topbar-persona-name-btn {
+/* Project slot — inherits the persona-name styling it replaced (display font +
+ * the persona accent, applied inline). Muted + italic when no project is set
+ * so the placeholder never masquerades as a real project name. */
+.topbar-project {
   font-family: var(--font-display);
   font-size: 0.75rem;
   line-height: 1;
-  background: transparent;
-  border: 0;
-  padding: 0;
+  max-width: 60vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-project[data-empty="true"] {
+  opacity: 0.55;
+  font-style: italic;
 }
 .status-group {
   display: flex;

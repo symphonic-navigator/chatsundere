@@ -164,7 +164,7 @@ describe('Cockpit', () => {
     );
     const btn = container.querySelector('[data-dual="action"]') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    expect(btn.title).toMatch(/aurum.*antworte|antworte/i);
+    expect(btn.title).toMatch(/aurum.*replying|still replying/i);
   });
 
   it('Send invokes onSend then clears via onDraftChange when text present', () => {

@@ -71,6 +71,26 @@ describe('SplashOverlay', () => {
     expect(screen.queryByLabelText(/skip intro/i)).toBeNull();
   });
 
+  it('dispatches splash-dismissed when tapped (focus signal for screens below)', () => {
+    const spy = vi.fn();
+    window.addEventListener('chatsundere:splash-dismissed', spy);
+    renderOverlay();
+    fireEvent.click(screen.getByLabelText(/skip intro/i));
+    expect(spy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('chatsundere:splash-dismissed', spy);
+  });
+
+  it('dispatches splash-dismissed on the hard-timeout path', () => {
+    const spy = vi.fn();
+    window.addEventListener('chatsundere:splash-dismissed', spy);
+    renderOverlay();
+    act(() => {
+      vi.advanceTimersByTime(3001);
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('chatsundere:splash-dismissed', spy);
+  });
+
   it('does not auto-clear splashShown on a normal reload (soft-reload)', () => {
     sessionStorage.setItem('splashShown', '1');
     // Default jsdom navigation entry has type "navigate" and transferSize 0.

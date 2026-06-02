@@ -78,6 +78,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   const autoFollow = useCurrentChatStore((s) => s.autoFollowEnabled);
   const expandedId = useCurrentChatStore((s) => s.expandedMessageId);
   const toggleExpanded = useCurrentChatStore((s) => s.toggleExpanded);
+  const isPinned = useCurrentChatStore((s) => s.isPinned);
   // The resolved mindspace lives in a global store that ChatPage binds for
   // the active chat's persona. We forward it to MessageBlock so reasoning
   // pills can pick up the persona-accented palette (today via CSS var,
@@ -196,6 +197,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 onBranch={p.onBranch ? () => p.onBranch?.(m.id) : undefined}
                 branchDisabled={p.branchDisabled}
                 isStreamingDraft={isDraft}
+                isPinned={isPinned}
               />
               {isDraft ? <StreamingCursor /> : null}
             </div>

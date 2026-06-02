@@ -66,6 +66,45 @@ describe('AvatarField', () => {
     expect(screen.getByText('AR')).toBeInTheDocument();
   });
 
+  it('preview applies the confirmed crop (not the whole image)', () => {
+    // jsdom has no object-URL support — stub it for the preview effect.
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = () => 'blob:preview';
+    URL.revokeObjectURL = () => {};
+    try {
+      const { container, unmount } = render(
+        <AvatarField
+          personaId="p1"
+          name="Aria"
+          colour="#fff"
+          pending={{
+            blob: new Blob(['x'], { type: 'image/webp' }),
+            mime: 'image/webp',
+            width: 100,
+            height: 100,
+            crop: { x: 0, y: 0, zoom: 1 },
+          }}
+          onPick={() => {}}
+          onRemove={() => {}}
+        />,
+        { wrapper },
+      );
+      const preview = container.querySelector('[data-avatar-preview]') as HTMLElement;
+      expect(preview).not.toBeNull();
+      // cropToBackground(100, 100, {0,0,1}, 48) → cover-fit to the 48px box.
+      // The bug rendered bg-cover with no explicit size; the fix sets it.
+      expect(preview.style.backgroundSize).toBe('48px 48px');
+      expect(preview.className).not.toContain('bg-cover');
+      // Unmount now, while the object-URL stubs are still in place, so the
+      // revoke in the cleanup effect does not hit the restored (absent) global.
+      unmount();
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+
   it('shows a monogram placeholder when personaId is null (create mode)', () => {
     render(
       <AvatarField

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { type ChangeEvent, useState } from 'react';
+import { type ChangeEvent, type RefObject, useState } from 'react';
 import { scorePassphrase } from '../lib/validators.js';
 
 export interface PassphraseFieldProps {
@@ -10,6 +10,9 @@ export interface PassphraseFieldProps {
   /** Show the inline strength metre below the field. */
   meter?: boolean;
   autoComplete?: 'new-password' | 'current-password';
+  /** Forwarded to the underlying input so callers can focus it imperatively
+   *  (e.g. the login screen claims focus once the cold-start intro finishes). */
+  inputRef?: RefObject<HTMLInputElement>;
 }
 
 const scoreColour: Record<0 | 1 | 2 | 3 | 4, string> = {
@@ -28,6 +31,7 @@ export function PassphraseField({
   onChange,
   meter = false,
   autoComplete = 'new-password',
+  inputRef,
 }: PassphraseFieldProps) {
   const [shown, setShown] = useState(false);
   const strength = meter && value.length > 0 ? scorePassphrase(value) : null;
@@ -39,6 +43,7 @@ export function PassphraseField({
       </label>
       <div className="flex items-center gap-2">
         <input
+          ref={inputRef}
           id={id}
           type={shown ? 'text' : 'password'}
           autoComplete={autoComplete}

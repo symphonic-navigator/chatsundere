@@ -123,6 +123,20 @@ describe('InteractionMode lifecycle', () => {
     vi.useRealTimers();
   });
 
+  it('Send while pinned releases input focus → reading mode (DimOverlay off)', () => {
+    useCurrentChatStore.getState().togglePin();
+    const { container } = mount({ draftValue: 'hi' });
+    const overlay = container.querySelector('.dim-overlay') as HTMLElement;
+    const ta = container.querySelector('textarea') as HTMLTextAreaElement;
+    ta.focus();
+    fireEvent.focus(ta);
+    expect(overlay.getAttribute('data-active')).toBe('true');
+    fireEvent.click(container.querySelector('[data-dual="action"]') as HTMLButtonElement);
+    // The user is dropped back into reading mode so the streamed reply is legible.
+    expect(overlay.getAttribute('data-active')).not.toBe('true');
+    expect(document.activeElement).not.toBe(ta);
+  });
+
   it('blur alone does not close', () => {
     const { container } = mount();
     const ta = container.querySelector('textarea') as HTMLTextAreaElement;

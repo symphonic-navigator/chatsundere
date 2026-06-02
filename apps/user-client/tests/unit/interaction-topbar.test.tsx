@@ -138,7 +138,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
     expect(titleBtn.querySelector('.topbar-pencil')).not.toBeNull();
   });
 
-  it('renders persona-name row below title as a separate tap target', () => {
+  it('the avatar is the tap target into persona settings', () => {
     const onOpen = vi.fn();
     const { container } = wrap(
       <InteractionTopbar
@@ -151,11 +151,60 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         onOpenPersonaEditor={onOpen}
       />,
     );
-    const personaBtn = container.querySelector('.topbar-persona-name-btn') as HTMLButtonElement;
-    expect(personaBtn).not.toBeNull();
-    expect(personaBtn.textContent).toContain('Aurum');
-    fireEvent.click(personaBtn);
+    const avatarBtn = container.querySelector('.topbar-avatar-btn') as HTMLButtonElement;
+    expect(avatarBtn).not.toBeNull();
+    expect(avatarBtn.getAttribute('aria-label')).toContain('Aurum');
+    fireEvent.click(avatarBtn);
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('no longer renders the persona name as text', () => {
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+        onOpenPersonaEditor={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.topbar-persona-name-btn')).toBeNull();
+  });
+
+  it('project slot shows a muted placeholder when no project', () => {
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
+    );
+    const slot = container.querySelector('.topbar-project') as HTMLElement;
+    expect(slot).not.toBeNull();
+    expect(slot.textContent).toBe('(no project)');
+    expect(slot.getAttribute('data-empty')).toBe('true');
+  });
+
+  it('project slot shows the project name (no placeholder) when set', () => {
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+        projectName="Rennwagen"
+      />,
+    );
+    const slot = container.querySelector('.topbar-project') as HTMLElement;
+    expect(slot.textContent).toBe('Rennwagen');
+    expect(slot.getAttribute('data-empty')).toBeNull();
   });
 
   it('tapping the title swaps to an input pre-filled with the current title (or empty when null)', () => {
@@ -273,7 +322,7 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
     expect(container.querySelector('.topbar-title-btn')).toBeNull();
   });
 
-  it('persona-name row remains functional in lazy mode', () => {
+  it('avatar tap into persona settings remains functional in lazy mode', () => {
     const onOpen = vi.fn();
     const { container } = wrap(
       <InteractionTopbar
@@ -286,7 +335,7 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
         onOpenPersonaEditor={onOpen}
       />,
     );
-    fireEvent.click(container.querySelector('.topbar-persona-name-btn') as HTMLButtonElement);
+    fireEvent.click(container.querySelector('.topbar-avatar-btn') as HTMLButtonElement);
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });

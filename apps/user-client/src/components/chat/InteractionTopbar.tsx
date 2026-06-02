@@ -14,6 +14,11 @@ interface Props {
   onExit: () => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
+  /** Name of the project this chat belongs to. Projects are not yet modelled,
+   *  so this is `null`/absent today and the slot shows a muted placeholder —
+   *  reserving the space (in the persona's accent + display font) for when the
+   *  feature lands. */
+  projectName?: string | null;
 }
 
 export function InteractionTopbar(p: Props): JSX.Element {
@@ -67,12 +72,20 @@ export function InteractionTopbar(p: Props): JSX.Element {
             <path d="M3 6h18M3 12h18M3 18h18" />
           </svg>
         </button>
-        <PersonaAvatar
-          personaId={p.persona.id}
-          name={p.persona.name}
-          colour={p.persona.colour}
-          size={28}
-        />
+        <button
+          type="button"
+          className="topbar-avatar-btn"
+          aria-label={`Open ${p.persona.name} settings`}
+          onClick={p.onOpenPersonaEditor}
+          disabled={!p.onOpenPersonaEditor}
+        >
+          <PersonaAvatar
+            personaId={p.persona.id}
+            name={p.persona.name}
+            colour={p.persona.colour}
+            size={36}
+          />
+        </button>
       </div>
 
       <div className="topbar-center">
@@ -111,16 +124,14 @@ export function InteractionTopbar(p: Props): JSX.Element {
             New chat
           </div>
         )}
-        <button
-          type="button"
-          className="topbar-persona-name-btn"
-          aria-label={`Open ${p.persona.name} settings`}
+        <div
+          className="topbar-project"
           style={{ color: p.persona.colour }}
-          onClick={p.onOpenPersonaEditor}
-          disabled={!p.onOpenPersonaEditor}
+          data-empty={p.projectName ? undefined : 'true'}
+          title={p.projectName ?? 'No project'}
         >
-          {p.persona.name}
-        </button>
+          {p.projectName ?? '(no project)'}
+        </div>
       </div>
 
       <div className="topbar-right">

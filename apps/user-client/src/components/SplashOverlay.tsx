@@ -52,6 +52,10 @@ export function SplashOverlay(): JSX.Element | null {
     const dismiss = () => {
       sessionStorage.setItem(STORAGE_KEY, '1');
       setShow(false);
+      // Robust "the intro is over" signal for any screen underneath (e.g. the
+      // login passphrase field claiming focus). Fires on every dismissal path —
+      // hard-timeout, Escape, and the reduced-motion case that emits no FLIP.
+      window.dispatchEvent(new Event('chatsundere:splash-dismissed'));
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') dismiss();
@@ -99,6 +103,7 @@ export function SplashOverlay(): JSX.Element | null {
   const dismiss = () => {
     sessionStorage.setItem(STORAGE_KEY, '1');
     setShow(false);
+    window.dispatchEvent(new Event('chatsundere:splash-dismissed'));
   };
 
   return (

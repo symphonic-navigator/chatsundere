@@ -32,6 +32,12 @@ export interface MessageBlockProps {
    *  last reasoning group as live; text now renders via MarkdownContent which
    *  re-parses as tokens arrive (no per-token fade). */
   isStreamingDraft?: boolean;
+  /** True when the cockpit is pinned. While pinned and the prompt input holds
+   *  focus, the first click on a message only sheds that focus (back to
+   *  reading mode) instead of also activating the message — the user must
+   *  click again to expand it. Keeps control in the user's hands rather than
+   *  snatching focus and selection away in a single gesture. */
+  isPinned?: boolean;
 }
 
 /** Renders a single chat message row with optional expanded controls. */
@@ -68,6 +74,32 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
   }, [p.expanded]);
 
+  // "Shed focus first, activate second" while the cockpit is pinned. Focus
+  // leaves the input on pointerdown (before the click fires), so we detect the
+  // composing state here — while the cockpit input is still the active element
+  // — and consume the resulting click in handleClick below.
+  const swallowActivationRef = useRef(false);
+  const onPointerDownCapture = (): void => {
+    const active = document.activeElement;
+    if (
+      p.isPinned === true &&
+      active instanceof HTMLElement &&
+      active.classList.contains('cockpit-input')
+    ) {
+      active.blur();
+      swallowActivationRef.current = true;
+    } else {
+      swallowActivationRef.current = false;
+    }
+  };
+  const handleClick = (): void => {
+    if (swallowActivationRef.current) {
+      swallowActivationRef.current = false;
+      return;
+    }
+    p.onToggleExpand();
+  };
+
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: message block is a touch-first tap target — keyboard nav handled at chat-list level
     <div
@@ -75,7 +107,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
       className={`msg ${roleClass}${p.expanded ? ' expanded' : ''}`}
       data-msg-id={p.message.id}
       data-bookmarked={p.message.bookmarked || undefined}
-      onClick={p.onToggleExpand}
+      onPointerDownCapture={onPointerDownCapture}
+      onClick={handleClick}
     >
       <div className="msg-name" style={nameStyle}>
         <span className="msg-name-prefix" aria-hidden="true">

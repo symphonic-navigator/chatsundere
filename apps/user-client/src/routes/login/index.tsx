@@ -11,7 +11,7 @@ import {
   loginWithLocalBiometric,
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
@@ -44,6 +44,35 @@ export function Login() {
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const passphraseRef = useRef<HTMLInputElement>(null);
+
+  // Once the cold-start intro is over, drop focus into the passphrase field so
+  // the keyboard opens and the user can type straight away — unlocking is what
+  // they came here to do. The animated path fires `splash-flip-done` (~2s); the
+  // reduced-motion / skip paths fire `splash-dismissed`; whichever lands first
+  // wins. When no splash plays this load (warm reload), focus immediately.
+  // (Mobile note: a programmatic focus outside a user gesture may place the
+  // caret without raising the on-screen keyboard on some browsers, e.g. iOS.)
+  useEffect(() => {
+    const focusPassphrase = (): void => passphraseRef.current?.focus();
+    const splashActive = sessionStorage.getItem('splashShown') === null;
+    if (!splashActive) {
+      focusPassphrase();
+      return;
+    }
+    let done = false;
+    const once = (): void => {
+      if (done) return;
+      done = true;
+      focusPassphrase();
+    };
+    window.addEventListener('chatsundere:splash-flip-done', once);
+    window.addEventListener('chatsundere:splash-dismissed', once);
+    return () => {
+      window.removeEventListener('chatsundere:splash-flip-done', once);
+      window.removeEventListener('chatsundere:splash-dismissed', once);
+    };
+  }, []);
 
   // Load account info and biometric availability once on mount.
   useEffect(() => {
@@ -242,6 +271,7 @@ export function Login() {
               value={passphrase}
               onChange={setPassphrase}
               autoComplete="current-password"
+              inputRef={passphraseRef}
             />
 
             {error && (

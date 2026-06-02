@@ -10,7 +10,7 @@ interface Props {
 export function DualActionBtn(p: Props): JSX.Element {
   const disabled = !p.hasText || p.isStreamLive;
   const title = p.isStreamLive
-    ? `${p.personaName} antwortet noch…`
+    ? `${p.personaName} is still replying…`
     : p.hasText
       ? 'Send'
       : 'Voice arrives with Block 4';

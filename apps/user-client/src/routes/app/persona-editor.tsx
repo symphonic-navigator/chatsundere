@@ -38,6 +38,7 @@ import {
 } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
+import { cropToBackground } from '../../lib/avatar-crop.js';
 import { normaliseAvatar } from '../../lib/avatar-normalise.js';
 import {
   CONTEXT_STEP,
@@ -113,7 +114,8 @@ export function AvatarField({
   // Hold the preview object URL in state so it is created once per blob and
   // revoked on cleanup — computing it inline would leak a URL on every render
   // (PersonaEditor re-renders on each keystroke).
-  const pendingBlob = pending && pending !== 'remove' ? pending.blob : null;
+  const pendingData = pending && pending !== 'remove' ? pending : null;
+  const pendingBlob = pendingData?.blob ?? null;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!pendingBlob) {
@@ -124,12 +126,25 @@ export function AvatarField({
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [pendingBlob]);
+  // Reproduce the confirmed crop in the preview exactly as PersonaAvatar does
+  // for the saved image (CSS background-size/position). Without this the
+  // preview fell back to bg-cover and briefly showed the whole, uncropped image
+  // until a reload re-rendered it through PersonaAvatar.
+  const previewBg =
+    pendingData && previewUrl
+      ? cropToBackground(pendingData.width, pendingData.height, pendingData.crop, 48)
+      : null;
   return (
     <div className="mb-3 flex items-center gap-3">
-      {previewUrl ? (
+      {previewUrl && previewBg ? (
         <div
-          className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-cover bg-center"
-          style={{ backgroundImage: `url(${previewUrl})` }}
+          className="h-12 w-12 shrink-0 overflow-hidden rounded-md"
+          style={{
+            backgroundImage: `url(${previewUrl})`,
+            backgroundSize: previewBg.backgroundSize,
+            backgroundPosition: previewBg.backgroundPosition,
+            backgroundRepeat: 'no-repeat',
+          }}
           data-avatar-preview
         />
       ) : pending === 'remove' || !personaId ? (

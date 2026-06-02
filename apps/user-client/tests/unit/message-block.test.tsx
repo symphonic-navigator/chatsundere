@@ -267,6 +267,46 @@ describe('MessageBlock', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
+  it('pinned + composing: first tap only sheds input focus, second tap activates', () => {
+    const onToggle = vi.fn();
+    // Stand-in for the pinned cockpit input that currently holds focus.
+    const input = document.createElement('textarea');
+    input.className = 'cockpit-input';
+    document.body.appendChild(input);
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    const { container } = render(
+      <MessageBlock
+        message={personaMsg()}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={onToggle}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isPinned
+      />,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: .msg is always present when MessageBlock renders
+    const msg = container.querySelector('.msg')!;
+
+    // First interaction: only sheds the input focus (back to reading mode).
+    fireEvent.pointerDown(msg);
+    fireEvent.click(msg);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(input);
+
+    // Second interaction: the input is no longer focused, so it activates.
+    fireEvent.pointerDown(msg);
+    fireEvent.click(msg);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    input.remove();
+  });
+
   it('Branch button is disabled while a stream is live', () => {
     const { container } = render(
       <MessageBlock
