@@ -3,6 +3,7 @@ import type { ComponentPropsWithoutRef } from 'react';
 import type { Components } from 'react-markdown';
 import type { Highlighter } from 'shiki';
 import { CodeBlock } from './CodeBlock.js';
+import { ImageMarker } from './ImageMarker.js';
 import { LatexBlock } from './LatexBlock.js';
 import { MermaidBlock } from './MermaidBlock.js';
 
@@ -13,7 +14,10 @@ import { MermaidBlock } from './MermaidBlock.js';
  *  - `a` opens every link in a new tab with `rel="noopener noreferrer"` (no
  *    tab-nabbing, no referrer) and stops the click bubbling up to the message
  *    bubble's expand/collapse toggle. react-markdown's default urlTransform
- *    already strips dangerous protocols (e.g. `javascript:`). */
+ *    already strips dangerous protocols (e.g. `javascript:`).
+ *  - `img` never auto-fetches: a model-emitted `![alt](url)` would otherwise
+ *    beacon the user's IP to a third party on render (a tracking/exfiltration
+ *    vector). ImageMarker renders a tap-to-load pill instead — see its docs. */
 export function createMarkdownComponents(highlighter: Highlighter | null): Components {
   return {
     code(props: ComponentPropsWithoutRef<'code'>) {
@@ -45,6 +49,9 @@ export function createMarkdownComponents(highlighter: Highlighter | null): Compo
           {children}
         </a>
       );
+    },
+    img(props: ComponentPropsWithoutRef<'img'>) {
+      return <ImageMarker {...props} />;
     },
   };
 }

@@ -30,6 +30,30 @@ describe('useCurrentChatStore', () => {
     expect(useCurrentChatStore.getState().expandedMessageId).toBeNull();
   });
 
+  it('inputFocused: settable, and cleared on every interaction-mode flip', () => {
+    const s = useCurrentChatStore.getState();
+    expect(s.inputFocused).toBe(false);
+    s.setInputFocused(true);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
+    // Closing the cockpit clears it so the chat-page overlay fades back out.
+    s.setInteractionMode(false);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
+    // Opening starts un-dimmed too — the cockpit autofocus re-dims afterwards.
+    s.setInputFocused(true);
+    s.setInteractionMode(true);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
+  });
+
+  it('chatPersonaIsAdult: defaults null, settable, reset to null', () => {
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBeNull();
+    useCurrentChatStore.getState().setChatPersonaIsAdult(false);
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBe(false);
+    useCurrentChatStore.getState().setChatPersonaIsAdult(true);
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBe(true);
+    useCurrentChatStore.getState().reset();
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBeNull();
+  });
+
   it('reset returns everything to initial', () => {
     const s = useCurrentChatStore.getState();
     s.setChatId('chat-1');

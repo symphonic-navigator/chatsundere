@@ -1,11 +1,10 @@
 import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { resolveContextWindow } from '../../lib/context-window.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { Cockpit } from './Cockpit.js';
-import { DimOverlay } from './DimOverlay.js';
 import { InteractionTopbar } from './InteractionTopbar.js';
 
 interface Props {
@@ -23,8 +22,9 @@ interface Props {
 }
 
 /**
- * Overlay layer that composes Topbar + DimOverlay + Cockpit and owns the
- * three auto-close triggers (§6.3 Decision 16):
+ * Overlay layer that composes Topbar + Cockpit, drives the DimOverlay focus
+ * flag (the overlay itself renders at chat-page level), and owns the three
+ * auto-close triggers (§6.3 Decision 16):
  *
  * 1. Send-tap with non-empty input → close after 100 ms (visual clear first).
  * 2. Outside-tap (pointerdown outside the InteractionMode DOM tree) → close immediately.
@@ -43,7 +43,10 @@ export function InteractionMode(p: Props): JSX.Element {
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const clearExpanded = useCurrentChatStore((s) => s.clearExpanded);
-  const [inputFocused, setInputFocused] = useState(false);
+  // DimOverlay activation lives in the store and is rendered at chat-page level
+  // (see chat-page.tsx) so the un-dim fade isn't cut short by this component
+  // unmounting on close. Here we only drive the focus flag.
+  const setInputFocused = useCurrentChatStore((s) => s.setInputFocused);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Tracks "blur happened; the next outside-tap is meaningful" — see JSDoc above.
@@ -119,8 +122,8 @@ export function InteractionMode(p: Props): JSX.Element {
         onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}
       />
-      <DimOverlay active={inputFocused} />
-      {/* Capture focus/blur on the textarea to drive DimOverlay activation. */}
+      {/* Capture focus/blur on the textarea to drive DimOverlay activation
+          (the overlay itself renders at chat-page level). */}
       <div
         onFocusCapture={(e) => {
           if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
