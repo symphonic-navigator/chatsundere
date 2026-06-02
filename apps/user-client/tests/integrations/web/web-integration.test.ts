@@ -98,4 +98,28 @@ describe('web-integration', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
   });
+
+  it('web_fetch.execute pulls the key and serialises the page', async () => {
+    const fetch = vi.fn(async (url: string) => ({ url, content: 'Page body.' }));
+    const getKey = vi.fn(async () => 'secret-key');
+    const integ = createWebIntegration({
+      getOffering: () =>
+        webOffering({ canSearch: false, canFetch: true, qualityClass: 'ai-friendly' }),
+      resolveWebAdapter: () => ({ fetch }),
+    });
+    const [tool] = integ.contributesTools(ctx({ webFetch: REF, getKey }));
+    if (!tool) throw new Error('expected web_fetch to be contributed');
+    expect(tool.name).toBe('web_fetch');
+    const result = await tool.execute({ url: 'https://e.x/page' });
+    expect(getKey).toHaveBeenCalledWith('nano-gpt');
+    expect(fetch).toHaveBeenCalledWith(
+      'https://e.x/page',
+      { nsfwAllowed: false, location: null },
+      'secret-key',
+      undefined,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain('Page body.');
+    expect(result.output).toContain('https://e.x/page');
+  });
 });
