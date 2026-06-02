@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, it, test } from 'bun:test';
 import { registerBuiltinProviders } from '../providers/_register-builtins.js';
 import { _resetRegistryForTests, listOfferings } from '../registry.js';
 import {
@@ -19,10 +19,10 @@ beforeAll(() => {
 afterAll(() => _resetRegistryForTests());
 
 describe('canonical-registry', () => {
-  test('lists twenty canonicals with unique ids', () => {
+  test('lists twenty-one canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(20);
-    expect(new Set(ids).size).toBe(20);
+    expect(ids).toHaveLength(21);
+    expect(new Set(ids).size).toBe(21);
     expect(ids).toContain('glm-5.1');
     expect(ids).toContain('deepseek-v3.2');
     expect(ids).toContain('qwen3.5-397b-a17b');
@@ -45,6 +45,14 @@ describe('canonical-registry', () => {
   test('CANONICALS is the source listCanonicals copies', () => {
     expect(listCanonicals()).toEqual([...CANONICALS]);
     expect(listCanonicals()).not.toBe(CANONICALS); // fresh array
+  });
+
+  it('includes the grok-4.3 canonical with vision + reasoning + tools', () => {
+    const grok = CANONICALS.find((c) => c.id === 'grok-4.3');
+    expect(grok).toBeDefined();
+    expect(grok?.requiredCaps).toEqual({ tools: true, reasoning: true, vision: true });
+    expect(grok?.freedomOriented).toBe(true);
+    expect(grok?.family).toBe('grok');
   });
 });
 

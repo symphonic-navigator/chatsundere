@@ -11,6 +11,7 @@ import { nanoGpt } from './providers/nano-gpt.js';
 import { novita } from './providers/novita.js';
 import {
   type StreamCompletionArgs,
+  _buildWireForTests,
   buildAdapterBodyForTest,
   buildBodyForTest,
   streamCompletion,
@@ -443,5 +444,39 @@ describe('buildAdapterBody', () => {
       recordingAdapter,
     );
     expect(lastReq?.reasoning).toEqual({ enabled: false });
+  });
+});
+
+describe('cacheKey threading', () => {
+  it('passes args.cacheKey into the CanonicalRequest the adapter receives', () => {
+    let seen: string | undefined;
+    const fake: ModelAdapter = {
+      profile: {
+        reasoning: { mode: 'none' },
+        toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+        vision: false,
+        replayReasoning: false,
+      },
+      buildRequest(req) {
+        seen = req.cacheKey;
+        return { model: 'm', body: { model: 'm' } };
+      },
+      parseChunk(_raw, state) {
+        return { events: [], state };
+      },
+    };
+    _buildWireForTests(
+      {
+        provider: { id: 'xai' } as never,
+        providerConfig: { baseUrl: 'x', routing: { kind: 'direct' } },
+        apiKey: 'k',
+        target: { slug: 'm', adapterId: 'xai:grok-4.3' },
+        messages: [{ role: 'user', content: 'hi' }],
+        bodyExtras: {},
+        cacheKey: 'chat-uuid-123',
+      } as never,
+      fake,
+    );
+    expect(seen).toBe('chat-uuid-123');
   });
 });

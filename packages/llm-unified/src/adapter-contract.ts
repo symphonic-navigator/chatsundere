@@ -17,6 +17,12 @@ export interface CanonicalRequest {
   messages: WireMessage[];
   reasoning: ReasoningIntent;
   tools?: ToolDef[];
+  /**
+   * Stable per-conversation key for providers with conversation-affinity prompt
+   * caching (xAI's `x-grok-conv-id`; OpenAI's `prompt_cache_key` later). Ignored
+   * by adapters that don't cache by conversation.
+   */
+  cacheKey?: string;
 }
 
 /** The upstream-bound request an adapter produces: a model slug plus a JSON body. */

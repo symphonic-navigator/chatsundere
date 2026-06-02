@@ -50,6 +50,8 @@ function composeOneShotWire(args: OneShotArgs): {
   if (adapter) {
     const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
     const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
+    // No `cacheKey` here by design: one-shot calls (title-gen, memory extraction)
+    // deliberately forgo conversation-affinity caching (spec §6 — chat-only).
     const req: CanonicalRequest = { messages: args.messages, reasoning: intent };
     const wire = adapter.buildRequest(req);
     // Sampling first, adapter structural keys second (as in streamCompletion);

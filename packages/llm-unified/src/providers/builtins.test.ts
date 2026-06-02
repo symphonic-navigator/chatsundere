@@ -16,7 +16,7 @@ beforeAll(() => {
 });
 
 describe('built-in providers', () => {
-  it('registers all eight built-ins in sortPriority order', () => {
+  it('registers all nine built-ins in sortPriority order', () => {
     const ids = listProviders().map((p) => p.id);
     expect(ids).toEqual([
       'chutes',
@@ -24,6 +24,7 @@ describe('built-in providers', () => {
       'mistral',
       'wafer',
       'novita',
+      'xai',
       'ollama-cloud',
       'nano-gpt',
       'openrouter',
@@ -126,6 +127,19 @@ describe('built-in providers', () => {
       expect(p.corsHint).toBe('requires-proxy');
       expect(p.offerings).toHaveLength(6);
     }
+  });
+
+  it('registers xai with a single verified grok-4.3 offering', () => {
+    const p = getProvider('xai');
+    expect(p?.corsHint).toBe('requires-proxy');
+    expect(p?.capabilities).toContain('vision');
+    expect(p?.offerings).toHaveLength(1);
+    const o = p?.offerings[0];
+    expect(o?.canonicalRef).toBe('grok-4.3');
+    expect(o?.context).toEqual({ recommended: 200_000, max: 1_000_000 });
+    expect(o?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
+    expect(o?.freedomOrientedDeployment).toBe(true);
+    expect(o?.confidence).toBe('verified');
   });
 
   it('every built-in declares an api_key config field marked secret + required', () => {

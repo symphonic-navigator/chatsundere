@@ -199,6 +199,15 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote:
       'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
   },
+  {
+    id: 'grok-4.3',
+    displayName: 'Grok 4.3',
+    family: 'grok',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'xAI/Grok refuses near-nothing; freedom-oriented model and deployment (Chris, 2026-06-02).',
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */

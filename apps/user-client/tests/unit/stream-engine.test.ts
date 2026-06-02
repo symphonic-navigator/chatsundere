@@ -171,6 +171,29 @@ describe('runStreamEngine', () => {
     expect(reasoningCalls.length).toBe(2);
   });
 
+  it('passes the chat id as cacheKey to streamCompletion', async () => {
+    let capturedArgs: unknown = null;
+    vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* (args) {
+      capturedArgs = args;
+      yield { type: 'finish', reason: 'stop' };
+    });
+    await runStreamEngine(
+      makeArgs({
+        chat: {
+          id: 'chat-7',
+          personaId: 'p1',
+          title: null,
+          resolvedMindspaceId: 'm1',
+          createdAt: 1,
+          lastMessageAt: 1,
+          bookmarkedMessageCount: 0,
+          draftInput: '',
+        },
+      }),
+    );
+    expect(capturedArgs).toMatchObject({ cacheKey: 'chat-7' });
+  });
+
   it('toWireMessage filters reasoning blocks from priorMessages history', async () => {
     let capturedMessages: unknown = null;
     vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* (args) {

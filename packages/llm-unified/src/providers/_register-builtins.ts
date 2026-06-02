@@ -8,6 +8,7 @@ import { registerOllamaCloud } from './ollama-cloud.js';
 import { registerOpenRouter } from './openrouter.js';
 import { registerTensorix } from './tensorix.js';
 import { registerWafer } from './wafer.js';
+import { registerXai } from './xai.js';
 
 /**
  * Register all built-in providers. Called once at package import
@@ -19,6 +20,7 @@ export function registerBuiltinProviders(): void {
   registerMistral();
   registerWafer();
   registerNovita();
+  registerXai();
   registerOllamaCloud();
   registerNanoGpt();
   registerOpenRouter();

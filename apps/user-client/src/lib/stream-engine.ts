@@ -91,6 +91,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     target: offeringToTarget(args.offering),
     messages: wireMessages,
     bodyExtras: extras,
+    cacheKey: args.chat.id,
     signal: args.signal,
     onRetry: (e) => console.warn(formatRetryEvent(e)),
   })) {

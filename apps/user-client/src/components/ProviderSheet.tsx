@@ -13,6 +13,7 @@ interface Props {
     | 'tensorix'
     | 'mistral'
     | 'wafer'
+    | 'xai'
     | 'novita'
     | 'ollama-cloud'
     | 'nano-gpt'

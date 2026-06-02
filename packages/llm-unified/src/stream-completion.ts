@@ -30,6 +30,12 @@ export interface StreamCompletionArgs {
    * populates this for verification.
    */
   tools?: ToolDef[];
+  /**
+   * Stable per-conversation key for providers with conversation-affinity prompt
+   * caching (xAI's `x-grok-conv-id`). Threaded into `CanonicalRequest` so
+   * adapters can emit it as a per-request header without touching the body.
+   */
+  cacheKey?: string;
   signal?: AbortSignal;
   /**
    * Cap on how long we wait for the upstream to begin responding (TTFB).
@@ -144,6 +150,7 @@ function buildWire(
     messages: args.messages,
     reasoning: intent,
     ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
+    ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
   };
   const wire = adapter.buildRequest(req);
   // Sampling first, adapter body second: the adapter's structural keys
@@ -167,3 +174,8 @@ export const buildBodyForTest = buildBody;
 // Test-only re-export so unit tests can exercise adapter-body composition
 // without the network.
 export const buildAdapterBodyForTest = buildAdapterBody;
+
+/** Test hook — exposes buildWire so cacheKey/header threading can be asserted. */
+export function _buildWireForTests(args: StreamCompletionArgs, adapter: ModelAdapter) {
+  return buildWire(args, adapter);
+}

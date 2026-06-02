@@ -6,6 +6,7 @@ export const BUILT_IN_PROVIDERS = [
   { id: 'tensorix', name: 'Tensorix', monogram: 'Te' },
   { id: 'mistral', name: 'Mistral AI', monogram: 'Mi' },
   { id: 'wafer', name: 'Wafer', monogram: 'Wa' },
+  { id: 'xai', name: 'xAI', monogram: 'xA' },
   { id: 'novita', name: 'Novita AI', monogram: 'No' },
   { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
   { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
