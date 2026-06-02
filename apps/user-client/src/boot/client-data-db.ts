@@ -80,6 +80,8 @@ export interface PersonaRow {
   temperature: number;
   adultPersona: boolean;
   chatsundereTonality: boolean;
+  /** Per-persona context window in tokens. null = use the offering's recommended. */
+  contextWindow: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -124,6 +126,24 @@ export interface PillRow {
   createdAt: number;
 }
 
+export interface AvatarCrop {
+  /** Pan as a fraction of the display size; 0 = centred. */
+  x: number;
+  y: number;
+  /** Cover-scale multiplier; 1 = cover the box exactly. */
+  zoom: number;
+}
+
+export interface PersonaAvatarRow {
+  personaId: string; // PK, 1:1 with a persona
+  blob: Blob; // downscaled FULL image (not pre-cropped)
+  mime: string;
+  width: number; // natural width of the stored image
+  height: number; // natural height of the stored image
+  crop: AvatarCrop;
+  updatedAt: number;
+}
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -134,6 +154,7 @@ class ClientDataDb extends Dexie {
   chats!: Table<ChatRow, string>;
   messages!: Table<MessageRow, string>;
   pills!: Table<PillRow, string>;
+  personaAvatars!: Table<PersonaAvatarRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -312,6 +333,29 @@ class ClientDataDb extends Dexie {
           .toCollection()
           .modify((p: Record<string, unknown>) => {
             p.chatsundereTonality = true;
+          });
+      });
+
+    // Version 10 — persona-settings: per-persona context window + avatars.
+    // personas gain a non-indexed `contextWindow` (backfilled null); a new
+    // `personaAvatars` table holds the downscaled image + crop metadata.
+    this.version(10)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+        personaAvatars: 'personaId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            p.contextWindow = null;
           });
       });
   }

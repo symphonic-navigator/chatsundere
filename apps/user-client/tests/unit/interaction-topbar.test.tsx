@@ -1,8 +1,10 @@
 import { getOffering } from '@chatsundere/llm-unified';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db';
+import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { InteractionTopbar } from '../../src/components/chat/InteractionTopbar';
 import { displayTitle } from '../../src/lib/chat-title';
 
@@ -22,6 +24,7 @@ const aurum: PersonaRow = {
   temperature: 0.85,
   adultPersona: false,
   chatsundereTonality: true,
+  contextWindow: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -37,20 +40,35 @@ const chatRow: import('../../src/boot/client-data-db').ChatRow = {
   draftInput: '',
 };
 
+beforeEach(async () => {
+  await _resetClientDataDbForTests();
+  await openClientDataDb();
+});
+afterEach(async () => {
+  await _resetClientDataDbForTests();
+});
+
+function wrap(node: React.ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 describe('InteractionTopbar', () => {
   it('hamburger triggers onExit', () => {
     const onExit = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={onExit}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={onExit}
+        onRenameChat={vi.fn()}
+      />,
     );
     const btn = container.querySelector('.hamburger-btn') as HTMLButtonElement;
     fireEvent.click(btn);
@@ -58,33 +76,29 @@ describe('InteractionTopbar', () => {
   });
 
   it('journal stub shows 0', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
     );
     expect(container.querySelector('.journal-indicator')?.textContent).toContain('0');
   });
 
   it('context gauge shows the right percentage', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={250}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={250}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
     );
     expect(container.querySelector('.context-gauge-text')?.textContent).toBe('25%');
     const fill = container.querySelector('.context-gauge-fill') as HTMLElement;
@@ -92,17 +106,15 @@ describe('InteractionTopbar', () => {
   });
 
   it('context gauge caps at 100', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={5000}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={5000}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
     );
     expect(container.querySelector('.context-gauge-text')?.textContent).toBe('100%');
   });
@@ -110,17 +122,15 @@ describe('InteractionTopbar', () => {
 
 describe('InteractionTopbar — title row (chat exists)', () => {
   it('renders displayTitle(chat) as a tappable button with a pencil glyph', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
     );
     const titleBtn = container.querySelector('.topbar-title-btn') as HTMLButtonElement;
     expect(titleBtn).not.toBeNull();
@@ -130,18 +140,16 @@ describe('InteractionTopbar — title row (chat exists)', () => {
 
   it('renders persona-name row below title as a separate tap target', () => {
     const onOpen = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-          onOpenPersonaEditor={onOpen}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+        onOpenPersonaEditor={onOpen}
+      />,
     );
     const personaBtn = container.querySelector('.topbar-persona-name-btn') as HTMLButtonElement;
     expect(personaBtn).not.toBeNull();
@@ -151,17 +159,15 @@ describe('InteractionTopbar — title row (chat exists)', () => {
   });
 
   it('tapping the title swaps to an input pre-filled with the current title (or empty when null)', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
     const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
@@ -172,17 +178,15 @@ describe('InteractionTopbar — title row (chat exists)', () => {
 
   it('Enter commits sanitised value via onRenameChat', () => {
     const onRename = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={onRename}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={onRename}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
     const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
@@ -193,17 +197,15 @@ describe('InteractionTopbar — title row (chat exists)', () => {
 
   it('Escape cancels without invoking onRenameChat', () => {
     const onRename = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={onRename}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={onRename}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
     const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
@@ -215,17 +217,15 @@ describe('InteractionTopbar — title row (chat exists)', () => {
 
   it('Blur commits the sanitised value', () => {
     const onRename = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={chatRow}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={onRename}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={chatRow}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={onRename}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
     const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
@@ -236,17 +236,15 @@ describe('InteractionTopbar — title row (chat exists)', () => {
 
   it('empty / whitespace-only commits null (= back to fallback)', () => {
     const onRename = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={{ ...chatRow, title: 'existing' }}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={onRename}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={{ ...chatRow, title: 'existing' }}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={onRename}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
     const input = container.querySelector('.topbar-title-input') as HTMLInputElement;
@@ -258,17 +256,15 @@ describe('InteractionTopbar — title row (chat exists)', () => {
 
 describe('InteractionTopbar — lazy mode (no chat yet)', () => {
   it('renders "New chat" placeholder when chat is null, no pencil, not interactive', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={null}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={null}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+      />,
     );
     const placeholder = container.querySelector('.topbar-title-placeholder') as HTMLElement;
     expect(placeholder).not.toBeNull();
@@ -279,18 +275,16 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
 
   it('persona-name row remains functional in lazy mode', () => {
     const onOpen = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionTopbar
-          persona={aurum}
-          chat={null}
-          usedTokens={0}
-          contextWindow={1000}
-          onExit={vi.fn()}
-          onRenameChat={vi.fn()}
-          onOpenPersonaEditor={onOpen}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionTopbar
+        persona={aurum}
+        chat={null}
+        usedTokens={0}
+        contextWindow={1000}
+        onExit={vi.fn()}
+        onRenameChat={vi.fn()}
+        onOpenPersonaEditor={onOpen}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-persona-name-btn') as HTMLButtonElement);
     expect(onOpen).toHaveBeenCalledTimes(1);
@@ -306,22 +300,20 @@ const imOffering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
 describe('InteractionMode → InteractionTopbar plumbing', () => {
   it('forwards `chat` and `onRenameChat` to the Topbar', () => {
     const onRename = vi.fn();
-    const { container } = render(
-      <MemoryRouter>
-        <InteractionMode
-          persona={aurum}
-          chat={chatRow}
-          offering={imOffering}
-          usedTokens={0}
-          draftValue=""
-          onDraftChange={vi.fn()}
-          isStreamLive={false}
-          onSend={vi.fn()}
-          onExit={vi.fn()}
-          onRenameChat={onRename}
-          onOpenPersonaEditor={vi.fn()}
-        />
-      </MemoryRouter>,
+    const { container } = wrap(
+      <InteractionMode
+        persona={aurum}
+        chat={chatRow}
+        offering={imOffering}
+        usedTokens={0}
+        draftValue=""
+        onDraftChange={vi.fn()}
+        isStreamLive={false}
+        onSend={vi.fn()}
+        onExit={vi.fn()}
+        onRenameChat={onRename}
+        onOpenPersonaEditor={vi.fn()}
+      />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);
     const input = container.querySelector('.topbar-title-input') as HTMLInputElement;

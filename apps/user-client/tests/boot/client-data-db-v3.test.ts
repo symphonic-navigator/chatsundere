@@ -95,6 +95,7 @@ describe('client-data-db v3 migration', () => {
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

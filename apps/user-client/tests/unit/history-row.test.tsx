@@ -22,6 +22,7 @@ const persona: PersonaRow = {
   temperature: 0.85,
   adultPersona: false,
   chatsundereTonality: true,
+  contextWindow: null,
   createdAt: 0,
   updatedAt: 0,
 };

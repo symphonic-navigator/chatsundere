@@ -67,6 +67,9 @@ vi.mock('@chatsundere/llm-unified', () => ({
     id === 'glm-5.1' ? { id: 'glm-5.1', displayName: 'GLM 5.1' } : undefined,
   listCanonicals: () => [],
   listOfferings: () => [],
+  getOffering: () => undefined,
+  availableCanonicals: () => ({ available: [], hiddenCount: 0 }),
+  effectiveFreedom: () => 'free',
 }));
 
 vi.mock('../../src/data/personas.js', () => ({

@@ -41,6 +41,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: 0,
       updatedAt: 0,
     },
@@ -60,6 +61,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       temperature: 0.85,
       adultPersona: true,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: 0,
       updatedAt: 0,
     },
@@ -255,6 +257,7 @@ describe('HistoryPage', () => {
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: 0,
       updatedAt: 0,
     });

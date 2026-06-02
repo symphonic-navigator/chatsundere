@@ -61,6 +61,7 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -155,6 +156,7 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });

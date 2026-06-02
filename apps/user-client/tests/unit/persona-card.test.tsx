@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import type { PersonaRow } from '../../src/boot/client-data-db.js';
 import { PersonaCard } from '../../src/components/PersonaCard.js';
 import type { ResolvedMindspace } from '../../src/state/mindspace-resolver.js';
@@ -25,6 +27,7 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     temperature: 0.85,
     adultPersona: false,
     chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -54,8 +57,21 @@ function makeMindspace(overrides: Partial<ResolvedMindspace> = {}): ResolvedMind
   };
 }
 
+beforeEach(async () => {
+  await _resetClientDataDbForTests();
+  await openClientDataDb();
+});
+afterEach(async () => {
+  await _resetClientDataDbForTests();
+});
+
 function wrap(node: React.ReactNode) {
-  return render(<MemoryRouter>{node}</MemoryRouter>);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 describe('PersonaCard', () => {

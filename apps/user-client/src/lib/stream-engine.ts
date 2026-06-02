@@ -19,6 +19,7 @@ import type {
   PillRow,
 } from '../boot/client-data-db.js';
 import { flattenAnswerText } from './content-blocks.js';
+import { resolveContextWindow, truncateToWindow } from './context-window.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
 
 export interface StartStreamArgs {
@@ -73,6 +74,9 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     { role: 'user', content: args.userMessageText },
   ];
 
+  const budget = resolveContextWindow(args.persona, args.offering);
+  const { messages: sentMessages } = truncateToWindow(wireMessages, budget);
+
   const extras: Record<string, unknown> = {
     ...resolveReasoningBodyExtras(args.offering.profile.reasoning, args.reasoning),
     temperature: args.persona.temperature,
@@ -89,7 +93,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     corsProxyUrl: args.corsProxyUrl,
     corsProxyKey: args.corsProxyKey,
     target: offeringToTarget(args.offering),
-    messages: wireMessages,
+    messages: sentMessages,
     bodyExtras: extras,
     cacheKey: args.chat.id,
     signal: args.signal,

@@ -3,12 +3,15 @@ import { useEffect, useRef } from 'react';
 import type { MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
 import { useToggleBookmark } from '../../data/chats.js';
 import { flattenAnswerText } from '../../lib/content-blocks.js';
+import { outOfWindowCount } from '../../lib/context-window.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
+import { estimateTokens } from '../../lib/token-estimator.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
 import { toastStore } from '../../state/toast.store.js';
+import { ContextMemoryMarker } from './ContextMemoryMarker.js';
 
 /**
  * Load-bearing default — survives the brief window between component mount
@@ -60,6 +63,10 @@ export interface ChatStreamProps {
   onBranch?: (messageId: string) => void;
   /** Disable branching across all messages (stream live for this chat). */
   branchDisabled?: boolean;
+  /** Resolved context window (tokens) for the marker. Undefined = no marker. */
+  contextBudget?: number;
+  /** Estimated system-prompt tokens, reserved before fitting history. */
+  systemTokens?: number;
 }
 
 /** Scroll container that sorts messages chronologically, inserts DateSeparators
@@ -82,6 +89,15 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
 
   const sorted = [...p.messages].sort((a, b) => a.createdAt - b.createdAt);
   const pillMap = new Map(p.pills.map((x) => [x.id, x]));
+
+  const outCount =
+    p.contextBudget != null
+      ? outOfWindowCount(
+          sorted.map((m) => estimateTokens(flattenAnswerText(m.contentBlocks))),
+          p.systemTokens ?? 0,
+          p.contextBudget,
+        )
+      : 0;
 
   // Scroll to bottom when new content arrives and auto-follow is active.
   // streamHandle ref changes on every token (the stream-manager replaces the
@@ -163,6 +179,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
 
         return (
           <div key={m.id}>
+            {i === outCount && outCount > 0 ? <ContextMemoryMarker /> : null}
             {sep}
             <div data-msg-id={m.id}>
               <MessageBlock

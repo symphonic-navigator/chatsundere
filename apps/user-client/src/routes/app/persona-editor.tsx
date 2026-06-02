@@ -2,9 +2,11 @@
 
 import {
   type FreedomState,
+  type Offering,
   availableCanonicals,
   effectiveFreedom,
   getCanonical,
+  getOffering,
   getProvider,
   listOfferings,
 } from '@chatsundere/llm-unified';
@@ -12,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
+  AvatarCrop,
   MindspaceRow,
   PersonaRow,
   ProviderRow,
@@ -19,11 +22,14 @@ import type {
 } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { AvatarCropModal } from '../../components/AvatarCropModal.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
+import { PersonaAvatar } from '../../components/PersonaAvatar.js';
 import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
+import { useRemovePersonaAvatar, useSetPersonaAvatar } from '../../data/persona-avatars.js';
 import {
   useCreatePersona,
   useDeletePersona,
@@ -32,9 +38,17 @@ import {
 } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
+import { normaliseAvatar } from '../../lib/avatar-normalise.js';
+import {
+  CONTEXT_STEP,
+  contextAdjustable,
+  effectiveFloor,
+  resolveContextWindow,
+} from '../../lib/context-window.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
+import { toastStore } from '../../state/toast.store.js';
 
 type DraftPersona = Omit<PersonaRow, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -64,7 +78,98 @@ function defaultDraft(
     temperature: 0.85,
     adultPersona: false,
     chatsundereTonality: true,
+    contextWindow: null,
   };
+}
+
+/** Pending avatar state. An object = crop confirmed but not yet persisted; 'remove' = user
+ *  wants the existing avatar deleted on next save; null = no pending change. */
+export type PendingAvatar =
+  | { blob: Blob; mime: string; width: number; height: number; crop: AvatarCrop }
+  | 'remove'
+  | null;
+
+/**
+ * Presentational avatar picker strip. Shows a preview (pending blob), the
+ * saved avatar via PersonaAvatar, or a two-letter monogram when in create
+ * mode or after an explicit remove. Exported for the avatar test.
+ */
+export function AvatarField({
+  personaId,
+  name,
+  colour,
+  pending,
+  onPick,
+  onRemove,
+}: {
+  personaId: string | null;
+  name: string;
+  colour: string;
+  pending: PendingAvatar;
+  onPick: (file: File) => void;
+  onRemove: () => void;
+}): JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Hold the preview object URL in state so it is created once per blob and
+  // revoked on cleanup — computing it inline would leak a URL on every render
+  // (PersonaEditor re-renders on each keystroke).
+  const pendingBlob = pending && pending !== 'remove' ? pending.blob : null;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingBlob) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(pendingBlob);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingBlob]);
+  return (
+    <div className="mb-3 flex items-center gap-3">
+      {previewUrl ? (
+        <div
+          className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-cover bg-center"
+          style={{ backgroundImage: `url(${previewUrl})` }}
+          data-avatar-preview
+        />
+      ) : pending === 'remove' || !personaId ? (
+        <div
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-md font-display"
+          style={{ background: `${colour}1f`, color: colour, border: `1px solid ${colour}33` }}
+        >
+          {name.trim().slice(0, 2).toUpperCase() || '??'}
+        </div>
+      ) : (
+        <PersonaAvatar personaId={personaId} name={name} colour={colour} size={48} />
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onPick(f);
+          e.target.value = '';
+        }}
+      />
+      <button
+        type="button"
+        aria-label="Change avatar"
+        onClick={() => inputRef.current?.click()}
+        className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+      >
+        Change avatar
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper"
+      >
+        Remove
+      </button>
+    </div>
+  );
 }
 
 /** Route component for creating and editing a persona. */
@@ -128,6 +233,32 @@ export function PersonaEditor(): JSX.Element {
     setDraft((d) => ({ ...d, ...p }));
   }
 
+  const setAvatarMut = useSetPersonaAvatar();
+  const removeAvatarMut = useRemovePersonaAvatar();
+  const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar>(null);
+  const [cropState, setCropState] = useState<{
+    url: string;
+    width: number;
+    height: number;
+    blob: Blob;
+    mime: string;
+  } | null>(null);
+
+  async function onPickAvatar(file: File): Promise<void> {
+    try {
+      const n = await normaliseAvatar(file);
+      setCropState({
+        url: URL.createObjectURL(n.blob),
+        width: n.width,
+        height: n.height,
+        blob: n.blob,
+        mime: n.mime,
+      });
+    } catch (e) {
+      toastStore.show({ message: (e as Error).message, tone: 'warn', durationMs: 3500 });
+    }
+  }
+
   // Dynamic accordion metas
   const selectedCanonical = draft.canonicalId ? getCanonical(draft.canonicalId) : undefined;
   const selectedProvider = providers.data?.find((p) => p.id === draft.providerId);
@@ -162,10 +293,20 @@ export function PersonaEditor(): JSX.Element {
       : 'Using user default';
 
   async function persistDraft() {
+    let pid: string | undefined = id;
     if (isCreate) {
-      await create.mutateAsync(draft);
+      const row = await create.mutateAsync(draft);
+      pid = row.id;
     } else if (id) {
       await update.mutateAsync({ id, patch: draft });
+    }
+    if (pid && pendingAvatar) {
+      if (pendingAvatar === 'remove') {
+        await removeAvatarMut.mutateAsync(pid);
+      } else {
+        await setAvatarMut.mutateAsync({ personaId: pid, ...pendingAvatar });
+      }
+      setPendingAvatar(null);
     }
     setIsDirty(false);
   }
@@ -320,6 +461,23 @@ export function PersonaEditor(): JSX.Element {
           onChange={(e) => patch({ tagline: e.target.value })}
           className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none focus:border-paper-soft"
         />
+        <div className="mt-3">
+          <div className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Avatar</div>
+          <AvatarField
+            personaId={isCreate ? null : (id ?? null)}
+            name={draft.name || 'New Persona'}
+            colour={draft.colour}
+            pending={pendingAvatar}
+            onPick={(f) => {
+              setIsDirty(true);
+              void onPickAvatar(f);
+            }}
+            onRemove={() => {
+              setIsDirty(true);
+              setPendingAvatar('remove');
+            }}
+          />
+        </div>
       </section>
 
       {/* ❶ Custom Instructions */}
@@ -438,6 +596,19 @@ export function PersonaEditor(): JSX.Element {
             />
           </button>
         </div>
+
+        {(() => {
+          const prov = providers.data?.find((pr) => pr.id === draft.providerId);
+          const off =
+            prov && draft.modelId ? getOffering(prov.templateId, draft.modelId) : undefined;
+          return off ? (
+            <ContextWindowControl
+              offering={off}
+              value={draft.contextWindow}
+              onChange={(n) => patch({ contextWindow: n })}
+            />
+          ) : null;
+        })()}
       </AccordionCard>
 
       {/* ❹ Font and Voice */}
@@ -530,7 +701,104 @@ export function PersonaEditor(): JSX.Element {
           </button>
         </div>
       ) : null}
+
+      {cropState ? (
+        <AvatarCropModal
+          imageUrl={cropState.url}
+          naturalWidth={cropState.width}
+          naturalHeight={cropState.height}
+          initialCrop={{ x: 0, y: 0, zoom: 1 }}
+          onCancel={() => {
+            URL.revokeObjectURL(cropState.url);
+            setCropState(null);
+          }}
+          onConfirm={(crop) => {
+            setPendingAvatar({
+              blob: cropState.blob,
+              mime: cropState.mime,
+              width: cropState.width,
+              height: cropState.height,
+              crop,
+            });
+            URL.revokeObjectURL(cropState.url);
+            setCropState(null);
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * Context-window slider. Green from the floor to the offering's recommended
+ * window, red from recommended to max (higher = costlier/slower/often weaker).
+ * `value` is the persona's override (null = recommended). Emits null on reset.
+ */
+export function ContextWindowControl({
+  offering,
+  value,
+  onChange,
+}: {
+  offering: Offering;
+  value: number | null;
+  onChange: (next: number | null) => void;
+}): JSX.Element {
+  const floor = effectiveFloor(offering);
+  const { max, recommended } = offering.context;
+  const adjustable = contextAdjustable(offering);
+  const resolved = resolveContextWindow({ contextWindow: value } as PersonaRow, offering);
+  const recFraction = max > floor ? ((recommended - floor) / (max - floor)) * 100 : 100;
+  const inRed = resolved > recommended;
+
+  return (
+    <div className="mt-4">
+      <div className="mb-1 flex items-center justify-between">
+        <label
+          htmlFor="persona-context"
+          className="text-xs uppercase tracking-widest text-paper-soft"
+        >
+          Context window
+        </label>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          disabled={value === null}
+          className="text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper disabled:opacity-40"
+        >
+          Use default
+        </button>
+      </div>
+      <div
+        aria-hidden
+        className="mb-2 h-1.5 w-full rounded-full"
+        style={{
+          background: `linear-gradient(to right, #6aa97a 0%, #6aa97a ${recFraction}%, #b33a5e ${recFraction}%, #b33a5e 100%)`,
+        }}
+      />
+      <div className="flex items-center gap-3">
+        <input
+          id="persona-context"
+          type="range"
+          min={floor}
+          max={max}
+          step={CONTEXT_STEP}
+          value={resolved}
+          disabled={!adjustable}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="flex-1 disabled:opacity-40"
+        />
+        <span className="w-28 text-right font-mono text-sm text-paper">
+          {resolved.toLocaleString()} tokens
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-paper-soft">
+        {!adjustable
+          ? "This model's context window isn't adjustable."
+          : inRed
+            ? 'Above the recommended window — higher is costlier, slower, and often weaker.'
+            : `Default ${recommended.toLocaleString()}. Lower trims cost; the red zone goes up to the model maximum.`}
+      </p>
+    </div>
   );
 }
 

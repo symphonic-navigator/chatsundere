@@ -2,9 +2,9 @@
 
 import { Link } from 'react-router-dom';
 import type { PersonaRow } from '../boot/client-data-db.js';
-import { monogramFor } from '../lib/monogram.js';
 import type { ResolvedMindspace } from '../state/mindspace-resolver.js';
 import { MindspaceTexture } from './MindspaceTexture.js';
+import { PersonaAvatar } from './PersonaAvatar.js';
 import { StreamingOrb } from './StreamingOrb.js';
 
 interface Props {
@@ -47,7 +47,6 @@ export function PersonaCard({
   lastChatId,
   onChat,
 }: Props): JSX.Element {
-  const monogram = monogramFor(persona.name);
   // Continue the most-recent chat if one exists, otherwise start fresh.
   const lastChat = lastChatId ?? null;
   const chatLabel = lastChat ? 'Continue' : 'New Chat';
@@ -81,16 +80,12 @@ export function PersonaCard({
         to={`/app/persona/${persona.id}`}
         className="relative z-[1] flex min-w-0 flex-1 items-center gap-3 p-3"
       >
-        <div
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-md font-display text-lg"
-          style={{
-            background: `${persona.colour}1f`,
-            color: persona.colour,
-            border: `1px solid ${persona.colour}33`,
-          }}
-        >
-          {monogram}
-        </div>
+        <PersonaAvatar
+          personaId={persona.id}
+          name={persona.name}
+          colour={persona.colour}
+          size={48}
+        />
 
         <div className="min-w-0 flex-1">
           <div className="truncate font-display text-base" style={{ color: persona.colour }}>

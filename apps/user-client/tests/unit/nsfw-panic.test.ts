@@ -42,6 +42,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     temperature: 0.85,
     adultPersona: true,
     chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 1,
     updatedAt: 1,
   });

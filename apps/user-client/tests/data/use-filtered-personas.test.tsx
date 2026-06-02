@@ -31,6 +31,7 @@ async function seedPersonas() {
     temperature: 0.85,
     adultPersona: false,
     chatsundereTonality: true,
+    contextWindow: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -50,6 +51,7 @@ async function seedPersonas() {
     temperature: 0.85,
     adultPersona: true,
     chatsundereTonality: true,
+    contextWindow: null,
     createdAt: now + 1,
     updatedAt: now + 1,
   });

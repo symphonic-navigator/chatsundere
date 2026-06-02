@@ -57,6 +57,7 @@ describe('usePersonas + CUD mutations', () => {
         temperature: 0.85,
         adultPersona: false,
         chatsundereTonality: true,
+        contextWindow: null,
       });
       createdId = created.id;
     });

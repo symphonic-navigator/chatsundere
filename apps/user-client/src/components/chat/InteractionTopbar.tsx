@@ -4,6 +4,7 @@ import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { sanitiseTitle } from '../../lib/title-generator.js';
 import { contextUtilisation } from '../../lib/token-estimator.js';
+import { PersonaAvatar } from '../PersonaAvatar.js';
 
 interface Props {
   persona: PersonaRow;
@@ -66,6 +67,12 @@ export function InteractionTopbar(p: Props): JSX.Element {
             <path d="M3 6h18M3 12h18M3 18h18" />
           </svg>
         </button>
+        <PersonaAvatar
+          personaId={p.persona.id}
+          name={p.persona.name}
+          colour={p.persona.colour}
+          size={28}
+        />
       </div>
 
       <div className="topbar-center">

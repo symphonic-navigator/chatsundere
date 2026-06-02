@@ -45,6 +45,7 @@ async function seedPersonaWithMindspace() {
     temperature: 0.85,
     adultPersona: false,
     chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 1,
     updatedAt: 1,
   });

@@ -36,6 +36,7 @@ describe('persona canonicalId column', () => {
       temperature: 0.8,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: 1,
       updatedAt: 1,
     });

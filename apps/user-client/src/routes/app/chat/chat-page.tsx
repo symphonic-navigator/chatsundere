@@ -1,6 +1,6 @@
 import { buildPrompt, getOffering } from '@chatsundere/llm-unified';
-// SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+// SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
@@ -18,6 +18,7 @@ import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRegenerate, useSendMessage } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
+import { resolveContextWindow } from '../../../lib/context-window.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
@@ -221,11 +222,12 @@ export function ChatPage(): JSX.Element {
   );
   const isStreamLive = !!streamHandle;
 
-  // Token estimate for the context gauge.
-  const usedTokens = useMemo(() => {
-    if (!offering || !effectivePersona || !settingsQuery.data) return 0;
+  // Token estimate for the context gauge and the out-of-window marker.
+  const { usedTokens, systemTokens } = useMemo(() => {
+    if (!offering || !effectivePersona || !settingsQuery.data)
+      return { usedTokens: 0, systemTokens: 0 };
     // Guard against personas with empty instructions — buildPrompt throws on empty.
-    if (!effectivePersona.instructions.trim()) return 0;
+    if (!effectivePersona.instructions.trim()) return { usedTokens: 0, systemTokens: 0 };
     const sys = buildPrompt(
       {
         tonalityEnabled: effectivePersona.chatsundereTonality,
@@ -246,8 +248,14 @@ export function ChatPage(): JSX.Element {
         .map((b) => b.text)
         .join(''),
     );
-    return estimateTokens([sys, ...msgTexts]);
+    return { usedTokens: estimateTokens([sys, ...msgTexts]), systemTokens: estimateTokens(sys) };
   }, [offering, effectivePersona, settingsQuery.data, chatQuery.data?.messages]);
+
+  const contextBudget = useMemo(
+    () =>
+      offering && effectivePersona ? resolveContextWindow(effectivePersona, offering) : undefined,
+    [offering, effectivePersona],
+  );
 
   // Reading-mode Enter hotkey: a bare Enter (no modifiers) opens the cockpit
   // and re-anchors to the latest message — symmetrical to Enter-to-send once
@@ -346,6 +354,8 @@ export function ChatPage(): JSX.Element {
           persona={effectivePersona}
           displayName={displayName}
           streamHandle={streamHandle}
+          contextBudget={contextBudget}
+          systemTokens={systemTokens}
           onRegenerate={onRegenerate}
           onBranch={(messageId) => {
             branchChat.reset();

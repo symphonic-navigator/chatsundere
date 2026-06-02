@@ -2,6 +2,7 @@ import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
+import { resolveContextWindow } from '../../lib/context-window.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { Cockpit } from './Cockpit.js';
 import { DimOverlay } from './DimOverlay.js';
@@ -104,7 +105,7 @@ export function InteractionMode(p: Props): JSX.Element {
         persona={p.persona}
         chat={p.chat}
         usedTokens={p.usedTokens}
-        contextWindow={p.offering.context.recommended}
+        contextWindow={resolveContextWindow(p.persona, p.offering)}
         onExit={p.onExit}
         onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}

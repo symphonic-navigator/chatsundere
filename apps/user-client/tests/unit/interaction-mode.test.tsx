@@ -1,4 +1,5 @@
 import { getOffering } from '@chatsundere/llm-unified';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -23,6 +24,7 @@ const aurum: PersonaRow = {
   temperature: 0.85,
   adultPersona: false,
   chatsundereTonality: true,
+  contextWindow: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -31,23 +33,27 @@ const aurum: PersonaRow = {
 const offering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
 
 function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
+  // The topbar renders <PersonaAvatar>, which reads its row via TanStack Query.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <div data-testid="outside">outside</div>
-      <InteractionMode
-        persona={aurum}
-        chat={null}
-        offering={offering}
-        usedTokens={0}
-        draftValue={extra.draftValue ?? 'hi'}
-        onDraftChange={vi.fn()}
-        onSend={vi.fn()}
-        isStreamLive={false}
-        onExit={vi.fn()}
-        onRenameChat={vi.fn()}
-        {...extra}
-      />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <div data-testid="outside">outside</div>
+        <InteractionMode
+          persona={aurum}
+          chat={null}
+          offering={offering}
+          usedTokens={0}
+          draftValue={extra.draftValue ?? 'hi'}
+          onDraftChange={vi.fn()}
+          onSend={vi.fn()}
+          isStreamLive={false}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+          {...extra}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

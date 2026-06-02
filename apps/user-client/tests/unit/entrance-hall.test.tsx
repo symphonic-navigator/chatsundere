@@ -110,6 +110,7 @@ describe('EntranceHall', () => {
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -151,6 +152,7 @@ describe('EntranceHall', () => {
       temperature: 0.85,
       adultPersona: false,
       chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });
