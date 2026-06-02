@@ -2,6 +2,7 @@
 
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
+import type { OfferingRef } from '../integrations/types.js';
 import type { EncryptedBlob } from '../lib/secrets.js';
 
 const DB_NAME = 'chatsundere_client_data';
@@ -18,6 +19,7 @@ export interface SettingsRow {
   animationsEnabled: boolean;
   adultMode: 'nsfw' | 'sfw';
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
+  webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
   createdAt: number;
   updatedAt: number;
 }
@@ -358,6 +360,29 @@ class ClientDataDb extends Dexie {
             p.contextWindow = null;
           });
       });
+
+    // Version 11 — web-interfacing integration spine. Settings gain a
+    // non-indexed `webInterfacing` block selecting the web search/fetch
+    // backends (both null until the user configures them).
+    this.version(11)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+        personaAvatars: 'personaId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            s.webInterfacing = { search: null, fetch: null };
+          });
+      });
   }
 }
 
@@ -466,6 +491,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         animationsEnabled: true,
         adultMode: 'nsfw',
         corsProxy: null,
+        webInterfacing: { search: null, fetch: null },
         createdAt: now,
         updatedAt: now,
       });

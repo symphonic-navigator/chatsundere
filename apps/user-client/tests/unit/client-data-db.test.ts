@@ -17,7 +17,7 @@ beforeEach(async () => {
 describe('chatsundere_client_data Dexie schema', () => {
   it('opens cleanly on a fresh origin', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(10);
+    expect(db.verno).toBe(11);
   });
 
   it('seeds seven built-in mindspaces on first open', async () => {
