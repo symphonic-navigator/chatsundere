@@ -1,13 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { StreamChunk } from '@chatsundere/llm-unified';
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
 import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
+import { buildIntegrationContext } from '../integrations/build-context.js';
+import type { OfferingRef } from '../integrations/types.js';
 import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
-import { dispatch as dispatchTool, systemPromptSegment, toolDefs } from '../tools/registry.js';
+import {
+  dispatch as dispatchTool,
+  resolveActiveTools,
+  systemPromptSegment,
+  toolDefs,
+} from '../tools/registry.js';
 import { toastStore } from './toast.store.js';
 
 export interface StreamHandle {
@@ -27,6 +35,8 @@ export interface StreamHandle {
 type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   chatId: string;
   userText: string;
+  /** The persona's selected web backends, from settings; absent = none. */
+  webInterfacing?: { search: OfferingRef | null; fetch: OfferingRef | null };
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -212,8 +222,14 @@ function runIntoDraft(
   });
 
   const toolsActive = args.offering.profile.toolCalls.supported;
-  const activeToolDefs = toolsActive ? toolDefs() : [];
-  const toolsInstruction = toolsActive ? (systemPromptSegment() ?? '') : '';
+  const integrationCtx = buildIntegrationContext(
+    args.persona,
+    args.webInterfacing ?? { search: null, fetch: null },
+    useSessionStore.getState().mk,
+  );
+  const activeTools = toolsActive ? resolveActiveTools(integrationCtx) : [];
+  const activeToolDefs = toolDefs(activeTools);
+  const toolsInstruction = systemPromptSegment(activeTools) ?? '';
 
   const onChunk = (chunk: StreamChunk): void => {
     // Mirror tokens and reasoning deltas into the handle so ChatStream
@@ -241,7 +257,7 @@ function runIntoDraft(
   runToolLoop({
     toolDefs: activeToolDefs,
     maxRounds: MAX_TOOL_ROUNDS,
-    dispatch: (name, toolArgs, signal) => dispatchTool(name, toolArgs, signal),
+    dispatch: (name, toolArgs, signal) => dispatchTool(activeTools, name, toolArgs, signal),
     signal: controller.signal,
     streamOnce: (toolExchange, tools) =>
       runStreamEngine({
