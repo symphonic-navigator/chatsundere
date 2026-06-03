@@ -3,8 +3,11 @@
 import { registerAdapter } from '../adapter-registry.js';
 import { ollamaNativeAdapter } from '../adapters/ollama-native.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
+import { registerWebAdapter } from '../integrations/web-adapter-registry.js';
+import type { SearchTier, WebOfferingMeta } from '../integrations/web-interfacing.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
+import { ollamaWebFetchAdapter, ollamaWebSearchAdapter } from '../web-adapters/ollama-web.js';
 import { apiKeyField } from './_helpers.js';
 
 // ollama.com serves reasoning-native models that cannot disable thinking
@@ -62,7 +65,53 @@ const SPECS: OllamaSpec[] = [
   },
 ];
 
-const offerings: Offering[] = SPECS.map(ollamaOffering);
+// Ollama's /api/web_search takes max_results (1–10). Listed recommended-first so
+// tiers[0] (the no-pick default) is the 5-result "standard".
+const OLLAMA_TIERS: SearchTier[] = [
+  { id: 'standard', label: 'Standard', params: { numResults: 5 } },
+  { id: 'quick', label: 'Quick', tooltip: 'fewer results, faster', params: { numResults: 3 } },
+  { id: 'deep', label: 'Deep', tooltip: 'more results, slower', params: { numResults: 10 } },
+];
+
+function ollamaWebOffering(slug: string, meta: WebOfferingMeta): Offering {
+  return {
+    canonicalRef: null,
+    providerId: 'ollama-cloud',
+    upstreamSlug: slug,
+    adapter: { kind: 'catalogue', adapterId: `ollama-cloud:${slug}` },
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    context: { recommended: 0, max: 0 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: null,
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'web',
+    web: meta,
+  };
+}
+
+const webOfferings: Offering[] = [
+  ollamaWebOffering('web-ollama-search', {
+    canSearch: true,
+    canFetch: false,
+    requiresProxy: true,
+    traits: ['ai'],
+    searchTiers: OLLAMA_TIERS,
+  }),
+  ollamaWebOffering('web-ollama-fetch', {
+    canSearch: false,
+    canFetch: true,
+    requiresProxy: true,
+    traits: [],
+  }),
+];
+
+const offerings: Offering[] = [...SPECS.map(ollamaOffering), ...webOfferings];
 
 export const ollamaCloud: ProviderDefinition = {
   id: 'ollama-cloud',
@@ -88,5 +137,13 @@ export function registerOllamaCloud(): void {
       `ollama-cloud:${spec.slug}`,
       ollamaNativeAdapter(spec.slug, { vision: spec.vision, reasoning: spec.reasoning }),
     );
+  }
+  for (const o of webOfferings) {
+    if (o.adapter.kind !== 'catalogue') continue;
+    if (o.web?.canFetch) {
+      registerWebAdapter(o.adapter.adapterId, () => ollamaWebFetchAdapter());
+    } else {
+      registerWebAdapter(o.adapter.adapterId, () => ollamaWebSearchAdapter());
+    }
   }
 }

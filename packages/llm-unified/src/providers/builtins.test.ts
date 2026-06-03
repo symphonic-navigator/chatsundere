@@ -120,17 +120,33 @@ describe('built-in providers', () => {
     }
   });
 
-  it('ollama-cloud requires proxy and has 2 verified fixed-on offerings', () => {
+  it('ollama-cloud has 2 LLM offerings + 2 web offerings (search/fetch)', () => {
     const p = getProvider('ollama-cloud');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(2);
-      expect(p.offerings.map((o) => o.upstreamSlug).sort()).toEqual(['deepseek-v4-pro', 'glm-5.1']);
-      // Live-verified via the native /api/chat adapter (run-ollama-suite.ts).
-      expect(p.offerings.every((o) => o.confidence === 'verified')).toBe(true);
-      expect(p.offerings.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
-      expect(p.offerings.every((o) => o.profile.reasoning.mode === 'fixed-on')).toBe(true);
+      expect(p.offerings).toHaveLength(4);
+
+      const llm = p.offerings.filter((o) => o.serviceKind === 'llm');
+      expect(llm.map((o) => o.upstreamSlug).sort()).toEqual(['deepseek-v4-pro', 'glm-5.1']);
+      expect(llm.every((o) => o.confidence === 'verified')).toBe(true);
+      expect(llm.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
+      expect(llm.every((o) => o.profile.reasoning.mode === 'fixed-on')).toBe(true);
+
+      const web = p.offerings.filter((o) => o.serviceKind === 'web');
+      expect(web.map((o) => o.upstreamSlug).sort()).toEqual([
+        'web-ollama-fetch',
+        'web-ollama-search',
+      ]);
+      const search = web.find((o) => o.upstreamSlug === 'web-ollama-search');
+      expect(search?.web?.canSearch).toBe(true);
+      expect(search?.web?.requiresProxy).toBe(true);
+      expect(search?.web?.traits).toEqual(['ai']);
+      expect(search?.web?.searchTiers?.[0]?.id).toBe('standard');
+      expect(search?.web?.searchTiers?.map((t) => t.id)).toEqual(['standard', 'quick', 'deep']);
+      const fetch = web.find((o) => o.upstreamSlug === 'web-ollama-fetch');
+      expect(fetch?.web?.canFetch).toBe(true);
+      expect(fetch?.web?.canSearch).toBe(false);
     }
   });
 
