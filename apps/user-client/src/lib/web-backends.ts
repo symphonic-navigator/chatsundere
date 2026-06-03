@@ -16,8 +16,9 @@ const refOf = (o: WebBackendOption): OfferingRef => ({
 
 /** Resolve a stored setting against the currently available options into the
  *  effective backend (`null` = off / unavailable). The recommended default is
- *  the first option that can serve the role (offerings are freedom-first
- *  ordered, with Linkup first for search). */
+ *  the first option that can serve the role (first-come ordered by the
+ *  usable-providers list), and an explicit pick that is no longer usable falls
+ *  back to the first usable option. */
 export function resolveWebBackend(
   setting: WebBackendSetting,
   options: WebBackendOption[],
@@ -29,5 +30,9 @@ export function resolveWebBackend(
   const match = usable.find(
     (o) => o.providerId === setting.providerId && o.upstreamSlug === setting.upstreamSlug,
   );
-  return match ? refOf(match) : null;
+  if (match) return refOf(match);
+  // The explicit pick is no longer usable (key/provider removed) → next-best,
+  // rather than going dark. The stored setting is left untouched so the pick
+  // reactivates if its key returns.
+  return usable[0] ? refOf(usable[0]) : null;
 }

@@ -33,7 +33,7 @@ export function webBackendOptions(
       if (o.web.requiresProxy && !hasProxy) continue;
       // Friendly name: a search backend is named by its engine ("web-linkup" →
       // "Linkup"); a fetch-only backend by its provider ("nano-gpt").
-      const bare = o.upstreamSlug.replace(/^web-/, '');
+      const bare = o.upstreamSlug.replace(/^web-/, '').replace(/-(search|fetch)$/, '');
       const label = o.web.canSearch
         ? bare.charAt(0).toUpperCase() + bare.slice(1)
         : provider.displayName;

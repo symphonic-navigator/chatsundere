@@ -8,8 +8,8 @@ vi.mock('@chatsundere/llm-unified', () => ({
     id === 'wafer' ? { corsHint: 'requires-proxy' } : { corsHint: 'direct' },
 }));
 
-const row = (templateId: string, enabled: boolean): ProviderRow =>
-  ({ id: `r-${templateId}`, templateId, enabled }) as ProviderRow;
+const row = (templateId: string, enabled: boolean, createdAt = 0): ProviderRow =>
+  ({ id: `r-${templateId}`, templateId, enabled, createdAt }) as ProviderRow;
 
 describe('usableTemplateIds', () => {
   it('includes enabled direct providers', () => {
@@ -23,5 +23,9 @@ describe('usableTemplateIds', () => {
   });
   it('includes proxy-required providers when a proxy is set', () => {
     expect(usableTemplateIds([row('wafer', true)], true)).toEqual(['wafer']);
+  });
+  it('orders by createdAt (first-configured first)', () => {
+    const providers = [row('chutes', true, 200), row('novita', true, 100)];
+    expect(usableTemplateIds(providers, false)).toEqual(['novita', 'chutes']);
   });
 });

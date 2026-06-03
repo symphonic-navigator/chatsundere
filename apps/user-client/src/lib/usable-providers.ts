@@ -15,6 +15,7 @@ export function usableTemplateIds(providers: ProviderRow[], hasProxy: boolean): 
   return providers
     .filter((p) => p.enabled)
     .filter((p) => getProvider(p.templateId)?.corsHint !== 'requires-proxy' || hasProxy)
+    .sort((a, b) => a.createdAt - b.createdAt) // first-configured first (first-come default)
     .map((p) => p.templateId);
 }
 
