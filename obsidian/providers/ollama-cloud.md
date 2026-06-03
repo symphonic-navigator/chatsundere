@@ -62,6 +62,35 @@ survive contact with ollama.com:
   satisfy the reasoning-required `gemma-4-31b` canonical.
 - **Reasoning corrected** — `think:false` is a no-op on these models → fixed-on.
 
+## Web interfacing (search + fetch)
+
+> Live-verified 2026-06-03 via `run-ollama-web-suite.ts` — **4/4** (search
+> standard/quick/deep = 5/3/10 hits, confirming the `max_results` mapping;
+> fetch = 940 chars).
+
+Ollama Cloud also serves web search and fetch — ported from chatsune's backend,
+the same `ollama-cloud` API key covers both LLM (`/api/chat`) and web.
+
+- **Endpoints:** `POST https://ollama.com/api/web_search` (`{ query, max_results }`,
+  1–10) and `POST https://ollama.com/api/web_fetch` (`{ url }`). Auth
+  `Authorization: Bearer <key>`. Responses `{ results: [{ title, url, snippet|content }] }`
+  and `{ content, title }`.
+- **CORS:** `requires-proxy` — ollama.com sends no ACAO, so the browser routes
+  through the user's CORS proxy; the Bun live-suite goes direct.
+- **Adapter:** `src/web-adapters/ollama-web.ts` (`ollamaWebSearchAdapter`,
+  `ollamaWebFetchAdapter`), mirroring `nano-gpt-web.ts`. The tier param
+  `numResults` is translated to Ollama's `max_results` (clamped 1–10).
+
+### Offerings (2, separate per role — mirrors nano-gpt)
+
+| Slug | Role | Traits | Tiers (numResults) |
+|---|---|---|---|
+| `web-ollama-search` | search | `ai` | standard 5 (default), quick 3, deep 10 |
+| `web-ollama-fetch` | fetch | — | — |
+
+Tiers are listed **recommended-first** (`standard` before `quick`) so the no-pick
+default (`tiers[0]`) is the 5-result standard, not the cheapest.
+
 ## Open / follow-ups
 
 - `freedomOrientedDeployment: null` — pending Chris (ollama is open-weight / self-hostable infra).

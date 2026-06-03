@@ -5,9 +5,28 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-03 (later) — **Web interfacing device-tested + hardened;
-ollama-cloud onboarded for web search (all on master, NOT pushed — 10 commits
-ahead; Chris device-tested OK incl. deepseek).** A long feedback round after the
+**Last updated:** 2026-06-03 (evening) — **Ollama Cloud is now a web backend
+(search + fetch), and the web-backend default is first-come with fallback.** On
+master, NOT yet pushed (the earlier round below was pushed). Two pieces, spec +
+plan in `superpowers/{specs,plans}/2026-06-03-ollama-web-and-first-come-default*`:
+**(A) Ollama web** — a new `ollama-web` adapter (`web-adapters/ollama-web.ts`,
+mirrors nano-gpt-web) hitting `ollama.com/api/web_search` + `/api/web_fetch`
+(Bearer, same `ollama-cloud` key as LLM), routed through the CORS proxy. Two
+catalogue offerings: `web-ollama-search` (traits `ai`, tiers standard 5 / quick 3
+/ deep 10) and `web-ollama-fetch`. Live-verified **4/4** via
+`run-ollama-web-suite.ts` (5/3/10 hits prove the `max_results` mapping; fetch 940
+chars). **(B) First-come default** — usable providers are now ordered by
+`createdAt`, so the first-configured web provider is the default per role; and
+`resolveWebBackend` falls back to the next-best when an explicit pick's
+key/provider is deleted, instead of going dark. No active key-event mechanism —
+the live per-message resolution handles it; the stored pick reactivates if its key
+returns. Record: [[providers/ollama-cloud]] (Web interfacing section). **Next:**
+squash into 2 feature units + doc, then Chris device-tests the §6 steps (ollama-
+first vs nano-gpt-first defaults, delete-active-key fallback, a real search+fetch
+in chat); Liz pushes on Chris's word.
+
+**Earlier 2026-06-03 (afternoon) — Web interfacing device-tested + hardened;
+ollama-cloud onboarded for web search (pushed).** A long feedback round after the
 landing. **(1) Web-settings UI** (`d07fb89`, `9445623`): the raw section is now an
 `AccordionCard` like the others; the search picker lists only search backends
 (Linkup default/Exa/Brave) and fetch only nano-gpt, with friendly "Engine
