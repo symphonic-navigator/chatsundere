@@ -33,7 +33,8 @@ describe('provider offerings', () => {
     }
     // The non-TEE providers are mixed: live-curated GLM offerings carry a
     // hand-written catalogue adapter and `confidence: 'verified'`; the rest are
-    // still on the generic path at `confidence: 'heuristic'`.
+    // still on the generic path at `confidence: 'heuristic'`. ollama-cloud now
+    // carries a native catalogue adapter (`/api/chat`), so it follows the rule.
     for (const o of [
       ...wafer.offerings,
       ...nanoGpt.offerings,

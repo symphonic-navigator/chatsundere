@@ -2,7 +2,7 @@
 import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
 import type { CanonicalRequest, ModelAdapter, ToolDef } from './adapter-contract.js';
 import { getAdapter } from './adapter-registry.js';
-import { parseWithAdapter } from './adapter-stream.js';
+import { parseWithAdapter, parseWithAdapterNdjson } from './adapter-stream.js';
 import type { CompletionTarget } from './catalogue/target.js';
 import { type OnRetry, withStreamingRetry } from './retry.js';
 import { parseOpenAiSseStream } from './streaming.js';
@@ -65,10 +65,12 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
   const adapter = args.target.adapterId ? getAdapter(args.target.adapterId) : undefined;
   let body: Record<string, unknown>;
   let extraHeaders: Record<string, string> | undefined;
+  let path = '/chat/completions';
   if (adapter) {
     const wire = buildWire(args, adapter);
     body = wire.body;
     extraHeaders = wire.headers;
+    if (wire.path) path = wire.path;
   } else {
     body = buildBody(args);
   }
@@ -81,7 +83,7 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
         apiKey: args.apiKey,
         corsProxyUrl: args.corsProxyUrl,
         corsProxyKey: args.corsProxyKey,
-        path: '/chat/completions',
+        path,
         method: 'POST',
         body,
         extraHeaders,
@@ -99,7 +101,9 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
     throw new Error(`streamCompletion: upstream ${response.status} returned no body`);
   }
   if (adapter) {
-    yield* parseWithAdapter(response.body, adapter, { signal: args.signal });
+    yield* adapter.responseFraming === 'ndjson'
+      ? parseWithAdapterNdjson(response.body, adapter, { signal: args.signal })
+      : parseWithAdapter(response.body, adapter, { signal: args.signal });
   } else {
     yield* parseOpenAiSseStream(response.body, { signal: args.signal });
   }
@@ -129,6 +133,21 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
     model: modelId,
     messages: args.messages,
     stream: true,
+    // Ask for usage on the final stream chunk — the catalogue adapters do this
+    // too; without it the generic path never surfaces normalised usage.
+    stream_options: { include_usage: true },
+    // Generic OpenAI-compatible providers (adapter.kind === 'generic') get tool
+    // definitions injected here — the catalogue path does this in `buildWire`,
+    // and without it a generic offering that declares `toolCalls.supported`
+    // silently never receives the tools, so the model never calls them.
+    ...(args.tools && args.tools.length > 0
+      ? {
+          tools: args.tools.map((t) => ({
+            type: 'function',
+            function: { name: t.name, description: t.description, parameters: t.parameters },
+          })),
+        }
+      : {}),
     ...extras,
   };
 }
@@ -143,7 +162,7 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
 function buildWire(
   args: StreamCompletionArgs,
   adapter: ModelAdapter,
-): { body: Record<string, unknown>; headers?: Record<string, string> } {
+): { body: Record<string, unknown>; headers?: Record<string, string>; path?: string } {
   const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
   const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
   const req: CanonicalRequest = {
@@ -156,7 +175,7 @@ function buildWire(
   // Sampling first, adapter body second: the adapter's structural keys
   // (model/messages/stream/reasoning/tools) always win on any clash, while
   // generic sampling params (e.g. temperature) the adapter does not set survive.
-  return { body: { ...sampling, ...wire.body }, headers: wire.headers };
+  return { body: { ...sampling, ...wire.body }, headers: wire.headers, path: wire.path };
 }
 
 /** The wire body via a ModelAdapter (headers dropped). Retained for tests. */

@@ -48,6 +48,19 @@ describe('parseOpenAiSseStream', () => {
     ]);
   });
 
+  it('emits a usage chunk from a final usage-only payload (empty choices)', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":14,"completion_tokens":10,"total_tokens":24}}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([
+      { type: 'token', text: 'hi' },
+      { type: 'usage', usage: { promptTokens: 14, completionTokens: 10, totalTokens: 24 } },
+    ]);
+  });
+
   it('handles chunks split across multiple network reads', async () => {
     const stream = streamOf(
       'data: {"choices":[{"delta":{"con',

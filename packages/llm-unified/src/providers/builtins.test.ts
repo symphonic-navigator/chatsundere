@@ -120,12 +120,17 @@ describe('built-in providers', () => {
     }
   });
 
-  it('ollama-cloud requires proxy', () => {
+  it('ollama-cloud requires proxy and has 2 verified fixed-on offerings', () => {
     const p = getProvider('ollama-cloud');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(6);
+      expect(p.offerings).toHaveLength(2);
+      expect(p.offerings.map((o) => o.upstreamSlug).sort()).toEqual(['deepseek-v4-pro', 'glm-5.1']);
+      // Live-verified via the native /api/chat adapter (run-ollama-suite.ts).
+      expect(p.offerings.every((o) => o.confidence === 'verified')).toBe(true);
+      expect(p.offerings.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
+      expect(p.offerings.every((o) => o.profile.reasoning.mode === 'fixed-on')).toBe(true);
     }
   });
 
@@ -177,9 +182,13 @@ describe('built-in providers', () => {
     }
   });
 
-  it('every built-in declares a probe at /models GET', () => {
+  it('every built-in declares a GET models probe', () => {
     for (const p of listProviders()) {
-      expect(p.probe.path).toBe('/models');
+      // Most providers sit on the OpenAI-compat `/models`; ollama-cloud's baseUrl
+      // is the bare host (its native adapter targets /api/chat), so it probes the
+      // explicit `/v1/models` listing instead.
+      const expected = p.id === 'ollama-cloud' ? '/v1/models' : '/models';
+      expect(p.probe.path).toBe(expected);
       expect(p.probe.method).toBe('GET');
     }
   });

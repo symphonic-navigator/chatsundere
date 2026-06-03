@@ -68,14 +68,14 @@ export function createWebIntegration(deps: WebIntegrationDeps): Integration {
         tools.push({
           name: 'web_search',
           description:
-            'Search the web for current, up-to-date information. Use it when the user asks you to look something up, or when answering accurately needs facts newer or more specific than your training.',
+            'Search the web for current, up-to-date information. Lean towards using it when the user explicitly asks you to look something up, rather than searching on your own initiative. Two or three searches are plenty: once you have relevant results, answer the user directly instead of searching again.',
           parameters: {
             type: 'object',
             properties: { query: { type: 'string', description: 'The search query.' } },
             required: ['query'],
           },
           systemPromptInstruction:
-            'You can search the web with web_search when you need current or external information.',
+            'Use web_search when the user asks for current or external information — prefer searching on request rather than proactively. Keep it to a focused search or two and answer once you have results rather than searching repeatedly.',
           async execute(args, signal): Promise<ToolResult> {
             try {
               const key = await ctx.getKey(offering.providerId);

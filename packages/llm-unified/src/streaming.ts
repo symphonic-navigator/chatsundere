@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { StreamChunk } from './types.js';
+import type { NormalisedUsage, StreamChunk } from './types.js';
 
 export interface ParseOpts {
   signal?: AbortSignal;
@@ -37,6 +37,46 @@ export async function* frameSseEvents(
         sep = buffer.indexOf('\n\n');
       }
     }
+  } finally {
+    opts.signal?.removeEventListener('abort', onAbort);
+    reader.releaseLock();
+  }
+}
+
+/**
+ * Frame an NDJSON byte stream into raw single-line JSON strings (each upstream
+ * object is one `\n`-terminated line). The ollama-native `/api/chat` framing.
+ */
+export async function* frameNdjsonLines(
+  stream: ReadableStream<Uint8Array>,
+  opts: ParseOpts = {},
+): AsyncIterable<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const onAbort = () => {
+    void reader.cancel().catch(() => {});
+  };
+  opts.signal?.addEventListener('abort', onAbort);
+
+  try {
+    while (true) {
+      if (opts.signal?.aborted) return;
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let nl = buffer.indexOf('\n');
+      while (nl !== -1) {
+        const line = buffer.slice(0, nl).trim();
+        if (line) yield line;
+        buffer = buffer.slice(nl + 1);
+        nl = buffer.indexOf('\n');
+      }
+    }
+    const tail = buffer.trim();
+    if (tail) yield tail;
   } finally {
     opts.signal?.removeEventListener('abort', onAbort);
     reader.releaseLock();
@@ -103,13 +143,37 @@ interface OpenAiDeltaPayload {
     };
     finish_reason?: string | null;
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: number | null };
+    prompt_tokens_details?: { cached_tokens?: number | null };
+  } | null;
 }
 
 function openAiPayloadToChunks(payload: unknown): StreamChunk[] {
   const p = payload as OpenAiDeltaPayload;
-  const choice = p.choices?.[0];
-  if (!choice) return [];
   const out: StreamChunk[] = [];
+
+  // Usage arrives in a final chunk whose `choices` is empty, when the request
+  // set `stream_options.include_usage` — handle it before the choice guard so
+  // the generic path surfaces usage like the catalogue adapters do.
+  if (p.usage) {
+    const usage: NormalisedUsage = {
+      promptTokens: p.usage.prompt_tokens ?? 0,
+      completionTokens: p.usage.completion_tokens ?? 0,
+      totalTokens: p.usage.total_tokens ?? 0,
+    };
+    const reasoning = p.usage.completion_tokens_details?.reasoning_tokens;
+    if (reasoning != null) usage.reasoningTokens = reasoning;
+    const cached = p.usage.prompt_tokens_details?.cached_tokens;
+    if (cached != null) usage.cachedTokens = cached;
+    out.push({ type: 'usage', usage });
+  }
+
+  const choice = p.choices?.[0];
+  if (!choice) return out;
 
   // Reasoning emits *before* the token in the same event — matches
   // upstream temporal ordering (the model thinks, then speaks).

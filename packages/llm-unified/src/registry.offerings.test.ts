@@ -24,9 +24,9 @@ describe('listOfferings', () => {
   test('returns offerings for a canonical: TEE, then freedom-oriented, then priority', () => {
     const offers = listOfferings('glm-5.1');
     // chutes is TEE → first. novita + nano-gpt are freedomOrientedDeployment:true
-    // (Chris, 2026-05-30) so they rank ahead of ollama-cloud (still unassessed),
-    // and within that freedom group sort by provider priority (novita 20 <
-    // nano-gpt 40). ollama-cloud's GLM 5.1 is uncurated/heuristic → last.
+    // (Chris, 2026-05-30) so they rank ahead of ollama-cloud (freedom-unassessed,
+    // `null`), and within that freedom group sort by provider priority (novita 20
+    // < nano-gpt 40). ollama-cloud's GLM 5.1 is verified now but freedom-null → last.
     expect(offers.map((o) => o.providerId)).toEqual([
       'chutes',
       'novita',
@@ -48,7 +48,7 @@ describe('listOfferings', () => {
 describe('getOffering', () => {
   test('finds an offering by provider template + slug', () => {
     expect(getOffering('chutes', 'zai-org/GLM-5.1-TEE')?.canonicalRef).toBe('glm-5.1');
-    expect(getOffering('ollama-cloud', 'deepseek-v4-pro')?.adapter.kind).toBe('generic');
+    expect(getOffering('ollama-cloud', 'deepseek-v4-pro')?.adapter.kind).toBe('catalogue');
     expect(getOffering('nano-gpt', 'zai-org/glm-5.1')?.adapter.kind).toBe('catalogue');
   });
 

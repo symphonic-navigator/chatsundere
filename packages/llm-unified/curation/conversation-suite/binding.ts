@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ModelAdapter, ToolDef } from '../../src/adapter-contract.js';
-import { parseWithAdapter } from '../../src/adapter-stream.js';
+import { parseWithAdapter, parseWithAdapterNdjson } from '../../src/adapter-stream.js';
 import {
   type OnRetry,
   type RetryEvent,
   formatRetryEvent,
   withStreamingRetry,
 } from '../../src/retry.js';
+import { buildBodyForTest } from '../../src/stream-completion.js';
+import { parseOpenAiSseStream } from '../../src/streaming.js';
 import { buildRequest } from '../../src/transport.js';
-import type { ProviderConfig, StreamChunk } from '../../src/types.js';
+import type { ProviderConfig, ProviderDefinition, StreamChunk } from '../../src/types.js';
 import { type RunnerBinding, assembleOutcome } from './runner.js';
 
 /** Default retry sink for suite runs: a structured CLI line. */
@@ -55,9 +57,10 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
             apiKey: args.apiKey,
             corsProxyUrl: args.corsProxyUrl ?? null,
             corsProxyKey: args.corsProxyKey ?? null,
-            path: '/chat/completions',
+            path: wire.path ?? '/chat/completions',
             method: 'POST',
             body: wire.body,
+            extraHeaders: wire.headers,
           }),
         doFetch: args.fetchImpl,
         operation: `suite-binding:${args.offeringRef}`,
@@ -71,7 +74,81 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
         return assembleOutcome(response.status, []);
       }
       const chunks: StreamChunk[] = [];
-      for await (const c of parseWithAdapter(response.body, args.adapter)) chunks.push(c);
+      const parse =
+        args.adapter.responseFraming === 'ndjson' ? parseWithAdapterNdjson : parseWithAdapter;
+      for await (const c of parse(response.body, args.adapter)) chunks.push(c);
+      return assembleOutcome(response.status, chunks);
+    },
+    toolResultFor(call): ReturnType<RunnerBinding['toolResultFor']> {
+      return {
+        role: 'tool',
+        tool_call_id: call.id,
+        name: call.name,
+        content: JSON.stringify({ ok: true }),
+      };
+    },
+  };
+}
+
+export interface GenericBindingArgs {
+  offeringRef: string;
+  provider: ProviderDefinition;
+  providerConfig: ProviderConfig;
+  apiKey: string;
+  /** The offering's upstream slug. */
+  target: string;
+  tools?: ToolDef[];
+  fetchImpl?: typeof fetch;
+  sleepImpl?: (ms: number) => Promise<void>;
+  onRetry?: OnRetry;
+}
+
+/**
+ * Wire the suite to a `adapter.kind === 'generic'` offering — it exercises the
+ * REAL generic production path (`buildBody` for tools + `applyReasoningToBody`,
+ * `parseOpenAiSseStream` for the response), not a hand-written adapter. Used to
+ * verify vanilla OpenAI-compatible providers (e.g. ollama-cloud).
+ */
+export function makeGenericLiveBinding(args: GenericBindingArgs): RunnerBinding {
+  return {
+    offeringRef: args.offeringRef,
+    async runTurn(messages, reasoning) {
+      const body = buildBodyForTest({
+        provider: args.provider,
+        providerConfig: args.providerConfig,
+        apiKey: args.apiKey,
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        target: { slug: args.target },
+        messages,
+        bodyExtras: { reasoning },
+        tools: args.tools,
+      });
+
+      const response = await withStreamingRetry({
+        buildRequest: () =>
+          buildRequest({
+            provider: args.providerConfig,
+            apiKey: args.apiKey,
+            corsProxyUrl: null,
+            corsProxyKey: null,
+            path: '/chat/completions',
+            method: 'POST',
+            body,
+          }),
+        doFetch: args.fetchImpl,
+        operation: `suite-binding:${args.offeringRef}`,
+        initialResponseTimeoutMs: null,
+        sleepFn: args.sleepImpl,
+        onRetry: args.onRetry ?? logRetryToConsole,
+      });
+
+      if (!response.ok || !response.body) {
+        await response.body?.cancel().catch(() => {});
+        return assembleOutcome(response.status, []);
+      }
+      const chunks: StreamChunk[] = [];
+      for await (const c of parseOpenAiSseStream(response.body)) chunks.push(c);
       return assembleOutcome(response.status, chunks);
     },
     toolResultFor(call): ReturnType<RunnerBinding['toolResultFor']> {

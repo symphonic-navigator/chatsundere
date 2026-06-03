@@ -226,6 +226,64 @@ describe('stream-completion.buildBody', () => {
     expect(body.temperature).toBe(0.7);
     expect(body.reasoning).toEqual({ enabled: true });
   });
+
+  it('injects tools (OpenAI shape) into the generic body, omitting when absent', () => {
+    const flashOffering = novita.offerings.find(
+      (o) => o.upstreamSlug === 'deepseek/deepseek-v4-flash',
+    );
+    if (!flashOffering) throw new Error('deepseek/deepseek-v4-flash not found in novita offerings');
+    const withTools = buildBodyForTest({
+      provider: novita,
+      providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
+      apiKey: '',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      target: { slug: flashOffering.upstreamSlug },
+      messages: [{ role: 'user', content: 'hi' }],
+      bodyExtras: {},
+      tools: [
+        {
+          name: 'web_search',
+          description: 'Search the web.',
+          parameters: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+            required: ['query'],
+          },
+        },
+      ],
+    });
+    expect(withTools.tools).toEqual([
+      {
+        type: 'function',
+        function: {
+          name: 'web_search',
+          description: 'Search the web.',
+          parameters: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+            required: ['query'],
+          },
+        },
+      },
+    ]);
+
+    // stream_options is requested unconditionally so usage surfaces.
+    expect(withTools.stream_options).toEqual({ include_usage: true });
+
+    const withoutTools = buildBodyForTest({
+      provider: novita,
+      providerConfig: { baseUrl: novita.baseUrl, routing: { kind: 'direct' } },
+      apiKey: '',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      target: { slug: flashOffering.upstreamSlug },
+      messages: [{ role: 'user', content: 'hi' }],
+      bodyExtras: {},
+    });
+    expect(withoutTools).not.toHaveProperty('tools');
+    expect(withoutTools.stream_options).toEqual({ include_usage: true });
+  });
 });
 
 // ---------------------------------------------------------------------------

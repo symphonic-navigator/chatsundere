@@ -37,6 +37,12 @@ export interface WireRequest {
    * per-request header steering.
    */
   headers?: Record<string, string>;
+  /**
+   * Endpoint path the request must hit, relative to the provider's `baseUrl`.
+   * Defaults to `/chat/completions` (OpenAI-compatible). A non-OpenAI provider
+   * overrides it — e.g. ollama's native `/api/chat`.
+   */
+  path?: string;
 }
 
 /**
@@ -49,8 +55,19 @@ export type ParseState = Record<string, unknown>;
 /** The pure transformation contract every adapter implements. */
 export interface ModelAdapter {
   buildRequest(req: CanonicalRequest): WireRequest;
+  /**
+   * Interpret one already-decoded stream event. `raw` is the JSON payload of an
+   * SSE `data:` line, or — for `responseFraming: 'ndjson'` adapters — one parsed
+   * NDJSON line (e.g. an ollama `/api/chat` chunk).
+   */
   parseChunk(raw: unknown, state: ParseState): { events: StreamChunk[]; state: ParseState };
   readonly profile: ModelProfile;
+  /**
+   * How the upstream frames its streamed response: `sse` (default, OpenAI
+   * `data: …\n\n` + `[DONE]`) or `ndjson` (one JSON object per line, terminated
+   * by a `done: true` chunk — ollama's native `/api/chat`).
+   */
+  readonly responseFraming?: 'sse' | 'ndjson';
 }
 
 /**
