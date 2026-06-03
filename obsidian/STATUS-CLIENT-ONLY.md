@@ -5,7 +5,39 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-03 — **Web interfacing live via nano-gpt (squashed on
+**Last updated:** 2026-06-03 (later) — **Web interfacing device-tested + hardened;
+ollama-cloud onboarded for web search (all on master, NOT pushed — 10 commits
+ahead; Chris device-tested OK incl. deepseek).** A long feedback round after the
+landing. **(1) Web-settings UI** (`d07fb89`, `9445623`): the raw section is now an
+`AccordionCard` like the others; the search picker lists only search backends
+(Linkup default/Exa/Brave) and fetch only nano-gpt, with friendly "Engine
+(provider)" names and a concrete pre-selected default (no abstract "Default"
+entry); a styling pass (dark custom-chevron selects, marker-pill traits, ZK note).
+**(2) ollama-cloud onboarded for web search** — a deep, four-layer debug
+(Chris's instinct to check chatsune was the key). The generic adapter path was
+incomplete: it never sent `tools` (`a4bc53d`) nor `stream_options`/usage
+(`a39579c`) — both fixed for *any* generic OpenAI-compatible provider. The real
+fix is a **native ollama `/api/chat` (NDJSON) adapter** (`d9af9a6`): ollama's
+OpenAI-compat `/v1` shim makes reasoning-native models **re-call the tool instead
+of answering** after a tool result; the native endpoint answers (chatsune's path).
+The adapter framework gained two general hooks — **`WireRequest.path` +
+`ModelAdapter.responseFraming` (`'sse' | 'ndjson'`)** + `parseWithAdapterNdjson` —
+so any non-OpenAI provider can now plug in. ollama-cloud = `glm-5.1` +
+`deepseek-v4-pro` (both fixed-on, verified catalogue; dead slugs + non-reasoning
+gemma dropped). **(3) web_search prompt nudge** (`3d66435`): glm-5.1 searched
+endlessly (its nature); a restrictive description + "search on request, two or
+three are plenty, then answer" (chatsune pattern + Chris's idea) makes it settle —
+**model-wide** improvement. Live-verified end-to-end through the real client path:
+glm answers in round 1, deepseek by round 4. **Lesson (worth keeping):** the
+conversation-suite validates the *pipe* (a tool *fires*), NOT the *loop* (the
+model *answers* after the tool result) — that gap let both the `/v1` re-search and
+glm's churn pass green; verify multi-turn tool-loop behaviour on device, or extend
+the suite with a post-tool-answer assertion (noted in
+[[providers/ollama-cloud]]). Records: [[providers/ollama-cloud]],
+[[feedback_verify_tool_loop_answers_not_just_fires]]. **Next:** Liz pushes the
+master backlog (now 10 ahead) when Chris says; then memory (the long-weekend item).
+
+**Earlier 2026-06-03 — Web interfacing live via nano-gpt (squashed on
 master `1bf5462`, NOT pushed; awaiting Chris's device test — his VPS CORS proxy
 is up + already tested, so it should work immediately).** The dormant spine is
 now wired end-to-end: a nano-gpt **search** adapter (`/api/web` — Linkup/Exa/
