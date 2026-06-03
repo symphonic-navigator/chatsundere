@@ -6,8 +6,8 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-02 (latest) — **Web-interfacing integration spine
-landed (branch `feat/web-interfacing-spine`, NOT merged/pushed to master; PR
-opened for Chris to device-test + integrate).** Implemented from the Liz/Lyra
+landed (merged to master via PR #1 `7fd4692`, NOT pushed; Chris to device-test
++ integrate).** Implemented from the Liz/Lyra
 spec end-to-end, strict TDD per task. The dormant *integration spine* — a
 first-class `Integration` abstraction (the counterpart to `Tool`) — with web
 interfacing (`web_search` + `web_fetch`) as its first case, wired and gated but
@@ -55,7 +55,8 @@ the **nano-gpt web adapter** — write it, register it in the
 `web-adapter-registry`, curate the `web` offerings (brave/exa/linkup, each its
 own offering); the section then auto-appears and web search/fetch go live. Then
 memory (the long-weekend item).
-**Last updated:** 2026-06-02 (latest) — **Frontend polish round (5 items)
+
+**Earlier 2026-06-02 — Frontend polish round (5 items)
 landed (squashed on master `fd30cb5`, NOT pushed; items 1-4 device-tested by
 Chris, item 5 awaiting his device test).** A second "frontend-improvement"
 pass, built conversationally with Chris (no spec/plan, no Larissa path — UI
