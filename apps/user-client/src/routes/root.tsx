@@ -98,8 +98,20 @@ export function Root() {
     <SplashContext.Provider value={{ topbarLogoRef }}>
       <div className="relative isolate min-h-dvh overflow-x-clip">
         <header
-          className={`sticky top-0 z-20 flex items-center justify-between gap-2 px-4 backdrop-blur-sm lg:px-6 ${
-            isReadingChat ? 'py-1 lg:py-1.5' : 'py-3 lg:py-4'
+          className={`sticky top-0 z-20 flex items-center justify-between gap-2 backdrop-blur-sm ${
+            isChatRoute
+              ? // Inside a chat the brand bar is constrained to the chat column
+                // (floats over the aurora like .chat-page), 0.75rem inline
+                // padding so the logo lines up with the hamburger below. In
+                // interaction mode it takes the dark fill (matching the chat
+                // topbar) at a middle height and sits flush against it (no gap
+                // — see .chat-page top). Reading mode stays ultra-thin and
+                // transparent (a dark strip there reads oddly over the quiet
+                // reading surface). Paired with .chat-page top in index.css.
+                `mx-auto w-full max-w-[420px] px-3 lg:max-w-[640px] ${
+                  isReadingChat ? 'py-1 lg:py-1.5' : 'bg-black/40 py-2 lg:py-2.5'
+                }`
+              : 'px-4 py-3 lg:px-6 lg:py-4'
           }`}
         >
           {/* Left cluster — logo + transient background-stream badge. The logo
