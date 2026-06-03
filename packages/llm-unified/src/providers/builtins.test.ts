@@ -36,8 +36,8 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 7 Claude = 16.
-      expect(p.offerings).toHaveLength(16);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 7 Claude + 4 web = 20.
+      expect(p.offerings).toHaveLength(20);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -140,6 +140,29 @@ describe('built-in providers', () => {
     expect(o?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
     expect(o?.freedomOrientedDeployment).toBe(true);
     expect(o?.confidence).toBe('verified');
+  });
+
+  it('nano-gpt has 3 web search offerings + 1 fetch offering with traits/tiers', () => {
+    const p = getProvider('nano-gpt');
+    const web = (p?.offerings ?? []).filter((o) => o.serviceKind === 'web');
+    expect(web).toHaveLength(4);
+
+    const linkup = web.find((o) => o.upstreamSlug === 'web-linkup');
+    expect(linkup?.web?.canSearch).toBe(true);
+    expect(linkup?.web?.requiresProxy).toBe(true);
+    expect(linkup?.web?.traits).toEqual(['recommended', 'ai']);
+    expect(linkup?.web?.searchTiers?.[0]?.id).toBe('standard');
+
+    const exa = web.find((o) => o.upstreamSlug === 'web-exa');
+    expect(exa?.web?.traits).toEqual(['ai', 'neural']);
+    expect(exa?.web?.searchTiers?.map((t) => t.id)).toEqual(['quick', 'neural']);
+
+    const brave = web.find((o) => o.upstreamSlug === 'web-brave');
+    expect(brave?.web?.traits).toEqual(['privacy']);
+
+    const scrape = web.find((o) => o.upstreamSlug === 'web-scrape');
+    expect(scrape?.web?.canFetch).toBe(true);
+    expect(scrape?.web?.canSearch).toBe(false);
   });
 
   it('every built-in declares an api_key config field marked secret + required', () => {

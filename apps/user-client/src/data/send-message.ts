@@ -5,8 +5,12 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
+import type { OfferingRef } from '../integrations/types.js';
 import type { ReasoningState } from '../lib/reasoning-resolver.js';
 import { openSecret } from '../lib/secrets.js';
+import { usableTemplateIds } from '../lib/usable-providers.js';
+import { webBackendOptions } from '../lib/web-backend-options.js';
+import { resolveWebBackend } from '../lib/web-backends.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +28,7 @@ interface PersonaContext {
   offering: Offering;
   globalInstructions: string;
   globalAboutMe: string;
+  webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
 }
 
 /**
@@ -64,6 +69,14 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
     : null;
 
+  const allProviders = await db.providers.toArray();
+  const hasProxy = settings.corsProxy != null;
+  const webOptions = webBackendOptions(usableTemplateIds(allProviders, hasProxy), hasProxy);
+  const webInterfacing = {
+    search: resolveWebBackend(settings.webInterfacing?.search ?? null, webOptions, 'search'),
+    fetch: resolveWebBackend(settings.webInterfacing?.fetch ?? null, webOptions, 'fetch'),
+  };
+
   return {
     chat,
     persona,
@@ -79,6 +92,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     offering,
     globalInstructions: settings.globalInstructions,
     globalAboutMe: settings.globalAboutMe,
+    webInterfacing,
   };
 }
 
@@ -149,9 +163,6 @@ export function useSendMessage() {
       // ── Fetch prior messages and hand off to stream-manager ─────────────
       const priorMessages = await db.messages.where('chatId').equals(chatId).sortBy('createdAt');
 
-      const settingsRow = await db.settings.get(1);
-      const webInterfacing = settingsRow?.webInterfacing ?? { search: null, fetch: null };
-
       await useStreamManagerStore.getState().start({
         chatId,
         userText: args.text,
@@ -171,7 +182,7 @@ export function useSendMessage() {
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
-        webInterfacing,
+        webInterfacing: ctx.webInterfacing,
       });
 
       return chatId;
@@ -239,9 +250,6 @@ export function useRegenerate() {
       // Resolve persona chain + decrypt, then re-roll.
       const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
 
-      const settingsRow = await db.settings.get(1);
-      const webInterfacing = settingsRow?.webInterfacing ?? { search: null, fetch: null };
-
       await useStreamManagerStore.getState().regenerate({
         chatId: args.chatId,
         targetMessageId: target.id,
@@ -259,7 +267,7 @@ export function useRegenerate() {
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
-        webInterfacing,
+        webInterfacing: ctx.webInterfacing,
       });
     },
 

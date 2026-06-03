@@ -24,7 +24,12 @@ interface Resolved {
 }
 
 function toWebContext(ctx: IntegrationContext): WebContext {
-  return { nsfwAllowed: ctx.nsfwAllowed, location: ctx.location };
+  return {
+    nsfwAllowed: ctx.nsfwAllowed,
+    location: ctx.location,
+    corsProxyUrl: ctx.corsProxyUrl,
+    corsProxyKey: ctx.corsProxyKey,
+  };
 }
 
 function formatSearch(result: WebSearchResult): string {
@@ -41,10 +46,11 @@ function formatFetch(result: WebFetchResult): string {
 /** Build the WebInterfacing integration over injectable resolvers. The default
  *  `webIntegration` wires the real catalogue + registry. */
 export function createWebIntegration(deps: WebIntegrationDeps): Integration {
-  const resolve = (ref: OfferingRef | null): Resolved | null => {
+  const resolve = (ref: OfferingRef | null, ctx: IntegrationContext): Resolved | null => {
     if (!ref) return null;
     const offering = deps.getOffering(ref.providerId, ref.upstreamSlug);
     if (!offering || offering.serviceKind !== 'web' || !offering.web) return null;
+    if (offering.web.requiresProxy && !ctx.corsProxyUrl) return null;
     if (offering.adapter.kind !== 'catalogue') return null;
     const provider = deps.resolveWebAdapter(offering.adapter.adapterId);
     return provider ? { offering, provider } : null;
@@ -56,13 +62,13 @@ export function createWebIntegration(deps: WebIntegrationDeps): Integration {
     contributesTools(ctx: IntegrationContext): Tool[] {
       const tools: Tool[] = [];
 
-      const searchR = resolve(ctx.webSearch);
+      const searchR = resolve(ctx.webSearch, ctx);
       if (searchR?.offering.web?.canSearch && searchR.provider.search) {
         const { offering, provider } = searchR;
         tools.push({
           name: 'web_search',
           description:
-            'Search the web for current information. Returns a ranked list of results with titles, URLs and snippets.',
+            'Search the web for current, up-to-date information. Use it when the user asks you to look something up, or when answering accurately needs facts newer or more specific than your training.',
           parameters: {
             type: 'object',
             properties: { query: { type: 'string', description: 'The search query.' } },
@@ -71,23 +77,35 @@ export function createWebIntegration(deps: WebIntegrationDeps): Integration {
           systemPromptInstruction:
             'You can search the web with web_search when you need current or external information.',
           async execute(args, signal): Promise<ToolResult> {
-            const key = await ctx.getKey(offering.providerId);
-            if (!key)
-              return { ok: false, output: '', error: 'No API key for the web search backend.' };
-            const query = typeof args.query === 'string' ? args.query : '';
-            // biome-ignore lint/style/noNonNullAssertion: gated above — provider.search is defined
-            const result = await provider.search!(query, toWebContext(ctx), key, signal);
-            return { ok: true, output: formatSearch(result), error: null };
+            try {
+              const key = await ctx.getKey(offering.providerId);
+              if (!key)
+                return { ok: false, output: '', error: 'No API key for the web search backend.' };
+              const query = typeof args.query === 'string' ? args.query : '';
+              const tiers = offering.web?.searchTiers ?? [];
+              const tier = tiers.find((t) => t.id === ctx.webSearchTierId) ?? tiers[0];
+              const opts = tier?.params ?? {};
+              // biome-ignore lint/style/noNonNullAssertion: gated above — provider.search is defined
+              const result = await provider.search!(query, toWebContext(ctx), key, opts, signal);
+              return { ok: true, output: formatSearch(result), error: null };
+            } catch (e) {
+              return {
+                ok: false,
+                output: '',
+                error: e instanceof Error ? e.message : 'Web search failed.',
+              };
+            }
           },
         });
       }
 
-      const fetchR = resolve(ctx.webFetch);
+      const fetchR = resolve(ctx.webFetch, ctx);
       if (fetchR?.offering.web?.canFetch && fetchR.provider.fetch) {
         const { offering, provider } = fetchR;
         tools.push({
           name: 'web_fetch',
-          description: 'Fetch and read the contents of a specific URL.',
+          description:
+            'Fetch and read the contents of a specific web page by its URL — use it when the user refers to a page, link, or article you should read.',
           parameters: {
             type: 'object',
             properties: { url: { type: 'string', description: 'The absolute URL to fetch.' } },
@@ -96,13 +114,21 @@ export function createWebIntegration(deps: WebIntegrationDeps): Integration {
           systemPromptInstruction:
             'You can read a specific page with web_fetch when you have a URL to inspect.',
           async execute(args, signal): Promise<ToolResult> {
-            const key = await ctx.getKey(offering.providerId);
-            if (!key)
-              return { ok: false, output: '', error: 'No API key for the web fetch backend.' };
-            const url = typeof args.url === 'string' ? args.url : '';
-            // biome-ignore lint/style/noNonNullAssertion: gated above — provider.fetch is defined
-            const result = await provider.fetch!(url, toWebContext(ctx), key, signal);
-            return { ok: true, output: formatFetch(result), error: null };
+            try {
+              const key = await ctx.getKey(offering.providerId);
+              if (!key)
+                return { ok: false, output: '', error: 'No API key for the web fetch backend.' };
+              const url = typeof args.url === 'string' ? args.url : '';
+              // biome-ignore lint/style/noNonNullAssertion: gated above — provider.fetch is defined
+              const result = await provider.fetch!(url, toWebContext(ctx), key, signal);
+              return { ok: true, output: formatFetch(result), error: null };
+            } catch (e) {
+              return {
+                ok: false,
+                output: '',
+                error: e instanceof Error ? e.message : 'Web fetch failed.',
+              };
+            }
           },
         });
       }

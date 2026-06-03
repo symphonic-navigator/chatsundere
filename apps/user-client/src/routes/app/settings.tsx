@@ -185,23 +185,40 @@ export function ProvidersSection(): JSX.Element {
 /**
  * Web-interfacing settings, hidden-until-unlocked: only mounts once a usable
  * provider contributes a `web` offering (spec §2.5 — a deliberate exception to
- * "disabled over hidden", which still applies *within* the section). Today no
- * `web` offering is curated, so `lit` never includes `'web'` and this returns
- * `null`. Owns the data wiring so `WebInterfacingSection` stays pure.
+ * "disabled over hidden", which still applies *within* the section). All web
+ * backends today need the CORS proxy (their endpoints lack CORS), so when no
+ * proxy is configured the section renders a disabled "needs a proxy" notice
+ * rather than offering pickers that cannot run. Owns the data wiring so
+ * `WebInterfacingSection` stays pure.
  */
 function WebInterfacingSettings(): JSX.Element | null {
   const usable = useUsableTemplateIds();
   const settings = useSettings();
   const update = useUpdateSettings();
   if (!aggregateServiceKinds(usable).includes('web')) return null;
+  const hasProxy = settings.data?.corsProxy != null;
+  const options = webBackendOptions(usable, hasProxy);
+  // Web offerings exist but all require the CORS proxy — disabled over hidden.
+  if (options.length === 0) {
+    return (
+      <AccordionCard icon="◍" label="Web" meta="Search & fetch backends">
+        <p className="web-needs-proxy">
+          Web search and fetch need a CORS proxy. Set one up under Upstream Providers above to
+          enable them.
+        </p>
+      </AccordionCard>
+    );
+  }
   const wi = settings.data?.webInterfacing ?? { search: null, fetch: null };
   return (
-    <WebInterfacingSection
-      options={webBackendOptions(usable)}
-      search={wi.search}
-      fetch={wi.fetch}
-      onChange={(next) => update.mutate({ webInterfacing: next })}
-    />
+    <AccordionCard icon="◍" label="Web" meta="Search & fetch backends">
+      <WebInterfacingSection
+        options={options}
+        search={wi.search}
+        fetch={wi.fetch}
+        onChange={(next) => update.mutate({ webInterfacing: next })}
+      />
+    </AccordionCard>
   );
 }
 

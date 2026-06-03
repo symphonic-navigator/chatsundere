@@ -44,7 +44,9 @@ export type {
   WebSearchHit,
   WebSearchResult,
   WebFetchResult,
-  WebQualityClass,
+  WebTrait,
+  SearchTier,
+  WebSearchOpts,
   WebOfferingMeta,
   WebInterfacingProvider,
 } from './integrations/web-interfacing.js';

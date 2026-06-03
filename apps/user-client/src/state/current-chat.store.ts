@@ -23,6 +23,7 @@ interface CurrentChatStore {
   isToolStripExpanded: boolean;
   isToolStripPinned: boolean;
   reasoning: ReasoningState;
+  webSearchTierId: string | null;
 
   /** Open a persisted chat by ID. Clears any pending lazy-open persona. */
   setChatId: (id: string | null) => void;
@@ -44,6 +45,7 @@ interface CurrentChatStore {
   /** Collapse the strip unless the user pinned it open. */
   collapseToolStripIfUnpinned: () => void;
   setReasoning: (r: ReasoningState) => void;
+  setWebSearchTierId: (id: string | null) => void;
   /** Reset all ephemeral state to initial defaults. */
   reset: () => void;
 }
@@ -63,6 +65,7 @@ type InitialState = Omit<
   | 'toggleToolStripPin'
   | 'collapseToolStripIfUnpinned'
   | 'setReasoning'
+  | 'setWebSearchTierId'
   | 'reset'
 >;
 
@@ -78,6 +81,7 @@ const initial: InitialState = {
   isToolStripExpanded: false,
   isToolStripPinned: false,
   reasoning: { kind: 'off' },
+  webSearchTierId: null,
 };
 
 export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
@@ -109,5 +113,6 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   collapseToolStripIfUnpinned: () =>
     set((s) => (s.isToolStripPinned ? {} : { isToolStripExpanded: false })),
   setReasoning: (r) => set({ reasoning: r }),
+  setWebSearchTierId: (id) => set({ webSearchTierId: id }),
   reset: () => set({ ...initial }),
 }));

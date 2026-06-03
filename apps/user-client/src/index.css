@@ -2049,3 +2049,86 @@ h1 {
   white-space: pre-wrap;
   font-size: 0.85em;
 }
+
+/* ===== Web interfacing settings (inside its AccordionCard) ===== */
+.web-interfacing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.web-zk-note,
+.web-needs-proxy {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--color-paper-soft);
+}
+.web-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.web-field > label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--color-paper);
+}
+.web-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+/* Custom chevron — native <select> arrows don't match the dark surface. */
+.web-select-wrap {
+  position: relative;
+}
+.web-select-wrap::after {
+  content: "▾";
+  position: absolute;
+  top: 50%;
+  right: 0.8rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 0.7rem;
+  color: var(--color-paper-soft);
+}
+.web-select {
+  appearance: none;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.55rem 2rem 0.55rem 0.85rem;
+  color: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.web-select:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.web-select:focus-visible {
+  outline: none;
+  border-color: rgba(141, 109, 255, 0.55);
+}
+.web-select option {
+  background: var(--color-ink-soft);
+  color: var(--color-paper);
+}
+.web-traits {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.web-trait-pill {
+  background: rgba(201, 191, 255, 0.08);
+  border: 1px solid rgba(201, 191, 255, 0.18);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-aurora-200);
+}

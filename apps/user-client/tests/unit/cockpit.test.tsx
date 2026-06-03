@@ -6,6 +6,13 @@ import type { PersonaRow } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
 
+// The Cockpit resolves the active web-search tiers via a TanStack-query-backed
+// hook; this unit test exercises the cockpit controls, not the depth picker (see
+// CockpitMenu.test), so stub the hook to keep it free of the query machinery.
+vi.mock('../../src/lib/use-active-search-tiers.js', () => ({
+  useActiveSearchTiers: () => undefined,
+}));
+
 const aurum: PersonaRow = {
   id: 'p1',
   name: 'Aurum',

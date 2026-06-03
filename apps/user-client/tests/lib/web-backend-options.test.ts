@@ -3,46 +3,55 @@ import type { ProviderDefinition } from '@chatsundere/llm-unified';
 import { describe, expect, it } from 'vitest';
 import { webBackendOptions } from '../../src/lib/web-backend-options.js';
 
-const provider = {
-  id: 'nano-gpt',
-  displayName: 'Nano-GPT',
-  offerings: [
-    {
-      providerId: 'nano-gpt',
-      upstreamSlug: 'brave',
-      serviceKind: 'web',
-      web: { canSearch: true, canFetch: true, qualityClass: 'classic' },
-      canonicalRef: null,
-      // biome-ignore lint/suspicious/noExplicitAny: only web fields matter here
-    } as any,
-    {
-      providerId: 'nano-gpt',
-      upstreamSlug: 'some-llm',
-      serviceKind: 'llm',
-      // biome-ignore lint/suspicious/noExplicitAny: non-web offering, ignored
-    } as any,
-  ],
-} as unknown as ProviderDefinition;
-
-describe('webBackendOptions', () => {
-  it('returns only web offerings of usable providers, with metadata', () => {
-    const opts = webBackendOptions(['nano-gpt'], (id) =>
-      id === 'nano-gpt' ? provider : undefined,
-    );
-    expect(opts).toEqual([
+const fake = (): ProviderDefinition =>
+  ({
+    id: 'nano-gpt',
+    displayName: 'nano-gpt',
+    offerings: [
       {
         providerId: 'nano-gpt',
-        providerName: 'Nano-GPT',
-        upstreamSlug: 'brave',
-        canSearch: true,
-        canFetch: true,
-        qualityClass: 'classic',
+        upstreamSlug: 'web-exa',
+        serviceKind: 'web',
+        web: { canSearch: true, canFetch: false, requiresProxy: true, traits: ['ai', 'neural'] },
       },
-    ]);
+    ],
+  }) as unknown as ProviderDefinition;
+
+describe('webBackendOptions', () => {
+  it('surfaces traits, requiresProxy and a friendly label (with a proxy)', () => {
+    const opts = webBackendOptions(['nano-gpt'], true, fake);
+    expect(opts[0]).toMatchObject({
+      providerId: 'nano-gpt',
+      upstreamSlug: 'web-exa',
+      label: 'Exa',
+      canSearch: true,
+      traits: ['ai', 'neural'],
+      requiresProxy: true,
+    });
+  });
+
+  it('labels a fetch-only backend by its provider name', () => {
+    const fetchOnly = (): ProviderDefinition =>
+      ({
+        id: 'nano-gpt',
+        displayName: 'nano-gpt',
+        offerings: [
+          {
+            providerId: 'nano-gpt',
+            upstreamSlug: 'web-scrape',
+            serviceKind: 'web',
+            web: { canSearch: false, canFetch: true, requiresProxy: true, traits: [] },
+          },
+        ],
+      }) as unknown as ProviderDefinition;
+    expect(webBackendOptions(['nano-gpt'], true, fetchOnly)[0]?.label).toBe('nano-gpt');
+  });
+
+  it('drops requiresProxy backends when no proxy is configured', () => {
+    expect(webBackendOptions(['nano-gpt'], false, fake)).toEqual([]);
   });
 
   it('returns [] when no usable provider has a web offering', () => {
-    const opts = webBackendOptions([], () => undefined);
-    expect(opts).toEqual([]);
+    expect(webBackendOptions([], true, () => undefined)).toEqual([]);
   });
 });

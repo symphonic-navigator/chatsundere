@@ -16,6 +16,7 @@ import {
   systemPromptSegment,
   toolDefs,
 } from '../tools/registry.js';
+import { useCurrentChatStore } from './current-chat.store.js';
 import { toastStore } from './toast.store.js';
 
 export interface StreamHandle {
@@ -226,6 +227,11 @@ function runIntoDraft(
     args.persona,
     args.webInterfacing ?? { search: null, fetch: null },
     useSessionStore.getState().mk,
+    {
+      corsProxyUrl: args.corsProxyUrl,
+      corsProxyKey: args.corsProxyKey,
+      webSearchTierId: useCurrentChatStore.getState().webSearchTierId,
+    },
   );
   const activeTools = toolsActive ? resolveActiveTools(integrationCtx) : [];
   const activeToolDefs = toolDefs(activeTools);

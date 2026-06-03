@@ -2,8 +2,8 @@
 
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
-import type { OfferingRef } from '../integrations/types.js';
 import type { EncryptedBlob } from '../lib/secrets.js';
+import type { WebBackendSetting } from '../lib/web-backends.js';
 
 const DB_NAME = 'chatsundere_client_data';
 
@@ -19,7 +19,7 @@ export interface SettingsRow {
   animationsEnabled: boolean;
   adultMode: 'nsfw' | 'sfw';
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
-  webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
+  webInterfacing: { search: WebBackendSetting; fetch: WebBackendSetting };
   createdAt: number;
   updatedAt: number;
 }

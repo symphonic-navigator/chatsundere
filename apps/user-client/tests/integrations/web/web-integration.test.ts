@@ -30,6 +30,9 @@ function ctx(over: Partial<IntegrationContext>): IntegrationContext {
     location: null,
     webSearch: null,
     webFetch: null,
+    corsProxyUrl: null,
+    corsProxyKey: null,
+    webSearchTierId: null,
     getKey: async () => 'secret-key',
     ...over,
   };
@@ -46,50 +49,95 @@ describe('web-integration', () => {
 
   it('contributes nothing when no adapter resolves (dormant — today)', () => {
     const integ = createWebIntegration({
-      getOffering: () => webOffering({ canSearch: true, canFetch: true, qualityClass: 'classic' }),
+      getOffering: () =>
+        webOffering({ canSearch: true, canFetch: true, requiresProxy: false, traits: ['privacy'] }),
       resolveWebAdapter: () => null, // registry empty
     });
     expect(integ.contributesTools(ctx({ webSearch: REF, webFetch: REF }))).toEqual([]);
   });
 
   it('contributes only web_search when the backend can search but not fetch', () => {
-    const provider: WebInterfacingProvider = { search: async (q) => ({ query: q, hits: [] }) };
+    const provider: WebInterfacingProvider = {
+      search: async (q) => ({ query: q, hits: [] }),
+    };
     const integ = createWebIntegration({
       getOffering: () =>
-        webOffering({ canSearch: true, canFetch: false, qualityClass: 'ai-friendly' }),
+        webOffering({ canSearch: true, canFetch: false, requiresProxy: false, traits: ['ai'] }),
       resolveWebAdapter: () => provider,
     });
     const tools = integ.contributesTools(ctx({ webSearch: REF, webFetch: REF }));
     expect(tools.map((t) => t.name)).toEqual(['web_search']);
   });
 
-  it('web_search.execute pulls the key and serialises hits', async () => {
+  it('web_search.execute pulls the key, resolves the tier, and serialises hits', async () => {
     const search = vi.fn(async (q: string) => ({
       query: q,
       hits: [{ title: 'T', url: 'https://e.x', snippet: 'S' }],
     }));
     const getKey = vi.fn(async () => 'secret-key');
     const integ = createWebIntegration({
-      getOffering: () => webOffering({ canSearch: true, canFetch: false, qualityClass: 'classic' }),
+      getOffering: () =>
+        webOffering({
+          canSearch: true,
+          canFetch: false,
+          requiresProxy: false,
+          traits: ['privacy'],
+        }),
       resolveWebAdapter: () => ({ search }),
     });
     const [tool] = integ.contributesTools(ctx({ webSearch: REF, getKey }));
     if (!tool) throw new Error('expected web_search to be contributed');
     const result = await tool.execute({ query: 'cats' });
     expect(getKey).toHaveBeenCalledWith('nano-gpt');
+    // No tiers on the offering → opts defaults to {}; no tier id selected
     expect(search).toHaveBeenCalledWith(
       'cats',
-      { nsfwAllowed: false, location: null },
+      { nsfwAllowed: false, location: null, corsProxyUrl: null, corsProxyKey: null },
       'secret-key',
+      {},
       undefined,
     );
     expect(result.ok).toBe(true);
     expect(result.output).toContain('https://e.x');
   });
 
+  it('web_search.execute resolves the selected tier and passes its params', async () => {
+    const search = vi.fn(async (q: string) => ({ query: q, hits: [] }));
+    const offering = webOffering({
+      canSearch: true,
+      canFetch: false,
+      requiresProxy: false,
+      traits: ['ai'],
+      searchTiers: [
+        { id: 'basic', label: 'Basic', params: { depth: 'basic', numResults: 5 } },
+        { id: 'advanced', label: 'Advanced', params: { depth: 'advanced', numResults: 20 } },
+      ],
+    });
+    const integ = createWebIntegration({
+      getOffering: () => offering,
+      resolveWebAdapter: () => ({ search }),
+    });
+    const [tool] = integ.contributesTools(ctx({ webSearch: REF, webSearchTierId: 'advanced' }));
+    if (!tool) throw new Error('expected web_search to be contributed');
+    await tool.execute({ query: 'dogs' });
+    expect(search).toHaveBeenCalledWith(
+      'dogs',
+      { nsfwAllowed: false, location: null, corsProxyUrl: null, corsProxyKey: null },
+      'secret-key',
+      { depth: 'advanced', numResults: 20 },
+      undefined,
+    );
+  });
+
   it('web_search.execute fails gracefully when no key is available', async () => {
     const integ = createWebIntegration({
-      getOffering: () => webOffering({ canSearch: true, canFetch: false, qualityClass: 'classic' }),
+      getOffering: () =>
+        webOffering({
+          canSearch: true,
+          canFetch: false,
+          requiresProxy: false,
+          traits: ['privacy'],
+        }),
       resolveWebAdapter: () => ({ search: async (q) => ({ query: q, hits: [] }) }),
     });
     const [tool] = integ.contributesTools(ctx({ webSearch: REF, getKey: async () => null }));
@@ -104,7 +152,7 @@ describe('web-integration', () => {
     const getKey = vi.fn(async () => 'secret-key');
     const integ = createWebIntegration({
       getOffering: () =>
-        webOffering({ canSearch: false, canFetch: true, qualityClass: 'ai-friendly' }),
+        webOffering({ canSearch: false, canFetch: true, requiresProxy: false, traits: ['ai'] }),
       resolveWebAdapter: () => ({ fetch }),
     });
     const [tool] = integ.contributesTools(ctx({ webFetch: REF, getKey }));
@@ -114,12 +162,139 @@ describe('web-integration', () => {
     expect(getKey).toHaveBeenCalledWith('nano-gpt');
     expect(fetch).toHaveBeenCalledWith(
       'https://e.x/page',
-      { nsfwAllowed: false, location: null },
+      { nsfwAllowed: false, location: null, corsProxyUrl: null, corsProxyKey: null },
       'secret-key',
       undefined,
     );
     expect(result.ok).toBe(true);
     expect(result.output).toContain('Page body.');
     expect(result.output).toContain('https://e.x/page');
+  });
+
+  it('web_fetch.execute fails gracefully when no key is available', async () => {
+    const integ = createWebIntegration({
+      getOffering: () =>
+        webOffering({ canSearch: false, canFetch: true, requiresProxy: false, traits: ['ai'] }),
+      resolveWebAdapter: () => ({ fetch: async (url) => ({ url, content: '' }) }),
+    });
+    const [tool] = integ.contributesTools(ctx({ webFetch: REF, getKey: async () => null }));
+    if (!tool) throw new Error('expected web_fetch to be contributed');
+    const result = await tool.execute({ url: 'https://e.x/page' });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeTruthy();
+  });
+
+  describe('proxy gate', () => {
+    it('does NOT contribute web_search when offering requiresProxy but no corsProxyUrl is set', () => {
+      const provider: WebInterfacingProvider = {
+        search: async (q) => ({ query: q, hits: [] }),
+      };
+      const integ = createWebIntegration({
+        getOffering: () =>
+          webOffering({
+            canSearch: true,
+            canFetch: false,
+            requiresProxy: true,
+            traits: ['ai'],
+          }),
+        resolveWebAdapter: () => provider,
+      });
+      // corsProxyUrl defaults to null in ctx()
+      const tools = integ.contributesTools(ctx({ webSearch: REF }));
+      expect(tools).toEqual([]);
+    });
+
+    it('DOES contribute web_search when offering requiresProxy and corsProxyUrl is provided', () => {
+      const provider: WebInterfacingProvider = {
+        search: async (q) => ({ query: q, hits: [] }),
+      };
+      const integ = createWebIntegration({
+        getOffering: () =>
+          webOffering({
+            canSearch: true,
+            canFetch: false,
+            requiresProxy: true,
+            traits: ['ai'],
+          }),
+        resolveWebAdapter: () => provider,
+      });
+      const tools = integ.contributesTools(
+        ctx({ webSearch: REF, corsProxyUrl: 'https://proxy.example.com', corsProxyKey: 'pk' }),
+      );
+      expect(tools.map((t) => t.name)).toEqual(['web_search']);
+    });
+
+    it('does NOT contribute web_fetch when offering requiresProxy but no corsProxyUrl is set', () => {
+      const provider: WebInterfacingProvider = {
+        fetch: async (url) => ({ url, content: '' }),
+      };
+      const integ = createWebIntegration({
+        getOffering: () =>
+          webOffering({
+            canSearch: false,
+            canFetch: true,
+            requiresProxy: true,
+            traits: ['ai'],
+          }),
+        resolveWebAdapter: () => provider,
+      });
+      const tools = integ.contributesTools(ctx({ webFetch: REF }));
+      expect(tools).toEqual([]);
+    });
+
+    it('DOES contribute web_fetch when offering requiresProxy and corsProxyUrl is provided', () => {
+      const provider: WebInterfacingProvider = {
+        fetch: async (url) => ({ url, content: '' }),
+      };
+      const integ = createWebIntegration({
+        getOffering: () =>
+          webOffering({
+            canSearch: false,
+            canFetch: true,
+            requiresProxy: true,
+            traits: ['ai'],
+          }),
+        resolveWebAdapter: () => provider,
+      });
+      const tools = integ.contributesTools(
+        ctx({ webFetch: REF, corsProxyUrl: 'https://proxy.example.com', corsProxyKey: 'pk' }),
+      );
+      expect(tools.map((t) => t.name)).toEqual(['web_fetch']);
+    });
+
+    it('threads corsProxyUrl + corsProxyKey through the WebContext on execution', async () => {
+      const search = vi.fn(async (q: string) => ({ query: q, hits: [] }));
+      const integ = createWebIntegration({
+        getOffering: () =>
+          webOffering({
+            canSearch: true,
+            canFetch: false,
+            requiresProxy: true,
+            traits: ['ai'],
+          }),
+        resolveWebAdapter: () => ({ search }),
+      });
+      const [tool] = integ.contributesTools(
+        ctx({
+          webSearch: REF,
+          corsProxyUrl: 'https://proxy.example.com',
+          corsProxyKey: 'pk-secret',
+        }),
+      );
+      if (!tool) throw new Error('expected web_search to be contributed');
+      await tool.execute({ query: 'test' });
+      expect(search).toHaveBeenCalledWith(
+        'test',
+        {
+          nsfwAllowed: false,
+          location: null,
+          corsProxyUrl: 'https://proxy.example.com',
+          corsProxyKey: 'pk-secret',
+        },
+        'secret-key',
+        {},
+        undefined,
+      );
+    });
   });
 });

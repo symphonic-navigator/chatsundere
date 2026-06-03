@@ -3,6 +3,7 @@ import type { Offering } from '@chatsundere/llm-unified';
 import { useEffect, useRef, useState } from 'react';
 import type { PersonaRow } from '../../boot/client-data-db.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
+import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
 import { CockpitMenu } from './CockpitMenu.js';
@@ -24,6 +25,9 @@ export function Cockpit(p: Props): JSX.Element {
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
+  const searchTiers = useActiveSearchTiers();
+  const searchTierId = useCurrentChatStore((s) => s.webSearchTierId);
+  const setSearchTierId = useCurrentChatStore((s) => s.setWebSearchTierId);
 
   // Close the menu when the user clicks anywhere outside the wrap, or presses
   // Escape. Without this the menu had no close path: the toggle button only
@@ -136,6 +140,9 @@ export function Cockpit(p: Props): JSX.Element {
               control={p.offering.profile.reasoning}
               reasoning={reasoning}
               onReasoningChange={onReasoningChange}
+              searchTiers={searchTiers}
+              searchTierId={searchTierId}
+              onSearchTierChange={setSearchTierId}
               onClose={() => setMenuOpen(false)}
             />
           ) : null}

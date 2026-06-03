@@ -8,11 +8,14 @@ export interface WebLocation {
   city?: string;
 }
 
-/** The per-call context a web backend may use: whether explicit content is
- *  permitted (driven by the active persona) and an optional location hint. */
+/** The per-call context a web backend may use: NSFW permission, an optional
+ *  location hint, and the call-time CORS-proxy routing (null when the adapter
+ *  is allowed direct, e.g. the Bun live-suite; populated in the browser). */
 export interface WebContext {
   nsfwAllowed: boolean;
   location: WebLocation | null;
+  corsProxyUrl: string | null;
+  corsProxyKey: string | null;
 }
 
 /** One result row from a web search. */
@@ -28,24 +31,42 @@ export interface WebSearchResult {
   hits: WebSearchHit[];
 }
 
-/** The outcome of fetching a single URL. `content` is model-ready text
- *  (markdown for `ai-friendly` backends, plainer text for `classic`). */
+/** The outcome of fetching a single URL. `content` is model-ready text,
+ *  markdown when the backend provides it. */
 export interface WebFetchResult {
   url: string;
   content: string;
 }
 
-/** Quality tier of a web backend: `classic` is 2002-style keyword search
- *  (Kagi, Brave); `ai-friendly` returns model-optimised content (Exa, Linkup). */
-export type WebQualityClass = 'classic' | 'ai-friendly';
+/** A curated display trait for a web backend, shown as a badge in the backend
+ *  picker. `ai` replaces the old `ai-friendly` quality class; Brave is
+ *  human-oriented and carries `privacy` instead. */
+export type WebTrait = 'recommended' | 'ai' | 'neural' | 'privacy';
 
-/** Curated capability metadata for a `web` offering — the single source of
- *  truth for what a backend can do and how good it is for an LLM. Lives on the
- *  offering (catalogue knowledge), not on the adapter. */
+/** One curated search-depth tier surfaced in the cockpit. The first tier in an
+ *  offering's list is the default (cheapest). `params` are merged verbatim into
+ *  the search request body. `label`/`tooltip` are user-facing British English. */
+export interface SearchTier {
+  id: string;
+  label: string;
+  tooltip?: string;
+  params: { depth?: string; numResults?: number };
+}
+
+/** Resolved per-call search options (a tier's `params`) — kept structurally
+ *  tied to `SearchTier['params']` so the two cannot drift. */
+export type WebSearchOpts = SearchTier['params'];
+
+/** Curated capability metadata for a `web` offering. */
 export interface WebOfferingMeta {
   canSearch: boolean;
   canFetch: boolean;
-  qualityClass: WebQualityClass;
+  traits: WebTrait[];
+  /** True when the backend's endpoints send no CORS headers and must route
+   *  through the user's CORS proxy (all nano-gpt web endpoints today). */
+  requiresProxy: boolean;
+  /** Search-only: the curated depth tiers (first = default). Omitted for fetch. */
+  searchTiers?: SearchTier[];
 }
 
 /** Behavioural contract a web-interfacing adapter implements. A backend exposes
@@ -56,6 +77,7 @@ export interface WebInterfacingProvider {
     query: string,
     ctx: WebContext,
     key: string,
+    opts: WebSearchOpts,
     signal?: AbortSignal,
   ): Promise<WebSearchResult>;
   fetch?(url: string, ctx: WebContext, key: string, signal?: AbortSignal): Promise<WebFetchResult>;

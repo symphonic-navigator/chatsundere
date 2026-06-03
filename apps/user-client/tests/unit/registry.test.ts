@@ -14,6 +14,9 @@ const dormantCtx: IntegrationContext = {
   location: null,
   webSearch: null,
   webFetch: null,
+  corsProxyUrl: null,
+  corsProxyKey: null,
+  webSearchTierId: null,
   getKey: async () => null,
 };
 

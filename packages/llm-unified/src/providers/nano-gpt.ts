@@ -4,8 +4,11 @@ import { registerAdapter } from '../adapter-registry.js';
 import { claudeAdapter } from '../adapters/anthropic-claude.js';
 import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
+import { registerWebAdapter } from '../integrations/web-adapter-registry.js';
+import type { SearchTier, WebOfferingMeta } from '../integrations/web-interfacing.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
+import { nanoGptWebScrapeAdapter, nanoGptWebSearchAdapter } from '../web-adapters/nano-gpt-web.js';
 import { apiKeyField } from './_helpers.js';
 
 const STEPS: ReasoningControl = {
@@ -157,6 +160,76 @@ function slugSwapOffering(
   };
 }
 
+const EXA_TIERS: SearchTier[] = [
+  { id: 'quick', label: 'Quick', params: { depth: 'auto', numResults: 8 } },
+  {
+    id: 'neural',
+    label: 'Neural',
+    tooltip: 'semantic search',
+    params: { depth: 'neural', numResults: 8 },
+  },
+];
+const LINKUP_TIERS: SearchTier[] = [
+  { id: 'standard', label: 'Standard', params: { depth: 'standard' } },
+  { id: 'deep', label: 'Deep', tooltip: 'slower, ~10× the cost', params: { depth: 'deep' } },
+];
+const BRAVE_TIERS: SearchTier[] = [
+  { id: 'standard', label: 'Standard', params: { depth: 'standard' } },
+];
+
+function webSearchOffering(slug: string, meta: WebOfferingMeta): Offering {
+  return {
+    canonicalRef: null,
+    providerId: 'nano-gpt',
+    upstreamSlug: slug,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${slug}` },
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    // Not a chat model — the context-window concept does not apply.
+    context: { recommended: 0, max: 0 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'web',
+    web: meta,
+  };
+}
+
+const webOfferings: Offering[] = [
+  webSearchOffering('web-linkup', {
+    canSearch: true,
+    canFetch: false,
+    requiresProxy: true,
+    traits: ['recommended', 'ai'],
+    searchTiers: LINKUP_TIERS,
+  }),
+  webSearchOffering('web-exa', {
+    canSearch: true,
+    canFetch: false,
+    requiresProxy: true,
+    traits: ['ai', 'neural'],
+    searchTiers: EXA_TIERS,
+  }),
+  webSearchOffering('web-brave', {
+    canSearch: true,
+    canFetch: false,
+    requiresProxy: true,
+    traits: ['privacy'],
+    searchTiers: BRAVE_TIERS,
+  }),
+  webSearchOffering('web-scrape', {
+    canSearch: false,
+    canFetch: true,
+    requiresProxy: true,
+    traits: [],
+  }),
+];
+
 const offerings: Offering[] = [
   slugSwapOffering('deepseek-v4-flash', 'deepseek/deepseek-v4-flash', STEPS, false, 200_000),
   slugSwapOffering('deepseek-v4-pro', 'deepseek/deepseek-v4-pro', STEPS, false, 200_000),
@@ -189,6 +262,7 @@ const offerings: Offering[] = [
     262_144,
   ),
   ...CLAUDE_SPECS.map(claudeOffering),
+  ...webOfferings,
 ];
 
 export const nanoGpt: ProviderDefinition = {
@@ -210,6 +284,7 @@ export function registerNanoGpt(): void {
   registerProvider(nanoGpt);
   for (const o of offerings) {
     if (o.adapter.kind !== 'catalogue') continue;
+    if (o.serviceKind === 'web') continue;
     if (o.canonicalRef?.startsWith('claude-')) {
       registerAdapter(
         o.adapter.adapterId,
@@ -224,6 +299,24 @@ export function registerNanoGpt(): void {
         o.adapter.adapterId,
         nanoGptSlugSwapAdapter(o.upstreamSlug, o.profile.vision, o.profile.reasoning),
       );
+    }
+  }
+
+  const searchProviderBySlug: Record<string, 'linkup' | 'exa' | 'brave'> = {
+    'web-linkup': 'linkup',
+    'web-exa': 'exa',
+    'web-brave': 'brave',
+  };
+  for (const o of webOfferings) {
+    if (o.adapter.kind !== 'catalogue') continue;
+    if (o.web?.canFetch) {
+      registerWebAdapter(o.adapter.adapterId, () => nanoGptWebScrapeAdapter());
+    } else {
+      const sp = searchProviderBySlug[o.upstreamSlug];
+      // Fail fast: a search offering whose slug is not mapped would otherwise
+      // register no adapter and silently never resolve.
+      if (!sp) throw new Error(`nano-gpt: unmapped web search slug "${o.upstreamSlug}"`);
+      registerWebAdapter(o.adapter.adapterId, () => nanoGptWebSearchAdapter(sp));
     }
   }
 }

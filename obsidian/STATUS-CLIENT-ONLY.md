@@ -5,7 +5,44 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-02 (latest) — **Web-interfacing integration spine
+**Last updated:** 2026-06-03 — **Web interfacing live via nano-gpt (squashed on
+master `1bf5462`, NOT pushed; awaiting Chris's device test — his VPS CORS proxy
+is up + already tested, so it should work immediately).** The dormant spine is
+now wired end-to-end: a nano-gpt **search** adapter (`/api/web` — Linkup/Exa/
+Brave) + **fetch** adapter (`/scrape-urls`), both reusing the `buildRequest`
+transport primitive; **three curated `web` search offerings** (Linkup default,
+Exa, Brave; Kagi deferred — empirically the *priciest*, not the cheapest) + a
+scrape fetch offering. `WebOfferingMeta` gained `traits`/`requiresProxy`/
+`searchTiers` (dropping `qualityClass`; `ai-friendly` folded into an `ai` trait).
+**CORS is the load-bearing finding:** the web endpoints send no CORS headers
+(chat does), so web search/fetch **must route through the user's CORS proxy**
+(the `requires-proxy` rail) — modelled as data on the offering, decoupled from
+nano-gpt's chat `corsHint: inofficial`. The web tools are **gated on a configured
+proxy**: without one, the settings section shows a "needs a proxy" notice
+(disabled-over-hidden) and no tool is offered. **Auto-default Linkup** (unset →
+recommended; explicit Off available) so web-search *availability* isn't gatekept
+to power users; **search depth** is a per-message cockpit control (Exa Quick/
+Neural, Linkup Standard/Deep) curated per offering, user-set, cheapest-default.
+Proxy + selected tier are threaded through the shared send path; settings carry
+trait badges + a **zero-knowledge note** ("queries leave your device"). Built
+subagent-driven (14 TDD tasks, serial + per-task spec/quality review + a final
+**opus** holistic review that caught a real Critical — the UI advertised an
+auto-on web search that silently no-opped without a proxy; fixed before squash).
+**Live conversation-suite** (`run-web-suite.ts`, direct-routing in Bun) **6/6**:
+every curated tier verified live (Exa `numResults:8` + `neural` honoured). **Not
+a Larissa change** (llm-unified + user-client; no auth/sync/proxy/crypto); the
+realised outbound surface logged in [[insights/security-deferrals]]. Verification
+(on master after the squash): `pnpm typecheck` **13/13**; llm-unified `bun test`
+**260/0**; user-client vitest **802 pass / 8 fail** (the unchanged `cockpit-draft`/
+`chat-page`/`chat-route` localStorage-jsdom baseline); build **9/9**. Spec/plan:
+[[../superpowers/specs/2026-06-03-web-interfacing-nano-gpt-adapter-design]],
+[[../superpowers/plans/2026-06-03-web-interfacing-nano-gpt-adapter]]. **Note:** the
+first squash captured only Tasks 1–7 (a stale worktree branch-ref via `git -C`);
+recovered by squashing the dangling branch-tip tree, re-verified on master before
+commit. **Next:** Chris device-tests web search/fetch end-to-end (proxy is up) →
+Liz pushes the master backlog; then memory (the long-weekend item).
+
+**Earlier 2026-06-02 — Web-interfacing integration spine
 landed (merged to master via PR #1 `7fd4692`, NOT pushed; Chris to device-test
 + integrate).** Implemented from the Liz/Lyra
 spec end-to-end, strict TDD per task. The dormant *integration spine* — a

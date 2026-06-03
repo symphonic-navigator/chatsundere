@@ -8,9 +8,11 @@ const brave: WebBackendOption = {
   providerId: 'nano-gpt',
   providerName: 'Nano-GPT',
   upstreamSlug: 'brave',
+  label: 'Brave',
   canSearch: true,
   canFetch: true,
-  qualityClass: 'classic',
+  traits: ['recommended'],
+  requiresProxy: false,
 };
 
 describe('WebInterfacingSection', () => {
@@ -20,7 +22,9 @@ describe('WebInterfacingSection', () => {
     );
     expect(screen.getByLabelText(/search backend/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/fetch backend/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Nano-GPT/).length).toBeGreaterThan(0);
+    // Friendly name with the upstream provider, and no abstract "Default" entry.
+    expect(screen.getAllByText(/Brave \(Nano-GPT\)/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Default')).not.toBeInTheDocument();
   });
 
   it('emits the chosen search backend as an OfferingRef', () => {

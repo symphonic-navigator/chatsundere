@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ReasoningControl } from '@chatsundere/llm-unified';
+import type { ReasoningControl, SearchTier } from '@chatsundere/llm-unified';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 
 interface Props {
@@ -7,17 +7,41 @@ interface Props {
   reasoning: ReasoningState;
   onReasoningChange: (r: ReasoningState) => void;
   onClose: () => void;
+  searchTiers?: SearchTier[];
+  searchTierId?: string | null;
+  onSearchTierChange?: (id: string) => void;
 }
 
 export function CockpitMenu(p: Props): JSX.Element | null {
-  if (p.control.mode === 'none') return null;
+  const hasReasoning = p.control.mode !== 'none';
+  const tiers = p.searchTiers ?? [];
+  const hasDepth = tiers.length >= 2;
+  // Highlight the stored tier, or fall back to the default when the stored id
+  // belongs to a different backend (the id is global, not per-backend).
+  const activeTierId = tiers.some((t) => t.id === p.searchTierId) ? p.searchTierId : tiers[0]?.id;
+  if (!hasReasoning && !hasDepth) return null;
 
   return (
     <div className="cockpit-menu" role="menu">
-      <div className="cockpit-menu-section" data-section="reasoning">
-        <div className="cockpit-menu-label">Reasoning</div>
-        {renderReasoning(p)}
-      </div>
+      {hasReasoning ? (
+        <div className="cockpit-menu-section" data-section="reasoning">
+          <div className="cockpit-menu-label">Reasoning</div>
+          {renderReasoning(p)}
+        </div>
+      ) : null}
+      {hasDepth ? (
+        <div className="cockpit-menu-section" data-section="web-depth">
+          <div className="cockpit-menu-label">Web depth</div>
+          <div className="cockpit-menu-chips">
+            {tiers.map((t) =>
+              chip(t.label, activeTierId === t.id, {
+                onClick: () => p.onSearchTierChange?.(t.id),
+                dataAttr: ['data-tier', t.id],
+              }),
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

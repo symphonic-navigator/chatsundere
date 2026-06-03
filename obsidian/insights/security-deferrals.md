@@ -285,3 +285,34 @@ context leaving the device. Discipline for the adapter: retrieve the provider ke
 only at the outbound point via the credential bus (never persist or log it); never
 log the query, URL, or location. Not a Larissa item for the spine (client-only,
 no auth/sync/proxy/crypto path) — but the adapter that lights it up will be.
+
+## 2026-06-03 — Web-interfacing integration: realised outbound surface
+
+The nano-gpt web adapter landed (`packages/llm-unified/src/web-adapters/nano-gpt-web.ts`),
+so the surface above is now live. How the discipline was honoured:
+
+- **Query/URL leave the device.** `web_search` sends the conversation-derived
+  query to the chosen provider (Linkup/Exa/Brave) via nano-gpt's `/api/web`;
+  `web_fetch` sends the target URL to `/scrape-urls`. Inherent to web search,
+  surfaced honestly to the user by a quiet zero-knowledge line in the settings
+  section ("Search queries and fetched pages leave your device…").
+- **Routes through the user's own CORS proxy.** The web endpoints send no CORS
+  headers (measured), so the adapter routes via the user-configured `corsProxy`
+  rail (reusing `buildRequest`), not client-direct. The proxy is the user's own
+  infrastructure (their VPS), so it seeing the query/key is within the trust
+  model — but it *is* a hop, recorded here.
+- **Key handling.** The nano-gpt key is fetched MasterKey-gated at the outbound
+  point via the credential bus (`ctx.getKey`, call-time only) and the decrypted
+  CORS-proxy shared key the same way (`openSecret`); neither is persisted or
+  logged. The query/URL are never logged.
+- **NSFW + location are NOT sent** to nano-gpt — its `/api/web` body accepts
+  neither, so the adapter drops them (they remain on `WebContext` for a future
+  brave-direct backend that would localise/filter). This *narrows* the
+  2026-06-02 "planned" concern: nano-gpt receives only the query/URL, not the
+  NSFW flag or location.
+- **Constructive failure.** Adapter errors are caught in the tool `execute` and
+  returned as a constructive `ToolResult` error rather than an unhandled throw.
+- Not a Larissa-gated change (llm-unified + user-client only; no
+  `auth-/sync-/proxy-service` or `packages/crypto` touch).
+- **Phase-2 follow-up:** route the call through the first-party `proxy-service`
+  once it exists, so even the transport hop is first-party and auditable.

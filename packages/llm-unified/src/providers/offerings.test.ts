@@ -15,6 +15,8 @@ describe('provider offerings', () => {
     for (const p of PROVIDERS) {
       expect(p.offerings.length).toBeGreaterThan(0);
       for (const o of p.offerings) {
+        // Web offerings legitimately have no canonical model reference.
+        if (o.serviceKind === 'web') continue;
         expect(o.providerId).toBe(p.id);
         const canonical = o.canonicalRef ? getCanonical(o.canonicalRef) : undefined;
         expect(canonical).toBeDefined();
