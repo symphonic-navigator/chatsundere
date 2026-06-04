@@ -67,6 +67,11 @@ export function InteractionMode(p: Props): JSX.Element {
       if (!target || !containerRef.current) return;
       if (containerRef.current.contains(target)) return;
 
+      // A tap on the brand logo is a deliberate navigation back to the Entrance
+      // Hall, not an idle outside-tap: let its click through to React Router
+      // rather than swallowing it. Without this the logo is dead while unpinned.
+      if (target instanceof Element && target.closest('.brand-logo')) return;
+
       // Pointerdown landed outside — close regardless of blur state.
       blurArmedRef.current = false;
 
@@ -101,14 +106,11 @@ export function InteractionMode(p: Props): JSX.Element {
       setTimeout(() => setInteractionMode(false), 100);
       return;
     }
-    // Pinned: the cockpit stays open, but we deliberately release input focus so
-    // the user lands back in reading mode (DimOverlay off) and can read the reply
-    // as it streams — rather than the input holding focus and dimming the
-    // response. Focus returns only when the user taps the input again. This is
-    // our slower, focus-led approach: dim what the user is not currently using.
-    if (document.activeElement instanceof HTMLTextAreaElement) {
-      document.activeElement.blur();
-    }
+    // Pinned: the cockpit stays open and keeps input focus — pinned means the
+    // user is set on full interaction, ready to keep typing. The streamed reply
+    // is no longer dimmed behind the held focus (the DimOverlay is suppressed
+    // while pinned, see chat-page.tsx), so there is no reason to shed focus on
+    // send. Unpinned (zen mode) is where dimming and focus-release still apply.
   };
 
   return (

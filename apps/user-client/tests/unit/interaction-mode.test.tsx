@@ -105,6 +105,19 @@ describe('InteractionMode lifecycle', () => {
     expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
   });
 
+  it('tap on the brand logo does not close (its click navigates instead)', () => {
+    // The logo lives in the header, outside the interaction container. An
+    // unpinned outside-tap would normally close + swallow the click; the logo
+    // is exempt so its <Link> can navigate back to the Entrance Hall.
+    const logo = document.createElement('a');
+    logo.className = 'brand-logo';
+    document.body.appendChild(logo);
+    mount();
+    fireEvent.pointerDown(logo);
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+    logo.remove();
+  });
+
   it('outside-tap does NOT close when pinned', () => {
     useCurrentChatStore.getState().togglePin();
     const { getByTestId } = mount();
@@ -124,7 +137,7 @@ describe('InteractionMode lifecycle', () => {
     vi.useRealTimers();
   });
 
-  it('Send while pinned releases input focus → reading mode (un-dims)', () => {
+  it('Send while pinned keeps input focus → full interaction', () => {
     useCurrentChatStore.getState().togglePin();
     const { container } = mount({ draftValue: 'hi' });
     const ta = container.querySelector('textarea') as HTMLTextAreaElement;
@@ -132,10 +145,11 @@ describe('InteractionMode lifecycle', () => {
     fireEvent.focus(ta);
     expect(useCurrentChatStore.getState().inputFocused).toBe(true);
     fireEvent.click(container.querySelector('[data-dual="action"]') as HTMLButtonElement);
-    // The user is dropped back into reading mode so the streamed reply is
-    // legible — the focus flag clears, which un-dims the chat-page overlay.
-    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
-    expect(document.activeElement).not.toBe(ta);
+    // Pinned = full interaction: the input keeps focus so the user can keep
+    // typing. The streamed reply is legible not because focus was shed, but
+    // because the DimOverlay is suppressed while pinned (chat-page level).
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
+    expect(document.activeElement).toBe(ta);
   });
 
   it('blur alone does not close', () => {

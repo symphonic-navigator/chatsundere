@@ -52,6 +52,7 @@ export function ChatPage(): JSX.Element {
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const isInteractionMode = useCurrentChatStore((s) => s.isInteractionMode);
   const inputFocused = useCurrentChatStore((s) => s.inputFocused);
+  const isPinned = useCurrentChatStore((s) => s.isPinned);
   const setChatPersonaIsAdult = useCurrentChatStore((s) => s.setChatPersonaIsAdult);
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
@@ -482,8 +483,12 @@ export function ChatPage(): JSX.Element {
         outlives InteractionMode's unmount-on-close, the un-dim transition
         actually runs (opacity 1→0 over 200ms) instead of the overlay
         vanishing instantly when the cockpit closes.
+
+        Suppressed while pinned: a pinned cockpit means the user is set on full
+        interaction, so the chat stays bright (the dimming is the zen-mode
+        affordance of the unpinned, read-heavy cockpit).
       */}
-      <DimOverlay active={isInteractionMode && inputFocused} />
+      <DimOverlay active={isInteractionMode && inputFocused && !isPinned} />
 
       {isInteractionMode && effectivePersona && offering ? (
         <InteractionMode
