@@ -5,7 +5,29 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-03 (evening) — **Ollama Cloud is now a web backend
+**Last updated:** 2026-06-04 — **Pinned-cockpit interaction tweaks landed (on
+master `2dcb6c3`, NOT pushed; device-tested by Chris — both work great).** Two
+client-only UI behaviour changes (plus one follow-on), conversational (no
+spec/plan, no Larissa path). The mental model Chris settled on: a **pinned**
+cockpit means the user is set on *full interaction*; **unpinned** is the
+read-heavy *zen mode*. (1) **Logo works as a back-to-Entrance-Hall button while
+unpinned.** The brand logo was already a `<Link to="/">`, but the unpinned
+outside-tap close-handler (`InteractionMode.tsx`) swallowed its click; the
+handler now exempts `.brand-logo` so the Link navigates (`/` → Gate → `/app`).
+Pinned already worked (the close-listener early-returns while pinned). (2) **No
+dimming on input focus while pinned.** `DimOverlay active={... && !isPinned}`
+(`chat-page.tsx`) — the chat stays bright in full-interaction mode; the
+zen-mode dim on focus is unchanged while unpinned. (3) **Send-while-pinned now
+keeps input focus** (Chris's call): `handleSend` no longer blurs the textarea
+when pinned, so the keyboard stays up for continued typing — the reply streams
+undimmed via (2) rather than the old focus-shed workaround. Verification:
+`interaction-mode.test.tsx` 10/10 (rewrote the old 'releases focus' test →
+'keeps focus', added a logo-exemption test); `pnpm typecheck` 13/13; biome
+clean; the lone `chat-page.test.tsx` fail is the unchanged `localStorage`-jsdom
+baseline (verified identical on master). **Next:** Liz pushes the master backlog
+when Chris says; then memory (the long-weekend item).
+
+**Earlier 2026-06-03 (evening) — Ollama Cloud is now a web backend
 (search + fetch), and the web-backend default is first-come with fallback.** On
 master, NOT yet pushed (the earlier round below was pushed). Two pieces, spec +
 plan in `superpowers/{specs,plans}/2026-06-03-ollama-web-and-first-come-default*`:
