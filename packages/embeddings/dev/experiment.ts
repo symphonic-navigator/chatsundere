@@ -263,6 +263,11 @@ const SCHEMES: Scheme[] = [
   { name: 'int4 MSE-clip k=32 (meta fp16)', bits: 4, block: 32, kind: 'asym-mse', meta: 16 },
   { name: 'int4 MSE-clip k=32 (meta int8)', bits: 4, block: 32, kind: 'asym-mse', meta: 8 },
   { name: 'int4 zero-point k=32 (meta int8)', bits: 4, block: 32, kind: 'zeropoint', meta: 8 },
+  // smaller blocks (k=16) — finer local fit, with the metadata axis:
+  { name: 'int4 MSE-clip k=16 (meta fp32)', bits: 4, block: 16, kind: 'asym-mse', meta: 32 },
+  { name: 'int4 MSE-clip k=16 (meta fp16)', bits: 4, block: 16, kind: 'asym-mse', meta: 16 },
+  { name: 'int4 MSE-clip k=16 (meta int8)', bits: 4, block: 16, kind: 'asym-mse', meta: 8 },
+  { name: 'int4 zero-point k=16 (meta int8)', bits: 4, block: 16, kind: 'zeropoint', meta: 8 },
 ];
 
 // A deliberately diverse, multilingual corpus so pair cosines span a wide range.
