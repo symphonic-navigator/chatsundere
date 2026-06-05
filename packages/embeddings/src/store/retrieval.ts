@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type QuantVector, cosineFromQuant } from './quantise.js';
+import { cosineQuery } from './codec.js';
 import type { VectorRow } from './schema.js';
 
 export interface NumericPredicate {
@@ -55,18 +55,19 @@ export function matchesFilter(
 }
 
 /**
- * Score candidate rows against a query vector and rank them.
+ * Score candidate rows against a full-precision query vector and rank them.
  * Order of operations: cosine score → minScore floor → sort desc →
  * over-fetch candidateK → rerank hook → final topK.
  */
 export function scoreAndRank(
-  query: QuantVector,
+  queryFp32: Float32Array,
+  queryNorm: number,
   rows: VectorRow[],
   opts: RankOptions,
 ): Candidate[] {
   let pool: Candidate[] = rows.map((r) => ({
     id: r.id,
-    score: cosineFromQuant(query, r),
+    score: cosineQuery(queryFp32, queryNorm, r),
     numeric: r.numeric,
     metadata: r.metadata,
   }));

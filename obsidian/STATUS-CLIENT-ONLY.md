@@ -1,7 +1,9 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-06-05 (packages/embeddings landed on
-feat/embeddings-engine — see Done entry below). Previous baseline:
+**Last updated:** 2026-06-05 (packages/embeddings default storage format
+swapped to the `D768_EQ_I4_L` int4 codec on feat/int4l-codec — see the top
+Done entry; the engine itself landed earlier on feat/embeddings-engine).
+Previous baseline:
 Phase 3.1 — Chat Backbone complete,
 sub-phase 1 of 3 of the Phase-3 chat surface). 27 task-commits landed
 sequentially on master (`464e244` → `ba27f25`), each TDD-paired
@@ -76,6 +78,24 @@ update the relevant one at the end.
 
 ## Done
 
+- **`packages/embeddings` — default storage format swapped to
+  `D768_EQ_I4_L` (2026-06-05, feat/int4l-codec)**. Per [ADR 0030](decisions/0030-default-vector-storage-format.md),
+  the store now uses an int4 zero-point codec (k=16 blocks, unsigned-8-bit
+  per-block metadata, ~497 B/vector — ~36% below the old int8's 772 B) instead
+  of int8 max-abs. New `src/store/codec.ts` exports `encode` / `decode` /
+  `cosineQuery` (full-precision fp32 query vs dequantised candidate — the
+  per-block scales no longer cancel) plus a versioned, length-checked,
+  byte-exact `serialise` / `deserialise` wire format (the blob is the future
+  E2EE sync payload, so it carries a 1-byte format-version tag). The int8 path
+  (`quantise.ts`, `quantiseMaxAbs`, `cosineFromQuant`, `QuantVector`) was
+  removed entirely — one format only, no runtime toggle (Omakase). No data
+  migration (no consumer had created the `vectors` table yet). A committed
+  fixture of 144 real arctic-embed vectors guards **recall@10 = 0.9729** vs the
+  fp32 ranking in CI (model run only at fixture-generation time, via
+  `bun run dev/dump-fixture.ts`). 51 Vitest tests, typecheck + Biome clean.
+  Spec: [`superpowers/specs/2026-06-05-int4l-codec-design.md`](../superpowers/specs/2026-06-05-int4l-codec-design.md).
+  Plan: [`superpowers/plans/2026-06-05-int4l-codec.md`](../superpowers/plans/2026-06-05-int4l-codec.md).
+
 - **`packages/embeddings` — client-local semantic-search foundation
   (2026-06-05, feat/embeddings-engine)**. 35 Vitest tests, full
   typecheck, Biome clean. What landed:
@@ -87,11 +107,11 @@ update the relevant one at the end.
     the public factory; `embed(texts, { kind: 'query' | 'document' })`
     auto-applies the arctic-embed v2.0 query prefix; `dispose()` terminates
     the worker.
-  - `VectorStore` — persists int8 vectors in a caller-owned Dexie table
+  - `VectorStore` — persists quantised vectors in a caller-owned Dexie table
     (transactional unity with domain rows; required for future E2EE sync).
-    Storage format: per-vector max-abs int8 quantisation — one scale
-    factor per vector, no fp16/fp32 toggle (Omakase). Cosine similarity
-    cancels the scale. CRUD: `upsert`, `update`, `delete`, `deleteWhere`,
+    Storage format originally per-vector max-abs int8; **superseded by the
+    `D768_EQ_I4_L` int4 codec — see the entry above.** CRUD: `upsert`,
+    `update`, `delete`, `deleteWhere`,
     `scan`. Query pipeline: filter by collection → tag / numeric predicates
     in-memory → cosine score → `minScore` floor → sort → `candidateK`
     over-fetch → optional `rerank` hook → `topK`. Optional storage budget
@@ -100,8 +120,9 @@ update the relevant one at the end.
   - `VECTORS_STORE_SCHEMA` — the Dexie store string to add to the
     consumer's own schema migration (primary key `id`, indexes
     `collection` and `[collection+updatedAt]`).
-  - Helper exports: `quantiseMaxAbs`, `dequantise`, `cosineFromQuant`,
-    `cosineSimilarity`, `dot`, `l2Norm` (for dreaming / dedup consumers).
+  - Helper exports (since superseded by the codec API — `encode`, `decode`,
+    `cosineQuery`, `serialise`, `deserialise`): the general
+    `cosineSimilarity`, `dot`, `l2Norm` remain (for dreaming / dedup consumers).
 
   **Not yet wired:** no GUI or chat surface; no Dexie v7 `vectors`
   migration in `apps/user-client` — that lands with the first domain

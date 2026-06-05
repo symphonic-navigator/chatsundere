@@ -30,6 +30,16 @@ export {
 export { type VectorInput, type VectorRow, VECTORS_STORE_SCHEMA } from './store/schema.js';
 export type { Candidate, NumericPredicate, VectorFilter } from './store/retrieval.js';
 
-// Quant + similarity helpers (for "dreaming"/dedup consumers)
-export { cosineFromQuant, dequantise, type QuantVector, quantiseMaxAbs } from './store/quantise.js';
+// Codec + similarity helpers (for "dreaming"/dedup consumers)
+export {
+  BLOCK_SIZE,
+  CODEC_VERSION,
+  cosineQuery,
+  decode,
+  deserialise,
+  encode,
+  type EncodedVector,
+  I4L_VECTOR_BYTES,
+  serialise,
+} from './store/codec.js';
 export { cosineSimilarity, dot, l2Norm } from './lib/similarity.js';

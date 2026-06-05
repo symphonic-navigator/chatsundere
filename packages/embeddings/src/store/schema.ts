@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { type EncodedVector, I4L_VECTOR_BYTES } from './codec.js';
 
-/** Caller-facing record handed to the store. `vector` is a float embedding; the store quantises it. */
+/** Caller-facing record handed to the store. `vector` is a float embedding; the store encodes it. */
 export interface VectorInput {
   id: string;
   collection: string;
@@ -11,13 +12,10 @@ export interface VectorInput {
   updatedAt: number;
 }
 
-/** The row as persisted in IndexedDB: quantised int8 plus scale/norm and precomputed byte size. */
-export interface VectorRow {
+/** The row as persisted in IndexedDB: the int4_L `EncodedVector` fields plus filter columns and precomputed byte size. */
+export interface VectorRow extends EncodedVector {
   id: string;
   collection: string;
-  q: Int8Array;
-  scale: number;
-  norm: number;
   tags: Record<string, string>;
   numeric: Record<string, number>;
   metadata?: unknown;
@@ -33,9 +31,8 @@ export interface VectorRow {
  */
 export const VECTORS_STORE_SCHEMA = 'id, collection, [collection+updatedAt]';
 
-/** Approximate persisted size of a row in bytes (int8 vector dominates). */
+/** Approximate persisted size of a row in bytes: the fixed int4_L vector size plus serialised metadata. */
 export function rowBytes(
-  q: Int8Array,
   tags: Record<string, string>,
   numeric: Record<string, number>,
   metadata: unknown,
@@ -43,5 +40,5 @@ export function rowBytes(
   const tagBytes = JSON.stringify(tags).length;
   const numBytes = JSON.stringify(numeric).length;
   const metaBytes = metadata === undefined ? 0 : JSON.stringify(metadata).length;
-  return q.byteLength + 16 + tagBytes + numBytes + metaBytes; // +16 for scale/norm/updatedAt overhead
+  return I4L_VECTOR_BYTES + tagBytes + numBytes + metaBytes;
 }

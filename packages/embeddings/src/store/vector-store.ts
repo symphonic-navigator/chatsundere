@@ -2,7 +2,8 @@
 import type Dexie from 'dexie';
 import type { Table } from 'dexie';
 import type { EmbeddingEngine } from '../engine/engine.js';
-import { quantiseMaxAbs } from './quantise.js';
+import { l2Norm } from '../lib/similarity.js';
+import { encode } from './codec.js';
 import { type Candidate, type VectorFilter, matchesFilter, scoreAndRank } from './retrieval.js';
 import { type VectorInput, type VectorRow, rowBytes } from './schema.js';
 
@@ -71,20 +72,18 @@ export interface VectorStore {
 }
 
 function toRow(input: VectorInput): VectorRow {
-  const { q, scale, norm } = quantiseMaxAbs(input.vector);
+  const encoded = encode(input.vector);
   const tags = input.tags ?? {};
   const numeric = input.numeric ?? {};
   return {
+    ...encoded,
     id: input.id,
     collection: input.collection,
-    q,
-    scale,
-    norm,
     tags,
     numeric,
     metadata: input.metadata,
     updatedAt: input.updatedAt,
-    bytes: rowBytes(q, tags, numeric, input.metadata),
+    bytes: rowBytes(tags, numeric, input.metadata),
   };
 }
 
@@ -162,7 +161,7 @@ export function createVectorStore(config: VectorStoreConfig): VectorStore {
       await table.update(id, {
         numeric,
         metadata,
-        bytes: rowBytes(existing.q, existing.tags, numeric, metadata),
+        bytes: rowBytes(existing.tags, numeric, metadata),
       });
     },
 
@@ -200,7 +199,7 @@ export function createVectorStore(config: VectorStoreConfig): VectorStore {
         throw new Error('query requires exactly one of { text, vector }.');
       }
       const rows = await loadCandidates(table, req.collection, req.filter);
-      return scoreAndRank(quantiseMaxAbs(queryVec), rows, {
+      return scoreAndRank(queryVec, l2Norm(queryVec), rows, {
         topK: req.topK,
         candidateK: req.candidateK,
         minScore: req.minScore,

@@ -86,7 +86,7 @@ describe('vector store CRUD', () => {
     await store.update('a', { numeric: { salience: 9 } });
     const after = (await store.scan({ collection: 'memory' }))[0];
     expect(after?.numeric.salience).toBe(9);
-    expect(Array.from(after?.q ?? [])).toEqual(Array.from(before?.q ?? [])); // vector untouched
+    expect(Array.from(after?.codes ?? [])).toEqual(Array.from(before?.codes ?? [])); // vector untouched
   });
 
   it('delete and deleteWhere remove rows', async () => {

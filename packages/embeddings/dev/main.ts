@@ -3,11 +3,12 @@ import Dexie, { type Table } from 'dexie';
 import {
   VECTORS_STORE_SCHEMA,
   type VectorRow,
-  cosineFromQuant,
+  cosineQuery,
   createEmbeddingEngine,
   createVectorStore,
+  encode,
   formatBackendLabel,
-  quantiseMaxAbs,
+  l2Norm,
 } from '../src/index.js';
 
 const out = document.getElementById('out');
@@ -39,8 +40,8 @@ function fp32Cos(a: Float32Array, b: Float32Array): number {
   return denom === 0 ? 0 : d / denom;
 }
 
-function int8Cos(a: Float32Array, b: Float32Array): number {
-  return cosineFromQuant(quantiseMaxAbs(a), quantiseMaxAbs(b));
+function codecCos(a: Float32Array, b: Float32Array): number {
+  return cosineQuery(a, l2Norm(a), encode(b));
 }
 
 async function main() {
@@ -54,7 +55,7 @@ async function main() {
   log(`backend: ${formatBackendLabel(engine.backend)}`);
   log(`crossOriginIsolated: ${globalThis.crossOriginIsolated}`);
 
-  // 1) Model-card sanity + int8 delta.
+  // 1) Model-card sanity + int4_L delta.
   const queryVecs = await engine.embed(['what is snowflake?'], { kind: 'query' });
   const q = queryVecs[0];
   if (!q) throw new Error('no query embedding');
@@ -65,12 +66,12 @@ async function main() {
     const label = docLabels[i];
     if (!doc) continue;
     const fp = fp32Cos(q, doc);
-    const q8 = int8Cos(q, doc);
+    const c4 = codecCos(q, doc);
     log(
-      `sanity "${label}": fp32 ${fp.toFixed(4)} | int8 ${q8.toFixed(4)} | Δ ${(q8 - fp).toFixed(4)}`,
+      `sanity "${label}": fp32 ${fp.toFixed(4)} | int4_L ${c4.toFixed(4)} | Δ ${(c4 - fp).toFixed(4)}`,
     );
   }
-  log('(expected fp32 references ~0.327 and ~0.070; int8 Δ should be small)');
+  log('(expected fp32 references ~0.327 and ~0.070; int4_L Δ should be small)');
 
   // 2) Multilingual exploration — degenerate-output + cross-lingual retrieval.
   const multilingual = [
@@ -106,7 +107,7 @@ async function main() {
   const ranked = multilingual
     .map((m, i) => {
       const v = mvecs[i];
-      return { lang: m.lang, cos: v ? int8Cos(enQuery, v) : 0 };
+      return { lang: m.lang, cos: v ? codecCos(enQuery, v) : 0 };
     })
     .sort((a, b) => b.cos - a.cos);
   log(
@@ -167,7 +168,7 @@ async function main() {
     const step = maxAbs / 127;
     const levels = step > 0 ? Math.round(rms / step) : 0;
     log(
-      `vec${i}: scale s=${maxAbs.toFixed(4)} range [${mn.toFixed(4)}, ${mx.toFixed(4)}] rms=${rms.toFixed(4)} · int8 step=${step.toFixed(5)} · typical comp ≈ ${levels} levels`,
+      `vec${i}: scale s=${maxAbs.toFixed(4)} range [${mn.toFixed(4)}, ${mx.toFixed(4)}] rms=${rms.toFixed(4)} · ref int8 step=${step.toFixed(5)} · typical comp ≈ ${levels} levels`,
     );
   }
   // Outlier-dimension fingerprint: mean |value| per dim across all sampled vectors.

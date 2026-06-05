@@ -9,6 +9,7 @@
   },
   "scripts": {
     "fetch-model": "node scripts/fetch-model.mjs",
+    "dump-fixture": "bun run dev/dump-fixture.ts",
     "dev": "vite",
     "typecheck": "tsc -p tsconfig.test.json",
     "test": "vitest run --passWithNoTests",

@@ -99,6 +99,28 @@ trade-off space. Key empirical findings:
 - The full ladder and the `D256_*` MRL tiers stay characterised in the CSV for
   future extreme-storage scenarios.
 
+## Correction (2026-06-05, implementation)
+
+Two numbers in this ADR were refined when the codec was actually built (see the
+implementation spec `superpowers/specs/2026-06-05-int4l-codec-design.md` and the
+landed `packages/embeddings/src/store/codec.ts`):
+
+- **Per-vector size is ~497 B, not 488 B.** The 488 B figure (from
+  `dev/bench.ts`) omitted the stored `norm` (4 B) and the 1-byte format-version
+  tag, and counted the per-vector metadata ranges as 8 B rather than the actual
+  12 B (`scaleMax`, `offMin`, `offMax` — three fp32 values). The honest
+  serialised blob is 1 + 4 (norm) + 12 (ranges) + 48 (scales) + 48 (offsets) +
+  384 (codes) = **497 B**. Still ~36% below int8's 772 B; the mission claim
+  holds, just exact rather than rounded.
+- **The per-block metadata is unsigned 8-bit, not signed int8.** The validated
+  maths (`experiment.ts` `int8RoundArray`, clamping to `[0, 255]`) quantises
+  scales over `[0, scaleMax]` and offsets over `[offMin, offMax]` as
+  `Uint8Array` indices (the signed range endpoints live in the fp32 ranges).
+  Unsigned gives the non-negative scale its full 8-bit resolution.
+
+The measured end-to-end **recall@10 against the committed fixture is 0.9729**,
+confirming the 97.2% study figure.
+
 ## References
 
 - Engine design spec: `superpowers/specs/2026-06-05-client-embeddings-engine-design.md`
