@@ -1,6 +1,8 @@
 # Chatsundere Status — Client-only
 
-**Last updated:** 2026-05-24 (Phase 3.1 — Chat Backbone complete,
+**Last updated:** 2026-06-05 (packages/embeddings landed on
+feat/embeddings-engine — see Done entry below). Previous baseline:
+Phase 3.1 — Chat Backbone complete,
 sub-phase 1 of 3 of the Phase-3 chat surface). 27 task-commits landed
 sequentially on master (`464e244` → `ba27f25`), each TDD-paired
 per spec §10. Across the work: `packages/llm-unified` gained
@@ -73,6 +75,42 @@ update the relevant one at the end.
 ---
 
 ## Done
+
+- **`packages/embeddings` — client-local semantic-search foundation
+  (2026-06-05, feat/embeddings-engine)**. 35 Vitest tests, full
+  typecheck, Biome clean. What landed:
+  - `EmbeddingEngine` — runs `snowflake-arctic-embed-m-v2.0` int8 via
+    transformers.js/ONNX-WASM inside a Web Worker. Three-tier capability
+    discovery: WebGPU → WASM multi-thread (requires `crossOriginIsolated`)
+    → WASM single-thread. `ResolvedBackend` surfaces the chosen path,
+    thread count, and fallback trail. `createEmbeddingEngine(opts?)` is
+    the public factory; `embed(texts, { kind: 'query' | 'document' })`
+    auto-applies the arctic-embed v2.0 query prefix; `dispose()` terminates
+    the worker.
+  - `VectorStore` — persists int8 vectors in a caller-owned Dexie table
+    (transactional unity with domain rows; required for future E2EE sync).
+    Storage format: per-vector max-abs int8 quantisation — one scale
+    factor per vector, no fp16/fp32 toggle (Omakase). Cosine similarity
+    cancels the scale. CRUD: `upsert`, `update`, `delete`, `deleteWhere`,
+    `scan`. Query pipeline: filter by collection → tag / numeric predicates
+    in-memory → cosine score → `minScore` floor → sort → `candidateK`
+    over-fetch → optional `rerank` hook → `topK`. Optional storage budget
+    (`maxCount` + `maxBytes`) with an `EvictionHook` or default
+    `BudgetExceededError`.
+  - `VECTORS_STORE_SCHEMA` — the Dexie store string to add to the
+    consumer's own schema migration (primary key `id`, indexes
+    `collection` and `[collection+updatedAt]`).
+  - Helper exports: `quantiseMaxAbs`, `dequantise`, `cosineFromQuant`,
+    `cosineSimilarity`, `dot`, `l2Norm` (for dreaming / dedup consumers).
+
+  **Not yet wired:** no GUI or chat surface; no Dexie v7 `vectors`
+  migration in `apps/user-client` — that lands with the first domain
+  consumer (memory system). Model fetch (`pnpm --filter
+  @chatsundere/embeddings run fetch-model`) and browser smoke test are
+  manual steps for Chris.
+
+  Spec: [`superpowers/specs/2026-06-05-client-embeddings-engine-design.md`](../superpowers/specs/2026-06-05-client-embeddings-engine-design.md).
+  Plan: [`superpowers/plans/2026-06-05-client-embeddings-engine.md`](../superpowers/plans/2026-06-05-client-embeddings-engine.md).
 
 - **Status-tracking split (2026-05-23)** — STATUS.md → STATUS-BACKEND.md;
   STATUS-CLIENT-ONLY.md established for the standalone-mode side; cross-
