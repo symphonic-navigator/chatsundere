@@ -263,6 +263,9 @@ const SCHEMES: Scheme[] = [
   { name: 'int4 MSE-clip k=32 (meta fp16)', bits: 4, block: 32, kind: 'asym-mse', meta: 16 },
   { name: 'int4 MSE-clip k=32 (meta int8)', bits: 4, block: 32, kind: 'asym-mse', meta: 8 },
   { name: 'int4 zero-point k=32 (meta int8)', bits: 4, block: 32, kind: 'zeropoint', meta: 8 },
+  // taxonomy candidates with int8 metadata throughout:
+  { name: 'int4 zero-point global (meta int8)', bits: 4, block: 0, kind: 'zeropoint', meta: 8 },
+  { name: 'int4 zero-point k=64 (meta int8)', bits: 4, block: 64, kind: 'zeropoint', meta: 8 },
   // smaller blocks (k=16) — finer local fit, with the metadata axis:
   { name: 'int4 MSE-clip k=16 (meta fp32)', bits: 4, block: 16, kind: 'asym-mse', meta: 32 },
   { name: 'int4 MSE-clip k=16 (meta fp16)', bits: 4, block: 16, kind: 'asym-mse', meta: 16 },
@@ -439,48 +442,51 @@ function topKNeighbours(vecs: Array<Float32Array | undefined>, i: number, k: num
   return new Set(scored.slice(0, k).map((s) => s.idx));
 }
 
-async function main() {
-  log('creating engine…');
-  const engine = await createEmbeddingEngine({ onProgress: () => {} });
-  log(`backend: ${formatBackendLabel(engine.backend)}`);
-  log(`corpus: ${CORPUS.length} texts → embedding…`);
+/** Truncate a vector to its first `d` dimensions and renormalise to unit length (Matryoshka). */
+function truncateNormalise(v: Float32Array, d: number): Float32Array {
+  const out = new Float32Array(d);
+  let norm = 0;
+  for (let i = 0; i < d; i++) {
+    const x = v[i] ?? 0;
+    out[i] = x;
+    norm += x * x;
+  }
+  norm = Math.sqrt(norm);
+  if (norm > 0) for (let i = 0; i < d; i++) out[i] = (out[i] ?? 0) / norm;
+  return out;
+}
 
-  const vecs = await engine.embed(CORPUS, { kind: 'document' });
-  const clean = vecs.filter((v): v is Float32Array => v !== undefined);
-  const n = clean.length;
+/** Run the full scheme table against a set of fp32 reference vectors of some dimension. */
+function runTable(title: string, clean: Float32Array[]): void {
+  const numVecs = clean.length;
   const dim = clean[0]?.length ?? 0;
-  log(`embedded ${n} vectors, dim ${dim}`);
 
-  const pairs: Array<[Float32Array, Float32Array]> = [];
   const ref: number[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < numVecs; i++) {
     const vi = clean[i];
     if (!vi) continue;
-    for (let j = i + 1; j < n; j++) {
+    for (let j = i + 1; j < numVecs; j++) {
       const vj = clean[j];
       if (!vj) continue;
-      pairs.push([vi, vj]);
       ref.push(cosine(vi, vj));
     }
   }
   const fp32Top: Array<Set<number>> = [];
-  for (let i = 0; i < n; i++) fp32Top.push(topKNeighbours(clean, i, TOP_K));
-  log(`${pairs.length} pairs · recall@${TOP_K} via leave-one-out\n`);
+  for (let i = 0; i < numVecs; i++) fp32Top.push(topKNeighbours(clean, i, TOP_K));
 
+  log(`\n=== ${title} · ${dim}-dim · ${numVecs} vecs · ${ref.length} pairs ===`);
   log(
     `${pad('scheme', 34)}${pad('B/vec', 7)}${pad('mean|Δ|', 10)}${pad('p95|Δ|', 10)}${pad('max|Δ|', 10)}recall@${TOP_K}`,
   );
   log('-'.repeat(81));
 
   for (const s of SCHEMES) {
-    const dq = clean.map((v) => (v ? dequantise(v, s) : undefined));
+    const dq = clean.map((v) => dequantise(v, s));
 
     const deltas: number[] = [];
     let p = 0;
-    for (let i = 0; i < n; i++) {
-      if (!clean[i]) continue;
-      for (let j = i + 1; j < n; j++) {
-        if (!clean[j]) continue;
+    for (let i = 0; i < numVecs; i++) {
+      for (let j = i + 1; j < numVecs; j++) {
         const a = dq[i];
         const b = dq[j];
         if (a && b) deltas.push(Math.abs(cosine(a, b) - (ref[p] ?? 0)));
@@ -494,8 +500,7 @@ async function main() {
 
     let recallSum = 0;
     let queries = 0;
-    for (let i = 0; i < n; i++) {
-      if (!dq[i]) continue;
+    for (let i = 0; i < numVecs; i++) {
       const top = topKNeighbours(dq, i, TOP_K);
       const truth = fp32Top[i];
       if (!truth || truth.size === 0) continue;
@@ -510,6 +515,57 @@ async function main() {
       `${pad(s.name, 34)}${pad(String(bytesPerVector(dim, s)), 7)}${pad(mean.toFixed(5), 10)}${pad(p95.toFixed(5), 10)}${pad(max.toFixed(5), 10)}${(recall * 100).toFixed(1)}%`,
     );
   }
+}
+
+async function main() {
+  log('creating engine…');
+  const engine = await createEmbeddingEngine({ onProgress: () => {} });
+  log(`backend: ${formatBackendLabel(engine.backend)}`);
+  log(`corpus: ${CORPUS.length} texts → embedding…`);
+
+  const vecs = await engine.embed(CORPUS, { kind: 'document' });
+  const clean = vecs.filter((v): v is Float32Array => v !== undefined);
+  log(`embedded ${clean.length} vectors, dim ${clean[0]?.length ?? 0}`);
+
+  runTable('Full', clean);
+
+  // Matryoshka: truncate to 256 dims + renormalise.
+  const mrlDim = 256;
+  const clean256 = clean.map((v) => truncateNormalise(v, mrlDim));
+
+  // Pure truncation cost: how well does 256-dim fp32 preserve the full-768 ranking?
+  const top768 = clean.map((_, i) => topKNeighbours(clean, i, TOP_K));
+  const top256 = clean256.map((_, i) => topKNeighbours(clean256, i, TOP_K));
+  let rSum = 0;
+  let rN = 0;
+  for (let i = 0; i < clean.length; i++) {
+    const a = top256[i];
+    const b = top768[i];
+    if (!a || !b || b.size === 0) continue;
+    let hit = 0;
+    for (const idx of a) if (b.has(idx)) hit++;
+    rSum += hit / b.size;
+    rN++;
+  }
+  let dSum = 0;
+  let dN = 0;
+  for (let i = 0; i < clean.length; i++) {
+    const a = clean[i];
+    const a2 = clean256[i];
+    if (!a || !a2) continue;
+    for (let j = i + 1; j < clean.length; j++) {
+      const b = clean[j];
+      const b2 = clean256[j];
+      if (!b || !b2) continue;
+      dSum += Math.abs(cosine(a2, b2) - cosine(a, b));
+      dN++;
+    }
+  }
+  log(
+    `\nMRL truncation 768→256 (fp32, no quant): recall@${TOP_K}=${((rSum / Math.max(1, rN)) * 100).toFixed(1)}% vs full · mean cosine|Δ|=${(dSum / Math.max(1, dN)).toFixed(5)}`,
+  );
+
+  runTable('Matryoshka-256', clean256);
 
   engine.dispose();
   log('\n✅ experiment complete');
