@@ -30,6 +30,30 @@ describe('useCurrentChatStore', () => {
     expect(useCurrentChatStore.getState().expandedMessageId).toBeNull();
   });
 
+  it('inputFocused: settable, and cleared on every interaction-mode flip', () => {
+    const s = useCurrentChatStore.getState();
+    expect(s.inputFocused).toBe(false);
+    s.setInputFocused(true);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
+    // Closing the cockpit clears it so the chat-page overlay fades back out.
+    s.setInteractionMode(false);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
+    // Opening starts un-dimmed too — the cockpit autofocus re-dims afterwards.
+    s.setInputFocused(true);
+    s.setInteractionMode(true);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
+  });
+
+  it('chatPersonaIsAdult: defaults null, settable, reset to null', () => {
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBeNull();
+    useCurrentChatStore.getState().setChatPersonaIsAdult(false);
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBe(false);
+    useCurrentChatStore.getState().setChatPersonaIsAdult(true);
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBe(true);
+    useCurrentChatStore.getState().reset();
+    expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBeNull();
+  });
+
   it('reset returns everything to initial', () => {
     const s = useCurrentChatStore.getState();
     s.setChatId('chat-1');
@@ -37,7 +61,7 @@ describe('useCurrentChatStore', () => {
     s.setInteractionMode(true);
     s.togglePin();
     s.setAutoFollow(false);
-    s.setReasoning({ mode: 'off' });
+    s.setReasoning({ kind: 'off' });
     s.reset();
     const after = useCurrentChatStore.getState();
     expect(after.chatId).toBeNull();
@@ -45,6 +69,6 @@ describe('useCurrentChatStore', () => {
     expect(after.isInteractionMode).toBe(false);
     expect(after.isPinned).toBe(false);
     expect(after.autoFollowEnabled).toBe(true);
-    expect(after.reasoning).toEqual({ mode: 'on' });
+    expect(after.reasoning).toEqual({ kind: 'off' });
   });
 });

@@ -1,0 +1,5 @@
+# Run tests from source only. Without this, `bun test` also discovers the
+# compiled `*.test.js` copies under dist/ after a build, where Worker entry
+# paths (resolved as `.ts`) do not exist — causing spurious failures.
+[test]
+root = "./src"

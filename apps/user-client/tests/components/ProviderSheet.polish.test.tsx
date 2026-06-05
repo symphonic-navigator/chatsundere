@@ -11,7 +11,7 @@ vi.mock('@chatsundere/llm-unified', () => ({
     displayName: id === 'ollama-cloud' ? 'Ollama Cloud' : 'nano-gpt.com',
     baseUrl: 'https://example.com/v1',
     corsHint: id === 'ollama-cloud' ? 'requires-proxy' : 'inofficial',
-    knownModels: [],
+    offerings: [],
   }),
   probeProvider: vi.fn(async () => ({ ok: true })),
 }));
@@ -76,10 +76,12 @@ describe('ProviderSheet polish', () => {
     expect(probed).not.toHaveBeenCalled();
   });
 
-  it('uses https://example.com as the proxy URL placeholder for Ollama Cloud', () => {
+  // The in-sheet proxy URL/shared-key fields were removed when the CORS proxy
+  // became global (My Settings → CorsProxyBlock). Even a requires-proxy provider
+  // shows no proxy field in the sheet.
+  it('does not render in-sheet proxy fields (proxy is global now)', () => {
     renderSheet('ollama-cloud');
-    const input = screen.getByLabelText(/proxy url/i) as HTMLInputElement;
-    expect(input.placeholder).toMatch(/example\.com/);
+    expect(screen.queryByLabelText(/proxy url/i)).not.toBeInTheDocument();
   });
 
   it('sets autocomplete=off and password-manager opt-out attrs on the API key field', () => {

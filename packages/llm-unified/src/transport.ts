@@ -9,6 +9,12 @@ export interface BuildRequestArgs {
   path: string;
   method: 'GET' | 'POST';
   body?: unknown;
+  /**
+   * Adapter-supplied extra headers, merged on top of the base
+   * Authorisation/Content-Type (and any cors-proxy headers). The adapter owns
+   * these — e.g. wafer's `Wafer-ZDR: required`.
+   */
+  extraHeaders?: Record<string, string>;
 }
 
 /**
@@ -19,7 +25,7 @@ export interface BuildRequestArgs {
  * usage) with the proxy headers in place.
  */
 export function buildRequest(args: BuildRequestArgs): Request {
-  const { provider, apiKey, corsProxyUrl, corsProxyKey, path, method, body } = args;
+  const { provider, apiKey, corsProxyUrl, corsProxyKey, path, method, body, extraHeaders } = args;
   const headers = new Headers({ Authorization: `Bearer ${apiKey}` });
   if (method === 'POST') headers.set('Content-Type', 'application/json');
 
@@ -36,6 +42,11 @@ export function buildRequest(args: BuildRequestArgs): Request {
     url = joinUrl(corsProxyUrl, path);
     headers.set('x-cors-proxy-api-key', corsProxyKey);
     headers.set('x-cors-proxy-target', provider.baseUrl);
+  }
+
+  // Adapter-supplied headers sit on top of the base/cors-proxy headers.
+  if (extraHeaders) {
+    for (const [k, value] of Object.entries(extraHeaders)) headers.set(k, value);
   }
 
   return new Request(url, {

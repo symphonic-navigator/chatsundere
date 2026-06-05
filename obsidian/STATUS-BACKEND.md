@@ -163,6 +163,7 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Pointers
 
+- **Roadmap to beta (locked 2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). This backend block is **Block 6 → v0.3.0**; deliberately dormant until then.
 - Client-only / standalone-mode work: [[STATUS-CLIENT-ONLY]]
 - All open todos: [[insights/follow-ups-index]]
 - Decisions: `decisions/0001–0028`

@@ -1,68 +1,139 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { describe, expect, it } from 'bun:test';
-import { type CompositionLayers, composeSystemPrompt } from './composition.js';
+import { type BuildPromptInputs, buildPrompt } from './composition.js';
+import { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js';
 
-function baseLayers(overrides: Partial<CompositionLayers> = {}): CompositionLayers {
+function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
   return {
-    globalUnlocker: '',
-    aboutMe: '',
+    tonalityEnabled: false,
+    nsfwEnabled: false,
+    globalInstructions: '',
     personaInstructions: 'You are a helpful assistant.',
+    aboutMe: '',
     projectInstructions: '',
     memoryContext: '',
+    toolsInstruction: '',
     ...overrides,
   };
 }
 
-describe('composeSystemPrompt', () => {
-  it('returns just the persona instructions when only that layer is set', () => {
-    const out = composeSystemPrompt(baseLayers());
-    expect(out).toBe('You are a helpful assistant.');
+describe('buildPrompt', () => {
+  it('returns just the persona instructions when nothing else is set', () => {
+    expect(buildPrompt(inputs(), 'chat')).toBe('You are a helpful assistant.');
   });
 
-  it('joins layers in the spec-defined order with blank-line separators', () => {
-    const out = composeSystemPrompt(
-      baseLayers({
-        globalUnlocker: 'The user is an adult.',
-        aboutMe: 'Chris is a backend developer.',
-        personaInstructions: 'You are Aurum.',
-        projectInstructions: 'This project explores mindspace textures.',
-        memoryContext: 'Previously: discussed cloudy textures.',
+  it('orders segments by band then position', () => {
+    const out = buildPrompt(
+      inputs({
+        tonalityEnabled: true,
+        nsfwEnabled: true,
+        globalInstructions: 'GLOBAL',
+        personaInstructions: 'PERSONA',
+        aboutMe: 'ABOUT',
+        projectInstructions: 'PROJECT',
+        memoryContext: 'MEMORY',
       }),
+      'chat',
     );
+    // Band 1: tonality, nsfw, global, persona — Band 2: about, project, memory
     expect(out).toBe(
-      'The user is an adult.\n\nChris is a backend developer.\n\nYou are Aurum.\n\nThis project explores mindspace textures.\n\nPreviously: discussed cloudy textures.',
+      [TONALITY_PROMPT, NSFW_PROMPT, 'GLOBAL', 'PERSONA', 'ABOUT', 'PROJECT', 'MEMORY'].join(
+        '\n\n',
+      ),
     );
   });
 
-  it('skips empty layers without leaving blank-line gaps', () => {
-    const out = composeSystemPrompt(
-      baseLayers({
-        globalUnlocker: 'NSFW allowed.',
-        personaInstructions: 'You are Aurum.',
+  it('omits the tonality segment when the toggle is off', () => {
+    const out = buildPrompt(inputs({ tonalityEnabled: false, personaInstructions: 'P' }), 'chat');
+    expect(out).toBe('P');
+  });
+
+  it('omits the NSFW segment when the persona is not adult', () => {
+    const out = buildPrompt(inputs({ nsfwEnabled: false, personaInstructions: 'P' }), 'chat');
+    expect(out).not.toContain('explicit erotica');
+  });
+
+  it('includes the NSFW segment when the persona is adult', () => {
+    const out = buildPrompt(inputs({ nsfwEnabled: true, personaInstructions: 'P' }), 'chat');
+    expect(out).toContain('explicit erotica');
+  });
+
+  it('skips whitespace-only free-text segments without leaving gaps', () => {
+    const out = buildPrompt(
+      inputs({ globalInstructions: '  \n ', personaInstructions: 'P', aboutMe: 'A' }),
+      'chat',
+    );
+    expect(out).toBe('P\n\nA');
+  });
+
+  it('drops Band 2 and Band 3 segments for the title job', () => {
+    const out = buildPrompt(
+      inputs({
+        tonalityEnabled: true,
+        globalInstructions: 'GLOBAL',
+        personaInstructions: 'PERSONA',
+        aboutMe: 'ABOUT',
+        projectInstructions: 'PROJECT',
+        memoryContext: 'MEMORY',
       }),
+      'title',
     );
-    expect(out).toBe('NSFW allowed.\n\nYou are Aurum.');
+    expect(out).toBe([TONALITY_PROMPT, 'GLOBAL', 'PERSONA'].join('\n\n'));
   });
 
-  it('treats whitespace-only layers as empty', () => {
-    const out = composeSystemPrompt(
-      baseLayers({
-        aboutMe: '   \n  ',
-        personaInstructions: 'You are Aurum.',
-      }),
-    );
-    expect(out).toBe('You are Aurum.');
+  it('keeps the NSFW segment in the title job for an adult persona', () => {
+    const out = buildPrompt(inputs({ nsfwEnabled: true, personaInstructions: 'P' }), 'title');
+    expect(out).toContain('explicit erotica');
   });
 
-  it('is idempotent — composing twice with the same input yields the same output', () => {
-    const layers = baseLayers({ globalUnlocker: 'X', aboutMe: 'Y' });
-    expect(composeSystemPrompt(layers)).toBe(composeSystemPrompt(layers));
+  it('keeps the NSFW segment out of the title job for an SFW persona', () => {
+    const out = buildPrompt(inputs({ nsfwEnabled: false, personaInstructions: 'P' }), 'title');
+    expect(out).not.toContain('explicit erotica');
+  });
+
+  it('is idempotent for the same input', () => {
+    const i = inputs({ tonalityEnabled: true, aboutMe: 'Y' });
+    expect(buildPrompt(i, 'chat')).toBe(buildPrompt(i, 'chat'));
   });
 
   it('throws when persona instructions is empty', () => {
-    expect(() => composeSystemPrompt(baseLayers({ personaInstructions: '' }))).toThrow(
+    expect(() => buildPrompt(inputs({ personaInstructions: '' }), 'chat')).toThrow(
       /personaInstructions/,
     );
+  });
+});
+
+const baseInputs: BuildPromptInputs = {
+  tonalityEnabled: false,
+  nsfwEnabled: false,
+  globalInstructions: '',
+  personaInstructions: 'You are a helpful companion.',
+  aboutMe: '',
+  projectInstructions: '',
+  memoryContext: '',
+  toolsInstruction: '',
+};
+
+describe('tools segment', () => {
+  it('includes the tools instruction in a chat prompt when present', () => {
+    const out = buildPrompt(
+      { ...baseInputs, toolsInstruction: 'Use calculate_js for maths.' },
+      'chat',
+    );
+    expect(out).toContain('Use calculate_js for maths.');
+  });
+
+  it('omits the tools instruction for the title job (chat-only)', () => {
+    const out = buildPrompt(
+      { ...baseInputs, toolsInstruction: 'Use calculate_js for maths.' },
+      'title',
+    );
+    expect(out).not.toContain('calculate_js');
+  });
+
+  it('drops the segment when the instruction is empty', () => {
+    const out = buildPrompt(baseInputs, 'chat');
+    expect(out).toBe('You are a helpful companion.');
   });
 });

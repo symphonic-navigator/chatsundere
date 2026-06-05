@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { Offering } from './catalogue/types.js';
 
 export type Capability = 'llm' | 'streaming' | 'tools' | 'json-mode' | 'vision';
 
@@ -12,36 +13,6 @@ export interface ConfigField {
   options?: { value: string; label: string }[];
 }
 
-export interface ReasoningEffortSpec {
-  buckets: string[];
-  defaultBucket: string;
-}
-
-export interface ReasoningCapability {
-  kind: 'no_reasoning' | 'optional' | 'always_on';
-  /** Present when the model exposes granular effort levels (e.g. low / medium / high). */
-  effort?: ReasoningEffortSpec;
-  /** Whether reasoning is enabled by default in the cockpit menu. */
-  defaultOn: boolean;
-  /**
-   * Hard-CoT models (Anthropic, xAI, OpenAI o-series) replay their thinking
-   * blocks back in history. Soft-CoT models (DeepSeek, GLM, Kimi) never see
-   * their own thinking again — set this to false for those.
-   */
-  replayReasoning: boolean;
-}
-
-export interface KnownModel {
-  id: string;
-  displayName: string;
-  notes?: string;
-  /** Recommended context size in tokens (not the hard maximum). Drives the Context-Gauge; see spec §4.2. */
-  contextWindow: number;
-  reasoning: ReasoningCapability;
-  vision: boolean;
-  tools: boolean;
-}
-
 export interface ProviderDefinition {
   id: string;
   displayName: string;
@@ -53,22 +24,85 @@ export interface ProviderDefinition {
   probe: { path: string; method: 'GET' | 'POST' };
   secretFields: ReadonlySet<string>;
   corsHint: 'direct' | 'inofficial' | 'requires-proxy';
-  knownModels: KnownModel[];
+  offerings: Offering[];
   sortPriority: number;
 }
 
+/**
+ * One tool call as it appears ON an assistant message in the wire history
+ * (OpenAI shape). Distinct from the streamed `tool-call` StreamChunk: this is
+ * the request the assistant made, replayed back into history so the subsequent
+ * `tool` result can reference it by `id`. Every provider we curate requires the
+ * `assistant(tool_calls) → tool(tool_call_id)` pairing for a valid multi-turn
+ * history (verified live, 2026-05-30).
+ */
+export interface WireToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+/** Anthropic ephemeral prompt-cache marker. OpenRouter passes this through to
+ * Anthropic verbatim on the OpenAI-compatible surface. Only the Claude adapter
+ * ever sets it; every other adapter leaves content parts unmarked. */
+export interface CacheControl {
+  type: 'ephemeral';
+  ttl?: '5m' | '1h';
+}
+
+/**
+ * One part of a multimodal message body (OpenAI shape). A plain-text message
+ * uses the `string` content form; a message carrying an image uses the array
+ * form with one `text` part and one or more `image_url` parts (data URL or
+ * remote URL). Every provider we curate accepts this on a `user` message.
+ * The optional `cache_control` marker is Claude-only (see CacheControl).
+ */
+export type WireContentPart =
+  | { type: 'text'; text: string; cache_control?: CacheControl }
+  | { type: 'image_url'; image_url: { url: string }; cache_control?: CacheControl };
+
 export interface WireMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  /** Plain text, or the multimodal array form for image input. */
+  content: string | WireContentPart[];
   name?: string;
+  /** Set on a `tool` message: the id of the assistant tool call it answers. */
   tool_call_id?: string;
+  /** Set on an `assistant` message: the tool calls it made this turn. */
+  tool_calls?: WireToolCall[];
+}
+
+/**
+ * Per-response token accounting, normalised to one shape across providers.
+ * Adapters extract this from the upstream `usage` object (which varies per
+ * provider) inside their `parseChunk`.
+ */
+export interface NormalisedUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Present when the provider reports reasoning/thinking tokens separately. */
+  reasoningTokens?: number;
+  /** Present when the provider reports prompt-cache hits. */
+  cachedTokens?: number;
 }
 
 export type StreamChunk =
   | { type: 'token'; text: string }
+  | { type: 'reasoning'; text: string }
   | { type: 'tool-call'; toolCallId: string; name: string; argumentsJson: string }
+  | { type: 'usage'; usage: NormalisedUsage }
   | { type: 'finish'; reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown' }
   | { type: 'error'; message: string };
+
+/**
+ * Engine → adapter intent for reasoning. Per-provider translation
+ * to body shape (`{reasoning:{enabled,effort}}` vs `{think:bool}` vs
+ * model-slug swap) is the adapter layer's responsibility.
+ */
+export type ReasoningIntent =
+  | { enabled: false }
+  | { enabled: true; effort?: 'low' | 'medium' | 'high' };
 
 export interface ProbeResult {
   ok: boolean;

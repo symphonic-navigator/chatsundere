@@ -1,9 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import type { ReactElement } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow, PersonaRow } from '../../src/boot/client-data-db';
-import { ChatStream } from '../../src/components/chat/ChatStream';
+import { ChatStream, MINDSPACE_FALLBACK } from '../../src/components/chat/ChatStream';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
 import type { StreamHandle } from '../../src/state/stream-manager.store';
+
+/**
+ * ChatStream pulls in useToggleBookmark (a TanStack mutation), so every render
+ * needs a QueryClient in context. This helper wraps the element in a fresh,
+ * retry-disabled client to keep the unit tests isolated.
+ */
+function renderWithQuery(element: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{element}</QueryClientProvider>);
+}
 
 const aurum: PersonaRow = {
   id: 'p1',
@@ -12,6 +24,7 @@ const aurum: PersonaRow = {
   colour: '#c9a84c',
   font: 'serif',
   instructions: '',
+  canonicalId: null,
   providerId: '',
   modelId: '',
   mindspaceId: null,
@@ -19,6 +32,8 @@ const aurum: PersonaRow = {
   textureOverride: null,
   temperature: 0.85,
   adultPersona: false,
+  chatsundereTonality: true,
+  contextWindow: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -55,7 +70,7 @@ describe('ChatStream', () => {
   it('renders messages in order with DateSeparator between days', () => {
     const day1 = new Date('2026-05-23T10:00:00').getTime();
     const day2 = new Date('2026-05-24T10:00:00').getTime();
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[userMsg('m1', 'first', day1), userMsg('m2', 'second', day2)]}
@@ -82,8 +97,9 @@ describe('ChatStream', () => {
       contentBuffer: [],
       pillBuffer: [],
       startedAt: Date.now(),
+      reusedDraft: false,
     };
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[draftMsg]}
@@ -98,7 +114,7 @@ describe('ChatStream', () => {
 
   it('scrolling up > 30px disables auto-follow', () => {
     useCurrentChatStore.getState().reset();
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[userMsg('m1', 'hi', 1)]}
@@ -117,10 +133,54 @@ describe('ChatStream', () => {
     expect(useCurrentChatStore.getState().autoFollowEnabled).toBe(false);
   });
 
+  it('copyMessageText excludes reasoning blocks from the clipboard', () => {
+    useCurrentChatStore.getState().reset();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const message: MessageRow = {
+      id: 'm-clip',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'reasoning', text: 'inner thought' },
+        { type: 'text', text: 'visible answer' },
+      ],
+      streamingState: 'complete',
+      bookmarked: false,
+      createdAt: Date.now(),
+    };
+
+    const { container } = renderWithQuery(
+      <ChatStream
+        chatId="c1"
+        messages={[message]}
+        pills={[]}
+        persona={aurum}
+        displayName="Chris"
+        streamHandle={null}
+      />,
+    );
+
+    // Expand the message so its MessageControls (with the Copy button) mount.
+    const msg = container.querySelector('[data-msg-id="m-clip"] .msg') as HTMLElement;
+    fireEvent.click(msg);
+
+    const copyBtn = container.querySelector(
+      '[data-msg-id="m-clip"] [data-ctrl="copy"]',
+    ) as HTMLButtonElement;
+    fireEvent.click(copyBtn);
+
+    expect(writeText).toHaveBeenCalledWith('visible answer');
+  });
+
   it('scrolling back into the bottom band re-enables auto-follow', () => {
     useCurrentChatStore.getState().reset();
     useCurrentChatStore.getState().setAutoFollow(false);
-    const { container } = render(
+    const { container } = renderWithQuery(
       <ChatStream
         chatId="c1"
         messages={[userMsg('m1', 'hi', 1)]}
@@ -137,5 +197,25 @@ describe('ChatStream', () => {
     // distance from bottom = 1000 - (590 + 400) = 10 → within 30 band
     fireEvent.scroll(stream);
     expect(useCurrentChatStore.getState().autoFollowEnabled).toBe(true);
+  });
+});
+
+describe('MINDSPACE_FALLBACK', () => {
+  it('has all ResolvedMindspace fields populated (no undefined)', () => {
+    expect(MINDSPACE_FALLBACK.id).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.displayName).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.texture).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.bg).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.surfaceBase).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accent).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentSubtle).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentBorder).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentBorderActive).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.accentGlow).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.primary).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.secondary).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.muted).toBeTruthy();
+    expect(MINDSPACE_FALLBACK.palette.text.ghost).toBeTruthy();
   });
 });

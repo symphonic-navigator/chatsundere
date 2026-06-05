@@ -48,6 +48,7 @@ describe('usePersonas + CUD mutations', () => {
         colour: '#c9a84c',
         font: 'serif',
         instructions: 'be present',
+        canonicalId: null,
         providerId: 'nano-gpt-row',
         modelId: 'deepseek-v4-flash',
         mindspaceId: null,
@@ -55,6 +56,8 @@ describe('usePersonas + CUD mutations', () => {
         textureOverride: null,
         temperature: 0.85,
         adultPersona: false,
+        chatsundereTonality: true,
+        contextWindow: null,
       });
       createdId = created.id;
     });

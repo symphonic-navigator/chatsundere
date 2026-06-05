@@ -91,7 +91,8 @@ chatsundere/
 │   ├── specs/             Design specs (this file's spec lives here)
 │   └── plans/             Implementation plans
 └── obsidian/
-    ├── STATUS.md          Single-point orientation (read first, update last)
+    ├── STATUS-CLIENT-ONLY.md  Client/standalone-mode orientation (read first, update last)
+    ├── STATUS-BACKEND.md      Server-side orientation (read first, update last)
     ├── briefs/            Lyra design briefs
     ├── decisions/         ADRs
     └── insights/          Liz's project journal
@@ -108,7 +109,7 @@ Three documentation directories with deliberately separate audiences:
   - `superpowers/specs/` — design specs (this file was implemented from one).
   - `superpowers/plans/` — implementation plans tied to a spec.
 - **`obsidian/`** — the vault. Audience: me, Lyra, and Chris over time. Also the home for *all* longer-form Markdown documentation — anything that would have lived in `docs/` under the brief's original assumption (architecture, onboarding, deployment, releases). Linkable from the public site if and when we choose to surface a given file.
-  - `obsidian/STATUS.md` — single-point orientation: what's done, what's briefed-but-unimplemented, what we agreed to do next. See §16.
+  - `obsidian/STATUS-CLIENT-ONLY.md` + `obsidian/STATUS-BACKEND.md` — orientation, split by side: client/standalone-mode work vs server-side work. What's done, what's briefed-but-unimplemented, what we agreed to do next. See §16.
   - `obsidian/ARCHITECTURE.md`, `obsidian/ONBOARDING.md` (and future `DEPLOYMENT.md`, `RELEASE-PROCESS.md`, `SYNC.md`, `PROXY.md`) — top-level Markdown documentation.
   - `obsidian/briefs/` — Lyra design briefs (peer-reviewed by Chris before landing here).
   - `obsidian/decisions/` — ADRs, sequentially numbered, Michael Nygard style.
@@ -172,6 +173,7 @@ Critical and high findings are not deferrable without explicit Chris sign-off in
 - Backend tests via Bun's built-in runner. Frontend tests via Vitest.
 - No comments that restate the code. Comments explain non-obvious *why*, not *what*.
 - Every feature spec ends with a "Manual verification" section listing device-tested steps Chris will run himself.
+- **Curation fixtures grow with inference.** The curation verification harness (the standardised conversation-suite) grows with the capabilities of the inference-runner. Adapters are validated against real end-to-end protocol behaviour, never merely structurally, and never in CI (provider keys never enter CI). See the [`/curate` skill](.claude/skills/curate/).
 
 ---
 
@@ -193,7 +195,9 @@ These are not nice-to-haves; they are how Chatsundere differentiates from generi
 
 ## 12. Versioning & Releases
 
-- The project is **private** until we can chat through 2-3 mainstream upstream providers with a few popular models. First public release at that point is **v0.1.0**.
+- The project is **private** until the Block-2 tool/upload/artifact scope is complete. First public release at that point is **v0.1.0**, a deliberately **local-only alpha** (no account, no sync). See [ADR 0031](obsidian/decisions/0031-eight-block-roadmap-to-beta.md) and the living [ROADMAP](obsidian/ROADMAP.md).
+- The original "2-3 *mainstream* providers" gate is **relaxed**: freedom-/privacy-oriented providers are a deliberate identity, not a stopgap. v0.1.0 is gated on feature scope, not on onboarding OpenAI/Anthropic/Google.
+- Version gates: **v0.1.0** (Block 2, local-only alpha), **v0.2.0** (Block 5, knowledge base), **v0.3.0** (Block 6, encrypted backend live), **v0.4.0** (Block 8, beta).
 - SemVer from v0.1.0 onwards.
 - Manual release notes per release; format will be locked in when we hit v0.1.0.
 - Versioning automation: Chris has ideas in flight. A future ADR will fix the approach.
@@ -260,14 +264,14 @@ Load these when their topic comes up. Do not preload.
 
 ---
 
-## 16. Session Lifecycle — STATUS.md Protocol
+## 16. Session Lifecycle — STATUS Protocol
 
-`obsidian/STATUS.md` is the single point of orientation across sessions. It carries three things: what is done, what is briefed-but-not-yet-implemented, and what we agreed to do next. Anything more detailed lives in [`follow-ups-index.md`](obsidian/insights/follow-ups-index.md), ADRs, briefs, or git history.
+Orientation across sessions lives in two files, split by side: `obsidian/STATUS-CLIENT-ONLY.md` (client/standalone-mode work) and `obsidian/STATUS-BACKEND.md` (server-side work). Each carries three things: what is done, what is briefed-but-not-yet-implemented, and what we agreed to do next. Anything more detailed lives in [`follow-ups-index.md`](obsidian/insights/follow-ups-index.md), ADRs, briefs, or git history.
 
-**Start of every session:** read `STATUS.md` before anything else. Synthesise it in two sentences to Chris so we both agree on where we are before we touch a file. If the synthesis surprises Chris, the file is stale — pause and update it before continuing.
+**Start of every session:** read both STATUS files before anything else. Synthesise them in two sentences to Chris so we both agree on where we are before we touch a file. If the synthesis surprises Chris, the file is stale — pause and update it before continuing.
 
-**End of every session:** update `STATUS.md` to reflect what changed. Move items between the "Done", "Briefed", and "Doing now" sections. Refresh the "Next session" block. Update the `Last updated:` line. Commit the change alongside or just after the squash it summarises.
+**End of every session:** update the relevant STATUS file to reflect what changed. Move items between the "Done", "Briefed", and "Doing now" sections. Refresh the "Next session" block. Update the `Last updated:` line. Commit the change alongside or just after the squash it summarises.
 
-**Stale-detection rule:** if a session adds or removes work that the file doesn't reflect, stop and update it — even mid-session. A stale `STATUS.md` is worse than no file; it lies confidently.
+**Stale-detection rule:** if a session adds or removes work that the file doesn't reflect, stop and update it — even mid-session. A stale STATUS file is worse than no file; it lies confidently.
 
 Discipline is mine, not Chris's. There is no git hook fallback.

@@ -17,7 +17,7 @@ beforeEach(async () => {
 describe('chatsundere_client_data Dexie schema', () => {
   it('opens cleanly on a fresh origin', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(11);
   });
 
   it('seeds seven built-in mindspaces on first open', async () => {
@@ -44,7 +44,7 @@ describe('chatsundere_client_data Dexie schema', () => {
     const aurum = await db.mindspaces.where('displayName').equals('Aurum').first();
     expect(aurum).toBeDefined();
     expect(settings?.defaultMindspaceId).toBe(aurum?.id);
-    expect(settings?.globalUnlockerPrompt).toBe('');
+    expect(settings?.globalInstructions).toBe('');
     expect(settings?.globalAboutMe).toBe('');
     expect(settings?.corsProxy).toBeNull();
   });

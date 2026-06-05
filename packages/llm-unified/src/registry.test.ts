@@ -21,7 +21,7 @@ function makeDef(id: string, sortPriority = 100): ProviderDefinition {
     probe: { path: '/models', method: 'GET' },
     secretFields: new Set(['api_key']),
     corsHint: 'direct',
-    knownModels: [],
+    offerings: [],
     sortPriority,
   };
 }

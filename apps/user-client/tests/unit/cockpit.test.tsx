@@ -1,10 +1,17 @@
-import type { KnownModel } from '@chatsundere/llm-unified';
+import { getOffering } from '@chatsundere/llm-unified';
 import { fireEvent, render } from '@testing-library/react';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
+
+// The Cockpit resolves the active web-search tiers via a TanStack-query-backed
+// hook; this unit test exercises the cockpit controls, not the depth picker (see
+// CockpitMenu.test), so stub the hook to keep it free of the query machinery.
+vi.mock('../../src/lib/use-active-search-tiers.js', () => ({
+  useActiveSearchTiers: () => undefined,
+}));
 
 const aurum: PersonaRow = {
   id: 'p1',
@@ -13,6 +20,7 @@ const aurum: PersonaRow = {
   colour: '#c9a84c',
   font: 'serif',
   instructions: '',
+  canonicalId: null,
   providerId: '',
   modelId: '',
   mindspaceId: null,
@@ -20,24 +28,21 @@ const aurum: PersonaRow = {
   textureOverride: null,
   temperature: 0.85,
   adultPersona: false,
+  chatsundereTonality: true,
+  contextWindow: null,
   createdAt: 1,
   updatedAt: 1,
 };
-const model: KnownModel = {
-  id: 'm',
-  displayName: 'M',
-  contextWindow: 1000,
-  reasoning: { kind: 'optional', defaultOn: true, replayReasoning: false },
-  vision: false,
-  tools: false,
-};
+// nano-gpt deepseek-v4-flash: steps reasoning, no vision, tools
+// biome-ignore lint/style/noNonNullAssertion: test fixture — this slug is guaranteed to exist in the catalogue
+const offering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
 
 describe('Cockpit', () => {
   it('renders two rows with the four control buttons in row 1', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -56,7 +61,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -72,7 +77,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -89,7 +94,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -107,7 +112,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -125,7 +130,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -141,7 +146,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={onChange}
         onSend={vi.fn()}
@@ -157,7 +162,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue="hello"
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -166,7 +171,7 @@ describe('Cockpit', () => {
     );
     const btn = container.querySelector('[data-dual="action"]') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    expect(btn.title).toMatch(/aurum.*antworte|antworte/i);
+    expect(btn.title).toMatch(/aurum.*replying|still replying/i);
   });
 
   it('Send invokes onSend then clears via onDraftChange when text present', () => {
@@ -175,7 +180,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue="hello there"
         onDraftChange={onChange}
         onSend={onSend}
@@ -193,7 +198,7 @@ describe('Cockpit', () => {
     const { container } = render(
       <Cockpit
         persona={aurum}
-        model={model}
+        offering={offering}
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
@@ -202,5 +207,35 @@ describe('Cockpit', () => {
     );
     const btn = container.querySelector('[data-dual="action"]') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
+  });
+
+  it('renders data-pinned="true" when pinned, "false" when not', () => {
+    useCurrentChatStore.getState().reset();
+    useCurrentChatStore.setState({ isPinned: true });
+    let { container, unmount } = render(
+      <Cockpit
+        persona={aurum}
+        offering={offering}
+        draftValue=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        isStreamLive={false}
+      />,
+    );
+    expect(container.querySelector('.cockpit')?.getAttribute('data-pinned')).toBe('true');
+    unmount();
+
+    useCurrentChatStore.setState({ isPinned: false });
+    ({ container } = render(
+      <Cockpit
+        persona={aurum}
+        offering={offering}
+        draftValue=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        isStreamLive={false}
+      />,
+    ));
+    expect(container.querySelector('.cockpit')?.getAttribute('data-pinned')).toBe('false');
   });
 });

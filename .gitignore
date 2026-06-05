@@ -148,7 +148,17 @@ infra/compose.prod.yml
 .turbo/
 .superpowers/
 
-# data exchange
+# Data exchange / analysis artefacts
 analysis/
 screenshots/
 
+# Visual examples
+visuals/
+
+# Dev-only IndexedDB dumps written by the user-client's DevDumpButton —
+# Claude / debug sessions only, never committed.
+dumps/
+
+# === Claude Code (transient session state) ===
+.claude/scheduled_tasks.lock
+.claude/worktrees/

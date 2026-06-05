@@ -58,6 +58,7 @@ describe('Circle route', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: 'be present',
+      canonicalId: null,
       providerId: 'nope',
       modelId: 'm',
       mindspaceId: null,
@@ -65,6 +66,8 @@ describe('Circle route', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });

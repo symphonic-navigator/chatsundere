@@ -9,6 +9,7 @@ import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { AboutSection } from './account-sections/about-section.js';
 import { AccountSection } from './account-sections/account-section.js';
 import { AuthMethodsSection } from './account-sections/auth-methods-section.js';
+import { DevToolsSection } from './account-sections/dev-tools-section.js';
 import { ServerLinkingSection } from './account-sections/server-linking-section.js';
 
 /**
@@ -77,6 +78,12 @@ export function AccountPage(): JSX.Element {
       <AccordionCard icon="ⓘ" label="About" meta="Version · licence · docs">
         <AboutSection />
       </AccordionCard>
+
+      {import.meta.env.DEV ? (
+        <AccordionCard icon="⌥" label="Developer tools" meta="Dev-only · debug actions">
+          <DevToolsSection />
+        </AccordionCard>
+      ) : null}
     </section>
   );
 }

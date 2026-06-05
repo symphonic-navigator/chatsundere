@@ -86,6 +86,7 @@ describe('client-data-db v3 migration', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: 'x',
+      canonicalId: null,
       providerId: 'pr-1',
       modelId: 'm-1',
       mindspaceId: null,
@@ -93,6 +94,8 @@ describe('client-data-db v3 migration', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

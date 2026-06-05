@@ -49,6 +49,7 @@ function plant(streams: Array<{ chatId: string; personaId: string }>): void {
       contentBuffer: [],
       pillBuffer: [],
       startedAt: Date.now() + i,
+      reusedDraft: false,
     });
   }
   useStreamManagerStore.setState({ streams: map });
@@ -70,6 +71,7 @@ describe('BackgroundStreamBadge', () => {
       colour: '#c9a84c',
       font: 'serif',
       instructions: '',
+      canonicalId: null,
       providerId: 'pr',
       modelId: 'm',
       mindspaceId: null,
@@ -77,6 +79,8 @@ describe('BackgroundStreamBadge', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
       createdAt: 1,
       updatedAt: 1,
     });

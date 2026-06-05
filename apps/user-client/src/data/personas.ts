@@ -82,20 +82,25 @@ export function useDeletePersona() {
   return useMutation({
     mutationFn: async (id: string) => {
       const db = getClientDataDb();
-      await db.transaction('rw', db.personas, db.chats, db.messages, db.pills, async () => {
-        const chats = await db.chats.where('personaId').equals(id).toArray();
-        const chatIds = chats.map((c) => c.id);
-        if (chatIds.length > 0) {
-          const messages = await db.messages.where('chatId').anyOf(chatIds).toArray();
-          const messageIds = messages.map((m) => m.id);
-          if (messageIds.length > 0) {
-            await db.pills.where('messageId').anyOf(messageIds).delete();
+      await db.transaction(
+        'rw',
+        [db.personas, db.chats, db.messages, db.pills, db.personaAvatars],
+        async () => {
+          const chats = await db.chats.where('personaId').equals(id).toArray();
+          const chatIds = chats.map((c) => c.id);
+          if (chatIds.length > 0) {
+            const messages = await db.messages.where('chatId').anyOf(chatIds).toArray();
+            const messageIds = messages.map((m) => m.id);
+            if (messageIds.length > 0) {
+              await db.pills.where('messageId').anyOf(messageIds).delete();
+            }
+            await db.messages.where('chatId').anyOf(chatIds).delete();
+            await db.chats.bulkDelete(chatIds);
           }
-          await db.messages.where('chatId').anyOf(chatIds).delete();
-          await db.chats.bulkDelete(chatIds);
-        }
-        await db.personas.delete(id);
-      });
+          await db.personaAvatars.delete(id);
+          await db.personas.delete(id);
+        },
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.personas });

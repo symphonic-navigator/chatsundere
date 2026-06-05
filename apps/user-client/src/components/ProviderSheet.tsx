@@ -4,11 +4,20 @@ import { getProvider, probeProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useDeleteProvider, useProviders, useUpsertProvider } from '../data/providers.js';
-import { useSettings, useUpdateSettings } from '../data/settings.js';
+import { useSettings } from '../data/settings.js';
 import { openSecret, sealSecret } from '../lib/secrets.js';
 
 interface Props {
-  templateId: 'nano-gpt' | 'novita' | 'ollama-cloud';
+  templateId:
+    | 'chutes'
+    | 'tensorix'
+    | 'mistral'
+    | 'wafer'
+    | 'xai'
+    | 'novita'
+    | 'ollama-cloud'
+    | 'nano-gpt'
+    | 'openrouter';
   onClose: () => void;
 }
 
@@ -25,14 +34,11 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
   const settings = useSettings();
   const upsert = useUpsertProvider();
   const del = useDeleteProvider();
-  const updateSettings = useUpdateSettings();
   const mk = useSessionStore((s) => s.mk);
 
   const existing = providers.data?.find((p) => p.templateId === templateId);
 
   const [apiKey, setApiKey] = useState('');
-  const [proxyUrl, setProxyUrl] = useState(settings.data?.corsProxy?.url ?? '');
-  const [proxyShared, setProxyShared] = useState('');
   const [revealKey, setRevealKey] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [saving, setSaving] = useState(false);
@@ -44,6 +50,13 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
     }
     if (!mk || !definition) {
       setStatus({ kind: 'error', reason: 'No master key in session — re-login required' });
+      return;
+    }
+    if (requiresProxy && !settings.data?.corsProxy) {
+      setStatus({
+        kind: 'error',
+        reason: 'Set a CORS proxy first (My Settings → Upstream Providers)',
+      });
       return;
     }
     setSaving(true);
@@ -76,23 +89,17 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
         });
       }
 
-      // For proxy-required providers: seal the shared key locally and use
-      // that local variable for the probe. Do NOT re-read from
-      // settings.data.corsProxy — TanStack-Query cache is stale right after
-      // a mutateAsync write.
-      let sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
-      if (requiresProxy && proxyUrl && proxyShared) {
-        sealedShared = await sealSecret(proxyShared, mk, 'cors-proxy/shared-key');
-        await updateSettings.mutateAsync({
-          corsProxy: { url: proxyUrl, sharedKey: sealedShared },
-        });
-      }
-
-      const decryptedKey = await openSecret(stableSealedKey, mk, stableSlotId);
+      // Proxy-required providers reuse the global CORS proxy configured in
+      // My Settings → Upstream Providers. We only read it here for the probe;
+      // it is never sealed or written from this sheet.
+      const sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
       const decryptedProxyKey =
         requiresProxy && sealedShared
           ? await openSecret(sealedShared, mk, 'cors-proxy/shared-key')
           : null;
+      const corsProxyUrl = requiresProxy ? (settings.data?.corsProxy?.url ?? null) : null;
+
+      const decryptedKey = await openSecret(stableSealedKey, mk, stableSlotId);
 
       const config = {
         baseUrl: definition.baseUrl,
@@ -102,7 +109,7 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
         definition,
         config,
         apiKey: decryptedKey,
-        corsProxyUrl: requiresProxy ? proxyUrl || settings.data?.corsProxy?.url || null : null,
+        corsProxyUrl,
         corsProxyKey: decryptedProxyKey,
       });
 
@@ -151,7 +158,6 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
             </div>
             <div>
               <div className="font-display text-sm text-paper">{displayName}</div>
-              <div className="text-xs text-paper-soft">Text capability</div>
             </div>
           </div>
           <button
@@ -195,54 +201,6 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
           </div>
         </div>
 
-        {requiresProxy ? (
-          <div className="mb-3 space-y-2 border-t border-white/5 pt-3">
-            <div>
-              <label
-                htmlFor="ps-proxy-url"
-                className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-              >
-                Proxy URL
-              </label>
-              <input
-                id="ps-proxy-url"
-                type="text"
-                placeholder="https://example.com"
-                value={proxyUrl}
-                onChange={(e) => setProxyUrl(e.target.value)}
-                autoComplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                name=""
-                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="ps-proxy-shared"
-                className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-              >
-                Shared key
-              </label>
-              <input
-                id="ps-proxy-shared"
-                type="password"
-                placeholder="shared secret"
-                value={proxyShared}
-                onChange={(e) => setProxyShared(e.target.value)}
-                autoComplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                name=""
-                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
-              />
-            </div>
-            <p className="text-[11px] text-paper-soft">
-              Required for Ollama Cloud. Stored once and reused for any provider that needs a proxy.
-            </p>
-          </div>
-        ) : null}
-
         {status.kind !== 'idle' ? (
           <div
             data-testid="sheet-status"
@@ -257,7 +215,7 @@ export function ProviderSheet({ templateId, onClose }: Props): JSX.Element {
             {status.kind === 'probing'
               ? 'Probing…'
               : status.kind === 'ok'
-                ? '✓ Key valid'
+                ? '✓ Key valid · LLM unlocked'
                 : `✗ ${(status as { kind: 'error'; reason: string }).reason}`}
           </div>
         ) : null}

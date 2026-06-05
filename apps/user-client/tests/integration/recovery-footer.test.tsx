@@ -45,6 +45,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     colour: '#fff',
     font: 'serif',
     instructions: 'inst',
+    canonicalId: null,
     providerId: 'pr',
     modelId: 'deepseek/deepseek-v4-flash',
     mindspaceId: null,
@@ -52,6 +53,8 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 1,
     updatedAt: 1,
   });

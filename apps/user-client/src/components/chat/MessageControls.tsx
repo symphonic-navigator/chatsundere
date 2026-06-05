@@ -6,6 +6,10 @@ interface Props {
   onCopy: () => void;
   onBookmark: () => void;
   onRegenerate?: () => void;
+  /** Fork the chat at this message. */
+  onBranch?: () => void;
+  /** Disable branching (e.g. while a stream is live for this chat). */
+  branchDisabled?: boolean;
 }
 
 function stop(e: React.MouseEvent): void {
@@ -19,8 +23,9 @@ export function MessageControls(p: Props): JSX.Element {
       <button
         type="button"
         data-ctrl="branch"
-        disabled
-        title="Branching arrives later"
+        onClick={p.onBranch}
+        disabled={p.branchDisabled || !p.onBranch}
+        title={p.branchDisabled ? 'Branching paused while replying' : 'Branch this chat from here'}
         className="ctrl-btn"
       >
         ✎ Branch

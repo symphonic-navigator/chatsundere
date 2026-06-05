@@ -1,0 +1,137 @@
+# Model Curation Record — GLM 5.1
+
+> Curation record. See [[../providers/chutes]] for the shared chutes mechanics.
+
+- **Identity:** GLM 5.1 · family `glm`
+- **T/R/V:** tools ✅ · reasoning ✅ · vision ❌ (text-only)
+- **replayReasoning:** false (soft-CoT — never replays its own thinking)
+- **🕊️ Freedom:** free — `freedomOriented: true` (Chris, 2026-05-30: z-ai/Zhipu
+  open-weight), and every deployment below is `freedomOrientedDeployment: true`.
+
+GLM 5.1 is offered on three providers, each with a hand-written catalogue
+adapter (`confidence: 'verified'`). The reasoning *mechanism* differs per
+provider — this is the whole reason the offerings are not on the generic path.
+
+## Offering — chutes
+
+- **slug:** `zai-org/GLM-5.1-TEE` · **adapterId:** `chutes:zai-org/GLM-5.1-TEE`
+- **context:** recommended/max 202 752
+- **reasoning control:** `reasoning_effort` — `low`/`medium`/`high` select effort;
+  **off = `chat_template_kwargs: { enable_thinking: false }`** (steps,
+  `offStep: 'off'`). Omitting the field does **not** disable thinking, and the
+  chutes off switch is `chat_template_kwargs`, NOT `reasoning_effort: 'none'` —
+  the latter 400s Kimi, so it was replaced uniformly (see [[../providers/chutes]]).
+  GLM (unlike chutes DeepSeek/Gemma) does surface `reasoning_content`.
+- **tool calls:** single block, concurrent with reasoning.
+- 🔒 **Privacy:** yes (chutes TEE)
+
+## Offering — nano-gpt
+
+- **slug:** `zai-org/glm-5.1` · **adapterId:** `nano-gpt:zai-org/glm-5.1`
+- **context:** recommended/max 200 000
+- **reasoning control:** **model-slug swap** (steps, `offStep: 'off'`). Bare
+  `zai-org/glm-5.1` reasons **not at all** (clean off); `zai-org/glm-5.1:thinking`
+  reasons and honours `reasoning_effort` (low/medium/high). Thinking streams on
+  the **`reasoning`** delta channel (not `reasoning_content`).
+- **tool calls:** single block, concurrent with reasoning.
+- **usage:** `reasoning_tokens` reported both top-level and under
+  `completion_tokens_details`; adapter prefers top-level.
+- 🔒 **Privacy:** no TEE / no ZDR (bare nano-gpt deployment).
+- A `TEE/glm-5.1` (+ `TEE/glm-5.1-thinking`) deployment also exists on nano-gpt;
+  not curated here (separate offering, future work).
+
+## Offering — novita
+
+- **slug:** `zai-org/glm-5.1` · **adapterId:** `novita:zai-org/glm-5.1`
+- **context:** recommended/max 200 000
+- **reasoning control:** **top-level boolean `enable_thinking`** (toggle,
+  `defaultOn: true`). Probed empirically: the heuristic `reasoning: {enabled}`
+  flag, `chat_template_kwargs.enable_thinking` and `reasoning_effort: "none"`
+  **all failed to disable** thinking; only `enable_thinking: false` does. No
+  granular effort buckets, hence a toggle, not steps. Thinking streams on
+  `reasoning_content`.
+- **tool calls:** single block, concurrent with reasoning.
+- **usage:** `reasoning_tokens` nested under `completion_tokens_details`.
+- 🔒 **Privacy:** no TEE / no ZDR.
+
+## Offering — wafer
+
+- **slug:** `GLM-5.1` · **adapterId:** `wafer:GLM-5.1`
+- **context:** recommended/max 202 752
+- **reasoning control:** **`reasoning_effort`** — `'none'` is the genuine off
+  (reasoning-absent green), `low`/`medium`/`high` enable. Effort does **not**
+  modulate the trace (probed: low 1102 / med 808 / high 943 reasoning tokens,
+  non-monotonic), so a **`toggle`** (defaultOn), not steps. Thinking streams on
+  the `reasoning_content` channel.
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under
+  `completion_tokens_details`, cached under `prompt_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention). The adapter sends
+  `Wafer-ZDR: required` so the badge is truthful (always on — Chris, 2026-05-31).
+  No TEE. See [[../providers/wafer]].
+
+## Offering — tensorix — `fixed-on` (reasoning cannot be disabled)
+
+- **slug:** `z-ai/glm-5.1` · **adapterId:** `tensorix:z-ai/glm-5.1`
+- **context:** recommended/max 131 072
+- **reasoning control:** **`fixed-on`.** `reasoning_effort: 'none'` does **not**
+  suppress reasoning — an off-leak probe with **unique** prompts reasoned 6/6
+  (the "off only hides" case, exactly like wafer's Kimi). Earlier suite runs that
+  showed `reasoning-absent` green were **Tensorix response-cache artefacts** (the
+  repeated off-prompt returned a cached trace-free reply); with unique prompts the
+  off is not real. Modelled `fixed-on` rather than a toggle that would falsely
+  promise an off. `reasoning_content` channel.
+- **tool calls:** streaming, concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **ZDR** (zero data retention, EU-sovereign, always-on per
+  policy). No TEE. See [[../providers/tensorix]].
+- **Validation (2026-05-31):** reasons reliably on unique prompts (4/4 medium);
+  tools + memory + usage green; text-only. Off not offered (fixed-on).
+
+## Offering — openrouter — `toggle` (clean off, unlike tensorix/wafer)
+
+- **slug:** `z-ai/glm-5.1` · **adapterId:** `openrouter:z-ai/glm-5.1`
+- **context:** recommended/max 202 752 (OpenRouter reported context).
+- **reasoning control:** **`toggle`** (defaultOn). The notable divergence: on
+  Tensorix and wafer GLM 5.1 is `fixed-on` (its off only hides — reasoning leaks
+  6/6), but on OpenRouter the unified `reasoning: { enabled: false }` is a
+  **genuine off** (0 reasoning tokens, empty channel — probed live 2026-05-31).
+  On emits ~153 reasoning tokens on the **`reasoning`** channel (OpenRouter
+  normalises GLM's native `reasoning_content` onto `reasoning`). See
+  [[../providers/openrouter]].
+- **tool calls:** streaming (fragmented args, reassembled), concurrent with reasoning.
+- **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`.
+- 🔒 **Privacy:** **no** — US router/aggregator, not ZDR/TEE, trust per-route.
+- 🕊️ **Freedom:** `freedomOrientedDeployment: null` (pending Chris).
+- **Validation (2026-05-31):** core 22/22 green, including `reasoning-absent` on
+  the off permutation (the clean off confirmed end-to-end); text-only.
+
+## Validation
+
+Full conversation-suite live (`makeLiveBinding`, keys under `keys/`) across every
+reasoning permutation: chutes 44/44, nano-gpt 44/44, novita 22/22 — all green
+(no HTTP/stream error, tool fires + valid JSON args, usage normalised, reasoning
+present/absent on the correct channel per permutation, memory carried through).
+**wafer (2026-05-31):** core 22/22 green (reasoning off + on, tools, memory,
+usage).
+
+## Notes
+
+`family: glm` — GLM 5 also exists on all three providers. No lineage axis
+(GLM 5 / 5.1 as one logical model) per the data-model design (D6); `family` gives
+loose grouping only. See [[glm-5]].
+
+## Repair history — reasoning "off" was leaking thinking (chutes, 2026-05-30)
+
+Symptom: choosing "off" in the cockpit still produced a CoT trace. The forward
+plumbing was correct (cockpit → `{enabled:false}` → adapter), but the
+`chutesAdapter` *omitted* `reasoning_effort` for off, assuming "omitted = off".
+Probed live: baseline (no field) → reasoning present; `reasoning_effort: "none"`
+→ absent. So GLM-family models on chutes reason by default. The first fix used
+**`reasoning_effort: "none"`** as the off-switch.
+
+**Superseded (later 2026-05-30):** `reasoning_effort: "none"` turned out to 400
+chutes Kimi-K2.6-TEE (especially with an image). The chutes off switch was
+therefore moved uniformly to **`chat_template_kwargs: { enable_thinking: false }`**,
+which disables every chutes model (GLM included) and works on image turns. GLM
+behaviour is unchanged (still off when off); see [[../providers/chutes]].

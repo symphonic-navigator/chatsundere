@@ -3,6 +3,7 @@
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
+import type { WebBackendSetting } from '../lib/web-backends.js';
 
 const DB_NAME = 'chatsundere_client_data';
 
@@ -11,13 +12,14 @@ const DB_NAME = 'chatsundere_client_data';
 export interface SettingsRow {
   id: 1;
   displayName: string;
-  globalUnlockerPrompt: string;
+  globalInstructions: string;
   globalAboutMe: string;
   defaultMindspaceId: string;
   userTexture: MindspaceTexture;
   animationsEnabled: boolean;
   adultMode: 'nsfw' | 'sfw';
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
+  webInterfacing: { search: WebBackendSetting; fetch: WebBackendSetting };
   createdAt: number;
   updatedAt: number;
 }
@@ -70,6 +72,8 @@ export interface PersonaRow {
   colour: string;
   font: 'sans' | 'serif' | 'cursive';
   instructions: string;
+  /** Canonical model id (Slice 2). null = not set → user must re-pick. */
+  canonicalId: string | null;
   providerId: string;
   modelId: string;
   mindspaceId: string | null;
@@ -77,6 +81,9 @@ export interface PersonaRow {
   textureOverride: MindspaceTexture | null;
   temperature: number;
   adultPersona: boolean;
+  chatsundereTonality: boolean;
+  /** Per-persona context window in tokens. null = use the offering's recommended. */
+  contextWindow: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -92,7 +99,10 @@ export interface ChatRow {
   draftInput: string; // NEW — Phase 3 cockpit autosave
 }
 
-export type ContentBlock = { type: 'text'; text: string } | { type: 'pill'; pillId: string };
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'pill'; pillId: string }
+  | { type: 'reasoning'; text: string };
 
 export interface MessageRow {
   id: string;
@@ -101,6 +111,10 @@ export interface MessageRow {
   contentBlocks: ContentBlock[];
   createdAt: number;
   bookmarked: boolean;
+  /** Custom bookmark name. `null`/absent ⇒ derive the default snippet from
+   *  the message text. Non-indexed: Dexie stores it schemalessly, so adding
+   *  it needs no version bump. */
+  bookmarkLabel?: string | null;
   streamingState: 'complete' | 'incomplete';
 }
 
@@ -114,6 +128,24 @@ export interface PillRow {
   createdAt: number;
 }
 
+export interface AvatarCrop {
+  /** Pan as a fraction of the display size; 0 = centred. */
+  x: number;
+  y: number;
+  /** Cover-scale multiplier; 1 = cover the box exactly. */
+  zoom: number;
+}
+
+export interface PersonaAvatarRow {
+  personaId: string; // PK, 1:1 with a persona
+  blob: Blob; // downscaled FULL image (not pre-cropped)
+  mime: string;
+  width: number; // natural width of the stored image
+  height: number; // natural height of the stored image
+  crop: AvatarCrop;
+  updatedAt: number;
+}
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -124,6 +156,7 @@ class ClientDataDb extends Dexie {
   chats!: Table<ChatRow, string>;
   messages!: Table<MessageRow, string>;
   pills!: Table<PillRow, string>;
+  personaAvatars!: Table<PersonaAvatarRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -248,6 +281,108 @@ class ClientDataDb extends Dexie {
           }
         }
       });
+
+    // v7 — Phase 4 chain-of-thought display. Schema-structurally identical
+    // to v6: `contentBlocks` is a non-indexed JSON column and accepts the
+    // widened ContentBlock union (now including `{type:'reasoning',text}`)
+    // without any index changes. The bump is a code-capability marker:
+    // "this build knows about reasoning blocks". No upgrade callback needed.
+    this.version(7).stores({
+      settings: 'id',
+      providers: 'id, templateId, enabled',
+      mindspaces: 'id, builtIn, displayName',
+      personas: 'id, providerId',
+      chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+      messages: 'id, chatId, [chatId+createdAt]',
+      pills: 'id, messageId',
+    });
+
+    // Version 8 — Slice 2: personas gain a non-indexed `canonicalId`. Clean
+    // break: rows from v7 have no canonicalId; the editor treats that as
+    // "model not set" and prompts a re-pick. No upgrade callback needed.
+    this.version(8).stores({
+      settings: 'id',
+      providers: 'id, templateId, enabled',
+      mindspaces: 'id, builtIn, displayName',
+      personas: 'id, providerId',
+      chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+      messages: 'id, chatId, [chatId+createdAt]',
+      pills: 'id, messageId',
+    });
+
+    // Version 9 — system-prompt builder v2. Rename the settings "unlocker"
+    // field and give personas a `chatsundereTonality` toggle (default on).
+    this.version(9)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            s.globalInstructions = s.globalUnlockerPrompt ?? '';
+            s.globalUnlockerPrompt = undefined;
+          });
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            p.chatsundereTonality = true;
+          });
+      });
+
+    // Version 10 — persona-settings: per-persona context window + avatars.
+    // personas gain a non-indexed `contextWindow` (backfilled null); a new
+    // `personaAvatars` table holds the downscaled image + crop metadata.
+    this.version(10)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+        personaAvatars: 'personaId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            p.contextWindow = null;
+          });
+      });
+
+    // Version 11 — web-interfacing integration spine. Settings gain a
+    // non-indexed `webInterfacing` block selecting the web search/fetch
+    // backends (both null until the user configures them).
+    this.version(11)
+      .stores({
+        settings: 'id',
+        providers: 'id, templateId, enabled',
+        mindspaces: 'id, builtIn, displayName',
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+        messages: 'id, chatId, [chatId+createdAt]',
+        pills: 'id, messageId',
+        personaAvatars: 'personaId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            s.webInterfacing = { search: null, fetch: null };
+          });
+      });
   }
 }
 
@@ -349,13 +484,14 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
       await db.settings.add({
         id: 1,
         displayName: '',
-        globalUnlockerPrompt: '',
+        globalInstructions: '',
         globalAboutMe: '',
         defaultMindspaceId: aurumId,
         userTexture: 'cloudy',
         animationsEnabled: true,
         adultMode: 'nsfw',
         corsProxy: null,
+        webInterfacing: { search: null, fetch: null },
         createdAt: now,
         updatedAt: now,
       });

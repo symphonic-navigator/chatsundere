@@ -52,6 +52,7 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       colour: '#b33a5e',
       font: 'sans',
       instructions: 'i',
+      canonicalId: null,
       providerId: 'pv',
       modelId: 'm',
       mindspaceId: null,
@@ -59,6 +60,8 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -144,6 +147,7 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       colour: '#fff',
       font: 'sans',
       instructions: 'i',
+      canonicalId: null,
       providerId: 'pv',
       modelId: 'm',
       mindspaceId: null,
@@ -151,6 +155,8 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       textureOverride: null,
       temperature: 0.85,
       adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
       createdAt: now,
       updatedAt: now,
     });

@@ -22,6 +22,7 @@ async function seedPersonas() {
     colour: '#fff',
     font: 'serif',
     instructions: 'x',
+    canonicalId: null,
     providerId: 'np',
     modelId: 'm',
     mindspaceId: null,
@@ -29,6 +30,8 @@ async function seedPersonas() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -39,6 +42,7 @@ async function seedPersonas() {
     colour: '#fff',
     font: 'serif',
     instructions: 'x',
+    canonicalId: null,
     providerId: 'np',
     modelId: 'm',
     mindspaceId: null,
@@ -46,6 +50,8 @@ async function seedPersonas() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: true,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: now + 1,
     updatedAt: now + 1,
   });

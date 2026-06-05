@@ -4,11 +4,9 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
-import { useUpsertProvider } from '../../src/data/providers.js';
 import { Settings } from '../../src/routes/app/settings.js';
 
 function wrap(node: ReactNode) {
@@ -35,25 +33,22 @@ describe('Settings route — About Me', () => {
     wrap(<Settings />);
     await waitFor(() => {
       expect(screen.getByText(/about me/i)).toBeInTheDocument();
-      expect(screen.getByText(/global system prompt/i)).toBeInTheDocument();
+      expect(screen.getByText(/global instructions/i)).toBeInTheDocument();
       expect(screen.getByText(/upstream providers/i)).toBeInTheDocument();
     });
   });
 
   it('persists about-me textarea edits after Save is clicked', async () => {
     wrap(<Settings />);
-    // Open the About Me accordion
     const card = await screen.findByText(/about me/i);
     fireEvent.click(card);
     const textarea = await screen.findByPlaceholderText(/tell your circle/i);
     fireEvent.change(textarea, { target: { value: 'A new about me' } });
-    // Draft must not have persisted yet
     {
       const db = (await import('../../src/boot/client-data-db.js')).getClientDataDb();
       const row = await db.settings.get(1);
       expect(row?.globalAboutMe).not.toBe('A new about me');
     }
-    // Click the bottom SaveBar's "Save Settings" button
     const saveBtn = screen.getByRole('button', { name: /save settings/i });
     fireEvent.click(saveBtn);
     await waitFor(async () => {
@@ -64,7 +59,10 @@ describe('Settings route — About Me', () => {
   });
 });
 
-describe('Settings route — Providers list', () => {
+// The Upstream Providers section now lists only *configured* providers (no more
+// hard-coded eight-row list). A freshly-seeded device has none, so the section
+// shows its warm empty state; the card meta counts configured providers.
+describe('Settings route — Upstream Providers', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
     await openClientDataDb();
@@ -73,44 +71,19 @@ describe('Settings route — Providers list', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('renders three built-in provider rows (nano-gpt, Novita AI, Ollama Cloud) with status', async () => {
+  it('shows the warm empty state when no provider is configured', async () => {
     wrap(<Settings />);
-    // Open the Upstream Providers accordion (no longer defaultOpen)
-    const providerHeader = await screen.findByText(/upstream providers/i);
-    fireEvent.click(providerHeader);
-    await waitFor(() => {
-      expect(screen.getByText(/nano-gpt/i)).toBeInTheDocument();
-      expect(screen.getByText(/novita ai/i)).toBeInTheDocument();
-      expect(screen.getByText(/ollama cloud/i)).toBeInTheDocument();
-    });
-    expect(screen.getAllByText(/not connected/i).length).toBe(3);
+    fireEvent.click(await screen.findByText(/upstream providers/i));
+    expect(await screen.findByText(/no voice yet/i)).toBeInTheDocument();
   });
 
-  it('counts connected providers in the card meta line', async () => {
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false, gcTime: 0 } },
-    });
-    const Inner = () => {
-      const upsert = useUpsertProvider();
-      const seeded = useRef(false);
-      useEffect(() => {
-        if (seeded.current) return;
-        seeded.current = true;
-        void upsert.mutateAsync({
-          templateId: 'nano-gpt',
-          apiKey: { ciphertext: new Uint8Array([1]), nonce: new Uint8Array([2]), version: 1 },
-          enabled: true,
-        });
-      }, [upsert.mutateAsync]);
-      return <Settings />;
-    };
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <Inner />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    await waitFor(() => expect(screen.getByText(/1 of 3 connected/i)).toBeInTheDocument());
+  // Configured-only listing + meta counting is unit-tested with mocked data in
+  // settings.providers.test.tsx. Here we assert the integration renders the
+  // global proxy block and the add affordance through the real Settings page.
+  it('renders the global proxy block and an add-provider affordance', async () => {
+    wrap(<Settings />);
+    fireEvent.click(await screen.findByText(/upstream providers/i));
+    expect(await screen.findByText(/server connection at beta/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add provider/i })).toBeInTheDocument();
   });
 });

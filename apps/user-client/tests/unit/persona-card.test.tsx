@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import type { PersonaRow } from '../../src/boot/client-data-db.js';
 import { PersonaCard } from '../../src/components/PersonaCard.js';
 import type { ResolvedMindspace } from '../../src/state/mindspace-resolver.js';
+import { useStreamManagerStore } from '../../src/state/stream-manager.store.js';
 
 function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
   return {
@@ -15,6 +18,7 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'i',
+    canonicalId: null,
     providerId: 'np',
     modelId: 'm',
     mindspaceId: null,
@@ -22,6 +26,8 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -51,8 +57,21 @@ function makeMindspace(overrides: Partial<ResolvedMindspace> = {}): ResolvedMind
   };
 }
 
+beforeEach(async () => {
+  await _resetClientDataDbForTests();
+  await openClientDataDb();
+});
+afterEach(async () => {
+  await _resetClientDataDbForTests();
+});
+
 function wrap(node: React.ReactNode) {
-  return render(<MemoryRouter>{node}</MemoryRouter>);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 describe('PersonaCard', () => {
@@ -70,7 +89,7 @@ describe('PersonaCard', () => {
     expect(screen.getByText(/quiet companion/i)).toBeInTheDocument();
   });
 
-  it('fires onChat when the primary Chat button is clicked', () => {
+  it('labels the button "New Chat" and fires onChat with a null chat id when no chat exists', () => {
     const onChat = vi.fn();
     wrap(
       <PersonaCard
@@ -80,8 +99,23 @@ describe('PersonaCard', () => {
         onChat={onChat}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^chat$/i }));
-    expect(onChat).toHaveBeenCalledWith(makePersona().id);
+    fireEvent.click(screen.getByRole('button', { name: /new chat/i }));
+    expect(onChat).toHaveBeenCalledWith(makePersona().id, null);
+  });
+
+  it('labels the button "Continue" and fires onChat with the last chat id when one exists', () => {
+    const onChat = vi.fn();
+    wrap(
+      <PersonaCard
+        persona={makePersona()}
+        mindspace={makeMindspace()}
+        hasProvider
+        lastChatId="chat-123"
+        onChat={onChat}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    expect(onChat).toHaveBeenCalledWith(makePersona().id, 'chat-123');
   });
 
   it('shows "Provider missing" badge when hasProvider is false', () => {
@@ -94,7 +128,7 @@ describe('PersonaCard', () => {
       />,
     );
     expect(screen.getByText(/provider missing/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^chat$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /new chat/i })).toBeDisabled();
   });
 
   it('renders persona name in persona colour', () => {
@@ -168,5 +202,47 @@ describe('PersonaCard', () => {
     expect(li.className).toContain('persona-card-sfw');
     expect(li.className).not.toContain('persona-card-nsfw');
     expect(li.dataset.adult).toBe('false');
+  });
+});
+
+describe('PersonaCard streaming orb', () => {
+  beforeEach(() => {
+    useStreamManagerStore.setState({ streams: new Map() });
+  });
+
+  it('shows the streaming orb when this persona has a live stream', () => {
+    const persona = makePersona({ id: 'p1' });
+    const mindspace = makeMindspace();
+    useStreamManagerStore.setState({
+      streams: new Map([
+        [
+          'c1',
+          {
+            chatId: 'c1',
+            personaId: 'p1',
+            draftMessageId: 'd1',
+            controller: new AbortController(),
+            status: 'streaming',
+            contentBuffer: [],
+            pillBuffer: [],
+            startedAt: 0,
+            reusedDraft: false,
+          },
+        ],
+      ]),
+    });
+    const { container } = wrap(
+      <PersonaCard persona={persona} mindspace={mindspace} hasProvider onChat={vi.fn()} />,
+    );
+    expect(container.querySelector('[data-streaming-orb]')).not.toBeNull();
+  });
+
+  it('does NOT show the streaming orb when no stream exists', () => {
+    const persona = makePersona({ id: 'p1' });
+    const mindspace = makeMindspace();
+    const { container } = wrap(
+      <PersonaCard persona={persona} mindspace={mindspace} hasProvider onChat={vi.fn()} />,
+    );
+    expect(container.querySelector('[data-streaming-orb]')).toBeNull();
   });
 });

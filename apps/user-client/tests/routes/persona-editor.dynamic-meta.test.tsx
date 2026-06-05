@@ -17,6 +17,7 @@ const STABLE_PERSONA = {
     colour: '#c9a84c',
     font: 'serif' as const,
     instructions: 'i',
+    canonicalId: 'glm-5.1',
     providerId: 'pr-1',
     modelId: 'llama-3.1-70b',
     mindspaceId: 'a',
@@ -57,11 +58,18 @@ const STABLE_PROVIDER_DEF = {
   id: 'nano-gpt',
   displayName: 'nano-gpt.com',
   baseUrl: 'x',
-  knownModels: [{ id: 'llama-3.1-70b', displayName: 'Llama 3.1 70B' }],
+  offerings: [],
 };
 
 vi.mock('@chatsundere/llm-unified', () => ({
   getProvider: () => STABLE_PROVIDER_DEF,
+  getCanonical: (id: string) =>
+    id === 'glm-5.1' ? { id: 'glm-5.1', displayName: 'GLM 5.1' } : undefined,
+  listCanonicals: () => [],
+  listOfferings: () => [],
+  getOffering: () => undefined,
+  availableCanonicals: () => ({ available: [], hiddenCount: 0 }),
+  effectiveFreedom: () => 'free',
 }));
 
 vi.mock('../../src/data/personas.js', () => ({
@@ -99,10 +107,10 @@ function setup(path: string) {
 }
 
 describe('PersonaEditor — dynamic accordion meta', () => {
-  it('Model meta shows provider · model when modelId is set', () => {
+  it('Model meta shows canonical · via provider when canonicalId and providerId are set', () => {
     setup('/app/persona/p-1');
     const header = screen.getByText(/^model$/i).closest('[data-accordion-card]');
-    expect(header?.textContent).toMatch(/nano-gpt\.com.*Llama 3\.1 70B/);
+    expect(header?.textContent).toMatch(/GLM 5\.1.*via nano-gpt\.com/);
   });
 
   it('Behavior meta shows an NSFW badge when adultPersona is true', () => {

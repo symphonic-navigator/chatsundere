@@ -26,6 +26,7 @@ async function seedPersonaWithMindspace() {
     colour: '#fff',
     font: 'serif',
     instructions: 'i',
+    canonicalId: null,
     providerId: 'np',
     modelId: 'm',
     mindspaceId: verdan.id,
@@ -33,6 +34,8 @@ async function seedPersonaWithMindspace() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: now,
     updatedAt: now,
   });

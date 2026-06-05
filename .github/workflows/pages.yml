@@ -1,0 +1,97 @@
+name: GitHub Pages Deploy
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*.*.*']
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up mise (bun, node, pnpm)
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Compute version
+        id: version
+        run: |
+          BASE=$(cat version.txt | tr -d '[:space:]')
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${BASE}-pre.${GITHUB_RUN_NUMBER}"
+          fi
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          BUILT_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "version=$VERSION"     >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "built_at=$BUILT_AT"   >> $GITHUB_OUTPUT
+          echo "Resolved version: $VERSION (sha=$SHORT_SHA built_at=$BUILT_AT)"
+
+      - name: Build PWA with /alpha/ base
+        env:
+          VITE_BASE: /alpha/
+          APP_VERSION:  ${{ steps.version.outputs.version }}
+          APP_SHA:      ${{ steps.version.outputs.short_sha }}
+          APP_BUILT_AT: ${{ steps.version.outputs.built_at }}
+        run: pnpm --filter user-client build
+
+      - name: Stage Pages output
+        run: |
+          mkdir -p _pages
+          cp -r docs/* _pages/
+          cp -r apps/user-client/dist _pages/alpha
+
+      - name: Write build manifest
+        env:
+          VERSION:   ${{ steps.version.outputs.version }}
+          SHORT_SHA: ${{ steps.version.outputs.short_sha }}
+          BUILT_AT:  ${{ steps.version.outputs.built_at }}
+        run: |
+          cat > _pages/alpha/build-manifest.json << EOF
+          {
+            "schema": "chatsundere-build/v1",
+            "built_at": "$BUILT_AT",
+            "trigger": "${GITHUB_EVENT_NAME}",
+            "ref": "$GITHUB_REF",
+            "artifact": {
+              "name": "user-client",
+              "type": "pwa",
+              "version": "$VERSION",
+              "git_sha": "$SHORT_SHA"
+            }
+          }
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

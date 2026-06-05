@@ -17,13 +17,16 @@ async function seedChat() {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'You are Aurum.',
+    canonicalId: null,
     providerId: 'pr1',
-    modelId: nanoGpt.knownModels[0]?.id ?? '',
+    modelId: nanoGpt.offerings[0]?.upstreamSlug ?? '',
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -72,11 +75,11 @@ function baseStartArgs(chatId: string, persona: unknown, model: unknown) {
     apiKey: 'k',
     corsProxyUrl: null,
     corsProxyKey: null,
-    model,
+    offering: model,
     priorMessages: [],
     userMessageText: 'Hello',
     reasoning: { mode: 'on' as const },
-    globalUnlocker: '',
+    globalInstructions: '',
     globalAboutMe: '',
   };
 }
@@ -93,7 +96,7 @@ describe('stream-manager.store', () => {
   it('start inserts user-msg + draft, engine resolve persists final', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'text', text: 'Hi' }],
       pillRows: [],
@@ -114,17 +117,20 @@ describe('stream-manager.store', () => {
   it('start persists pills with the right messageId', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'pill', pillId: 'pill-uuid-1' }],
+      // A non-tool-call pill: this test exercises the pill-persistence wiring
+      // (messageId assignment), not tool execution — a tool-call pill would now
+      // drive the tool loop. Tool execution is covered in tool-loop.test.ts.
       pillRows: [
         {
           id: 'pill-uuid-1',
           messageId: '',
-          kind: 'tool-call',
+          kind: 'image-result',
           positionHint: 'inline',
           status: 'completed',
-          payload: { name: 'web_search' },
+          payload: {},
           createdAt: 1,
         },
       ],
@@ -140,10 +146,187 @@ describe('stream-manager.store', () => {
     expect(pills[0]?.messageId).toBe(personaMsgId);
   });
 
-  it('abortDiscard removes the draft, keeps the user message', async () => {
+  it('live contentBuffer pushes each token as its own text block (no coalescing)', async () => {
+    // Each upstream chunk should become its own text-block so the renderer's
+    // `.token-fade` keyframe plays once per chunk (only newly-mounted spans
+    // animate). Coalescing here would collapse all tokens into one ever-
+    // growing span and the fade would never re-fire on later chunks.
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
+    type OnChunk = (c: { type: 'token'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      // Never resolves — we only want to observe mid-stream buffer state.
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const store = useStreamManagerStore.getState();
+    void store.start(baseStartArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    fire({ type: 'token', text: 'Hi' });
+    fire({ type: 'token', text: ' there' });
+    fire({ type: 'token', text: ', friend' });
+    const handle = useStreamManagerStore.getState().streams.get(chatId);
+    expect(handle).toBeDefined();
+    expect(handle?.contentBuffer).toEqual([
+      { type: 'text', text: 'Hi' },
+      { type: 'text', text: ' there' },
+      { type: 'text', text: ', friend' },
+    ]);
+    await store.abortDiscard(chatId);
+  });
+
+  it('mirrors reasoning chunks into the live content buffer as reasoning blocks', async () => {
+    // Phase 4: reasoning chunks must mirror into the live buffer just like
+    // token chunks — each one its own sub-block so the ReasoningPill body
+    // benefits from the same per-chunk fade-in as the token stream.
+    //
+    // We deliberately use a unique chatId here (and in the two sibling
+    // tests below) because earlier tests in this file leak setTimeout(...,
+    // 200ms) closures that `m.delete('c1')` from the live streams Map
+    // after their success chain runs. A shared chatId would race with
+    // those leaks and intermittently wipe our freshly-started handle.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-mirror-reasoning';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    fire({ type: 'reasoning', text: 'planning' });
+    const handle = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(handle).toBeDefined();
+    expect(handle?.contentBuffer).toEqual([{ type: 'reasoning', text: 'planning' }]);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('preserves non-coalescing for reasoning (token-fade compat)', async () => {
+    // Same contract as the token-chunk non-coalescing test: each reasoning
+    // delta must land as its own block so the .token-fade keyframe replays
+    // on fresh-mounted spans inside the open ReasoningPill body.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const myChatId = 'c-preserve-reasoning';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    fire({ type: 'reasoning', text: 'aa' });
+    fire({ type: 'reasoning', text: 'bb' });
+    const handle = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(handle?.contentBuffer).toEqual([
+      { type: 'reasoning', text: 'aa' },
+      { type: 'reasoning', text: 'bb' },
+    ]);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('rotates the handle reference on every reasoning chunk', async () => {
+    // Same handle-rotation guarantee as for token chunks — a zustand
+    // selector returning `streams.get(chatId)` must see a fresh reference
+    // after every reasoning delta, otherwise ReasoningPill won't re-render.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    const myChatId = 'c-rotate-reasoning';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    const fire = captured as unknown as OnChunk;
+    const h0 = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(h0).toBeDefined();
+    fire({ type: 'reasoning', text: 'a' });
+    const h1 = useStreamManagerStore.getState().streams.get(myChatId);
+    fire({ type: 'reasoning', text: 'b' });
+    const h2 = useStreamManagerStore.getState().streams.get(myChatId);
+    expect(h1).toBeDefined();
+    expect(h2).toBeDefined();
+    expect(h1).not.toBe(h0);
+    expect(h2).not.toBe(h1);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('abortDiscard removes the draft, keeps the user message', async () => {
+    // Use a unique chatId to prevent a 200ms cleanup timer from an earlier
+    // resolved stream (sharing chatId 'c1') from racing against this handle.
+    const { db, personaId } = await seedChat();
+    const myChatId = 'c-abort-discard';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
     vi.spyOn(engine, 'runStreamEngine').mockImplementation(
       () =>
         new Promise(() => {
@@ -151,20 +334,20 @@ describe('stream-manager.store', () => {
         }),
     );
     const store = useStreamManagerStore.getState();
-    void store.start(baseStartArgs(chatId, persona, model) as never);
+    void store.start({ ...baseStartArgs(myChatId, persona, model), chatId: myChatId } as never);
     await new Promise((r) => setTimeout(r, 20));
-    expect(useStreamManagerStore.getState().has(chatId)).toBe(true);
-    await store.abortDiscard(chatId);
-    const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(true);
+    await store.abortDiscard(myChatId);
+    const msgs = await db.messages.where('chatId').equals(myChatId).toArray();
     expect(msgs.filter((m) => m.role === 'user').length).toBe(1);
     expect(msgs.filter((m) => m.role === 'persona').length).toBe(0);
-    expect(useStreamManagerStore.getState().has(chatId)).toBe(false);
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(false);
   });
 
   it('fires title-gen after the first persona response (no-await)', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'text', text: 'Hi there' }],
@@ -187,7 +370,7 @@ describe('stream-manager.store', () => {
   it('does not fire title-gen for subsequent persona responses', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     // Plant a prior completed persona message so this is the "second" response.
     await db.messages.add({
       id: 'prior-p',
@@ -214,7 +397,7 @@ describe('stream-manager.store', () => {
     const { db, chatId, personaId } = await seedChat();
     await db.chats.update(chatId, { title: 'pre-set title' });
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
     vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
       finalContentBlocks: [{ type: 'text', text: 'whatever' }],
@@ -227,11 +410,179 @@ describe('stream-manager.store', () => {
     expect(titleSpy).not.toHaveBeenCalled();
   });
 
+  it('regenerate re-rolls into the target persona message, leaving the user row intact', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' }); // suppress first-response title-gen
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const userId = 'u1';
+    const personaMsgId = 'pm1';
+    await db.messages.add({
+      id: userId,
+      chatId,
+      role: 'user',
+      contentBlocks: [{ type: 'text', text: 'tell me a joke' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    await db.messages.add({
+      id: personaMsgId,
+      chatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'old answer' }],
+      createdAt: 3,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation((async (a: {
+      onChunk: (c: unknown) => void;
+    }) => {
+      a.onChunk({ type: 'token', text: 'new answer' });
+      return {
+        finalContentBlocks: [{ type: 'text', text: 'new answer' }],
+        pillRows: [],
+        finishReason: 'stop',
+      };
+    }) as never);
+
+    const store = useStreamManagerStore.getState();
+    await store.regenerate({
+      ...baseStartArgs(chatId, persona, model),
+      userMessageText: 'tell me a joke',
+      priorMessages: [],
+      targetMessageId: personaMsgId,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const personaRow = await db.messages.get(personaMsgId);
+    expect(personaRow?.streamingState).toBe('complete');
+    expect(personaRow?.contentBlocks).toEqual([{ type: 'text', text: 'new answer' }]);
+    // User row never touched: same id, same content, still present.
+    const user = await db.messages.get(userId);
+    expect(user?.contentBlocks).toEqual([{ type: 'text', text: 'tell me a joke' }]);
+    const count = await db.messages.where('chatId').equals(chatId).count();
+    expect(count).toBe(2);
+  });
+
+  it('regenerate leaves target incomplete and user row intact on engine failure', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const userId = 'u1';
+    const personaMsgId = 'pm1';
+    await db.messages.add({
+      id: userId,
+      chatId,
+      role: 'user',
+      contentBlocks: [{ type: 'text', text: 'q' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    await db.messages.add({
+      id: personaMsgId,
+      chatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'old answer' }],
+      createdAt: 3,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+
+    vi.spyOn(engine, 'runStreamEngine').mockRejectedValue(new Error('upstream down'));
+
+    const store = useStreamManagerStore.getState();
+    await store.regenerate({
+      ...baseStartArgs(chatId, persona, model),
+      userMessageText: 'q',
+      priorMessages: [],
+      targetMessageId: personaMsgId,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const personaRow = await db.messages.get(personaMsgId);
+    expect(personaRow?.streamingState).toBe('incomplete');
+    const user = await db.messages.get(userId);
+    expect(user?.contentBlocks).toEqual([{ type: 'text', text: 'q' }]);
+    const count = await db.messages.where('chatId').equals(chatId).count();
+    expect(count).toBe(2);
+  });
+
+  it('abortDiscard preserves a regenerate target as incomplete (not deleted)', async () => {
+    // Use a unique chatId to avoid racing against the 200ms setTimeout cleanup
+    // closures that prior tests leave behind on the shared 'c1' slot.
+    const { db, personaId } = await seedChat();
+    const myChatId = 'c-abort-regen';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const userId = 'u1';
+    const personaMsgId = 'pm1';
+    await db.messages.add({
+      id: userId,
+      chatId: myChatId,
+      role: 'user',
+      contentBlocks: [{ type: 'text', text: 'q' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    await db.messages.add({
+      id: personaMsgId,
+      chatId: myChatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'old answer' }],
+      createdAt: 3,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+
+    // Never-resolving engine so the stream stays live until we abort.
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      (() =>
+        new Promise(() => {
+          /* never */
+        })) as never,
+    );
+
+    const store = useStreamManagerStore.getState();
+    await store.regenerate({
+      ...baseStartArgs(myChatId, persona, model),
+      userMessageText: 'q',
+      priorMessages: [],
+      targetMessageId: personaMsgId,
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(true);
+
+    await store.abortDiscard(myChatId);
+
+    // The target message must STILL EXIST, marked incomplete — not deleted.
+    const personaRow = await db.messages.get(personaMsgId);
+    expect(personaRow).toBeDefined();
+    expect(personaRow?.streamingState).toBe('incomplete');
+    const count = await db.messages.where('chatId').equals(myChatId).count();
+    expect(count).toBe(2);
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(false);
+  });
+
   it('abortAllForPersonaDiscard kicks every stream against a persona', async () => {
     // seedChat sets up persona p1; add a second chat against same persona
     const { db, chatId: c1, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);
-    const model = nanoGpt.knownModels[0];
+    const model = nanoGpt.offerings[0];
     const c2 = 'c2';
     await db.chats.add({
       id: c2,

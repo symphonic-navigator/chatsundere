@@ -70,6 +70,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Dimmed aurora variant — applied by Root.tsx on /app subroutes so the
+   persona mindspace texture is the dominant visual layer. The aurora
+   stays as a subtle atmospheric haze beneath the mindspace. Gradient
+   shape is preserved; only the starting colour opacity is reduced. */
+body.dim-ambient {
+  background-image: radial-gradient(120% 80% at 50% 0%, rgba(22, 10, 61, 0.3) 0%, transparent 60%),
+    radial-gradient(80% 60% at 80% 110%, rgba(67, 45, 184, 0.25) 0%, transparent 55%);
+}
+
 h1,
 h2,
 h3 {
@@ -474,6 +483,12 @@ h1 {
   font-size: 0.9em;
   opacity: 0.4;
   transition: opacity 200ms ease;
+  /* button element resets — .pill is now a <button> for expandable tool-calls.
+     No `font` reset: the explicit font-family/font-size above already overrides
+     the native button font, and a `font: inherit` shorthand here would clobber them. */
+  border: none;
+  color: inherit;
+  cursor: default;
 }
 .msg.expanded .pill {
   opacity: 1;
@@ -520,10 +535,17 @@ h1 {
   text-align: left;
 }
 .msg-name {
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 0.25rem;
-  opacity: 0.85;
+  margin-bottom: 0.35rem;
+  opacity: 0.95;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.msg-name-prefix {
+  font-size: 0.9em;
+  line-height: 1;
 }
 .msg-timestamp {
   font-size: 0.7rem;
@@ -535,13 +557,176 @@ h1 {
   line-height: 1.5;
   word-wrap: break-word;
 }
-.msg.expanded {
-  background: rgba(255, 255, 255, 0.04);
+/* Opulent Markdown styling for rendered message content. All message text
+   renders through MarkdownContent, so block elements own their own spacing.
+   Tuned for the Aurora dark theme: ink-soft code surfaces with a single
+   restrained aurora glow, accent-lilac links, serif headings, marker-pill
+   inline code. */
+.msg-text p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
 }
-.msg.expanded .msg-text {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 0.5rem;
-  border-radius: 0.25rem;
+.msg-text p:first-child {
+  margin-top: 0;
+}
+.msg-text p:last-child {
+  margin-bottom: 0;
+}
+.msg-text ul,
+.msg-text ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 1.5em;
+}
+.msg-text li {
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+.msg-text ul {
+  list-style-type: disc;
+}
+.msg-text ol {
+  list-style-type: decimal;
+}
+/* Inline code as a subtle marker pill — rhymes with the .pill inline markers. */
+.msg-text code:not(pre code) {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+/* Fenced code blocks sit on the ink-soft elevated surface with one restrained
+   aurora glow. The !important overrides shiki's inline background-color so the
+   highlighted output rests on the theme surface, not shiki's own grey. */
+.msg-text pre {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+  padding: 0.85em 1em;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-ink-soft) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px -16px rgba(141, 109, 255, 0.4);
+  overflow-x: auto;
+}
+.msg-text pre code {
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.msg-text blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--color-aurora-500) 55%, transparent);
+  padding-left: 0.85em;
+  margin-left: 0;
+  opacity: 0.85;
+}
+/* Serif headings give model replies a touch of opulence (the §11 voice). */
+.msg-text h1,
+.msg-text h2,
+.msg-text h3,
+.msg-text h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.msg-text h1 {
+  font-size: 1.4em;
+}
+.msg-text h2 {
+  font-size: 1.2em;
+}
+.msg-text h3 {
+  font-size: 1.08em;
+}
+.msg-text hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 1em 0;
+}
+.msg-text table {
+  border-collapse: collapse;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.msg-text th,
+.msg-text td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.35em 0.65em;
+}
+.msg-text th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+/* Accent-lilac links with a quiet underline that brightens on hover. */
+.msg-text a {
+  color: var(--color-aurora-500);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-aurora-500) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.msg-text a:hover {
+  text-decoration-color: var(--color-aurora-500);
+}
+/* KaTeX display maths: a little vertical air, horizontal scroll on overflow. */
+.msg-text .katex-display {
+  margin: 0.6em 0;
+  padding: 0.25em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* Image marker — the privacy-preserving tap-to-load pill that stands in for a
+   model-emitted image until the user consents (see ImageMarker.tsx). Inline
+   marker aesthetic, matching the inline-code pill. */
+.image-marker {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  max-width: 100%;
+  padding: 0.1em 0.5em;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  text-align: left;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+.image-marker:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.image-marker[data-empty="true"],
+.image-marker--error {
+  cursor: default;
+}
+.image-marker-host {
+  opacity: 0.7;
+}
+.image-marker-cta {
+  opacity: 0.55;
+}
+.image-marker--error {
+  background: rgba(214, 102, 102, 0.12);
+}
+.image-marker--error a {
+  color: var(--color-aurora-500);
+}
+.image-marker-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0;
+  border-radius: 10px;
+}
+.msg.expanded {
+  /* Full-width selection tint — edge to edge. The inner .msg-text inset box
+   *  was removed: its padding narrowed the text on selection (lost width). */
+  background: rgba(255, 255, 255, 0.06);
 }
 .msg-controls {
   display: flex;
@@ -571,15 +756,22 @@ h1 {
   border-color: rgba(201, 168, 76, 0.4);
 }
 
-/* ===== Bottom Affordance / Scroll-to-end ===== */
+/* ===== Bottom Affordance / Scroll-to-end =====
+ * Real flex-child of .chat-page (consistent with .interaction-topbar and
+ * .cockpit since Phase 3.3 polish-iter 1). order: 999 keeps it pinned to
+ * the bottom of the flex column in reading mode; flex-shrink: 0 means
+ * chat-stream gives up height for it instead of overlapping. The bottom
+ * padding lifts the bar ~2rem above the page edge so it still feels like
+ * a deliberate floating handle. Positioned-fixed was structurally
+ * vulnerable to any ancestor introducing a transform/filter/contain
+ * containing-block; a flex-item cannot scroll with a sibling's overflow. */
 .affordance {
-  position: absolute;
-  left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  flex-shrink: 0;
+  order: 999;
+  align-self: center;
   background: transparent;
   border: 0;
-  padding: 0.5rem 2rem;
+  padding: 0.75rem 2rem calc(2rem + env(safe-area-inset-bottom, 0px));
   cursor: pointer;
   display: flex;
   justify-content: center;
@@ -605,13 +797,66 @@ h1 {
     opacity: 1;
   }
 }
+
+@keyframes affordance-breath {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+
+.bottom-affordance {
+  animation: affordance-breath 3.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-affordance {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/*
+ * ScrollToEnd lives inside the chat-stream now (rendered as its first
+ * child when auto-follow is off). Sticky positioning pins it to the
+ * bottom of the scrollable viewport regardless of where the user has
+ * scrolled. Because chat-stream is flex-col, `align-self: center`
+ * centres it on the cross-axis.
+ */
+
+@keyframes scroll-to-end-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scroll-to-end-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 .scroll-to-end {
-  position: absolute;
-  left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: sticky;
+  bottom: 1rem;
+  align-self: center;
+  background: rgba(30, 30, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
   padding: 0.4rem 1rem;
   cursor: pointer;
@@ -620,11 +865,35 @@ h1 {
   gap: 0.4rem;
   font-size: 0.85rem;
   color: inherit;
+  z-index: 8;
+  backdrop-filter: blur(8px);
+}
+.scroll-to-end:hover {
+  background: rgba(40, 40, 40, 0.95);
 }
 .scroll-to-end:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+
+.scroll-to-end[data-visible="true"] {
+  animation: scroll-to-end-in 240ms ease-out forwards;
+}
+
+.scroll-to-end[data-visible="false"] {
+  animation: scroll-to-end-out 180ms ease-in forwards;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .scroll-to-end[data-visible="true"] {
+    animation: none;
+    opacity: 1;
+  }
+  .scroll-to-end[data-visible="false"] {
+    animation: none;
+    opacity: 0;
+    pointer-events: none;
+  }
   .affordance-bar {
     animation: none;
     opacity: 0.7;
@@ -643,13 +912,67 @@ h1 {
   user-select: none;
 }
 
-/* ===== Chat Stream ===== */
+/* ===== Chat Stream =====
+ * No longer needs to clear absolute overlays — the cockpit and topbar are
+ * now flex-siblings that take real height, so the chat-stream simply gets
+ * what's left. flex: 1 + overflow-y: auto handles scrolling internally.
+ */
 .chat-stream {
   flex: 1;
+  min-height: 0; /* enable shrinking inside flex container */
   overflow-y: auto;
-  padding: 1rem;
+  /* Inline padding matches .interaction-topbar and .cockpit (0.75rem) so the
+   * message text, hamburger/avatar and cockpit input all sit on one edge. */
+  padding: 1rem 0.75rem;
   display: flex;
   flex-direction: column;
+}
+/*
+ * Anchor the first child to the bottom when content is shorter than the
+ * viewport — short conversations sit on the bottom edge (WhatsApp /
+ * Messages feel). If content overflows, margin-top: auto resolves to 0
+ * and the natural top-down scroll behaviour kicks in.
+ */
+.chat-stream > :first-child {
+  margin-top: auto;
+}
+
+/* ===== Scrollbars =====
+ * Touch devices overlay-hide their scrollbars (the "nice" mobile feel); desktop
+ * otherwise shows a wide native bar that breaks the calm. A thin neutral bar is
+ * the default for every scroll surface; the chat stream picks up the active
+ * mindspace accent so the conversation surface feels of-a-piece. Webkit ignores
+ * these on most touch browsers, so the mobile overlay behaviour is untouched. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  /* 2px transparent border + padding-box clip narrows the visible thumb to a
+   * restrained ~6px without changing the hit area. */
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+.chat-stream {
+  scrollbar-color: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 45%, transparent) transparent;
+}
+.chat-stream::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 38%, transparent);
+}
+.chat-stream::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 62%, transparent);
 }
 .streaming-cursor {
   display: inline-block;
@@ -666,27 +989,85 @@ h1 {
     opacity: 0;
   }
 }
+
+/* Streaming text — raw (pre-Markdown) chunks shown while a draft is live.
+   Each upstream chunk is its own un-coalesced block (see
+   stream-manager.appendStreamChunk), rendered as a .stream-tok span: a freshly
+   mounted span fades in, so the reply materialises token-by-token. pre-wrap
+   preserves the raw newlines until the draft finalises and re-renders as
+   Markdown. A pure opacity fade — no drift — keeps the text steady to read. */
+.msg-stream-text {
+  white-space: pre-wrap;
+}
+.stream-tok {
+  animation: tok-fade 420ms ease-out both;
+}
+@keyframes tok-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .streaming-cursor {
     animation: none;
     opacity: 0.7;
   }
+  .stream-tok {
+    animation: none;
+  }
 }
 
-/* ===== Interaction Topbar ===== */
+/* ===== Interaction Topbar =====
+ * Real flex-child of .chat-page now (sibling of .chat-stream / .cockpit).
+ * order: -1 keeps it at the top of the flex column regardless of JSX
+ * placement; flex-shrink: 0 means chat-stream shrinks around it.
+ *
+ * position: relative is mandatory for z-index to take effect — same
+ * reasoning as .cockpit above. Without it the DimOverlay would render
+ * over the topbar. */
 .interaction-topbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
+  order: -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  /* Slimmer than the original 0.5rem: the larger avatar now anchors the bar's
+   * height, so the surrounding padding is trimmed to keep it tight. */
+  padding: 0.25rem 0.75rem;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   z-index: 5;
+}
+.topbar-avatar-btn {
+  display: inline-flex;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  /* The avatar doubles as the "open persona" affordance — a faint accent ring
+   * appears on hover/focus so it reads as tappable without shouting. */
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 150ms ease;
+}
+.topbar-avatar-btn:hover:not(:disabled),
+.topbar-avatar-btn:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.35);
+}
+.topbar-avatar-btn:disabled {
+  cursor: default;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 .hamburger-btn {
   background: transparent;
@@ -698,13 +1079,71 @@ h1 {
   align-items: center;
   justify-content: center;
 }
-.interaction-topbar .context-label {
-  font-size: 0.7rem;
-  opacity: 0.6;
+.topbar-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
 }
-.interaction-topbar .context-name {
+.topbar-title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--color-paper);
+}
+.topbar-title {
   font-family: var(--font-display);
   font-size: 1rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
+}
+.topbar-pencil {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+.topbar-title-input {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1.1;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  color: var(--color-paper);
+  outline: none;
+  text-align: center;
+  max-width: 60vw;
+}
+.topbar-title-placeholder {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1.1;
+  color: var(--color-paper-soft);
+  font-style: italic;
+}
+/* Project slot — inherits the persona-name styling it replaced (display font +
+ * the persona accent, applied inline). Muted + italic when no project is set
+ * so the placeholder never masquerades as a real project name. */
+.topbar-project {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  line-height: 1;
+  max-width: 60vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-project[data-empty="true"] {
+  opacity: 0.55;
+  font-style: italic;
 }
 .status-group {
   display: flex;
@@ -818,17 +1257,29 @@ h1 {
   border-color: rgba(201, 168, 76, 0.5);
 }
 
-/* ===== Cockpit Shell ===== */
+/* ===== Cockpit Shell =====
+ * Now a real flex-child of .chat-page (via .interaction-mode being
+ * display:contents). flex-shrink: 0 means it claims its natural height
+ * and the chat-stream above shrinks to fit; order: 1000 keeps it pinned
+ * to the bottom regardless of where it sits in JSX.
+ *
+ * position: relative is mandatory — without it, z-index would silently
+ * have no effect, and the absolutely-positioned DimOverlay (z-index 3)
+ * would render OVER the cockpit when the textarea is focused. */
 .cockpit {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
+  order: 1000;
   background: rgba(10, 10, 10, 0.95);
   backdrop-filter: blur(12px);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 0.5rem;
+  /* Inline padding aligned with .chat-stream and .interaction-topbar (0.75rem). */
+  padding: 0.5rem 0.75rem;
   z-index: 6;
+}
+.cockpit[data-pinned="true"] {
+  border-top: 1px solid var(--mindspace-accent-border-active, rgba(201, 168, 76, 0.6));
+  box-shadow: 0 0 8px 0 color-mix(in srgb, var(--mindspace-accent, #c9a84c) 15%, transparent);
 }
 .cockpit-row-controls {
   display: flex;
@@ -881,7 +1332,10 @@ h1 {
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
   color: inherit;
-  font-family: inherit;
+  /* The persona's font now flows through `.msg-text` (Phase 3.3 iter-2); the
+   * cockpit-input must NOT inherit it — the input is a system surface, not a
+   * persona voice. Lock to sans-serif so typing always feels like a UI input. */
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   resize: none;
 }
@@ -924,27 +1378,65 @@ h1 {
   opacity: 1;
 }
 
-/* ===== InteractionMode wrapper ===== */
+/* ===== InteractionMode wrapper =====
+ * display: contents removes this element from layout entirely — its
+ * children (InteractionTopbar / Cockpit) appear directly in the chat-page
+ * flex column. The React component still owns its containerRef for
+ * outside-tap detection because the DOM node still exists; CSS just skips
+ * it for layout. (The DimOverlay is a direct chat-page child, not nested
+ * here, so its un-dim fade survives this wrapper unmounting on close.) */
 .interaction-mode {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.interaction-mode > * {
-  pointer-events: auto;
-}
-/* DimOverlay must never intercept taps — only a visual layer. */
-.interaction-mode .dim-overlay {
-  pointer-events: none;
+  display: contents;
 }
 
 /* ===== Chat Page Layout ===== */
+/*
+ * Break out of the <main> container's max-width / padding to claim the
+ * full viewport area below the sticky brand header. The header is sticky
+ * at top:0 with z-20; we slot in just under it. Everything inside this
+ * element positions against the chat-page edge, not the page gutter.
+ *
+ * The fixed inset + auto margins centre the surface horizontally while
+ * keeping it pinned vertically — so the cockpit at bottom:0 actually
+ * lands on the viewport floor, not at the end of message content.
+ */
 .chat-page {
-  position: relative;
+  position: fixed;
+  /* Flush against the interaction-mode brand bar (root.tsx py-2 lg:py-2.5 +
+     a 1.25rem logo): no aurora gap between the two dark bars. Kept slightly
+     tight on purpose — both bars share the same dark fill, so a small overlap
+     is invisible whereas a gap is not. Device-tuning knob. */
+  top: 2.5rem;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
+  transition: top 180ms ease;
+}
+/* Read-only mode collapses the brand bar to a thin strip (logo hidden +
+   compact padding, see root.tsx) — pull the chat surface up into the
+   reclaimed space. These top values are the device-tuning knobs paired with
+   the header's py-* classes (reading py-1/lg:py-1.5, interaction py-2/lg:py-2.5). */
+.chat-page[data-mode="reading"] {
+  top: 2rem;
+}
+@media (min-width: 1024px) {
+  .chat-page {
+    top: 2.75rem;
+    max-width: 640px;
+  }
+  .chat-page[data-mode="reading"] {
+    top: 2.25rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-page {
+    transition: none;
+  }
 }
 
 /* ===== Toast ===== */
@@ -1056,4 +1548,587 @@ h1 {
 .stream-interrupted-actions {
   display: flex;
   gap: 0.4rem;
+}
+
+/* === Phase 4 — ReasoningPill === */
+
+.reasoning-pill,
+.pill {
+  margin-block: 0.75rem;
+}
+
+.reasoning-pill {
+  /* Block-level flex (not inline) so subsequent text wraps onto a new
+   * paragraph instead of clinging to the pill's right edge. width:fit-content
+   * keeps the pill content-sized — it doesn't stretch across the bubble. */
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 18%, var(--color-ink) 82%);
+  border: 1px solid color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 35%, transparent);
+  color: var(--color-paper);
+  appearance: none;
+}
+
+.reasoning-pill-dots {
+  display: inline-flex;
+  gap: 0.15rem;
+  letter-spacing: 0.05em;
+}
+.reasoning-pill-dots .dot {
+  display: inline-block;
+  line-height: 1;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot {
+  animation: reasoning-dots-pulse 1.2s ease-in-out infinite;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.reasoning-pill[data-live="true"] .reasoning-pill-dots .dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes reasoning-dots-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+.reasoning-pill-chevron {
+  opacity: 0.7;
+  transition: transform 200ms ease;
+}
+.reasoning-pill[data-state="open"] .reasoning-pill-chevron {
+  transform: rotate(90deg);
+}
+
+.reasoning-pill-open {
+  /* Same block-level treatment as the closed handle (see .reasoning-pill) —
+   * the open trace also occupies its own line so following text drops below. */
+  display: flex;
+  width: fit-content;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 100%;
+}
+.reasoning-pill-open > .reasoning-pill {
+  border-radius: 14px 14px 0 0;
+  margin: 0;
+  align-self: flex-start;
+}
+
+.reasoning-pill-body {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 8%, var(--color-ink) 92%);
+  border: 1px solid color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 25%, transparent);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  color: var(--color-paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reasoning-pill[data-live="true"] .reasoning-pill-dots .dot {
+    animation: none;
+  }
+  .reasoning-pill-chevron {
+    transition: none;
+  }
+}
+
+/* ===== Streaming Orb ===== */
+
+.streaming-orb {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: orb-breath 1.5s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes orb-breath {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-orb {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* --- Bookmarks & table-of-contents --------------------------------------- */
+
+/* Reading-mode floating tool-strip — ghostly, top-right */
+.reading-tool-strip {
+  /* Absolute (not fixed) so it binds to .chat-page — viewport-fixed gets
+   *  trapped/clipped by the mindspace transform layers' containing-block,
+   *  the exact hazard documented for the bottom affordance above (§"Bottom
+   *  Affordance"). .chat-page is itself position:fixed, so it is a clean
+   *  containing block for this absolute child; the strip pins to the
+   *  top-right of the chat column and does not scroll with the stream. */
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  /* Ghostly, but discoverable — 0.45 was too faint to find as the primary
+   *  navigation entry. Soft at rest, full on hover/expand. */
+  opacity: 0.72;
+  transition: opacity 160ms ease;
+}
+.reading-tool-strip:hover,
+.reading-tool-strip[data-expanded] {
+  /* Stay translucent when expanded — fully opaque felt out of character with
+   *  the ghostly resting state. Still a touch more present than at rest. */
+  opacity: 0.88;
+}
+.tool-strip-toggle,
+.tool-strip-btn {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--color-ink, #1a1a1a) 88%, transparent);
+  color: var(--color-paper, #e6e6e6);
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 22%, transparent);
+  backdrop-filter: blur(4px);
+}
+.tool-strip-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.tool-strip-btn[data-active] {
+  color: var(--color-accent, #c9a227);
+  /* Emoji glyphs (e.g. the pin) ignore `color`, so signal the active state
+   *  with a background + border tint that reads regardless of glyph. */
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 30%, var(--color-ink, #1a1a1a));
+  border-color: color-mix(in srgb, var(--color-accent, #c9a227) 60%, transparent);
+}
+
+/* Inline rename field — shared by the ToC sheet and the global bookmarks
+ *  list. Without explicit styling the input was invisible on the dark sheet. */
+.toc-entry-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--color-paper, #e6e6e6) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent, #c9a227) 55%, transparent);
+  color: var(--color-paper, #e6e6e6);
+  font: inherit;
+}
+.toc-entry-input:focus {
+  outline: none;
+  border-color: var(--color-accent, #c9a227);
+}
+
+/* ToC overlay sheet */
+.toc-sheet-root {
+  /* Absolute, bound to .chat-page (same containing-block reason as
+   *  .reading-tool-strip) — viewport-fixed would be clipped by the mindspace
+   *  transform layers. Covers the chat column, which is the whole surface on
+   *  mobile. */
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+}
+.toc-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.toc-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(88vw, 22rem);
+  background: var(--color-ink, #1a1a1a);
+  border-left: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.toc-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.toc-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.toc-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.toc-entry-label {
+  flex: 1;
+  text-align: left;
+  padding: 0.4rem 0;
+  color: var(--color-paper, #e6e6e6);
+}
+.toc-entry[data-starred] .toc-entry-label {
+  font-style: italic;
+}
+.toc-entry-actions {
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0.7;
+}
+
+/* Branch-this-chat bottom-sheet — mirrors .toc-sheet structure */
+.branch-sheet-root {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+}
+.branch-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.branch-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-ink, #1a1a1a);
+  border-top: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.branch-sheet-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+.branch-sheet-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-surface-input, rgba(0, 0, 0, 0.3));
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 14%, transparent);
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.branch-sheet-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--color-accent, #c9a227) 55%, transparent);
+}
+.branch-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.branch-cancel,
+.branch-confirm {
+  padding: 0.45rem 1rem;
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.branch-confirm {
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 22%, transparent);
+}
+.branch-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.branch-sheet-error {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, #e06c75 82%, var(--color-paper, #e6e6e6));
+}
+
+/* Jump highlight pulse */
+.msg-focus-pulse {
+  animation: msg-focus-pulse 1.6s ease-out;
+}
+@keyframes msg-focus-pulse {
+  0% {
+    background: color-mix(in srgb, var(--color-accent, #c9a227) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-focus-pulse {
+    animation: none;
+  }
+}
+
+/* History segmented tabs + bookmark groups */
+.history-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+.history-tab {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+.history-tab[data-active] {
+  opacity: 1;
+  border-bottom: 2px solid var(--color-accent, #c9a227);
+}
+.bookmark-group-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+.bookmark-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bookmark-row {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 0.35rem 0;
+  color: var(--color-paper, #e6e6e6);
+}
+
+/* ===== Persona filter dropdown (custom — native <select> option lists are
+ *  OS-rendered and cannot be themed to match the dark surface) ===== */
+.persona-dropdown {
+  position: relative;
+}
+.persona-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.875rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.persona-dropdown-trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-paper-soft, rgba(255, 255, 255, 0.4));
+}
+.persona-dropdown-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.persona-dropdown-chevron {
+  opacity: 0.55;
+  transition: transform 160ms ease;
+}
+.persona-dropdown-chevron[data-open] {
+  transform: rotate(180deg);
+}
+.persona-dropdown-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.persona-dropdown-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.3rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-ink, #161616);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+.persona-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--color-paper, #e6e6e6);
+  transition: background 120ms ease;
+}
+.persona-dropdown-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.persona-dropdown-option[data-selected] {
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 18%, transparent);
+  color: var(--color-accent, #c9a227);
+}
+
+/* ===== Expandable tool-call pill ===== */
+.pill-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.pill[data-pill-expandable] {
+  cursor: pointer;
+}
+.pill[data-pill-status="pending"] .pill-icon {
+  opacity: 0.6;
+}
+.pill[data-pill-status="failed"] {
+  color: var(--colour-danger, #d66);
+}
+.pill-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.pill-detail-code,
+.pill-detail-result,
+.pill-detail-error {
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap;
+  font-size: 0.85em;
+}
+
+/* ===== Web interfacing settings (inside its AccordionCard) ===== */
+.web-interfacing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.web-zk-note,
+.web-needs-proxy {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--color-paper-soft);
+}
+.web-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.web-field > label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--color-paper);
+}
+.web-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+/* Custom chevron — native <select> arrows don't match the dark surface. */
+.web-select-wrap {
+  position: relative;
+}
+.web-select-wrap::after {
+  content: "▾";
+  position: absolute;
+  top: 50%;
+  right: 0.8rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 0.7rem;
+  color: var(--color-paper-soft);
+}
+.web-select {
+  appearance: none;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.55rem 2rem 0.55rem 0.85rem;
+  color: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.web-select:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.web-select:focus-visible {
+  outline: none;
+  border-color: rgba(141, 109, 255, 0.55);
+}
+.web-select option {
+  background: var(--color-ink-soft);
+  color: var(--color-paper);
+}
+.web-traits {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.web-trait-pill {
+  background: rgba(201, 191, 255, 0.08);
+  border: 1px solid rgba(201, 191, 255, 0.18);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-aurora-200);
 }

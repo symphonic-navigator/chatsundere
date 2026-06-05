@@ -1,10 +1,13 @@
 import {
-  type KnownModel,
+  type Offering,
   type ProviderConfig,
   type ProviderDefinition,
   type StreamChunk,
+  type ToolDef,
   type WireMessage,
-  composeSystemPrompt,
+  buildPrompt,
+  formatRetryEvent,
+  offeringToTarget,
   streamCompletion,
 } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -16,6 +19,8 @@ import type {
   PersonaRow,
   PillRow,
 } from '../boot/client-data-db.js';
+import { flattenAnswerText } from './content-blocks.js';
+import { resolveContextWindow, truncateToWindow } from './context-window.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
 
 export interface StartStreamArgs {
@@ -26,12 +31,19 @@ export interface StartStreamArgs {
   apiKey: string;
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
-  model: KnownModel;
+  offering: Offering;
   priorMessages: MessageRow[];
   userMessageText: string;
   reasoning: ReasoningState;
-  globalUnlocker: string;
+  globalInstructions: string;
   globalAboutMe: string;
+  /** Joined tool system-prompt instructions for the Band-3 tools segment. */
+  toolsInstruction?: string;
+  /** Canonical tool definitions to offer the model (empty = none). */
+  tools?: ToolDef[];
+  /** Accumulated assistant(tool_calls) / tool messages from prior loop rounds,
+   *  appended after the active user turn. */
+  toolExchange?: WireMessage[];
   signal: AbortSignal;
   onChunk: (chunk: StreamChunk) => void;
 }
@@ -48,22 +60,35 @@ export interface StreamEngineResult {
  * responsible for persistence.
  */
 export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngineResult> {
-  const systemPrompt = composeSystemPrompt({
-    globalUnlocker: args.globalUnlocker,
-    aboutMe: args.globalAboutMe,
-    personaInstructions: args.persona.instructions,
-    projectInstructions: '',
-    memoryContext: '',
-  });
+  const aboutMe = args.persona.aboutMeOverride?.trim()
+    ? args.persona.aboutMeOverride
+    : args.globalAboutMe;
+  const systemPrompt = buildPrompt(
+    {
+      tonalityEnabled: args.persona.chatsundereTonality,
+      nsfwEnabled: args.persona.adultPersona,
+      globalInstructions: args.globalInstructions,
+      personaInstructions: args.persona.instructions,
+      aboutMe,
+      projectInstructions: '',
+      memoryContext: '',
+      toolsInstruction: args.toolsInstruction ?? '',
+    },
+    'chat',
+  );
 
-  const wireMessages: WireMessage[] = [
-    { role: 'system', content: systemPrompt },
-    ...args.priorMessages.map(toWireMessage),
-    { role: 'user', content: args.userMessageText },
-  ];
+  const wireMessages = buildEngineWireMessages(
+    systemPrompt,
+    args.priorMessages,
+    args.userMessageText,
+    args.toolExchange ?? [],
+  );
+
+  const budget = resolveContextWindow(args.persona, args.offering);
+  const { messages: sentMessages } = truncateToWindow(wireMessages, budget);
 
   const extras: Record<string, unknown> = {
-    ...resolveReasoningBodyExtras(args.model, args.reasoning),
+    ...resolveReasoningBodyExtras(args.offering.profile.reasoning, args.reasoning),
     temperature: args.persona.temperature,
   };
 
@@ -77,22 +102,27 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     apiKey: args.apiKey,
     corsProxyUrl: args.corsProxyUrl,
     corsProxyKey: args.corsProxyKey,
-    model: args.model,
-    messages: wireMessages,
+    target: offeringToTarget(args.offering),
+    messages: sentMessages,
     bodyExtras: extras,
+    cacheKey: args.chat.id,
+    tools: args.tools,
     signal: args.signal,
+    onRetry: (e) => console.warn(formatRetryEvent(e)),
   })) {
     args.onChunk(chunk);
 
     if (chunk.type === 'token') {
       appendText(contentBuffer, chunk.text);
+    } else if (chunk.type === 'reasoning') {
+      appendReasoning(contentBuffer, chunk.text);
     } else if (chunk.type === 'tool-call') {
       const pill: PillRow = {
         id: uuidv7(),
         messageId: '', // filled by stream-manager when persisting
         kind: 'tool-call',
         positionHint: 'inline',
-        status: 'completed',
+        status: 'pending',
         payload: {
           name: chunk.name,
           argumentsJson: chunk.argumentsJson,
@@ -104,6 +134,9 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       contentBuffer.push({ type: 'pill', pillId: pill.id });
     } else if (chunk.type === 'finish') {
       finishReason = chunk.reason;
+    } else if (chunk.type === 'usage') {
+      // Usage display is a later feature (a subsequent catalogue-runtime slice).
+      // Adapters emit usage chunks; we deliberately ignore them here for now.
     } else if (chunk.type === 'error') {
       throw new Error(`stream-engine: upstream ${chunk.message}`);
     }
@@ -122,15 +155,41 @@ function appendText(buf: ContentBlock[], text: string): void {
   }
 }
 
+/** Append reasoning to the tail of the content buffer, coalescing adjacent reasoning blocks. */
+function appendReasoning(buf: ContentBlock[], text: string): void {
+  const last = buf[buf.length - 1];
+  if (last && last.type === 'reasoning') {
+    last.text += text;
+  } else {
+    buf.push({ type: 'reasoning', text });
+  }
+}
+
+/**
+ * Assemble the wire message list for one engine pass: system prompt, replayed
+ * history, the active user turn, then any accumulated tool exchange from prior
+ * loop rounds. Extracted so the tool-exchange placement is unit-testable.
+ */
+export function buildEngineWireMessages(
+  systemPrompt: string,
+  priorMessages: MessageRow[],
+  userMessageText: string,
+  toolExchange: WireMessage[],
+): WireMessage[] {
+  return [
+    { role: 'system', content: systemPrompt },
+    ...priorMessages.map(toWireMessage),
+    { role: 'user', content: userMessageText },
+    ...toolExchange,
+  ];
+}
+
 /**
  * Collapse a persisted MessageRow to a single WireMessage for context replay.
  * Pill-blocks are dropped — Phase 3 doesn't execute tools from history.
  */
 function toWireMessage(m: MessageRow): WireMessage {
-  const text = m.contentBlocks
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
+  const text = flattenAnswerText(m.contentBlocks);
   if (m.role === 'persona') return { role: 'assistant', content: text };
   if (m.role === 'system') return { role: 'system', content: text };
   return { role: 'user', content: text };

@@ -42,8 +42,8 @@ async function seed() {
     updatedAt: 1,
   });
 
-  const model = nanoGpt.knownModels[0];
-  if (!model) throw new Error('nano-gpt has no known models');
+  const offering = nanoGpt.offerings[0];
+  if (!offering) throw new Error('nano-gpt has no offerings');
 
   await db.personas.add({
     id: personaId,
@@ -52,13 +52,16 @@ async function seed() {
     colour: '#c9a84c',
     font: 'serif',
     instructions: 'instr',
+    canonicalId: null,
     providerId,
-    modelId: model.id,
+    modelId: offering.upstreamSlug,
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -94,7 +97,7 @@ describe('useSendMessage', () => {
         chatId: null,
         personaId,
         text: 'Hello',
-        reasoning: { mode: 'on' },
+        reasoning: { kind: 'on' },
       });
     });
 
@@ -110,8 +113,8 @@ describe('useSendMessage', () => {
     expect(callArg.chatId).toBe(chatId);
     expect(callArg.userText).toBe('Hello');
     expect(callArg.apiKey).toBe('test-key');
-    // No CORS proxy configured — globalUnlocker should be the empty default
-    expect(callArg.globalUnlocker).toBe('');
+    // No CORS proxy configured — globalInstructions should be the empty default
+    expect(callArg.globalInstructions).toBe('');
   });
 
   it('chat-mode: reuses existing ChatRow and does not create a new one', async () => {
@@ -143,7 +146,7 @@ describe('useSendMessage', () => {
         chatId: existing,
         personaId,
         text: 'Hi',
-        reasoning: { mode: 'on' },
+        reasoning: { kind: 'on' },
       });
     });
 

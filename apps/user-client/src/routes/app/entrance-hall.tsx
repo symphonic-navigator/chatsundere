@@ -7,6 +7,7 @@ import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useDisplayName, useSettings } from '../../data/settings.js';
+import { APP_VERSION } from '../../lib/version.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 interface RoomTileProps {
@@ -115,9 +116,8 @@ export function EntranceHall(): JSX.Element {
         <RoomTile
           label="My History"
           icon="◯"
-          meta="Coming in Phase 4"
-          disabled
-          tooltip="Coming in Phase 4"
+          meta={`${chats.data?.length ?? 0} chats`}
+          to="/app/history"
         />
         <RoomTile
           label="My Treasury"
@@ -134,6 +134,10 @@ export function EntranceHall(): JSX.Element {
         />
         <RoomTile label="My Account" icon="⌬" meta="Identity & auth" to="/app/account" />
       </div>
+
+      <footer className="mt-auto pt-6 text-center text-[10px] uppercase tracking-widest text-paper-soft/40">
+        v{APP_VERSION.version} · sha {APP_VERSION.sha}
+      </footer>
     </section>
   );
 }

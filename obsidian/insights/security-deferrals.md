@@ -239,3 +239,80 @@ Full audit run on the four functional commits of Squash β. Critical: none. High
 - **Severity:** unconfirmed; depends on key-rotation flow implementation.
 - **Rationale for deferral:** Belongs in the same Larissa audit that covers the join flows.
 - **Follow-up commitment:** Larissa audit task at end of onboarding-overhaul squash (Task 24) explicitly checks the AAD-source consistency between join, login, and key-rotation flows.
+
+## Credential bus — new access surface to unsealed keys (2026-06-01)
+
+The credential bus (`apps/user-client/src/credentials/`) is a new place that
+calls `openSecret` to return decrypted provider API keys to in-app consumers
+(future integrations). It changes no crypto primitive and adds no storage, but
+it widens *who* can request a decrypted key beyond the chat send path. Not a
+Larissa-gated change (no `auth-/sync-/proxy-service` or `packages/crypto`
+touch). Follow-up to watch when the first integration lands: ensure integration
+code retrieves keys only at the point of an outbound call and does not persist
+or log the plaintext.
+
+## calculate_js sandbox — client-side JS execution surface (2026-06-02)
+
+The `calculate_js` tool (`apps/user-client/src/tools/`) executes
+**model-generated** JavaScript in the browser. It is not a Larissa-gated change
+(no `auth-/sync-/proxy-service` or `packages/crypto` touch), but it is a new
+security-sensitive surface and is logged here deliberately.
+
+- **Boundary:** a fresh Web Worker per call (`sandbox.worker.ts` +
+  `sandbox-host.ts`), terminated after the reply or on a 10 s timeout / abort.
+  Dangerous globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `importScripts`,
+  timers, `Worker`, `indexedDB`, `caches`, …) are nulled on the Worker `self`
+  and additionally shadowed as function-local `var … = undefined` inside the
+  eval scope (`sandbox-exec.ts`). Pure compute only — no DOM, no network.
+- **Threat model:** the code is produced by the LLM (delivered over the provider
+  stream), not by an attacker directly, but a hostile or compromised provider
+  response could inject code — hence the Worker isolation + nulled
+  network/storage globals. Output is capped (4 KB) and the run is time-bounded.
+- **Why a Worker and not an iframe:** an origin-isolated iframe buys nothing for
+  pure compute (no DOM access is granted). Revisit the boundary (sandboxed
+  iframe / stricter isolation) only if a future tool needs DOM or richer
+  capabilities.
+- **Follow-up to watch:** when provider-side web-search integrations or any
+  DOM-touching tool land, re-evaluate the isolation model and consider a Larissa
+  pass on the execution boundary at that point.
+
+## 2026-06-02 — Web-interfacing integration: planned outbound surface
+
+The web-interfacing spine is dormant (no adapter), so there is no network call
+yet. When the nano-gpt web adapter lands, the integration will send the user's
+query/URL **plus the NSFW flag and location** to an upstream — privacy-sensitive
+context leaving the device. Discipline for the adapter: retrieve the provider key
+only at the outbound point via the credential bus (never persist or log it); never
+log the query, URL, or location. Not a Larissa item for the spine (client-only,
+no auth/sync/proxy/crypto path) — but the adapter that lights it up will be.
+
+## 2026-06-03 — Web-interfacing integration: realised outbound surface
+
+The nano-gpt web adapter landed (`packages/llm-unified/src/web-adapters/nano-gpt-web.ts`),
+so the surface above is now live. How the discipline was honoured:
+
+- **Query/URL leave the device.** `web_search` sends the conversation-derived
+  query to the chosen provider (Linkup/Exa/Brave) via nano-gpt's `/api/web`;
+  `web_fetch` sends the target URL to `/scrape-urls`. Inherent to web search,
+  surfaced honestly to the user by a quiet zero-knowledge line in the settings
+  section ("Search queries and fetched pages leave your device…").
+- **Routes through the user's own CORS proxy.** The web endpoints send no CORS
+  headers (measured), so the adapter routes via the user-configured `corsProxy`
+  rail (reusing `buildRequest`), not client-direct. The proxy is the user's own
+  infrastructure (their VPS), so it seeing the query/key is within the trust
+  model — but it *is* a hop, recorded here.
+- **Key handling.** The nano-gpt key is fetched MasterKey-gated at the outbound
+  point via the credential bus (`ctx.getKey`, call-time only) and the decrypted
+  CORS-proxy shared key the same way (`openSecret`); neither is persisted or
+  logged. The query/URL are never logged.
+- **NSFW + location are NOT sent** to nano-gpt — its `/api/web` body accepts
+  neither, so the adapter drops them (they remain on `WebContext` for a future
+  brave-direct backend that would localise/filter). This *narrows* the
+  2026-06-02 "planned" concern: nano-gpt receives only the query/URL, not the
+  NSFW flag or location.
+- **Constructive failure.** Adapter errors are caught in the tool `execute` and
+  returned as a constructive `ToolResult` error rather than an unhandled throw.
+- Not a Larissa-gated change (llm-unified + user-client only; no
+  `auth-/sync-/proxy-service` or `packages/crypto` touch).
+- **Phase-2 follow-up:** route the call through the first-party `proxy-service`
+  once it exists, so even the transport hop is first-party and auditable.

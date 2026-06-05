@@ -48,6 +48,19 @@ describe('parseOpenAiSseStream', () => {
     ]);
   });
 
+  it('emits a usage chunk from a final usage-only payload (empty choices)', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":14,"completion_tokens":10,"total_tokens":24}}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([
+      { type: 'token', text: 'hi' },
+      { type: 'usage', usage: { promptTokens: 14, completionTokens: 10, totalTokens: 24 } },
+    ]);
+  });
+
   it('handles chunks split across multiple network reads', async () => {
     const stream = streamOf(
       'data: {"choices":[{"delta":{"con',
@@ -106,5 +119,55 @@ describe('parseOpenAiSseStream', () => {
     expect(chunks).toEqual([
       { type: 'tool-call', toolCallId: 'call_1', name: 'web_search', argumentsJson: '{"q":"hi"}' },
     ]);
+  });
+});
+
+describe('parseOpenAiSseStream — reasoning', () => {
+  it('emits a reasoning chunk from delta.reasoning (modern field)', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"reasoning":"Let me think..."}}]}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([{ type: 'reasoning', text: 'Let me think...' }]);
+  });
+
+  it('emits a reasoning chunk from delta.reasoning_content (legacy field)', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"reasoning_content":"Pondering deeply"}}]}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([{ type: 'reasoning', text: 'Pondering deeply' }]);
+  });
+
+  it('concatenates modern and legacy reasoning fields into a single chunk', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"reasoning":"modern-","reasoning_content":"legacy"}}]}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([{ type: 'reasoning', text: 'modern-legacy' }]);
+  });
+
+  it('emits reasoning before token when both are present in the same event', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"reasoning":"think","content":"speak"}}]}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([
+      { type: 'reasoning', text: 'think' },
+      { type: 'token', text: 'speak' },
+    ]);
+  });
+
+  it('emits no reasoning chunk when reasoning fields are empty or null', async () => {
+    const stream = streamOf(
+      'data: {"choices":[{"delta":{"reasoning":"","reasoning_content":null,"content":"hi"}}]}\n\n',
+      'data: [DONE]\n\n',
+    );
+    const chunks = await collect(parseOpenAiSseStream(stream));
+    expect(chunks).toEqual([{ type: 'token', text: 'hi' }]);
   });
 });

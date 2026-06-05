@@ -1,29 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  type ServiceKind,
+  aggregateServiceKinds,
+  getProvider,
+  providerServiceKinds,
+  providersContributing,
+} from '@chatsundere/llm-unified';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { MindspaceTexture, SettingsRow } from '../../boot/client-data-db.js';
 import { AccordionCard } from '../../components/AccordionCard.js';
+import { AddProviderPicker } from '../../components/AddProviderPicker.js';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { CapBadgeRow } from '../../components/CapBadgeRow.js';
+import { CorsProxyBlock } from '../../components/CorsProxyBlock.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
 import { SaveBar } from '../../components/SaveBar.js';
+import { WebInterfacingSection } from '../../components/WebInterfacingSection.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
+import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../lib/built-in-providers.js';
+import { usableTemplateIds, useUsableTemplateIds } from '../../lib/usable-providers.js';
+import { webBackendOptions } from '../../lib/web-backend-options.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
-
-const BUILT_IN_PROVIDERS = [
-  { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
-  { id: 'novita', name: 'Novita AI', monogram: 'No' },
-  { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
-] as const;
 
 interface SettingsDraft {
   globalAboutMe: string;
-  globalUnlockerPrompt: string;
+  globalInstructions: string;
   defaultMindspaceId: string;
   userTexture: MindspaceTexture;
 }
@@ -31,7 +39,7 @@ interface SettingsDraft {
 function draftFromRow(s: SettingsRow): SettingsDraft {
   return {
     globalAboutMe: s.globalAboutMe,
-    globalUnlockerPrompt: s.globalUnlockerPrompt,
+    globalInstructions: s.globalInstructions,
     defaultMindspaceId: s.defaultMindspaceId,
     userTexture: s.userTexture,
   };
@@ -40,53 +48,177 @@ function draftFromRow(s: SettingsRow): SettingsDraft {
 function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
   return (
     a.globalAboutMe === b.globalAboutMe &&
-    a.globalUnlockerPrompt === b.globalUnlockerPrompt &&
+    a.globalInstructions === b.globalInstructions &&
     a.defaultMindspaceId === b.defaultMindspaceId &&
     a.userTexture === b.userTexture
   );
 }
 
-function ProvidersList(): JSX.Element {
+/**
+ * Honest placeholder (disabled over hidden): when models without vision can't
+ * read attached images, a substitute vision model will describe them. Dormant
+ * until the image-attachment subsystem lands. No persistence, no picker yet.
+ */
+export function SubstituteVisionPlaceholder(): JSX.Element {
+  return (
+    <div className="opacity-60">
+      <p className="mb-3 text-[11px] text-paper-soft">
+        Route screenshots and images through a vision-capable model, so a chat model that can't see
+        images on its own can still read them. One global choice for all personas.
+      </p>
+      <button
+        type="button"
+        disabled
+        title="Activates once image attachments arrive (coming soon)"
+        className="rounded-md border border-paper-soft/20 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft/40"
+      >
+        Choose substitute model
+      </button>
+      <p className="mt-2 text-[11px] text-paper-soft">
+        Activates once image attachments arrive (coming soon).
+      </p>
+    </div>
+  );
+}
+
+/** Upstream Providers: proxy block, summary, configured list, add-picker. */
+export function ProvidersSection(): JSX.Element {
   const providers = useProviders();
-  const [openSheet, setOpenSheet] = useState<'nano-gpt' | 'novita' | 'ollama-cloud' | null>(null);
+  const settings = useSettings();
+  const [openSheet, setOpenSheet] = useState<ProviderTemplateId | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  const rows = providers.data ?? [];
+  const hasProxy = !!settings.data?.corsProxy;
+  const usable = usableTemplateIds(rows, hasProxy);
+  const lit = aggregateServiceKinds(usable);
+
+  const tooltipFor = (k: ServiceKind): string => {
+    const contributors = providersContributing(k).filter(
+      (id) => !rows.some((r) => r.templateId === id),
+    );
+    if (contributors.length === 0) return 'Coming soon';
+    const names = contributors.map((id) => getProvider(id)?.displayName ?? id);
+    return `Add ${names.join(', ')} to unlock ${k.toUpperCase()}`;
+  };
+
+  function statusOf(row: { templateId: string; enabled: boolean }): string {
+    if (!row.enabled) return '✗ Not connected';
+    const needsProxy = getProvider(row.templateId)?.corsHint === 'requires-proxy';
+    if (needsProxy && !hasProxy) return '✗ Needs proxy';
+    return '● Connected';
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      {BUILT_IN_PROVIDERS.map((b) => {
-        const row = providers.data?.find((p) => p.templateId === b.id);
-        const connected = !!row?.enabled;
-        return (
-          <button
-            key={b.id}
-            type="button"
-            className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-3 text-left hover:bg-white/[0.04]"
-            onClick={() => setOpenSheet(b.id)}
-          >
-            <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
-              {b.monogram}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-display text-sm text-paper">{b.name}</div>
-              <div className="text-xs text-paper-soft">
-                {connected ? '● Connected · Key valid' : 'Not connected'}
+    <div className="flex flex-col gap-3">
+      <CorsProxyBlock />
+
+      <div>
+        <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">
+          What you have
+        </div>
+        <CapBadgeRow lit={lit} tooltipFor={tooltipFor} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="rounded-md border border-white/5 bg-white/[0.02] p-4 text-sm text-paper-soft">
+          Your Circle has no voice yet — add a provider to begin.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => setOpenSheet(row.templateId as ProviderTemplateId)}
+              className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-3 text-left hover:bg-white/[0.04]"
+            >
+              <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
+                {BUILT_IN_PROVIDERS.find((b) => b.id === row.templateId)?.monogram ??
+                  row.templateId.slice(0, 2)}
               </div>
-              <div className="mt-1 flex gap-1">
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
-                  Text
-                </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-sm text-paper">
+                  {getProvider(row.templateId)?.displayName ?? row.templateId}
+                </div>
+                <div className="text-xs text-paper-soft">{statusOf(row)}</div>
+                <div className="mt-1">
+                  <CapBadgeRow lit={providerServiceKinds(row.templateId)} />
+                </div>
               </div>
-            </div>
-            <span className="text-paper-soft">▸</span>
-          </button>
-        );
-      })}
-      <p className="mt-2 text-[11px] text-paper-soft">
-        Keys are tested automatically on save. Each provider can be added once.
-      </p>
+              <span className="text-paper-soft">▸</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setPicking(true)}
+        className="rounded-md border border-dashed border-white/15 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
+      >
+        + Add provider
+      </button>
+
+      {picking ? (
+        <AddProviderPicker
+          configuredTemplateIds={rows.map((r) => r.templateId)}
+          hasProxy={hasProxy}
+          onPick={(id) => {
+            setPicking(false);
+            setOpenSheet(id);
+          }}
+          onNeedProxy={() => {
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
+
       {openSheet ? (
         <ProviderSheet templateId={openSheet} onClose={() => setOpenSheet(null)} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Web-interfacing settings, hidden-until-unlocked: only mounts once a usable
+ * provider contributes a `web` offering (spec §2.5 — a deliberate exception to
+ * "disabled over hidden", which still applies *within* the section). All web
+ * backends today need the CORS proxy (their endpoints lack CORS), so when no
+ * proxy is configured the section renders a disabled "needs a proxy" notice
+ * rather than offering pickers that cannot run. Owns the data wiring so
+ * `WebInterfacingSection` stays pure.
+ */
+function WebInterfacingSettings(): JSX.Element | null {
+  const usable = useUsableTemplateIds();
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  if (!aggregateServiceKinds(usable).includes('web')) return null;
+  const hasProxy = settings.data?.corsProxy != null;
+  const options = webBackendOptions(usable, hasProxy);
+  // Web offerings exist but all require the CORS proxy — disabled over hidden.
+  if (options.length === 0) {
+    return (
+      <AccordionCard icon="◍" label="Web" meta="Search & fetch backends">
+        <p className="web-needs-proxy">
+          Web search and fetch need a CORS proxy. Set one up under Upstream Providers above to
+          enable them.
+        </p>
+      </AccordionCard>
+    );
+  }
+  const wi = settings.data?.webInterfacing ?? { search: null, fetch: null };
+  return (
+    <AccordionCard icon="◍" label="Web" meta="Search & fetch backends">
+      <WebInterfacingSection
+        options={options}
+        search={wi.search}
+        fetch={wi.fetch}
+        onChange={(next) => update.mutate({ webInterfacing: next })}
+      />
+    </AccordionCard>
   );
 }
 
@@ -133,8 +265,8 @@ export function Settings(): JSX.Element {
     const orig = draftFromRow(settings.data);
     const diff: Partial<SettingsDraft> = {};
     if (draft.globalAboutMe !== orig.globalAboutMe) diff.globalAboutMe = draft.globalAboutMe;
-    if (draft.globalUnlockerPrompt !== orig.globalUnlockerPrompt)
-      diff.globalUnlockerPrompt = draft.globalUnlockerPrompt;
+    if (draft.globalInstructions !== orig.globalInstructions)
+      diff.globalInstructions = draft.globalInstructions;
     if (draft.defaultMindspaceId !== orig.defaultMindspaceId)
       diff.defaultMindspaceId = draft.defaultMindspaceId;
     if (draft.userTexture !== orig.userTexture) diff.userTexture = draft.userTexture;
@@ -208,28 +340,34 @@ export function Settings(): JSX.Element {
 
       <AccordionCard
         icon="⚿"
-        label="Global System Prompt"
-        meta="The unlocker — prepended to every persona"
+        label="Global Instructions"
+        meta="Your own instructions — added to every persona"
       >
         <AutoSizeTextarea
-          aria-label="Global system prompt"
+          aria-label="Global instructions"
           minRows={4}
           maxRows={20}
-          value={draft.globalUnlockerPrompt}
-          onChange={(v) => patch({ globalUnlockerPrompt: v })}
+          value={draft.globalInstructions}
+          onChange={(v) => patch({ globalInstructions: v })}
         />
         <p className="mt-2 text-[11px] text-paper-soft">
-          This text is prepended to every persona's system prompt. Mainly useful for permissive but
-          cautious open-source models. Always global, no per-persona override.
+          Added to every persona's system prompt. Your own global wishes — the curated Chatsundere
+          tonality is a separate per-persona toggle. Always global, no per-persona override.
         </p>
       </AccordionCard>
 
       <AccordionCard
         icon="⬢"
         label="Upstream Providers"
-        meta={`${(providers.data ?? []).filter((p) => p.enabled).length} of 3 connected`}
+        meta={`${(providers.data ?? []).length} provider(s)`}
       >
-        <ProvidersList />
+        <ProvidersSection />
+      </AccordionCard>
+
+      <WebInterfacingSettings />
+
+      <AccordionCard icon="◫" label="Image understanding" meta="For models without vision">
+        <SubstituteVisionPlaceholder />
       </AccordionCard>
 
       <SaveBar

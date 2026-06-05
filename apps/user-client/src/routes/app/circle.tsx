@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { PersonaCard } from '../../components/PersonaCard.js';
+import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
@@ -28,6 +29,7 @@ export function Circle(): JSX.Element {
   const providers = useProviders();
   const mindspaces = useMindspaces();
   const settings = useSettings();
+  const chats = useChats();
   const setMindspace = useMindspaceStore((s) => s.update);
 
   useEffect(() => {
@@ -49,6 +51,13 @@ export function Circle(): JSX.Element {
 
   const defaultMindspaceId = settings.data?.defaultMindspaceId ?? '';
   const defaultTexture = settings.data?.userTexture ?? null;
+
+  // The chat list is ordered most-recently-active first, so the first row we
+  // see for a persona is its most-recent chat — that's the one "Continue" resumes.
+  const lastChatByPersona = new Map<string, string>();
+  for (const c of chats.data ?? []) {
+    if (!lastChatByPersona.has(c.personaId)) lastChatByPersona.set(c.personaId, c.id);
+  }
 
   return (
     <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-24 pt-4">
@@ -84,8 +93,11 @@ export function Circle(): JSX.Element {
               persona={p}
               mindspace={ms}
               hasProvider={enabledProviderIds.has(p.providerId)}
-              onChat={(personaId) => {
-                navigate(`/app/chat/new?personaId=${personaId}`);
+              lastChatId={lastChatByPersona.get(p.id) ?? null}
+              onChat={(personaId, lastChatId) => {
+                navigate(
+                  lastChatId ? `/app/chat/${lastChatId}` : `/app/chat/new?personaId=${personaId}`,
+                );
               }}
             />
           );

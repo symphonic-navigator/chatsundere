@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { uuidv7 } from 'uuidv7';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
-import { useChat, useCreateChat, useToggleBookmark, useUpdateChat } from '../../src/data/chats.js';
+import {
+  useChat,
+  useCreateChat,
+  useDeleteChat,
+  useToggleBookmark,
+  useUpdateChat,
+} from '../../src/data/chats.js';
+import { useStreamManagerStore } from '../../src/state/stream-manager.store.js';
 
 function wrapper(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
@@ -29,6 +36,7 @@ async function seedPersonaWithMindspace() {
     colour: '#fff',
     font: 'serif',
     instructions: '',
+    canonicalId: null,
     providerId: 'pr',
     modelId: 'm',
     mindspaceId: first.id,
@@ -36,6 +44,8 @@ async function seedPersonaWithMindspace() {
     textureOverride: null,
     temperature: 0.85,
     adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -166,5 +176,92 @@ describe('chat hooks', () => {
     const c2 = await db.chats.get(chatId);
     expect(m2?.bookmarked).toBe(false);
     expect(c2?.bookmarkedMessageCount).toBe(0);
+  });
+});
+
+describe('useDeleteChat', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests({ keepData: false });
+    // Reset the stream-manager between tests.
+    useStreamManagerStore.setState({ streams: new Map() });
+  });
+
+  it('deletes the chat row, its messages, and their pills in one tx', async () => {
+    const db = await openClientDataDb();
+    const { personaId } = await seedPersonaWithMindspace();
+    const qc = new QueryClient();
+    const { result: createH } = renderHook(() => useCreateChat(), { wrapper: wrapper(qc) });
+    const chatId = await act(async () => await createH.current.mutateAsync({ personaId }));
+
+    const msgId = uuidv7();
+    await db.messages.add({
+      id: msgId,
+      chatId,
+      role: 'user',
+      contentBlocks: [{ type: 'text', text: 'hi' }],
+      createdAt: 0,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    await db.pills.add({
+      id: uuidv7(),
+      messageId: msgId,
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {},
+      createdAt: 0,
+    });
+
+    const { result } = renderHook(() => useDeleteChat(), { wrapper: wrapper(qc) });
+    await act(async () => await result.current.mutateAsync(chatId));
+
+    expect(await db.chats.get(chatId)).toBeUndefined();
+    expect(await db.messages.where('chatId').equals(chatId).count()).toBe(0);
+    expect(await db.pills.where('messageId').equals(msgId).count()).toBe(0);
+  });
+
+  it('aborts a live stream for the chat before deleting', async () => {
+    const { personaId } = await seedPersonaWithMindspace();
+    const qc = new QueryClient();
+    const { result: createH } = renderHook(() => useCreateChat(), { wrapper: wrapper(qc) });
+    const chatId = await act(async () => await createH.current.mutateAsync({ personaId }));
+
+    const abort = vi.fn();
+    useStreamManagerStore.setState({
+      streams: new Map([
+        [
+          chatId,
+          {
+            chatId,
+            personaId,
+            draftMessageId: uuidv7(),
+            controller: { abort } as unknown as AbortController,
+            status: 'streaming',
+            contentBuffer: [],
+            pillBuffer: [],
+            startedAt: 0,
+            reusedDraft: false,
+          },
+        ],
+      ]),
+    });
+
+    const { result } = renderHook(() => useDeleteChat(), { wrapper: wrapper(qc) });
+    await act(async () => await result.current.mutateAsync(chatId));
+
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(useStreamManagerStore.getState().streams.has(chatId)).toBe(false);
+  });
+
+  it('is a no-op for stream-abort when no live stream', async () => {
+    const { personaId } = await seedPersonaWithMindspace();
+    const qc = new QueryClient();
+    const { result: createH } = renderHook(() => useCreateChat(), { wrapper: wrapper(qc) });
+    const chatId = await act(async () => await createH.current.mutateAsync({ personaId }));
+    const { result } = renderHook(() => useDeleteChat(), { wrapper: wrapper(qc) });
+    // No live stream — should not throw.
+    await act(async () => await result.current.mutateAsync(chatId));
+    expect((await openClientDataDb()).chats.get(chatId)).resolves.toBeUndefined();
   });
 });

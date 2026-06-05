@@ -1,4 +1,5 @@
-import type { KnownModel } from '@chatsundere/llm-unified';
+import { getOffering } from '@chatsundere/llm-unified';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -14,6 +15,7 @@ const aurum: PersonaRow = {
   colour: '#c9a84c',
   font: 'serif',
   instructions: '',
+  canonicalId: null,
   providerId: '',
   modelId: '',
   mindspaceId: null,
@@ -21,34 +23,37 @@ const aurum: PersonaRow = {
   textureOverride: null,
   temperature: 0.85,
   adultPersona: false,
+  chatsundereTonality: true,
+  contextWindow: null,
   createdAt: 1,
   updatedAt: 1,
 };
-const model: KnownModel = {
-  id: 'm',
-  displayName: 'M',
-  contextWindow: 1000,
-  reasoning: { kind: 'no_reasoning', defaultOn: false, replayReasoning: false },
-  vision: false,
-  tools: false,
-};
+// nano-gpt deepseek-v4-flash: steps reasoning, 200_000 context
+// biome-ignore lint/style/noNonNullAssertion: test fixture — this slug is guaranteed to exist in the catalogue
+const offering = getOffering('nano-gpt', 'deepseek/deepseek-v4-flash')!;
 
 function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
+  // The topbar renders <PersonaAvatar>, which reads its row via TanStack Query.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <div data-testid="outside">outside</div>
-      <InteractionMode
-        persona={aurum}
-        model={model}
-        usedTokens={0}
-        draftValue={extra.draftValue ?? 'hi'}
-        onDraftChange={vi.fn()}
-        onSend={vi.fn()}
-        isStreamLive={false}
-        onExit={vi.fn()}
-        {...extra}
-      />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <div data-testid="outside">outside</div>
+        <InteractionMode
+          persona={aurum}
+          chat={null}
+          offering={offering}
+          usedTokens={0}
+          draftValue={extra.draftValue ?? 'hi'}
+          onDraftChange={vi.fn()}
+          onSend={vi.fn()}
+          isStreamLive={false}
+          onExit={vi.fn()}
+          onRenameChat={vi.fn()}
+          {...extra}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -58,22 +63,25 @@ beforeEach(() => {
 });
 
 describe('InteractionMode lifecycle', () => {
-  it('renders Topbar + Cockpit + DimOverlay', () => {
+  it('renders Topbar + Cockpit (DimOverlay now lives at chat-page level)', () => {
     const { container } = mount();
     expect(container.querySelector('.interaction-topbar')).not.toBeNull();
     expect(container.querySelector('.cockpit')).not.toBeNull();
-    expect(container.querySelector('.dim-overlay')).not.toBeNull();
+    // The overlay was lifted out of InteractionMode so its un-dim fade
+    // survives this component unmounting on close — it renders in chat-page.
+    expect(container.querySelector('.dim-overlay')).toBeNull();
   });
 
-  it('DimOverlay activates only on textarea focus', () => {
+  it('drives inputFocused from textarea focus (cockpit autofocuses on open)', () => {
     const { container } = mount();
-    const overlay = container.querySelector('.dim-overlay') as HTMLElement;
-    expect(overlay.getAttribute('data-active')).not.toBe('true');
     const ta = container.querySelector('textarea') as HTMLTextAreaElement;
-    fireEvent.focus(ta);
-    expect(overlay.getAttribute('data-active')).toBe('true');
+    // The cockpit autofocuses its input on open so the user can type straight
+    // away, so the focus flag (which drives the overlay) starts true.
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
     fireEvent.blur(ta);
-    expect(overlay.getAttribute('data-active')).not.toBe('true');
+    expect(useCurrentChatStore.getState().inputFocused).toBe(false);
+    fireEvent.focus(ta);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
   });
 
   it('Send with non-empty input closes after a 100ms delay', async () => {
@@ -97,6 +105,19 @@ describe('InteractionMode lifecycle', () => {
     expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
   });
 
+  it('tap on the brand logo does not close (its click navigates instead)', () => {
+    // The logo lives in the header, outside the interaction container. An
+    // unpinned outside-tap would normally close + swallow the click; the logo
+    // is exempt so its <Link> can navigate back to the Entrance Hall.
+    const logo = document.createElement('a');
+    logo.className = 'brand-logo';
+    document.body.appendChild(logo);
+    mount();
+    fireEvent.pointerDown(logo);
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+    logo.remove();
+  });
+
   it('outside-tap does NOT close when pinned', () => {
     useCurrentChatStore.getState().togglePin();
     const { getByTestId } = mount();
@@ -114,6 +135,21 @@ describe('InteractionMode lifecycle', () => {
     });
     expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
     vi.useRealTimers();
+  });
+
+  it('Send while pinned keeps input focus → full interaction', () => {
+    useCurrentChatStore.getState().togglePin();
+    const { container } = mount({ draftValue: 'hi' });
+    const ta = container.querySelector('textarea') as HTMLTextAreaElement;
+    ta.focus();
+    fireEvent.focus(ta);
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
+    fireEvent.click(container.querySelector('[data-dual="action"]') as HTMLButtonElement);
+    // Pinned = full interaction: the input keeps focus so the user can keep
+    // typing. The streamed reply is legible not because focus was shed, but
+    // because the DimOverlay is suppressed while pinned (chat-page level).
+    expect(useCurrentChatStore.getState().inputFocused).toBe(true);
+    expect(document.activeElement).toBe(ta);
   });
 
   it('blur alone does not close', () => {

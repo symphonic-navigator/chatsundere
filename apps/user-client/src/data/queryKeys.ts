@@ -10,7 +10,10 @@ export const QK = {
   personas: ['personas'] as const,
   persona: (id: string) => ['personas', id] as const,
   providers: ['providers'] as const,
+  credential: (id: string) => ['providers', 'credential', id] as const,
   mindspaces: ['mindspaces'] as const,
   chats: ['chats'] as const,
   chat: (id: string) => ['chats', id] as const,
+  bookmarks: ['bookmarks'] as const,
+  personaAvatar: (id: string) => ['persona-avatar', id] as const,
 };

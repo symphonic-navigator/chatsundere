@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
-import { type ChatRow, getClientDataDb } from '../boot/client-data-db.js';
+import { type ChatRow, type ContentBlock, getClientDataDb } from '../boot/client-data-db.js';
+import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import { QK } from './queryKeys.js';
 
 /** List all chat rows ordered by most-recently-active first. */
@@ -120,6 +121,131 @@ export function useToggleBookmark() {
       // Broad invalidation — we don't know which chat query is mounted.
       void qc.invalidateQueries({ queryKey: QK.chats });
       void qc.invalidateQueries({ queryKey: ['chats'] });
+      void qc.invalidateQueries({ queryKey: QK.bookmarks });
+    },
+  });
+}
+
+/**
+ * Delete a chat and cascade-delete its messages + pills inside a single
+ * Dexie transaction. Pre-step: abort any live background stream for this
+ * chat via `useStreamManagerStore.abortDiscard` (no-op when no stream).
+ *
+ * Invalidates the chat list on success. Per spec §3.7.
+ */
+export function useDeleteChat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (chatId: string): Promise<void> => {
+      // Abort any live stream first so we don't leave a controller dangling.
+      await useStreamManagerStore.getState().abortDiscard(chatId);
+
+      const db = getClientDataDb();
+      await db.transaction('rw', db.chats, db.messages, db.pills, async () => {
+        const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+        const msgIds = msgs.map((m) => m.id);
+        if (msgIds.length > 0) {
+          await db.pills.where('messageId').anyOf(msgIds).delete();
+        }
+        await db.messages.where('chatId').equals(chatId).delete();
+        await db.chats.delete(chatId);
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: QK.chats });
+    },
+  });
+}
+
+/**
+ * Fork a chat at a given message into a new, fully independent session.
+ * Copies the chat row plus every message and pill up to AND INCLUDING the
+ * branch-point message, assigning fresh ids throughout. Pill-id references
+ * inside copied `contentBlocks` are rewritten to point at the new pills.
+ * Persona/provider/mindspace are referenced, never duplicated.
+ *
+ * Returns the new chat's id. Throws if the source chat or branch-point
+ * message is absent (e.g. raced against a delete) — the transaction aborts
+ * and leaves no partial branch.
+ */
+export function useBranchChat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      sourceChatId: string;
+      branchPointMessageId: string;
+      title: string;
+    }): Promise<string> => {
+      const db = getClientDataDb();
+      const newChatId = uuidv7();
+      const now = Date.now();
+
+      await db.transaction('rw', db.chats, db.messages, db.pills, async () => {
+        const source = await db.chats.get(args.sourceChatId);
+        if (!source) throw new Error(`useBranchChat: source chat ${args.sourceChatId} not found`);
+
+        const allMsgs = await db.messages
+          .where('chatId')
+          .equals(args.sourceChatId)
+          .sortBy('createdAt');
+        const cutIdx = allMsgs.findIndex((m) => m.id === args.branchPointMessageId);
+        if (cutIdx === -1)
+          throw new Error(`useBranchChat: branch point ${args.branchPointMessageId} not found`);
+        const copied = allMsgs.slice(0, cutIdx + 1);
+
+        const copiedIds = copied.map((m) => m.id);
+        const pills = copiedIds.length
+          ? await db.pills.where('messageId').anyOf(copiedIds).toArray()
+          : [];
+
+        const msgIdMap = new Map(copied.map((m) => [m.id, uuidv7()]));
+        const pillIdMap = new Map(pills.map((pl) => [pl.id, uuidv7()]));
+
+        const lastCopied = copied[copied.length - 1];
+        await db.chats.add({
+          id: newChatId,
+          personaId: source.personaId,
+          title: args.title,
+          resolvedMindspaceId: source.resolvedMindspaceId,
+          createdAt: now,
+          lastMessageAt: lastCopied?.createdAt ?? now,
+          bookmarkedMessageCount: copied.filter((m) => m.bookmarked).length,
+          draftInput: '',
+        });
+
+        for (const m of copied) {
+          const blocks = (structuredClone(m.contentBlocks) as ContentBlock[]).map((b) =>
+            b.type === 'pill' ? { ...b, pillId: pillIdMap.get(b.pillId) ?? b.pillId } : b,
+          );
+          await db.messages.add({
+            id: msgIdMap.get(m.id) ?? uuidv7(),
+            chatId: newChatId,
+            role: m.role,
+            contentBlocks: blocks,
+            createdAt: m.createdAt,
+            bookmarked: m.bookmarked,
+            bookmarkLabel: m.bookmarkLabel,
+            streamingState: m.streamingState,
+          });
+        }
+
+        for (const pl of pills) {
+          await db.pills.add({
+            id: pillIdMap.get(pl.id) ?? uuidv7(),
+            messageId: msgIdMap.get(pl.messageId) ?? pl.messageId,
+            kind: pl.kind,
+            positionHint: pl.positionHint,
+            status: pl.status,
+            payload: structuredClone(pl.payload),
+            createdAt: pl.createdAt,
+          });
+        }
+      });
+
+      return newChatId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: QK.chats });
     },
   });
 }

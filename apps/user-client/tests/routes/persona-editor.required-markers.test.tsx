@@ -35,7 +35,10 @@ const STABLE_MINDSPACES = { data: [STABLE_MINDSPACE] };
 const STABLE_PROVIDERS = { data: [] as never[] };
 
 vi.mock('@chatsundere/llm-unified', () => ({
-  getProvider: () => ({ id: 'p', displayName: 'P', baseUrl: 'x', knownModels: [] }),
+  getProvider: () => ({ id: 'p', displayName: 'P', baseUrl: 'x', offerings: [] }),
+  getCanonical: () => undefined,
+  listCanonicals: () => [],
+  listOfferings: () => [],
 }));
 
 vi.mock('../../src/data/personas.js', () => ({
