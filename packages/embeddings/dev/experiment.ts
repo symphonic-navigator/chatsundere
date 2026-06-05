@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 // One-off quantisation experiment (not shipped). Measures, on real arctic-embed
 // vectors, how several int4 schemes distort similarity vs the fp32 reference —
-// both as raw cosine deltas AND as ranking impact (recall@10). Schemes:
-// max-abs, zero-point (min/max), mean-centred, and an MSE-optimal clipped
-// zero-point. Run: `pnpm --filter embeddings dev`, open /experiment.html.
+// as raw cosine deltas AND ranking impact (recall@10). Schemes: max-abs,
+// zero-point (min/max), mean-centred, MSE-optimal clipped zero-point, plus a
+// metadata-precision axis (store per-block scale+offset as fp32 / fp16 / int8 —
+// the second level of GGUF k-quants). Run: `pnpm --filter embeddings dev`, open
+// /experiment.html.
 //
-// Method: for each scheme we dequantise every vector and measure
+// Method: dequantise every vector, then measure
 // (a) |cosine_scheme − cosine_fp32| over all pairs, and
 // (b) recall@10: leave-one-out, does the scheme's top-10 nearest match fp32's?
 import { createEmbeddingEngine, formatBackendLabel } from '../src/index.js';
@@ -19,7 +21,7 @@ const log = (s: string) => {
 
 type Kind = 'maxabs' | 'zeropoint' | 'meancentre' | 'asym-mse';
 
-// ---- quantisation schemes (pure) ----
+// ---- value quantisers ----
 
 /** Symmetric max-abs to `bits` bits; blockSize 0 = whole vector (global scale). */
 function quantSymmetric(v: Float32Array, bits: number, blockSize: number): Float32Array {
@@ -43,35 +45,6 @@ function quantSymmetric(v: Float32Array, bits: number, blockSize: number): Float
       if (q > qmax) q = qmax;
       else if (q < -qmax) q = -qmax;
       result[i] = q * scale;
-    }
-  }
-  return result;
-}
-
-/** Asymmetric (zero-point) using the block's raw min/max. */
-function quantAsymmetric(v: Float32Array, bits: number, blockSize: number): Float32Array {
-  const levels = (1 << bits) - 1; // 15 codes (0..15) for 4-bit
-  const bs = blockSize > 0 ? blockSize : v.length;
-  const result = new Float32Array(v.length);
-  for (let start = 0; start < v.length; start += bs) {
-    const end = Math.min(start + bs, v.length);
-    let mn = Number.POSITIVE_INFINITY;
-    let mx = Number.NEGATIVE_INFINITY;
-    for (let i = start; i < end; i++) {
-      const x = v[i] ?? 0;
-      if (x < mn) mn = x;
-      if (x > mx) mx = x;
-    }
-    const scale = mx > mn ? (mx - mn) / levels : 0;
-    for (let i = start; i < end; i++) {
-      if (scale === 0) {
-        result[i] = mn;
-        continue;
-      }
-      let q = Math.round(((v[i] ?? 0) - mn) / scale);
-      if (q > levels) q = levels;
-      else if (q < 0) q = 0;
-      result[i] = q * scale + mn;
     }
   }
   return result;
@@ -107,15 +80,50 @@ function quantMeanCentred(v: Float32Array, bits: number, blockSize: number): Flo
   return result;
 }
 
-// MSE-optimal asymmetric: shrink the [min, max] range toward the block mean by a
-// factor f (clipping outliers), picking the f that minimises reconstruction MSE —
-// a distribution-weighted scale rather than raw min/max.
 const CLIP_FACTORS = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7];
 
-function quantAsymMSE(v: Float32Array, bits: number, blockSize: number): Float32Array {
+// ---- metadata precision (the GGUF "scale-of-scales" idea) ----
+
+/** Round to IEEE-754 half-precision mantissa (~11 effective bits). Values here are well inside fp16's normal range. */
+function fp16Round(x: number): number {
+  if (!Number.isFinite(x) || x === 0) return x;
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x);
+  const step = 2 ** (Math.floor(Math.log2(ax)) - 10); // 10 mantissa bits
+  return sign * Math.round(ax / step) * step;
+}
+
+/** Quantise an array of params to int8 over [lo, hi], returning the dequantised values. */
+function int8RoundArray(vals: number[], lo: number, hi: number): number[] {
+  const span = hi - lo;
+  if (span <= 0) return vals.map(() => lo);
+  const step = span / 255;
+  return vals.map((x) => {
+    let q = Math.round((x - lo) / step);
+    if (q > 255) q = 255;
+    else if (q < 0) q = 0;
+    return lo + q * step;
+  });
+}
+
+/**
+ * Asymmetric quant (zero-point or MSE-optimal clipped) with a metadata-precision
+ * axis: per-block (lo, scale) computed in fp32, then optionally rounded to fp16
+ * or quantised to int8 (per vector) before reconstruction.
+ */
+function quantAsymmetric(
+  v: Float32Array,
+  bits: number,
+  blockSize: number,
+  useMSE: boolean,
+  metaBits: number,
+): Float32Array {
   const levels = (1 << bits) - 1;
   const bs = blockSize > 0 ? blockSize : v.length;
-  const result = new Float32Array(v.length);
+  const starts: number[] = [];
+  const los: number[] = [];
+  const scales: number[] = [];
+
   for (let start = 0; start < v.length; start += bs) {
     const end = Math.min(start + bs, v.length);
     let sum = 0;
@@ -127,42 +135,73 @@ function quantAsymMSE(v: Float32Array, bits: number, blockSize: number): Float32
       if (x < mn) mn = x;
       if (x > mx) mx = x;
     }
-    const mean = sum / (end - start);
-    let bestLo = mn;
-    let bestScale = mx > mn ? (mx - mn) / levels : 0;
-    let bestErr = Number.POSITIVE_INFINITY;
-    for (const f of CLIP_FACTORS) {
-      const lo = mean + f * (mn - mean);
-      const hi = mean + f * (mx - mean);
-      const scale = hi > lo ? (hi - lo) / levels : 0;
-      let err = 0;
-      for (let i = start; i < end; i++) {
-        const x = v[i] ?? 0;
-        let dq = lo;
-        if (scale > 0) {
-          let q = Math.round((x - lo) / scale);
-          if (q > levels) q = levels;
-          else if (q < 0) q = 0;
-          dq = q * scale + lo;
+    let lo = mn;
+    let scale = mx > mn ? (mx - mn) / levels : 0;
+    if (useMSE) {
+      const mean = sum / (end - start);
+      let bestErr = Number.POSITIVE_INFINITY;
+      for (const f of CLIP_FACTORS) {
+        const flo = mean + f * (mn - mean);
+        const fhi = mean + f * (mx - mean);
+        const fscale = fhi > flo ? (fhi - flo) / levels : 0;
+        let err = 0;
+        for (let i = start; i < end; i++) {
+          const x = v[i] ?? 0;
+          let dq = flo;
+          if (fscale > 0) {
+            let q = Math.round((x - flo) / fscale);
+            if (q > levels) q = levels;
+            else if (q < 0) q = 0;
+            dq = q * fscale + flo;
+          }
+          const e = x - dq;
+          err += e * e;
         }
-        const e = x - dq;
-        err += e * e;
-      }
-      if (err < bestErr) {
-        bestErr = err;
-        bestLo = lo;
-        bestScale = scale;
+        if (err < bestErr) {
+          bestErr = err;
+          lo = flo;
+          scale = fscale;
+        }
       }
     }
+    starts.push(start);
+    los.push(lo);
+    scales.push(scale);
+  }
+
+  let qLos = los;
+  let qScales = scales;
+  if (metaBits === 16) {
+    qLos = los.map(fp16Round);
+    qScales = scales.map(fp16Round);
+  } else if (metaBits === 8) {
+    let loMin = Number.POSITIVE_INFINITY;
+    let loMax = Number.NEGATIVE_INFINITY;
+    let scMax = 0;
+    for (const l of los) {
+      if (l < loMin) loMin = l;
+      if (l > loMax) loMax = l;
+    }
+    for (const sc of scales) if (sc > scMax) scMax = sc;
+    qLos = int8RoundArray(los, loMin, loMax);
+    qScales = int8RoundArray(scales, 0, scMax);
+  }
+
+  const result = new Float32Array(v.length);
+  for (let b = 0; b < starts.length; b++) {
+    const start = starts[b] ?? 0;
+    const end = Math.min(start + bs, v.length);
+    const lo = qLos[b] ?? 0;
+    const scale = qScales[b] ?? 0;
     for (let i = start; i < end; i++) {
-      if (bestScale === 0) {
-        result[i] = bestLo;
+      if (scale === 0) {
+        result[i] = lo;
         continue;
       }
-      let q = Math.round(((v[i] ?? 0) - bestLo) / bestScale);
+      let q = Math.round(((v[i] ?? 0) - lo) / scale);
       if (q > levels) q = levels;
       else if (q < 0) q = 0;
-      result[i] = q * bestScale + bestLo;
+      result[i] = q * scale + lo;
     }
   }
   return result;
@@ -188,21 +227,24 @@ interface Scheme {
   bits: number;
   block: number; // 0 = global
   kind: Kind;
+  meta?: number; // metadata precision in bits: 32 (default) | 16 | 8
 }
 
 function dequantise(v: Float32Array, s: Scheme): Float32Array {
   if (s.kind === 'maxabs') return quantSymmetric(v, s.bits, s.block);
-  if (s.kind === 'zeropoint') return quantAsymmetric(v, s.bits, s.block);
   if (s.kind === 'meancentre') return quantMeanCentred(v, s.bits, s.block);
-  return quantAsymMSE(v, s.bits, s.block);
+  return quantAsymmetric(v, s.bits, s.block, s.kind === 'asym-mse', s.meta ?? 32);
 }
 
-/** Stored bytes per vector: packed codes + per-block params (scale, plus an offset unless max-abs). */
+/** Stored bytes per vector: packed codes + per-block params (+ tiny per-vector overhead for int8 metadata). */
 function bytesPerVector(dim: number, s: Scheme): number {
   const dataBytes = Math.ceil((dim * s.bits) / 8);
   const nBlocks = s.block > 0 ? Math.ceil(dim / s.block) : 1;
-  const paramsPerBlock = s.kind === 'maxabs' ? 4 : 8; // fp32 scale (+ fp32 offset)
-  return dataBytes + nBlocks * paramsPerBlock;
+  if (s.kind === 'maxabs') return dataBytes + nBlocks * 4; // fp32 scale only
+  const meta = s.meta ?? 32;
+  const paramBytesPerBlock = meta === 32 ? 8 : meta === 16 ? 4 : 2; // 2 params × (4|2|1) B
+  const vecOverhead = meta === 8 ? 8 : 0; // per-vector lo-range + scale-max
+  return dataBytes + nBlocks * paramBytesPerBlock + vecOverhead;
 }
 
 const SCHEMES: Scheme[] = [
@@ -215,9 +257,12 @@ const SCHEMES: Scheme[] = [
   { name: 'int4 zero-point k=64', bits: 4, block: 64, kind: 'zeropoint' },
   { name: 'int4 zero-point k=32', bits: 4, block: 32, kind: 'zeropoint' },
   { name: 'int4 zero-point k=16', bits: 4, block: 16, kind: 'zeropoint' },
-  // weighting probes, all at k=32 for a fair compare against zero-point k=32:
   { name: 'int4 mean-centre k=32', bits: 4, block: 32, kind: 'meancentre' },
-  { name: 'int4 zero-pt+MSE-clip k=32', bits: 4, block: 32, kind: 'asym-mse' },
+  { name: 'int4 MSE-clip k=32 (meta fp32)', bits: 4, block: 32, kind: 'asym-mse', meta: 32 },
+  // metadata-precision axis on the best int4 scheme:
+  { name: 'int4 MSE-clip k=32 (meta fp16)', bits: 4, block: 32, kind: 'asym-mse', meta: 16 },
+  { name: 'int4 MSE-clip k=32 (meta int8)', bits: 4, block: 32, kind: 'asym-mse', meta: 8 },
+  { name: 'int4 zero-point k=32 (meta int8)', bits: 4, block: 32, kind: 'zeropoint', meta: 8 },
 ];
 
 // A deliberately diverse, multilingual corpus so pair cosines span a wide range.
@@ -305,7 +350,6 @@ async function main() {
   const dim = clean[0]?.length ?? 0;
   log(`embedded ${n} vectors, dim ${dim}`);
 
-  // fp32 reference: pair cosines + per-query top-K neighbour sets.
   const pairs: Array<[Float32Array, Float32Array]> = [];
   const ref: number[] = [];
   for (let i = 0; i < n; i++) {
@@ -323,14 +367,13 @@ async function main() {
   log(`${pairs.length} pairs · recall@${TOP_K} via leave-one-out\n`);
 
   log(
-    `${pad('scheme', 30)}${pad('bits', 5)}${pad('B/vec', 7)}${pad('mean|Δ|', 10)}${pad('p95|Δ|', 10)}${pad('max|Δ|', 10)}recall@${TOP_K}`,
+    `${pad('scheme', 34)}${pad('B/vec', 7)}${pad('mean|Δ|', 10)}${pad('p95|Δ|', 10)}${pad('max|Δ|', 10)}recall@${TOP_K}`,
   );
-  log('-'.repeat(82));
+  log('-'.repeat(81));
 
   for (const s of SCHEMES) {
     const dq = clean.map((v) => (v ? dequantise(v, s) : undefined));
 
-    // (a) raw cosine deltas over all pairs.
     const deltas: number[] = [];
     let p = 0;
     for (let i = 0; i < n; i++) {
@@ -348,7 +391,6 @@ async function main() {
     const p95 = deltas[Math.floor(deltas.length * 0.95)] ?? 0;
     const max = deltas[deltas.length - 1] ?? 0;
 
-    // (b) recall@K: does the scheme's top-K match fp32's?
     let recallSum = 0;
     let queries = 0;
     for (let i = 0; i < n; i++) {
@@ -364,7 +406,7 @@ async function main() {
     const recall = recallSum / Math.max(1, queries);
 
     log(
-      `${pad(s.name, 30)}${pad(String(s.bits), 5)}${pad(String(bytesPerVector(dim, s)), 7)}${pad(mean.toFixed(5), 10)}${pad(p95.toFixed(5), 10)}${pad(max.toFixed(5), 10)}${(recall * 100).toFixed(1)}%`,
+      `${pad(s.name, 34)}${pad(String(bytesPerVector(dim, s)), 7)}${pad(mean.toFixed(5), 10)}${pad(p95.toFixed(5), 10)}${pad(max.toFixed(5), 10)}${(recall * 100).toFixed(1)}%`,
     );
   }
 
