@@ -145,6 +145,51 @@ async function main() {
   log(`usage: ${JSON.stringify(await store.usage())}`);
   await Dexie.delete('embeddings_dev_demo');
 
+  // 4) Quantisation range diagnostics — what value range does arctic actually use?
+  log('\n— quant range diagnostics (what range does arctic actually use?) —');
+  const sampleVecs = [q, enQuery, ...mvecs].filter((v): v is Float32Array => v !== undefined);
+  for (let i = 0; i < sampleVecs.length; i++) {
+    const v = sampleVecs[i];
+    if (!v) continue;
+    let mn = Number.POSITIVE_INFINITY;
+    let mx = Number.NEGATIVE_INFINITY;
+    let maxAbs = 0;
+    let sumSq = 0;
+    for (let j = 0; j < v.length; j++) {
+      const x = v[j] ?? 0;
+      if (x < mn) mn = x;
+      if (x > mx) mx = x;
+      const a = Math.abs(x);
+      if (a > maxAbs) maxAbs = a;
+      sumSq += x * x;
+    }
+    const rms = Math.sqrt(sumSq / v.length);
+    const step = maxAbs / 127;
+    const levels = step > 0 ? Math.round(rms / step) : 0;
+    log(
+      `vec${i}: scale s=${maxAbs.toFixed(4)} range [${mn.toFixed(4)}, ${mx.toFixed(4)}] rms=${rms.toFixed(4)} · int8 step=${step.toFixed(5)} · typical comp ≈ ${levels} levels`,
+    );
+  }
+  // Outlier-dimension fingerprint: mean |value| per dim across all sampled vectors.
+  const dim = sampleVecs[0]?.length ?? 0;
+  const meanAbs = new Float32Array(dim);
+  for (const v of sampleVecs) {
+    for (let j = 0; j < dim; j++) {
+      meanAbs[j] = (meanAbs[j] ?? 0) + Math.abs(v[j] ?? 0) / sampleVecs.length;
+    }
+  }
+  let meanAbsSum = 0;
+  for (let j = 0; j < dim; j++) meanAbsSum += meanAbs[j] ?? 0;
+  const avgDim = dim > 0 ? meanAbsSum / dim : 0;
+  const topDims = Array.from(meanAbs, (m, idx) => ({ idx, m }))
+    .sort((a, b) => b.m - a.m)
+    .slice(0, 8);
+  log(`avg mean|value| across ${dim} dims = ${avgDim.toFixed(4)}`);
+  log(
+    `top-8 dims by mean|value|: ${topDims.map((r) => `#${r.idx}:${r.m.toFixed(3)}(${(avgDim > 0 ? r.m / avgDim : 0).toFixed(1)}×)`).join(' ')}`,
+  );
+  log('(a dim ≫ avg on every vector = an outlier dim; close to avg = well-behaved)');
+
   engine.dispose();
   log('\n✅ smoke complete');
 }
