@@ -121,7 +121,43 @@ landed `packages/embeddings/src/store/codec.ts`):
 The measured end-to-end **recall@10 against the committed fixture is 0.9729**,
 confirming the 97.2% study figure.
 
+## External corroboration
+
+Taehee Jeong, *"4bit-Quantization in Vector-Embedding for RAG"* (ICMLA 2024,
+[arXiv:2501.10534](https://arxiv.org/html/2501.10534v1)) independently reaches
+the same architectural conclusions on three of our four decisions:
+
+- **int4 scalar quantisation of embeddings** is a viable accuracy/size trade — 8×
+  smaller than fp32 (their decision 1, our decision 1).
+- **Group-wise (blockwise) quantisation with a per-group scale** is the lever that
+  recovers accuracy at int4 (their "group-wise quantization", our k=16 blocks).
+- **Brute-force KNN over the quantised vectors**, explicitly chosen over ANN/HNSW
+  for exactness (our decision 4 — int4 + ANN is the deferred large-scale tier).
+
+Their symmetric-int4 group-size-32 RMSE of **0.0048** also corroborates our own
+symmetric max-abs k=32 figure (Δ 0.00498) almost exactly — two independent
+studies, same baseline.
+
+**Where we diverge — and why our recall is much higher.** Their int4 tops out at
+**0.45–0.67 top-10 overlap** vs fp32, whereas ours measures **0.9729**. The gap is
+explained by two levers they do *not* use: (1) **zero-point (asymmetric)
+quantisation** — their method is symmetric throughout, while asymmetric min/max is
+the single biggest int4 lever in our study (~30% delta reduction); and (2)
+**keeping the query at full fp32 precision** and dequantising only the stored
+candidate (asymmetric distance computation) — they quantise queries and documents
+uniformly. The paper thus both validates the *direction* (int4 + group-wise +
+brute-force) and, by omission, sharpens *why* `D768_EQ_I4_L` lands where it does.
+(Absolute numbers are directional, not apples-to-apples: different model, corpus,
+dimensionality, and overlap metric.)
+
 ## References
+
+- Engine design spec: `superpowers/specs/2026-06-05-client-embeddings-engine-design.md`
+- Codec implementation spec: `superpowers/specs/2026-06-05-int4l-codec-design.md`
+- Quant study harness: `packages/embeddings/dev/experiment.ts`
+- Scan benchmark: `packages/embeddings/dev/bench.ts`
+- Results: `obsidian/insights/2026-06-05-quant-experiment-results.csv`
+- Taehee Jeong, "4bit-Quantization in Vector-Embedding for RAG", ICMLA 2024 — arXiv:2501.10534
 
 - Engine design spec: `superpowers/specs/2026-06-05-client-embeddings-engine-design.md`
 - Quant study harness: `packages/embeddings/dev/experiment.ts`
