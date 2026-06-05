@@ -1,9 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { StreamChunk } from '@chatsundere/llm-unified';
+import {
+  type OneShotArgs,
+  type StreamChunk,
+  type WireContentPart,
+  getOffering,
+  runOneShotCompletion,
+} from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
+import { blobToDataUrl } from '../attachments/blob-data-url.js';
+import { resolveAttachmentParts } from '../attachments/resolve-send.js';
+import { describeImage } from '../attachments/substitute-vision.js';
+import { imageDisposition } from '../attachments/vision-gate.js';
+import { buildUserWireContent } from '../attachments/wire-injection.js';
 import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
+import { attachPendingToMessage, listMessageAttachments } from '../data/attachments.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { queryClient } from '../lib/queryClient.js';
@@ -38,6 +50,14 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   userText: string;
   /** The persona's selected web backends, from settings; absent = none. */
   webInterfacing?: { search: OfferingRef | null; fetch: OfferingRef | null };
+  /** Global substitute-vision model ref "providerTemplateId:upstreamSlug"; null = none. */
+  substituteVisionModel?: string | null;
+  /**
+   * The substitute model's resolved one-shot call context (provider, decrypted
+   * api-key, CORS proxy, target). Resolved in the send path because it needs the
+   * MasterKey, which the store never touches. Absent when no substitute is set.
+   */
+  substituteOneShotBase?: Omit<OneShotArgs, 'messages' | 'bodyExtras'>;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -97,7 +117,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const userMessageId = uuidv7();
     const draftMessageId = uuidv7();
 
-    await db.transaction('rw', db.messages, db.chats, async () => {
+    await db.transaction('rw', db.messages, db.chats, db.attachments, async () => {
       await db.messages.add({
         id: userMessageId,
         chatId: args.chatId,
@@ -116,10 +136,29 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         bookmarked: false,
         streamingState: 'incomplete',
       });
+      // Lazy-mode re-home: at compose time a brand-new chat had no row, so the
+      // Cockpit keyed its pending attachments under chatId = '' (see chat-page.tsx,
+      // InteractionMode `chatId={chat?.id ?? activeChatId ?? ''}`). By send time the
+      // real chat exists (created in useSendMessage) — adopt those orphaned rows
+      // onto this chat before binding them to the user message, so they are not lost.
+      if (args.chatId !== '') {
+        const orphans = await db.attachments
+          .where('chatId')
+          .equals('')
+          .filter((a) => a.messageId === null)
+          .toArray();
+        await Promise.all(orphans.map((a) => db.attachments.update(a.id, { chatId: args.chatId })));
+      }
+      // Bind all pending attachments for this chat to the new user message atomically.
+      await attachPendingToMessage(args.chatId, userMessageId);
       await db.chats.update(args.chatId, { lastMessageAt: now + 1, draftInput: '' });
     });
 
-    runIntoDraft(args, draftMessageId, set, get, false);
+    // Resolve the user turn's attachments into multimodal wire content, then
+    // stream. Text-only turns short-circuit to the plain string (unchanged path).
+    const userContent = await resolveUserContent(args, userMessageId);
+
+    runIntoDraft({ ...args, userMessageText: userContent }, draftMessageId, set, get, false);
   },
 
   regenerate: async (args) => {
@@ -186,6 +225,63 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     }
   },
 }));
+
+/**
+ * Resolve a user turn's bound attachments into the wire `content` for that turn:
+ * a plain string when there are no attachments (unchanged behaviour), else a
+ * multimodal `WireContentPart[]`. Images are sent directly when the active model
+ * has vision; otherwise routed through the substitute-vision model (description
+ * cached on the row); otherwise emitted as a text placeholder. Failures degrade
+ * gracefully to the plain user text — a vision hiccup must not block the send.
+ *
+ * NOTE (prior-turn replay, spec §9): only the CURRENT user turn's attachments are
+ * resolved here. Re-injecting attachments from PRIOR user messages on replay would
+ * require resolving per-prior-message parts and a new attachment-parts mapping in
+ * `buildEngineWireMessages` (which currently flattens history to text-only). That
+ * is deferred — the current-turn path is the must-have. See the task report.
+ */
+async function resolveUserContent(
+  args: StartArgs,
+  userMessageId: string,
+): Promise<string | WireContentPart[]> {
+  const db = getClientDataDb();
+  try {
+    const atts = await listMessageAttachments(userMessageId);
+    if (atts.length === 0) return args.userText;
+
+    // Refs are "providerTemplateId:upstreamSlug" (see settings substitute picker).
+    // The active provider's template id is ProviderDefinition.id (args.provider.id).
+    const activeRef = `${args.provider.id}:${args.offering.upstreamSlug}`;
+    const substituteRef = args.substituteVisionModel ?? null;
+    const lookup = (ref: string) => {
+      const idx = ref.indexOf(':');
+      if (idx < 0) return undefined;
+      return getOffering(ref.slice(0, idx), ref.slice(idx + 1));
+    };
+    const disposition = imageDisposition(activeRef, substituteRef, lookup);
+
+    const base = args.substituteOneShotBase;
+    const parts = await resolveAttachmentParts(atts, disposition, substituteRef, {
+      toDataUrl: blobToDataUrl,
+      describe: async (dataUrl, model) => {
+        if (!base) throw new Error('substitute-vision: no resolved one-shot context');
+        return describeImage({
+          dataUrl,
+          model,
+          runOneShot: runOneShotCompletion,
+          oneShotBase: base,
+        });
+      },
+      cacheDescription: async (id, model, text) => {
+        await db.attachments.update(id, { visionDescription: { model, text } });
+      },
+    });
+    return buildUserWireContent(args.userText, parts);
+  } catch (err) {
+    console.error('[stream-manager] attachment resolution failed; sending text only', err);
+    return args.userText;
+  }
+}
 
 /**
  * Stream one turn into an already-persisted draft persona-message

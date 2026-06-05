@@ -20,6 +20,8 @@ export interface SettingsRow {
   adultMode: 'nsfw' | 'sfw';
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
   webInterfacing: { search: WebBackendSetting; fetch: WebBackendSetting };
+  /** Global substitute vision model — an offering ref "providerId:upstreamSlug"; null = none. */
+  substituteVisionModel: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -128,6 +130,34 @@ export interface PillRow {
   createdAt: number;
 }
 
+export type AttachmentKind = 'image' | 'text';
+export type AttachmentOrigin = 'upload' | 'generated';
+export type AttachmentState = 'active' | 'deleted';
+
+export interface AttachmentRow {
+  id: string;
+  chatId: string;
+  /** null while pending (local to the chat's compose state); set to the user message id on send. */
+  messageId: string | null;
+  origin: AttachmentOrigin;
+  kind: AttachmentKind;
+  /** User-editable; ALWAYS sent on the wire. */
+  fileName: string;
+  mime: string;
+  order: number;
+  state: AttachmentState;
+  createdAt: number;
+  /** kind === 'image' — the NORMALISED JPEG (see image-normalise.ts), the only stored copy. */
+  blob?: Blob;
+  /** kind === 'text' — editable via the lightbox Source view while pending. */
+  text?: string;
+  /** kind === 'image' — post-normalisation dimensions. */
+  width?: number;
+  height?: number;
+  /** kind === 'image' — substitute-vision cache, keyed by the model that produced it. */
+  visionDescription?: { model: string; text: string } | null;
+}
+
 export interface AvatarCrop {
   /** Pan as a fraction of the display size; 0 = centred. */
   x: number;
@@ -157,6 +187,7 @@ class ClientDataDb extends Dexie {
   messages!: Table<MessageRow, string>;
   pills!: Table<PillRow, string>;
   personaAvatars!: Table<PersonaAvatarRow, string>;
+  attachments!: Table<AttachmentRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -383,6 +414,23 @@ class ClientDataDb extends Dexie {
             s.webInterfacing = { search: null, fetch: null };
           });
       });
+
+    // Version 12 — user attachments. A new `attachments` table holds uploaded
+    // images and text files, joined to a user message by messageId (null while
+    // pending). Settings gain `substituteVisionModel` for the global vision
+    // fallback (backfilled null for existing rows).
+    this.version(12)
+      .stores({
+        attachments: 'id, chatId, messageId, [chatId+messageId]',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((row: SettingsRow) => {
+            if (row.substituteVisionModel === undefined) row.substituteVisionModel = null;
+          });
+      });
   }
 }
 
@@ -492,6 +540,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         adultMode: 'nsfw',
         corsProxy: null,
         webInterfacing: { search: null, fetch: null },
+        substituteVisionModel: null,
         createdAt: now,
         updatedAt: now,
       });

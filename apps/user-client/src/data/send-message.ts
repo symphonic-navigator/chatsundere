@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { getOffering, getProvider } from '@chatsundere/llm-unified';
-import type { Offering, ProviderConfig, ProviderDefinition } from '@chatsundere/llm-unified';
+import type { MasterKey } from '@chatsundere/crypto';
+import { getOffering, getProvider, offeringToTarget } from '@chatsundere/llm-unified';
+import type {
+  Offering,
+  OneShotArgs,
+  ProviderConfig,
+  ProviderDefinition,
+} from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
@@ -97,6 +103,67 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// resolveSubstituteVision — one-shot call context for the global substitute model
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the global substitute-vision model (`settings.substituteVisionModel`,
+ * a "providerTemplateId:upstreamSlug" ref) into a one-shot call context: its
+ * ProviderDefinition, decrypted api-key (via the MasterKey, same path as the
+ * active model), the shared CORS proxy, and the completion target. Returns
+ * `null` when no substitute is configured or it cannot be resolved (no enabled
+ * provider row / unknown offering) — the send then falls back to placeholders.
+ *
+ * Decryption happens HERE (not in the store) because only the send path holds
+ * the MasterKey; the stream-manager never touches crypto.
+ */
+async function resolveSubstituteVision(
+  ref: string | null,
+  mk: MasterKey,
+  corsProxyUrl: string | null,
+  corsProxyKey: string | null,
+): Promise<Omit<OneShotArgs, 'messages' | 'bodyExtras'> | null> {
+  if (!ref) return null;
+  const idx = ref.indexOf(':');
+  if (idx < 0) return null;
+  const templateId = ref.slice(0, idx);
+  const slug = ref.slice(idx + 1);
+
+  const providerDef = getProvider(templateId);
+  const offering = getOffering(templateId, slug);
+  if (!providerDef || !offering) return null;
+
+  const db = getClientDataDb();
+  const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
+    (p) => p.enabled,
+  );
+  if (!providerRow) return null;
+
+  let apiKey: string;
+  try {
+    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+  } catch {
+    // Corrupt ciphertext (e.g. AES-GCM auth-tag failure) — degrade to no substitute
+    // so a text-only send is never blocked by a broken substitute-vision key.
+    console.warn('resolveSubstituteVision: failed to decrypt api-key — falling back to null');
+    return null;
+  }
+
+  return {
+    provider: providerDef,
+    providerConfig: {
+      baseUrl: providerDef.baseUrl,
+      routing:
+        providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+    },
+    apiKey,
+    corsProxyUrl,
+    corsProxyKey,
+    target: offeringToTarget(offering),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // useSendMessage
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -163,6 +230,17 @@ export function useSendMessage() {
       // ── Fetch prior messages and hand off to stream-manager ─────────────
       const priorMessages = await db.messages.where('chatId').equals(chatId).sortBy('createdAt');
 
+      // Resolve the global substitute-vision model's call context (if any) so the
+      // store can route images through it when the active model cannot see them.
+      const settings = await db.settings.get(1);
+      const substituteVisionModel = settings?.substituteVisionModel ?? null;
+      const substituteOneShotBase = await resolveSubstituteVision(
+        substituteVisionModel,
+        mk,
+        ctx.corsProxyUrl,
+        ctx.corsProxyKey,
+      );
+
       await useStreamManagerStore.getState().start({
         chatId,
         userText: args.text,
@@ -183,6 +261,8 @@ export function useSendMessage() {
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
         webInterfacing: ctx.webInterfacing,
+        substituteVisionModel,
+        substituteOneShotBase: substituteOneShotBase ?? undefined,
       });
 
       return chatId;
@@ -191,6 +271,10 @@ export function useSendMessage() {
     onSuccess: (chatId) => {
       void qc.invalidateQueries({ queryKey: ['chats', chatId] });
       void qc.invalidateQueries({ queryKey: ['chats'] });
+      // The pending attachments were bound to the just-sent message (and any
+      // lazy-mode '' orphans were re-homed), so clear the cockpit strip. The
+      // prefix covers both the real chat id and the lazy '' key.
+      void qc.invalidateQueries({ queryKey: ['attachments', 'pending'] });
     },
   });
 }

@@ -1,21 +1,77 @@
-import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react';
+import type { Offering } from '@chatsundere/llm-unified';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { classifyFile } from '../../attachments/file-classify.js';
+import { normaliseImageForLlm } from '../../attachments/image-normalise.js';
 import type { PersonaRow } from '../../boot/client-data-db.js';
+import {
+  addAttachment,
+  usePendingAttachments,
+  useRemoveAttachment,
+  useRenameAttachment,
+  useUpdateAttachmentText,
+} from '../../data/attachments.js';
+import { QK } from '../../data/queryKeys.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
+import { Lightbox } from '../lightbox/Lightbox.js';
+import { attachmentToViewable } from '../lightbox/viewable-item.js';
+import { AttachmentStrip } from './AttachmentStrip.js';
 import { CockpitMenu } from './CockpitMenu.js';
 import { DualActionBtn } from './DualActionBtn.js';
 
 interface Props {
+  chatId: string;
   persona: PersonaRow;
   offering: Offering;
   draftValue: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
   isStreamLive: boolean;
+}
+
+/**
+ * Ingest picked/pasted/dropped files into the chat's pending attachment set:
+ * images are normalised (1024 px JPEG) before storage, text files are read as
+ * their UTF-8 source. Rejected files (unsupported type or oversize) are reported
+ * via `onReject` and skipped; the rest still go through.
+ */
+async function ingestFiles(
+  chatId: string,
+  files: FileList | File[],
+  onReject: (msg: string) => void,
+): Promise<void> {
+  for (const file of Array.from(files)) {
+    const c = classifyFile(file);
+    if (!c.ok) {
+      onReject(c.reason);
+      continue;
+    }
+    if (c.kind === 'image') {
+      const norm = await normaliseImageForLlm(file);
+      await addAttachment({
+        chatId,
+        kind: 'image',
+        fileName: file.name,
+        mime: 'image/jpeg',
+        blob: norm.blob,
+        width: norm.width,
+        height: norm.height,
+      });
+    } else {
+      const text = await file.text();
+      await addAttachment({
+        chatId,
+        kind: 'text',
+        fileName: file.name,
+        mime: file.type || 'text/plain',
+        text,
+      });
+    }
+  }
 }
 
 export function Cockpit(p: Props): JSX.Element {
@@ -28,6 +84,47 @@ export function Cockpit(p: Props): JSX.Element {
   const searchTiers = useActiveSearchTiers();
   const searchTierId = useCurrentChatStore((s) => s.webSearchTierId);
   const setSearchTierId = useCurrentChatStore((s) => s.setWebSearchTierId);
+
+  // Attachments: the pending set for this chat, plus the mutation hooks the
+  // lightbox drives (rename / remove / edit-text), and the local UI state for
+  // the hidden picker, the reject toast, the OS drag-over flag, and the open
+  // lightbox index.
+  const qc = useQueryClient();
+  const { data: pending = [] } = usePendingAttachments(p.chatId);
+  const remove = useRemoveAttachment(p.chatId);
+  const rename = useRenameAttachment(p.chatId);
+  const editText = useUpdateAttachmentText(p.chatId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [originRect, setOriginRect] = useState<DOMRect | undefined>(undefined);
+  const [reject, setReject] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const ingest = async (files: FileList | File[]): Promise<void> => {
+    await ingestFiles(p.chatId, files, setReject);
+    await qc.invalidateQueries({ queryKey: QK.attachmentsPending(p.chatId) });
+  };
+
+  // One object URL per pending image, rebuilt whenever the pending set changes
+  // and revoked on the next change / unmount so the browser never leaks blobs.
+  const objectUrls = useMemo(
+    () =>
+      new Map(
+        pending
+          .filter((a) => a.kind === 'image' && a.blob)
+          .map((a) => [a.id, URL.createObjectURL(a.blob as Blob)]),
+      ),
+    [pending],
+  );
+  useEffect(
+    () => () => {
+      for (const u of objectUrls.values()) URL.revokeObjectURL(u);
+    },
+    [objectUrls],
+  );
+  const items = pending.map((row) =>
+    attachmentToViewable(row, { pending: true, objectUrl: objectUrls.get(row.id) }),
+  );
 
   // Close the menu when the user clicks anywhere outside the wrap, or presses
   // Escape. Without this the menu had no close path: the toggle button only
@@ -90,15 +187,52 @@ export function Cockpit(p: Props): JSX.Element {
   };
 
   return (
-    <div className="cockpit" data-pinned={isPinned ? 'true' : 'false'}>
+    <div
+      className="cockpit"
+      data-pinned={isPinned ? 'true' : 'false'}
+      onPaste={(e) => {
+        const files = Array.from(e.clipboardData.files);
+        if (files.length > 0) {
+          e.preventDefault();
+          void ingest(files);
+        }
+        // Plain-text paste falls through to the textarea (normal prompt text).
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        if (e.dataTransfer.files.length > 0) {
+          e.preventDefault();
+          setDragging(false);
+          void ingest(e.dataTransfer.files);
+        }
+      }}
+    >
+      {/* Hidden picker input — opened by the (+) button. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.csv,.ts,.tsx,.js,.py"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          if (e.target.files) void ingest(e.target.files);
+          e.target.value = '';
+        }}
+      />
       <div className="cockpit-row-controls">
         <button
           type="button"
           className="cockpit-icon-btn"
           data-control="plus"
-          disabled
-          title="Coming with Treasury"
-          aria-label="Treasury (coming soon)"
+          title="Add attachment"
+          aria-label="Add attachment"
+          onClick={() => fileInputRef.current?.click()}
         >
           <svg
             viewBox="0 0 24 24"
@@ -181,6 +315,14 @@ export function Cockpit(p: Props): JSX.Element {
           </svg>
         </button>
       </div>
+      {pending.length > 0 && <div className="cockpit-divider" />}
+      <AttachmentStrip
+        attachments={pending}
+        onOpen={(i, rect) => {
+          setOriginRect(rect);
+          setLightboxIndex(i);
+        }}
+      />
       <div className="cockpit-row-input">
         <AutoSizeTextarea
           value={p.draftValue}
@@ -198,6 +340,23 @@ export function Cockpit(p: Props): JSX.Element {
           onSend={() => p.onSend(p.draftValue)}
         />
       </div>
+      {dragging && <div className="cockpit-drop-overlay">Drop files to attach</div>}
+      {reject && (
+        <div className="cockpit-reject" role="alert" onAnimationEnd={() => setReject(null)}>
+          {reject}
+        </div>
+      )}
+      {lightboxIndex !== null && (
+        <Lightbox
+          items={items}
+          index={lightboxIndex}
+          originRect={originRect}
+          onRename={(id, name) => rename.mutate({ id, fileName: name })}
+          onRemove={(id) => remove.mutate(id)}
+          onEditText={(id, text) => editText.mutate({ id, text })}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }

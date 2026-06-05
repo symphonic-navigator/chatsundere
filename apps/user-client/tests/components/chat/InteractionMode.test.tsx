@@ -53,6 +53,7 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
       <MemoryRouter>
         <InteractionMode
           persona={persona}
+          chatId="c1"
           chat={null}
           offering={offering}
           usedTokens={32_768}

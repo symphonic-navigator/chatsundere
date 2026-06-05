@@ -4,6 +4,7 @@ import {
   type ProviderDefinition,
   type StreamChunk,
   type ToolDef,
+  type WireContentPart,
   type WireMessage,
   buildPrompt,
   formatRetryEvent,
@@ -33,7 +34,9 @@ export interface StartStreamArgs {
   corsProxyKey: string | null;
   offering: Offering;
   priorMessages: MessageRow[];
-  userMessageText: string;
+  /** The active user turn content. Pass a plain string for text-only turns or a
+   *  `WireContentPart[]` for multimodal turns (images + text). */
+  userMessageText: string | WireContentPart[];
   reasoning: ReasoningState;
   globalInstructions: string;
   globalAboutMe: string;
@@ -169,17 +172,22 @@ function appendReasoning(buf: ContentBlock[], text: string): void {
  * Assemble the wire message list for one engine pass: system prompt, replayed
  * history, the active user turn, then any accumulated tool exchange from prior
  * loop rounds. Extracted so the tool-exchange placement is unit-testable.
+ *
+ * `userContent` accepts a plain string for text-only turns or a
+ * `WireContentPart[]` for multimodal turns (text + images). Prior-turn replay
+ * of attachments is the caller's responsibility (Task 14) — `toWireMessage`
+ * stays text-only for v1.
  */
 export function buildEngineWireMessages(
   systemPrompt: string,
   priorMessages: MessageRow[],
-  userMessageText: string,
+  userContent: string | WireContentPart[],
   toolExchange: WireMessage[],
 ): WireMessage[] {
   return [
     { role: 'system', content: systemPrompt },
     ...priorMessages.map(toWireMessage),
-    { role: 'user', content: userMessageText },
+    { role: 'user', content: userContent },
     ...toolExchange,
   ];
 }

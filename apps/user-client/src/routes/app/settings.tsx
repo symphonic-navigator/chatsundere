@@ -4,6 +4,7 @@ import {
   type ServiceKind,
   aggregateServiceKinds,
   getProvider,
+  listProviders,
   providerServiceKinds,
   providersContributing,
 } from '@chatsundere/llm-unified';
@@ -55,28 +56,51 @@ function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
 }
 
 /**
- * Honest placeholder (disabled over hidden): when models without vision can't
- * read attached images, a substitute vision model will describe them. Dormant
- * until the image-attachment subsystem lands. No persistence, no picker yet.
+ * Global substitute-vision model picker. Shows a `<select>` of all vision-capable
+ * offerings (those with `profile.vision === true`) across registered providers.
+ * Persists the chosen ref as `"${providerId}:${upstreamSlug}"` in
+ * `settings.substituteVisionModel` — the format the send path parses with
+ * `getProvider(providerId)` / `getOffering(providerId, upstreamSlug)`.
+ *
+ * Disabled-over-hidden when no vision-capable offering is registered; a tooltip
+ * explains why.
  */
-export function SubstituteVisionPlaceholder(): JSX.Element {
+export function SubstituteVisionSetting(): JSX.Element {
+  const { data: settings } = useSettings();
+  const update = useUpdateSettings();
+
+  const visionOfferings = listProviders().flatMap((pr) =>
+    pr.offerings
+      .filter((o) => o.profile.vision)
+      .map((o) => ({
+        ref: `${pr.id}:${o.upstreamSlug}`,
+        label: `${o.upstreamSlug} (${pr.displayName})`,
+      })),
+  );
+  const disabled = visionOfferings.length === 0;
+
   return (
-    <div className="opacity-60">
+    <div>
       <p className="mb-3 text-[11px] text-paper-soft">
-        Route screenshots and images through a vision-capable model, so a chat model that can't see
-        images on its own can still read them. One global choice for all personas.
+        Route images through a vision-capable model, so a chat model that can&apos;t see images on
+        its own can still read them. One global choice for all personas — used only when your active
+        model cannot see images.
       </p>
-      <button
-        type="button"
-        disabled
-        title="Activates once image attachments arrive (coming soon)"
-        className="rounded-md border border-paper-soft/20 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft/40"
+      <select
+        className="cockpit-select"
+        aria-label="Substitute vision model"
+        disabled={disabled}
+        title={disabled ? 'Configure a vision-capable provider first' : undefined}
+        value={settings?.substituteVisionModel ?? ''}
+        onChange={(e) => update.mutate({ substituteVisionModel: e.target.value || null })}
       >
-        Choose substitute model
-      </button>
-      <p className="mt-2 text-[11px] text-paper-soft">
-        Activates once image attachments arrive (coming soon).
-      </p>
+        <option value="">None</option>
+        {visionOfferings.map((o) => (
+          <option key={o.ref} value={o.ref}>
+            {o.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -367,7 +391,7 @@ export function Settings(): JSX.Element {
       <WebInterfacingSettings />
 
       <AccordionCard icon="◫" label="Image understanding" meta="For models without vision">
-        <SubstituteVisionPlaceholder />
+        <SubstituteVisionSetting />
       </AccordionCard>
 
       <SaveBar

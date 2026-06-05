@@ -352,6 +352,7 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
     const { container } = wrap(
       <InteractionMode
         persona={aurum}
+        chatId="c1"
         chat={chatRow}
         offering={imOffering}
         usedTokens={0}

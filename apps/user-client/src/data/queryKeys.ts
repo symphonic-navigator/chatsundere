@@ -16,4 +16,6 @@ export const QK = {
   chat: (id: string) => ['chats', id] as const,
   bookmarks: ['bookmarks'] as const,
   personaAvatar: (id: string) => ['persona-avatar', id] as const,
+  attachmentsPending: (chatId: string) => ['attachments', 'pending', chatId] as const,
+  attachmentsForMessage: (messageId: string) => ['attachments', 'message', messageId] as const,
 };

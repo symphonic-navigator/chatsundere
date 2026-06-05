@@ -2,9 +2,11 @@
 
 export type {
   Capability,
+  CacheControl,
   ConfigField,
   ProviderDefinition,
   ProviderConfig,
+  WireContentPart,
   WireMessage,
   WireToolCall,
   StreamChunk,

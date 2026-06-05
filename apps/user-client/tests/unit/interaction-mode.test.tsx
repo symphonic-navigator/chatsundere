@@ -41,6 +41,7 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
         <div data-testid="outside">outside</div>
         <InteractionMode
           persona={aurum}
+          chatId="c1"
           chat={null}
           offering={offering}
           usedTokens={0}

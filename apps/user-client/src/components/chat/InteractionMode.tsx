@@ -9,6 +9,8 @@ import { InteractionTopbar } from './InteractionTopbar.js';
 
 interface Props {
   persona: PersonaRow;
+  /** The active chat's id (empty string while a lazy chat has not yet been created on first send). */
+  chatId: string;
   chat: ChatRow | null;
   offering: Offering;
   usedTokens: number;
@@ -145,6 +147,7 @@ export function InteractionMode(p: Props): JSX.Element {
         }}
       >
         <Cockpit
+          chatId={p.chatId}
           persona={p.persona}
           offering={p.offering}
           draftValue={p.draftValue}

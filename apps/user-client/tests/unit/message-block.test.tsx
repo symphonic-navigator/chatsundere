@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow, PersonaRow, PillRow } from '../../src/boot/client-data-db';
 import { MessageBlock } from '../../src/components/chat/MessageBlock';
@@ -8,6 +10,12 @@ import type { ResolvedMindspace } from '../../src/state/mindspace-resolver';
 // which today reads only the CSS var written by an ancestor MindspaceLayer.
 // A cast keeps the type contract intact without pinning the full shape here.
 const mindspaceStub = {} as ResolvedMindspace;
+
+// MessageBlock now queries TanStack Query for sent attachments; every render needs a provider.
+function qcWrapper({ children }: { children: ReactNode }) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 function userMsg(over: Partial<MessageRow> = {}): MessageRow {
   return {
@@ -70,6 +78,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     expect(container.querySelector('.msg.from-user')).not.toBeNull();
     const prefix = container.querySelector('.msg.from-user .msg-name-prefix');
@@ -100,6 +109,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     const block = container.querySelector('.msg.from-persona');
     expect(block).not.toBeNull();
@@ -124,6 +134,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     const personaText = container.querySelector('.msg.from-persona .msg-text') as HTMLElement;
     // Aurum uses 'serif' → maps to --font-display.
@@ -166,6 +177,7 @@ describe('MessageBlock', () => {
         onBookmark={vi.fn()}
         isStreamingDraft={true}
       />,
+      { wrapper: qcWrapper },
     );
     // While streaming, each un-coalesced chunk becomes its own .stream-tok span
     // so freshly-appended tokens can fade in individually.
@@ -197,6 +209,7 @@ describe('MessageBlock', () => {
         onBookmark={vi.fn()}
         isStreamingDraft={false}
       />,
+      { wrapper: qcWrapper },
     );
     const text = container.querySelector('.msg-text') as HTMLElement;
     expect(text.textContent).toBe('Hi world');
@@ -234,6 +247,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     const text = container.querySelector('.msg-text')?.textContent ?? '';
     expect(text.indexOf('first')).toBeLessThan(text.indexOf('web_search'));
@@ -254,6 +268,7 @@ describe('MessageBlock', () => {
         onBookmark={vi.fn()}
         onRegenerate={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     expect(container.querySelector('.msg.expanded')).not.toBeNull();
     expect(container.querySelector('.msg-timestamp')).not.toBeNull();
@@ -273,6 +288,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     expect(container.querySelector('.msg-controls')).toBeNull();
   });
@@ -291,6 +307,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     // biome-ignore lint/style/noNonNullAssertion: .msg is always present when MessageBlock renders
     fireEvent.click(container.querySelector('.msg')!);
@@ -319,6 +336,7 @@ describe('MessageBlock', () => {
         onBookmark={vi.fn()}
         isPinned
       />,
+      { wrapper: qcWrapper },
     );
     // biome-ignore lint/style/noNonNullAssertion: .msg is always present when MessageBlock renders
     const msg = container.querySelector('.msg')!;
@@ -353,6 +371,7 @@ describe('MessageBlock', () => {
         onBranch={vi.fn()}
         branchDisabled
       />,
+      { wrapper: qcWrapper },
     );
     const branch = container.querySelector('[data-ctrl="branch"]') as HTMLButtonElement | null;
     expect(branch?.disabled).toBe(true);
@@ -373,6 +392,7 @@ describe('MessageBlock', () => {
         onBookmark={vi.fn()}
         onRegenerate={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     const read = container.querySelector('[data-ctrl="read"]') as HTMLButtonElement | null;
     expect(read?.disabled).toBe(true);
@@ -392,6 +412,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     expect(container.querySelector('[data-ctrl="regenerate"]')).toBeNull();
   });
@@ -410,6 +431,7 @@ describe('MessageBlock', () => {
         onCopy={onCopy}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     const btn = container.querySelector('[data-ctrl="copy"]') as HTMLButtonElement;
     fireEvent.click(btn);
@@ -429,6 +451,7 @@ describe('MessageBlock', () => {
         onCopy={vi.fn()}
         onBookmark={vi.fn()}
       />,
+      { wrapper: qcWrapper },
     );
     expect(container.querySelector('[data-ctrl="bookmark"][data-active="true"]')).toBeNull();
     rerender(
@@ -476,6 +499,7 @@ describe('<MessageBlock> reasoning rendering', () => {
         onBookmark={vi.fn()}
         isStreamingDraft={false}
       />,
+      { wrapper: qcWrapper },
     );
     const pills = document.querySelectorAll('.reasoning-pill');
     expect(pills.length).toBe(1);
@@ -510,6 +534,7 @@ describe('<MessageBlock> reasoning rendering', () => {
         onBookmark={vi.fn()}
         isStreamingDraft={false}
       />,
+      { wrapper: qcWrapper },
     );
     expect(document.querySelectorAll('.reasoning-pill').length).toBe(2);
   });
@@ -543,6 +568,7 @@ describe('<MessageBlock> reasoning rendering', () => {
         onBookmark={vi.fn()}
         isStreamingDraft={true}
       />,
+      { wrapper: qcWrapper },
     );
     const pills = document.querySelectorAll('.reasoning-pill');
     expect(pills.length).toBe(2);

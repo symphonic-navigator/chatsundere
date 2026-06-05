@@ -34,4 +34,13 @@ if (typeof window !== 'undefined' && !window.ResizeObserver) {
   };
 }
 
+// jsdom 25.x does not implement URL.createObjectURL / revokeObjectURL.
+// Components such as AttachmentThumb call these to display blob previews.
+// A no-op stub (returning a fixed string) is sufficient for unit tests that
+// do not assert on the rendered image URL itself.
+if (typeof URL.createObjectURL === 'undefined') {
+  URL.createObjectURL = (_blob: Blob | MediaSource) => 'blob:stub';
+  URL.revokeObjectURL = (_url: string) => undefined;
+}
+
 afterEach(() => cleanup());

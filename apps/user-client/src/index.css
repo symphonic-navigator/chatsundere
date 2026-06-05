@@ -2132,3 +2132,452 @@ h1 {
   text-transform: uppercase;
   color: var(--color-aurora-200);
 }
+
+/* ===== Lightbox overlay ===== */
+
+/*
+ * position:fixed resolves to the viewport here because no ancestor of
+ * .chat-page establishes a containing block — none applies transform,
+ * filter, perspective, or will-change:transform.  As long as that holds,
+ * fixed gives us a true full-viewport overlay without needing to hoist the
+ * element up the DOM the way .toc-sheet-root / .branch-sheet-root are.
+ *
+ * WARNING: if any ancestor of .chat-page ever gains transform/filter/
+ * perspective/will-change, the browser will re-root this element to that
+ * ancestor instead of the viewport (the "containing-block trap").  Should
+ * that happen, the lightbox must be moved to bind directly to .chat-page,
+ * mirroring the sheet pattern.
+ *
+ * The native <dialog> UA stylesheet gives it position:absolute, auto
+ * margins for centering, and a ::backdrop pseudo-element.  We override
+ * all of those so our layout wins.
+ */
+.lightbox-root {
+  /* Reset every UA <dialog> default that would fight our overlay layout. */
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  /* Sit above .cockpit (z-index 6) and .toc-sheet-root / .branch-sheet-root
+   * (z-index 40).  50 keeps us in the same z-band without fighting toasts
+   * (z-index 100). */
+  z-index: 50;
+  /* Contain click events inside the chat column — pointer-events on children
+   * handle the interactive surfaces; the root itself is transparent. */
+  pointer-events: none;
+}
+
+/* Hide the native ::backdrop — we render our own .lightbox-backdrop div. */
+.lightbox-root::backdrop {
+  display: none;
+}
+
+/* Backdrop: full-overlay dim + blur, click-through to .lightbox-root which
+ * calls onClose.  Restores pointer-events removed on the root. */
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+  cursor: default;
+}
+
+/*
+ * .lightbox is the visible surface that receives the FLIP zoom transform.
+ * Bound to 6% / 4% insets so it floats above the chat column with breathing
+ * room on all sides.  The border-radius + purple glow give it the opulent
+ * feel from the approved mockups.
+ */
+.lightbox {
+  position: absolute;
+  inset: 6% 4%;
+  background: rgba(10, 5, 24, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 0 40px -10px rgba(141, 109, 255, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+/* Toolbar: filename button, action buttons, close × */
+.lightbox-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.lightbox-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-paper);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  min-width: 0;
+}
+
+.lightbox-name span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-name-edit {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-paper);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(141, 109, 255, 0.4);
+  border-radius: 6px;
+  padding: 2px 6px;
+  min-width: 0;
+}
+
+.lightbox-spacer {
+  flex: 1;
+}
+
+.lightbox-btn {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #d9c27a;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-radius: 8px;
+  padding: 3px 9px;
+  background: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms ease;
+}
+
+.lightbox-btn:hover {
+  background: rgba(201, 168, 76, 0.08);
+}
+
+.lightbox-danger {
+  color: #ff9aa6;
+  border-color: rgba(255, 122, 138, 0.4);
+}
+
+.lightbox-danger:hover {
+  background: rgba(255, 122, 138, 0.08);
+}
+
+.lightbox-x {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--color-paper);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: background 150ms ease;
+}
+
+.lightbox-x:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Body: the image or text viewer, fills remaining space */
+.lightbox-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  min-height: 0;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Navigation chevrons */
+.lightbox-chev {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease;
+  /* Keep chevrons above the image / text body */
+  z-index: 1;
+}
+
+.lightbox-chev:hover {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.lightbox-chev.l {
+  left: 10px;
+}
+
+.lightbox-chev.r {
+  right: 10px;
+}
+
+/* n / total counter pill at the bottom */
+.lightbox-counter {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 2px 9px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+/* ===== Text / Markdown lightbox body (LightboxTextBody) ===== */
+
+/*
+ * Segmented toggle — Preview / Source tabs.  Inlined inside the body so
+ * it scrolls with the content on tall documents.
+ */
+.lightbox-text {
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.lightbox-seg {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  overflow: hidden;
+  width: max-content;
+  margin: 0.6rem;
+  flex-shrink: 0;
+}
+
+.lightbox-seg button {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 3px 12px;
+  color: rgba(232, 230, 245, 0.6);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.lightbox-seg button.on {
+  background: rgba(141, 109, 255, 0.85);
+  color: #fff;
+}
+
+.lightbox-md,
+.lightbox-plain {
+  padding: 0 1rem 1rem;
+  color: var(--color-paper);
+}
+
+.lightbox-plain {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.lightbox-source {
+  width: 100%;
+  min-height: 50vh;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(141, 109, 255, 0.4);
+  border-radius: 8px;
+  padding: 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #cfc6ee;
+  resize: vertical;
+  margin: 0 1rem 1rem;
+  width: calc(100% - 2rem);
+  box-sizing: border-box;
+}
+
+.lightbox-source:focus {
+  outline: none;
+  border-color: rgba(141, 109, 255, 0.65);
+}
+
+/* ===== Attachment cockpit divider ===== */
+
+/* Thin rule between the controls row and the attachment strip */
+.cockpit-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0.3rem 0;
+}
+
+/* ===== Attachment strip ===== */
+
+.attach-strip {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.1rem 0.05rem 0.35rem;
+  overflow-x: auto;
+  /* Hide the scrollbar visually but keep it functional */
+  scrollbar-width: none;
+}
+
+.attach-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.attach-thumb {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 9px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  padding: 0;
+  /* Subtle press feedback */
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.attach-thumb:hover {
+  border-color: rgba(141, 109, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(141, 109, 255, 0.2);
+}
+
+.attach-thumb-img {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.attach-thumb-doc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #c9b8ff;
+  letter-spacing: 0.04em;
+}
+
+/* Filename truncated at the bottom of the tile */
+.attach-thumb-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 7px;
+  padding: 1px 2px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--color-paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+/*
+ * "Analysing image" pulse overlay — a shimmer sweep that uses the existing
+ * pill-shimmer keyframe (translates -110% → 0 → +110%) over a dark base.
+ * overflow:hidden on .attach-thumb clips it to the tile boundary.
+ */
+.attach-thumb-analysing {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  /* Shimmer is a pseudo-element sweep on top of the dark base */
+}
+
+.attach-thumb-analysing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(141, 109, 255, 0.25) 50%,
+    transparent 100%
+  );
+  animation: pill-shimmer 2.2s ease-in-out infinite;
+}
+
+/* ===== Cockpit OS-drop overlay ===== */
+
+.cockpit-drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(141, 109, 255, 0.18);
+  border: 2px dashed rgba(141, 109, 255, 0.6);
+  border-radius: 14px;
+  color: var(--color-paper);
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ===== Cockpit reject toast ===== */
+
+.cockpit-reject {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #ff9aa6;
+  padding: 0.2rem 0.4rem;
+  animation: toast-in 3s forwards;
+}
+
+/* ===== Sent-message "image deleted" note ===== */
+
+.msg-attach-deleted {
+  font-size: 11px;
+  font-style: italic;
+  color: rgba(232, 230, 245, 0.5);
+  padding: 0.3rem 0.1rem;
+}

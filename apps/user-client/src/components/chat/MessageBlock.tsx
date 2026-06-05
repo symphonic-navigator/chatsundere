@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { renameAttachment, useMessageAttachments } from '../../data/attachments.js';
+import { QK } from '../../data/queryKeys.js';
 import { groupAdjacent } from '../../lib/content-blocks.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
+import { Lightbox } from '../lightbox/Lightbox.js';
+import { attachmentToViewable } from '../lightbox/viewable-item.js';
+import { AttachmentStrip } from './AttachmentStrip.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
 import { ReasoningPill } from './ReasoningPill.js';
@@ -46,6 +52,42 @@ export interface MessageBlockProps {
 export function MessageBlock(p: MessageBlockProps): JSX.Element {
   const isUser = p.message.role === 'user';
   const roleClass = isUser ? 'from-user' : 'from-persona';
+
+  // ---- Sent attachments (user messages only) ----
+  const qc = useQueryClient();
+  const { data: attachments = [] } = useMessageAttachments(isUser ? p.message.id : '');
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [originRect, setOriginRect] = useState<DOMRect | undefined>(undefined);
+
+  // Build object URLs for image blobs; revoke on change to prevent memory leaks.
+  const objectUrls = useMemo(
+    () =>
+      new Map(
+        attachments
+          .filter((a) => a.kind === 'image' && a.blob && a.state === 'active')
+          .map((a) => [a.id, URL.createObjectURL(a.blob as Blob)]),
+      ),
+    [attachments],
+  );
+  useEffect(
+    () => () => {
+      for (const u of objectUrls.values()) URL.revokeObjectURL(u);
+    },
+    [objectUrls],
+  );
+
+  const activeAttachments = attachments.filter((a) => a.state === 'active');
+  const lightboxItems = activeAttachments.map((row) =>
+    attachmentToViewable(row, { pending: false, objectUrl: objectUrls.get(row.id) }),
+  );
+
+  // Rename on a sent attachment: use low-level op + manual invalidation so the strip refreshes.
+  // (useRenameAttachment only invalidates the pending key, not the message key.)
+  const handleRename = (id: string, name: string): void => {
+    void renameAttachment(id, name).then(() =>
+      qc.invalidateQueries({ queryKey: QK.attachmentsForMessage(p.message.id) }),
+    );
+  };
   const namePrefix = isUser ? '🪶' : '✨';
   const nameText = isUser ? p.displayName : (p.persona?.name ?? '');
   // Persona keeps its accent colour at full strength; the user's name is the
@@ -133,6 +175,29 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           p.mindspace,
         )}
       </div>
+      {isUser && activeAttachments.length > 0 && (
+        <AttachmentStrip
+          attachments={activeAttachments}
+          onOpen={(i, rect) => {
+            setOriginRect(rect);
+            setLightboxIndex(i);
+          }}
+        />
+      )}
+      {isUser && attachments.some((a) => a.state === 'deleted') && (
+        <div className="msg-attach-deleted">image deleted</div>
+      )}
+      {isUser && lightboxIndex !== null && (
+        <Lightbox
+          items={lightboxItems}
+          index={lightboxIndex}
+          originRect={originRect}
+          onRename={handleRename}
+          onRemove={() => {}}
+          onEditText={() => {}}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
       {p.expanded ? (
         <MessageControls
           message={p.message}

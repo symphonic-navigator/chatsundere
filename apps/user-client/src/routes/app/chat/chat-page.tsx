@@ -493,6 +493,7 @@ export function ChatPage(): JSX.Element {
       {isInteractionMode && effectivePersona && offering ? (
         <InteractionMode
           persona={effectivePersona}
+          chatId={chat?.id ?? activeChatId ?? ''}
           chat={chat}
           offering={offering}
           usedTokens={usedTokens}
