@@ -48,17 +48,25 @@ Every service has its own `.env.example`. After `scripts/setup-dev.sh` runs, you
 
 ### `apps/auth-service`
 
+All secret keys (`AUTH_JWT_PRIVATE_KEY`, `*_HMAC_KEY*`) ship empty in
+`.env.example` and are filled with generated dev values by
+`scripts/setup-dev.sh`. Each is a 32-byte base64url string; the validator
+rejects anything shorter than 40 characters.
+
 | Variable | Purpose | Example |
 |---|---|---|
 | `NODE_ENV` | `development` / `production` / `test` | `development` |
 | `PORT` | HTTP listening port | `3100` |
 | `LOG_LEVEL` | pino level | `debug` |
+| `API_BASE_URL` | Public URL of this auth-service (JWT audience + OPAQUE server identity) | `http://localhost:3100/auth` |
 | `DATABASE_URL` | Postgres connection string for `auth_db` | `postgres://chatsundere:dev@localhost:5432/auth_db` |
+| `TEST_DATABASE_URL` | Separate Postgres DB for integration tests (truncated each run) | `postgres://chatsundere:dev@localhost:5432/auth_db_test` |
 | `REDIS_URL` | Redis connection (DB 0) | `redis://localhost:6379/0` |
-| `JWT_ISSUER` | `iss` claim issued in access tokens | `chatsundere-auth` |
-| `JWT_AUDIENCE` | `aud` claim issued in access tokens | `chatsundere-services` |
-| `JWT_PRIVATE_KEY_PEM` | Ed25519 signing key (generated in auth-service unit) | _(commented)_ |
-| `CORS_ORIGINS` | Comma-separated allowed origins | _(commented)_ |
+| `AUTH_JWT_PRIVATE_KEY` | Ed25519 signing seed, base64url (generated) | _(generated)_ |
+| `INVITATION_HMAC_KEY` | Keyed hashing of invitation tokens (generated) | _(generated)_ |
+| `REFRESH_TOKEN_HMAC_KEY` | Keyed hashing of refresh tokens (generated) | _(generated)_ |
+| `HMAC_KEY_PENDING_CODES` | Keyed hashing of invitation/pairing codes (generated) | _(generated)_ |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins | `http://localhost:3000,http://localhost:3010` |
 
 ### `apps/sync-service`
 

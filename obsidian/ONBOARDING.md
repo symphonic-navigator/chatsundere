@@ -28,6 +28,21 @@ docker compose -f infra/compose.dev.yml up -d
 pnpm dev
 ```
 
+### What `setup-dev.sh` does
+
+`./scripts/setup-dev.sh` is the one-time `.env` bootstrap. It copies each
+`apps/*/.env.example` to a sibling `.env` (leaving any existing one untouched)
+and, for `auth-service`, generates the four secrets that ship empty in the
+example — `AUTH_JWT_PRIVATE_KEY` and the three HMAC keys — because committing
+them is forbidden but an empty value fails the service's `minLength(40)`
+validation. The generated values are dev-only; re-running the script tops up
+only still-empty keys, so it is safe to run repeatedly and will repair a
+half-filled `.env` from an earlier run.
+
+Symptom of skipping it (or of an `auth-service/.env` with empty secrets): every
+backend dies at boot with `ValiError: Invalid type: Expected string but received
+undefined` at `src/index.ts:7`. Run `./scripts/setup-dev.sh` and start again.
+
 ### A note on workspace packages
 
 `pnpm install` does **not** build the TypeScript packages under `packages/`. The user-client imports their compiled `dist/` output (per each package's `main` field), so a fresh clone — or a fresh checkout on a different machine after `packages/*/src` has changed — needs the packages built before Vite can resolve them.
