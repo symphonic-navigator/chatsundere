@@ -147,3 +147,8 @@ infra/compose.prod.yml
 # Turborepo local cache (regenerated per build, never committed)
 .turbo/
 .superpowers/
+
+# data exchange
+analysis/
+screenshots/
+
