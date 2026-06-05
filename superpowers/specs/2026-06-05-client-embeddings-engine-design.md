@@ -68,7 +68,7 @@ packages/embeddings/
 │   ├── store/
 │   │   ├── vector-store.ts      operates on a consumer-provided Dexie table
 │   │   ├── retrieval.ts         filter-then-rank + rerank (pure functions)
-│   │   ├── quantise.ts          int8 max-abs / fp16 / fp32 codecs (pure)
+│   │   ├── quantise.ts          int8 max-abs codec (pure)
 │   │   └── schema.ts            VectorRecord type + Dexie store-string helper
 │   └── lib/
 │       └── similarity.ts        dot / l2Norm / cosine (ported from PoC)
@@ -139,7 +139,7 @@ availability, `crossOriginIsolated`, fallback trail) is surfaced for diagnostics
 interface VectorRecord {
   id: string;                    // caller-supplied (e.g. a memoryId)
   collection: string;            // namespace, e.g. 'memory' | 'kb'
-  vector: Int8Array;             // 768-dim, quantised (default format; see 5.2)
+  vector: Int8Array;             // 768-dim, int8 max-abs (see 5.2) — the only format
   scale: number;                 // per-vector max-abs scale (for reconstruction)
   norm: number;                  // L2 norm of the stored vector (for exact cosine)
   tags: Record<string, string>;  // indexable equality filter axes
@@ -149,9 +149,9 @@ interface VectorRecord {
 }
 ```
 
-### 5.2 Quantisation — per-vector max-abs int8 (default)
+### 5.2 Quantisation — per-vector max-abs int8 (the only format)
 
-The default storage format is **symmetric per-vector max-abs int8**, the same
+The sole storage format is **symmetric per-vector max-abs int8**, the same
 idea as GGUF k-block quant (a scale per unit) applied per vector:
 
 ```
@@ -176,14 +176,14 @@ qᵢ  = round(vᵢ / s · 127)             // the largest component lands exactl
   real vector for merging; scoring never needs it.
 - **Size:** ~772 B/vector (768 B int8 + scale + norm) — 4× smaller than fp32.
 
-**Configurable format** at store construction: `'int8' | 'fp16' | 'fp32'`, one
-format per store, recorded in store metadata. Regardless of format we always
-store `norm` and compute cosine as `dot / (normA · normB)`.
-
-- `fp16` — 1536 B/vector, ~lossless; floating point *is* a non-linear quantiser
-  (finer absolute resolution near zero, for free). Stored as `Uint16`, widened
-  to fp32 on read (no native fp16 arithmetic in JS).
-- `fp32` — 3072 B/vector, exact and simplest, but 4× int8.
+**One format only — no fp16/fp32 toggle.** A deliberate Omakase call
+(CLAUDE.md §11): given the retrieval accuracy of the max-abs scheme, a
+configurable storage format is gold-plating, and a per-store format option
+complicates every code path and migration for no real gain. There is a single
+monomorphic int8 path. We always store `norm` and compute cosine as
+`dot / (normA · normB)`. (A quant scheme also cannot be transcoded in place —
+the original fp32 is gone after quantisation — so a format zoo would buy nothing
+even for future upgrades; see below.)
 
 **Measured upgrade paths (not built on spec — built only if the smoke-test delta
 demands; see §9, §10):** the one honest weakness of per-vector max-abs is that a
@@ -194,8 +194,9 @@ this, the documented upgrades are **(i)** a robust globally-calibrated scale
 (scale per block of e.g. 64 dims, GGUF-style) which localise an outlier dim to
 its own block. **Zero-point / asymmetric quant is explicitly *not* pursued**:
 embedding components are ~zero-mean and symmetric, so the gain is single-digit %
-while it breaks the clean cosine-scale cancellation. All upgrades are additive
-and format-tagged, never a breaking change.
+while it breaks the clean cosine-scale cancellation. Because vectors cannot be
+transcoded in place, any such upgrade is a **re-embed migration driven by the
+consumer** (which holds the source text) — never an in-place format zoo.
 
 ### 5.3 Filtering
 
@@ -277,7 +278,6 @@ engine.dispose();
 const store = createVectorStore({
   db, table,                 // consumer-owned (chatsundere_client_data.vectors)
   engine?,                   // enables text queries
-  format?: 'int8',           // default int8 max-abs
   budget?: { maxBytes?, maxCount?, onFull?: 'reject' | EvictionHook },
 });
 store.upsert / update / delete / deleteWhere / scan / query / usage  // see §5
@@ -321,7 +321,7 @@ package does not configure the host app.
 **Vitest** on the pure cores (model inference is not loadable in jsdom):
 
 - `quantise` — int8 max-abs round-trip, scale/norm correctness, cosine-scale
-  cancellation, fp16/fp32 codecs.
+  cancellation, no-clipping invariant.
 - `similarity` — dot / l2Norm / cosine numerics.
 - `retrieval` — filter-then-rank, tag equality + numeric range predicates,
   `candidateK`/`rerank` ordering, topK/minScore boundaries, empty candidate
@@ -357,12 +357,14 @@ unstyled, not shipped:
 ## 10. Out of Scope / YAGNI (measured upgrade paths, not built now)
 
 ANN / HNSW index · int8 zero-point/asymmetric quant · sub-block scales · robust
-globally-calibrated scale · Matryoshka (MRL) dimension truncation · GUI / chat
-wiring · server-side sync of vectors · cross-collection search · re-ranking
-*inside* the engine · the Block-3 memory / KB consumers themselves.
+globally-calibrated scale · configurable fp16/fp32 storage format (Omakase:
+int8 only) · Matryoshka (MRL) dimension truncation · GUI / chat wiring ·
+server-side sync of vectors · cross-collection search · re-ranking *inside* the
+engine · the Block-3 memory / KB consumers themselves.
 
 The quant upgrades (§5.2) and ANN are **built only if a measurement demands
-them**, and are additive, format-tagged changes — never breaking.
+them** — and a quant change is a consumer-driven re-embed migration (vectors
+cannot be transcoded in place), not an in-place format switch.
 
 ## 11. Open Items to Resolve During Implementation
 
