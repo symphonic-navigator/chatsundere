@@ -1,0 +1,39 @@
+dim_scheme,bytes_per_vector,recall_vs_768_pct
+768 / int8 max-abs (global) [prod],772,99.4
+768 / int4 max-abs (global),388,92.9
+768 / int4 zero-point (global),392,93.8
+768 / int4 max-abs k=64,432,95.0
+768 / int4 max-abs k=32,480,96.5
+768 / int4 max-abs k=16,576,96.7
+768 / int4 zero-point k=64,480,95.8
+768 / int4 zero-point k=32,576,96.3
+768 / int4 zero-point k=16,768,97.4
+768 / int4 mean-centre k=32,576,95.8
+768 / int4 MSE-clip k=32 (meta fp32),576,97.0
+768 / int4 MSE-clip k=32 (meta fp16),480,96.8
+768 / int4 MSE-clip k=32 (meta int8),440,96.7
+768 / int4 zero-point global (meta int8),394,93.8
+768 / int4 zero-point k=64 (meta int8),416,95.9
+768 / int4 MSE-clip k=16 (meta fp32),768,97.3
+768 / int4 MSE-clip k=16 (meta fp16),576,97.4
+768 / int4 MSE-clip k=16 (meta int8),488,96.9
+768 / int4 zero-point k=16 (meta int8),488,97.2
+256 / int8 max-abs (global) [prod],260,89.7
+256 / int4 max-abs (global),132,87.1
+256 / int4 zero-point (global),136,87.1
+256 / int4 max-abs k=64,144,88.0
+256 / int4 max-abs k=32,160,87.4
+256 / int4 max-abs k=16,192,89.1
+256 / int4 zero-point k=64,160,88.8
+256 / int4 zero-point k=32,192,88.8
+256 / int4 zero-point k=16,256,89.1
+256 / int4 mean-centre k=32,192,88.9
+256 / int4 MSE-clip k=32 (meta fp32),192,88.5
+256 / int4 MSE-clip k=32 (meta fp16),160,88.5
+256 / int4 MSE-clip k=32 (meta int8),152,88.7
+256 / int4 zero-point global (meta int8),138,87.1
+256 / int4 zero-point k=64 (meta int8),144,88.8
+256 / int4 MSE-clip k=16 (meta fp32),256,89.2
+256 / int4 MSE-clip k=16 (meta fp16),192,89.0
+256 / int4 MSE-clip k=16 (meta int8),168,89.1
+256 / int4 zero-point k=16 (meta int8),168,89.1
