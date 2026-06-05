@@ -5,7 +5,50 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-05 — **Parallel `packages/embeddings` line merged in.**
+**Last updated:** 2026-06-05 — **Unified lightbox & user attachments landed
+(squashed on master `987c885`, device-tested by Chris — two device fixes folded
+in; being pushed).**
+Block-2 feature, brainstormed end-to-end with Chris (visual companion for the
+cockpit/lightbox layout), built **subagent-driven** (18 plan tasks, serial
+implementers + per-task review + a final **opus** holistic review = ready-to-merge).
+The deferred image-attachment subsystem is now real. **What landed:** (1) a new
+`attachments` Dexie table (**v12**) — first-class rows joined to a user message by
+`messageId` (null while pending, local to the chat); `state:'deleted'` reserved for
+future generated-content. (2) A **single unified lightbox** (`components/lightbox/`)
+fed `ViewableItem[]` + index + a `caps` descriptor — chrome by `origin`, body by
+`kind`, **Preview/Source** (editable, pending-only) for text/markdown, loop
+navigation, **FLIP zoom**; the seam the future artefact feature plugs into.
+(3) **Upload** via the (now-live) `(+)` picker, clipboard paste, and OS file drop
+(desktop; deliberately distinct from in-app drag-and-drop per §11). (4) **Client-side
+image normalisation** (1024px JPEG, alpha→white, GIF first-frame, EXIF applied;
+chatsune's rules ported to the browser since we have no backend) — store-and-send the
+normalised copy only (WYSIWYG). (5) Cockpit thumbnail strip
+(controls→divider→strip→input; **no ×**, removal via the lightbox — Chris's
+anti-misclick choice) and sent-attachment strips under the user message.
+(6) **Multimodal wire injection** (image_url / substitute-description / placeholder;
+filename always carried). (7) **Global substitute vision model** (My Settings, real
+picker) — chatsune's mechanism ported client-side, used only when the active model
+can't see images; description cached on the attachment row. **Not a Larissa change**
+(client-only + an `llm-unified` one-shot; outbound surface logged in
+[[insights/security-deferrals]]). **Deferred by design:** prior-turn attachment
+replay (spec §9 — a vision model "forgets" an attached image after its turn; clean
+extension point), and the generated-content producers (artefact / image-gen). One
+review finding fixed pre-finish: a corrupt substitute key could block any send → now
+degrades to "no substitute". Verification (on master after the squash): `pnpm
+typecheck` **14/14**; `pnpm run build` **9/9**; user-client vitest **871/871**;
+llm-unified `bun test` **276/0**; biome clean. **Device-test fixes (folded into the
+squash):** (1) the cockpit strip now clears on send — `useSendMessage` invalidates
+the `attachmentsPending` query once attachments bind to the message; (2) the lightbox
+was confined to the cockpit because `.cockpit`'s `backdrop-filter` establishes a
+containing block for `position: fixed` — now **portalled to `<body>`** so it covers
+the whole viewport (escapes the backdrop-filter and any stream transform). Both
+device-confirmed by Chris. Spec/plan:
+[[../superpowers/specs/2026-06-05-unified-lightbox-and-attachments-design]],
+[[../superpowers/plans/2026-06-05-unified-lightbox-and-attachments]]. **Next:** Liz
+pushes the master backlog (Chris green-lit). Then memory (the long-weekend item) per
+[[ROADMAP]].
+
+**Earlier 2026-06-05 — Parallel `packages/embeddings` line merged in.**
 The client-local semantic-search engine (feat/embeddings-engine) and its
 `D768_EQ_I4_L` int4-codec storage swap (feat/int4l-codec, [ADR 0030](decisions/0030-default-vector-storage-format.md))
 were built on a separate master line and are now merged with the web-interfacing

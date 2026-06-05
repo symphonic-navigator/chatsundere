@@ -98,7 +98,9 @@ describe('attachments schema (Dexie v12)', () => {
       visionDescription: null,
     };
     await db.attachments.add(att);
-    const pending = await db.attachments.where('[chatId+messageId]').equals(['c1', null as never]).toArray();
+    // NB: null is not a valid IndexedDB key, so pending rows are found by chatId + a JS filter,
+    // never by the [chatId+messageId] compound index with a null component.
+    const pending = await db.attachments.where('chatId').equals('c1').filter((a) => a.messageId === null).toArray();
     expect(pending).toHaveLength(1);
     expect(pending[0]?.fileName).toBe('screen.png');
   });
@@ -297,7 +299,8 @@ export async function addAttachment(input: AddAttachmentInput): Promise<string> 
   const db = getClientDataDb();
   const id = uuidv7();
   return db.transaction('rw', db.attachments, async () => {
-    const order = await db.attachments.where('[chatId+messageId]').equals([input.chatId, null as never]).count();
+    // null is not a valid IndexedDB key — scope by chatId, filter pending in JS (counts are tiny).
+    const order = await db.attachments.where('chatId').equals(input.chatId).filter((a) => a.messageId === null).count();
     const row: AttachmentRow = {
       id,
       chatId: input.chatId,
@@ -333,7 +336,7 @@ export async function updateAttachmentText(id: string, text: string): Promise<vo
 }
 
 export async function listPendingAttachments(chatId: string): Promise<AttachmentRow[]> {
-  const rows = await getClientDataDb().attachments.where('[chatId+messageId]').equals([chatId, null as never]).toArray();
+  const rows = await getClientDataDb().attachments.where('chatId').equals(chatId).filter((a) => a.messageId === null).toArray();
   return rows.sort((a, b) => a.order - b.order);
 }
 
@@ -345,7 +348,7 @@ export async function listMessageAttachments(messageId: string): Promise<Attachm
 export async function attachPendingToMessage(chatId: string, messageId: string): Promise<void> {
   const db = getClientDataDb();
   await db.transaction('rw', db.attachments, async () => {
-    const pending = await db.attachments.where('[chatId+messageId]').equals([chatId, null as never]).toArray();
+    const pending = await db.attachments.where('chatId').equals(chatId).filter((a) => a.messageId === null).toArray();
     await Promise.all(pending.map((a) => db.attachments.update(a.id, { messageId })));
   });
 }

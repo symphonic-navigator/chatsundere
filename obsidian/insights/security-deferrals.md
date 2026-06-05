@@ -316,3 +316,33 @@ so the surface above is now live. How the discipline was honoured:
   `auth-/sync-/proxy-service` or `packages/crypto` touch).
 - **Phase-2 follow-up:** route the call through the first-party `proxy-service`
   once it exists, so even the transport hop is first-party and auditable.
+
+## 2026-06-05 — User attachments + substitute vision: realised outbound surface
+
+Not a Larissa-gated change (client-only: `apps/user-client` + an `llm-unified`
+one-shot wire call; no `auth-/sync-/proxy-service` or `packages/crypto` touch).
+Recording the new outbound surface, analogous to the web-interfacing entries.
+
+- **Uploaded content leaves the device.** When the user sends a message with
+  image/text attachments, the content reaches the chosen model's provider:
+  images as a base64 `image_url` part (already normalised to 1024px JPEG
+  client-side before storage/send), text attachments as a filename-headed text
+  part. Inherent to using a cloud model — identical in nature to sending the
+  prompt itself.
+- **Substitute-vision describe call.** When the active model cannot see images
+  and a global substitute vision model is configured, each image is sent (same
+  normalised base64) in a one-shot completion to the *substitute* provider to
+  produce a text description, which is then injected into the active model's
+  context. So an image can reach a second provider (the substitute) in addition
+  to the active one — a deliberate, user-configured behaviour.
+- **Key handling.** The substitute provider's API key is decrypted MasterKey-
+  gated in the send path only (`openSecret`, the same slot/path the active model
+  uses), passed transiently to the one-shot call, never stored on the stream
+  handle nor in Dexie. A decrypt failure degrades to "no substitute" and never
+  blocks a send. Neither the key, nor image data URLs, nor descriptions are
+  logged.
+- **Local storage.** Only the normalised JPEG (not the original) and any cached
+  vision description are stored in IndexedDB; nothing is uploaded to our server
+  (there is no server in this path — local-first).
+- **Phase-2 follow-up:** when a substitute model routes via a CORS proxy, the
+  same first-party `proxy-service` migration noted above applies.
