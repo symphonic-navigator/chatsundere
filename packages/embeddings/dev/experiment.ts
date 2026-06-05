@@ -456,8 +456,13 @@ function truncateNormalise(v: Float32Array, d: number): Float32Array {
   return out;
 }
 
-/** Run the full scheme table against a set of fp32 reference vectors of some dimension. */
-function runTable(title: string, clean: Float32Array[]): void {
+/**
+ * Run the full scheme table against a set of fp32 reference vectors of some dimension.
+ * `recall@K` is measured against this set's own fp32 ranking (isolates quant). If `truth`
+ * is given (the full-768 fp32 top-K per query), an extra `rec/768` column reports the
+ * scheme's top-K against the TRUE 768 ranking — the end-to-end quality (truncation + quant).
+ */
+function runTable(title: string, clean: Float32Array[], truth?: Array<Set<number>>): void {
   const numVecs = clean.length;
   const dim = clean[0]?.length ?? 0;
 
@@ -471,14 +476,15 @@ function runTable(title: string, clean: Float32Array[]): void {
       ref.push(cosine(vi, vj));
     }
   }
-  const fp32Top: Array<Set<number>> = [];
-  for (let i = 0; i < numVecs; i++) fp32Top.push(topKNeighbours(clean, i, TOP_K));
+  const localTop: Array<Set<number>> = [];
+  for (let i = 0; i < numVecs; i++) localTop.push(topKNeighbours(clean, i, TOP_K));
 
   log(`\n=== ${title} · ${dim}-dim · ${numVecs} vecs · ${ref.length} pairs ===`);
+  const recHead = truth ? `${pad(`rec/${dim}`, 9)}rec/768` : `recall@${TOP_K}`;
   log(
-    `${pad('scheme', 34)}${pad('B/vec', 7)}${pad('mean|Δ|', 10)}${pad('p95|Δ|', 10)}${pad('max|Δ|', 10)}recall@${TOP_K}`,
+    `${pad('scheme', 34)}${pad('B/vec', 7)}${pad('mean|Δ|', 10)}${pad('p95|Δ|', 10)}${pad('max|Δ|', 10)}${recHead}`,
   );
-  log('-'.repeat(81));
+  log('-'.repeat(truth ? 88 : 81));
 
   for (const s of SCHEMES) {
     const dq = clean.map((v) => dequantise(v, s));
@@ -498,21 +504,32 @@ function runTable(title: string, clean: Float32Array[]): void {
     const p95 = deltas[Math.floor(deltas.length * 0.95)] ?? 0;
     const max = deltas[deltas.length - 1] ?? 0;
 
-    let recallSum = 0;
+    let localSum = 0;
+    let truthSum = 0;
     let queries = 0;
     for (let i = 0; i < numVecs; i++) {
       const top = topKNeighbours(dq, i, TOP_K);
-      const truth = fp32Top[i];
-      if (!truth || truth.size === 0) continue;
-      let hit = 0;
-      for (const idx of top) if (truth.has(idx)) hit++;
-      recallSum += hit / truth.size;
+      const lt = localTop[i];
+      if (!lt || lt.size === 0) continue;
+      let lh = 0;
+      for (const idx of top) if (lt.has(idx)) lh++;
+      localSum += lh / lt.size;
+      const gt = truth ? truth[i] : undefined;
+      if (gt && gt.size > 0) {
+        let gh = 0;
+        for (const idx of top) if (gt.has(idx)) gh++;
+        truthSum += gh / gt.size;
+      }
       queries++;
     }
-    const recall = recallSum / Math.max(1, queries);
+    const localRec = localSum / Math.max(1, queries);
+    const truthRec = truthSum / Math.max(1, queries);
 
+    const recCols = truth
+      ? `${pad(`${(localRec * 100).toFixed(1)}%`, 9)}${(truthRec * 100).toFixed(1)}%`
+      : `${(localRec * 100).toFixed(1)}%`;
     log(
-      `${pad(s.name, 34)}${pad(String(bytesPerVector(dim, s)), 7)}${pad(mean.toFixed(5), 10)}${pad(p95.toFixed(5), 10)}${pad(max.toFixed(5), 10)}${(recall * 100).toFixed(1)}%`,
+      `${pad(s.name, 34)}${pad(String(bytesPerVector(dim, s)), 7)}${pad(mean.toFixed(5), 10)}${pad(p95.toFixed(5), 10)}${pad(max.toFixed(5), 10)}${recCols}`,
     );
   }
 }
@@ -565,7 +582,7 @@ async function main() {
     `\nMRL truncation 768→256 (fp32, no quant): recall@${TOP_K}=${((rSum / Math.max(1, rN)) * 100).toFixed(1)}% vs full · mean cosine|Δ|=${(dSum / Math.max(1, dN)).toFixed(5)}`,
   );
 
-  runTable('Matryoshka-256', clean256);
+  runTable('Matryoshka-256', clean256, top768);
 
   engine.dispose();
   log('\n✅ experiment complete');
