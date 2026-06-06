@@ -18,6 +18,9 @@ const dormantCtx: IntegrationContext = {
   corsProxyKey: null,
   webSearchTierId: null,
   getKey: async () => null,
+  chatId: '',
+  personaId: '',
+  personaOffering: { providerId: '', upstreamSlug: '' },
 };
 
 describe('tool registry', () => {

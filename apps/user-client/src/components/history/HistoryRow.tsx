@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
+import { useChatArtefactCount } from '../../data/artefacts.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { relativeTimeLabel } from '../../lib/relative-time.js';
 import { StreamingOrb } from '../StreamingOrb.js';
@@ -18,6 +19,10 @@ interface Props {
 export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.Element {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'idle' | 'rename' | 'confirm-delete'>('idle');
+  // Only fetch the artefact count when the confirm-delete tray is visible — avoids loading
+  // full artefact content for every history row just to render a warning count.
+  const artefactCountQuery = useChatArtefactCount(chat.id, mode === 'confirm-delete');
+  const artefactCount = artefactCountQuery.data ?? 0;
 
   if (mode === 'confirm-delete') {
     return (
@@ -29,6 +34,7 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
             setMode('idle');
             onDelete();
           }}
+          artefactCount={artefactCount}
         />
       </li>
     );

@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+/** Incremental progress a tool may report while executing (for live pills). */
+export interface ToolProgress {
+  charCount: number;
+}
+
 /** The outcome of executing a tool. `output` is handed to the model verbatim
  *  as the `tool` message content; `error` is set (and `ok` false) on failure. */
 export interface ToolResult {
   ok: boolean;
   output: string;
   error: string | null;
+  /** Optional structured data merged into the pill payload (e.g. an artefact id). */
+  meta?: Record<string, unknown>;
 }
 
 /** A client-executed tool. The registry projects `parameters` into a wire
@@ -18,5 +25,9 @@ export interface Tool {
   parameters: Record<string, unknown>;
   /** Text injected into the system prompt's tools segment; `null` if trivial. */
   systemPromptInstruction: string | null;
-  execute(args: Record<string, unknown>, signal?: AbortSignal): Promise<ToolResult>;
+  execute(
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+    onProgress?: (p: ToolProgress) => void,
+  ): Promise<ToolResult>;
 }

@@ -82,8 +82,10 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
 
   // Rename on a sent attachment: use low-level op + manual invalidation so the strip refreshes.
   // (useRenameAttachment only invalidates the pending key, not the message key.)
-  const handleRename = (id: string, name: string): void => {
-    void renameAttachment(id, name).then(() =>
+  // Attachments have no title, so patch.title never arrives here — only patch.fileName is used.
+  const handleRename = (id: string, patch: { title?: string; fileName?: string }): void => {
+    if (!patch.fileName) return;
+    void renameAttachment(id, patch.fileName).then(() =>
       qc.invalidateQueries({ queryKey: QK.attachmentsForMessage(p.message.id) }),
     );
   };

@@ -4,10 +4,12 @@ import { useEffect } from 'react';
 interface Props {
   onCancel: () => void;
   onDelete: () => void;
+  /** When > 0, an extra warning line is shown. */
+  artefactCount?: number;
 }
 
 /** Inline confirm-tray used by HistoryRow when the user taps the delete glyph. */
-export function HistoryRowConfirmTray({ onCancel, onDelete }: Props): JSX.Element {
+export function HistoryRowConfirmTray({ onCancel, onDelete, artefactCount }: Props): JSX.Element {
   useEffect(() => {
     const t = setTimeout(onCancel, 6000);
     return () => clearTimeout(t);
@@ -15,7 +17,14 @@ export function HistoryRowConfirmTray({ onCancel, onDelete }: Props): JSX.Elemen
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-danger/40 bg-danger/[0.06] px-3 py-2">
-      <span className="text-xs uppercase tracking-wider text-paper-soft">Delete this chat?</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs uppercase tracking-wider text-paper-soft">Delete this chat?</span>
+        {artefactCount != null && artefactCount > 0 ? (
+          <span className="text-xs text-danger/70">
+            This will also delete {artefactCount} artefact{artefactCount === 1 ? '' : 's'}.
+          </span>
+        ) : null}
+      </div>
       <div className="flex gap-2">
         <button
           type="button"

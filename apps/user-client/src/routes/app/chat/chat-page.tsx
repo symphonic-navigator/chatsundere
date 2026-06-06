@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { buildPrompt, getOffering } from '@chatsundere/llm-unified';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-// SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
+import { ArtefactSheet } from '../../../components/chat/ArtefactSheet.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
@@ -14,6 +15,14 @@ import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { ReadingToolStrip } from '../../../components/chat/ReadingToolStrip.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { TocSheet } from '../../../components/chat/TocSheet.js';
+import { Lightbox } from '../../../components/lightbox/Lightbox.js';
+import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
+import {
+  useChatArtefacts,
+  useDeleteArtefact,
+  useRenameArtefact,
+  useUpdateArtefactContent,
+} from '../../../data/artefacts.js';
 import { useBranchChat, useChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRegenerate, useSendMessage } from '../../../data/send-message.js';
@@ -57,6 +66,12 @@ export function ChatPage(): JSX.Element {
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
+
+  const isArtefactSheetOpen = useCurrentChatStore((s) => s.isArtefactSheetOpen);
+  const setArtefactSheetOpen = useCurrentChatStore((s) => s.setArtefactSheetOpen);
+  const openArtefactId = useCurrentChatStore((s) => s.openArtefactId);
+  const openArtefact = useCurrentChatStore((s) => s.openArtefact);
+  const closeArtefact = useCurrentChatStore((s) => s.closeArtefact);
 
   const [tocOpen, setTocOpen] = useState(false);
   const [branchPointId, setBranchPointId] = useState<string | null>(null);
@@ -341,6 +356,16 @@ export function ChatPage(): JSX.Element {
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
 
+  // Artefact hooks — keyed to the active chat (non-null when chat-mode).
+  const { data: chatArtefacts = [] } = useChatArtefacts(activeChatId ?? '');
+  const renameArtefact = useRenameArtefact(activeChatId ?? '');
+  const editArtefactContent = useUpdateArtefactContent(activeChatId ?? '');
+  const removeArtefact = useDeleteArtefact(activeChatId ?? '');
+  const artefactItems = chatArtefacts.map(artefactToViewable);
+  const artefactIndex = openArtefactId
+    ? artefactItems.findIndex((item) => item.id === openArtefactId)
+    : -1;
+
   const focusId = search.get('focus');
   // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot per focusId once messages are present
   useEffect(() => {
@@ -454,11 +479,42 @@ export function ChatPage(): JSX.Element {
       ) : null}
 
       {!isInteractionMode && hasMessages ? (
-        <ReadingToolStrip onOpenToc={() => setTocOpen(true)} />
+        <ReadingToolStrip
+          onOpenToc={() => setTocOpen(true)}
+          onOpenArtefacts={() => setArtefactSheetOpen(true)}
+        />
       ) : null}
 
       {tocOpen ? (
         <TocSheet messages={messages} onClose={() => setTocOpen(false)} onJump={jumpToMessage} />
+      ) : null}
+
+      {isArtefactSheetOpen ? (
+        <ArtefactSheet
+          chatId={activeChatId ?? ''}
+          onClose={() => setArtefactSheetOpen(false)}
+          onOpen={openArtefact}
+        />
+      ) : null}
+
+      {openArtefactId !== null && artefactIndex >= 0 ? (
+        <Lightbox
+          items={artefactItems}
+          index={artefactIndex}
+          getOriginRect={(id) =>
+            document
+              .querySelector<HTMLElement>(`[data-artefact-pill="${CSS.escape(id)}"]`)
+              ?.getBoundingClientRect() ?? null
+          }
+          onRename={(id, patch) => renameArtefact.mutate({ id, patch })}
+          onRemove={() => {}}
+          onEditText={(id, text) => editArtefactContent.mutate({ id, content: text })}
+          onDelete={(id) => {
+            removeArtefact.mutate(id);
+            closeArtefact();
+          }}
+          onClose={closeArtefact}
+        />
       ) : null}
 
       {branchPointId ? (

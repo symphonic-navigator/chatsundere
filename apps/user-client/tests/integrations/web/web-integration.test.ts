@@ -34,6 +34,9 @@ function ctx(over: Partial<IntegrationContext>): IntegrationContext {
     corsProxyKey: null,
     webSearchTierId: null,
     getKey: async () => 'secret-key',
+    chatId: '',
+    personaId: '',
+    personaOffering: { providerId: '', upstreamSlug: '' },
     ...over,
   };
 }

@@ -16,6 +16,7 @@ export interface ToolLoopDeps {
     name: string,
     args: Record<string, unknown>,
     signal?: AbortSignal,
+    onProgress?: (p: import('../tools/types.js').ToolProgress) => void,
   ) => Promise<ToolResult>;
   /** Tool definitions offered on tool-executing rounds. */
   toolDefs: ToolDef[];
@@ -76,13 +77,24 @@ export async function runToolLoop(deps: ToolLoopDeps): Promise<StreamEngineResul
       pill.status = 'pending';
       deps.onPillUpdate?.(pill);
 
-      const r = await deps.dispatch(payload.name, parseArgs(payload.argumentsJson), deps.signal);
+      const onProgress = (p: import('../tools/types.js').ToolProgress): void => {
+        pill.payload = { ...(pill.payload as Record<string, unknown>), ...p };
+        deps.onPillUpdate?.(pill);
+      };
+
+      const r = await deps.dispatch(
+        payload.name,
+        parseArgs(payload.argumentsJson),
+        deps.signal,
+        onProgress,
+      );
       const content = r.ok ? r.output : (r.error ?? r.output);
       pill.status = r.ok ? 'completed' : 'failed';
       pill.payload = {
-        ...payload,
+        ...(pill.payload as Record<string, unknown>),
         result: r.ok ? r.output : undefined,
         error: r.ok ? undefined : (r.error ?? ''),
+        ...(r.meta ?? {}),
       };
       deps.onPillUpdate?.(pill);
 

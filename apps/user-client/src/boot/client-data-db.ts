@@ -134,6 +134,35 @@ export type AttachmentKind = 'image' | 'text';
 export type AttachmentOrigin = 'upload' | 'generated';
 export type AttachmentState = 'active' | 'deleted';
 
+export type ArtefactOrigin = 'generated' | 'saved-message' | 'saved-code-block';
+export type ArtefactKind = 'text' | 'image';
+export type ArtefactFormat = 'html' | 'markdown' | 'code' | 'svg' | 'mermaid' | 'image';
+
+export interface ArtefactRow {
+  id: string;
+  /** Owner chat — cascade-deleted with the chat. */
+  chatId: string;
+  /** Provenance + future treasury filter. */
+  personaId: string;
+  /** Reserved; unused until projects exist. */
+  projectId: string | null;
+  origin: ArtefactOrigin;
+  kind: ArtefactKind;
+  format: ArtefactFormat;
+  /** Display name — freely renameable. */
+  title: string;
+  /** Carries the extension (download + detectFormat preview); renameable. */
+  fileName: string;
+  mime: string;
+  /** Text artefacts. */
+  content: string;
+  /** Normalised trim+lowercase user tags (Treasury chunk owns the UI). */
+  tags: string[];
+  favourite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AttachmentRow {
   id: string;
   chatId: string;
@@ -188,6 +217,7 @@ class ClientDataDb extends Dexie {
   pills!: Table<PillRow, string>;
   personaAvatars!: Table<PersonaAvatarRow, string>;
   attachments!: Table<AttachmentRow, string>;
+  artefacts!: Table<ArtefactRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -431,6 +461,13 @@ class ClientDataDb extends Dexie {
             if (row.substituteVisionModel === undefined) row.substituteVisionModel = null;
           });
       });
+
+    // Version 13 — artefacts treasury. A new `artefacts` table holds text and
+    // image artefacts generated or saved by the user, indexed for fast lookup
+    // by chat, persona, and favourite status.
+    this.version(13).stores({
+      artefacts: 'id, chatId, personaId, favourite, [chatId+createdAt]',
+    });
   }
 }
 

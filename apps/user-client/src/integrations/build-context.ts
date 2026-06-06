@@ -23,6 +23,14 @@ export interface IntegrationRoute {
   webSearchTierId: string | null;
 }
 
+/** Owner chat + persona + offering context for artefact authoring, assembled
+ *  per send by the stream-manager and passed into the integration context. */
+export interface ArtefactTarget {
+  chatId: string;
+  personaId: string;
+  personaOffering: OfferingRef;
+}
+
 /**
  * Assemble the per-send IntegrationContext. NSFW comes from the active persona;
  * location is deferred (null today); the web backends come from settings; the
@@ -34,6 +42,7 @@ export function buildIntegrationContext(
   web: WebSettings,
   mk: MasterKey | null,
   route: IntegrationRoute,
+  artefact: ArtefactTarget,
   getKeyFn: (id: string, mk: MasterKey) => Promise<string | null> = getCredentialKey,
 ): IntegrationContext {
   return {
@@ -44,6 +53,9 @@ export function buildIntegrationContext(
     corsProxyUrl: route.corsProxyUrl,
     corsProxyKey: route.corsProxyKey,
     webSearchTierId: route.webSearchTierId,
+    chatId: artefact.chatId,
+    personaId: artefact.personaId,
+    personaOffering: artefact.personaOffering,
     getKey: (id) => (mk ? getKeyFn(id, mk) : Promise.resolve(null)),
   };
 }

@@ -8,6 +8,12 @@ import type { OfferingRef } from '../../src/integrations/types.js';
 const REF: OfferingRef = { providerId: 'nano-gpt', upstreamSlug: 'brave' };
 const fakeMk = {} as MasterKey;
 const noRoute: IntegrationRoute = { corsProxyUrl: null, corsProxyKey: null, webSearchTierId: null };
+/** Minimal placeholder used by tests that do not exercise artefact fields. */
+const noArtefact = {
+  chatId: '',
+  personaId: '',
+  personaOffering: { providerId: '', upstreamSlug: '' },
+};
 
 describe('buildIntegrationContext', () => {
   it('maps persona nsfw flag and web settings into the context', () => {
@@ -16,6 +22,7 @@ describe('buildIntegrationContext', () => {
       { search: REF, fetch: null },
       fakeMk,
       noRoute,
+      noArtefact,
       async () => 'k',
     );
     expect(ctx.nsfwAllowed).toBe(true);
@@ -35,6 +42,7 @@ describe('buildIntegrationContext', () => {
       { search: null, fetch: null },
       fakeMk,
       route,
+      noArtefact,
     );
     expect(ctx.corsProxyUrl).toBe('https://proxy.example.com');
     expect(ctx.corsProxyKey).toBe('pk-secret');
@@ -47,6 +55,7 @@ describe('buildIntegrationContext', () => {
       { search: null, fetch: null },
       fakeMk,
       noRoute,
+      noArtefact,
     );
     expect(ctx.corsProxyUrl).toBeNull();
     expect(ctx.corsProxyKey).toBeNull();
@@ -60,6 +69,7 @@ describe('buildIntegrationContext', () => {
       { search: null, fetch: null },
       fakeMk,
       noRoute,
+      noArtefact,
       getKeyFn,
     );
     await expect(ctx.getKey('nano-gpt')).resolves.toBe('secret');
@@ -73,6 +83,7 @@ describe('buildIntegrationContext', () => {
       { search: null, fetch: null },
       null,
       noRoute,
+      noArtefact,
       getKeyFn,
     );
     await expect(ctx.getKey('nano-gpt')).resolves.toBeNull();

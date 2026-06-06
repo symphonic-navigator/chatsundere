@@ -379,3 +379,34 @@ standalone HTML / SVG / code / mermaid / markdown previews.
   artefact-generation work with a locally-bundled transpiler. See
   [[follow-ups-index]] (Active — Implementation) and
   [[../../superpowers/specs/2026-06-06-lightbox-viewer-design]] §11.
+
+## 2026-06-06 — Artefact Kern: model-generated executable HTML surface
+
+Not a Larissa-gated change (client-only — `apps/user-client` only; no
+`auth-/sync-/proxy-service` or `packages/crypto` touch). Logged here because
+the artefact system persists and renders **model-generated executable HTML**,
+which is a new content-execution surface.
+
+- **Execution boundary.** The artefact HTML is rendered by the existing
+  `HtmlPreview` sandbox (`previews/HtmlPreview.tsx`), reused via the lightbox
+  `artefactToViewable` bridge — identical containment to the lightbox-viewer
+  HTML preview logged in the 2026-06-06 entry above. Specifically:
+  `<iframe srcDoc … sandbox="allow-scripts">` with **no** `allow-same-origin`.
+  The null origin prevents access to cookies, `localStorage`, or IndexedDB —
+  so no user secrets are reachable from within the artefact. A strict CSP
+  `<meta>` is injected (`default-src 'none'; img-src data:; style-src
+  'unsafe-inline'; script-src 'unsafe-inline'; font-src data:;`), blocking all
+  external network requests: no phone-home, no IP-leak even from a
+  prompt-injection attempt in the generated code.
+- **Author system prompt.** The author subagent prompt (`AUTHOR_SYSTEM_PROMPT`
+  in `lib/artefact-author.ts`) explicitly instructs the model to use no external
+  resources, no CDN, no `<script src>`, no `<link href>` to remote resources,
+  no `fetch`/`XHR`/`WebSocket`. The prompt is defence-in-depth — the **sandbox
+  is the real boundary** (never trust model output). A jailbroken or
+  misbehaving model cannot exfiltrate data or phone home because the CSP +
+  null-origin sandbox blocks every outbound path regardless.
+- **Same posture as the lightbox viewer HTML preview.** No new trust
+  assumptions; same iframe sandbox flags and CSP policy.
+- **No follow-up required.** The existing sandbox is the appropriate boundary.
+  If a future artefact kind (e.g. a locally-bundled JSX/SPA transpiler) changes
+  the execution model, re-evaluate and add an entry then.

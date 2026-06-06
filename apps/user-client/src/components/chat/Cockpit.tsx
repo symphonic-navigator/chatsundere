@@ -348,7 +348,9 @@ export function Cockpit(p: Props): JSX.Element {
               .querySelector<HTMLElement>(`[data-attachment-thumb="${CSS.escape(id)}"]`)
               ?.getBoundingClientRect() ?? null
           }
-          onRename={(id, name) => rename.mutate({ id, fileName: name })}
+          onRename={(id, patch) => {
+            if (patch.fileName) rename.mutate({ id, fileName: patch.fileName });
+          }}
           onRemove={(id) => remove.mutate(id)}
           onEditText={(id, text) => editText.mutate({ id, text })}
           onClose={() => setLightboxIndex(null)}

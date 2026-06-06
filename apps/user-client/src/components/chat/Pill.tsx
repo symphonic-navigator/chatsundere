@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
+import { ArtefactPill } from './ArtefactPill.js';
 
 const ICON: Record<PillRow['kind'], string> = {
   'tool-call': '⚙',
@@ -39,6 +40,13 @@ function codeOf(p: PillPayloadShape | undefined): string | null {
 
 export function Pill({ row }: { row: PillRow }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
+
+  if (
+    row.kind === 'tool-call' &&
+    (row.payload as { name?: string } | undefined)?.name === 'create_artefact'
+  ) {
+    return <ArtefactPill row={row} />;
+  }
 
   if (row.positionHint === 'above-text') {
     const inlineRow: PillRow = { ...row, positionHint: 'inline' };

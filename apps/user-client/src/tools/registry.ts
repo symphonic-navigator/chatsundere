@@ -34,10 +34,11 @@ export function dispatch(
   name: string,
   args: Record<string, unknown>,
   signal?: AbortSignal,
+  onProgress?: (p: import('./types.js').ToolProgress) => void,
 ): Promise<ToolResult> {
   const tool = tools.find((t) => t.name === name);
   if (!tool) {
     return Promise.resolve({ ok: false, output: '', error: `Unknown tool: ${name}` });
   }
-  return tool.execute(args, signal);
+  return tool.execute(args, signal, onProgress);
 }

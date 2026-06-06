@@ -328,6 +328,14 @@ function runIntoDraft(
       corsProxyKey: args.corsProxyKey,
       webSearchTierId: useCurrentChatStore.getState().webSearchTierId,
     },
+    {
+      chatId: args.chatId,
+      personaId: args.persona.id,
+      personaOffering: {
+        providerId: args.offering.providerId,
+        upstreamSlug: args.offering.upstreamSlug,
+      },
+    },
   );
   const activeTools = toolsActive ? resolveActiveTools(integrationCtx) : [];
   const activeToolDefs = toolDefs(activeTools);
@@ -359,7 +367,8 @@ function runIntoDraft(
   runToolLoop({
     toolDefs: activeToolDefs,
     maxRounds: MAX_TOOL_ROUNDS,
-    dispatch: (name, toolArgs, signal) => dispatchTool(activeTools, name, toolArgs, signal),
+    dispatch: (name, toolArgs, signal, onProgress) =>
+      dispatchTool(activeTools, name, toolArgs, signal, onProgress),
     signal: controller.signal,
     streamOnce: (toolExchange, tools) =>
       runStreamEngine({

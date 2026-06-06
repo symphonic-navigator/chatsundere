@@ -126,10 +126,29 @@ export function useToggleBookmark() {
   });
 }
 
+/** Delete a chat and everything it owns (messages, pills, attachments, artefacts). */
+export async function deleteChatCascade(chatId: string): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction(
+    'rw',
+    [db.chats, db.messages, db.pills, db.attachments, db.artefacts],
+    async () => {
+      const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+      const msgIds = msgs.map((m) => m.id);
+      if (msgIds.length > 0) await db.pills.where('messageId').anyOf(msgIds).delete();
+      await db.attachments.where('chatId').equals(chatId).delete();
+      await db.artefacts.where('chatId').equals(chatId).delete();
+      await db.messages.where('chatId').equals(chatId).delete();
+      await db.chats.delete(chatId);
+    },
+  );
+}
+
 /**
- * Delete a chat and cascade-delete its messages + pills inside a single
- * Dexie transaction. Pre-step: abort any live background stream for this
- * chat via `useStreamManagerStore.abortDiscard` (no-op when no stream).
+ * Delete a chat and cascade-delete its messages, pills, attachments and
+ * artefacts inside a single Dexie transaction. Pre-step: abort any live
+ * background stream for this chat via `useStreamManagerStore.abortDiscard`
+ * (no-op when no stream).
  *
  * Invalidates the chat list on success. Per spec §3.7.
  */
@@ -139,17 +158,7 @@ export function useDeleteChat() {
     mutationFn: async (chatId: string): Promise<void> => {
       // Abort any live stream first so we don't leave a controller dangling.
       await useStreamManagerStore.getState().abortDiscard(chatId);
-
-      const db = getClientDataDb();
-      await db.transaction('rw', db.chats, db.messages, db.pills, async () => {
-        const msgs = await db.messages.where('chatId').equals(chatId).toArray();
-        const msgIds = msgs.map((m) => m.id);
-        if (msgIds.length > 0) {
-          await db.pills.where('messageId').anyOf(msgIds).delete();
-        }
-        await db.messages.where('chatId').equals(chatId).delete();
-        await db.chats.delete(chatId);
-      });
+      await deleteChatCascade(chatId);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: QK.chats });

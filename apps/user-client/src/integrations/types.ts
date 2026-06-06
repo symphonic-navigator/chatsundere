@@ -28,6 +28,12 @@ export interface IntegrationContext {
   /** Retrieve a provider's plaintext key at call time — credential-bus,
    *  MasterKey-gated. Returns null when no key / no master key. */
   getKey: (providerTemplateId: string) => Promise<string | null>;
+  /** Owner chat for artefacts produced this send. */
+  chatId: string;
+  /** Active persona id — provenance for produced artefacts. */
+  personaId: string;
+  /** The persona's LLM offering — the model the author subagent runs. */
+  personaOffering: OfferingRef;
 }
 
 /** A dynamic, credential-gated capability unit — the counterpart to a static

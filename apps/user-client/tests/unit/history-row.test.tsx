@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -38,13 +39,16 @@ const chat: ChatRow = {
 };
 
 function wrap(ui: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
-    <MemoryRouter initialEntries={['/app/history']}>
-      <Routes>
-        <Route path="/app/history" element={ui} />
-        <Route path="/app/chat/:id" element={<div data-testid="chat-mounted" />} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/history']}>
+        <Routes>
+          <Route path="/app/history" element={ui} />
+          <Route path="/app/chat/:id" element={<div data-testid="chat-mounted" />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

@@ -5,6 +5,8 @@ import { useCurrentChatStore } from '../../state/current-chat.store.js';
 interface Props {
   /** Open the per-chat ToC / bookmarks sheet. */
   onOpenToc: () => void;
+  /** Open the per-chat artefacts sheet. */
+  onOpenArtefacts: () => void;
 }
 
 /**
@@ -71,6 +73,14 @@ export function ReadingToolStrip(p: Props): JSX.Element {
             onClick={p.onOpenToc}
           >
             <span aria-hidden>◈</span>
+          </button>
+          <button
+            type="button"
+            className="tool-strip-btn"
+            aria-label="Artefacts"
+            onClick={p.onOpenArtefacts}
+          >
+            <span aria-hidden>⬡</span>
           </button>
         </div>
       ) : null}

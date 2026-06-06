@@ -24,6 +24,10 @@ interface CurrentChatStore {
   isToolStripPinned: boolean;
   reasoning: ReasoningState;
   webSearchTierId: string | null;
+  /** Artefact lightbox: the id of the artefact currently open, or null. */
+  openArtefactId: string | null;
+  /** Whether the artefact sidebar sheet is open. */
+  isArtefactSheetOpen: boolean;
 
   /** Open a persisted chat by ID. Clears any pending lazy-open persona. */
   setChatId: (id: string | null) => void;
@@ -46,6 +50,12 @@ interface CurrentChatStore {
   collapseToolStripIfUnpinned: () => void;
   setReasoning: (r: ReasoningState) => void;
   setWebSearchTierId: (id: string | null) => void;
+  /** Open an artefact in the lightbox; closes the sidebar sheet. */
+  openArtefact: (id: string) => void;
+  /** Close the artefact lightbox. */
+  closeArtefact: () => void;
+  /** Open or close the artefact sidebar sheet. */
+  setArtefactSheetOpen: (open: boolean) => void;
   /** Reset all ephemeral state to initial defaults. */
   reset: () => void;
 }
@@ -66,6 +76,9 @@ type InitialState = Omit<
   | 'collapseToolStripIfUnpinned'
   | 'setReasoning'
   | 'setWebSearchTierId'
+  | 'openArtefact'
+  | 'closeArtefact'
+  | 'setArtefactSheetOpen'
   | 'reset'
 >;
 
@@ -82,6 +95,8 @@ const initial: InitialState = {
   isToolStripPinned: false,
   reasoning: { kind: 'off' },
   webSearchTierId: null,
+  openArtefactId: null,
+  isArtefactSheetOpen: false,
 };
 
 export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
@@ -114,5 +129,8 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
     set((s) => (s.isToolStripPinned ? {} : { isToolStripExpanded: false })),
   setReasoning: (r) => set({ reasoning: r }),
   setWebSearchTierId: (id) => set({ webSearchTierId: id }),
+  openArtefact: (id) => set({ openArtefactId: id, isArtefactSheetOpen: false }),
+  closeArtefact: () => set({ openArtefactId: null }),
+  setArtefactSheetOpen: (open) => set({ isArtefactSheetOpen: open }),
   reset: () => set({ ...initial }),
 }));

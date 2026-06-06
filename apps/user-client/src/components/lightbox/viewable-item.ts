@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { AttachmentRow } from '../../boot/client-data-db.js';
+import type { ArtefactRow, AttachmentRow } from '../../boot/client-data-db.js';
 
 /** Per-item capability descriptor — drives which action buttons the lightbox renders. */
 export interface Caps {
@@ -11,7 +11,7 @@ export interface Caps {
   copy: boolean;
   /** True for text items — download the content as a file. */
   download: boolean;
-  /** True for generated-origin items (Phase 2+; always false in v1). */
+  /** True for generated-origin items, e.g. artefacts. */
   delete: boolean;
   /** True for text items that are still pending — allows editing the source. */
   editSource: boolean;
@@ -23,6 +23,8 @@ export interface ViewableItem {
   /** 'image' → `<img>`; 'text' → the format is derived from fileName/mime. */
   kind: 'image' | 'text';
   fileName: string;
+  /** Display title, separate from fileName — present for artefacts only. */
+  title?: string;
   /** MIME type — used for preview-format detection and download. */
   mime: string;
   /** Blob object URL — only present for image items. Caller revokes. */
@@ -30,6 +32,27 @@ export interface ViewableItem {
   /** Text content — only present for text items. */
   text?: string;
   caps: Caps;
+}
+
+/** Map a stored artefact to a viewable. Generated artefacts are first-class:
+ *  editable, copyable, downloadable, deletable. */
+export function artefactToViewable(row: ArtefactRow): ViewableItem {
+  return {
+    id: row.id,
+    kind: 'text',
+    fileName: row.fileName,
+    title: row.title,
+    mime: row.mime,
+    text: row.content,
+    caps: {
+      rename: true,
+      remove: false,
+      copy: true,
+      download: true,
+      delete: true,
+      editSource: true,
+    },
+  };
 }
 
 /**

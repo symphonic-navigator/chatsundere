@@ -10,10 +10,13 @@ import type { ViewableItem } from './viewable-item';
 export interface LightboxProps {
   items: ViewableItem[];
   index: number;
-  onRename: (id: string, name: string) => void;
+  /** Patch-based rename so artefacts can rename title and/or fileName independently. */
+  onRename: (id: string, patch: { title?: string; fileName?: string }) => void;
   onRemove: (id: string) => void;
   onEditText: (id: string, text: string) => void;
   onClose: () => void;
+  /** Delete a generated item (only called when caps.delete is true). */
+  onDelete?: (id: string) => void;
   /** Resolve the live rect of the origin thumbnail for item `id`, for the FLIP
    *  open/close zoom. Returns null when the origin is gone (scrolled away/detached).
    *  Implemented by the caller via `[data-attachment-thumb="<id>"]`. */
@@ -30,7 +33,7 @@ export interface LightboxProps {
  */
 export function Lightbox(p: LightboxProps): JSX.Element | null {
   const [i, setI] = useState(p.index);
-  const [renaming, setRenaming] = useState(false);
+  const [renamingField, setRenamingField] = useState<'title' | 'fileName' | null>(null);
   const [override, setOverride] = useState<PreviewFormat | null>(null);
   const [copied, setCopied] = useState(false);
   // Edit buffer + last-saved baseline for the current text item.
@@ -60,8 +63,8 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
 
   // Focus the rename input when it mounts, without using the autoFocus attribute.
   useEffect(() => {
-    if (renaming) renameRef.current?.focus();
-  }, [renaming]);
+    if (renamingField) renameRef.current?.focus();
+  }, [renamingField]);
 
   // Empty-items guard: skip key handling during the brief gap between an item
   // being removed and onClose firing, so Arrow keys cannot compute 0 % 0 = NaN.
@@ -234,25 +237,80 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
       <div className="lightbox-backdrop" onClick={attemptClose} />
       <div className="lightbox" ref={surfaceRef}>
         <div className="lightbox-top">
-          {renaming ? (
+          {item.title !== undefined ? (
+            <div className="lightbox-name-group">
+              {renamingField === 'title' ? (
+                <input
+                  ref={renameRef}
+                  className="lightbox-name-edit lightbox-name-edit--title"
+                  defaultValue={item.title}
+                  onBlur={(e) => {
+                    setRenamingField(null);
+                    if (e.target.value.trim())
+                      p.onRename(item.id, { title: e.target.value.trim() });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Escape') setRenamingField(null);
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="lightbox-name lightbox-name--title"
+                  aria-label="Rename title"
+                  onClick={() => item.caps.rename && setRenamingField('title')}
+                >
+                  <span>{item.title}</span>
+                  {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
+                </button>
+              )}
+              {renamingField === 'fileName' ? (
+                <input
+                  ref={renameRef}
+                  className="lightbox-name-edit lightbox-name-edit--filename"
+                  defaultValue={item.fileName}
+                  onBlur={(e) => {
+                    setRenamingField(null);
+                    if (e.target.value.trim())
+                      p.onRename(item.id, { fileName: e.target.value.trim() });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Escape') setRenamingField(null);
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="lightbox-name lightbox-name--filename"
+                  aria-label="Rename filename"
+                  onClick={() => item.caps.rename && setRenamingField('fileName')}
+                >
+                  <span>{item.fileName}</span>
+                  {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
+                </button>
+              )}
+            </div>
+          ) : renamingField === 'fileName' ? (
             <input
               ref={renameRef}
               className="lightbox-name-edit"
               defaultValue={item.fileName}
               onBlur={(e) => {
-                setRenaming(false);
-                if (e.target.value.trim()) p.onRename(item.id, e.target.value.trim());
+                setRenamingField(null);
+                if (e.target.value.trim()) p.onRename(item.id, { fileName: e.target.value.trim() });
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                if (e.key === 'Escape') setRenaming(false);
+                if (e.key === 'Escape') setRenamingField(null);
               }}
             />
           ) : (
             <button
               type="button"
               className="lightbox-name"
-              onClick={() => item.caps.rename && setRenaming(true)}
+              onClick={() => item.caps.rename && setRenamingField('fileName')}
               title="Rename"
             >
               <span>{item.fileName}</span>
@@ -285,11 +343,16 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
                 Download
               </button>
             )}
-            {item.caps.delete && (
-              <button type="button" className="lightbox-btn lightbox-danger">
+            {item.caps.delete && p.onDelete ? (
+              <button
+                type="button"
+                className="lightbox-btn lightbox-danger"
+                aria-label="Delete"
+                onClick={() => p.onDelete?.(item.id)}
+              >
                 Delete
               </button>
-            )}
+            ) : null}
             {item.caps.remove && (
               <button
                 type="button"

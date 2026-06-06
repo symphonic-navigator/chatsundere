@@ -26,12 +26,15 @@ const dormantCtx: IntegrationContext = {
   corsProxyKey: null,
   webSearchTierId: null,
   getKey: async () => null,
+  chatId: '',
+  personaId: '',
+  personaOffering: { providerId: '', upstreamSlug: '' },
 };
 
 describe('tool registry composition', () => {
-  it('always includes calculate_js and contributes nothing web-side when dormant', () => {
+  it('always includes calculate_js and create_artefact, and nothing web-side when dormant', () => {
     const tools = resolveActiveTools(dormantCtx);
-    expect(tools.map((t) => t.name)).toEqual(['calculate_js']);
+    expect(tools.map((t) => t.name)).toEqual(['calculate_js', 'create_artefact']);
   });
 
   it('toolDefs projects each tool to its wire definition', () => {
