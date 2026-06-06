@@ -444,3 +444,24 @@ which is a new content-execution surface.
 - **Follow-up commitment:** None required. If a future TTI `kind:'image'`
   artefact gains a blob-snapshot branch, it rides the existing image-attachment
   path (already logged) — re-evaluate only if that path changes.
+
+## 2026-06-06 — Save as artefact (artefact chunk 4): no new surface
+
+- **Affected paths:** `apps/user-client/**` (client-only; no Larissa scope path).
+- **Finding:** _(none — confirmation entry)._
+- **Severity:** N/A.
+- **Rationale:** Save-as-artefact persists model- or user-authored content that
+  already exists in the conversation — a message's visible text (as `markdown`)
+  or a fenced code block / Mermaid diagram (format from the fence language). A
+  saved `html` code block becomes a renderable HTML artefact, but it is another
+  *producer* of the **already-logged** persisted-execution surface (the Kern
+  entry above): it is previewed by the **same** hard-sandboxed `HtmlPreview`
+  (null-origin iframe, CSP `default-src 'none'`, no external network). No new
+  execution or network path, no new persistence shape (no Dexie migration — the
+  v13 `artefacts` table already carries the `saved-message`/`saved-code-block`
+  origins and `markdown`/`code` formats). NSFW provenance is preserved: a saved
+  artefact inherits the chat's persona id, gated read-side by the existing
+  Treasury/sidebar `useFilteredPersonas` filter exactly as a generated artefact.
+- **Follow-up commitment:** None required. Re-evaluate only if a future artefact
+  kind introduces a new preview/exec surface (e.g. the deferred locally-bundled
+  JSX/SPA viewer — tracked in [[follow-ups-index]]).

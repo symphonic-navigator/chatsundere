@@ -65,6 +65,35 @@
 > exec/network surface** (logged in [[insights/security-deferrals]]). Spec/plan:
 > [[../superpowers/specs/2026-06-06-artefacts-as-attachments-design]],
 > [[../superpowers/plans/2026-06-06-artefacts-as-attachments]].
+>
+> **Save as artefact (Chunk 4) shipped 2026-06-06** — squashed to master
+> `7c907e5` (**NOT pushed**; awaiting Chris's device test), built subagent-driven
+> (9 TDD tasks + per-task spec/quality reviews + a final **opus** holistic review
+> = READY TO SQUASH, no critical/important). Verified: typecheck clean, build
+> 9/9, user-client vitest 997/997, biome clean. **No Dexie migration** (the v13
+> schema already carries the `saved-message`/`saved-code-block` origins and
+> `markdown`/`code` formats). **What landed:** (1) a pure `fenceToArtefactMeta`
+> (`lib/fence-to-artefact.ts`) — inverse of the lightbox's `LANG_BY_EXT` —
+> mapping a fence language to `{format, mime, ext}`. (2) `addSavedMessageArtefact`
+> / `addSavedCodeBlockArtefact` + thin hooks (`data/artefacts.ts`) mirroring
+> `addGeneratedArtefact`. (3) A `◆ Save` control in `MessageControls` (disabled-
+> over-hidden when a message has no text → tooltip), saving the concatenated
+> **visible text blocks** only (reasoning/pills excluded). (4) An
+> **`ArtefactSaveContext`** provided by `MessageBlock` around its markdown carries
+> chat/persona + a code-block save callback to `CodeBlock`/`MermaidBlock`, which
+> gain a **Save** button beside Copy (Copy's positioning moved into a shared
+> `CodeBlockActions` toolbar); the context is **null outside a chat message** (e.g.
+> the lightbox doc preview) so no spurious button appears there, and **no Save
+> button appears mid-stream** (the streaming-draft path renders raw spans, not
+> Markdown). (5) One-tap saves immediately + a `success` toast; rename/tag happen
+> later in the lightbox/Treasury. **Not a Larissa change** (client-only; no new
+> exec/network surface — a saved `html` block reuses the same hard-sandboxed
+> `HtmlPreview` as the Kern; logged in [[insights/security-deferrals]]). The opus
+> holistic review found **no critical/important** cross-cutting issues; one minor
+> follow-up logged (some fence languages outside `detectFormat`'s `LANG_BY_EXT`
+> render un-highlighted in the lightbox — pre-existing, [[insights/follow-ups-index]]).
+> Spec/plan: [[../superpowers/specs/2026-06-06-save-as-artefact-design]],
+> [[../superpowers/plans/2026-06-06-save-as-artefact]].
 
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
@@ -207,6 +236,19 @@ do not silently change it — if a decision is revisited, note the change + why.
 23. **Selection only, no in-picker preview.** Tapping a row toggles a check; there
     is no tap-opens-lightbox path inside the picker. Deep inspection lives in the
     real Treasury (one tap away). Revisit if users want an in-picker peek.
+24. **Save-as-artefact format mapping (Chunk 4).** Save-message → `format:'markdown'`
+    (the concatenated **visible text blocks** only — reasoning/pills excluded).
+    Save-code-block derives the format from the fence language via
+    `fenceToArtefactMeta`: `html`→`'html'` (renderable in the same hard-sandboxed
+    `HtmlPreview` as a generated artefact), `svg`→`'svg'`, `mermaid`→`'mermaid'`,
+    everything else→`'code'`. **Refinement to the spec's "no markdown here" line:**
+    a ```` ```markdown ```` *fence* is stored as `format:'markdown'` (not `'code'`),
+    so the Treasury type filter and the lightbox `detectFormat` renderer agree
+    (both treat `.md` as a doc). Save scope = code blocks with a recognised
+    language + Mermaid; language-less fences, inline code, and LaTeX get no button
+    (decision: Code + Mermaid only). One-tap save (default title = snippet) + a
+    `success` toast; rename/tag later in the lightbox/Treasury. No `sourceMessageId`
+    provenance link (deliberately absent from the built schema).
 
 ### Open questions (to resolve in the relevant chunk's spec)
 
@@ -265,7 +307,7 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 | 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | ✅ done (master `ff62750`, 2026-06-06; awaiting Chris's device test) |
 | 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ✅ done (master `92100de`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
 | 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ✅ done (master `f43b33e`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
-| 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ⬜ planned |
+| 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ✅ done (master `7c907e5`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
 | 5 | **Iteration** *(small follow-up)* | `edit_artefact(id, instruction)` — reuses the Kern author-subagent machinery; just the second tool + lightbox-edit conflict handling | 🅿️ deferred |
 | 6 | **Configurable author model** *(follow-up, aimed today)* | global "artefact author model" picker (mirrors substitute-vision): chat with one model's voice, author the file with the best coder — "best of everything" | 🅿️ deferred |
 
