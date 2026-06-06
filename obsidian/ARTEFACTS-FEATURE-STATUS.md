@@ -67,7 +67,7 @@
 > [[../superpowers/plans/2026-06-06-artefacts-as-attachments]].
 >
 > **Save as artefact (Chunk 4) shipped 2026-06-06** — squashed to master
-> `7c907e5` (**NOT pushed**; awaiting Chris's device test), built subagent-driven
+> `7c907e5` (**device-confirmed by Chris**; being pushed), built subagent-driven
 > (9 TDD tasks + per-task spec/quality reviews + a final **opus** holistic review
 > = READY TO SQUASH, no critical/important). Verified: typecheck clean, build
 > 9/9, user-client vitest 997/997, biome clean. **No Dexie migration** (the v13
@@ -307,7 +307,7 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 | 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | ✅ done (master `ff62750`, 2026-06-06; awaiting Chris's device test) |
 | 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ✅ done (master `92100de`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
 | 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ✅ done (master `f43b33e`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
-| 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ✅ done (master `7c907e5`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
+| 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ✅ done (master `7c907e5`, 2026-06-06; **device-confirmed by Chris**) |
 | 5 | **Iteration** *(small follow-up)* | `edit_artefact(id, instruction)` — reuses the Kern author-subagent machinery; just the second tool + lightbox-edit conflict handling | 🅿️ deferred |
 | 6 | **Configurable author model** *(follow-up, aimed today)* | global "artefact author model" picker (mirrors substitute-vision): chat with one model's voice, author the file with the best coder — "best of everything" | 🅿️ deferred |
 

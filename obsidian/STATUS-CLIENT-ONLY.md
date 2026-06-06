@@ -6,7 +6,7 @@
 > **Artefact system (Block 2):** **Kern shipped** (squash `ff62750`) +
 > **Treasury (Chunk 2)** (squash `92100de`) + **Artefacts-as-attachments
 > (Chunk 3)** (squash `f43b33e`) + **Save-as-artefact (Chunk 4) shipped
-> 2026-06-06** (squash `7c907e5`, NOT pushed; awaiting Chris's device test) —
+> 2026-06-06** (squash `7c907e5`, device-confirmed by Chris; being pushed) —
 > a `◆ Save` control on every message (visible text → markdown artefact) and a
 > **Save** button beside Copy on every code block / Mermaid diagram (format from
 > the fence language; `html` stays renderable). One-tap + success toast; rename
@@ -17,7 +17,7 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-06 — **Save as artefact (artefact Chunk 4) landed
-(squashed on master `7c907e5`, NOT pushed; awaiting Chris's device test).**
+(squashed on master `7c907e5`, device-confirmed by Chris; being pushed).**
 Block-2 feature, brainstormed end-to-end with Chris, built **subagent-driven**
 (9 TDD tasks, per-task spec/quality review + a final **opus** holistic review =
 READY TO SQUASH, no critical/important). Lift existing conversation content into
@@ -51,11 +51,10 @@ render un-highlighted in the lightbox — pre-existing, [[insights/follow-ups-in
 Verification: `pnpm typecheck` clean; `pnpm run build` **9/9**; user-client
 vitest **997/997** (fully green); biome clean. Spec/plan:
 [[../superpowers/specs/2026-06-06-save-as-artefact-design]],
-[[../superpowers/plans/2026-06-06-save-as-artefact]]. **Next:** Chris
-device-tests the spec §10 checklist (save a message → markdown doc; save a
-`python` block → highlighted `.py`; save an `html` block → live sandboxed
-render; save a Mermaid diagram; text-less message → Save disabled); then Chunk 5
-(iteration) or Block-1 memory per [[ROADMAP]].
+[[../superpowers/plans/2026-06-06-save-as-artefact]]. **Device-confirmed by
+Chris (2026-06-06) — "works wonderfully".** **Next:** Chunk 5 (iteration —
+`edit_artefact(id, instruction)`, reuses the Kern author-subagent machinery) or
+Block-1 memory (chatsune port) per [[ROADMAP]].
 
 **Earlier 2026-06-06 — Artefacts as attachments (artefact Chunk 3)
 landed (squashed on master `f43b33e`, NOT pushed; awaiting Chris's device
