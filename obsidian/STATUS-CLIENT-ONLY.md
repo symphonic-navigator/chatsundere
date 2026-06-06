@@ -39,19 +39,23 @@ spec-§6 gap (persona filter must auto-reset when its persona hides) before squa
 Verification: `pnpm typecheck` **14/14**; `pnpm run build` **9/9**; user-client vitest
 **959/959** (fully green); biome clean. Spec/plan:
 [[../superpowers/specs/2026-06-06-treasury-design]],
-[[../superpowers/plans/2026-06-06-treasury]]. **Device-fix round (master `382afa0`,
-NOT pushed; root-caused via the debugging skill):** (1) the **lightbox open** now
-animates symmetrically — the FLIP falls back to a zoom-up-from-off-screen when no
-origin rect is available (mirror of the existing close fallback), so opening an
-artefact from the **sidebar** (which closes its origin row on open) or the Treasury
-no longer pops; (2) **two-tap-to-open in the sidebar** fixed — the sheet overlays
-(`.artefact-sheet-root`/`.toc-sheet-root`/`.branch-sheet-root`) are now exempt from
-`InteractionMode`'s unpinned outside-tap handler (they render at chat-page level, so
-the first tap was swallowed + collapsed the cockpit instead of reaching the row) —
-same class as the earlier `.lightbox-root` exemption. Verified: typecheck 14/14,
-vitest **960/960**, biome clean. **Next:** Chris device-tests the spec §13 checklist
-+ these two fixes; then Chunk 3 (artefacts as attachments) or Block-1 memory per
-[[ROADMAP]].
+[[../superpowers/plans/2026-06-06-treasury]]. **Device-fix round (master `382afa0` →
+`ebd3d49`, NOT pushed; root-caused via the debugging skill; both device-confirmed
+by Chris):** (1) **lightbox open no longer pops.** Root cause was paint timing — the
+open FLIP ran in `useEffect`, which fires *after* the first paint, so the surface
+painted full-size for a frame (the pop) before the from-transform was applied and the
+transition had no painted start. (Close was fine — it animates away from the
+already-painted open state.) Fix: run the open FLIP in **`useLayoutEffect`** (from-
+transform lands before first paint) with a **forced reflow** to commit it as the
+transition's start value; plus a fallback origin (off-screen-bottom, mirror of the
+close fallback) so open animates even when the origin row is gone by mount time
+(e.g. the sidebar closes on open). (2) **two-tap-to-open in the sidebar** fixed — the
+sheet overlays (`.artefact-sheet-root`/`.toc-sheet-root`/`.branch-sheet-root`) are now
+exempt from `InteractionMode`'s unpinned outside-tap handler (they render at chat-page
+level, so the first tap was swallowed + collapsed the cockpit instead of reaching the
+row) — same class as the earlier `.lightbox-root` exemption (with a regression test).
+Verified: typecheck 14/14, vitest **960/960**, biome clean. **Next:** Chunk 3
+(artefacts as attachments) or Block-1 memory per [[ROADMAP]].
 
 **Earlier 2026-06-06 — Lightbox viewer landed, device-tested by Chris &
 merged to master (`8b35592`, NOT pushed).** Built in an isolated worktree
