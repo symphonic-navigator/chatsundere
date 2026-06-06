@@ -78,7 +78,7 @@ describe('Lightbox', () => {
     expect(onRemove).toHaveBeenCalledWith('1');
   });
 
-  it('toggles Preview/Source for markdown and persists an edit', () => {
+  it('toggles Preview/Source for markdown and persists an edit via Save', () => {
     const onEditText = vi.fn();
     const { getByText, getByRole } = render(
       <Lightbox items={[md('1')]} index={0} {...handlers} onEditText={onEditText} />,
@@ -86,7 +86,7 @@ describe('Lightbox', () => {
     fireEvent.click(getByText('Source'));
     const ta = getByRole('textbox') as HTMLTextAreaElement;
     fireEvent.change(ta, { target: { value: '# Edited' } });
-    fireEvent.blur(ta);
+    fireEvent.click(getByRole('button', { name: 'Save' }));
     expect(onEditText).toHaveBeenCalledWith('1', '# Edited');
   });
 
@@ -116,5 +116,73 @@ describe('Lightbox', () => {
     fireEvent.click(screen.getByRole('button', { name: /format/i }));
     fireEvent.click(screen.getByText('Markdown'));
     expect(document.body.querySelector('.lightbox-doc h1')?.textContent).toBe('H');
+  });
+});
+
+describe('Lightbox editing (Save / Undo / dirty-confirm)', () => {
+  function openSourceAndEdit(next: string): HTMLTextAreaElement {
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    const ta = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: next } });
+    return ta;
+  }
+
+  it('Save is disabled until dirty, then persists the draft and clears dirty', () => {
+    const onEditText = vi.fn();
+    render(<Lightbox items={[md('e1')]} index={0} {...handlers} onEditText={onEditText} />);
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    openSourceAndEdit('# Hi there');
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onEditText).toHaveBeenCalledWith('e1', '# Hi there');
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('Undo reverts the draft to the last saved value', () => {
+    render(<Lightbox items={[md('e1')]} index={0} {...handlers} />);
+    const ta = openSourceAndEdit('changed');
+    expect(ta.value).toBe('changed');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('# Hi');
+  });
+
+  it('closing while dirty shows the confirm bar instead of closing; Cancel keeps it open', () => {
+    const onClose = vi.fn();
+    render(<Lightbox items={[md('e1')]} index={0} {...handlers} onClose={onClose} />);
+    openSourceAndEdit('edited');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('confirm → Discard proceeds with the close', () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    render(<Lightbox items={[md('e1')]} index={0} {...handlers} onClose={onClose} />);
+    openSourceAndEdit('edited');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    vi.advanceTimersByTime(300);
+    expect(onClose).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('confirm → Save persists the edit before proceeding', () => {
+    vi.useFakeTimers();
+    const onEditText = vi.fn();
+    render(<Lightbox items={[md('e1')]} index={0} {...handlers} onEditText={onEditText} />);
+    openSourceAndEdit('edited');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // Two "Save" buttons now exist (toolbar + confirm bar); the confirm one is last.
+    const saves = screen.getAllByRole('button', { name: 'Save' });
+    fireEvent.click(saves[saves.length - 1] as HTMLButtonElement);
+    expect(onEditText).toHaveBeenCalledWith('e1', 'edited');
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
   });
 });

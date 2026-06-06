@@ -29,7 +29,8 @@ describe('LightboxTextBody dispatch', () => {
       <LightboxTextBody
         item={item({ text: '# Hi', fileName: 'a.md' })}
         format="markdown"
-        onEditText={() => {}}
+        draft="# Hi"
+        onDraftChange={() => {}}
       />,
     );
     expect(container.querySelector('.lightbox-doc h1')?.textContent).toBe('Hi');
@@ -39,7 +40,8 @@ describe('LightboxTextBody dispatch', () => {
       <LightboxTextBody
         item={item({ text: '<svg/>', fileName: 'a.svg' })}
         format="svg"
-        onEditText={() => {}}
+        draft="<svg/>"
+        onDraftChange={() => {}}
       />,
     );
     expect(container.querySelector('.lightbox-svg img')).not.toBeNull();
@@ -49,7 +51,8 @@ describe('LightboxTextBody dispatch', () => {
       <LightboxTextBody
         item={item({ text: '<p>x</p>', fileName: 'a.html' })}
         format="html"
-        onEditText={() => {}}
+        draft="<p>x</p>"
+        onDraftChange={() => {}}
       />,
     );
     expect(container.querySelector('iframe.lightbox-html')?.getAttribute('sandbox')).toBe(

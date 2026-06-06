@@ -28,21 +28,24 @@ function Preview({ item, format }: { item: ViewableItem; format: PreviewFormat }
 }
 
 /**
- * Body for text lightbox items: a Preview/Source toggle. Preview dispatches on
- * the (possibly user-overridden) format; Source is the raw text, editable only
- * when caps.editSource is true.
+ * Body for text lightbox items: a Preview/Source toggle. The toggle stays fixed
+ * at the top; only the content (or source) scrolls below it. Preview dispatches on
+ * the (possibly user-overridden) format and renders from the live `draft`; Source is
+ * a full-height editor over the same draft, editable only when caps.editSource is true.
+ * The draft, Save/Undo and dirty handling are owned by the Lightbox.
  */
 export function LightboxTextBody({
   item,
   format,
-  onEditText,
+  draft,
+  onDraftChange,
 }: {
   item: ViewableItem;
   format: PreviewFormat;
-  onEditText: (id: string, text: string) => void;
+  draft: string;
+  onDraftChange: (text: string) => void;
 }): JSX.Element {
   const [view, setView] = useState<'preview' | 'source'>('preview');
-  const [draft, setDraft] = useState(item.text ?? '');
 
   return (
     <div className="lightbox-text">
@@ -62,17 +65,18 @@ export function LightboxTextBody({
           Source
         </button>
       </div>
-      {view === 'preview' ? (
-        <Preview item={{ ...item, text: draft }} format={format} />
-      ) : (
-        <textarea
-          className="lightbox-source"
-          value={draft}
-          readOnly={!item.caps.editSource}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => item.caps.editSource && draft !== item.text && onEditText(item.id, draft)}
-        />
-      )}
+      <div className="lightbox-scroll">
+        {view === 'preview' ? (
+          <Preview item={{ ...item, text: draft }} format={format} />
+        ) : (
+          <textarea
+            className="lightbox-source"
+            value={draft}
+            readOnly={!item.caps.editSource}
+            onChange={(e) => onDraftChange(e.target.value)}
+          />
+        )}
+      </div>
     </div>
   );
 }

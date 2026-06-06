@@ -25,20 +25,28 @@ export interface LightboxProps {
  * Toolbar is driven by the current item's caps; navigation loops (chevrons + keyboard ←/→/Esc).
  * Opens with a FLIP zoom from the origin thumb when getOriginRect is provided; respects
  * prefers-reduced-motion. Close zooms back to the thumb (or downward off-screen if gone).
+ * Editable text items keep an in-memory draft: Save persists it, Undo reverts to the last
+ * saved value, and closing/navigating while dirty asks for confirmation first.
  */
 export function Lightbox(p: LightboxProps): JSX.Element | null {
   const [i, setI] = useState(p.index);
   const [renaming, setRenaming] = useState(false);
   const [override, setOverride] = useState<PreviewFormat | null>(null);
   const [copied, setCopied] = useState(false);
+  // Edit buffer + last-saved baseline for the current text item.
+  const [draft, setDraft] = useState(p.items[p.index]?.text ?? '');
+  const [baseline, setBaseline] = useState(p.items[p.index]?.text ?? '');
+  // When set, a destructive navigation/close is pending behind the dirty-confirm bar.
+  const [confirming, setConfirming] = useState<{ run: () => void } | null>(null);
   const renameRef = useRef<HTMLInputElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const closingRef = useRef(false);
-  // Stable ref to requestClose — assigned below after the item guard, read by effects above.
-  // requestClose is a hoisted function declaration so effects can safely call closeRef.current().
+  // Stable refs to the latest close/navigation handlers, so the keydown + iframe
+  // listeners (registered once) always invoke the current, dirty-guarded versions.
   const closeRef = useRef<() => void>(() => {
     /* placeholder; overwritten each render */
   });
+  const navRef = useRef<{ prev: () => void; next: () => void }>({ prev: () => {}, next: () => {} });
   const item = p.items[i];
 
   // Keep the index valid as items shrink (e.g. after a remove).
@@ -61,8 +69,8 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     if (p.items.length === 0) return;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') closeRef.current();
-      else if (e.key === 'ArrowRight') setI((n) => (n + 1) % p.items.length);
-      else if (e.key === 'ArrowLeft') setI((n) => (n - 1 + p.items.length) % p.items.length);
+      else if (e.key === 'ArrowRight') navRef.current.next();
+      else if (e.key === 'ArrowLeft') navRef.current.prev();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -99,11 +107,15 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     return () => window.removeEventListener('message', onMsg);
   }, []);
 
-  // Reset the format override + copied flash when the viewed item changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `i` is intentionally listed as a trigger; the effect only calls stable setters, which biome would otherwise flag as "no deps needed"
+  // Reset per-item view state (override, copied flash, edit buffer, confirm bar)
+  // whenever the viewed item changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `i` is intentionally the only trigger; the body reads the freshly-indexed item and calls stable setters
   useEffect(() => {
     setOverride(null);
     setCopied(false);
+    setDraft(p.items[i]?.text ?? '');
+    setBaseline(p.items[i]?.text ?? '');
+    setConfirming(null);
   }, [i]);
 
   if (!item) return null;
@@ -111,9 +123,25 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   const format: PreviewFormat =
     item.kind === 'text' ? (override ?? detectFormat(item.fileName, item.mime)) : 'plain';
 
+  const editable = item.kind === 'text' && item.caps.editSource;
+  const dirty = editable && draft !== baseline;
+
+  // Run an action immediately, or — if there are unsaved edits — defer it behind
+  // the dirty-confirm bar.
+  function guard(run: () => void): void {
+    if (dirty) setConfirming({ run });
+    else run();
+  }
+  function save(): void {
+    if (!item) return;
+    p.onEditText(item.id, draft);
+    setBaseline(draft);
+  }
+
   const multi = p.items.length > 1;
-  const prev = (): void => setI((n) => (n - 1 + p.items.length) % p.items.length);
-  const next = (): void => setI((n) => (n + 1) % p.items.length);
+  const prev = (): void => guard(() => setI((n) => (n - 1 + p.items.length) % p.items.length));
+  const next = (): void => guard(() => setI((n) => (n + 1) % p.items.length));
+  navRef.current = { prev, next };
 
   const DURATION = 220;
 
@@ -181,7 +209,20 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     });
   }
 
-  closeRef.current = requestClose;
+  // Closing is dirty-guarded too — unsaved edits prompt the confirm bar first.
+  function attemptClose(): void {
+    guard(() => requestClose());
+  }
+  closeRef.current = attemptClose;
+
+  // Resolve a pending confirm: optionally save, then run the deferred action.
+  function resolveConfirm(saveFirst: boolean): void {
+    if (!confirming) return;
+    const run = confirming.run;
+    if (saveFirst) save();
+    setConfirming(null);
+    run();
+  }
 
   // Portal to <body> so the overlay escapes every containing block — notably
   // the cockpit's `backdrop-filter` (and any transformed chat-stream ancestor),
@@ -190,7 +231,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   return createPortal(
     <dialog className="lightbox-root" aria-modal="true" open>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard handler in the useEffect above already handles Escape; click on backdrop is a mouse shortcut */}
-      <div className="lightbox-backdrop" onClick={requestClose} />
+      <div className="lightbox-backdrop" onClick={attemptClose} />
       <div className="lightbox" ref={surfaceRef}>
         <div className="lightbox-top">
           {renaming ? (
@@ -225,7 +266,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               type="button"
               className="lightbox-btn"
               onClick={() => {
-                void copyText(item.text ?? '');
+                void copyText(draft);
                 setCopied(true);
                 window.setTimeout(() => setCopied(false), 1500);
               }}
@@ -237,9 +278,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
             <button
               type="button"
               className="lightbox-btn"
-              onClick={() =>
-                downloadText(item.text ?? '', formatToExtension(item.fileName, format))
-              }
+              onClick={() => downloadText(draft, formatToExtension(item.fileName, format))}
             >
               Download
             </button>
@@ -258,7 +297,22 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               Remove
             </button>
           )}
-          <button type="button" className="lightbox-x" aria-label="Close" onClick={requestClose}>
+          {editable && (
+            <button
+              type="button"
+              className="lightbox-btn"
+              disabled={!dirty}
+              onClick={() => setDraft(baseline)}
+            >
+              Undo
+            </button>
+          )}
+          {editable && (
+            <button type="button" className="lightbox-btn" disabled={!dirty} onClick={save}>
+              Save
+            </button>
+          )}
+          <button type="button" className="lightbox-x" aria-label="Close" onClick={attemptClose}>
             ×
           </button>
         </div>
@@ -266,7 +320,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
           {item.kind === 'image' ? (
             <img className="lightbox-img" src={item.imageUrl} alt={item.fileName} />
           ) : (
-            <LightboxTextBody item={item} format={format} onEditText={p.onEditText} />
+            <LightboxTextBody item={item} format={format} draft={draft} onDraftChange={setDraft} />
           )}
           {multi && (
             <button type="button" className="lightbox-chev l" aria-label="Previous" onClick={prev}>
@@ -284,6 +338,25 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
             </span>
           )}
         </div>
+        {confirming && (
+          <div className="lightbox-confirm" role="alertdialog" aria-label="Unsaved changes">
+            <span>Unsaved changes</span>
+            <span className="lightbox-spacer" />
+            <button type="button" className="lightbox-btn" onClick={() => resolveConfirm(true)}>
+              Save
+            </button>
+            <button
+              type="button"
+              className="lightbox-btn lightbox-danger"
+              onClick={() => resolveConfirm(false)}
+            >
+              Discard
+            </button>
+            <button type="button" className="lightbox-btn" onClick={() => setConfirming(null)}>
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     </dialog>,
     document.body,
