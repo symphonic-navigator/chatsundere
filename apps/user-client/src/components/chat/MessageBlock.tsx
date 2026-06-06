@@ -2,11 +2,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { useSaveCodeBlockArtefact, useSaveMessageArtefact } from '../../data/artefacts.js';
 import { renameAttachment, useMessageAttachments } from '../../data/attachments.js';
 import { QK } from '../../data/queryKeys.js';
+import { codeSnippetTitle, messageSnippetTitle } from '../../lib/artefact-titles.js';
 import { groupAdjacent } from '../../lib/content-blocks.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
+import { toastStore } from '../../state/toast.store.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
 import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
@@ -14,6 +17,7 @@ import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
 import { ReasoningPill } from './ReasoningPill.js';
 import { MarkdownContent } from './markdown/MarkdownContent.js';
+import { ArtefactSaveContext } from './markdown/artefact-save-context.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -52,6 +56,10 @@ export interface MessageBlockProps {
 export function MessageBlock(p: MessageBlockProps): JSX.Element {
   const isUser = p.message.role === 'user';
   const roleClass = isUser ? 'from-user' : 'from-persona';
+
+  // ---- Save-as-artefact mutations (called unconditionally — Rules of Hooks) ----
+  const saveMessage = useSaveMessageArtefact(p.message.chatId);
+  const saveCode = useSaveCodeBlockArtefact(p.message.chatId);
 
   // ---- Sent attachments (user messages only) ----
   const qc = useQueryClient();
@@ -145,6 +153,45 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     p.onToggleExpand();
   };
 
+  const personaId = p.persona?.id ?? null;
+
+  const textContent = p.message.contentBlocks
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+  const canSaveMessage = personaId !== null && textContent.trim().length > 0;
+
+  const confirmSaved = (title: string): void => {
+    toastStore.show({ message: `Saved «${title}»`, tone: 'success', durationMs: 2500 });
+  };
+  const warnFailed = (): void => {
+    toastStore.show({ message: 'Could not save artefact', tone: 'warn', durationMs: 2500 });
+  };
+
+  const handleSaveMessage = (): void => {
+    if (personaId === null || !canSaveMessage) return;
+    const title = messageSnippetTitle(textContent);
+    saveMessage.mutate(
+      { personaId, title, content: textContent },
+      { onSuccess: () => confirmSaved(title), onError: warnFailed },
+    );
+  };
+
+  const saveCtx =
+    personaId === null
+      ? null
+      : {
+          chatId: p.message.chatId,
+          personaId,
+          saveCodeBlock: ({ content, lang }: { content: string; lang: string }) => {
+            const title = codeSnippetTitle(content, lang);
+            saveCode.mutate(
+              { personaId, title, content, lang },
+              { onSuccess: () => confirmSaved(title), onError: warnFailed },
+            );
+          },
+        };
+
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: message block is a touch-first tap target — keyboard nav handled at chat-list level
     <div
@@ -168,13 +215,15 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
         className="msg-text"
         style={p.persona ? { fontFamily: FONT_VAR[p.persona.font] } : undefined}
       >
-        {renderBlocks(
-          p.message.contentBlocks,
-          p.pills,
-          p.isStreamingDraft === true,
-          p.persona,
-          p.mindspace,
-        )}
+        <ArtefactSaveContext.Provider value={saveCtx}>
+          {renderBlocks(
+            p.message.contentBlocks,
+            p.pills,
+            p.isStreamingDraft === true,
+            p.persona,
+            p.mindspace,
+          )}
+        </ArtefactSaveContext.Provider>
       </div>
       {isUser && activeAttachments.length > 0 && (
         <AttachmentStrip attachments={activeAttachments} onOpen={(i) => setLightboxIndex(i)} />
@@ -205,6 +254,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           onRegenerate={p.onRegenerate}
           onBranch={p.onBranch}
           branchDisabled={p.branchDisabled}
+          onSave={handleSaveMessage}
+          canSave={canSaveMessage}
         />
       ) : null}
     </div>

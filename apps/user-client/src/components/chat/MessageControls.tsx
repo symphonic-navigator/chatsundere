@@ -10,6 +10,10 @@ interface Props {
   onBranch?: () => void;
   /** Disable branching (e.g. while a stream is live for this chat). */
   branchDisabled?: boolean;
+  /** Save this message's visible text as a Markdown artefact. */
+  onSave?: () => void;
+  /** Whether the message has text to save (disabled-over-hidden otherwise). */
+  canSave?: boolean;
 }
 
 function stop(e: React.MouseEvent): void {
@@ -46,6 +50,16 @@ export function MessageControls(p: Props): JSX.Element {
         className="ctrl-btn"
       >
         ◈ Bookmark
+      </button>
+      <button
+        type="button"
+        data-ctrl="save"
+        onClick={p.onSave}
+        disabled={!p.canSave || !p.onSave}
+        title={p.canSave ? 'Save this message as an artefact' : 'No text to save'}
+        className="ctrl-btn"
+      >
+        ◆ Save
       </button>
       <button
         type="button"

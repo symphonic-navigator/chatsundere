@@ -32,7 +32,7 @@ export function CopyButton({ text }: { text: string }): JSX.Element {
     <button
       type="button"
       onClick={handleCopy}
-      className="absolute right-2 top-2 z-10 rounded border border-white/10 bg-white/10 px-2 py-0.5 font-mono text-[11px] text-white/45 transition-colors hover:bg-white/15 hover:text-white/70"
+      className="rounded border border-white/10 bg-white/10 px-2 py-0.5 font-mono text-[11px] text-white/45 transition-colors hover:bg-white/15 hover:text-white/70"
     >
       {copied ? 'Copied' : 'Copy'}
     </button>

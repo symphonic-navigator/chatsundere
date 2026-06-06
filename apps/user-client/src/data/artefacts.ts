@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ArtefactRow, getClientDataDb } from '../boot/client-data-db.js';
+import { fenceToArtefactMeta } from '../lib/fence-to-artefact.js';
 import { normaliseTags } from '../lib/treasury-filter.js';
 import { QK } from './queryKeys.js';
 
@@ -36,6 +37,79 @@ export async function addGeneratedArtefact(input: AddGeneratedArtefactInput): Pr
     title: input.title,
     fileName: `${slugify(input.title)}.html`,
     mime: 'text/html',
+    content: input.content,
+    tags: [],
+    favourite: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await getClientDataDb().artefacts.add(row);
+  return id;
+}
+
+export interface AddSavedMessageArtefactInput {
+  chatId: string;
+  personaId: string;
+  title: string;
+  /** Concatenated visible message text (markdown). */
+  content: string;
+}
+
+/** Save a message's visible text as a Markdown artefact. Returns its id. */
+export async function addSavedMessageArtefact(
+  input: AddSavedMessageArtefactInput,
+): Promise<string> {
+  const id = uuidv7();
+  const now = Date.now();
+  const row: ArtefactRow = {
+    id,
+    chatId: input.chatId,
+    personaId: input.personaId,
+    projectId: null,
+    origin: 'saved-message',
+    kind: 'text',
+    format: 'markdown',
+    title: input.title,
+    fileName: `${slugify(input.title)}.md`,
+    mime: 'text/markdown',
+    content: input.content,
+    tags: [],
+    favourite: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await getClientDataDb().artefacts.add(row);
+  return id;
+}
+
+export interface AddSavedCodeBlockArtefactInput {
+  chatId: string;
+  personaId: string;
+  title: string;
+  content: string;
+  /** Fence language token, e.g. 'python', 'html', 'mermaid'. */
+  lang: string;
+}
+
+/** Save a fenced code block (or Mermaid diagram) as an artefact whose
+ *  format/MIME/extension derive from the fence language. Returns its id. */
+export async function addSavedCodeBlockArtefact(
+  input: AddSavedCodeBlockArtefactInput,
+): Promise<string> {
+  const id = uuidv7();
+  const now = Date.now();
+  const meta = fenceToArtefactMeta(input.lang);
+  const row: ArtefactRow = {
+    id,
+    chatId: input.chatId,
+    personaId: input.personaId,
+    projectId: null,
+    origin: 'saved-code-block',
+    kind: 'text',
+    format: meta.format,
+    title: input.title,
+    fileName: `${slugify(input.title)}.${meta.ext}`,
+    mime: meta.mime,
     content: input.content,
     tags: [],
     favourite: false,
@@ -205,6 +279,28 @@ export function useDeleteArtefact(chatId: string) {
   return useMutation({
     mutationFn: (id: string) => deleteArtefact(id),
     onSuccess: (_r, id) => invalidate(id),
+  });
+}
+
+// Create hooks invalidate the chat + global lists but pass no id: the artefact
+// did not exist before, so there is no prior QK.artefact(id) query to refresh.
+/** Mutation hook: save a message's text as a Markdown artefact. */
+export function useSaveMessageArtefact(chatId: string) {
+  const invalidate = useArtefactInvalidation(chatId);
+  return useMutation({
+    mutationFn: (v: { personaId: string; title: string; content: string }) =>
+      addSavedMessageArtefact({ chatId, ...v }),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Mutation hook: save a fenced code block (or Mermaid) as an artefact. */
+export function useSaveCodeBlockArtefact(chatId: string) {
+  const invalidate = useArtefactInvalidation(chatId);
+  return useMutation({
+    mutationFn: (v: { personaId: string; title: string; content: string; lang: string }) =>
+      addSavedCodeBlockArtefact({ chatId, ...v }),
+    onSuccess: () => invalidate(),
   });
 }
 

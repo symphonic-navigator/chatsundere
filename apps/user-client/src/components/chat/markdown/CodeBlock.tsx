@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Highlighter } from 'shiki';
+import { CodeBlockActions } from './CodeBlockActions.js';
 import { CollapsibleCode } from './CollapsibleCode.js';
-import { CopyButton } from './CopyButton.js';
 
 /** A fenced code block with a known language. Highlights via shiki when the
  *  highlighter has loaded; otherwise renders plain (and re-renders to
@@ -30,7 +30,7 @@ export function CodeBlock({
     return (
       <CollapsibleCode codeStr={codeStr}>
         <div className="relative">
-          <CopyButton text={codeStr} />
+          <CodeBlockActions codeStr={codeStr} lang={lang} />
           {/* Surface, radius, padding and glow are owned by `.msg-text pre` in
               index.css (which also overrides shiki's inline background). */}
           <div
@@ -45,7 +45,7 @@ export function CodeBlock({
   return (
     <CollapsibleCode codeStr={codeStr}>
       <div className="relative">
-        <CopyButton text={codeStr} />
+        <CodeBlockActions codeStr={codeStr} lang={lang} />
         <pre>
           <code>{codeStr}</code>
         </pre>
