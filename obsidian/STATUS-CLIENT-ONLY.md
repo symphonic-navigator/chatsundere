@@ -3,8 +3,11 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-> **Artefact system (Block 2, started 2026-06-06):** living plan + decision log
-> in [[ARTEFACTS-FEATURE-STATUS]]. Read it before touching artefact work.
+> **Artefact system (Block 2):** **Kern shipped 2026-06-06** (squash `ff62750`,
+> NOT pushed; awaiting Chris's device test) — generation tool + author subagent +
+> pill + lightbox reuse + sidebar. Living plan + decision log + remaining chunks
+> (Treasury, attachments, save-as, iteration, configurable author model) in
+> [[ARTEFACTS-FEATURE-STATUS]]. Read it before touching artefact work.
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 

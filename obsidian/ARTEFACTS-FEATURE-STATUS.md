@@ -7,6 +7,14 @@
 > **Started:** 2026-06-06 (brainstorm with Chris). **Block:** 2 (→ v0.1.0).
 > **Side:** client-only (no auth/sync/proxy/crypto → no Larissa gate, but see
 > §Security).
+>
+> **Kern shipped 2026-06-06** — squashed to master `ff62750` (**NOT pushed**),
+> built subagent-driven (17 TDD tasks + final opus holistic review). Verified:
+> typecheck 14/14, build 9/9, user-client vitest 928/928, biome clean. **Next:
+> Chris device-tests the spec §13 checklist**, then Chunk 2 (Treasury).
+> Known limit: author output capped at `max_tokens: 8192` (≈demo-scale single
+> files) — tune on device. Open device decision: sidebar inline-rename is
+> double-click only (mobile touch gap; rename also available in the lightbox).
 
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
@@ -186,7 +194,7 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 
 | # | Chunk | Contents | Status |
 |---|---|---|---|
-| 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | 🔨 implementing (plan: [[../superpowers/plans/2026-06-06-artefact-kern]], 17 tasks) |
+| 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | ✅ done (master `ff62750`, 2026-06-06; awaiting Chris's device test) |
 | 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ⬜ planned |
 | 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ⬜ planned |
 | 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ⬜ planned |
@@ -197,6 +205,10 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 
 - **Restyle the ToC/bookmarks sheet (`TocSheet`)** to match the polished compact
   artefact-sidebar aesthetic — currently plain. Small, non-blocking.
+- **Sidebar inline-rename on touch:** the `ArtefactSheet` rename is double-click
+  only (collides with tap-to-open on mobile-first 380px). Decide a touch gesture
+  (long-press / small edit affordance) after Chris's device test; rename already
+  works in the lightbox, so non-blocking. (Final opus review, 2026-06-06.)
 
 ---
 
