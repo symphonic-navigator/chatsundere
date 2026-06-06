@@ -237,86 +237,92 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
       <div className="lightbox-backdrop" onClick={attemptClose} />
       <div className="lightbox" ref={surfaceRef}>
         <div className="lightbox-top">
-          {item.title !== undefined ? (
-            <div className="lightbox-name-group">
-              {renamingField === 'title' ? (
-                <input
-                  ref={renameRef}
-                  className="lightbox-name-edit lightbox-name-edit--title"
-                  defaultValue={item.title}
-                  onBlur={(e) => {
-                    setRenamingField(null);
-                    if (e.target.value.trim())
-                      p.onRename(item.id, { title: e.target.value.trim() });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                    if (e.key === 'Escape') setRenamingField(null);
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="lightbox-name lightbox-name--title"
-                  aria-label="Rename title"
-                  onClick={() => item.caps.rename && setRenamingField('title')}
-                >
-                  <span>{item.title}</span>
-                  {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
-                </button>
-              )}
-              {renamingField === 'fileName' ? (
-                <input
-                  ref={renameRef}
-                  className="lightbox-name-edit lightbox-name-edit--filename"
-                  defaultValue={item.fileName}
-                  onBlur={(e) => {
-                    setRenamingField(null);
-                    if (e.target.value.trim())
-                      p.onRename(item.id, { fileName: e.target.value.trim() });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                    if (e.key === 'Escape') setRenamingField(null);
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="lightbox-name lightbox-name--filename"
-                  aria-label="Rename filename"
-                  onClick={() => item.caps.rename && setRenamingField('fileName')}
-                >
-                  <span>{item.fileName}</span>
-                  {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
-                </button>
-              )}
-            </div>
-          ) : renamingField === 'fileName' ? (
-            <input
-              ref={renameRef}
-              className="lightbox-name-edit"
-              defaultValue={item.fileName}
-              onBlur={(e) => {
-                setRenamingField(null);
-                if (e.target.value.trim()) p.onRename(item.id, { fileName: e.target.value.trim() });
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                if (e.key === 'Escape') setRenamingField(null);
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              className="lightbox-name"
-              onClick={() => item.caps.rename && setRenamingField('fileName')}
-              title="Rename"
-            >
-              <span>{item.fileName}</span>
-              {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
+          <div className="lightbox-titlebar">
+            {item.title !== undefined ? (
+              <div className="lightbox-name-group">
+                {renamingField === 'title' ? (
+                  <input
+                    ref={renameRef}
+                    className="lightbox-name-edit lightbox-name-edit--title"
+                    defaultValue={item.title}
+                    onBlur={(e) => {
+                      setRenamingField(null);
+                      if (e.target.value.trim())
+                        p.onRename(item.id, { title: e.target.value.trim() });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Escape') setRenamingField(null);
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="lightbox-name lightbox-name--title"
+                    aria-label="Rename title"
+                    onClick={() => item.caps.rename && setRenamingField('title')}
+                  >
+                    <span>{item.title}</span>
+                    {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
+                  </button>
+                )}
+                {renamingField === 'fileName' ? (
+                  <input
+                    ref={renameRef}
+                    className="lightbox-name-edit lightbox-name-edit--filename"
+                    defaultValue={item.fileName}
+                    onBlur={(e) => {
+                      setRenamingField(null);
+                      if (e.target.value.trim())
+                        p.onRename(item.id, { fileName: e.target.value.trim() });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Escape') setRenamingField(null);
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="lightbox-name lightbox-name--filename"
+                    aria-label="Rename filename"
+                    onClick={() => item.caps.rename && setRenamingField('fileName')}
+                  >
+                    <span>{item.fileName}</span>
+                    {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
+                  </button>
+                )}
+              </div>
+            ) : renamingField === 'fileName' ? (
+              <input
+                ref={renameRef}
+                className="lightbox-name-edit"
+                defaultValue={item.fileName}
+                onBlur={(e) => {
+                  setRenamingField(null);
+                  if (e.target.value.trim())
+                    p.onRename(item.id, { fileName: e.target.value.trim() });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setRenamingField(null);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="lightbox-name"
+                onClick={() => item.caps.rename && setRenamingField('fileName')}
+                title="Rename"
+              >
+                <span>{item.fileName}</span>
+                {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
+              </button>
+            )}
+            <button type="button" className="lightbox-x" aria-label="Close" onClick={attemptClose}>
+              ×
             </button>
-          )}
+          </div>
           <div className="lightbox-actions">
             {item.kind === 'text' && (
               <FormatPicker value={format} onChange={(f) => setOverride(f)} />
@@ -378,9 +384,6 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               </button>
             )}
           </div>
-          <button type="button" className="lightbox-x" aria-label="Close" onClick={attemptClose}>
-            ×
-          </button>
         </div>
         <div className="lightbox-body">
           {item.kind === 'image' ? (

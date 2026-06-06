@@ -3,8 +3,10 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { listChatArtefacts } from '../../src/data/artefacts.js';
+import { QK } from '../../src/data/queryKeys.js';
 import { makeArtefactTool } from '../../src/integrations/artefact/artefact-integration.js';
 import type { IntegrationContext } from '../../src/integrations/types.js';
+import { queryClient } from '../../src/lib/queryClient.js';
 
 beforeEach(async () => {
   await _resetClientDataDbForTests();
@@ -57,6 +59,24 @@ test('execute authors a file, persists it, returns the id via meta + progress', 
   const rows = await listChatArtefacts('c1');
   expect(rows).toHaveLength(1);
   expect(rows[0]?.content).toContain('<!doctype');
+});
+
+test('invalidates the chat artefacts query so the lightbox sees the new row', async () => {
+  const spy = vi.spyOn(queryClient, 'invalidateQueries');
+  const tool = makeArtefactTool(ctx(), {
+    author: async () => '<!doctype html><title>x</title>',
+    resolveBase: () => ({
+      provider: {} as never,
+      providerConfig: {} as never,
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      target: { slug: 'glm-5.1' } as never,
+    }),
+  });
+  await tool.execute({ title: 'Calc', brief: 'a calculator' });
+  expect(spy).toHaveBeenCalledWith({ queryKey: QK.chatArtefacts('c1') });
+  spy.mockRestore();
 });
 
 test('missing key → failed result, nothing persisted', async () => {

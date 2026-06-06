@@ -2212,11 +2212,28 @@ h1 {
 /* Toolbar: filename button, action buttons, close × */
 .lightbox-top {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.5rem;
   padding: 0.55rem 0.6rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+}
+
+/* Title + filename on their own row, with the × pushed to the right; the action
+   cluster sits on a second row below (see .lightbox-actions). */
+.lightbox-titlebar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.lightbox-name-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
 .lightbox-name {
@@ -2254,16 +2271,15 @@ h1 {
   flex: 1;
 }
 
-/* Action-button cluster: takes the space between the filename and the ×, and
-   WRAPS onto further rows on narrow (mobile-first) widths so no button — Save
-   in particular — is ever pushed off the right edge. */
+/* Action-button cluster: its own row beneath the title/filename, left-aligned,
+   WRAPPING on narrow (mobile-first) widths so no button — Save in particular —
+   is ever pushed off the edge. */
 .lightbox-actions {
-  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.4rem;
 }
 

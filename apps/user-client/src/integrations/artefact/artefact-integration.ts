@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getOffering, getProvider, offeringToTarget } from '@chatsundere/llm-unified';
 import { addGeneratedArtefact } from '../../data/artefacts.js';
+import { QK } from '../../data/queryKeys.js';
 import {
   type AuthorArtefactArgs,
   type AuthorBase,
   authorArtefact,
 } from '../../lib/artefact-author.js';
+import { queryClient } from '../../lib/queryClient.js';
 import type { Tool, ToolResult } from '../../tools/types.js';
 import type { Integration, IntegrationContext } from '../types.js';
 
@@ -87,6 +89,11 @@ export function makeArtefactTool(ctx: IntegrationContext, deps: ArtefactToolDeps
           title,
           content,
         });
+        // The tool runs outside React, so the chat-page artefacts query (which
+        // feeds the lightbox) won't see the new row on its own. Invalidate now —
+        // otherwise tapping the pill can't open the artefact until another
+        // observer refetches (e.g. the sidebar being opened once).
+        void queryClient.invalidateQueries({ queryKey: QK.chatArtefacts(ctx.chatId) });
         return {
           ok: true,
           output: `Created artefact «${title}» (id: ${id}). It is ready — let the user know.`,
