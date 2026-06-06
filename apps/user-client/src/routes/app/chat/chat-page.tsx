@@ -560,6 +560,9 @@ export function ChatPage(): JSX.Element {
           onExit={onExitToEntranceHall}
           onRenameChat={onRenameChat}
           onOpenPersonaEditor={onOpenPersonaEditor}
+          onOpenToc={() => setTocOpen(true)}
+          onOpenArtefacts={() => setArtefactSheetOpen(true)}
+          toolsAvailable={hasMessages}
         />
       ) : null}
     </div>

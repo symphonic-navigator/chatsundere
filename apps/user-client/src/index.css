@@ -1320,6 +1320,13 @@ h1 {
   font-size: 1.1rem;
   line-height: 1;
 }
+/* ToC / artefact glyphs in the cockpit controls row — sized to sit beside the
+   20px SVG icons (mirrors the reading-mode tool strip). */
+.cockpit-glyph {
+  font-size: 1.05rem;
+  line-height: 1;
+  display: inline-flex;
+}
 .cockpit-row-input {
   display: flex;
   align-items: flex-end;

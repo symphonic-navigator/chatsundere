@@ -31,6 +31,13 @@ interface Props {
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
   isStreamLive: boolean;
+  /** Open the per-chat ToC / bookmarks sheet (omitted → button hidden). */
+  onOpenToc?: () => void;
+  /** Open the per-chat artefact sheet (omitted → button hidden). */
+  onOpenArtefacts?: () => void;
+  /** Whether the chat has content worth navigating — gates the ToC/artefact
+   *  buttons in the controls row (mirrors the reading-mode tool strip). */
+  toolsAvailable?: boolean;
 }
 
 /**
@@ -293,6 +300,32 @@ export function Cockpit(p: Props): JSX.Element {
           </span>
         </button>
         <div className="cockpit-controls-spacer" />
+        {p.toolsAvailable && p.onOpenToc && p.onOpenArtefacts ? (
+          <>
+            <button
+              type="button"
+              className="cockpit-icon-btn"
+              data-control="toc"
+              aria-label="Bookmarks and contents"
+              onClick={p.onOpenToc}
+            >
+              <span className="cockpit-glyph" aria-hidden="true">
+                ◈
+              </span>
+            </button>
+            <button
+              type="button"
+              className="cockpit-icon-btn"
+              data-control="artefacts"
+              aria-label="Artefacts"
+              onClick={p.onOpenArtefacts}
+            >
+              <span className="cockpit-glyph" aria-hidden="true">
+                ⬡
+              </span>
+            </button>
+          </>
+        ) : null}
         <button
           type="button"
           className={`cockpit-icon-btn${isPinned ? ' active' : ''}`}

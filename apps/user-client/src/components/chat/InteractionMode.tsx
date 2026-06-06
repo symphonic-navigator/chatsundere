@@ -21,6 +21,9 @@ interface Props {
   onExit: () => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
+  onOpenToc?: () => void;
+  onOpenArtefacts?: () => void;
+  toolsAvailable?: boolean;
 }
 
 /**
@@ -161,6 +164,9 @@ export function InteractionMode(p: Props): JSX.Element {
           onDraftChange={p.onDraftChange}
           onSend={handleSend}
           isStreamLive={p.isStreamLive}
+          onOpenToc={p.onOpenToc}
+          onOpenArtefacts={p.onOpenArtefacts}
+          toolsAvailable={p.toolsAvailable}
         />
       </div>
     </div>
