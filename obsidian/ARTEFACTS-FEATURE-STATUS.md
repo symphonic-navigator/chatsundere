@@ -25,6 +25,21 @@
 > **Decided:** the lightbox **Source editor stays a plain textarea** — no
 > editable syntax highlighting (the Preview already highlights via shiki; an
 > overlay/CodeMirror editor is over-engineering for a mobile single-file editor).
+>
+> **Treasury (Chunk 2) shipped 2026-06-06** — squashed to master `92100de`
+> (**NOT pushed**; awaiting Chris's device test), built subagent-driven (10 TDD
+> tasks + two-stage review per task + final opus holistic review). Verified:
+> typecheck 14/14, build 9/9, user-client vitest 959/959, biome clean.
+> **Brainstorm decisions:** filter UI = **variant C** (type tabs `All/Apps/Docs/
+> Code/Img` + a ⚙ filter sheet for persona/tags/favourites/project-reserved +
+> compact fuzzy name search + removable active-filter chips); multi-select =
+> **a visible "Select" header button** → floating action bar (bulk Tag + Delete
+> with confirm) — **no long-press** (Chris's call); **tags editable in both** the
+> lightbox (single, from chat *or* treasury) and the Treasury (bulk); two-line
+> rows (decision #20). **`read_artefact` deferred** (follow-up; Chunk 3 is the
+> real "feed content back" path). No Dexie migration (the v13 table already
+> carries tags/favourite/personaId). Holistic review caught + fixed a privacy
+> leak (NSFW persona tags must not surface in the SFW view) before squash.
 
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
@@ -154,11 +169,13 @@ do not silently change it — if a decision is revisited, note the change + why.
 
 ### Open questions (to resolve in the relevant chunk's spec)
 
-- **Treasury filter UI at 380px:** five axes (persona, tag, project, type,
-  name-search) is a lot on mobile. Needs a visual pass.
-- **`read_artefact(id)` on demand?** With the file out of context, if the user
-  asks "what's in it?" the main model can't answer. Add a `read_artefact` tool,
-  or rely on the user opening the lightbox? Decide in Kern/Treasury spec.
+- ~~**Treasury filter UI at 380px:**~~ **resolved 2026-06-06** → **variant C**:
+  type as segmented tabs (the most-used axis) + the remaining axes behind a ⚙
+  filter sheet + compact name search + removable chips (visual pass done in the
+  brainstorm companion).
+- ~~**`read_artefact(id)` on demand?**~~ **resolved 2026-06-06: deferred.** Not a
+  Treasury concern; Chunk 3 (artefacts-as-attachments) is the real "feed content
+  back into the conversation" path. Logged as a follow-up, kept out of scope.
 - **Vector name search:** fuzzy + case-insensitive now; vector search is a
   beta-era add (out of scope).
 
@@ -205,7 +222,7 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 | # | Chunk | Contents | Status |
 |---|---|---|---|
 | 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | ✅ done (master `ff62750`, 2026-06-06; awaiting Chris's device test) |
-| 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ⬜ planned |
+| 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ✅ done (master `92100de`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
 | 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ⬜ planned |
 | 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ⬜ planned |
 | 5 | **Iteration** *(small follow-up)* | `edit_artefact(id, instruction)` — reuses the Kern author-subagent machinery; just the second tool + lightbox-edit conflict handling | 🅿️ deferred |

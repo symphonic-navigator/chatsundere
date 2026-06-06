@@ -3,15 +3,46 @@
 > **Resuming after a `/clear` (2026-05-30)?** Read the warm handoff first:
 > [[insights/2026-05-30-handoff-to-next-session]].
 
-> **Artefact system (Block 2):** **Kern shipped 2026-06-06** (squash `ff62750`,
-> NOT pushed; awaiting Chris's device test) — generation tool + author subagent +
-> pill + lightbox reuse + sidebar. Living plan + decision log + remaining chunks
-> (Treasury, attachments, save-as, iteration, configurable author model) in
+> **Artefact system (Block 2):** **Kern shipped** (squash `ff62750`) +
+> **Treasury (Chunk 2) shipped 2026-06-06** (squash `92100de`, NOT pushed;
+> awaiting Chris's device test) — global `/app/treasury` view, type tabs + filter
+> sheet + fuzzy search + favourites, shared TagEditor (lightbox + bulk),
+> multi-select tag/delete, Entrance-Hall tile live. Remaining chunks (attachments,
+> save-as, iteration, configurable author model) + decision log in
 > [[ARTEFACTS-FEATURE-STATUS]]. Read it before touching artefact work.
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-06 — **Lightbox viewer landed, device-tested by Chris &
+**Last updated:** 2026-06-06 — **Treasury (artefact chunk 2) landed (squashed on
+master `92100de`, NOT pushed; awaiting Chris's device test).** Block-2 feature,
+brainstormed end-to-end with Chris (with the visual companion for the 380px filter
+layout), built **subagent-driven** (10 TDD tasks, implementer + two-stage review
+per task — spec then quality — + a final **opus** holistic review). A global
+`/app/treasury` view over all chat-owned artefacts: **filter layout C** — segmented
+type tabs (`All/Apps/Docs/Code/Img`) + a ⚙ filter sheet (persona via the reused
+`PersonaFilterDropdown`, tags via a shared `TagEditor` in pick-mode, favourites,
+disabled project row) + compact fuzzy name search + removable active-filter chips;
+**two-line rows** (`TreasuryRow`, decision #20); the lightbox cycles over the
+**filtered** set. **Tags are editable in both** the lightbox (single artefact —
+reachable from a chat pill *or* the treasury) and the Treasury (bulk). **Multi-select
+= a visible "Select" header button** → floating action bar (🏷 bulk Tag + 🗑 Delete
+with an inline confirm) — **no long-press** (Chris's call). New global queries +
+bulk/cross-chat mutations in `data/artefacts.ts` (no Dexie migration — the v13 table
+already carries `tags`/`favourite`/`personaId`); **chat deletion now invalidates
+artefact queries** (was a latent staleness bug, surfaced by the global view); the
+**Entrance-Hall tile is live** (count meta). **`read_artefact` deferred** (Chunk 3 is
+the real feed-back path). **Not a Larissa change** (client-only; previews reuse the
+existing hard-sandboxed `HtmlPreview` — no new exec/network surface; logged in
+[[insights/security-deferrals]]). The holistic review caught + fixed a **privacy leak**
+(an NSFW persona's artefacts *and their tags* must not surface in the SFW view) and a
+spec-§6 gap (persona filter must auto-reset when its persona hides) before squash.
+Verification: `pnpm typecheck` **14/14**; `pnpm run build` **9/9**; user-client vitest
+**959/959** (fully green); biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-06-treasury-design]],
+[[../superpowers/plans/2026-06-06-treasury]]. **Next:** Chris device-tests the spec §13
+checklist; then Chunk 3 (artefacts as attachments) or Block-1 memory per [[ROADMAP]].
+
+**Earlier 2026-06-06 — Lightbox viewer landed, device-tested by Chris &
 merged to master (`8b35592`, NOT pushed).** Built in an isolated worktree
 (`worktree-lightbox-viewer`, squashed to `00c1396`) while Chris device-tested chat on
 master, then fast-forward-merged + worktree cleaned up; **three device-feedback fixes

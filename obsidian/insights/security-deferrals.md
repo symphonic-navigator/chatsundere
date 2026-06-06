@@ -410,3 +410,17 @@ which is a new content-execution surface.
 - **No follow-up required.** The existing sandbox is the appropriate boundary.
   If a future artefact kind (e.g. a locally-bundled JSX/SPA transpiler) changes
   the execution model, re-evaluate and add an entry then.
+
+## 2026-06-06 — Treasury (artefact chunk 2): no new surface
+
+- **Affected paths:** `apps/user-client/**` (client-only; no Larissa scope path).
+- **Finding:** _(none — confirmation entry)._
+- **Severity:** N/A.
+- **Rationale:** The Treasury adds only a global *read* over the local Dexie
+  `artefacts` table plus local bulk *tag*/*delete* mutations. Previews still go
+  through the same hard-sandboxed `HtmlPreview` (null-origin iframe + CSP
+  `default-src 'none'`) logged above — no new execution or network surface, and
+  nothing leaves the device. The NSFW-hidden-persona guard was extended to the
+  Treasury so an adult persona's artefacts **and their tags** are excluded from
+  the SFW view (caught in the final holistic review; fixed before squash).
+- **Follow-up commitment:** None required.
