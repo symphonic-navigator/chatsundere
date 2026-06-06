@@ -4,16 +4,64 @@
 > [[insights/2026-05-30-handoff-to-next-session]].
 
 > **Artefact system (Block 2):** **Kern shipped** (squash `ff62750`) +
-> **Treasury (Chunk 2) shipped 2026-06-06** (squash `92100de`, NOT pushed;
-> awaiting Chris's device test) — global `/app/treasury` view, type tabs + filter
-> sheet + fuzzy search + favourites, shared TagEditor (lightbox + bulk),
-> multi-select tag/delete, Entrance-Hall tile live. Remaining chunks (attachments,
-> save-as, iteration, configurable author model) + decision log in
-> [[ARTEFACTS-FEATURE-STATUS]]. Read it before touching artefact work.
+> **Treasury (Chunk 2)** (squash `92100de`) + **Artefacts-as-attachments
+> (Chunk 3) shipped 2026-06-06** (squash `f43b33e`, NOT pushed; awaiting Chris's
+> device test) — the cockpit `(+)` is now a source menu (*Upload from device* /
+> *Attach from Treasury*) opening a slim `ArtefactPicker` bottom-sheet that
+> snapshot-copies chosen artefacts into the chat's attachments (cross-persona
+> reuse). Remaining chunks (save-as, iteration, configurable author model) +
+> decision log in [[ARTEFACTS-FEATURE-STATUS]]. Read it before touching artefact
+> work.
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-06 — **Treasury (artefact chunk 2) landed (squashed on
+**Last updated:** 2026-06-06 — **Artefacts as attachments (artefact Chunk 3)
+landed (squashed on master `f43b33e`, NOT pushed; awaiting Chris's device
+test).** Block-2 feature, brainstormed end-to-end with Chris (visual companion
+for the entry-point + picker layout), built **subagent-driven** (7 TDD tasks,
+per-task review + a final **opus** holistic review). Attach an existing artefact
+to a chat message by copying a **snapshot** into the existing `attachments` flow
+(re-use = copy, not reference; lifecycle decoupled — deleting the artefact later
+never breaks a sent message). **What landed:** (1) `addArtefactSnapshot` +
+`useAddArtefactSnapshots` (`data/attachments.ts`) map an `ArtefactRow` → a pending
+`kind:'text'`, `origin:'upload'` attachment (content/fileName/mime only — no
+title/tags); **no Dexie migration**, no provenance link. The existing send/wire
+path carries it as a code-fenced text part and the lightbox previews it via the
+extension-bearing `fileName` (so an HTML artefact renders in the sandbox, md as a
+doc). **Text-only** (HTML/md/code/svg/mermaid are all `kind:'text'`; the future
+TTI `kind:'image'` blob branch is a trivial later add). (2) The cockpit **`(+)`
+button becomes a two-item source menu** (*Upload from device* / *Attach from
+Treasury*) — only when an `onAttachFromTreasury` handler is wired (back-compat:
+falls back to the direct file dialog otherwise). (3) A slim **`ArtefactPicker`**
+bottom-sheet (`components/artefact/`): type tabs + fuzzy name search +
+selection-only one-line rows + a sticky "Attach (N)"; **no persona/tag filter**
+(search is the main entry, Duplo over Lego); **no in-picker preview** (inspect in
+the Treasury). Selections resolve against the NSFW-gated `visibleRows` so they
+**persist across tab/search changes** (the full selection is snapshotted, not
+just the visible subset). **NSFW gating mirrors the Treasury** via
+`useFilteredPersonas` — an adult persona's artefacts never reach the picker in
+SFW mode. (4) Extracted **`useDismissOnOutside`** (`lib/`), shared by the new
+`(+)` menu and the existing chat `(⋯)` menu. (5) The picker renders at chat-page
+level and `.artefact-picker-root` is **exempted from `InteractionMode`'s
+unpinned outside-tap close** (mirrors the other sheet overlays). **Not a Larissa
+change** (client-only; no new exec/network surface — snapshots reuse the existing
+hard-sandboxed lightbox viewers and the existing outbound wire path; logged in
+[[insights/security-deferrals]]). The **opus holistic review caught one
+cross-cutting bug** the per-task reviews missed — the picker root wasn't exempt
+from the cockpit outside-tap close, so the first tap collapsed the cockpit
+(fired in the primary chat-mode/unpinned case; tests missed it because the picker
+was tested standalone) — fixed + regression-tested before squash; one Critical
+in the picker-quality review (selection resolved against `filtered` → silent
+no-op after a tab switch) was fixed mid-task. Verification: `pnpm run build`
+**9/9**; `pnpm typecheck` clean; user-client vitest **972/972** (fully green);
+biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-06-artefacts-as-attachments-design]],
+[[../superpowers/plans/2026-06-06-artefacts-as-attachments]]. **Next:** Chris
+device-tests the spec §12 checklist (incl. the cross-persona scenario: make an
+artefact with persona A, attach it in a chat with persona B); then Chunk 4
+(save-message / save-code-block as artefact) or Block-1 memory per [[ROADMAP]].
+
+**Earlier 2026-06-06 — Treasury (artefact chunk 2) landed (squashed on
 master `92100de`, NOT pushed; awaiting Chris's device test).** Block-2 feature,
 brainstormed end-to-end with Chris (with the visual companion for the 380px filter
 layout), built **subagent-driven** (10 TDD tasks, implementer + two-stage review

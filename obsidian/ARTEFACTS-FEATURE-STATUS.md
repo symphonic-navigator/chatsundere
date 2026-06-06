@@ -40,6 +40,31 @@
 > real "feed content back" path). No Dexie migration (the v13 table already
 > carries tags/favourite/personaId). Holistic review caught + fixed a privacy
 > leak (NSFW persona tags must not surface in the SFW view) before squash.
+>
+> **Artefacts as attachments (Chunk 3) shipped 2026-06-06** — squashed to master
+> `f43b33e` (**NOT pushed**; awaiting Chris's device test), built subagent-driven
+> (7 TDD tasks + per-task review + a final **opus** holistic review). Verified:
+> build 9/9, typecheck clean, user-client vitest 959→**972/972**, biome clean.
+> **Brainstorm decisions** (visual companion): entry point = the cockpit **(+)
+> becomes a two-item source menu** (*Upload from device* / *Attach from Treasury*,
+> variant A — the natural home as more "add" sources arrive); picker = a **slim
+> Quick-Sheet** (variant A — type tabs + fuzzy name search + selection-only rows +
+> sticky "Attach (N)"; **no persona/tag filter** — search is the main entry,
+> Duplo over Lego); **selection only, no in-picker preview** (inspect in the
+> Treasury). Mechanism (decision log #2): each attach copies a **snapshot**
+> (content/fileName/mime → a pending `kind:'text'`, `origin:'upload'` attachment)
+> via the existing `addAttachment`; **no Dexie migration**, no provenance link;
+> the existing send/wire path carries it as a code-fenced text part and the
+> lightbox previews it via the extension-bearing `fileName`. **Text-only** (HTML/
+> md/code/svg/mermaid are all `kind:'text'`; the future TTI `kind:'image'` blob
+> branch is a trivial later add). NSFW gating mirrors the Treasury via
+> `useFilteredPersonas`. The **opus holistic review caught one cross-cutting bug**
+> per-task reviews missed (the picker root wasn't exempt from `InteractionMode`'s
+> unpinned outside-tap close → first tap collapsed the cockpit; fixed +
+> regression-tested before squash) and confirmed the rest end-to-end. **No new
+> exec/network surface** (logged in [[insights/security-deferrals]]). Spec/plan:
+> [[../superpowers/specs/2026-06-06-artefacts-as-attachments-design]],
+> [[../superpowers/plans/2026-06-06-artefacts-as-attachments]].
 
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
@@ -166,6 +191,22 @@ do not silently change it — if a decision is revisited, note the change + why.
     glyph + title + favourite star, nothing more — details live in the lightbox.
     The richer two-line (format · size · age) treatment is reserved for the
     Treasury, where orientation matters more.
+21. **Attach entry point = the cockpit `(+)` becomes a source menu (variant A).**
+    Tapping `(+)` opens a two-item Aurora menu — *Upload from device* (the existing
+    file dialog) and *Attach from Treasury* — instead of opening the dialog
+    directly. The menu is the natural home as more "add" sources arrive (e.g. TTI).
+    Back-compat: `(+)` only becomes a menu when an attach handler is wired, so it
+    falls back to the direct dialog where no Treasury attach is offered.
+22. **Attach picker = a slim Quick-Sheet (variant A), not the full Treasury.** A
+    bottom-sheet with type tabs + fuzzy name search + selection-only one-line rows
+    + a sticky "Attach (N)". **No persona/tag filter** — search is the primary
+    entry point; persona/tag filtering is a later add *if device use shows the
+    need* (Duplo over Lego). Selections resolve against the NSFW-gated `visibleRows`
+    so they persist across tab/search changes (the full selection is snapshotted,
+    not just the currently visible subset).
+23. **Selection only, no in-picker preview.** Tapping a row toggles a check; there
+    is no tap-opens-lightbox path inside the picker. Deep inspection lives in the
+    real Treasury (one tap away). Revisit if users want an in-picker peek.
 
 ### Open questions (to resolve in the relevant chunk's spec)
 
@@ -223,7 +264,7 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 |---|---|---|---|
 | 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | ✅ done (master `ff62750`, 2026-06-06; awaiting Chris's device test) |
 | 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ✅ done (master `92100de`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
-| 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ⬜ planned |
+| 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ✅ done (master `f43b33e`, 2026-06-06; **NOT pushed** — awaiting Chris's device test) |
 | 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ⬜ planned |
 | 5 | **Iteration** *(small follow-up)* | `edit_artefact(id, instruction)` — reuses the Kern author-subagent machinery; just the second tool + lightbox-edit conflict handling | 🅿️ deferred |
 | 6 | **Configurable author model** *(follow-up, aimed today)* | global "artefact author model" picker (mirrors substitute-vision): chat with one model's voice, author the file with the best coder — "best of everything" | 🅿️ deferred |

@@ -424,3 +424,23 @@ which is a new content-execution surface.
   Treasury so an adult persona's artefacts **and their tags** are excluded from
   the SFW view (caught in the final holistic review; fixed before squash).
 - **Follow-up commitment:** None required.
+
+## 2026-06-06 — Artefacts as attachments (artefact chunk 3): no new surface
+
+- **Affected paths:** `apps/user-client/**` (client-only; no Larissa scope path).
+- **Finding:** _(none — confirmation entry)._
+- **Severity:** N/A.
+- **Rationale:** Attaching an artefact copies a **snapshot** of its already-
+  persisted text content into the existing local `attachments` table (a pending
+  `kind:'text'`, `origin:'upload'` row). No new persistence shape (no Dexie
+  migration), no new execution surface — previewing a snapshot reuses the same
+  hard-sandboxed lightbox viewers (`HtmlPreview` null-origin iframe + CSP
+  `default-src 'none'`) logged above. The only new *outbound* consequence is that
+  artefact content can now ride a chat message to the model — but that is the
+  user's explicit action and is byte-for-byte identical to attaching a text file
+  today (same `resolve-send` / `wire-injection` path). NSFW privacy is preserved
+  by reusing the Treasury's `useFilteredPersonas` gate (adult-persona artefacts
+  never reach the picker in SFW mode).
+- **Follow-up commitment:** None required. If a future TTI `kind:'image'`
+  artefact gains a blob-snapshot branch, it rides the existing image-attachment
+  path (already logged) — re-evaluate only if that path changes.
