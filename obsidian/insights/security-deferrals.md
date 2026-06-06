@@ -346,3 +346,36 @@ Recording the new outbound surface, analogous to the web-interfacing entries.
   (there is no server in this path — local-first).
 - **Phase-2 follow-up:** when a substitute model routes via a CORS proxy, the
   same first-party `proxy-service` migration noted above applies.
+
+## 2026-06-06 — Lightbox viewer: iframe-exec & content-render surfaces
+
+Not a Larissa change (client-only — no auth/sync/proxy/crypto path). Logged here
+for completeness, as the lightbox now renders untrusted file content with new
+mechanisms. The lightbox-viewer work (branch `worktree-lightbox-viewer`) added
+standalone HTML / SVG / code / mermaid / markdown previews.
+
+- **HTML preview runs untrusted content in a hard-sandboxed iframe.**
+  `previews/HtmlPreview.tsx` renders an uploaded HTML file via
+  `<iframe srcDoc … sandbox="allow-scripts">` with **no** `allow-same-origin`.
+  The null origin means the iframe cannot read cookies, `localStorage`, or
+  IndexedDB — where the MasterKey and ciphertext live — so previewed scripts
+  cannot reach user secrets. A strict CSP `<meta>` is injected into the srcDoc
+  (`default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src
+  'unsafe-inline'; font-src data:;`), which blocks **all** external network
+  requests: no phone-home, no IP-leak, no tracking from previewed HTML.
+  Self-contained HTML renders; anything reaching out is blocked.
+- **SVG preview cannot execute scripts.** `previews/SvgPreview.tsx` renders the
+  SVG as an `<img>` `data:image/svg+xml;base64,…` URI. The image context does not
+  execute embedded `<script>` — safe by construction (the SVG source is never
+  injected as raw inner HTML).
+- **Code preview** injects shiki's library-generated HTML (same reviewed pattern
+  as the chat `CodeBlock`) — not user HTML.
+- **iframe→parent Escape bridge.** The HTML preview posts
+  `{ type: 'lightbox-escape' }`; the lightbox validates `event.data?.type` before
+  acting (an action trigger, not data — no origin trust needed).
+- **JSX/SPA deferred on zero-knowledge grounds.** chatsune's artefact view loaded
+  React + Babel from `unpkg.com` at runtime (third-party CDN = IP-leak + remote-code
+  surface). That was **rejected**; JSX/SPA preview is deferred to the
+  artefact-generation work with a locally-bundled transpiler. See
+  [[follow-ups-index]] (Active — Implementation) and
+  [[../../superpowers/specs/2026-06-06-lightbox-viewer-design]] §11.

@@ -5,7 +5,49 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-05 — **Unified lightbox & user attachments landed
+**Last updated:** 2026-06-06 — **Lightbox viewer landed (squashed on branch
+`worktree-lightbox-viewer` at `00c1396`, NOT on master; awaiting Chris's device
+test + merge — he was device-testing chat on master, so this stayed isolated in a
+worktree per his request).**
+Block-2 viewer feature, brainstormed end-to-end with Chris, built **subagent-driven**
+(11 plan tasks, per-task review + a final **opus** holistic review = READY TO
+SQUASH, no critical/important). **Viewer only — artefact *generation* is a deliberate
+separate next scope Chris wants to do cleanly afterwards.** **What landed:** (1) a
+pure `detectFormat(fileName, mime)` (`lightbox/format-detect.ts`) so a text item's
+**preview format** is derived from its extension/MIME (not from `kind`); the body
+dispatches to one small preview each. (2) Five standalone viewers (`lightbox/previews/`):
+**MarkdownDoc** (reuses the chat `MarkdownContent` GFM/KaTeX/Mermaid/Shiki pipeline in
+a generous **Aurora** `.lightbox-doc` document container — lilac, *not* chatsune's
+gold; chat path untouched), **CodePreview** (whole-file shiki, no collapse),
+**HtmlPreview** (hard-sandboxed iframe: `allow-scripts` with **no** `allow-same-origin`
+→ null origin, no MK/IndexedDB access; strict CSP `default-src 'none'` blocks all
+external network → no IP-leak; Escape→postMessage bridge), **SvgPreview** (base64
+data-uri `<img>`, no script exec), **MermaidPreview** (whole file via the lazy
+`MermaidBlock`). (3) "How it works" chrome: a custom **Aurora format-override
+dropdown** (`FormatPicker`, modelled on `PersonaFilterDropdown` — no native
+`<select>`), **Copy**, **Download**; `ViewableItem` now carries `mime`, `Caps` gains
+`copy`, copy/download enabled for text items of any origin. (4) **Symmetric
+close-zoom** (Part b): the lightbox takes `getOriginRect(id)` (caller resolves via
+`[data-attachment-thumb]`) instead of a static rect; open FLIP unchanged, on close it
+**re-measures** the current item's thumb → zooms back, or **downward off-screen + fade**
+when scrolled away/detached; 220ms, reduced-motion-aware, no double-close/stale-closure.
+(5) Uploads now accept **`.svg`/`.mmd`/`.mermaid`** as text so the SVG/Mermaid viewers
+have a source. **JSX/SPA preview deliberately deferred** to the artefact-generation
+work (no third-party CDN — chatsune loaded React+Babel from unpkg, rejected on
+zero-knowledge grounds); recorded in [[insights/follow-ups-index]] (Active —
+Implementation) and [[insights/security-deferrals]]. **Not a Larissa change**
+(client-only; the new iframe-exec/render surface is logged in security-deferrals).
+Verification (on the branch): `pnpm typecheck` **14/14**; `pnpm run build` **9/9**;
+user-client vitest **900/900** (fully green — the old localStorage-jsdom baseline did
+not manifest); biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-06-lightbox-viewer-design]],
+[[../superpowers/plans/2026-06-06-lightbox-viewer]]. **Next:** Chris device-tests
+(spec §13 manual steps — upload a .ts/.md/.html/.svg/.mmd, the open/close zoom from the
+stream incl. the scrolled-away downward fall-back, the format-override), then merges
+`worktree-lightbox-viewer` → master. **Then: the artefact-generation session** (Chris's
+favourite feature — JSX/SPA preview belongs there).
+
+**Earlier 2026-06-05 — Unified lightbox & user attachments landed
 (squashed on master `987c885`, device-tested by Chris — two device fixes folded
 in; being pushed).**
 Block-2 feature, brainstormed end-to-end with Chris (visual companion for the
