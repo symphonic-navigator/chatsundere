@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AttachmentRow } from '../../src/boot/client-data-db.js';
 import { attachmentToViewable } from '../../src/components/lightbox/viewable-item.js';
 
-function row(over: Partial<AttachmentRow>): AttachmentRow {
+function makeRow(over: Partial<AttachmentRow>): AttachmentRow {
   return {
     id: 'a',
     chatId: 'c',
@@ -24,47 +24,93 @@ function row(over: Partial<AttachmentRow>): AttachmentRow {
 }
 
 describe('attachmentToViewable', () => {
-  it('pending upload image → image kind, rename+remove, no download/delete, no editSource', () => {
-    const v = attachmentToViewable(row({}), { pending: true, objectUrl: 'blob:1' });
+  it('pending upload image → image kind, rename+remove, no copy/download/delete, no editSource', () => {
+    const v = attachmentToViewable(makeRow({}), { pending: true, objectUrl: 'blob:1' });
     expect(v.kind).toBe('image');
     expect(v.imageUrl).toBe('blob:1');
     expect(v.caps).toEqual({
       rename: true,
       remove: true,
+      copy: false,
       download: false,
       delete: false,
       editSource: false,
     });
   });
 
-  it('pending markdown text → markdown kind, editable source', () => {
+  it('maps a text row to kind "text" carrying mime, with copy/download caps', () => {
+    const row = makeRow({
+      kind: 'text',
+      fileName: 'notes.md',
+      mime: 'text/markdown',
+      text: '# Hi',
+    });
+    const v = attachmentToViewable(row, { pending: true });
+    expect(v.kind).toBe('text');
+    expect(v.mime).toBe('text/markdown');
+    expect(v.caps.copy).toBe(true);
+    expect(v.caps.download).toBe(true);
+    expect(v.caps.editSource).toBe(true);
+  });
+
+  it('maps an image row with copy/download disabled', () => {
+    const row = makeRow({ kind: 'image', fileName: 'p.jpg', mime: 'image/jpeg' });
+    const v = attachmentToViewable(row, { pending: false, objectUrl: 'blob:x' });
+    expect(v.kind).toBe('image');
+    expect(v.caps.copy).toBe(false);
+    expect(v.caps.download).toBe(false);
+  });
+
+  it('pending text (.md) → text kind, editable source, carries text content', () => {
     const v = attachmentToViewable(
-      row({ kind: 'text', fileName: 'n.md', mime: 'text/markdown', text: '# x', blob: undefined }),
+      makeRow({
+        kind: 'text',
+        fileName: 'n.md',
+        mime: 'text/markdown',
+        text: '# x',
+        blob: undefined,
+      }),
       { pending: true },
     );
-    expect(v.kind).toBe('markdown');
+    expect(v.kind).toBe('text');
     expect(v.text).toBe('# x');
     expect(v.caps.editSource).toBe(true);
     expect(v.caps.remove).toBe(true);
   });
 
-  it('plain text (.txt) → text kind, not markdown', () => {
+  it('plain text (.txt) → text kind with copy/download caps', () => {
     const v = attachmentToViewable(
-      row({ kind: 'text', fileName: 'log.txt', mime: 'text/plain', text: 'hi', blob: undefined }),
+      makeRow({
+        kind: 'text',
+        fileName: 'log.txt',
+        mime: 'text/plain',
+        text: 'hi',
+        blob: undefined,
+      }),
       { pending: true },
     );
     expect(v.kind).toBe('text');
+    expect(v.caps.copy).toBe(true);
+    expect(v.caps.download).toBe(true);
   });
 
   it('sent upload → rename only, no remove, source read-only', () => {
     const v = attachmentToViewable(
-      row({ messageId: 'm', kind: 'text', fileName: 'n.md', text: 'x', blob: undefined }),
+      makeRow({
+        messageId: 'm',
+        kind: 'text',
+        fileName: 'n.md',
+        mime: 'text/markdown',
+        text: 'x',
+        blob: undefined,
+      }),
       { pending: false },
     );
     expect(v.caps).toEqual({
       rename: true,
       remove: false,
-      download: false,
+      copy: true,
+      download: true,
       delete: false,
       editSource: false,
     });

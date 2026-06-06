@@ -57,7 +57,6 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
   const qc = useQueryClient();
   const { data: attachments = [] } = useMessageAttachments(isUser ? p.message.id : '');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [originRect, setOriginRect] = useState<DOMRect | undefined>(undefined);
 
   // Build object URLs for image blobs; revoke on change to prevent memory leaks.
   const objectUrls = useMemo(
@@ -176,13 +175,7 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
         )}
       </div>
       {isUser && activeAttachments.length > 0 && (
-        <AttachmentStrip
-          attachments={activeAttachments}
-          onOpen={(i, rect) => {
-            setOriginRect(rect);
-            setLightboxIndex(i);
-          }}
-        />
+        <AttachmentStrip attachments={activeAttachments} onOpen={(i) => setLightboxIndex(i)} />
       )}
       {isUser && attachments.some((a) => a.state === 'deleted') && (
         <div className="msg-attach-deleted">image deleted</div>
@@ -191,7 +184,11 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
         <Lightbox
           items={lightboxItems}
           index={lightboxIndex}
-          originRect={originRect}
+          getOriginRect={(id) =>
+            document
+              .querySelector<HTMLElement>(`[data-attachment-thumb="${CSS.escape(id)}"]`)
+              ?.getBoundingClientRect() ?? null
+          }
           onRename={handleRename}
           onRemove={() => {}}
           onEditText={() => {}}

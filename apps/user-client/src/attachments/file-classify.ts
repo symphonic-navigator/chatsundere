@@ -36,6 +36,9 @@ const TEXT_EXTENSIONS = new Set([
   'xml',
   'sql',
   'log',
+  'svg',
+  'mmd',
+  'mermaid',
 ]);
 
 export type Classification = { ok: true; kind: 'image' | 'text' } | { ok: false; reason: string };

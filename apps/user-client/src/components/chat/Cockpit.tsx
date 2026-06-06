@@ -96,7 +96,6 @@ export function Cockpit(p: Props): JSX.Element {
   const editText = useUpdateAttachmentText(p.chatId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [originRect, setOriginRect] = useState<DOMRect | undefined>(undefined);
   const [reject, setReject] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -218,7 +217,7 @@ export function Cockpit(p: Props): JSX.Element {
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.csv,.ts,.tsx,.js,.py"
+        accept="image/png,image/jpeg,image/webp,image/gif,text/*,.md,.json,.csv,.ts,.tsx,.js,.py,.svg,.mmd,.mermaid,.html,.css"
         style={{ display: 'none' }}
         onChange={(e) => {
           if (e.target.files) void ingest(e.target.files);
@@ -316,13 +315,7 @@ export function Cockpit(p: Props): JSX.Element {
         </button>
       </div>
       {pending.length > 0 && <div className="cockpit-divider" />}
-      <AttachmentStrip
-        attachments={pending}
-        onOpen={(i, rect) => {
-          setOriginRect(rect);
-          setLightboxIndex(i);
-        }}
-      />
+      <AttachmentStrip attachments={pending} onOpen={(i) => setLightboxIndex(i)} />
       <div className="cockpit-row-input">
         <AutoSizeTextarea
           value={p.draftValue}
@@ -350,7 +343,11 @@ export function Cockpit(p: Props): JSX.Element {
         <Lightbox
           items={items}
           index={lightboxIndex}
-          originRect={originRect}
+          getOriginRect={(id) =>
+            document
+              .querySelector<HTMLElement>(`[data-attachment-thumb="${CSS.escape(id)}"]`)
+              ?.getBoundingClientRect() ?? null
+          }
           onRename={(id, name) => rename.mutate({ id, fileName: name })}
           onRemove={(id) => remove.mutate(id)}
           onEditText={(id, text) => editText.mutate({ id, text })}

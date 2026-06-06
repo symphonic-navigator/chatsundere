@@ -41,14 +41,14 @@ describe('AttachmentStrip', () => {
     expect(queryByLabelText(/remove|close|×/i)).toBeNull(); // deliberate: no X on the thumb
   });
 
-  it('calls onOpen with the clicked index and the thumbnail rect', () => {
+  it('calls onOpen with the clicked index', () => {
     const onOpen = vi.fn();
     const { getAllByRole } = render(
       <AttachmentStrip attachments={[row({ id: '1' }), row({ id: '2' })]} onOpen={onOpen} />,
     );
     const btn = getAllByRole('button')[1] as HTMLElement;
     fireEvent.click(btn);
-    expect(onOpen).toHaveBeenCalledWith(1, expect.anything());
+    expect(onOpen).toHaveBeenCalledWith(1);
   });
 
   it('renders nothing when empty', () => {

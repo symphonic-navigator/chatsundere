@@ -1,27 +1,56 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Lightbox } from '../../src/components/lightbox/Lightbox';
 import type { ViewableItem } from '../../src/components/lightbox/viewable-item';
 
-const caps = { rename: true, remove: true, download: false, delete: false, editSource: false };
+const caps = {
+  rename: true,
+  remove: true,
+  copy: false,
+  download: false,
+  delete: false,
+  editSource: false,
+};
 const img = (id: string, name: string): ViewableItem => ({
   id,
   kind: 'image',
   fileName: name,
+  mime: 'image/jpeg',
   imageUrl: 'blob:1',
   caps,
 });
 const md = (id: string): ViewableItem => ({
   id,
-  kind: 'markdown',
+  kind: 'text',
   fileName: 'n.md',
+  mime: 'text/markdown',
   text: '# Hi',
-  caps: { ...caps, editSource: true },
+  caps: { ...caps, copy: true, download: true, editSource: true },
 });
 
 function noop() {}
 const handlers = { onRename: noop, onRemove: noop, onEditText: noop, onClose: noop };
+const noopHandlers = handlers;
+
+const textItem = (
+  overrides: Partial<ViewableItem> & { text?: string; fileName?: string },
+): ViewableItem => ({
+  id: 'txt-1',
+  kind: 'text',
+  fileName: overrides.fileName ?? 'file.txt',
+  mime: 'text/plain',
+  text: overrides.text ?? '',
+  caps: {
+    rename: false,
+    remove: false,
+    copy: true,
+    download: true,
+    delete: false,
+    editSource: false,
+  },
+  ...overrides,
+});
 
 describe('Lightbox', () => {
   it('shows the current item filename and a n / total counter', () => {
@@ -67,5 +96,25 @@ describe('Lightbox', () => {
     );
     expect(queryByText('Download')).toBeNull();
     expect(queryByText('Delete')).toBeNull();
+  });
+
+  it('copies the raw content and flashes Copied', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    const items = [textItem({ text: 'print(1)', fileName: 'a.py' })];
+    render(<Lightbox items={items} index={0} {...noopHandlers} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenCalledWith('print(1)');
+    vi.unstubAllGlobals();
+  });
+
+  it('overriding the format switches the rendered preview', () => {
+    const items = [textItem({ text: '# H', fileName: 'note.txt' })]; // detects as plain
+    render(<Lightbox items={items} index={0} {...noopHandlers} />);
+    // The lightbox is a portal into document.body, so query there.
+    expect(document.body.querySelector('.lightbox-plain')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /format/i }));
+    fireEvent.click(screen.getByText('Markdown'));
+    expect(document.body.querySelector('.lightbox-doc h1')?.textContent).toBe('H');
   });
 });

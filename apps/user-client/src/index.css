@@ -2443,6 +2443,224 @@ h1 {
   border-color: rgba(141, 109, 255, 0.65);
 }
 
+/* ===== Document-grade Markdown for the lightbox (MarkdownDoc) =====
+   Mirrors .msg-text but with generous, document-grade spacing and its own
+   code-surface rule (there is no .msg-text ancestor here). Aurora palette. */
+.lightbox-doc {
+  padding: 0 1rem 1.25rem;
+  color: var(--color-paper);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+.lightbox-doc > :first-child {
+  margin-top: 0;
+}
+.lightbox-doc p {
+  margin: 0.75em 0;
+}
+.lightbox-doc ul,
+.lightbox-doc ol {
+  margin: 0.75em 0;
+  padding-left: 1.6em;
+}
+.lightbox-doc ul {
+  list-style-type: disc;
+}
+.lightbox-doc ol {
+  list-style-type: decimal;
+}
+.lightbox-doc li {
+  margin: 0.25em 0;
+}
+.lightbox-doc h1,
+.lightbox-doc h2,
+.lightbox-doc h3,
+.lightbox-doc h4,
+.lightbox-doc h5,
+.lightbox-doc h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+}
+.lightbox-doc h1 {
+  font-size: 1.6em;
+}
+.lightbox-doc h2 {
+  font-size: 1.35em;
+}
+.lightbox-doc h3 {
+  font-size: 1.15em;
+}
+.lightbox-doc h4 {
+  font-size: 1.02em;
+}
+.lightbox-doc code:not(pre code) {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+.lightbox-doc pre {
+  margin: 1em 0;
+  padding: 0.9em 1.05em;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-ink-soft) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px -16px rgba(141, 109, 255, 0.4);
+  overflow-x: auto;
+}
+.lightbox-doc pre code {
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+}
+.lightbox-doc blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--color-aurora-500) 55%, transparent);
+  padding-left: 1em;
+  margin: 1em 0 1em 0;
+  opacity: 0.85;
+}
+.lightbox-doc hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 1.4em 0;
+}
+.lightbox-doc table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.lightbox-doc th,
+.lightbox-doc td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.4em 0.7em;
+}
+.lightbox-doc th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+.lightbox-doc a {
+  color: var(--color-aurora-500);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-aurora-500) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.lightbox-doc a:hover {
+  text-decoration-color: var(--color-aurora-500);
+}
+.lightbox-doc .katex-display {
+  margin: 0.8em 0;
+  padding: 0.25em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ===== Standalone viewers ===== */
+.lightbox-code {
+  align-self: stretch;
+  width: 100%;
+  padding: 0 1rem 1rem;
+  font-size: 0.84rem;
+  overflow: auto;
+}
+.lightbox-code pre {
+  margin: 0;
+  padding: 0.9em 1.05em;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-ink-soft) !important;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+}
+.lightbox-svg,
+.lightbox-mermaid {
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.lightbox-svg img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.lightbox-html {
+  align-self: stretch;
+  flex: 1;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* ===== Format-override dropdown (FormatPicker) — Aurora-tinted ===== */
+.lb-fmt {
+  position: relative;
+}
+.lb-fmt-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 8px;
+  border: 1px solid rgba(141, 109, 255, 0.35);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 3px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-paper);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lb-fmt-trigger:hover {
+  background: rgba(141, 109, 255, 0.1);
+}
+.lb-fmt-chevron {
+  opacity: 0.55;
+  transition: transform 160ms ease;
+}
+.lb-fmt-chevron[data-open] {
+  transform: rotate(180deg);
+}
+.lb-fmt-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  min-width: 9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.3rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-ink, #161616);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+.lb-fmt-option {
+  text-align: left;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-paper);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.lb-fmt-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.lb-fmt-option[data-selected] {
+  background: color-mix(in srgb, var(--color-aurora-500) 22%, transparent);
+  color: var(--color-aurora-200);
+}
+
 /* ===== Attachment cockpit divider ===== */
 
 /* Thin rule between the controls row and the attachment strip */

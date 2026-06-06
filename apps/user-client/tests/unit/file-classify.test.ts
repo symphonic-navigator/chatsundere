@@ -7,6 +7,10 @@ function file(name: string, type: string, size = 100): File {
   return new File([blob], name, { type });
 }
 
+function svgFile(name: string, type: string): File {
+  return new File(['<svg/>'], name, { type });
+}
+
 describe('classifyFile', () => {
   it('accepts supported images as kind image', () => {
     expect(classifyFile(file('a.png', 'image/png'))).toEqual({ ok: true, kind: 'image' });
@@ -28,5 +32,20 @@ describe('classifyFile', () => {
   it('rejects oversize files', () => {
     expect(classifyFile(file('big.png', 'image/png', 11 * 1024 * 1024)).ok).toBe(false);
     expect(classifyFile(file('big.txt', 'text/plain', 2 * 1024 * 1024)).ok).toBe(false);
+  });
+});
+
+describe('classifyFile — svg & mermaid', () => {
+  it('accepts an .svg as text (XML), even with the image/svg+xml mime', () => {
+    expect(classifyFile(svgFile('logo.svg', 'image/svg+xml'))).toEqual({ ok: true, kind: 'text' });
+    expect(classifyFile(svgFile('logo.svg', ''))).toEqual({ ok: true, kind: 'text' });
+  });
+  it('accepts .mmd and .mermaid as text', () => {
+    expect(classifyFile(svgFile('flow.mmd', ''))).toEqual({ ok: true, kind: 'text' });
+    expect(classifyFile(svgFile('flow.mermaid', ''))).toEqual({ ok: true, kind: 'text' });
+  });
+  it('still rejects an unsupported binary type', () => {
+    const r = classifyFile(svgFile('a.bin', 'application/octet-stream'));
+    expect(r.ok).toBe(false);
   });
 });

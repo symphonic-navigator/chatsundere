@@ -14,15 +14,16 @@ function extension(name: string): string {
  * Documents show a pill with the uppercased file extension.
  * A quiet "analysing" indicator appears on sent images that still lack a vision description.
  * Deliberately carries NO remove/× button — removal is via the lightbox only (anti-misclick).
- * Clicking the tile calls `onOpen` with the tile's bounding rect so the caller can position a
- * FLIP zoom animation.
+ * Clicking the tile calls `onOpen` so the caller can open the lightbox at this item's index.
+ * The `data-attachment-thumb` attribute lets the lightbox re-measure the rect at close time
+ * for the reverse FLIP zoom.
  */
 export function AttachmentThumb({
   row,
   onOpen,
 }: {
   row: AttachmentRow;
-  onOpen: (rect: DOMRect) => void;
+  onOpen: () => void;
 }): JSX.Element {
   const [url, setUrl] = useState<string | null>(null);
 
@@ -44,7 +45,8 @@ export function AttachmentThumb({
       type="button"
       className="attach-thumb"
       data-kind={row.kind}
-      onClick={(e) => onOpen(e.currentTarget.getBoundingClientRect())}
+      data-attachment-thumb={row.id}
+      onClick={() => onOpen()}
       title={row.fileName}
     >
       {row.kind === 'image' && url ? (

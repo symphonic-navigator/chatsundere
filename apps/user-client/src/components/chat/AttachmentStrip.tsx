@@ -6,21 +6,22 @@ import { AttachmentThumb } from './AttachmentThumb';
  * Horizontal strip of attachment thumbnails for a chat cockpit or a sent message bubble.
  *
  * Renders nothing when the attachment list is empty.
- * Calls `onOpen(index, rect)` when a thumb is clicked, forwarding the tile's bounding rect
- * so the caller can open the lightbox with a FLIP zoom from the correct origin.
+ * Calls `onOpen(index)` when a thumb is clicked so the caller can open the lightbox at
+ * the correct position. The lightbox re-measures the origin rect at close time via
+ * `[data-attachment-thumb="<id>"]`.
  */
 export function AttachmentStrip({
   attachments,
   onOpen,
 }: {
   attachments: AttachmentRow[];
-  onOpen: (index: number, rect: DOMRect) => void;
+  onOpen: (index: number) => void;
 }): JSX.Element | null {
   if (attachments.length === 0) return null;
   return (
     <div className="attach-strip">
       {attachments.map((row, i) => (
-        <AttachmentThumb key={row.id} row={row} onOpen={(rect) => onOpen(i, rect)} />
+        <AttachmentThumb key={row.id} row={row} onOpen={() => onOpen(i)} />
       ))}
     </div>
   );
