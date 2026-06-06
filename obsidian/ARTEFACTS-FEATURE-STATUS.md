@@ -11,6 +11,7 @@
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
 [[../superpowers/specs/2026-06-06-artefact-kern-design]] (Kern spec) ·
+[[../superpowers/plans/2026-06-06-artefact-kern]] (Kern plan) ·
 [[insights/follow-ups-index]] · [[insights/security-deferrals]].
 
 ---
@@ -185,7 +186,7 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 
 | # | Chunk | Contents | Status |
 |---|---|---|---|
-| 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | 📝 spec written ([[../superpowers/specs/2026-06-06-artefact-kern-design]]) |
+| 1 | **Kern** | `artefacts` table (v13); **author subagent** (one-shot, brief→file, streamed); `create_artefact(title, brief)` tool (HTML single-file, self-contained, focused system prompt); artefact pill (title + **char-progress** + click); click → lightbox (cycle, edit/rename `title`+`fileName`/copy/download/delete); per-chat **sidebar** (ReadingToolStrip → sheet, favourites + list, like ToC) | 🔨 implementing (plan: [[../superpowers/plans/2026-06-06-artefact-kern]], 17 tasks) |
 | 2 | **Treasury** | global view (flip the Entrance-Hall tile live); filters: persona, type, **tags** (+ autocomplete), project (reserved), fuzzy name search; favourites; multi-select for management (delete/tag) | ⬜ planned |
 | 3 | **Artefacts as attachments** | slimmed treasury picker + multi-select → copy snapshot into `attachments` → existing multimodal wire injection (cross-persona reuse) | ⬜ planned |
 | 4 | **Save as artefact** | save-message-as-artefact (markdown, both roles, default name = snippet, text-only) **and** save-code-block-as-artefact (format from fence language) | ⬜ planned |
