@@ -19,7 +19,12 @@
 > below title+filename (no overlap); (3) artefact sidebar is tap-to-open +
 > favourite only — **no inline rename** (Chris's call: artefacts are heavyweight,
 > rename lives in the lightbox); (4) format dropdown anchored `left:0` (was
-> opening off the left edge after the toolbar move).
+> opening off the left edge after the toolbar move); (5) ToC + artefact buttons
+> added to the cockpit controls row (right-aligned, above the input) so they're
+> reachable while composing, not just in reading mode (master `436aea7`).
+> **Decided:** the lightbox **Source editor stays a plain textarea** — no
+> editable syntax highlighting (the Preview already highlights via shiki; an
+> overlay/CodeMirror editor is over-engineering for a mobile single-file editor).
 
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
