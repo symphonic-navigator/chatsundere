@@ -119,6 +119,22 @@ describe('InteractionMode lifecycle', () => {
     logo.remove();
   });
 
+  it('tap inside the lightbox overlay does not close (it is portalled to body, outside the container)', () => {
+    // The lightbox renders via a portal to <body>, so a click inside it is
+    // technically outside the interaction container. It must NOT be treated as
+    // an outside-tap — that would collapse the cockpit and unmount the lightbox
+    // (the lightbox is a Cockpit child), making in-lightbox clicks close it.
+    const root = document.createElement('div');
+    root.className = 'lightbox-root';
+    const btn = document.createElement('button');
+    root.appendChild(btn);
+    document.body.appendChild(root);
+    mount();
+    fireEvent.pointerDown(btn);
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+    root.remove();
+  });
+
   it('outside-tap does NOT close when pinned', () => {
     useCurrentChatStore.getState().togglePin();
     const { getByTestId } = mount();

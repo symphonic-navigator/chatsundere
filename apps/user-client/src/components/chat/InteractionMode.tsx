@@ -74,6 +74,13 @@ export function InteractionMode(p: Props): JSX.Element {
       // rather than swallowing it. Without this the logo is dead while unpinned.
       if (target instanceof Element && target.closest('.brand-logo')) return;
 
+      // The lightbox is portalled to <body>, so it lives outside this container —
+      // but a tap inside it is an interaction with the lightbox, not an outside-tap.
+      // Without this exemption every click inside the lightbox (e.g. the
+      // Preview/Source toggle) would collapse the cockpit and unmount the lightbox
+      // (it renders as a Cockpit child), making in-lightbox clicks close it.
+      if (target instanceof Element && target.closest('.lightbox-root')) return;
+
       // Pointerdown landed outside — close regardless of blur state.
       blurArmedRef.current = false;
 
