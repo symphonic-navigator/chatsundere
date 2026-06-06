@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ArtefactRow, getClientDataDb } from '../boot/client-data-db.js';
+import { normaliseTags } from '../lib/treasury-filter.js';
 import { QK } from './queryKeys.js';
 
 /** Convert a human title into a URL/filename-safe slug. */
@@ -91,6 +92,45 @@ export async function getArtefact(id: string): Promise<ArtefactRow | undefined> 
   return getClientDataDb().artefacts.get(id);
 }
 
+/** Return every artefact across all chats, newest first (id tiebreaker). */
+export async function listAllArtefacts(): Promise<ArtefactRow[]> {
+  const rows = await getClientDataDb().artefacts.toArray();
+  return rows.sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+}
+
+/** Total artefact count across all chats — for the Entrance-Hall tile. */
+export async function countAllArtefacts(): Promise<number> {
+  return getClientDataDb().artefacts.count();
+}
+
+/** Replace an artefact's tags with a normalised set. */
+export async function setArtefactTags(id: string, tags: string[]): Promise<void> {
+  await getClientDataDb().artefacts.update(id, {
+    tags: normaliseTags(tags),
+    updatedAt: Date.now(),
+  });
+}
+
+/** Union `tags` into each listed artefact's existing tags (normalised, no dupes). */
+export async function addTagsToArtefacts(ids: string[], tags: string[]): Promise<void> {
+  const add = normaliseTags(tags);
+  if (ids.length === 0 || add.length === 0) return;
+  const db = getClientDataDb();
+  const now = Date.now();
+  await db.transaction('rw', db.artefacts, async () => {
+    for (const id of ids) {
+      const row = await db.artefacts.get(id);
+      if (!row) continue;
+      await db.artefacts.update(id, { tags: normaliseTags([...row.tags, ...add]), updatedAt: now });
+    }
+  });
+}
+
+/** Delete many artefacts at once. */
+export async function deleteArtefacts(ids: string[]): Promise<void> {
+  await getClientDataDb().artefacts.bulkDelete(ids);
+}
+
 // ---- React hooks ----
 
 /** Query hook that reactively lists all artefacts for the given chat, newest first. */
@@ -125,6 +165,9 @@ function useArtefactInvalidation(chatId: string) {
   return (id?: string) => {
     void qc.invalidateQueries({ queryKey: QK.chatArtefacts(chatId) });
     if (id) void qc.invalidateQueries({ queryKey: QK.artefact(id) });
+    // Also refresh global artefact surfaces (Treasury list/count) so chat-pill
+    // rename/edit/delete/favourite stay consistent across the whole UI.
+    void qc.invalidateQueries({ queryKey: ['artefacts'] });
   };
 }
 
@@ -162,5 +205,80 @@ export function useDeleteArtefact(chatId: string) {
   return useMutation({
     mutationFn: (id: string) => deleteArtefact(id),
     onSuccess: (_r, id) => invalidate(id),
+  });
+}
+
+/** Query hook listing all artefacts across chats, newest first. */
+export function useAllArtefacts() {
+  return useQuery({ queryKey: QK.allArtefacts, queryFn: listAllArtefacts });
+}
+
+/** Query hook for the global artefact count (Entrance-Hall tile). */
+export function useAllArtefactCount() {
+  return useQuery({ queryKey: [...QK.allArtefacts, 'count'] as const, queryFn: countAllArtefacts });
+}
+
+function useArtefactPrefixInvalidation() {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: ['artefacts'] });
+}
+
+/** Mutation: replace one artefact's tags. Invalidates all artefact queries. */
+export function useSetArtefactTags() {
+  const invalidate = useArtefactPrefixInvalidation();
+  return useMutation({
+    mutationFn: (v: { id: string; tags: string[] }) => setArtefactTags(v.id, v.tags),
+    onSuccess: invalidate,
+  });
+}
+
+/** Mutation: bulk-add tags to many artefacts. Invalidates all artefact queries. */
+export function useAddTagsToArtefacts() {
+  const invalidate = useArtefactPrefixInvalidation();
+  return useMutation({
+    mutationFn: (v: { ids: string[]; tags: string[] }) => addTagsToArtefacts(v.ids, v.tags),
+    onSuccess: invalidate,
+  });
+}
+
+/** Mutation: bulk-delete artefacts. Invalidates all artefact queries. */
+export function useDeleteArtefacts() {
+  const invalidate = useArtefactPrefixInvalidation();
+  return useMutation({
+    mutationFn: (ids: string[]) => deleteArtefacts(ids),
+    onSuccess: invalidate,
+  });
+}
+
+// ---- Cross-chat variants of the existing chat-scoped mutations ----
+// The Treasury operates over artefacts from many chats at once, so these wrap
+// the existing single-artefact functions but invalidate the whole `['artefacts']`
+// prefix instead of one chat's query.
+
+/** Favourite toggle for cross-chat surfaces (Treasury). */
+export function useSetArtefactFavouriteGlobal() {
+  const invalidate = useArtefactPrefixInvalidation();
+  return useMutation({
+    mutationFn: (v: { id: string; favourite: boolean }) => setArtefactFavourite(v.id, v.favourite),
+    onSuccess: invalidate,
+  });
+}
+
+/** Rename for cross-chat surfaces (Treasury lightbox). */
+export function useRenameArtefactGlobal() {
+  const invalidate = useArtefactPrefixInvalidation();
+  return useMutation({
+    mutationFn: (v: { id: string; patch: { title?: string; fileName?: string } }) =>
+      renameArtefact(v.id, v.patch),
+    onSuccess: invalidate,
+  });
+}
+
+/** Content-edit for cross-chat surfaces (Treasury lightbox). */
+export function useUpdateArtefactContentGlobal() {
+  const invalidate = useArtefactPrefixInvalidation();
+  return useMutation({
+    mutationFn: (v: { id: string; content: string }) => updateArtefactContent(v.id, v.content),
+    onSuccess: invalidate,
   });
 }

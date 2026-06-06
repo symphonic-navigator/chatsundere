@@ -21,6 +21,7 @@ import {
   useChatArtefacts,
   useDeleteArtefact,
   useRenameArtefact,
+  useSetArtefactTags,
   useUpdateArtefactContent,
 } from '../../../data/artefacts.js';
 import { useBranchChat, useChat, useUpdateChat } from '../../../data/chats.js';
@@ -32,6 +33,7 @@ import { resolveContextWindow } from '../../../lib/context-window.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
+import { collectTags } from '../../../lib/treasury-filter.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
@@ -361,6 +363,7 @@ export function ChatPage(): JSX.Element {
   const renameArtefact = useRenameArtefact(activeChatId ?? '');
   const editArtefactContent = useUpdateArtefactContent(activeChatId ?? '');
   const removeArtefact = useDeleteArtefact(activeChatId ?? '');
+  const setArtefactTags = useSetArtefactTags();
   const artefactItems = chatArtefacts.map(artefactToViewable);
   const artefactIndex = openArtefactId
     ? artefactItems.findIndex((item) => item.id === openArtefactId)
@@ -506,6 +509,8 @@ export function ChatPage(): JSX.Element {
               .querySelector<HTMLElement>(`[data-artefact-pill="${CSS.escape(id)}"]`)
               ?.getBoundingClientRect() ?? null
           }
+          tagSuggestions={collectTags(chatArtefacts)}
+          onSetTags={(id, tags) => setArtefactTags.mutate({ id, tags })}
           onRename={(id, patch) => renameArtefact.mutate({ id, patch })}
           onRemove={() => {}}
           onEditText={(id, text) => editArtefactContent.mutate({ id, content: text })}

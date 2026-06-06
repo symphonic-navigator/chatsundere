@@ -35,6 +35,7 @@ describe('attachmentToViewable', () => {
       download: false,
       delete: false,
       editSource: false,
+      editTags: false,
     });
   });
 
@@ -113,6 +114,7 @@ describe('attachmentToViewable', () => {
       download: true,
       delete: false,
       editSource: false,
+      editTags: false,
     });
   });
 });

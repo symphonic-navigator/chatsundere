@@ -18,6 +18,7 @@ function item(over: Partial<ViewableItem>): ViewableItem {
       download: true,
       delete: false,
       editSource: false,
+      editTags: false,
     },
     ...over,
   };

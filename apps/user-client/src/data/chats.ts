@@ -162,6 +162,7 @@ export function useDeleteChat() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: QK.chats });
+      void qc.invalidateQueries({ queryKey: ['artefacts'] });
     },
   });
 }

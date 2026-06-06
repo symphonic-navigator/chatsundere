@@ -11,6 +11,7 @@ const caps = {
   download: false,
   delete: false,
   editSource: false,
+  editTags: false,
 };
 const img = (id: string, name: string): ViewableItem => ({
   id,
@@ -48,6 +49,7 @@ const textItem = (
     download: true,
     delete: false,
     editSource: false,
+    editTags: false,
   },
   ...overrides,
 });

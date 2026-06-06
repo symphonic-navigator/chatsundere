@@ -2,7 +2,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import { Lightbox } from '../../src/components/lightbox/Lightbox.js';
-import type { ViewableItem } from '../../src/components/lightbox/viewable-item.js';
+import {
+  type ViewableItem,
+  artefactToViewable,
+} from '../../src/components/lightbox/viewable-item.js';
 
 const item: ViewableItem = {
   id: 'a1',
@@ -11,7 +14,15 @@ const item: ViewableItem = {
   title: 'Calc',
   mime: 'text/html',
   text: '<x>',
-  caps: { rename: true, remove: false, copy: true, download: true, delete: true, editSource: true },
+  caps: {
+    rename: true,
+    remove: false,
+    copy: true,
+    download: true,
+    delete: true,
+    editSource: true,
+    editTags: true,
+  },
 };
 
 test('renders a delete control and fires onDelete', () => {
@@ -50,4 +61,41 @@ test('renames title and fileName independently via onRename patch', () => {
   fireEvent.change(input, { target: { value: 'New' } });
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(onRename).toHaveBeenCalledWith('a1', { title: 'New' });
+});
+
+test('lightbox renders a tag editor for artefacts and calls onSetTags', () => {
+  const onSetTags = vi.fn();
+  const item = artefactToViewable({
+    id: 'a',
+    chatId: 'c',
+    personaId: 'p',
+    projectId: null,
+    origin: 'generated',
+    kind: 'text',
+    format: 'html',
+    title: 'T',
+    fileName: 't.html',
+    mime: 'text/html',
+    content: '<x>',
+    tags: [],
+    favourite: false,
+    createdAt: 0,
+    updatedAt: 0,
+  });
+  render(
+    <Lightbox
+      items={[item]}
+      index={0}
+      tagSuggestions={['prod']}
+      onSetTags={onSetTags}
+      onRename={vi.fn()}
+      onRemove={vi.fn()}
+      onEditText={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  );
+  const input = screen.getByPlaceholderText('Add a tag…');
+  fireEvent.change(input, { target: { value: 'demo' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onSetTags).toHaveBeenCalledWith('a', ['demo']);
 });

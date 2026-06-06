@@ -17,6 +17,7 @@ const img: ViewableItem = {
     download: false,
     delete: false,
     editSource: false,
+    editTags: false,
   },
 };
 const handlers = { onRename: () => {}, onRemove: () => {}, onEditText: () => {} };

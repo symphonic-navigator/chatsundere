@@ -15,6 +15,8 @@ export interface Caps {
   delete: boolean;
   /** True for text items that are still pending — allows editing the source. */
   editSource: boolean;
+  /** True for artefacts — show the tag editor in the lightbox. */
+  editTags: boolean;
 }
 
 /** Presentation item consumed by the lightbox — storage-agnostic. */
@@ -31,6 +33,8 @@ export interface ViewableItem {
   imageUrl?: string;
   /** Text content — only present for text items. */
   text?: string;
+  /** Normalised tags — present for artefacts; drives the lightbox tag editor. */
+  tags?: string[];
   caps: Caps;
 }
 
@@ -44,6 +48,7 @@ export function artefactToViewable(row: ArtefactRow): ViewableItem {
     title: row.title,
     mime: row.mime,
     text: row.content,
+    tags: row.tags,
     caps: {
       rename: true,
       remove: false,
@@ -51,6 +56,7 @@ export function artefactToViewable(row: ArtefactRow): ViewableItem {
       download: true,
       delete: true,
       editSource: true,
+      editTags: true,
     },
   };
 }
@@ -79,6 +85,7 @@ export function attachmentToViewable(
       download: isText,
       delete: row.origin === 'generated',
       editSource: isText && opts.pending,
+      editTags: false,
     },
   };
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { TagEditor } from '../artefact/TagEditor.js';
 import { FormatPicker } from './FormatPicker';
 import { LightboxTextBody } from './LightboxTextBody';
 import { type PreviewFormat, detectFormat, formatToExtension } from './format-detect';
@@ -21,6 +22,10 @@ export interface LightboxProps {
    *  open/close zoom. Returns null when the origin is gone (scrolled away/detached).
    *  Implemented by the caller via `[data-attachment-thumb="<id>"]`. */
   getOriginRect?: (id: string) => DOMRect | null;
+  /** Set the tags of an artefact (only meaningful when caps.editTags is true). */
+  onSetTags?: (id: string, tags: string[]) => void;
+  /** Existing tags across artefacts, for tag-editor autocomplete. */
+  tagSuggestions?: string[];
 }
 
 /**
@@ -384,6 +389,16 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               </button>
             )}
           </div>
+          {item.caps.editTags && p.onSetTags ? (
+            <div className="lightbox-tags">
+              <TagEditor
+                mode="edit"
+                value={item.tags ?? []}
+                suggestions={p.tagSuggestions ?? []}
+                onChange={(next) => p.onSetTags?.(item.id, next)}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="lightbox-body">
           {item.kind === 'image' ? (

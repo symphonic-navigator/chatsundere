@@ -20,4 +20,5 @@ export const QK = {
   attachmentsForMessage: (messageId: string) => ['attachments', 'message', messageId] as const,
   chatArtefacts: (chatId: string) => ['artefacts', 'chat', chatId] as const,
   artefact: (id: string) => ['artefacts', 'item', id] as const,
+  allArtefacts: ['artefacts', 'all'] as const,
 };

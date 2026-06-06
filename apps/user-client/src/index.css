@@ -2290,6 +2290,10 @@ h1 {
   gap: 0.4rem;
 }
 
+.lightbox-tags {
+  padding: 0.5rem 0.75rem 0;
+}
+
 .lightbox-btn {
   font-size: 11px;
   font-family: var(--font-mono);
@@ -3142,6 +3146,13 @@ h1 {
   color: var(--color-warning);
 }
 
+/* pink for image-family (image / svg / mermaid) */
+.artefact-glyph.g-img,
+.treasury-glyph.g-img {
+  color: #e58fc8;
+  background: rgba(229, 143, 200, 0.12);
+}
+
 .artefact-row-label {
   flex: 1;
   min-width: 0;
@@ -3201,4 +3212,262 @@ h1 {
   padding: 0.25rem 0;
   margin: 0;
   font-style: italic;
+}
+
+/* ---- Shared tag editor ---- */
+.tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.tag-editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  background: rgba(141, 109, 255, 0.18);
+  border: 1px solid rgba(91, 70, 192, 0.6);
+  color: var(--color-paper);
+}
+.tag-chip-x {
+  opacity: 0.65;
+  line-height: 1;
+}
+.tag-chip-x:hover {
+  opacity: 1;
+}
+.tag-editor-input {
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-paper);
+  outline: none;
+}
+.tag-editor-input:focus {
+  border-color: var(--color-paper-soft);
+}
+.tag-editor-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.tag-suggestion {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-paper-soft);
+}
+.tag-suggestion:hover {
+  color: var(--color-paper);
+  border-color: rgba(141, 109, 255, 0.6);
+}
+
+/* ---- Treasury rows ---- */
+.treasury-list {
+  display: flex;
+  flex-direction: column;
+}
+.treasury-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.treasury-row[data-selected] {
+  background: rgba(141, 109, 255, 0.08);
+}
+.treasury-glyph {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 0.5rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+}
+.treasury-glyph.g-html {
+  color: #b69bff;
+  background: rgba(141, 109, 255, 0.14);
+}
+.treasury-glyph.g-md {
+  color: #5fd6b6;
+  background: rgba(95, 214, 182, 0.12);
+}
+.treasury-glyph.g-code {
+  color: #e0a85f;
+  background: rgba(224, 168, 95, 0.12);
+}
+.treasury-check {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 0.4rem;
+  margin-top: 0.1rem;
+  border: 1.5px solid rgba(91, 70, 192, 0.8);
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  color: #fff;
+}
+.treasury-check[data-on] {
+  background: #7a5cf0;
+  border-color: #7a5cf0;
+}
+.treasury-row-body {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.treasury-row-title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--color-paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.treasury-row-meta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: var(--color-paper-soft);
+}
+.treasury-row-star {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.25);
+}
+.treasury-row-star[data-active] {
+  color: var(--color-warning, #e8b94a);
+}
+
+/* ---- Treasury filter sheet ---- */
+.treasury-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.treasury-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+.treasury-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(88vw, 22rem);
+  background: var(--color-ink, #0d0b16);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+}
+.treasury-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.treasury-sheet-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--color-paper);
+}
+.treasury-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.treasury-filter-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-paper-soft);
+}
+.treasury-fav-toggle {
+  align-self: flex-start;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-paper-soft);
+}
+.treasury-fav-toggle[data-on] {
+  color: var(--color-warning, #e8b94a);
+  border-color: rgba(232, 185, 74, 0.5);
+}
+.treasury-filter-disabled {
+  opacity: 0.4;
+}
+.treasury-filter-note {
+  font-size: 0.8rem;
+  color: var(--color-paper-soft);
+  font-style: italic;
+}
+
+/* ---- Treasury bulk action bar ---- */
+.treasury-actionbar {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #1a1430;
+  border: 1px solid #4a3a92;
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.treasury-actionbar-count {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--color-paper);
+}
+.treasury-actionbar-confirm {
+  font-size: 0.8rem;
+  color: var(--color-paper-soft);
+}
+.treasury-actionbar-btn {
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+  background: rgba(141, 109, 255, 0.18);
+  border: 1px solid rgba(91, 70, 192, 0.7);
+  color: var(--color-paper);
+}
+.treasury-actionbar-btn:disabled {
+  opacity: 0.4;
+}
+.treasury-actionbar-btn.danger {
+  background: rgba(162, 59, 94, 0.25);
+  border-color: #a23b5e;
+  color: #f0a6c0;
+}
+.treasury-sheet-close {
+  color: var(--color-paper-soft);
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+.treasury-sheet-close:hover {
+  color: var(--color-paper);
 }

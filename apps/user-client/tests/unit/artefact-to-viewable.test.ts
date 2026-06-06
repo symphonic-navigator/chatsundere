@@ -37,5 +37,29 @@ test('maps an artefact row to a viewable with generated caps + title', () => {
     download: true,
     delete: true,
     editSource: true,
+    editTags: true,
   });
+});
+
+test('artefactToViewable carries tags and enables editTags; attachments do not', async () => {
+  const { artefactToViewable } = await import('../../src/components/lightbox/viewable-item.js');
+  const v = artefactToViewable({
+    id: 'a',
+    chatId: 'c',
+    personaId: 'p',
+    projectId: null,
+    origin: 'generated',
+    kind: 'text',
+    format: 'html',
+    title: 'T',
+    fileName: 't.html',
+    mime: 'text/html',
+    content: '<x>',
+    tags: ['demo'],
+    favourite: false,
+    createdAt: 0,
+    updatedAt: 0,
+  });
+  expect(v.tags).toEqual(['demo']);
+  expect(v.caps.editTags).toBe(true);
 });

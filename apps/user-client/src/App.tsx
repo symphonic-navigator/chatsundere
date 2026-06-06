@@ -11,6 +11,7 @@ import { EntranceHall } from './routes/app/entrance-hall.js';
 import { HistoryPage } from './routes/app/history.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
 import { Settings as MySettings } from './routes/app/settings.js';
+import { Treasury } from './routes/app/treasury.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
 import { Login } from './routes/login/index.js';
@@ -94,6 +95,7 @@ export function App() {
                   <Route path="/app/chat/new" element={<ChatPage />} />
                   <Route path="/app/chat/:chatId" element={<ChatPage />} />
                   <Route path="/app/history" element={<HistoryPage />} />
+                  <Route path="/app/treasury" element={<Treasury />} />
                   <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />

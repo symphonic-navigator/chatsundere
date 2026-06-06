@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAllArtefactCount } from '../../data/artefacts.js';
 import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
@@ -79,6 +80,7 @@ export function EntranceHall(): JSX.Element {
     : undefined;
   const personaCount = personas.data?.length ?? 0;
   const providerCount = (providers.data ?? []).filter((p) => p.enabled).length;
+  const artefactCount = useAllArtefactCount().data ?? 0;
   return (
     <section className="flex min-h-[80dvh] flex-col gap-6 px-4 pb-12 pt-6">
       <div className="text-center">
@@ -122,9 +124,8 @@ export function EntranceHall(): JSX.Element {
         <RoomTile
           label="My Treasury"
           icon="⬡"
-          meta="Coming later"
-          disabled
-          tooltip="Coming later"
+          meta={artefactCount === 0 ? 'empty' : `${artefactCount} artefacts`}
+          to="/app/treasury"
         />
         <RoomTile
           label="My Settings"

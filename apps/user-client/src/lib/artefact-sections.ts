@@ -17,5 +17,7 @@ export function buildArtefactSections(rows: ArtefactRow[]): ArtefactSections {
 export function formatGlyph(format: ArtefactRow['format']): { glyph: string; cls: string } {
   if (format === 'markdown') return { glyph: 'M↓', cls: 'g-md' };
   if (format === 'code') return { glyph: '{ }', cls: 'g-code' };
+  if (format === 'image' || format === 'svg' || format === 'mermaid')
+    return { glyph: '▦', cls: 'g-img' };
   return { glyph: '</>', cls: 'g-html' };
 }

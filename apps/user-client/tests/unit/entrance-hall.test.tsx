@@ -65,17 +65,15 @@ describe('EntranceHall', () => {
     });
   });
 
-  it('renders disabled-stubs for Projects / Treasury (not History)', async () => {
+  it('renders the disabled Projects stub (not History or Treasury)', async () => {
     wrap('/app');
-    for (const label of ['My Projects', 'My Treasury']) {
+    const projectsTile = await screen.findByText('My Projects');
+    expect(projectsTile.closest('[aria-disabled="true"]')).not.toBeNull();
+    // History and Treasury are live (not disabled) in the zero-state.
+    for (const label of ['My History', 'My Treasury']) {
       const tile = await screen.findByText(label);
-      const card = tile.closest('[aria-disabled="true"]');
-      expect(card).not.toBeNull();
+      expect(tile.closest('[aria-disabled="true"]')).toBeNull();
     }
-    // History is no longer disabled in the zero-state
-    const historyTile = await screen.findByText('My History');
-    const historyCard = historyTile.closest('[aria-disabled="true"]');
-    expect(historyCard).toBeNull();
   });
 
   it('navigates to /app/circle when My Circle is tapped', async () => {
