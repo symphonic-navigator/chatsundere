@@ -84,6 +84,17 @@ export function InteractionMode(p: Props): JSX.Element {
       // (it renders as a Cockpit child), making in-lightbox clicks close it.
       if (target instanceof Element && target.closest('.lightbox-root')) return;
 
+      // Sheet overlays (artefact sidebar, ToC, branch) render at chat-page level —
+      // outside this container — but a tap inside one is an interaction with that
+      // sheet, not an outside-tap. Without this the first tap inside the sheet is
+      // swallowed (and the cockpit collapses) instead of reaching the row, so e.g.
+      // opening an artefact from the sidebar over an unpinned cockpit takes two taps.
+      if (
+        target instanceof Element &&
+        target.closest('.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root')
+      )
+        return;
+
       // Pointerdown landed outside — close regardless of blur state.
       blurArmedRef.current = false;
 

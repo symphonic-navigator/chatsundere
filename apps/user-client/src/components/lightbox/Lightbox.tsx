@@ -85,13 +85,26 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   }, [p]);
 
   // FLIP open: map the surface onto the origin thumb, then animate to identity.
-  // Runs once on mount; guards: reduced motion / missing or zero-size origin.
+  // Runs once on mount; guard: reduced motion only.
   // biome-ignore lint/correctness/useExhaustiveDependencies: open zoom is a mount-only effect
   useEffect(() => {
     const el = surfaceRef.current;
     if (!el || reducedMotion()) return;
-    const origin = p.getOriginRect?.(p.items[p.index]?.id ?? '') ?? null;
-    if (!origin || origin.width === 0 || origin.height === 0) return;
+    const live = p.getOriginRect?.(p.items[p.index]?.id ?? '') ?? null;
+    // Symmetric with close (see requestClose): zoom FROM the origin thumb when it
+    // is available; otherwise zoom up from off-screen bottom — the mirror of the
+    // close fallback — so open ALWAYS animates instead of popping. This covers
+    // openers whose origin is gone by mount time, e.g. the artefact sidebar,
+    // which closes (removing its row) the moment an artefact is opened.
+    const origin: DOMRect =
+      live && live.width > 0 && live.height > 0
+        ? live
+        : ({
+            left: window.innerWidth / 2 - 30,
+            top: window.innerHeight + 40,
+            width: 60,
+            height: 60,
+          } as DOMRect);
     const to = el.getBoundingClientRect();
     if (to.width === 0 || to.height === 0) return;
     const sx = origin.width / to.width;

@@ -135,6 +135,27 @@ describe('InteractionMode lifecycle', () => {
     root.remove();
   });
 
+  it('tap inside a sheet overlay (artefact sidebar / ToC / branch) does not close the cockpit', () => {
+    // Sheet overlays render at chat-page level, outside the interaction
+    // container. A tap inside one must NOT count as an outside-tap — otherwise
+    // the first tap is swallowed (and the cockpit collapses) instead of reaching
+    // the row, so opening an artefact from the sidebar over an unpinned cockpit
+    // would take two taps.
+    for (const cls of ['artefact-sheet-root', 'toc-sheet-root', 'branch-sheet-root']) {
+      useCurrentChatStore.getState().reset();
+      useCurrentChatStore.getState().setInteractionMode(true);
+      const root = document.createElement('div');
+      root.className = cls;
+      const btn = document.createElement('button');
+      root.appendChild(btn);
+      document.body.appendChild(root);
+      mount();
+      fireEvent.pointerDown(btn);
+      expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+      root.remove();
+    }
+  });
+
   it('outside-tap does NOT close when pinned', () => {
     useCurrentChatStore.getState().togglePin();
     const { getByTestId } = mount();
