@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
+import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
 import { ArtefactSheet } from '../../../components/chat/ArtefactSheet.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
@@ -76,6 +77,7 @@ export function ChatPage(): JSX.Element {
   const closeArtefact = useCurrentChatStore((s) => s.closeArtefact);
 
   const [tocOpen, setTocOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [branchPointId, setBranchPointId] = useState<string | null>(null);
 
   const jumpToMessage = (messageId: string): void => {
@@ -500,6 +502,13 @@ export function ChatPage(): JSX.Element {
         />
       ) : null}
 
+      {pickerOpen ? (
+        <ArtefactPicker
+          chatId={chat?.id ?? activeChatId ?? ''}
+          onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
+
       {openArtefactId !== null && artefactIndex >= 0 ? (
         <Lightbox
           items={artefactItems}
@@ -567,6 +576,7 @@ export function ChatPage(): JSX.Element {
           onOpenPersonaEditor={onOpenPersonaEditor}
           onOpenToc={() => setTocOpen(true)}
           onOpenArtefacts={() => setArtefactSheetOpen(true)}
+          onAttachFromTreasury={() => setPickerOpen(true)}
           toolsAvailable={hasMessages}
         />
       ) : null}

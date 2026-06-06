@@ -3471,3 +3471,149 @@ h1 {
 .treasury-sheet-close:hover {
   color: var(--color-paper);
 }
+
+/* ===== Cockpit (+) source-menu item ===================================== */
+.cockpit-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.cockpit-menu-item + .cockpit-menu-item {
+  margin-top: 0.15rem;
+}
+.cockpit-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== Artefact attach picker (bottom-sheet; mirrors .branch-sheet) ====== */
+.artefact-picker-root {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+}
+.artefact-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.artefact-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 80%;
+  background: var(--color-ink, #1a1a1a);
+  border-top: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.artefact-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.artefact-picker-title {
+  font-family: var(--font-display, serif);
+  font-size: 1.05rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.artefact-picker-close {
+  background: transparent;
+  border: 0;
+  color: var(--color-paper, #e6e6e6);
+  opacity: 0.7;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+.artefact-picker-close:hover {
+  opacity: 1;
+}
+.artefact-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.artefact-picker-row-body {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.5rem 0.4rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+  cursor: pointer;
+  text-align: left;
+}
+.artefact-picker-row[data-selected] .artefact-picker-row-body,
+.artefact-picker-row-body:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.artefact-picker-row-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artefact-picker-row-chip {
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 16%, transparent);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+}
+.artefact-picker-check {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 30%, transparent);
+  border-radius: 0.3rem;
+  font-size: 0.8rem;
+}
+.artefact-picker-check[data-on] {
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 70%, transparent);
+  border-color: transparent;
+  color: #1a1a1a;
+}
+.artefact-picker-empty {
+  opacity: 0.6;
+  font-size: 0.9rem;
+  padding: 1.5rem 0.4rem;
+  text-align: center;
+}
+.artefact-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.artefact-picker-attach {
+  padding: 0.5rem 1.1rem;
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 22%, transparent);
+  cursor: pointer;
+}
+.artefact-picker-attach:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

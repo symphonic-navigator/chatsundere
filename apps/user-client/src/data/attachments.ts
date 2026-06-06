@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import {
+  type ArtefactRow,
   type AttachmentKind,
   type AttachmentRow,
   getClientDataDb,
@@ -49,6 +50,22 @@ export async function addAttachment(input: AddAttachmentInput): Promise<string> 
     };
     await db.attachments.add(row);
     return id;
+  });
+}
+
+/**
+ * Copy an artefact's current content into the chat as a pending attachment — a
+ * snapshot. Lifecycle is decoupled from the artefact: deleting the artefact
+ * later never touches the message. Text artefacts only; an image artefact (TTI,
+ * future) would need a blob branch and is out of scope.
+ */
+export async function addArtefactSnapshot(chatId: string, artefact: ArtefactRow): Promise<string> {
+  return addAttachment({
+    chatId,
+    kind: 'text',
+    fileName: artefact.fileName,
+    mime: artefact.mime,
+    text: artefact.content,
   });
 }
 
@@ -151,6 +168,20 @@ export function useUpdateAttachmentText(chatId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, text }: { id: string; text: string }) => updateAttachmentText(id, text),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK.attachmentsPending(chatId) }),
+  });
+}
+
+/**
+ * Mutation hook: snapshot a batch of artefacts into the chat's pending set, then
+ * invalidate the pending query once (mirrors `Cockpit.ingest`).
+ */
+export function useAddArtefactSnapshots(chatId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (artefacts: ArtefactRow[]) => {
+      for (const a of artefacts) await addArtefactSnapshot(chatId, a);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.attachmentsPending(chatId) }),
   });
 }

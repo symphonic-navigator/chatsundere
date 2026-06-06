@@ -15,6 +15,7 @@ import {
 import { QK } from '../../data/queryKeys.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
+import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
@@ -38,6 +39,8 @@ interface Props {
   /** Whether the chat has content worth navigating — gates the ToC/artefact
    *  buttons in the controls row (mirrors the reading-mode tool strip). */
   toolsAvailable?: boolean;
+  /** Open the Treasury attach picker (omitted → (+) opens the file dialog directly). */
+  onAttachFromTreasury?: () => void;
 }
 
 /**
@@ -83,6 +86,7 @@ async function ingestFiles(
 
 export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
@@ -136,24 +140,10 @@ export function Cockpit(p: Props): JSX.Element {
   // Escape. Without this the menu had no close path: the toggle button only
   // toggled by re-clicking the same icon, and clicks on chips left it open.
   const menuWrapRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onPointer = (e: PointerEvent): void => {
-      const target = e.target as Node | null;
-      if (!target || !menuWrapRef.current) return;
-      if (menuWrapRef.current.contains(target)) return;
-      setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointer);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+  useDismissOnOutside(menuOpen, menuWrapRef, () => setMenuOpen(false));
+
+  const plusWrapRef = useRef<HTMLDivElement>(null);
+  useDismissOnOutside(sourceMenuOpen, plusWrapRef, () => setSourceMenuOpen(false));
 
   // Selecting a reasoning option also dismisses the menu — the user has made
   // their choice; keeping it open is busy-noise.
@@ -232,26 +222,60 @@ export function Cockpit(p: Props): JSX.Element {
         }}
       />
       <div className="cockpit-row-controls">
-        <button
-          type="button"
-          className="cockpit-icon-btn"
-          data-control="plus"
-          title="Add attachment"
-          aria-label="Add attachment"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            aria-hidden="true"
+        <div ref={plusWrapRef} className="cockpit-menu-wrap">
+          <button
+            type="button"
+            className="cockpit-icon-btn"
+            data-control="plus"
+            title="Add attachment"
+            aria-label="Add attachment"
+            aria-expanded={p.onAttachFromTreasury ? sourceMenuOpen : undefined}
+            onClick={() => {
+              if (p.onAttachFromTreasury) setSourceMenuOpen((v) => !v);
+              else fileInputRef.current?.click();
+            }}
           >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          {sourceMenuOpen && p.onAttachFromTreasury ? (
+            <div className="cockpit-menu" role="menu">
+              <button
+                type="button"
+                className="cockpit-menu-item"
+                role="menuitem"
+                data-source="upload"
+                onClick={() => {
+                  setSourceMenuOpen(false);
+                  fileInputRef.current?.click();
+                }}
+              >
+                <span aria-hidden>📎</span> Upload from device
+              </button>
+              <button
+                type="button"
+                className="cockpit-menu-item"
+                role="menuitem"
+                data-source="treasury"
+                onClick={() => {
+                  setSourceMenuOpen(false);
+                  p.onAttachFromTreasury?.();
+                }}
+              >
+                <span aria-hidden>⬡</span> Attach from Treasury
+              </button>
+            </div>
+          ) : null}
+        </div>
         <div ref={menuWrapRef} className="cockpit-menu-wrap">
           <button
             type="button"

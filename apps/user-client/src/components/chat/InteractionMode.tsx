@@ -23,6 +23,7 @@ interface Props {
   onOpenPersonaEditor?: () => void;
   onOpenToc?: () => void;
   onOpenArtefacts?: () => void;
+  onAttachFromTreasury?: () => void;
   toolsAvailable?: boolean;
 }
 
@@ -84,14 +85,17 @@ export function InteractionMode(p: Props): JSX.Element {
       // (it renders as a Cockpit child), making in-lightbox clicks close it.
       if (target instanceof Element && target.closest('.lightbox-root')) return;
 
-      // Sheet overlays (artefact sidebar, ToC, branch) render at chat-page level —
-      // outside this container — but a tap inside one is an interaction with that
-      // sheet, not an outside-tap. Without this the first tap inside the sheet is
-      // swallowed (and the cockpit collapses) instead of reaching the row, so e.g.
-      // opening an artefact from the sidebar over an unpinned cockpit takes two taps.
+      // Sheet overlays (artefact sidebar, ToC, branch, attach picker) render at
+      // chat-page level — outside this container — but a tap inside one is an
+      // interaction with that sheet, not an outside-tap. Without this the first tap
+      // inside the sheet is swallowed (and the cockpit collapses) instead of reaching
+      // the control, so e.g. opening an artefact from the sidebar — or selecting one
+      // in the attach picker — over an unpinned cockpit takes two taps.
       if (
         target instanceof Element &&
-        target.closest('.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root')
+        target.closest(
+          '.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root, .artefact-picker-root',
+        )
       )
         return;
 
@@ -177,6 +181,7 @@ export function InteractionMode(p: Props): JSX.Element {
           isStreamLive={p.isStreamLive}
           onOpenToc={p.onOpenToc}
           onOpenArtefacts={p.onOpenArtefacts}
+          onAttachFromTreasury={p.onAttachFromTreasury}
           toolsAvailable={p.toolsAvailable}
         />
       </div>
