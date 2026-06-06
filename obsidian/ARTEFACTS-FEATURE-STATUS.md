@@ -13,8 +13,13 @@
 > typecheck 14/14, build 9/9, user-client vitest 928/928, biome clean. **Next:
 > Chris device-tests the spec §13 checklist**, then Chunk 2 (Treasury).
 > Known limit: author output capped at `max_tokens: 8192` (≈demo-scale single
-> files) — tune on device. Open device decision: sidebar inline-rename is
-> double-click only (mobile touch gap; rename also available in the lightbox).
+> files) — tune on device. **Device-fix rounds landed** (master `2fa7b5f`,
+> `9862f60`): (1) pill opens on first tap — `create_artefact` now invalidates the
+> chat artefacts query after persisting; (2) lightbox toolbar moved to a row
+> below title+filename (no overlap); (3) artefact sidebar is tap-to-open +
+> favourite only — **no inline rename** (Chris's call: artefacts are heavyweight,
+> rename lives in the lightbox); (4) format dropdown anchored `left:0` (was
+> opening off the left edge after the toolbar move).
 
 Links: [[STATUS-CLIENT-ONLY]] · [[ROADMAP]] ·
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]] (the seam we plug into) ·
@@ -205,10 +210,9 @@ spec in `superpowers/specs/` and plan in `superpowers/plans/`.
 
 - **Restyle the ToC/bookmarks sheet (`TocSheet`)** to match the polished compact
   artefact-sidebar aesthetic — currently plain. Small, non-blocking.
-- **Sidebar inline-rename on touch:** the `ArtefactSheet` rename is double-click
-  only (collides with tap-to-open on mobile-first 380px). Decide a touch gesture
-  (long-press / small edit affordance) after Chris's device test; rename already
-  works in the lightbox, so non-blocking. (Final opus review, 2026-06-06.)
+- ~~Sidebar inline-rename on touch~~ — **resolved 2026-06-06:** removed entirely.
+  The `ArtefactSheet` is tap-to-open + favourite only; rename lives in the
+  lightbox (Chris: artefacts are heavyweight, keep the sheet uncluttered).
 
 ---
 
