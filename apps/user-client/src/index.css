@@ -2254,6 +2254,19 @@ h1 {
   flex: 1;
 }
 
+/* Action-button cluster: takes the space between the filename and the ×, and
+   WRAPS onto further rows on narrow (mobile-first) widths so no button — Save
+   in particular — is ever pushed off the right edge. */
+.lightbox-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .lightbox-btn {
   font-size: 11px;
   font-family: var(--font-mono);

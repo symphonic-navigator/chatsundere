@@ -259,59 +259,62 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               {item.caps.rename ? <span aria-hidden="true"> ✎</span> : null}
             </button>
           )}
-          <span className="lightbox-spacer" />
-          {item.kind === 'text' && <FormatPicker value={format} onChange={(f) => setOverride(f)} />}
-          {item.caps.copy && (
-            <button
-              type="button"
-              className="lightbox-btn"
-              onClick={() => {
-                void copyText(draft);
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 1500);
-              }}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          )}
-          {item.caps.download && (
-            <button
-              type="button"
-              className="lightbox-btn"
-              onClick={() => downloadText(draft, formatToExtension(item.fileName, format))}
-            >
-              Download
-            </button>
-          )}
-          {item.caps.delete && (
-            <button type="button" className="lightbox-btn lightbox-danger">
-              Delete
-            </button>
-          )}
-          {item.caps.remove && (
-            <button
-              type="button"
-              className="lightbox-btn lightbox-danger"
-              onClick={() => p.onRemove(item.id)}
-            >
-              Remove
-            </button>
-          )}
-          {editable && (
-            <button
-              type="button"
-              className="lightbox-btn"
-              disabled={!dirty}
-              onClick={() => setDraft(baseline)}
-            >
-              Undo
-            </button>
-          )}
-          {editable && (
-            <button type="button" className="lightbox-btn" disabled={!dirty} onClick={save}>
-              Save
-            </button>
-          )}
+          <div className="lightbox-actions">
+            {item.kind === 'text' && (
+              <FormatPicker value={format} onChange={(f) => setOverride(f)} />
+            )}
+            {item.caps.copy && (
+              <button
+                type="button"
+                className="lightbox-btn"
+                onClick={() => {
+                  void copyText(draft);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1500);
+                }}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            )}
+            {item.caps.download && (
+              <button
+                type="button"
+                className="lightbox-btn"
+                onClick={() => downloadText(draft, formatToExtension(item.fileName, format))}
+              >
+                Download
+              </button>
+            )}
+            {item.caps.delete && (
+              <button type="button" className="lightbox-btn lightbox-danger">
+                Delete
+              </button>
+            )}
+            {item.caps.remove && (
+              <button
+                type="button"
+                className="lightbox-btn lightbox-danger"
+                onClick={() => p.onRemove(item.id)}
+              >
+                Remove
+              </button>
+            )}
+            {editable && (
+              <button
+                type="button"
+                className="lightbox-btn"
+                disabled={!dirty}
+                onClick={() => setDraft(baseline)}
+              >
+                Undo
+              </button>
+            )}
+            {editable && (
+              <button type="button" className="lightbox-btn" disabled={!dirty} onClick={save}>
+                Save
+              </button>
+            )}
+          </div>
           <button type="button" className="lightbox-x" aria-label="Close" onClick={attemptClose}>
             ×
           </button>
