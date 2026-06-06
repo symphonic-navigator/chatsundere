@@ -5,10 +5,11 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-06 — **Lightbox viewer landed (squashed on branch
-`worktree-lightbox-viewer` at `00c1396`, NOT on master; awaiting Chris's device
-test + merge — he was device-testing chat on master, so this stayed isolated in a
-worktree per his request).**
+**Last updated:** 2026-06-06 — **Lightbox viewer landed, device-tested by Chris &
+merged to master (`8b35592`, NOT pushed).** Built in an isolated worktree
+(`worktree-lightbox-viewer`, squashed to `00c1396`) while Chris device-tested chat on
+master, then fast-forward-merged + worktree cleaned up; **three device-feedback fixes
+folded in on top** (detailed at the end of this entry — all confirmed by Chris).
 Block-2 viewer feature, brainstormed end-to-end with Chris, built **subagent-driven**
 (11 plan tasks, per-task review + a final **opus** holistic review = READY TO
 SQUASH, no critical/important). **Viewer only — artefact *generation* is a deliberate
@@ -41,11 +42,26 @@ Verification (on the branch): `pnpm typecheck` **14/14**; `pnpm run build` **9/9
 user-client vitest **900/900** (fully green — the old localStorage-jsdom baseline did
 not manifest); biome clean. Spec/plan:
 [[../superpowers/specs/2026-06-06-lightbox-viewer-design]],
-[[../superpowers/plans/2026-06-06-lightbox-viewer]]. **Next:** Chris device-tests
-(spec §13 manual steps — upload a .ts/.md/.html/.svg/.mmd, the open/close zoom from the
-stream incl. the scrolled-away downward fall-back, the format-override), then merges
-`worktree-lightbox-viewer` → master. **Then: the artefact-generation session** (Chris's
-favourite feature — JSX/SPA preview belongs there).
+[[../superpowers/plans/2026-06-06-lightbox-viewer]].
+**Device-feedback round (squashed on master, NOT pushed; all confirmed by Chris):**
+(a) `f508684` — **clicks inside the lightbox no longer collapse the cockpit.** The
+lightbox is portalled to `<body>`, so a pointerdown in it counted as "outside"
+`InteractionMode`'s container; the unpinned outside-tap handler collapsed interaction
+mode (unmounting the Cockpit + the lightbox it renders), so *any* in-lightbox click
+closed it. Fixed by exempting `.lightbox-root` from the outside-tap handler (mirrors
+the existing `.brand-logo` exemption). Pre-existing since the lightbox was portalled to
+body; surfaced by the new text/source viewer. (b) `37a2c3a` — **source-editing UX:**
+the Preview/Source toggle is now pinned (only the content scrolls, via a
+`.lightbox-scroll` region); the source editor fills the whole content area; editing is
+explicit — the draft + last-saved baseline were lifted into the Lightbox and the
+blur-auto-save removed, with a **Save** button (top-right) + **Undo**, both
+disabled-until-dirty; closing/navigating while dirty opens an inline **Save / Discard /
+Cancel** confirm bar. (c) `8b35592` — the **toolbar wraps** (`.lightbox-actions`,
+`flex-wrap`) so on mobile-first 380px widths no action (Save / ×) is clipped.
+Verification after the round: `pnpm typecheck` **14/14**, `pnpm run build` **9/9**,
+user-client vitest **906/906**, biome clean. **Next: the artefact-generation session**
+— Chris's favourite feature; JSX/SPA preview belongs there (locally-bundled transpiler,
+never a third-party CDN — see [[insights/follow-ups-index]] / [[insights/security-deferrals]]).
 
 **Earlier 2026-06-05 — Unified lightbox & user attachments landed
 (squashed on master `987c885`, device-tested by Chris — two device fixes folded
