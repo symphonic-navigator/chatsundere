@@ -2695,7 +2695,10 @@ h1 {
   position: absolute;
   z-index: 20;
   top: calc(100% + 0.3rem);
-  right: 0;
+  /* Anchored left: the picker now sits at the start of the actions row beneath
+     the title, so the menu must open rightward into view (right:0 dropped it off
+     the left edge, hiding the left-aligned labels). */
+  left: 0;
   min-width: 9rem;
   display: flex;
   flex-direction: column;

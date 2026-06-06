@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useState } from 'react';
 import type { ArtefactRow } from '../../boot/client-data-db.js';
-import {
-  useChatArtefacts,
-  useRenameArtefact,
-  useSetArtefactFavourite,
-} from '../../data/artefacts.js';
+import { useChatArtefacts, useSetArtefactFavourite } from '../../data/artefacts.js';
 import { buildArtefactSections, formatGlyph } from '../../lib/artefact-sections.js';
 
 interface Props {
@@ -15,19 +10,16 @@ interface Props {
   onOpen: (artefactId: string) => void;
 }
 
+/**
+ * Per-chat artefact sidebar. Deliberately lean: tap a row to open it in the
+ * lightbox, star it to favourite. Renaming lives in the lightbox, not here —
+ * artefacts are heavyweight (unlike a ToC entry/bookmark), so the sheet stays
+ * an uncluttered "find and open" surface.
+ */
 export function ArtefactSheet(p: Props): JSX.Element {
   const { data: rows = [] } = useChatArtefacts(p.chatId);
   const setFav = useSetArtefactFavourite(p.chatId);
-  const rename = useRenameArtefact(p.chatId);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
   const sections = buildArtefactSections(rows);
-
-  function commitRename(id: string): void {
-    const next = draft.trim();
-    if (next) void rename.mutateAsync({ id, patch: { title: next } });
-    setEditingId(null);
-  }
 
   const renderRow = (r: ArtefactRow): JSX.Element => {
     const g = formatGlyph(r.format);
@@ -36,36 +28,16 @@ export function ArtefactSheet(p: Props): JSX.Element {
         <span className={`artefact-glyph ${g.cls}`} aria-hidden>
           {g.glyph}
         </span>
-        {editingId === r.id ? (
-          <input
-            className="artefact-row-input"
-            // biome-ignore lint/a11y/noAutofocus: inline rename — focus is the intent
-            autoFocus
-            value={draft}
-            maxLength={80}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename(r.id);
-              else if (e.key === 'Escape') setEditingId(null);
-            }}
-            onBlur={() => commitRename(r.id)}
-          />
-        ) : (
-          <button
-            type="button"
-            className="artefact-row-label"
-            onClick={() => {
-              p.onOpen(r.id);
-              p.onClose();
-            }}
-            onDoubleClick={() => {
-              setDraft(r.title);
-              setEditingId(r.id);
-            }}
-          >
-            {r.title}
-          </button>
-        )}
+        <button
+          type="button"
+          className="artefact-row-label"
+          onClick={() => {
+            p.onOpen(r.id);
+            p.onClose();
+          }}
+        >
+          {r.title}
+        </button>
         <button
           type="button"
           className="artefact-row-star"
