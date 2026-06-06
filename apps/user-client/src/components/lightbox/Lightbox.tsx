@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TagEditor } from '../artefact/TagEditor.js';
 import { FormatPicker } from './FormatPicker';
@@ -84,18 +84,25 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey);
   }, [p]);
 
-  // FLIP open: map the surface onto the origin thumb, then animate to identity.
-  // Runs once on mount; guard: reduced motion only.
+  // FLIP open: paint the surface AT the origin first, then animate to identity.
+  // `useLayoutEffect` (not `useEffect`) is load-bearing: the "from" transform must
+  // be applied BEFORE the browser's first paint of the freshly-mounted lightbox.
+  // With `useEffect` (runs after paint) the surface paints full-size for a frame —
+  // that flash is the "pop" — and the transition then has no painted start state.
+  // (Close has no such problem: it animates away from the already-painted open
+  // state.) A forced reflow commits the "from" state so the change to identity
+  // animates reliably, including on iOS Safari. Guard: reduced motion only.
   // biome-ignore lint/correctness/useExhaustiveDependencies: open zoom is a mount-only effect
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = surfaceRef.current;
     if (!el || reducedMotion()) return;
+    const to = el.getBoundingClientRect();
+    if (to.width === 0 || to.height === 0) return;
     const live = p.getOriginRect?.(p.items[p.index]?.id ?? '') ?? null;
-    // Symmetric with close (see requestClose): zoom FROM the origin thumb when it
-    // is available; otherwise zoom up from off-screen bottom — the mirror of the
-    // close fallback — so open ALWAYS animates instead of popping. This covers
-    // openers whose origin is gone by mount time, e.g. the artefact sidebar,
-    // which closes (removing its row) the moment an artefact is opened.
+    // Zoom FROM the origin thumb when available; otherwise from off-screen bottom
+    // (mirror of the close fallback) so open ALWAYS animates instead of popping —
+    // e.g. the artefact sidebar closes (removing its row) the moment an artefact
+    // is opened, so by mount time there is no origin to FLIP from.
     const origin: DOMRect =
       live && live.width > 0 && live.height > 0
         ? live
@@ -105,18 +112,17 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
             width: 60,
             height: 60,
           } as DOMRect);
-    const to = el.getBoundingClientRect();
-    if (to.width === 0 || to.height === 0) return;
     const sx = origin.width / to.width;
     const sy = origin.height / to.height;
     el.style.transformOrigin = 'top left';
     el.style.transform = `translate(${origin.left - to.left}px, ${origin.top - to.top}px) scale(${sx}, ${sy})`;
     el.style.opacity = '0.6';
-    requestAnimationFrame(() => {
-      el.style.transition = 'transform 220ms ease, opacity 220ms ease';
-      el.style.transform = 'none';
-      el.style.opacity = '1';
-    });
+    // Force a reflow so the "from" transform is committed as the transition's
+    // start value before we set the end state in the same synchronous block.
+    void el.offsetWidth;
+    el.style.transition = 'transform 220ms ease, opacity 220ms ease';
+    el.style.transform = 'none';
+    el.style.opacity = '1';
   }, []);
 
   // Bridge Escape from inside the HTML-preview iframe.
