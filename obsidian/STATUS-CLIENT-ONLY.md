@@ -16,8 +16,30 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-07 — **Knowledgebase foundation (Chunk A) landed
-(squashed on master `0ef499f`, NOT pushed; awaiting Chris's device test).**
+**Last updated:** 2026-06-07 — **Knowledgebase foundation (Chunk A) landed +
+DEVICE-CONFIRMED by Chris** (squashed on master `0ef499f`, NOT pushed; embed +
+retrieval both working on device). **Device test surfaced four integration gaps
+the plan/spec/holistic-review all missed — only a real run finds these** (fixes
+on master, not pushed): (1) `de26fe5` exclude `@huggingface/transformers` from
+Vite's dep optimiser + `worker.format:'es'` — pre-bundling mangles its
+`new URL('ort-wasm…', import.meta.url)` asset refs; (2) `6b68ccf` provision the
+~310 MB int8 weights at `/model/` (`pnpm --filter @chatsundere/user-client
+fetch-model`, gitignored) + console/tooltip surfacing of embedding errors;
+(3) `32d2a6b` exclude `/model/` from the SW `navigateFallback` denylist;
+(4) **the real final boss — poisoned Cache Storage:** an early-attempt SW had
+written `index.html` into transformers' browser cache, so every later attempt
+read that HTML back (`JSON.parse('<!DOCTYPE…')` — "No backend available"),
+**surviving SW-unregister, dev restarts, and "Disable cache"** (that toggle only
+affects the HTTP cache, not the Cache-Storage API). Fix: clear Cache Storage once
+(DevTools → Application → Cache Storage); the `/model/` SW denylist prevents
+re-poisoning. **Retrieval smoke-test PASS** (console, against the live int4
+store): query "farbkraft" → top hit **0.571** (the matching chunk) vs **~0.10**
+for everything else — clean semantic separation; the int4 layout verified by
+Chris from raw bytes (768 dim → 384 B codes + 48 scales + 48 offsets, k=16, ADR
+0030). **Open Zero-Knowledge gap (honest):** the **ORT WASM runtime** still loads
+from the **jsdelivr CDN** at runtime (default `wasmPaths`) — the *model* is
+self-hosted, the *runtime* is not yet; self-host it too ([[insights/follow-ups-index]],
+[[insights/security-deferrals]]).
 Block-5 feature (v0.2.0), brainstormed end-to-end with Chris, built
 **subagent-driven** in an isolated worktree (15 plan tasks, per-task review +
 a final **opus** holistic review that caught two real gaps the per-task reviews
