@@ -157,7 +157,14 @@ export default defineConfig({
       ),
     },
   },
-  optimizeDeps: { exclude: ['qr-scanner/qr-scanner-worker.min.js'] },
+  // `@huggingface/transformers` must NOT be pre-bundled: the dep optimiser
+  // mangles its `new URL('ort-wasm-…', import.meta.url)` asset references, so
+  // onnxruntime-web cannot locate its WASM factory and every backend fails with
+  // "Unexpected token '<'… No backend available" (the SPA fallback HTML). The
+  // embeddings package's own dev server excludes it for the same reason.
+  optimizeDeps: { exclude: ['qr-scanner/qr-scanner-worker.min.js', '@huggingface/transformers'] },
+  // The embedding engine runs as an ES-module Web Worker.
+  worker: { format: 'es' },
   test: {
     environment: 'jsdom',
     globals: true,
