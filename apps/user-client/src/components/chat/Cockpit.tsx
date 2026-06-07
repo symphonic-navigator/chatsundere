@@ -449,6 +449,7 @@ export function Cockpit(p: Props): JSX.Element {
           personaLibraryIds={personaLibraryIds}
           chatLibraryIds={chatLibraryIds}
           onToggleChat={onToggleChatLibrary}
+          adultPersona={p.persona.adultPersona}
           canBindChat={!!p.chatId}
           onClose={() => setKnowledgeOpen(false)}
         />

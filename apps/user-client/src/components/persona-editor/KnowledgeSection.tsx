@@ -5,20 +5,27 @@ import { useFilteredLibraries } from '../../data/knowledge.js';
 interface Props {
   selected: string[];
   onChange: (next: string[]) => void;
+  /**
+   * Whether the edited persona is an adult persona. An SFW persona is never
+   * offered NSFW libraries for assignment, even when the global adult mode is on
+   * (NSFW gating layer 1, applied on top of the global-mode filter).
+   */
+  adultPersona: boolean;
 }
 
 /**
  * Controlled knowledge-assignment list. Renders the user's libraries
- * (NSFW-filtered by adult mode via `useFilteredLibraries`) as toggle rows bound
- * to the persona's `libraryIds`. Empty state points the user at My Knowledge.
+ * (NSFW-filtered by adult mode via `useFilteredLibraries`, then further gated to
+ * the persona's adult flag) as toggle rows bound to the persona's `libraryIds`.
+ * Empty state points the user at My Knowledge.
  */
-export function KnowledgeSection({ selected, onChange }: Props): JSX.Element {
-  const { data: libraries } = useFilteredLibraries();
+export function KnowledgeSection({ selected, onChange, adultPersona }: Props): JSX.Element {
+  const libraries = (useFilteredLibraries().data ?? []).filter((l) => adultPersona || !l.nsfw);
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
 
-  if (!libraries || libraries.length === 0) {
+  if (libraries.length === 0) {
     return (
       <p className="text-[11px] text-paper-soft">
         No knowledge libraries yet. Create one in{' '}

@@ -18,11 +18,11 @@ function wrap(ui: ReactElement) {
   );
 }
 
-const lib = (id: string, name: string) => ({
+const lib = (id: string, name: string, nsfw = false) => ({
   id,
   name,
   description: '',
-  nsfw: false,
+  nsfw,
   createdAt: 0,
   updatedAt: 0,
 });
@@ -33,7 +33,7 @@ describe('KnowledgeSection', () => {
       data: [lib('a', 'A'), lib('b', 'B')],
     } as unknown as ReturnType<typeof useFilteredLibraries>);
     const onChange = vi.fn();
-    wrap(<KnowledgeSection selected={['a']} onChange={onChange} />);
+    wrap(<KnowledgeSection selected={['a']} onChange={onChange} adultPersona={true} />);
     fireEvent.click(screen.getByText('B'));
     expect(onChange).toHaveBeenCalledWith(['a', 'b']);
   });
@@ -43,7 +43,7 @@ describe('KnowledgeSection', () => {
       data: [lib('a', 'A'), lib('b', 'B')],
     } as unknown as ReturnType<typeof useFilteredLibraries>);
     const onChange = vi.fn();
-    wrap(<KnowledgeSection selected={['a', 'b']} onChange={onChange} />);
+    wrap(<KnowledgeSection selected={['a', 'b']} onChange={onChange} adultPersona={true} />);
     fireEvent.click(screen.getByText('A'));
     expect(onChange).toHaveBeenCalledWith(['b']);
   });
@@ -52,7 +52,33 @@ describe('KnowledgeSection', () => {
     vi.mocked(useFilteredLibraries).mockReturnValue({
       data: [],
     } as unknown as ReturnType<typeof useFilteredLibraries>);
-    wrap(<KnowledgeSection selected={[]} onChange={vi.fn()} />);
+    wrap(<KnowledgeSection selected={[]} onChange={vi.fn()} adultPersona={true} />);
+    expect(screen.getByText(/My Knowledge/i)).toBeTruthy();
+  });
+
+  it('hides NSFW libraries from an SFW persona even when the global mode permits them', () => {
+    vi.mocked(useFilteredLibraries).mockReturnValue({
+      data: [lib('sfw', 'SFW Lib'), lib('nsfw', 'NSFW Lib', true)],
+    } as unknown as ReturnType<typeof useFilteredLibraries>);
+    wrap(<KnowledgeSection selected={[]} onChange={vi.fn()} adultPersona={false} />);
+    expect(screen.getByText('SFW Lib')).toBeTruthy();
+    expect(screen.queryByText('NSFW Lib')).toBeNull();
+  });
+
+  it('shows NSFW libraries for an adult persona', () => {
+    vi.mocked(useFilteredLibraries).mockReturnValue({
+      data: [lib('sfw', 'SFW Lib'), lib('nsfw', 'NSFW Lib', true)],
+    } as unknown as ReturnType<typeof useFilteredLibraries>);
+    wrap(<KnowledgeSection selected={[]} onChange={vi.fn()} adultPersona={true} />);
+    expect(screen.getByText('SFW Lib')).toBeTruthy();
+    expect(screen.getByText('NSFW Lib')).toBeTruthy();
+  });
+
+  it('shows the empty-state when filtering removes every library', () => {
+    vi.mocked(useFilteredLibraries).mockReturnValue({
+      data: [lib('nsfw', 'NSFW Lib', true)],
+    } as unknown as ReturnType<typeof useFilteredLibraries>);
+    wrap(<KnowledgeSection selected={[]} onChange={vi.fn()} adultPersona={false} />);
     expect(screen.getByText(/My Knowledge/i)).toBeTruthy();
   });
 });

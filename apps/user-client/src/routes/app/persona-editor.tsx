@@ -708,6 +708,7 @@ export function PersonaEditor(): JSX.Element {
         <KnowledgeSection
           selected={draft.libraryIds}
           onChange={(ids) => patch({ libraryIds: ids })}
+          adultPersona={draft.adultPersona}
         />
       </AccordionCard>
 
