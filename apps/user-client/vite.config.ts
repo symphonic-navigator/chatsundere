@@ -98,7 +98,12 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/auth\/v1\//, /^\/api\//],
+        // `/model/` serves the self-hosted embedding weights (config/tokenizer
+        // JSON + the int8 ONNX). Without this denylist entry the SW's
+        // navigate-fallback shadows those asset requests with index.html, so
+        // transformers.js receives HTML and every backend fails with
+        // "Unexpected token '<'… No backend available" (Chunk A device test).
+        navigateFallbackDenylist: [/^\/auth\/v1\//, /^\/api\//, /^\/model\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) =>
