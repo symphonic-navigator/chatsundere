@@ -16,7 +16,50 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-06 — **Save as artefact (artefact Chunk 4) landed
+**Last updated:** 2026-06-07 — **Knowledgebase foundation (Chunk A) landed
+(squashed on master `0ef499f`, NOT pushed; awaiting Chris's device test).**
+Block-5 feature (v0.2.0), brainstormed end-to-end with Chris, built
+**subagent-driven** in an isolated worktree (15 plan tasks, per-task review +
+a final **opus** holistic review that caught two real gaps the per-task reviews
+missed — missing library edit/delete UI and `position:absolute` sheets — both
+fixed pre-squash). **First real consumer of the dormant `packages/embeddings`**
+(arctic-embed-m-v2.0, int4 store, ADR 0030); only a Markdown **chunker** was
+missing and is now ported (hierarchical heading→paragraph→sentence→word). **What
+landed:** (1) Dexie **v14** `libraries` + `documents` tables; chunk vectors live
+in a **separate** embeddings IndexedDB (domain/vectors split = spec Approach 1),
+cascade-deleted via `data/knowledge.ts`. (2) A **background ingestion queue**
+(`knowledge/ingestion-queue.ts` + `start-ingestion.ts`): pending→embedding→ready/
+failed, idempotent re-embed (delete old chunk vectors before writing), mid-flight
+deletion discard, reload-resume (interrupted `embedding`→`pending`); started at
+boot in `main.tsx` after `openDb()` (race-free, StrictMode-safe, no model load on
+a docs-empty install). (3) The **My Knowledge room** (`/app/knowledge` +
+`/:libraryId`): library list + detail, **upload (.md/.txt) + paste** add, per-doc
+status badges with Retry, document editor (content edit re-embeds, title-only does
+not), library edit/delete with inline confirm, **NSFW gating** via
+`useFilteredLibraries` (mirrors personas); the entrance-hall **My Knowledge tile is
+live**. Everything is **Markdown** (no mediaType); **no refresh/cooldown** ("haben
+wir schon" dropped — its effect is Chunk C). **Not a Larissa change** (client-only;
+the realised HF-CDN model-weight fetch is logged in [[insights/security-deferrals]]
+— self-hosting the weights is an **urgent** follow-up, [[insights/follow-ups-index]]).
+Verification: `pnpm typecheck` **14/14**; embeddings vitest **59/59**; user-client
+vitest **994 pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline, verified identical on master); `pnpm run build`
+**9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-07-knowledgebase-chunk-a-foundation-design]],
+[[../superpowers/plans/2026-06-07-knowledgebase-chunk-a-foundation]]. **Device test
+(spec §8):** `pnpm dev` must be **restarted** (packages/embeddings changed — Vite
+HMR ignores `packages/*`); the **first embed downloads ~hundreds of MB from the HF
+CDN** (network needed). Steps: create library → add `.md` by upload (banner +
+pending→embedding→ready) → add by paste → edit content (re-embed) → edit title only
+(stays ready) → NSFW library hidden in SFW → delete document & library → reload
+mid-embed (resumes). **Deferred (logged):** NSFW deep-link gating of the detail
+route (consistent with the persona-editor precedent; real retrieval gating is Chunk
+B), and a `NewLibrarySheet` alias cleanup. **Next:** Chris device-tests → push the
+master backlog; then the **urgent CDN self-host** (candidate: right after Chunk C),
+then Knowledgebase **Chunk B** (query_knowledgebase tool + persona/chat binding +
+attach-document) per [[ROADMAP]].
+
+**Earlier 2026-06-06 — Save as artefact (artefact Chunk 4) landed
 (squashed on master `7c907e5`, device-confirmed by Chris; being pushed).**
 Block-2 feature, brainstormed end-to-end with Chris, built **subagent-driven**
 (9 TDD tasks, per-task spec/quality review + a final **opus** holistic review =

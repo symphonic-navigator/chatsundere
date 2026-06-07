@@ -465,3 +465,11 @@ which is a new content-execution surface.
 - **Follow-up commitment:** None required. Re-evaluate only if a future artefact
   kind introduces a new preview/exec surface (e.g. the deferred locally-bundled
   JSX/SPA viewer — tracked in [[follow-ups-index]]).
+
+## 2026-06-07 — Knowledgebase Chunk A: embedding-model weights fetched from the HuggingFace CDN
+
+- **Affected paths:** `apps/user-client/**`, `packages/embeddings/**` (client-only; no Larissa scope path — auth/sync/proxy/crypto untouched).
+- **Finding:** The knowledgebase is the first live consumer of the on-device embedding engine. On the first embed, `@huggingface/transformers` (transformers.js) downloads the `Snowflake/snowflake-arctic-embed-m-v2.0` model weights (~hundreds of MB) from the **HuggingFace CDN**. This exposes the user's IP address and the fact that this specific model is being requested to a third party (HuggingFace) on first use. **No user content** leaves the device — only the weight-file request. It contradicts the project's zero-knowledge / no-third-party stance for outbound traffic.
+- **Severity:** low (no plaintext, keys, or user data exposed; bounded to a one-time IP + model-name disclosure to a CDN; weights cache locally afterwards).
+- **Rationale for deferral:** Self-hosting the weights requires a hosting decision for a large binary outside git (instance static asset / release asset / Git LFS — not a raw git blob) and pointing transformers.js at our own origin; out of scope for the Chunk A foundation. The exposure is a one-time CDN fetch with no user content.
+- **Follow-up commitment:** **Urgent** — self-host the weights and repoint transformers.js, candidate immediately after Knowledgebase Chunk C. Tracked in [[follow-ups-index]] (Active — Implementation). Re-evaluate at the v0.2.0 cut if not yet done.
