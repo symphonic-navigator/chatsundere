@@ -17,7 +17,14 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-07 — **Knowledgebase Chunk B (Retrieval) landed**
-(squashed on master `8d3e496`, NOT pushed; awaiting Chris's device test).
+(squashed on master `8d3e496`, NOT pushed; **device-tested by Chris** — Firsavaai/
+Farbkraft retrieval, the pill, locking, cockpit temporary (un)assignment, and delete
+all confirmed working; **one device-fix folded in** `0b7800f`: NSFW gating layer 1
+was incomplete — `KnowledgeSection`/`KnowledgeSheet` filtered on the *global*
+adult-mode, not the persona's `adultPersona`, so a SFW persona was offered NSFW
+libraries while global mode is NSFW; both now gate on `adultPersona || !nsfw`.
+Retrieval-time gating was already correct, so there was never a content leak — only
+a wrong *assignment* surface).
 Block-5 feature (v0.2.0), brainstormed end-to-end with Chris, built
 **subagent-driven** in an isolated worktree (16 TDD tasks, per-task spec+quality
 review + a final **opus** holistic review = READY TO SQUASH; the opus review
