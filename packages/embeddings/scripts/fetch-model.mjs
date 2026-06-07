@@ -27,7 +27,12 @@ const EXPECTED_SHA256 = {
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
-const outRoot = join(here, '..', 'public', 'model', REPO);
+// Output dir override (e.g. the user-client serves the weights at its own
+// /model/). MODEL_OUT_DIR is resolved against the caller's cwd; default is this
+// package's own public/model (for the standalone embeddings dev server).
+const outRoot = process.env.MODEL_OUT_DIR
+  ? join(process.env.MODEL_OUT_DIR, REPO)
+  : join(here, '..', 'public', 'model', REPO);
 
 function sha256(buf) {
   return createHash('sha256').update(buf).digest('hex');

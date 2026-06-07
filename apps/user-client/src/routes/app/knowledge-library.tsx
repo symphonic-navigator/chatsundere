@@ -101,6 +101,7 @@ export function KnowledgeLibrary(): JSX.Element {
               </button>
               <DocumentStatusBadge
                 status={doc.embeddingStatus}
+                error={doc.embeddingError}
                 onRetry={() => retryDocument.mutate(doc.id)}
               />
               <button

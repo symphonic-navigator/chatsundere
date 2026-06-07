@@ -17,6 +17,10 @@ function realQueue(): IngestionQueue {
   queue = createIngestionQueue({
     getDocument: (id) => db.documents.get(id),
     setStatus: async (id, status: EmbeddingStatus, error?: string) => {
+      // Surface embedding failures to the console — the badge only shows "Failed"
+      // and the error otherwise lives silently in the DB row (a blind spot during
+      // the first device test). The detail page also shows it as a badge tooltip.
+      if (status === 'failed') console.error(`[knowledge] embedding failed for ${id}: ${error}`);
       await db.documents.update(id, {
         embeddingStatus: status,
         embeddingError: error ?? null,

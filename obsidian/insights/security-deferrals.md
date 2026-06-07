@@ -466,10 +466,16 @@ which is a new content-execution surface.
   kind introduces a new preview/exec surface (e.g. the deferred locally-bundled
   JSX/SPA viewer — tracked in [[follow-ups-index]]).
 
-## 2026-06-07 — Knowledgebase Chunk A: embedding-model weights fetched from the HuggingFace CDN
+## 2026-06-07 — Knowledgebase Chunk A: on-device embedding engine is self-hosted (CORRECTED)
+
+> **Correction (same day):** An earlier version of this entry wrongly claimed the
+> runtime fetches model weights from the HuggingFace CDN, exposing the user's IP.
+> That is **false**. The embeddings package (`packages/embeddings/src/engine/
+> execution.ts`) sets `env.allowRemoteModels = false` and `env.localModelPath =
+> '/model/'` — **the runtime never contacts huggingface.co.** The premise of the
+> original note (and of spec §4.3's "urgent CDN" follow-up) was incorrect.
 
 - **Affected paths:** `apps/user-client/**`, `packages/embeddings/**` (client-only; no Larissa scope path — auth/sync/proxy/crypto untouched).
-- **Finding:** The knowledgebase is the first live consumer of the on-device embedding engine. On the first embed, `@huggingface/transformers` (transformers.js) downloads the `Snowflake/snowflake-arctic-embed-m-v2.0` model weights (~hundreds of MB) from the **HuggingFace CDN**. This exposes the user's IP address and the fact that this specific model is being requested to a third party (HuggingFace) on first use. **No user content** leaves the device — only the weight-file request. It contradicts the project's zero-knowledge / no-third-party stance for outbound traffic.
-- **Severity:** low (no plaintext, keys, or user data exposed; bounded to a one-time IP + model-name disclosure to a CDN; weights cache locally afterwards).
-- **Rationale for deferral:** Self-hosting the weights requires a hosting decision for a large binary outside git (instance static asset / release asset / Git LFS — not a raw git blob) and pointing transformers.js at our own origin; out of scope for the Chunk A foundation. The exposure is a one-time CDN fetch with no user content.
-- **Follow-up commitment:** **Urgent** — self-host the weights and repoint transformers.js, candidate immediately after Knowledgebase Chunk C. Tracked in [[follow-ups-index]] (Active — Implementation). Re-evaluate at the v0.2.0 cut if not yet done.
+- **Finding (confirmation entry — no runtime exposure):** The knowledgebase is the first live consumer of the on-device embedding engine (`Snowflake/snowflake-arctic-embed-m-v2.0`, int8, transformers.js + onnxruntime-web/WASM, WebGPU when available). The engine is configured **self-hosted only**: it loads the model + ONNX runtime assets exclusively from the app's own origin under `/model/`, never from a third party at runtime. No user content, IP, or model-name disclosure leaves the device to any third party during use.
+- **Severity:** N/A (no third-party runtime traffic; on-device inference; nothing leaves the device).
+- **Operational requirement (not a security deferral, but tracked so it isn't lost):** the ~310 MB int8 weights MUST be **provisioned at `/model/`** for the feature to work — a **build/deploy-time** step, performed once on the operator's machine via `pnpm --filter @chatsundere/user-client fetch-model` (which fetches from huggingface.co **at setup time**, on the operator's machine — not the user's). The weights are gitignored (`apps/user-client/public/model/`); the production deployment must serve `/model/` (the Vite build copies `public/model` → `dist/model`). The only outstanding hardening is **pinning the file SHA256s** in `scripts/fetch-model.mjs` (currently scaffolded but empty). Tracked in [[follow-ups-index]].

@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "generate:icons": "node scripts/generate-placeholder-icons.mjs"
+    "generate:icons": "node scripts/generate-placeholder-icons.mjs",
+    "fetch-model": "MODEL_OUT_DIR=\"$PWD/public/model\" node ../../packages/embeddings/scripts/fetch-model.mjs"
   },
   "dependencies": {
     "@chatsundere/crypto": "workspace:^",

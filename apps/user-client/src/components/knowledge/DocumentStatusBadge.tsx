@@ -8,13 +8,20 @@ const LABEL: Record<EmbeddingStatus, string> = {
   failed: 'Failed',
 };
 
-/** Inline status pill for a document; failed documents expose a Retry. */
+/** Inline status pill for a document; failed documents expose a Retry and, on
+ *  hover, the underlying error message as a tooltip. */
 export function DocumentStatusBadge(props: {
   status: EmbeddingStatus;
   onRetry: () => void;
+  /** The embedding error, shown as a tooltip on the failed pill. */
+  error?: string | null;
 }): JSX.Element {
   return (
-    <span className="doc-status" data-status={props.status}>
+    <span
+      className="doc-status"
+      data-status={props.status}
+      title={props.status === 'failed' ? (props.error ?? undefined) : undefined}
+    >
       {LABEL[props.status]}
       {props.status === 'failed' ? (
         <button

@@ -39,25 +39,29 @@ not), library edit/delete with inline confirm, **NSFW gating** via
 `useFilteredLibraries` (mirrors personas); the entrance-hall **My Knowledge tile is
 live**. Everything is **Markdown** (no mediaType); **no refresh/cooldown** ("haben
 wir schon" dropped — its effect is Chunk C). **Not a Larissa change** (client-only;
-the realised HF-CDN model-weight fetch is logged in [[insights/security-deferrals]]
-— self-hosting the weights is an **urgent** follow-up, [[insights/follow-ups-index]]).
+the engine is **self-hosted** — `env.allowRemoteModels=false`, `localModelPath='/model/'`
+— so the runtime **never** calls HuggingFace; confirmation in [[insights/security-deferrals]]).
 Verification: `pnpm typecheck` **14/14**; embeddings vitest **59/59**; user-client
 vitest **994 pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
 localStorage-jsdom baseline, verified identical on master); `pnpm run build`
 **9/9**; biome clean. Spec/plan:
 [[../superpowers/specs/2026-06-07-knowledgebase-chunk-a-foundation-design]],
-[[../superpowers/plans/2026-06-07-knowledgebase-chunk-a-foundation]]. **Device test
-(spec §8):** `pnpm dev` must be **restarted** (packages/embeddings changed — Vite
-HMR ignores `packages/*`); the **first embed downloads ~hundreds of MB from the HF
-CDN** (network needed). Steps: create library → add `.md` by upload (banner +
+[[../superpowers/plans/2026-06-07-knowledgebase-chunk-a-foundation]]. **Device-test PREREQUISITE
+(spec §8):** the ~310 MB int8 weights must be provisioned at `/model/` — run
+**`pnpm --filter @chatsundere/user-client fetch-model`** once (gitignored under
+`apps/user-client/public/model/`; fetches from HF **at setup time** on the operator's
+machine, never at runtime), then **restart `pnpm dev`** (packages/embeddings changed —
+Vite HMR ignores `packages/*`). *(This blocker surfaced in Chris's first device test:
+without the weights, `/model/...` 404s → SPA index.html → "Unexpected token '<'… No
+backend available".)* Steps: create library → add `.md` by upload (banner +
 pending→embedding→ready) → add by paste → edit content (re-embed) → edit title only
 (stays ready) → NSFW library hidden in SFW → delete document & library → reload
 mid-embed (resumes). **Deferred (logged):** NSFW deep-link gating of the detail
 route (consistent with the persona-editor precedent; real retrieval gating is Chunk
-B), and a `NewLibrarySheet` alias cleanup. **Next:** Chris device-tests → push the
-master backlog; then the **urgent CDN self-host** (candidate: right after Chunk C),
-then Knowledgebase **Chunk B** (query_knowledgebase tool + persona/chat binding +
-attach-document) per [[ROADMAP]].
+B), a `NewLibrarySheet` alias cleanup, **prod deployment must serve `/model/`**, and
+**pin SHA256s in fetch-model.mjs** ([[insights/follow-ups-index]]). **Next:** Chris
+device-tests → push the master backlog; then Knowledgebase **Chunk B**
+(query_knowledgebase tool + persona/chat binding + attach-document) per [[ROADMAP]].
 
 **Earlier 2026-06-06 — Save as artefact (artefact Chunk 4) landed
 (squashed on master `7c907e5`, device-confirmed by Chris; being pushed).**

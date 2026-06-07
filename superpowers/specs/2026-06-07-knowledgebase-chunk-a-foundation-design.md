@@ -167,13 +167,18 @@ download progress. The room surfaces a one-time banner
 progress. WebGPU is preferred; the engine falls back to WASM when WebGPU is
 absent. A download failure leaves the document `pending`/`failed` with retry.
 
-> **Dependency / privacy note (urgent follow-up):** transformers.js fetches the
-> model weights from the **HuggingFace CDN** on first use — exposing the user's IP
-> and the fact that this model is requested (but **no user content**). We commit
-> to self-hosting the weights very soon (candidate: directly after Chunk C today,
-> if the artefact-hosting story allows a large binary outside git). Tracked in
-> [[follow-ups-index]]; a formal [[security-deferrals]] entry is written at the
-> Chunk A squash.
+> **CORRECTED (2026-06-07) — the original note here was based on a false premise.**
+> The embeddings engine is configured **self-hosted only** (`env.allowRemoteModels =
+> false`, `env.localModelPath = '/model/'`): the runtime loads the model + ONNX
+> runtime assets exclusively from the app's own origin under `/model/`, and **never
+> contacts huggingface.co**. There is no runtime CDN privacy exposure. The real
+> requirement (missed by this spec and surfaced in device testing) is **operational**:
+> the ~310 MB int8 weights must be **provisioned at `/model/`** at build/deploy time —
+> `pnpm --filter @chatsundere/user-client fetch-model` (fetches from HF on the
+> operator's machine at setup, gitignored under `apps/user-client/public/model/`; the
+> Vite build copies `public/model` → `dist/model`). Outstanding: prod deployment must
+> serve `/model/`, and `fetch-model.mjs` should pin file SHA256s. Tracked in
+> [[follow-ups-index]]; see [[security-deferrals]] 2026-06-07 (corrected).
 
 ### 4.4 Reload robustness
 

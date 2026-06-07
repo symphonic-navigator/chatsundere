@@ -139,6 +139,11 @@ infra/data/
 
 # Per-service env files (.env at root is already gitignored)
 apps/*/.env
+
+# Self-hosted embedding-model weights — large (~310 MB int8 ONNX), fetched at
+# setup/deploy time via `pnpm --filter @chatsundere/user-client fetch-model`,
+# never committed. Served at /model/ by the user-client (dev + prod build).
+apps/user-client/public/model/
 packages/*/.env
 
 # Production compose file (only the .example is committed)
