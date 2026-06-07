@@ -55,6 +55,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -69,6 +70,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     lastMessageAt: 3,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
   });
   await db.messages.add({
     id: uuidv7(),

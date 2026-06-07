@@ -25,6 +25,7 @@ const aurum: PersonaRow = {
   adultPersona: false,
   chatsundereTonality: true,
   contextWindow: null,
+  libraryIds: [],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -38,6 +39,7 @@ const chatRow: import('../../src/boot/client-data-db').ChatRow = {
   lastMessageAt: 0,
   bookmarkedMessageCount: 0,
   draftInput: '',
+  libraryIds: [],
 };
 
 beforeEach(async () => {

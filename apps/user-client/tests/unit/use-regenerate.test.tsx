@@ -56,6 +56,7 @@ async function seedChatWithExchange() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -69,6 +70,7 @@ async function seedChatWithExchange() {
     lastMessageAt: 4,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
   });
   const userMsgId = uuidv7();
   await db.messages.add({
@@ -174,6 +176,7 @@ describe('useRegenerate (non-destructive)', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });

@@ -55,6 +55,7 @@ describe('Pill rendering integration', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 1,
       updatedAt: 1,
     });
@@ -69,6 +70,7 @@ describe('Pill rendering integration', () => {
       lastMessageAt: 3,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const personaMsgId = uuidv7();
     const pillId = uuidv7();

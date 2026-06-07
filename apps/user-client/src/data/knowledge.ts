@@ -55,7 +55,8 @@ export async function deleteDocumentCascade(
   await getClientDataDb().documents.delete(id);
 }
 
-/** Delete a library, all its documents, and all their vectors. */
+/** Delete a library, all its documents and vectors, and prune the id from every
+ *  persona and chat that referenced it. */
 export async function deleteLibraryCascade(
   id: string,
   store: VectorStoreLike = getKnowledgeVectorStore(),
@@ -65,6 +66,17 @@ export async function deleteLibraryCascade(
   for (const doc of docs) await deleteDocumentVectors(doc.id, store);
   await db.documents.where('libraryId').equals(id).delete();
   await db.libraries.delete(id);
+  // Prune dangling bindings.
+  await db.personas
+    .filter((p) => p.libraryIds.includes(id))
+    .modify((p) => {
+      p.libraryIds = p.libraryIds.filter((l) => l !== id);
+    });
+  await db.chats
+    .filter((c) => c.libraryIds.includes(id))
+    .modify((c) => {
+      c.libraryIds = c.libraryIds.filter((l) => l !== id);
+    });
 }
 
 // ---- Libraries: React-Query hooks ----
@@ -112,6 +124,8 @@ export function useDeleteLibrary() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.libraries });
       qc.invalidateQueries({ queryKey: ['documents'] });
+      qc.invalidateQueries({ queryKey: QK.personas });
+      qc.invalidateQueries({ queryKey: QK.chats });
     },
   });
 }

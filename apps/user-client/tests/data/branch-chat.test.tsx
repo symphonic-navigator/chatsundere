@@ -31,6 +31,7 @@ beforeEach(async () => {
     lastMessageAt: 300,
     bookmarkedMessageCount: 1,
     draftInput: 'half typed',
+    libraryIds: [],
   });
   await db.messages.add({
     id: 'u1',

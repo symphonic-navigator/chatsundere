@@ -62,6 +62,7 @@ async function seed() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -117,6 +118,67 @@ describe('useSendMessage', () => {
     expect(callArg.globalInstructions).toBe('');
   });
 
+  it('passes a knowledge context built from the persona/chat libraryIds', async () => {
+    const { db, personaId } = await seed();
+
+    // Assign an existing library to the persona so the effective set is non-empty.
+    const libraryId = uuidv7();
+    await db.libraries.add({
+      id: libraryId,
+      name: 'Lore',
+      description: 'World lore',
+      nsfw: false,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await db.personas.update(personaId, { libraryIds: [libraryId] });
+
+    const startSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'start')
+      .mockResolvedValue(undefined);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSendMessage(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        chatId: null,
+        personaId,
+        text: 'Hello',
+        reasoning: { kind: 'on' },
+      });
+    });
+
+    expect(startSpy).toHaveBeenCalledTimes(1);
+    const callArg = startSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    const knowledge = callArg.knowledge as { libraries: { id: string }[] } | null;
+    expect(knowledge).not.toBeNull();
+    expect(knowledge?.libraries.map((l) => l.id)).toContain(libraryId);
+  });
+
+  it('passes a null knowledge context when no libraries are assigned', async () => {
+    const { personaId } = await seed();
+
+    const startSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'start')
+      .mockResolvedValue(undefined);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSendMessage(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        chatId: null,
+        personaId,
+        text: 'Hello',
+        reasoning: { kind: 'on' },
+      });
+    });
+
+    const callArg = startSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArg.knowledge).toBeNull();
+  });
+
   it('chat-mode: reuses existing ChatRow and does not create a new one', async () => {
     const { db, personaId } = await seed();
 
@@ -131,6 +193,7 @@ describe('useSendMessage', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
 
     const startSpy = vi

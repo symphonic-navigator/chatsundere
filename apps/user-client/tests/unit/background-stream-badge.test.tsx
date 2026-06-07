@@ -81,6 +81,7 @@ describe('BackgroundStreamBadge', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 1,
       updatedAt: 1,
     });

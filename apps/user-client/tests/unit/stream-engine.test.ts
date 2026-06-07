@@ -32,6 +32,7 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     },
     persona: {
       id: 'p1',
@@ -50,6 +51,7 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 1,
       updatedAt: 1,
     },
@@ -123,6 +125,7 @@ describe('runStreamEngine', () => {
           adultPersona: false,
           chatsundereTonality: true,
           contextWindow: null,
+          libraryIds: [],
           createdAt: 1,
           updatedAt: 1,
         },
@@ -135,6 +138,18 @@ describe('runStreamEngine', () => {
     expect(msgs[0]?.content).toContain('GLOBAL-UNLOCK');
     expect(msgs[0]?.content).toContain('about-me');
     expect(msgs[0]?.content).toContain('persona body');
+  });
+
+  it('passes knowledgeLibrariesContext into the system prompt', async () => {
+    let capturedMessages: unknown = null;
+    vi.spyOn(llm, 'streamCompletion').mockImplementation(async function* (args) {
+      capturedMessages = (args as { messages: unknown }).messages;
+      yield { type: 'finish', reason: 'stop' };
+    });
+    await runStreamEngine(makeArgs({ knowledgeLibrariesContext: 'You can search: A.' }));
+    const msgs = capturedMessages as Array<{ role: string; content: string }>;
+    expect(msgs[0]?.role).toBe('system');
+    expect(msgs[0]?.content).toContain('You can search: A.');
   });
 
   it('throws on error chunk', async () => {
@@ -191,6 +206,7 @@ describe('runStreamEngine', () => {
           lastMessageAt: 1,
           bookmarkedMessageCount: 0,
           draftInput: '',
+          libraryIds: [],
         },
       }),
     );

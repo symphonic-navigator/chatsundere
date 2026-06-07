@@ -28,6 +28,7 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 0,
     updatedAt: 0,
     ...overrides,

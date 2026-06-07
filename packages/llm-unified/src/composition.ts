@@ -22,6 +22,8 @@ export interface BuildPromptInputs {
   projectInstructions: string;
   /** Reserved slot — no producer yet. */
   memoryContext: string;
+  /** Band-2 knowledge-libraries awareness (chat only); empty when none assigned. */
+  knowledgeLibrariesContext?: string;
   /** Band-3 tools segment — joined tool system-prompt instructions (chat only). */
   toolsInstruction: string;
 }
@@ -34,6 +36,7 @@ type SegmentId =
   | 'aboutMe'
   | 'project'
   | 'memories'
+  | 'knowledgeLibraries'
   | 'tools';
 
 interface SegmentSpec {
@@ -74,6 +77,13 @@ const SEGMENTS: readonly SegmentSpec[] = [
   { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_ONLY, resolve: (i) => i.aboutMe },
   { id: 'project', band: 2, order: 1, jobs: CHAT_ONLY, resolve: (i) => i.projectInstructions },
   { id: 'memories', band: 2, order: 2, jobs: CHAT_ONLY, resolve: (i) => i.memoryContext },
+  {
+    id: 'knowledgeLibraries',
+    band: 2,
+    order: 3,
+    jobs: CHAT_ONLY,
+    resolve: (i) => i.knowledgeLibrariesContext ?? '',
+  },
   { id: 'tools', band: 3, order: 0, jobs: CHAT_ONLY, resolve: (i) => i.toolsInstruction },
 ];
 

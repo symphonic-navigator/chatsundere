@@ -5,6 +5,7 @@ import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import * as engine from '../../src/lib/stream-engine';
 import * as titleGen from '../../src/lib/title-generator';
+import * as toolLoop from '../../src/lib/tool-loop';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
 
 async function seedChat() {
@@ -27,6 +28,7 @@ async function seedChat() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -51,6 +53,7 @@ async function seedChat() {
     lastMessageAt: 1,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
   });
   return { db, personaId, chatId };
 }
@@ -68,6 +71,7 @@ function baseStartArgs(chatId: string, persona: unknown, model: unknown) {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     },
     persona,
     provider: nanoGpt,
@@ -204,6 +208,7 @@ describe('stream-manager.store', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     type OnChunk = (c: { type: 'token' | 'reasoning'; text: string }) => void;
     let captured: OnChunk | null = null;
@@ -250,6 +255,7 @@ describe('stream-manager.store', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const store = useStreamManagerStore.getState();
     void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
@@ -291,6 +297,7 @@ describe('stream-manager.store', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const store = useStreamManagerStore.getState();
     void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
@@ -324,6 +331,7 @@ describe('stream-manager.store', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const persona = await db.personas.get(personaId);
     const model = nanoGpt.offerings[0];
@@ -525,6 +533,7 @@ describe('stream-manager.store', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const persona = await db.personas.get(personaId);
     const model = nanoGpt.offerings[0];
@@ -593,6 +602,7 @@ describe('stream-manager.store', () => {
       lastMessageAt: 2,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     vi.spyOn(engine, 'runStreamEngine').mockImplementation(
       () =>
@@ -614,10 +624,139 @@ describe('stream-manager.store', () => {
         lastMessageAt: 2,
         bookmarkedMessageCount: 0,
         draftInput: '',
+        libraryIds: [],
       },
     } as never);
     expect(useStreamManagerStore.getState().streams.size).toBe(2);
     await store.abortAllForPersonaDiscard(personaId);
     expect(useStreamManagerStore.getState().streams.size).toBe(0);
+  });
+
+  it('offers query_knowledgebase and awareness when knowledge libraries are present', async () => {
+    // Kept last in the file: the abortAllForPersonaDiscard test above asserts an
+    // exact streams.size, so it must not race a lingering handle from here.
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-knowledge';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    // Capture the tool defs handed to the tool loop and the args handed to the
+    // stream engine. The model offering must declare tool-call support so the
+    // store resolves the active tool set rather than short-circuiting to [].
+    // The loop drives one stream round (so runStreamEngine receives its args)
+    // then never resolves — we abortDiscard at the end rather than letting the
+    // success chain leak a 200ms cleanup timer.
+    let capturedToolDefs: { name: string }[] = [];
+    let capturedStreamArgs: { knowledgeLibrariesContext?: string } = {};
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      toolDefs: { name: string }[];
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      capturedToolDefs = args.toolDefs;
+      void args.streamOnce({}, []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: {
+      knowledgeLibrariesContext?: string;
+    }) => {
+      capturedStreamArgs = args;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    const knowledge = {
+      libraries: [{ id: 'a', name: 'Farblehre', description: 'colour' }],
+      retrieve: async () => [],
+    };
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      offering: { ...(model as object), profile: { toolCalls: { supported: true } } },
+      knowledge,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedToolDefs.some((d) => d.name === 'query_knowledgebase')).toBe(true);
+    expect(capturedStreamArgs.knowledgeLibrariesContext).toContain('Farblehre');
+    await store.abortDiscard(myChatId);
+  });
+
+  it('gating: knowledge awareness stays empty when tool calls unsupported', async () => {
+    // Kept last in the file: the abortAllForPersonaDiscard test above asserts an
+    // exact streams.size, so it must not race a lingering handle from here.
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-no-tools';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    // Model offering has toolCalls.supported: false, so even with knowledge libraries
+    // present, the awareness must be empty (and no query_knowledgebase tool offered).
+    let capturedToolDefs: { name: string }[] = [];
+    let capturedStreamArgs: { knowledgeLibrariesContext?: string } = {};
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      toolDefs: { name: string }[];
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      capturedToolDefs = args.toolDefs;
+      void args.streamOnce({}, []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: {
+      knowledgeLibrariesContext?: string;
+    }) => {
+      capturedStreamArgs = args;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    const knowledge = {
+      libraries: [{ id: 'a', name: 'Farblehre', description: 'colour' }],
+      retrieve: async () => [],
+    };
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      offering: { ...(model as object), profile: { toolCalls: { supported: false } } },
+      knowledge,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedToolDefs.some((d) => d.name === 'query_knowledgebase')).toBe(false);
+    expect(capturedStreamArgs.knowledgeLibrariesContext).toBe('');
+    await store.abortDiscard(myChatId);
   });
 });

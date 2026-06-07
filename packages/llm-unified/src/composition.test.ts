@@ -137,3 +137,34 @@ describe('tools segment', () => {
     expect(out).toBe('You are a helpful companion.');
   });
 });
+
+describe('knowledgeLibraries segment', () => {
+  it('includes the knowledge awareness text in a chat prompt', () => {
+    const out = buildPrompt(
+      { ...baseInputs, knowledgeLibrariesContext: 'You can search: Farblehre — colour notes.' },
+      'chat',
+    );
+    expect(out).toContain('You can search: Farblehre — colour notes.');
+  });
+
+  it('drops the segment when empty', () => {
+    const out = buildPrompt({ ...baseInputs }, 'chat');
+    expect(out).not.toContain('You can search');
+  });
+
+  it('drops the segment for the title job even when provided', () => {
+    const out = buildPrompt(
+      { ...baseInputs, knowledgeLibrariesContext: 'You can search: X.' },
+      'title',
+    );
+    expect(out).not.toContain('You can search');
+  });
+
+  it('orders knowledge after memories', () => {
+    const out = buildPrompt(
+      { ...baseInputs, memoryContext: 'MEM', knowledgeLibrariesContext: 'KB' },
+      'chat',
+    );
+    expect(out.indexOf('MEM')).toBeLessThan(out.indexOf('KB'));
+  });
+});

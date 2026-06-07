@@ -86,6 +86,8 @@ export interface PersonaRow {
   chatsundereTonality: boolean;
   /** Per-persona context window in tokens. null = use the offering's recommended. */
   contextWindow: number | null;
+  /** Knowledge libraries assigned to this persona (Chunk B). */
+  libraryIds: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -99,6 +101,8 @@ export interface ChatRow {
   lastMessageAt: number;
   bookmarkedMessageCount: number;
   draftInput: string; // NEW — Phase 3 cockpit autosave
+  /** Ad-hoc knowledge libraries for this chat only (Chunk B). */
+  libraryIds: string[];
 }
 
 export type ContentBlock =
@@ -508,6 +512,28 @@ class ClientDataDb extends Dexie {
       libraries: 'id, name, nsfw',
       documents: 'id, libraryId, embeddingStatus, [libraryId+createdAt]',
     });
+
+    // Version 15 — knowledgebase Chunk B (retrieval). Personas and chats gain a
+    // non-indexed `libraryIds` array binding them to knowledge libraries.
+    this.version(15)
+      .stores({
+        personas: 'id, providerId',
+        chats: 'id, personaId, lastMessageAt, [personaId+lastMessageAt]',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            if (!Array.isArray(p.libraryIds)) p.libraryIds = [];
+          });
+        await tx
+          .table('chats')
+          .toCollection()
+          .modify((c: Record<string, unknown>) => {
+            if (!Array.isArray(c.libraryIds)) c.libraryIds = [];
+          });
+      });
   }
 }
 

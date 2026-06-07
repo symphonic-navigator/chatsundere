@@ -43,6 +43,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     adultPersona: true,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -59,6 +60,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     lastMessageAt: 2,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
   });
   return { personaId, chatId };
 }

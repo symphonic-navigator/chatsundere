@@ -67,6 +67,7 @@ export function useCreateChat() {
         lastMessageAt: now,
         bookmarkedMessageCount: 0,
         draftInput: '',
+        libraryIds: [],
       });
       return id;
     },
@@ -88,6 +89,24 @@ export function useUpdateChat() {
     },
     onSuccess: (_d, vars) => {
       void qc.invalidateQueries({ queryKey: QK.chat(vars.id) });
+      void qc.invalidateQueries({ queryKey: QK.chats });
+    },
+  });
+}
+
+/** Set the ad-hoc knowledge libraries for a single chat. */
+export async function setChatLibraries(chatId: string, libraryIds: string[]): Promise<void> {
+  await getClientDataDb().chats.update(chatId, { libraryIds });
+}
+
+/** Set the ad-hoc knowledge libraries for a single chat (React-Query hook). */
+export function useSetChatLibraries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { chatId: string; libraryIds: string[] }) =>
+      setChatLibraries(args.chatId, args.libraryIds),
+    onSuccess: (_v, args) => {
+      void qc.invalidateQueries({ queryKey: QK.chat(args.chatId) });
       void qc.invalidateQueries({ queryKey: QK.chats });
     },
   });
@@ -221,6 +240,7 @@ export function useBranchChat() {
           lastMessageAt: lastCopied?.createdAt ?? now,
           bookmarkedMessageCount: copied.filter((m) => m.bookmarked).length,
           draftInput: '',
+          libraryIds: [...source.libraryIds],
         });
 
         for (const m of copied) {

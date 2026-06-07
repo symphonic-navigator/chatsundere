@@ -31,6 +31,7 @@ describe('Dexie v10 migration', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

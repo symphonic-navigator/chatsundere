@@ -32,6 +32,7 @@ async function seedPersonas() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -52,6 +53,7 @@ async function seedPersonas() {
     adultPersona: true,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now + 1,
     updatedAt: now + 1,
   });

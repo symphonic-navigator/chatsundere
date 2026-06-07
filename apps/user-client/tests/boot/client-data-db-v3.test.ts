@@ -96,6 +96,7 @@ describe('client-data-db v3 migration', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

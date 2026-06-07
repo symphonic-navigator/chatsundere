@@ -17,7 +17,16 @@ beforeEach(async () => {
 describe('chatsundere_client_data Dexie schema', () => {
   it('opens cleanly on a fresh origin', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(14);
+    expect(db.verno).toBe(15);
+  });
+
+  it('v15 backfills libraryIds to [] on personas and chats', async () => {
+    const db = await openClientDataDb();
+    const persona = await db.personas.toArray();
+    const chats = await db.chats.toArray();
+    for (const p of persona) expect(Array.isArray(p.libraryIds)).toBe(true);
+    for (const c of chats) expect(Array.isArray(c.libraryIds)).toBe(true);
+    expect(db.verno).toBe(15);
   });
 
   it('seeds seven built-in mindspaces on first open', async () => {

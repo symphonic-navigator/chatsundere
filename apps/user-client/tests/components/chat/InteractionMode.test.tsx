@@ -33,6 +33,7 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
     colour: '#fff',
     font: 'serif',
     contextWindow: 1_000,
+    libraryIds: [],
     instructions: 'x',
     adultPersona: false,
     chatsundereTonality: true,

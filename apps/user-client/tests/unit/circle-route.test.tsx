@@ -68,6 +68,7 @@ describe('Circle route', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: now,
       updatedAt: now,
     });

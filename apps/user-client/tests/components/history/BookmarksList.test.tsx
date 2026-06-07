@@ -20,6 +20,7 @@ const groups: BookmarkGroup[] = [
       lastMessageAt: 9,
       bookmarkedMessageCount: 1,
       draftInput: '',
+      libraryIds: [],
     },
     persona: null,
     bookmarks: [

@@ -33,6 +33,7 @@ async function seedSfwAndNsfw() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -53,6 +54,7 @@ async function seedSfwAndNsfw() {
     adultPersona: true,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -149,6 +151,7 @@ describe('Circle filter (adult mode)', () => {
       adultPersona: true,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: now,
       updatedAt: now,
     });

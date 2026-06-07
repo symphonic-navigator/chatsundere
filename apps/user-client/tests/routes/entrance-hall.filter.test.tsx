@@ -33,6 +33,7 @@ async function seedSfwAndNsfw() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -53,6 +54,7 @@ async function seedSfwAndNsfw() {
     adultPersona: true,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -114,6 +116,7 @@ describe('Entrance Hall filter (adult mode)', () => {
       adultPersona: true,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -126,6 +129,7 @@ describe('Entrance Hall filter (adult mode)', () => {
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     await db.settings.update(1, { adultMode: 'sfw' });
     renderHall();

@@ -12,6 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import type { OfferingRef } from '../integrations/types.js';
+import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
 import type { ReasoningState } from '../lib/reasoning-resolver.js';
 import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
@@ -35,6 +36,7 @@ interface PersonaContext {
   globalInstructions: string;
   globalAboutMe: string;
   webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
+  knowledge: import('../knowledge/query-tool.js').KnowledgeContext | null;
 }
 
 /**
@@ -83,6 +85,8 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     fetch: resolveWebBackend(settings.webInterfacing?.fetch ?? null, webOptions, 'fetch'),
   };
 
+  const knowledge = await buildKnowledgeContext(persona, chat);
+
   return {
     chat,
     persona,
@@ -99,6 +103,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     globalInstructions: settings.globalInstructions,
     globalAboutMe: settings.globalAboutMe,
     webInterfacing,
+    knowledge,
   };
 }
 
@@ -221,6 +226,7 @@ export function useSendMessage() {
           lastMessageAt: now,
           bookmarkedMessageCount: 0,
           draftInput: '',
+          libraryIds: [],
         });
       }
 
@@ -261,6 +267,7 @@ export function useSendMessage() {
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
         webInterfacing: ctx.webInterfacing,
+        knowledge: ctx.knowledge,
         substituteVisionModel,
         substituteOneShotBase: substituteOneShotBase ?? undefined,
       });
@@ -352,6 +359,7 @@ export function useRegenerate() {
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
         webInterfacing: ctx.webInterfacing,
+        knowledge: ctx.knowledge,
       });
     },
 

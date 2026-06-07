@@ -18,6 +18,7 @@ import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client
 import { attachPendingToMessage, listMessageAttachments } from '../data/attachments.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
+import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
 import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
@@ -58,6 +59,11 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
    * MasterKey, which the store never touches. Absent when no substitute is set.
    */
   substituteOneShotBase?: Omit<OneShotArgs, 'messages' | 'bodyExtras'>;
+  /**
+   * Per-send knowledge context (effective libraries + retrieve closure), resolved
+   * in the send path. Absent/null = no libraries assigned → no knowledge tool.
+   */
+  knowledge?: import('../knowledge/query-tool.js').KnowledgeContext | null;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -337,9 +343,12 @@ function runIntoDraft(
       },
     },
   );
-  const activeTools = toolsActive ? resolveActiveTools(integrationCtx) : [];
+  const knowledge = args.knowledge ?? null;
+  const activeTools = toolsActive ? resolveActiveTools(integrationCtx, knowledge) : [];
   const activeToolDefs = toolDefs(activeTools);
   const toolsInstruction = systemPromptSegment(activeTools) ?? '';
+  const knowledgeLibrariesContext =
+    toolsActive && knowledge ? renderKnowledgeAwareness(knowledge.libraries) : '';
 
   const onChunk = (chunk: StreamChunk): void => {
     // Mirror tokens and reasoning deltas into the handle so ChatStream
@@ -374,6 +383,7 @@ function runIntoDraft(
       runStreamEngine({
         ...args,
         toolsInstruction,
+        knowledgeLibrariesContext,
         tools,
         toolExchange,
         signal: controller.signal,

@@ -42,6 +42,8 @@ export interface StartStreamArgs {
   globalAboutMe: string;
   /** Joined tool system-prompt instructions for the Band-3 tools segment. */
   toolsInstruction?: string;
+  /** Band-2 knowledge-libraries awareness text (chat only); '' when none. */
+  knowledgeLibrariesContext?: string;
   /** Canonical tool definitions to offer the model (empty = none). */
   tools?: ToolDef[];
   /** Accumulated assistant(tool_calls) / tool messages from prior loop rounds,
@@ -75,6 +77,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       aboutMe,
       projectInstructions: '',
       memoryContext: '',
+      knowledgeLibrariesContext: args.knowledgeLibrariesContext ?? '',
       toolsInstruction: args.toolsInstruction ?? '',
     },
     'chat',

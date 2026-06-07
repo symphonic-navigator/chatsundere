@@ -94,7 +94,7 @@ export function InteractionMode(p: Props): JSX.Element {
       if (
         target instanceof Element &&
         target.closest(
-          '.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root, .artefact-picker-root',
+          '.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root, .artefact-picker-root, .knowledge-sheet-root',
         )
       )
         return;

@@ -36,6 +36,7 @@ async function seedPersonaWithMindspace() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: now,
     updatedAt: now,
   });

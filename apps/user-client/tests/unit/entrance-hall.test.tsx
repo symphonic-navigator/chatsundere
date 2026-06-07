@@ -119,6 +119,7 @@ describe('EntranceHall', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -131,6 +132,7 @@ describe('EntranceHall', () => {
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     wrap('/app');
     await waitFor(() => {
@@ -161,6 +163,7 @@ describe('EntranceHall', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -175,6 +178,7 @@ describe('EntranceHall', () => {
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     await db.chats.add({
       id: 'c2',
@@ -185,6 +189,7 @@ describe('EntranceHall', () => {
       lastMessageAt: now + 1000,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
 
     wrap('/app');

@@ -21,6 +21,7 @@ function persona(id: string, name: string): PersonaRow {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 0,
     updatedAt: 0,
   };

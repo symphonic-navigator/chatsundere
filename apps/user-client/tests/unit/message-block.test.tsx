@@ -60,6 +60,7 @@ const aurum: PersonaRow = {
   adultPersona: false,
   chatsundereTonality: true,
   contextWindow: null,
+  libraryIds: [],
   createdAt: 1,
   updatedAt: 1,
 };

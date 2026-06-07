@@ -21,7 +21,7 @@ function wrap(qc: QueryClient) {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 }
-const persona = { id: 'p', name: 'Aurum', font: 'serif' } as never;
+const persona = { id: 'p', name: 'Aurum', font: 'serif', libraryIds: [] } as never;
 const offering = { profile: { vision: true } } as never;
 
 beforeEach(async () => {

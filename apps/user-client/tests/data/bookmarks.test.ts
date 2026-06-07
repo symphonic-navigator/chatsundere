@@ -22,6 +22,7 @@ beforeEach(async () => {
     lastMessageAt: 30,
     bookmarkedMessageCount: 1,
     draftInput: '',
+    libraryIds: [],
   });
   await db.messages.bulkAdd([
     {

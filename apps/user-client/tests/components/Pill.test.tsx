@@ -35,6 +35,26 @@ describe('Pill (tool-call)', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
+  it('expands a query_knowledgebase pill to show the query and results', () => {
+    const row: PillRow = {
+      id: 'p2',
+      messageId: 'm1',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {
+        name: 'query_knowledgebase',
+        argumentsJson: '{"query":"farbkraft"}',
+        result: '[Farblehre › Grundlagen]  (0.57)\nWarme Farben wirken kräftiger.',
+      },
+      createdAt: 0,
+    };
+    render(<Pill row={row} />);
+    fireEvent.click(screen.getByText('query_knowledgebase'));
+    expect(screen.getByText(/farbkraft/)).toBeInTheDocument();
+    expect(screen.getByText(/Farblehre/)).toBeInTheDocument();
+  });
+
   it('shows the error when the call failed', () => {
     render(
       <Pill

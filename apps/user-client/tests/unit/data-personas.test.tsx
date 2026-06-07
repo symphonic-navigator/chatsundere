@@ -58,6 +58,7 @@ describe('usePersonas + CUD mutations', () => {
         adultPersona: false,
         chatsundereTonality: true,
         contextWindow: null,
+        libraryIds: [],
       });
       createdId = created.id;
     });

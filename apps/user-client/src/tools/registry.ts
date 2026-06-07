@@ -2,17 +2,24 @@
 import type { ToolDef } from '@chatsundere/llm-unified';
 import { INTEGRATIONS } from '../integrations/index.js';
 import type { IntegrationContext } from '../integrations/types.js';
+import { type KnowledgeContext, contributeKnowledgeTools } from '../knowledge/query-tool.js';
 import { calculateJs } from './calculate-js.js';
 import type { Tool, ToolResult } from './types.js';
 
 /** Always-on tools (omakase — no per-tool toggle). */
 const STATIC_TOOLS: readonly Tool[] = [calculateJs];
 
-/** The active tool set for this send: static tools plus every tool each
- *  integration contributes for the given context. At zero configured
- *  integrations this is exactly `STATIC_TOOLS`. */
-export function resolveActiveTools(ctx: IntegrationContext): Tool[] {
-  return [...STATIC_TOOLS, ...INTEGRATIONS.flatMap((i) => i.contributesTools(ctx))];
+/** The active tool set for this send: static tools, every integration-contributed
+ *  tool, and the local context tools (knowledgebase) when a context is present. */
+export function resolveActiveTools(
+  ctx: IntegrationContext,
+  knowledge: KnowledgeContext | null = null,
+): Tool[] {
+  return [
+    ...STATIC_TOOLS,
+    ...INTEGRATIONS.flatMap((i) => i.contributesTools(ctx)),
+    ...(knowledge ? contributeKnowledgeTools(knowledge) : []),
+  ];
 }
 
 /** Wire tool definitions for the given active tools. */

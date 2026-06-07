@@ -142,6 +142,7 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   };
@@ -154,6 +155,7 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
     lastMessageAt: 1,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
   };
   await db.personas.add(persona);
   await db.chats.add(chat);

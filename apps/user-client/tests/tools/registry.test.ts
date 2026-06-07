@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
 import type { IntegrationContext } from '../../src/integrations/types.js';
+import type { KnowledgeContext } from '../../src/knowledge/query-tool.js';
 import {
   dispatch,
   resolveActiveTools,
@@ -35,6 +36,29 @@ describe('tool registry composition', () => {
   it('always includes calculate_js and create_artefact, and nothing web-side when dormant', () => {
     const tools = resolveActiveTools(dormantCtx);
     expect(tools.map((t) => t.name)).toEqual(['calculate_js', 'create_artefact']);
+  });
+
+  it('appends query_knowledgebase when a knowledge context has libraries', () => {
+    const knowledge: KnowledgeContext = {
+      libraries: [{ id: 'a', name: 'A', description: '' }],
+      retrieve: async () => [],
+    };
+    const tools = resolveActiveTools(dormantCtx, knowledge);
+    expect(tools.some((t) => t.name === 'query_knowledgebase')).toBe(true);
+  });
+
+  it('omits query_knowledgebase when knowledge is null', () => {
+    const tools = resolveActiveTools(dormantCtx, null);
+    expect(tools.some((t) => t.name === 'query_knowledgebase')).toBe(false);
+  });
+
+  it('omits query_knowledgebase when knowledge has no libraries', () => {
+    const knowledge: KnowledgeContext = {
+      libraries: [],
+      retrieve: async () => [],
+    };
+    const tools = resolveActiveTools(dormantCtx, knowledge);
+    expect(tools.some((t) => t.name === 'query_knowledgebase')).toBe(false);
   });
 
   it('toolDefs projects each tool to its wire definition', () => {

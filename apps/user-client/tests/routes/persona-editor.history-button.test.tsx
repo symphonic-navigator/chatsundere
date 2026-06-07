@@ -70,6 +70,7 @@ const CHAT_FOR_PERSONA = {
   lastMessageAt: 0,
   bookmarkedMessageCount: 0,
   draftInput: '',
+  libraryIds: [],
 };
 
 vi.mock('@chatsundere/llm-unified', () => ({

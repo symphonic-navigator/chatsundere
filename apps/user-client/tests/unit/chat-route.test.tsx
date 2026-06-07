@@ -108,6 +108,7 @@ describe('ChatPage regenerate wiring', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 1,
       updatedAt: 1,
     });
@@ -121,6 +122,7 @@ describe('ChatPage regenerate wiring', () => {
       lastMessageAt: 3,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const userMsgId = uuidv7();
     await db.messages.add({

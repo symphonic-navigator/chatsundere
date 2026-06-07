@@ -13,6 +13,7 @@ function row(over: Partial<ChatRow> = {}): ChatRow {
     lastMessageAt: 0,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
     ...over,
   };
 }

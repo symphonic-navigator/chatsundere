@@ -27,6 +27,7 @@ import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
+import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useRemovePersonaAvatar, useSetPersonaAvatar } from '../../data/persona-avatars.js';
@@ -80,6 +81,7 @@ function defaultDraft(
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
   };
 }
 
@@ -220,7 +222,9 @@ export function PersonaEditor(): JSX.Element {
   useEffect(() => {
     if (!isCreate && persona.data) {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = persona.data;
-      setDraft(rest);
+      // Older persona rows predate libraryIds; default to an empty selection so
+      // the Knowledge section binds to an array rather than undefined.
+      setDraft({ ...rest, libraryIds: rest.libraryIds ?? [] });
     } else if (isCreate && !userModifiedRef.current) {
       // Keep updating from seed until the user makes their first edit. This
       // lets later-loaded data (e.g. the default mindspace accent colour)
@@ -689,6 +693,22 @@ export function PersonaEditor(): JSX.Element {
           Empty = global About Me is used (shown in grey). Fill in to override for this persona
           only.
         </p>
+      </AccordionCard>
+
+      {/* ❻ Knowledge */}
+      <AccordionCard
+        icon="❋"
+        label="Knowledge"
+        meta={
+          draft.libraryIds.length > 0
+            ? `${draft.libraryIds.length} ${draft.libraryIds.length === 1 ? 'library' : 'libraries'}`
+            : 'No libraries assigned'
+        }
+      >
+        <KnowledgeSection
+          selected={draft.libraryIds}
+          onChange={(ids) => patch({ libraryIds: ids })}
+        />
       </AccordionCard>
 
       {/* Delete zone — edit mode only */}

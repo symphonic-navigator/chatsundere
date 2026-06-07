@@ -70,6 +70,7 @@ async function seed() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -94,6 +95,7 @@ async function seed() {
     lastMessageAt: 1717000000000,
     bookmarkedMessageCount: 0,
     draftInput: '',
+    libraryIds: [],
   });
   const chat = (await db.chats.get(chatId)) as ChatRow;
   const persona = (await db.personas.get(personaId)) as PersonaRow;

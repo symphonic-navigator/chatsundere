@@ -81,6 +81,7 @@ describe('PersonaEditor — Font and Voice section', () => {
       'Font and Voice',
       'Mindspace — Override',
       'About Me — Override',
+      'Knowledge',
     ]);
   });
 

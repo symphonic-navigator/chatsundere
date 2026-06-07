@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { uuidv7 } from 'uuidv7';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import {
+  setChatLibraries,
   useChat,
   useCreateChat,
   useDeleteChat,
@@ -46,6 +47,7 @@ async function seedPersonaWithMindspace() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -94,6 +96,7 @@ describe('chat hooks', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const messageId = uuidv7();
     await db.messages.add({
@@ -125,6 +128,7 @@ describe('chat hooks', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useUpdateChat(), { wrapper: wrapper(qc) });
@@ -148,6 +152,7 @@ describe('chat hooks', () => {
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     const messageId = uuidv7();
     await db.messages.add({
@@ -176,6 +181,24 @@ describe('chat hooks', () => {
     const c2 = await db.chats.get(chatId);
     expect(m2?.bookmarked).toBe(false);
     expect(c2?.bookmarkedMessageCount).toBe(0);
+  });
+
+  it('setChatLibraries writes libraryIds and invalidates the chat query', async () => {
+    await _resetClientDataDbForTests({ keepData: false });
+    const db = await openClientDataDb();
+    await db.chats.add({
+      id: 'c1',
+      personaId: 'p1',
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    await setChatLibraries('c1', ['a', 'b']);
+    expect((await db.chats.get('c1'))?.libraryIds).toEqual(['a', 'b']);
   });
 });
 

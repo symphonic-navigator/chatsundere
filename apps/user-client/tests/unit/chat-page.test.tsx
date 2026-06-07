@@ -62,6 +62,7 @@ async function seedPersonaWithMindspace() {
     adultPersona: false,
     chatsundereTonality: true,
     contextWindow: null,
+    libraryIds: [],
     createdAt: 1,
     updatedAt: 1,
   });
@@ -99,6 +100,7 @@ describe('ChatPage', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 1,
       updatedAt: 1,
     });
@@ -127,6 +129,7 @@ describe('ChatPage', () => {
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -177,6 +180,7 @@ describe('ChatPage', () => {
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -235,6 +239,7 @@ describe('ChatPage', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 1,
       updatedAt: 1,
     });
@@ -251,6 +256,7 @@ describe('ChatPage', () => {
       lastMessageAt: 2,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
     await db.messages.add({
       id: uuidv7(),
@@ -285,6 +291,7 @@ describe('ChatPage cleanup', () => {
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

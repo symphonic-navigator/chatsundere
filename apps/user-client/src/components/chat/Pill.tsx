@@ -27,12 +27,18 @@ function labelFor(row: PillRow): string {
   return p?.expression ?? 'voice';
 }
 
-/** Pull the `code` argument out of the stored arguments JSON for display. */
+/**
+ * Pull the primary argument out of the stored arguments JSON for display.
+ * `calculate_js` exposes `code`, `query_knowledgebase` exposes `query`; any other
+ * tool falls back to the raw JSON so its input is still inspectable.
+ */
 function codeOf(p: PillPayloadShape | undefined): string | null {
   if (!p?.argumentsJson) return null;
   try {
-    const parsed = JSON.parse(p.argumentsJson) as { code?: unknown };
-    return typeof parsed.code === 'string' ? parsed.code : p.argumentsJson;
+    const parsed = JSON.parse(p.argumentsJson) as { code?: unknown; query?: unknown };
+    if (typeof parsed.code === 'string') return parsed.code;
+    if (typeof parsed.query === 'string') return parsed.query;
+    return p.argumentsJson;
   } catch {
     return p.argumentsJson;
   }

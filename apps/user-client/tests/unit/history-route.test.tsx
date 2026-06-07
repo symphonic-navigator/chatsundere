@@ -42,6 +42,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 0,
       updatedAt: 0,
     },
@@ -62,6 +63,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       adultPersona: true,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 0,
       updatedAt: 0,
     },
@@ -79,6 +81,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       lastMessageAt: 100,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     },
     {
       id: chatB,
@@ -89,6 +92,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       lastMessageAt: 200,
       bookmarkedMessageCount: 0,
       draftInput: '',
+      libraryIds: [],
     },
   ]);
 
@@ -258,6 +262,7 @@ describe('HistoryPage', () => {
       adultPersona: false,
       chatsundereTonality: true,
       contextWindow: null,
+      libraryIds: [],
       createdAt: 0,
       updatedAt: 0,
     });

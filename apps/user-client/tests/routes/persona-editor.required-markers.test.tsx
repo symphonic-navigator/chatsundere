@@ -100,7 +100,7 @@ describe('PersonaEditor — required-field markers', () => {
     expect(ci?.querySelector('[aria-label="Custom Instructions is required"]')).not.toBeNull();
   });
 
-  it('orders accordion sections as Custom Instructions → Model → Behavior → Font and Voice → Mindspace → About-Me-Override', () => {
+  it('orders accordion sections as Custom Instructions → Model → Behavior → Font and Voice → Mindspace → About-Me-Override → Knowledge', () => {
     setup();
     const headers = Array.from(
       document.querySelectorAll('[data-accordion-card] [data-accordion-label]'),
@@ -112,6 +112,7 @@ describe('PersonaEditor — required-field markers', () => {
       'Font and Voice',
       'Mindspace — Override',
       'About Me — Override',
+      'Knowledge',
     ]);
   });
 });

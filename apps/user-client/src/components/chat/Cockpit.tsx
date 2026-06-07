@@ -12,7 +12,10 @@ import {
   useRenameAttachment,
   useUpdateAttachmentText,
 } from '../../data/attachments.js';
+import { useChat, useSetChatLibraries } from '../../data/chats.js';
+import { useFilteredLibraries } from '../../data/knowledge.js';
 import { QK } from '../../data/queryKeys.js';
+import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
@@ -23,6 +26,7 @@ import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { CockpitMenu } from './CockpitMenu.js';
 import { DualActionBtn } from './DualActionBtn.js';
+import { KnowledgeSheet } from './KnowledgeSheet.js';
 
 interface Props {
   chatId: string;
@@ -87,6 +91,7 @@ async function ingestFiles(
 export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
@@ -180,6 +185,32 @@ export function Cockpit(p: Props): JSX.Element {
     if (willUnpin && p.draftValue.trim().length === 0) {
       setInteractionMode(false);
     }
+  };
+
+  // Knowledge binding: the persona contributes a fixed library set; the chat
+  // adds an ad-hoc set on top. The button shows a count of the effective
+  // (existing + NSFW-allowed) libraries so the user can see at a glance whether
+  // any knowledge is in play for the next send.
+  const { data: allLibraries = [] } = useFilteredLibraries();
+  const { data: chatData } = useChat(p.chatId || null);
+  const setChatLibraries = useSetChatLibraries();
+  // Legacy / partial persona rows may omit libraryIds (Chunk B added the field);
+  // default to an empty set so the cockpit never crashes on iteration.
+  const personaLibraryIds = p.persona.libraryIds ?? [];
+  const chatLibraryIds = chatData?.chat.libraryIds ?? [];
+  const effectiveCount = computeEffectiveLibraries(
+    personaLibraryIds,
+    chatLibraryIds,
+    allLibraries,
+    p.persona.adultPersona,
+  ).length;
+
+  const onToggleChatLibrary = (id: string): void => {
+    if (!p.chatId) return;
+    const next = chatLibraryIds.includes(id)
+      ? chatLibraryIds.filter((l) => l !== id)
+      : [...chatLibraryIds, id];
+    setChatLibraries.mutate({ chatId: p.chatId, libraryIds: next });
   };
 
   return (
@@ -352,6 +383,23 @@ export function Cockpit(p: Props): JSX.Element {
         ) : null}
         <button
           type="button"
+          className={`cockpit-icon-btn${effectiveCount > 0 ? ' active' : ''}`}
+          data-control="knowledge"
+          aria-label="Knowledge for this chat"
+          aria-expanded={knowledgeOpen}
+          onClick={() => setKnowledgeOpen((v) => !v)}
+        >
+          <span className="cockpit-glyph" aria-hidden="true">
+            ❖
+          </span>
+          {effectiveCount > 0 ? (
+            <span className="cockpit-control-count" aria-hidden="true">
+              {effectiveCount}
+            </span>
+          ) : null}
+        </button>
+        <button
+          type="button"
           className={`cockpit-icon-btn${isPinned ? ' active' : ''}`}
           data-control="pin"
           aria-label={isPinned ? 'Unpin cockpit' : 'Pin cockpit'}
@@ -395,6 +443,15 @@ export function Cockpit(p: Props): JSX.Element {
         <div className="cockpit-reject" role="alert" onAnimationEnd={() => setReject(null)}>
           {reject}
         </div>
+      )}
+      {knowledgeOpen && (
+        <KnowledgeSheet
+          personaLibraryIds={personaLibraryIds}
+          chatLibraryIds={chatLibraryIds}
+          onToggleChat={onToggleChatLibrary}
+          canBindChat={!!p.chatId}
+          onClose={() => setKnowledgeOpen(false)}
+        />
       )}
       {lightboxIndex !== null && (
         <Lightbox
