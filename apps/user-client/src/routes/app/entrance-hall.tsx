@@ -52,7 +52,7 @@ function RoomTile({ label, icon, meta, to, disabled, tooltip }: RoomTileProps) {
   );
 }
 
-/** Landing surface for /app — greeting, optional continue-card, and six room tiles. */
+/** Landing surface for /app — greeting, optional continue-card, and eight room tiles. */
 export function EntranceHall(): JSX.Element {
   const navigate = useNavigate();
   const displayName = useDisplayName();
@@ -126,6 +126,20 @@ export function EntranceHall(): JSX.Element {
           icon="⬡"
           meta={artefactCount === 0 ? 'empty' : `${artefactCount} artefacts`}
           to="/app/treasury"
+        />
+        <RoomTile
+          label="My Knowledge"
+          icon="❖"
+          meta="Coming with Block 5"
+          disabled
+          tooltip="Coming with Block 5"
+        />
+        <RoomTile
+          label="My Integrations"
+          icon="⊞"
+          meta="Coming soon"
+          disabled
+          tooltip="Coming soon"
         />
         <RoomTile
           label="My Settings"

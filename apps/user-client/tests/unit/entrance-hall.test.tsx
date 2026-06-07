@@ -39,7 +39,7 @@ describe('EntranceHall', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('renders the greeting + five room tiles', async () => {
+  it('renders the greeting + the room tiles', async () => {
     wrap('/app');
     await waitFor(() => {
       expect(screen.getByText(/welcome back/i)).toBeInTheDocument();
@@ -47,8 +47,18 @@ describe('EntranceHall', () => {
       expect(screen.getByText('My Projects')).toBeInTheDocument();
       expect(screen.getByText('My History')).toBeInTheDocument();
       expect(screen.getByText('My Treasury')).toBeInTheDocument();
+      expect(screen.getByText('My Knowledge')).toBeInTheDocument();
+      expect(screen.getByText('My Integrations')).toBeInTheDocument();
       expect(screen.getByText('My Settings')).toBeInTheDocument();
     });
+  });
+
+  it('renders Knowledge + Integrations as disabled stubs', async () => {
+    wrap('/app');
+    for (const label of ['My Knowledge', 'My Integrations']) {
+      const tile = await screen.findByText(label);
+      expect(tile.closest('[aria-disabled="true"]')).not.toBeNull();
+    }
   });
 
   it('does NOT render a "My Bookmarks" tile', async () => {

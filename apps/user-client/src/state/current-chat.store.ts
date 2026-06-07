@@ -19,9 +19,6 @@ interface CurrentChatStore {
    *  AdultModeToggle. Shown otherwise (`null` outside chats, `true` for an
    *  adult persona where the mode indicator is still wanted). */
   chatPersonaIsAdult: boolean | null;
-  /** Reading-mode floating tool-strip: separate from `isPinned` (the cockpit). */
-  isToolStripExpanded: boolean;
-  isToolStripPinned: boolean;
   reasoning: ReasoningState;
   webSearchTierId: string | null;
   /** Artefact lightbox: the id of the artefact currently open, or null. */
@@ -44,10 +41,6 @@ interface CurrentChatStore {
   setInputFocused: (focused: boolean) => void;
   setChatPersonaIsAdult: (isAdult: boolean | null) => void;
   togglePin: () => void;
-  setToolStripExpanded: (open: boolean) => void;
-  toggleToolStripPin: () => void;
-  /** Collapse the strip unless the user pinned it open. */
-  collapseToolStripIfUnpinned: () => void;
   setReasoning: (r: ReasoningState) => void;
   setWebSearchTierId: (id: string | null) => void;
   /** Open an artefact in the lightbox; closes the sidebar sheet. */
@@ -71,9 +64,6 @@ type InitialState = Omit<
   | 'setInputFocused'
   | 'setChatPersonaIsAdult'
   | 'togglePin'
-  | 'setToolStripExpanded'
-  | 'toggleToolStripPin'
-  | 'collapseToolStripIfUnpinned'
   | 'setReasoning'
   | 'setWebSearchTierId'
   | 'openArtefact'
@@ -91,8 +81,6 @@ const initial: InitialState = {
   isPinned: false,
   inputFocused: false,
   chatPersonaIsAdult: null,
-  isToolStripExpanded: false,
-  isToolStripPinned: false,
   reasoning: { kind: 'off' },
   webSearchTierId: null,
   openArtefactId: null,
@@ -123,10 +111,6 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   setInputFocused: (focused) => set({ inputFocused: focused }),
   setChatPersonaIsAdult: (isAdult) => set({ chatPersonaIsAdult: isAdult }),
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),
-  setToolStripExpanded: (open) => set({ isToolStripExpanded: open }),
-  toggleToolStripPin: () => set((s) => ({ isToolStripPinned: !s.isToolStripPinned })),
-  collapseToolStripIfUnpinned: () =>
-    set((s) => (s.isToolStripPinned ? {} : { isToolStripExpanded: false })),
   setReasoning: (r) => set({ reasoning: r }),
   setWebSearchTierId: (id) => set({ webSearchTierId: id }),
   openArtefact: (id) => set({ openArtefactId: id, isArtefactSheetOpen: false }),

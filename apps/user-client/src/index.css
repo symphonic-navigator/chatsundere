@@ -1695,58 +1695,6 @@ h1 {
 
 /* --- Bookmarks & table-of-contents --------------------------------------- */
 
-/* Reading-mode floating tool-strip — ghostly, top-right */
-.reading-tool-strip {
-  /* Absolute (not fixed) so it binds to .chat-page — viewport-fixed gets
-   *  trapped/clipped by the mindspace transform layers' containing-block,
-   *  the exact hazard documented for the bottom affordance above (§"Bottom
-   *  Affordance"). .chat-page is itself position:fixed, so it is a clean
-   *  containing block for this absolute child; the strip pins to the
-   *  top-right of the chat column and does not scroll with the stream. */
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.4rem;
-  /* Ghostly, but discoverable — 0.45 was too faint to find as the primary
-   *  navigation entry. Soft at rest, full on hover/expand. */
-  opacity: 0.72;
-  transition: opacity 160ms ease;
-}
-.reading-tool-strip:hover,
-.reading-tool-strip[data-expanded] {
-  /* Stay translucent when expanded — fully opaque felt out of character with
-   *  the ghostly resting state. Still a touch more present than at rest. */
-  opacity: 0.88;
-}
-.tool-strip-toggle,
-.tool-strip-btn {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--color-ink, #1a1a1a) 88%, transparent);
-  color: var(--color-paper, #e6e6e6);
-  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 22%, transparent);
-  backdrop-filter: blur(4px);
-}
-.tool-strip-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.tool-strip-btn[data-active] {
-  color: var(--color-accent, #c9a227);
-  /* Emoji glyphs (e.g. the pin) ignore `color`, so signal the active state
-   *  with a background + border tint that reads regardless of glyph. */
-  background: color-mix(in srgb, var(--color-accent, #c9a227) 30%, var(--color-ink, #1a1a1a));
-  border-color: color-mix(in srgb, var(--color-accent, #c9a227) 60%, transparent);
-}
-
 /* Inline rename field — shared by the ToC sheet and the global bookmarks
  *  list. Without explicit styling the input was invisible on the dark sheet. */
 .toc-entry-input {
@@ -1766,8 +1714,8 @@ h1 {
 
 /* ToC overlay sheet */
 .toc-sheet-root {
-  /* Absolute, bound to .chat-page (same containing-block reason as
-   *  .reading-tool-strip) — viewport-fixed would be clipped by the mindspace
+  /* Absolute, bound to .chat-page (which is itself position:fixed, so a clean
+   *  containing block) — viewport-fixed would be clipped by the mindspace
    *  transform layers. Covers the chat column, which is the whole surface on
    *  mobile. */
   position: absolute;

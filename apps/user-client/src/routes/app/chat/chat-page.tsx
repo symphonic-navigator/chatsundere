@@ -13,7 +13,6 @@ import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { DimOverlay } from '../../../components/chat/DimOverlay.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
-import { ReadingToolStrip } from '../../../components/chat/ReadingToolStrip.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { TocSheet } from '../../../components/chat/TocSheet.js';
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
@@ -480,13 +479,6 @@ export function ChatPage(): JSX.Element {
             setAutoFollow(true);
             setInteractionMode(true);
           }}
-        />
-      ) : null}
-
-      {!isInteractionMode && hasMessages ? (
-        <ReadingToolStrip
-          onOpenToc={() => setTocOpen(true)}
-          onOpenArtefacts={() => setArtefactSheetOpen(true)}
         />
       ) : null}
 
