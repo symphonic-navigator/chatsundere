@@ -16,7 +16,65 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-07 — **Knowledgebase Chunk B (Retrieval) landed**
+**Last updated:** 2026-06-07 — **Knowledgebase Chunk B2 (Attach document)
+landed** (squashed on master `88f5c7d`, **NOT pushed** — awaiting Chris's device
+test; Liz pushes on his word). Block-5 feature (v0.2.0), client-only.
+Brainstormed end-to-end with Chris (visual companion for the picker layout), built
+**subagent-driven** in an isolated worktree (12 TDD tasks, per-task spec+quality
+review + a final **opus** holistic review = **READY TO SQUASH**, no
+critical/important). Attach a knowledge-library document's **full** content to a
+message as a first-class attachment — the deliberate counterpart to retrieval's
+snippets (Chris: *"über den Tellerrand rausschauen"* + *"ich will das ganze
+Dokument da jetzt drinnen haben"*). **Equivalent to file upload** (one attachment
+model, not two): same lightbox, rename, edit, in-stream rendering. **What landed:**
+(1) **Copy-on-write** — a library attachment is a normal `kind:'text'`,
+`origin:'library'` `AttachmentRow` carrying `kbRef:{libraryId,documentId}` and **no
+copied `text`**; the invariant is **`text===undefined` ⇒ live reference**
+(content read live), **`text` set ⇒ materialised**. Rename sets only `fileName`
+(stays a reference); editing content materialises. (2) **Snapshot-on-send**
+(`snapshotPendingDocumentReferences`) freezes the live content into the row **inside
+the send transaction, before the bind**, so the existing wire path
+(`resolveAttachmentParts` reads `a.text ?? ''`) is unchanged and the sent message is
+**decoupled** from later source edits/deletes (WYSIWYG — Chris chose snapshot-on-send
+over a persistent reference). (3) **Defensive materialisation**: deleting the source
+document/library freezes any pending reference first. (4) **DocumentPicker** — a new
+accordion-tree bottom-sheet (libraries expand in place — Chris dislikes drill-down,
+see [[feedback_inline_over_hidden_navigation]]; **not** the ND-calm choice but his
+call), **multi-select** across **all** libraries, **NSFW-gated** (`useFilteredLibraries`),
+offered as a **third `(+)` source** "Attach from knowledge" (disabled-with-tooltip
+when no libraries). **Embedding status is irrelevant** — any document is attachable
+(attach uses raw content, not vectors). (5) **Lightbox** previews the **live**
+content for an unmaterialised reference (`usePendingDocumentContents` → `effectiveText`)
+and shows a **provenance** line (library › doc); `editSource` is gated until the live
+content has loaded (closes a data-loss footgun the opus review found). **Adult-mode
+default is `nsfw`** (a surprise a real test run surfaced — the picker NSFW test forces
+SFW explicitly). **Not a Larissa change** (client-only; no auth/sync/proxy/crypto;
+**no new network egress** — the content rides the existing outbound text-attachment
+wire path). **Squash hygiene:** full-tree capture verified (`git diff master..branch`
+empty, 18=18 files) + typecheck on master before worktree cleanup
+([[feedback_verify_worktree_squash_captured_full_tree]]). Verification (on master
+after squash): `pnpm typecheck` **14/14**; user-client vitest **1060 pass / 8 fail**
+(the unchanged `cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline,
+**verified byte-identical to master + failing identically on master**); `pnpm run
+build` **9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-07-knowledgebase-chunk-b2-attach-document-design]],
+[[../superpowers/plans/2026-06-07-knowledgebase-chunk-b2-attach-document]].
+**Deferred (logged, all Minor):** invalidate the reference-preview query on source
+edit (preview-only staleness), wrap `deleteLibraryCascade` in one transaction,
+`aria-haspopup` on the cockpit menu triggers ([[insights/follow-ups-index]]).
+**Device test (spec §10):** with a SFW library (several docs) + an adult library,
+`(+)` → Attach from knowledge → the accordion lists all (adult hidden in a SFW chat) →
+expand two, multi-select across both, attach → they appear like uploads → tap one →
+lightbox shows the **live** Markdown + provenance → rename one, edit another (add a
+note) → send → they render under the user message, the reply reflects the full
+content → then edit/delete the source documents in My Knowledge: the sent message is
+unchanged → attach a doc then delete its source library while still pending: the
+attachment survives → with **no** libraries the menu item is disabled with the
+tooltip. **Next:** Chris device-tests → Liz pushes the master backlog on his word;
+then *Chunk C* (Lorebooks / phrase-triggered injection, reuse the `TagEditor` UX) per
+[[ROADMAP]].
+
+**Earlier 2026-06-07 — Knowledgebase Chunk B (Retrieval) landed**
 (squashed on master `8d3e496`, **pushed** 2026-06-07 with the Chunk-A backlog
 `3548f87..7026899`; **device-tested by Chris** — Firsavaai/
 Farbkraft retrieval, the pill, locking, cockpit temporary (un)assignment, and delete
