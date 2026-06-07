@@ -16,7 +16,64 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-07 — **Knowledgebase foundation (Chunk A) landed +
+**Last updated:** 2026-06-07 — **Knowledgebase Chunk B (Retrieval) landed**
+(squashed on master `8d3e496`, NOT pushed; awaiting Chris's device test).
+Block-5 feature (v0.2.0), brainstormed end-to-end with Chris, built
+**subagent-driven** in an isolated worktree (16 TDD tasks, per-task spec+quality
+review + a final **opus** holistic review = READY TO SQUASH; the opus review
+confirmed end-to-end wiring, scoping, and NSFW gating, flagging only two cosmetic
+minors). A companion can now **use** the knowledgebase: the **`query_knowledgebase`**
+tool searches **only the libraries assigned to the persona** (∪ ad-hoc chat
+libraries), NSFW-filtered, and the model is told what's available via a **Band-2
+awareness segment** (the answer to "the tool gets called too rarely" — the model
+*sees* its libraries). **What landed:** (1) a **third tool category — context
+tools** in `resolveActiveTools(ctx, knowledge)`, beside static tools and provider
+integrations; `query_knowledgebase` is **purely local** (no offering/credential/
+`ServiceKind`), so it deliberately does NOT fit the `Integration` abstraction.
+(2) **Dexie v15**: `libraryIds: string[]` on personas + chats; `deleteLibraryCascade`
+prunes dangling bindings; `useBranchChat` inherits the parent's libraries. (3)
+**Retrieval is fully on-device** (`knowledge/retrieval.ts` + `knowledge-context.ts`):
+embed the query once (`kind:'query'`), one **filtered** `store.query` per assigned
+library (`tags.libraryId` — never the whole collection), merge → global topK
+(defaults topK 6 / minScore 0.35 / candidateK 24, device-tunable), provenance-headed
+passages (library › document › heading). **No new network egress.** (4) The
+send-path (`send-message.ts`) builds a `KnowledgeContext` per send; the stream-manager
+derives the tool + awareness **gated on `toolsActive && knowledge`** and threads both
+into `buildPrompt`. (5) UI: a **Knowledge** section in the persona-editor (assign
+libraries, NSFW-filtered) + a **cockpit knowledge sheet** (persona libraries
+**locked-on** for transparency, chat additions toggleable, **disabled-with-tooltip
+until the chat exists** per disabled-over-hidden); retrieval surfaces in the tool
+pill (query + passages). **Not a Larissa change** (client-only + one `llm-unified`
+prompt segment; no auth/sync/proxy/crypto, no new egress — confirmed by the opus
+review). **Process note worth keeping:** the **full** vitest (T16) caught a real
+regression the per-task UI review missed — T14 only ran `tests/components/chat/`, so
+two `tests/unit/cockpit-*` files (persona fixtures predating `libraryIds`,
+cast-hidden so typecheck stayed green) crashed the Cockpit via
+`computeEffectiveLibraries(undefined)`; fixed with a `?? []` guard + fixture updates
+before squash. Reinforces [[feedback_per_task_review_runs_full_suite]]. **Squash
+hygiene note:** during the run master's ref drifted to carry the 15 individual
+task-commits (an EnterWorktree/amend interaction); reset master to the clean
+base `4eb72e7` and re-squashed from the verified branch tip, confirming
+`git diff master..branch` empty (full-tree capture) + typecheck before worktree
+cleanup ([[feedback_verify_worktree_squash_captured_full_tree]]). Verification
+(on master after squash): `pnpm typecheck` **14/14**; user-client vitest **1041
+pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline, **verified identical on master**); llm-unified
+`bun test` **280/0**; `pnpm run build` **9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-07-knowledgebase-chunk-b-retrieval-design]],
+[[../superpowers/plans/2026-06-07-knowledgebase-chunk-b-retrieval]]. **Deferred
+(logged):** *attach document* (its own UX session — Chris has ideas), Lorebooks /
+phrase-triggered injection (**Chunk C**), a `tags`-set-membership filter in
+`packages/embeddings` (replace per-library queries with one scored scan), and the
+cockpit effective-count double-NSFW-filter display nuance
+([[insights/follow-ups-index]]). **Device-test reuses the Chunk-A model** already
+provisioned at `/model/` (no new setup). **Next:** Chris device-tests (assign a
+library to a persona → ask a covered question → the model calls `query_knowledgebase`,
+a pill appears, it answers from the passage; expand the pill; cockpit ad-hoc toggle;
+SFW hides NSFW libraries; delete a bound library) → Liz pushes the master backlog on
+Chris's word; then *attach document* or Chunk C per [[ROADMAP]].
+
+**Earlier 2026-06-07 — Knowledgebase foundation (Chunk A) landed +
 DEVICE-CONFIRMED by Chris** (squashed on master `0ef499f`, NOT pushed; embed +
 retrieval both working on device). **Device test surfaced four integration gaps
 the plan/spec/holistic-review all missed — only a real run finds these** (fixes
