@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAllArtefactCount } from '../../data/artefacts.js';
 import { useChats } from '../../data/chats.js';
+import { useFilteredLibraries } from '../../data/knowledge.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
@@ -81,6 +82,7 @@ export function EntranceHall(): JSX.Element {
   const personaCount = personas.data?.length ?? 0;
   const providerCount = (providers.data ?? []).filter((p) => p.enabled).length;
   const artefactCount = useAllArtefactCount().data ?? 0;
+  const libraryCount = useFilteredLibraries().data?.length ?? 0;
   return (
     <section className="flex min-h-[80dvh] flex-col gap-6 px-4 pb-12 pt-6">
       <div className="text-center">
@@ -130,9 +132,8 @@ export function EntranceHall(): JSX.Element {
         <RoomTile
           label="My Knowledge"
           icon="❖"
-          meta="Coming with Block 5"
-          disabled
-          tooltip="Coming with Block 5"
+          meta={libraryCount === 0 ? 'empty' : `${libraryCount} libraries`}
+          to="/app/knowledge"
         />
         <RoomTile
           label="My Integrations"

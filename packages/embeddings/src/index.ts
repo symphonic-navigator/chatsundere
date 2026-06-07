@@ -43,3 +43,6 @@ export {
   serialise,
 } from './store/codec.js';
 export { cosineSimilarity, dot, l2Norm } from './lib/similarity.js';
+
+// Chunking — document text → embeddable chunks
+export { type Chunk, type ChunkOptions, chunkMarkdown, estimateTokens } from './chunk/chunker.js';

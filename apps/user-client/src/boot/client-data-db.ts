@@ -205,6 +205,35 @@ export interface PersonaAvatarRow {
   updatedAt: number;
 }
 
+// ===== Knowledgebase (v14) =====
+
+/** A library is a named container of documents. */
+export interface LibraryRow {
+  id: string;
+  name: string;
+  description: string;
+  nsfw: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type EmbeddingStatus = 'pending' | 'embedding' | 'ready' | 'failed';
+
+/** A document belongs to exactly one library; `content` is the source of truth. */
+export interface DocumentRow {
+  id: string;
+  libraryId: string;
+  title: string;
+  content: string;
+  embeddingStatus: EmbeddingStatus;
+  embeddingError: string | null;
+  chunkCount: number;
+  /** Reserved for Chunk C (phrase-triggered injection). No UI in Chunk A. */
+  triggerPhrases: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -218,6 +247,8 @@ class ClientDataDb extends Dexie {
   personaAvatars!: Table<PersonaAvatarRow, string>;
   attachments!: Table<AttachmentRow, string>;
   artefacts!: Table<ArtefactRow, string>;
+  libraries!: Table<LibraryRow, string>;
+  documents!: Table<DocumentRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -467,6 +498,15 @@ class ClientDataDb extends Dexie {
     // by chat, persona, and favourite status.
     this.version(13).stores({
       artefacts: 'id, chatId, personaId, favourite, [chatId+createdAt]',
+    });
+
+    // Version 14 — knowledgebase foundation. Two new tables: `libraries`
+    // (named document containers) and `documents` (Markdown content + embedding
+    // status). Chunk vectors live in the separate embeddings vector store, not
+    // here. Fresh tables → no upgrade callback.
+    this.version(14).stores({
+      libraries: 'id, name, nsfw',
+      documents: 'id, libraryId, embeddingStatus, [libraryId+createdAt]',
     });
   }
 }

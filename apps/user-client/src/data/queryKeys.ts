@@ -21,4 +21,9 @@ export const QK = {
   chatArtefacts: (chatId: string) => ['artefacts', 'chat', chatId] as const,
   artefact: (id: string) => ['artefacts', 'item', id] as const,
   allArtefacts: ['artefacts', 'all'] as const,
+  libraries: ['libraries'] as const,
+  library: (id: string) => ['libraries', id] as const,
+  documents: (libraryId: string) => ['documents', 'library', libraryId] as const,
+  document: (id: string) => ['documents', 'item', id] as const,
+  documentCounts: ['documents', 'counts'] as const,
 };

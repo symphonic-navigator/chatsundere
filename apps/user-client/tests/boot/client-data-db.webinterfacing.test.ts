@@ -16,6 +16,6 @@ describe('settings.webInterfacing (Dexie v11)', () => {
 
   it('is at version 11', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(13);
+    expect(db.verno).toBe(14);
   });
 });

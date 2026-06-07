@@ -9,6 +9,8 @@ import { ChatPage } from './routes/app/chat/chat-page.js';
 import { Circle } from './routes/app/circle.js';
 import { EntranceHall } from './routes/app/entrance-hall.js';
 import { HistoryPage } from './routes/app/history.js';
+import { KnowledgeLibrary } from './routes/app/knowledge-library.js';
+import { KnowledgeList } from './routes/app/knowledge.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { Treasury } from './routes/app/treasury.js';
@@ -96,6 +98,8 @@ export function App() {
                   <Route path="/app/chat/:chatId" element={<ChatPage />} />
                   <Route path="/app/history" element={<HistoryPage />} />
                   <Route path="/app/treasury" element={<Treasury />} />
+                  <Route path="/app/knowledge" element={<KnowledgeList />} />
+                  <Route path="/app/knowledge/:libraryId" element={<KnowledgeLibrary />} />
                   <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />

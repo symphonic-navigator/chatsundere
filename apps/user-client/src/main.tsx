@@ -1,11 +1,12 @@
-import { attachConnectivityListeners } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
+import { attachConnectivityListeners } from '@chatsundere/ui-shared';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { openDb } from './boot/open-db.js';
 import { reconcileStaging } from './boot/reconcile-staging.js';
 import { checkRuntime } from './boot/runtime-check.js';
+import { startKnowledgeIngestion } from './knowledge/start-ingestion.js';
 import { useBootStore } from './state/boot.store.js';
 import './index.css';
 
@@ -38,6 +39,7 @@ async function boot() {
     return;
   }
   attachConnectivityListeners();
+  void startKnowledgeIngestion();
   const staging = await reconcileStaging();
   useBootStore.getState().set({ kind: 'ready', staging });
   render();

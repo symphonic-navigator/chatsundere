@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@chatsundere/crypto": "workspace:^",
+    "@chatsundere/embeddings": "workspace:^",
     "@chatsundere/llm-unified": "workspace:^",
     "@chatsundere/shared-types": "workspace:^",
     "@chatsundere/ui-shared": "workspace:^",

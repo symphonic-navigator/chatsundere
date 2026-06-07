@@ -53,12 +53,12 @@ describe('EntranceHall', () => {
     });
   });
 
-  it('renders Knowledge + Integrations as disabled stubs', async () => {
+  it('renders Integrations as a disabled stub and Knowledge as a live tile', async () => {
     wrap('/app');
-    for (const label of ['My Knowledge', 'My Integrations']) {
-      const tile = await screen.findByText(label);
-      expect(tile.closest('[aria-disabled="true"]')).not.toBeNull();
-    }
+    const integrations = await screen.findByText('My Integrations');
+    expect(integrations.closest('[aria-disabled="true"]')).not.toBeNull();
+    const knowledge = await screen.findByText('My Knowledge');
+    expect(knowledge.closest('[aria-disabled="true"]')).toBeNull();
   });
 
   it('does NOT render a "My Bookmarks" tile', async () => {

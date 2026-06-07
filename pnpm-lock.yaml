@@ -207,6 +207,9 @@ importers:
       '@chatsundere/crypto':
         specifier: workspace:^
         version: link:../../packages/crypto
+      '@chatsundere/embeddings':
+        specifier: workspace:^
+        version: link:../../packages/embeddings
       '@chatsundere/llm-unified':
         specifier: workspace:^
         version: link:../../packages/llm-unified

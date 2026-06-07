@@ -3565,3 +3565,109 @@ h1 {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ===== Generic sheet primitives (bottom-sheet pattern) =================== */
+
+.sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  border: 0;
+}
+.sheet-panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 32rem;
+  background: var(--color-ink, #1a1a1a);
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
+  border-bottom: 0;
+  border-radius: 0.75rem 0.75rem 0 0;
+  padding: 1rem;
+  color: inherit;
+}
+.sheet-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.sheet-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ===== Knowledgebase (Chunk A — minimal mechanics-first styling) ========= */
+
+.knowledge-new-btn,
+.knowledge-back {
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 22%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  background: color-mix(in srgb, var(--color-ink, #1a1a1a) 70%, transparent);
+}
+.knowledge-library-row,
+.knowledge-document-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+.knowledge-library-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+.doc-status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.doc-status[data-status="failed"] {
+  color: #ff8c8c;
+}
+.doc-status[data-status="ready"] {
+  color: var(--color-accent, #c9a227);
+}
+.doc-status-retry {
+  margin-left: 0.4rem;
+  text-decoration: underline;
+}
+.model-download-banner {
+  border: 1px solid color-mix(in srgb, var(--color-accent, #c9a227) 40%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 12%, var(--color-ink, #1a1a1a));
+}
+.add-document-menu {
+  display: flex;
+  flex-direction: column;
+}
+.knowledge-sheet-root .sheet-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}

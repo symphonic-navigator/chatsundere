@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import {
+  type EmbeddingEngine,
+  VECTORS_STORE_SCHEMA,
+  type VectorRow,
+  type VectorStore,
+  createEmbeddingEngine,
+  createVectorStore,
+} from '@chatsundere/embeddings';
+import Dexie, { type Table } from 'dexie';
+import { useModelProgressStore } from '../state/model-progress.store.js';
+
+/** The single vector-store collection for all knowledgebase chunks. */
+export const KNOWLEDGE_COLLECTION = 'knowledge';
+
+/** The subset of VectorStore the knowledge data layer + queue depend on. */
+export type VectorStoreLike = Pick<VectorStore, 'upsert' | 'deleteWhere' | 'scan'>;
+
+const VECTORS_DB_NAME = 'chatsundere-knowledge-vectors';
+
+class KnowledgeVectorsDb extends Dexie {
+  vectors!: Table<VectorRow, string>;
+  constructor() {
+    super(VECTORS_DB_NAME);
+    this.version(1).stores({ vectors: VECTORS_STORE_SCHEMA });
+  }
+}
+
+let dbHandle: KnowledgeVectorsDb | null = null;
+let storeHandle: VectorStore | null = null;
+let enginePromise: Promise<EmbeddingEngine> | null = null;
+
+function db(): KnowledgeVectorsDb {
+  if (!dbHandle) dbHandle = new KnowledgeVectorsDb();
+  return dbHandle;
+}
+
+/**
+ * The shared knowledge vector store. Engine-less: Chunk A only upserts/deletes/
+ * scans (we embed manually during ingestion); text queries (Chunk B) pass a
+ * pre-embedded vector, so the store never needs the engine itself.
+ */
+export function getKnowledgeVectorStore(): VectorStore {
+  if (!storeHandle) storeHandle = createVectorStore({ db: db(), table: db().vectors });
+  return storeHandle;
+}
+
+/**
+ * The shared on-device embedding engine, created once. Surfaces load progress
+ * to the model-progress store so the UI can show a one-time download banner.
+ */
+export function getEmbeddingEngine(): Promise<EmbeddingEngine> {
+  if (!enginePromise) {
+    const progress = useModelProgressStore.getState();
+    progress.setLoading(true);
+    enginePromise = createEmbeddingEngine({
+      onProgress: (data: unknown) => {
+        const d = data as { progress?: number };
+        if (typeof d.progress === 'number') progress.setProgress(d.progress / 100);
+      },
+    }).then((engine) => {
+      useModelProgressStore.getState().setReady();
+      return engine;
+    });
+  }
+  return enginePromise;
+}
+
+/** Test-only: drop the in-memory singletons and delete the IndexedDB database. */
+export async function _resetKnowledgeVectorsForTests(): Promise<void> {
+  if (dbHandle) {
+    dbHandle.close();
+    await dbHandle.delete();
+  }
+  dbHandle = null;
+  storeHandle = null;
+  enginePromise = null;
+}
