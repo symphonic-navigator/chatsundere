@@ -9,6 +9,7 @@ import {
   getKnowledgeVectorStore,
 } from '../boot/knowledge-vectors-db.js';
 import { enqueueDocument } from '../knowledge/start-ingestion.js';
+import { materialiseReferencesForDocument } from './attachments.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
 
@@ -46,11 +47,13 @@ export async function deleteDocumentVectors(
   });
 }
 
-/** Delete a document row and its vectors. */
+/** Delete a document row and its vectors, materialising any pending references first. */
 export async function deleteDocumentCascade(
   id: string,
   store: VectorStoreLike = getKnowledgeVectorStore(),
 ): Promise<void> {
+  const doc = await getClientDataDb().documents.get(id);
+  if (doc) await materialiseReferencesForDocument(id, doc.content);
   await deleteDocumentVectors(id, store);
   await getClientDataDb().documents.delete(id);
 }
@@ -63,7 +66,10 @@ export async function deleteLibraryCascade(
 ): Promise<void> {
   const db = getClientDataDb();
   const docs = await db.documents.where('libraryId').equals(id).toArray();
-  for (const doc of docs) await deleteDocumentVectors(doc.id, store);
+  for (const doc of docs) {
+    await materialiseReferencesForDocument(doc.id, doc.content);
+    await deleteDocumentVectors(doc.id, store);
+  }
   await db.documents.where('libraryId').equals(id).delete();
   await db.libraries.delete(id);
   // Prune dangling bindings.

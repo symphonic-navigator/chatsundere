@@ -8,6 +8,7 @@ import type { PersonaRow } from '../../boot/client-data-db.js';
 import {
   addAttachment,
   usePendingAttachments,
+  usePendingDocumentContents,
   useRemoveAttachment,
   useRenameAttachment,
   useUpdateAttachmentText,
@@ -45,6 +46,8 @@ interface Props {
   toolsAvailable?: boolean;
   /** Open the Treasury attach picker (omitted → (+) opens the file dialog directly). */
   onAttachFromTreasury?: () => void;
+  /** Open the knowledge document picker (omitted → no "Attach from knowledge" item). */
+  onAttachFromLibrary?: () => void;
 }
 
 /**
@@ -137,10 +140,6 @@ export function Cockpit(p: Props): JSX.Element {
     },
     [objectUrls],
   );
-  const items = pending.map((row) =>
-    attachmentToViewable(row, { pending: true, objectUrl: objectUrls.get(row.id) }),
-  );
-
   // Close the menu when the user clicks anywhere outside the wrap, or presses
   // Escape. Without this the menu had no close path: the toggle button only
   // toggled by re-clicking the same icon, and clicks on chips left it open.
@@ -213,6 +212,27 @@ export function Cockpit(p: Props): JSX.Element {
     setChatLibraries.mutate({ chatId: p.chatId, libraryIds: next });
   };
 
+  // Live content for copy-on-write document references (preview before send), plus a
+  // provenance label sourced from the (already NSFW-filtered) library list.
+  const { data: refContents } = usePendingDocumentContents(pending);
+  const libraryNameById = useMemo(
+    () => new Map(allLibraries.map((l) => [l.id, l.name])),
+    [allLibraries],
+  );
+  const items = pending.map((row) => {
+    const provenance = row.kbRef
+      ? `${libraryNameById.get(row.kbRef.libraryId) ?? 'Library'} › ${row.fileName.replace(/\.md$/, '')}`
+      : undefined;
+    return attachmentToViewable(row, {
+      pending: true,
+      objectUrl: objectUrls.get(row.id),
+      effectiveText: refContents?.get(row.id),
+      provenance,
+    });
+  });
+
+  const hasSourceMenu = !!p.onAttachFromTreasury || !!p.onAttachFromLibrary;
+
   return (
     <div
       className="cockpit"
@@ -260,9 +280,9 @@ export function Cockpit(p: Props): JSX.Element {
             data-control="plus"
             title="Add attachment"
             aria-label="Add attachment"
-            aria-expanded={p.onAttachFromTreasury ? sourceMenuOpen : undefined}
+            aria-expanded={hasSourceMenu ? sourceMenuOpen : undefined}
             onClick={() => {
-              if (p.onAttachFromTreasury) setSourceMenuOpen((v) => !v);
+              if (hasSourceMenu) setSourceMenuOpen((v) => !v);
               else fileInputRef.current?.click();
             }}
           >
@@ -278,7 +298,7 @@ export function Cockpit(p: Props): JSX.Element {
               <path d="M12 5v14M5 12h14" />
             </svg>
           </button>
-          {sourceMenuOpen && p.onAttachFromTreasury ? (
+          {sourceMenuOpen && hasSourceMenu ? (
             <div className="cockpit-menu" role="menu">
               <button
                 type="button"
@@ -292,18 +312,36 @@ export function Cockpit(p: Props): JSX.Element {
               >
                 <span aria-hidden>📎</span> Upload from device
               </button>
-              <button
-                type="button"
-                className="cockpit-menu-item"
-                role="menuitem"
-                data-source="treasury"
-                onClick={() => {
-                  setSourceMenuOpen(false);
-                  p.onAttachFromTreasury?.();
-                }}
-              >
-                <span aria-hidden>⬡</span> Attach from Treasury
-              </button>
+              {p.onAttachFromTreasury ? (
+                <button
+                  type="button"
+                  className="cockpit-menu-item"
+                  role="menuitem"
+                  data-source="treasury"
+                  onClick={() => {
+                    setSourceMenuOpen(false);
+                    p.onAttachFromTreasury?.();
+                  }}
+                >
+                  <span aria-hidden>⬡</span> Attach from Treasury
+                </button>
+              ) : null}
+              {p.onAttachFromLibrary ? (
+                <button
+                  type="button"
+                  className="cockpit-menu-item"
+                  role="menuitem"
+                  data-source="library"
+                  disabled={allLibraries.length === 0}
+                  title={allLibraries.length === 0 ? 'Create a library first' : undefined}
+                  onClick={() => {
+                    setSourceMenuOpen(false);
+                    p.onAttachFromLibrary?.();
+                  }}
+                >
+                  <span aria-hidden>❖</span> Attach from knowledge
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>

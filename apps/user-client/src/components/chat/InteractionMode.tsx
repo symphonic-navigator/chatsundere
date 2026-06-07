@@ -24,6 +24,7 @@ interface Props {
   onOpenToc?: () => void;
   onOpenArtefacts?: () => void;
   onAttachFromTreasury?: () => void;
+  onAttachFromLibrary?: () => void;
   toolsAvailable?: boolean;
 }
 
@@ -94,7 +95,7 @@ export function InteractionMode(p: Props): JSX.Element {
       if (
         target instanceof Element &&
         target.closest(
-          '.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root, .artefact-picker-root, .knowledge-sheet-root',
+          '.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root, .artefact-picker-root, .knowledge-sheet-root, .document-picker-root',
         )
       )
         return;
@@ -182,6 +183,7 @@ export function InteractionMode(p: Props): JSX.Element {
           onOpenToc={p.onOpenToc}
           onOpenArtefacts={p.onOpenArtefacts}
           onAttachFromTreasury={p.onAttachFromTreasury}
+          onAttachFromLibrary={p.onAttachFromLibrary}
           toolsAvailable={p.toolsAvailable}
         />
       </div>

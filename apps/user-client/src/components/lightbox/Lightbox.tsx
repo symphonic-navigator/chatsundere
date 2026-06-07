@@ -347,6 +347,11 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               ×
             </button>
           </div>
+          {item.provenance ? (
+            <p className="lightbox-provenance" aria-label="Source">
+              {item.provenance}
+            </p>
+          ) : null}
           <div className="lightbox-actions">
             {item.kind === 'text' && (
               <FormatPicker value={format} onChange={(f) => setOverride(f)} />

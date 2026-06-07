@@ -15,7 +15,11 @@ import { describeImage } from '../attachments/substitute-vision.js';
 import { imageDisposition } from '../attachments/vision-gate.js';
 import { buildUserWireContent } from '../attachments/wire-injection.js';
 import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
-import { attachPendingToMessage, listMessageAttachments } from '../data/attachments.js';
+import {
+  attachPendingToMessage,
+  listMessageAttachments,
+  snapshotPendingDocumentReferences,
+} from '../data/attachments.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
@@ -123,7 +127,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const userMessageId = uuidv7();
     const draftMessageId = uuidv7();
 
-    await db.transaction('rw', db.messages, db.chats, db.attachments, async () => {
+    await db.transaction('rw', db.messages, db.chats, db.attachments, db.documents, async () => {
       await db.messages.add({
         id: userMessageId,
         chatId: args.chatId,
@@ -155,6 +159,9 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           .toArray();
         await Promise.all(orphans.map((a) => db.attachments.update(a.id, { chatId: args.chatId })));
       }
+      // Snapshot-on-send: freeze any still-referenced knowledge documents so the sent
+      // message is decoupled from later edits/deletes of the source (WYSIWYG).
+      await snapshotPendingDocumentReferences(args.chatId);
       // Bind all pending attachments for this chat to the new user message atomically.
       await attachPendingToMessage(args.chatId, userMessageId);
       await db.chats.update(args.chatId, { lastMessageAt: now + 1, draftInput: '' });

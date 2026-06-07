@@ -135,7 +135,7 @@ export interface PillRow {
 }
 
 export type AttachmentKind = 'image' | 'text';
-export type AttachmentOrigin = 'upload' | 'generated';
+export type AttachmentOrigin = 'upload' | 'generated' | 'library';
 export type AttachmentState = 'active' | 'deleted';
 
 export type ArtefactOrigin = 'generated' | 'saved-message' | 'saved-code-block';
@@ -189,6 +189,10 @@ export interface AttachmentRow {
   height?: number;
   /** kind === 'image' — substitute-vision cache, keyed by the model that produced it. */
   visionDescription?: { model: string; text: string } | null;
+  /** origin === 'library' — copy-on-write reference into the knowledgebase. While
+   *  `text` is unset the content is read live from this document; editing or
+   *  sending freezes a snapshot into `text`. Retained for provenance after that. */
+  kbRef?: { libraryId: string; documentId: string } | null;
 }
 
 export interface AvatarCrop {

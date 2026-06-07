@@ -118,3 +118,52 @@ describe('attachmentToViewable', () => {
     });
   });
 });
+
+function libRow(over: Partial<AttachmentRow> = {}): AttachmentRow {
+  return {
+    id: 'a1',
+    chatId: 'c1',
+    messageId: null,
+    origin: 'library',
+    kind: 'text',
+    fileName: 'Doc.md',
+    mime: 'text/markdown',
+    order: 0,
+    state: 'active',
+    createdAt: 0,
+    kbRef: { libraryId: 'lib1', documentId: 'doc1' },
+    ...over,
+  };
+}
+
+describe('attachmentToViewable — library origin', () => {
+  it('uses effectiveText when the row has no copied text yet, and is removable while pending', () => {
+    const v = attachmentToViewable(libRow(), {
+      pending: true,
+      effectiveText: 'live body',
+      provenance: 'My Library › Doc',
+    });
+    expect(v.text).toBe('live body');
+    expect(v.caps.remove).toBe(true);
+    expect(v.caps.editSource).toBe(true);
+    expect(v.provenance).toBe('My Library › Doc');
+  });
+
+  it('prefers the row text once materialised', () => {
+    const v = attachmentToViewable(libRow({ text: 'edited' }), {
+      pending: true,
+      effectiveText: 'live body',
+    });
+    expect(v.text).toBe('edited');
+  });
+
+  it('does not offer editSource for a library reference whose live content has not loaded yet', () => {
+    const v = attachmentToViewable(libRow(), { pending: true }); // no effectiveText, no row.text
+    expect(v.caps.editSource).toBe(false);
+  });
+
+  it('offers editSource once the live content has loaded', () => {
+    const v = attachmentToViewable(libRow(), { pending: true, effectiveText: 'live body' });
+    expect(v.caps.editSource).toBe(true);
+  });
+});

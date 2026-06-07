@@ -3671,3 +3671,174 @@ h1 {
   flex-direction: column;
   gap: 0.75rem;
 }
+
+/* ===== Knowledge document picker — accordion-tree bottom sheet ============ */
+/* Mirrors the artefact-picker sheet visually; keep the two in sync.         */
+
+.document-picker-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.document-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.document-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 80%;
+  background: var(--color-ink, #1a1a1a);
+  border-top: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.document-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.document-picker-title {
+  font-family: var(--font-display, serif);
+  font-size: 1.05rem;
+  color: var(--color-paper, #e6e6e6);
+}
+.document-picker-close {
+  background: transparent;
+  border: 0;
+  color: var(--color-paper, #e6e6e6);
+  opacity: 0.7;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+.document-picker-close:hover {
+  opacity: 1;
+}
+.document-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.document-picker-group {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 8%, transparent);
+}
+.document-picker-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--color-paper, #e6e6e6);
+  padding: 0.6rem 0.4rem;
+  text-align: left;
+  cursor: pointer;
+}
+.document-picker-group-head:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0.4rem;
+}
+.document-picker-caret {
+  width: 1em;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.document-picker-group-name {
+  font-weight: 500;
+  flex: 1;
+}
+.document-picker-docs {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0 0 0 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.document-picker-doc {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-radius: 0.4rem;
+  color: var(--color-paper, #e6e6e6);
+  padding: 0.45rem 0.4rem;
+  text-align: left;
+  cursor: pointer;
+}
+.document-picker-doc:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.document-picker-doc[data-selected] {
+  background: rgba(255, 255, 255, 0.06);
+}
+.document-picker-check {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 30%, transparent);
+  border-radius: 0.3rem;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.document-picker-check[data-on] {
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 70%, transparent);
+  border-color: transparent;
+  color: #1a1a1a;
+}
+.document-picker-doc-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-picker-group-empty,
+.document-picker-empty {
+  opacity: 0.6;
+  font-size: 0.9rem;
+  padding: 1rem 0.4rem;
+  text-align: center;
+}
+.document-picker-empty {
+  padding: 1.5rem 0.4rem;
+}
+.document-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.document-picker-attach {
+  padding: 0.5rem 1.1rem;
+  border-radius: 0.4rem;
+  border: 0;
+  color: var(--color-paper, #e6e6e6);
+  background: color-mix(in srgb, var(--color-accent, #c9a227) 22%, transparent);
+  cursor: pointer;
+  font-weight: 600;
+}
+.document-picker-attach:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Provenance line shown below artefact title in the lightbox. */
+.lightbox-provenance {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}

@@ -4,7 +4,9 @@ import { uuidv7 } from 'uuidv7';
 import {
   type ArtefactRow,
   type AttachmentKind,
+  type AttachmentOrigin,
   type AttachmentRow,
+  type DocumentRow,
   getClientDataDb,
 } from '../boot/client-data-db.js';
 import { QK } from './queryKeys.js';
@@ -18,6 +20,8 @@ export interface AddAttachmentInput {
   text?: string;
   width?: number;
   height?: number;
+  origin?: AttachmentOrigin;
+  kbRef?: { libraryId: string; documentId: string } | null;
 }
 
 /** Lowest-level ops (no React) — used by hooks and by the send path. */
@@ -35,7 +39,8 @@ export async function addAttachment(input: AddAttachmentInput): Promise<string> 
       id,
       chatId: input.chatId,
       messageId: null,
-      origin: 'upload',
+      origin: input.origin ?? 'upload',
+      kbRef: input.kbRef ?? null,
       kind: input.kind,
       fileName: input.fileName,
       mime: input.mime,
@@ -67,6 +72,84 @@ export async function addArtefactSnapshot(chatId: string, artefact: ArtefactRow)
     mime: artefact.mime,
     text: artefact.content,
   });
+}
+
+/**
+ * Attach a knowledge-library document to the chat as a *copy-on-write* pending
+ * reference: no content is copied — `kbRef` points at the live document and the
+ * content is resolved live until the user edits it or the message is sent. Mirrors
+ * `addArtefactSnapshot` in shape, but references instead of snapshotting.
+ */
+export async function addDocumentReference(chatId: string, doc: DocumentRow): Promise<string> {
+  return addAttachment({
+    chatId,
+    kind: 'text',
+    fileName: `${doc.title}.md`,
+    mime: 'text/markdown',
+    origin: 'library',
+    kbRef: { libraryId: doc.libraryId, documentId: doc.id },
+    // text intentionally omitted — copy-on-write (see snapshotPendingDocumentReferences).
+  });
+}
+
+/**
+ * Freeze a document's content into any *pending* attachment that still references it
+ * as a live copy-on-write reference (`text` unset). Called when the source document is
+ * about to be deleted, so an in-progress attachment does not break. Reads the
+ * attachments table directly (no knowledge.ts import) to avoid an import cycle.
+ */
+export async function materialiseReferencesForDocument(
+  documentId: string,
+  content: string,
+): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.attachments, async () => {
+    const refs = await db.attachments
+      .filter(
+        (a) => a.messageId === null && a.kbRef?.documentId === documentId && a.text === undefined,
+      )
+      .toArray();
+    await Promise.all(refs.map((a) => db.attachments.update(a.id, { text: content })));
+  });
+}
+
+/**
+ * Snapshot-on-send: freeze the current live content of every still-referenced pending
+ * document attachment into its row, decoupling the sent message from the knowledgebase
+ * (WYSIWYG). A vanished document degrades to empty content rather than throwing. Safe to
+ * call inside an existing rw transaction that scopes `attachments` + `documents` (it does
+ * not open its own transaction, so it can join the send transaction).
+ */
+export async function snapshotPendingDocumentReferences(chatId: string): Promise<void> {
+  const db = getClientDataDb();
+  const refs = await db.attachments
+    .where('chatId')
+    .equals(chatId)
+    .filter((a) => a.messageId === null && a.kbRef != null && a.text === undefined)
+    .toArray();
+  for (const a of refs) {
+    const doc = a.kbRef ? await db.documents.get(a.kbRef.documentId) : undefined;
+    await db.attachments.update(a.id, { text: doc?.content ?? '' });
+  }
+}
+
+/**
+ * Resolve the live content of every still-referenced pending document attachment,
+ * keyed by attachment id, so the lightbox can preview a copy-on-write document before
+ * it is materialised or sent. Materialised rows (text already set) are omitted.
+ */
+export async function loadPendingDocumentContents(
+  rows: AttachmentRow[],
+): Promise<Map<string, string>> {
+  const db = getClientDataDb();
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    if (r.kbRef != null && r.text === undefined) {
+      const doc = await db.documents.get(r.kbRef.documentId);
+      if (doc) map.set(r.id, doc.content);
+    }
+  }
+  return map;
 }
 
 /** Permanently delete an attachment record from the local database by its ID. */
@@ -122,6 +205,21 @@ export function usePendingAttachments(chatId: string) {
   return useQuery({
     queryKey: QK.attachmentsPending(chatId),
     queryFn: () => listPendingAttachments(chatId),
+  });
+}
+
+/**
+ * Query hook wrapping `loadPendingDocumentContents`; re-runs only when the set of
+ * unmaterialised references changes (keyed by attachment+document id signature).
+ */
+export function usePendingDocumentContents(rows: AttachmentRow[]) {
+  const sig = rows
+    .filter((r) => r.kbRef != null && r.text === undefined)
+    .map((r) => `${r.id}:${(r.kbRef as { documentId: string }).documentId}`)
+    .join(',');
+  return useQuery({
+    queryKey: ['attachments', 'ref-contents', sig],
+    queryFn: () => loadPendingDocumentContents(rows),
   });
 }
 
@@ -181,6 +279,20 @@ export function useAddArtefactSnapshots(chatId: string) {
   return useMutation({
     mutationFn: async (artefacts: ArtefactRow[]) => {
       for (const a of artefacts) await addArtefactSnapshot(chatId, a);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK.attachmentsPending(chatId) }),
+  });
+}
+
+/**
+ * Mutation hook: add a batch of documents as copy-on-write references to the chat's
+ * pending set, then invalidate the pending query once.
+ */
+export function useAddDocumentReferences(chatId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (docs: DocumentRow[]) => {
+      for (const d of docs) await addDocumentReference(chatId, d);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.attachmentsPending(chatId) }),
   });

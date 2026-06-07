@@ -5,7 +5,7 @@ import type { ArtefactRow, AttachmentRow } from '../../boot/client-data-db.js';
 export interface Caps {
   /** Always true — every attachment can be renamed by the user. */
   rename: boolean;
-  /** True only for upload-origin items that are still pending (not yet sent). */
+  /** True for upload- or library-origin items that are still pending (not yet sent). */
   remove: boolean;
   /** True for text items — copy the raw content to the clipboard. */
   copy: boolean;
@@ -35,6 +35,8 @@ export interface ViewableItem {
   text?: string;
   /** Normalised tags — present for artefacts; drives the lightbox tag editor. */
   tags?: string[];
+  /** Human-readable origin label, e.g. "My Library › Doc" — present for library refs. */
+  provenance?: string;
   caps: Caps;
 }
 
@@ -68,23 +70,26 @@ export function artefactToViewable(row: ArtefactRow): ViewableItem {
  */
 export function attachmentToViewable(
   row: AttachmentRow,
-  opts: { pending: boolean; objectUrl?: string },
+  opts: { pending: boolean; objectUrl?: string; effectiveText?: string; provenance?: string },
 ): ViewableItem {
   const isText = row.kind === 'text';
+  const removable = (row.origin === 'upload' || row.origin === 'library') && opts.pending;
+  const hasContent = row.text !== undefined || opts.effectiveText !== undefined;
   return {
     id: row.id,
     kind: row.kind,
     fileName: row.fileName,
     mime: row.mime,
     imageUrl: row.kind === 'image' ? opts.objectUrl : undefined,
-    text: isText ? row.text : undefined,
+    text: isText ? (row.text ?? opts.effectiveText) : undefined,
+    provenance: opts.provenance,
     caps: {
       rename: true,
-      remove: row.origin === 'upload' && opts.pending,
+      remove: removable,
       copy: isText,
       download: isText,
       delete: row.origin === 'generated',
-      editSource: isText && opts.pending,
+      editSource: isText && opts.pending && hasContent,
       editTags: false,
     },
   };

@@ -15,6 +15,7 @@ import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { TocSheet } from '../../../components/chat/TocSheet.js';
+import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js';
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
 import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
 import {
@@ -77,6 +78,7 @@ export function ChatPage(): JSX.Element {
 
   const [tocOpen, setTocOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [documentPickerOpen, setDocumentPickerOpen] = useState(false);
   const [branchPointId, setBranchPointId] = useState<string | null>(null);
 
   const jumpToMessage = (messageId: string): void => {
@@ -501,6 +503,13 @@ export function ChatPage(): JSX.Element {
         />
       ) : null}
 
+      {documentPickerOpen ? (
+        <DocumentPicker
+          chatId={chat?.id ?? activeChatId ?? ''}
+          onClose={() => setDocumentPickerOpen(false)}
+        />
+      ) : null}
+
       {openArtefactId !== null && artefactIndex >= 0 ? (
         <Lightbox
           items={artefactItems}
@@ -569,6 +578,7 @@ export function ChatPage(): JSX.Element {
           onOpenToc={() => setTocOpen(true)}
           onOpenArtefacts={() => setArtefactSheetOpen(true)}
           onAttachFromTreasury={() => setPickerOpen(true)}
+          onAttachFromLibrary={() => setDocumentPickerOpen(true)}
           toolsAvailable={hasMessages}
         />
       ) : null}
