@@ -16,7 +16,68 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **Substitute-vision as a live in-stream pill**
+**Last updated:** 2026-06-08 (latest) — **Chat polish: cancel inference, table
+overflow, read-only home** (squashed onto master `cfe6923`, **NOT pushed**;
+**NOT yet device-verified**). One client-only feature unit bundling three chat-surface
+polish items Chris hit during device testing, brainstormed end-to-end with Chris,
+built **subagent-driven** in an isolated worktree (7 TDD tasks + a stale-test fix +
+a Critical fix; per-task spec+quality review + a final **opus** holistic review).
+**(B) Cancel a running inference:** the whole abort machinery already existed
+(`AbortController` threaded to the adapters; `abortDiscard`/`abortAllForPersonaPreserve`);
+only a user control was missing. New **`abortPreserve(chatId)`** store action aborts a
+single chat's live stream and **keeps the partial answer as `incomplete`** (vs
+`abortDiscard`, which deletes a fresh-send draft) — Chris's call: the user decides
+whether to keep what they have or retry. The **send button becomes a Stop control**
+(square icon) while `isStreamLive` (`DualActionBtn`); `onStop` threads
+chat-page → InteractionMode → Cockpit → DualActionBtn and calls `abortPreserve`. The
+existing **`StreamInterruptedFooter`** then offers Retry, and the input frees
+immediately so the user can just keep chatting. `abortAllForPersonaPreserve` now
+delegates to `abortPreserve` (DRY). **No reading-mode Stop** (cockpit is one tap away —
+Chris's call to keep reading mode minimal). **(C) Table overflow:** wide Markdown GFM
+tables forced a page-level horizontal scrollbar (`.msg-text table` had no overflow
+handling, unlike `pre`/`katex-display`). A `table` override in `markdown-components.tsx`
+wraps tables in **`.msg-table-wrap` (`overflow-x:auto; max-width:100%`)** + a
+`min-width:0` guard on `.msg-text`, so a wide table scrolls **inside its bubble**
+(`.chat-stream` is `flex-direction:column` with `overflow-y:auto` → its `overflow-x`
+computes to `auto`, the leak path). **(D) Read-only home logo:** the brand logo was
+hidden in reading mode; it now always renders, gaining a small **`brand-logo-small`**
+variant (twinkle dropped) in reading mode, linking `to="/"` (→ Entrance Hall) for a
+one-tap route home. Styling deliberately minimal (Chris does the precise pass).
+**The opus holistic review caught one Critical the per-task reviews + Liz's own Task-1
+reasoning missed:** `abortPreserve` wrote the partial to Dexie but did **not** invalidate
+the chat query — and the message list is a **one-shot TanStack `useChat`** (not a Dexie
+live-query; `chat-page.tsx:367`), so once the handle was removed the kept answer would
+flash to an **empty bubble** until a later incidental refetch. Fixed by mirroring the
+success/`.catch` paths (`invalidateQueries(['chats', chatId])` + `['chats']`), with the
+store test strengthened to assert the invalidation. (Liz had **wrongly declined** this as
+a Task-1 "minor", assuming Dexie reactivity that doesn't exist here — the holistic review
+earned its keep.) **Not a Larissa change** (client-only; no auth/sync/proxy/crypto, no new
+egress, no Dexie migration). Verification (on master after squash): `pnpm typecheck
+--force` **14/14**; user-client vitest **8 fail / 1215 pass** — the **8 fail are the exact
+unchanged `cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline, verified
+identical on master (8 fail / 1210 pass)**, +5 new green tests, **zero new failures** (one
+transient 9th-failure flake observed once under parallel load, not reproduced in 3
+subsequent full runs nor in the changed store test run 23/23 ×3); `pnpm run build`
+**9/9**; biome clean on the changed files (the lone `index.css` `picker-backdrop`
+format issue is **pre-existing on master**, untouched here). Full-tree capture verified
+(`git diff master..chat-polish` empty over 18 files) + typecheck on master before worktree
+cleanup. Spec/plan:
+[[../superpowers/specs/2026-06-08-chat-polish-cancel-table-readonly-home-design]],
+[[../superpowers/plans/2026-06-08-chat-polish-cancel-table-readonly-home]]. **Deferred
+(logged, both Minor):** a rare cold-start-into-reading-mode splash-FLIP oddity, and a
+Stop during the substitute-vision describe phase not cancelling the in-flight one-shot
+([[insights/follow-ups-index]]). **Device test:** (1) send a message; while it streams
+the send button shows a **stop** icon → tap → the stream halts, the partial answer
+**stays** with a Retry footer (not blank), the input is usable; then type+send a new
+message (continues), and on a fresh attempt tap **Retry** (re-rolls). (2) Regenerate a
+reply, stop mid-stream → partial preserved with Retry, original not lost. (3) Receive a
+Markdown table wider than 380px → it **scrolls horizontally inside its bubble**, the chat
+stream shows **no** page-level horizontal scrollbar; code blocks/maths still scroll. (4)
+In a chat, drop to reading mode (cockpit hidden) → a **small Chatsundere logo** appears
+top-left → tap → lands in the Entrance Hall; interaction-mode logo unchanged. **Next:**
+Chris device-tests → **Liz pushes the master backlog on his word** (Liz must NOT push).
+
+**Earlier 2026-06-08 (substitute-vision) — **Substitute-vision as a live in-stream pill**
 (squashed onto master `a7c05d0`, **NOT pushed**; **DEVICE-CONFIRMED by Chris 2026-06-08**
 — "ich mag es sehr, so wie es jetzt ist! großartig!"). A UX
 redesign of the substitute-vision flow (active model can't see images → a substitute
