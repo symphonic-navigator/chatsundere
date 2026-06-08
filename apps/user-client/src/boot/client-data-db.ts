@@ -244,6 +244,10 @@ export interface DocumentRow {
   chunkCount: number;
   /** Reserved for Chunk C (phrase-triggered injection). No UI in Chunk A. */
   triggerPhrases: string[];
+  /** Chunk C: when true, the immediately preceding companion message is also
+   *  scanned for this document's trigger phrases. Non-indexed → no version bump.
+   *  Absent ⇒ false (user-message-only triggering). */
+  triggerOnCompanion?: boolean;
   createdAt: number;
   updatedAt: number;
 }

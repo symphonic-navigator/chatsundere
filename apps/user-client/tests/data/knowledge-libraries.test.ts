@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ChatRow,
   type PersonaRow,
@@ -12,7 +12,20 @@ import {
   _resetKnowledgeVectorsForTests,
   getKnowledgeVectorStore,
 } from '../../src/boot/knowledge-vectors-db.js';
-import { createLibrary, deleteLibraryCascade, listLibraries } from '../../src/data/knowledge.js';
+import {
+  createLibrary,
+  deleteLibraryCascade,
+  listDocuments,
+  listLibraries,
+  updateDocument,
+} from '../../src/data/knowledge.js';
+
+// Mock the ingestion queue so enqueueDocument is a no-op in these tests.
+// Without this, content-update tests would start a background drain that
+// races with afterEach teardown and produces a DatabaseClosedError.
+vi.mock('../../src/knowledge/start-ingestion.js', () => ({
+  enqueueDocument: vi.fn(),
+}));
 
 function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
   return {
@@ -117,5 +130,62 @@ describe('library data layer', () => {
 
     expect((await db.personas.get('p1'))?.libraryIds).toEqual([other.id]);
     expect((await db.chats.get('c1'))?.libraryIds).toEqual([]);
+  });
+});
+
+describe('updateDocument — trigger phrases', () => {
+  it('a phrase/toggle-only change does NOT re-queue embedding', async () => {
+    const db = getClientDataDb();
+    const lib = await createLibrary({ name: 'L', description: '', nsfw: false });
+    // Insert directly (bypassing addDocuments) to avoid the async embedding
+    // worker from racing with our status setup in the test environment.
+    await db.documents.add({
+      id: 'doc-phrase-test',
+      libraryId: lib.id,
+      title: 'D',
+      content: 'body',
+      embeddingStatus: 'ready',
+      embeddingError: null,
+      chunkCount: 1,
+      triggerPhrases: [],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const doc = (await listDocuments(lib.id))[0];
+    if (!doc) throw new Error('doc not found');
+
+    await updateDocument(doc.id, { triggerPhrases: ['Roter  Drache'], triggerOnCompanion: true });
+
+    const after = await db.documents.get(doc.id);
+    expect(after?.embeddingStatus).toBe('ready'); // no re-embed
+    expect(after?.triggerPhrases).toEqual(['roter drache']); // normalised on write
+    expect(after?.triggerOnCompanion).toBe(true);
+  });
+
+  it('a content change still re-queues embedding', async () => {
+    const db = getClientDataDb();
+    const lib = await createLibrary({ name: 'L2', description: '', nsfw: false });
+    // Insert directly (bypassing addDocuments) to avoid the async embedding
+    // worker from racing with our status setup in the test environment.
+    await db.documents.add({
+      id: 'doc-content-test',
+      libraryId: lib.id,
+      title: 'D',
+      content: 'body',
+      embeddingStatus: 'ready',
+      embeddingError: null,
+      chunkCount: 1,
+      triggerPhrases: [],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const doc = (await listDocuments(lib.id))[0];
+    if (!doc) throw new Error('doc not found');
+    await db.documents.update(doc.id, { embeddingStatus: 'ready' });
+
+    await updateDocument(doc.id, { content: 'new body' });
+
+    const after = await db.documents.get(doc.id);
+    expect(after?.embeddingStatus).toBe('pending');
   });
 });

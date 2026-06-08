@@ -870,4 +870,105 @@ describe('stream-manager.store', () => {
     expect(capturedStreamArgs.knowledgeLibrariesContext).toBe('');
     await store.abortDiscard(myChatId);
   });
+
+  it('persists a kb-injection pill above the answer when lore fired', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    const lore = {
+      entries: [{ libraryName: 'Story', documentTitle: 'Red Dragon', injectedText: 'X.' }],
+      omittedCount: 0,
+      truncatedCount: 0,
+    };
+
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'Answer' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(chatId, persona, model),
+      loreContext: 'LORE',
+      lore,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const pills = await db.pills.toArray();
+    const kb = pills.find((p) => p.kind === 'kb-injection');
+    expect(kb).toBeDefined();
+    expect((kb?.payload as { entries: unknown[] }).entries).toHaveLength(1);
+
+    const msgs = await db.messages.where('chatId').equals(chatId).sortBy('createdAt');
+    const msg = msgs.find((m) => m.role === 'persona');
+    const firstBlock = msg?.contentBlocks[0];
+    expect(firstBlock).toEqual({ type: 'pill', pillId: kb?.id });
+  });
+
+  it('persists the kb-injection pill row when the stream FAILS with lore fired (no dangling pointer)', async () => {
+    // Regression: the .catch path used to persist contentBuffer (which includes
+    // the lore pill block) to db.messages without writing the pill row to db.pills,
+    // leaving a dangling pillId that the renderer could not resolve on reload.
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    // Use a unique chatId to avoid timer-leak races with earlier success-path tests.
+    const myChatId = 'c-lore-fail';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    const lore = {
+      entries: [{ libraryName: 'Lore', documentTitle: 'Chapter 1', injectedText: 'Y.' }],
+      omittedCount: 0,
+      truncatedCount: 0,
+    };
+
+    // Drive a genuine stream failure — the tool loop propagates the rejection
+    // straight into the .catch handler, which is exactly the bug site.
+    vi.spyOn(engine, 'runStreamEngine').mockRejectedValue(new Error('upstream down'));
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      chat: {
+        id: myChatId,
+        personaId,
+        title: 'kept',
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      },
+      loreContext: 'LORE',
+      lore,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    // The pill row MUST exist in db.pills so the pill block in the
+    // incomplete persona message doesn't dangle on reload.
+    const pills = await db.pills.toArray();
+    const kb = pills.find((p) => p.kind === 'kb-injection');
+    expect(kb).toBeDefined();
+
+    // The incomplete persona message's first contentBlock must reference that pill.
+    const msgs = await db.messages.where('chatId').equals(myChatId).sortBy('createdAt');
+    const personaMsg = msgs.find((m) => m.role === 'persona');
+    expect(personaMsg?.streamingState).toBe('incomplete');
+    const firstBlock = personaMsg?.contentBlocks[0];
+    expect(firstBlock).toEqual({ type: 'pill', pillId: kb?.id });
+  });
 });

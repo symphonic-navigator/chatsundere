@@ -36,7 +36,7 @@ describe('buildPrompt', () => {
       }),
       'chat',
     );
-    // Band 1: tonality, nsfw, global, persona — Band 2: about, project, memory
+    // Band 1: tonality, nsfw, global, persona — Band 2 before Band 3
     expect(out).toBe(
       [TONALITY_PROMPT, NSFW_PROMPT, 'GLOBAL', 'PERSONA', 'ABOUT', 'PROJECT', 'MEMORY'].join(
         '\n\n',
@@ -166,5 +166,31 @@ describe('knowledgeLibraries segment', () => {
       'chat',
     );
     expect(out.indexOf('MEM')).toBeLessThan(out.indexOf('KB'));
+  });
+});
+
+describe('lore segment', () => {
+  it('places the lore segment after memories and before knowledge libraries', () => {
+    const out = buildPrompt(
+      inputs({
+        personaInstructions: 'P',
+        memoryContext: 'MEM',
+        loreContext: 'LORE',
+        knowledgeLibrariesContext: 'KB',
+      }),
+      'chat',
+    );
+    expect(out.indexOf('MEM')).toBeLessThan(out.indexOf('LORE'));
+    expect(out.indexOf('LORE')).toBeLessThan(out.indexOf('KB'));
+  });
+
+  it('omits the lore segment when empty', () => {
+    const out = buildPrompt(inputs({ personaInstructions: 'P' }), 'chat');
+    expect(out).toBe('P');
+  });
+
+  it('drops the lore segment for the title job', () => {
+    const out = buildPrompt(inputs({ personaInstructions: 'P', loreContext: 'LORE' }), 'title');
+    expect(out).toBe('P');
   });
 });

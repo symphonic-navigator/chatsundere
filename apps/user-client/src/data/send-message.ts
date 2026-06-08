@@ -11,9 +11,15 @@ import type {
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
-import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
+import {
+  type ChatRow,
+  type MessageRow,
+  type PersonaRow,
+  getClientDataDb,
+} from '../boot/client-data-db.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
+import { buildLoreContext } from '../knowledge/lore-context.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
@@ -21,6 +27,24 @@ import { webBackendOptions } from '../lib/web-backend-options.js';
 import { resolveWebBackend } from '../lib/web-backends.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import type { ExpertBase } from '../tools/ask-expert.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// lastCompanionText — lorebook companion-scan helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The most recent complete persona message's text, or null. Used as the
+ *  optional companion scan-source for lorebooks (only docs that opt in see it). */
+export function lastCompanionText(messages: readonly MessageRow[]): string | null {
+  const last = [...messages]
+    .reverse()
+    .find((m) => m.role === 'persona' && m.streamingState === 'complete');
+  if (!last) return null;
+  const text = last.contentBlocks
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+  return text === '' ? null : text;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolvePersonaContext — shared helper
@@ -324,6 +348,13 @@ export function useSendMessage() {
         ctx.corsProxyKey,
       );
 
+      const lore = await buildLoreContext(
+        ctx.persona,
+        ctx.chat,
+        args.text,
+        lastCompanionText(priorMessages),
+      );
+
       await useStreamManagerStore.getState().start({
         chatId,
         userText: args.text,
@@ -345,6 +376,8 @@ export function useSendMessage() {
         globalAboutMe: ctx.globalAboutMe,
         webInterfacing: ctx.webInterfacing,
         knowledge: ctx.knowledge,
+        loreContext: lore?.loreContext ?? '',
+        lore: lore?.lore ?? null,
         substituteVisionModel,
         substituteOneShotBase: substituteOneShotBase ?? undefined,
         expertBase: ctx.expertBase ?? undefined,
@@ -421,6 +454,13 @@ export function useRegenerate() {
       // Resolve persona chain + decrypt, then re-roll.
       const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
 
+      const lore = await buildLoreContext(
+        ctx.persona,
+        ctx.chat,
+        userMessageText,
+        lastCompanionText(priorMessages),
+      );
+
       await useStreamManagerStore.getState().regenerate({
         chatId: args.chatId,
         targetMessageId: target.id,
@@ -440,6 +480,8 @@ export function useRegenerate() {
         globalAboutMe: ctx.globalAboutMe,
         webInterfacing: ctx.webInterfacing,
         knowledge: ctx.knowledge,
+        loreContext: lore?.loreContext ?? '',
+        lore: lore?.lore ?? null,
         expertBase: ctx.expertBase ?? undefined,
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,

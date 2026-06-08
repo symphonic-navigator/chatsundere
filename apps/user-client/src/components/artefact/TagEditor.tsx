@@ -9,6 +9,9 @@ interface Props {
   /** Existing tags to autocomplete / offer. */
   suggestions: string[];
   onChange: (next: string[]) => void;
+  /** Normaliser applied on add. Defaults to `normaliseTags`; the lore editor
+   *  passes `normalisePhrases` so internal whitespace is collapsed. */
+  normalise?: (values: string[]) => string[];
 }
 
 /**
@@ -17,11 +20,17 @@ interface Props {
  * current input are offered as quick-add buttons. In pick mode there is no free
  * text — only the not-yet-selected suggestions are offered.
  */
-export function TagEditor({ mode, value, suggestions, onChange }: Props): JSX.Element {
+export function TagEditor({
+  mode,
+  value,
+  suggestions,
+  onChange,
+  normalise = normaliseTags,
+}: Props): JSX.Element {
   const [text, setText] = useState('');
 
   function add(tag: string): void {
-    onChange(normaliseTags([...value, tag]));
+    onChange(normalise([...value, tag]));
     setText('');
   }
   function remove(tag: string): void {

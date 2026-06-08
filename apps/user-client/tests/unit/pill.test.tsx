@@ -33,13 +33,22 @@ describe('Pill', () => {
     expect(container.querySelector('.pill-above .pill')).not.toBeNull();
   });
 
-  it('kb-injection label uses payload.kbName', () => {
+  it('kb-injection label shows the lore entry count', () => {
     const { container } = render(
-      <Pill row={makeRow({ kind: 'kb-injection', payload: { kbName: 'Manuals' } })} />,
+      <Pill
+        row={makeRow({
+          kind: 'kb-injection',
+          payload: {
+            entries: [{ libraryName: 'Story', documentTitle: 'Red Dragon', injectedText: 'x' }],
+            omittedCount: 0,
+            truncatedCount: 0,
+          },
+        })}
+      />,
     );
     const span = container.querySelector('.pill');
     expect(span?.textContent).toContain('◆');
-    expect(span?.textContent).toContain('KB Manuals');
+    expect(span?.textContent).toContain('Lore · 1');
   });
 
   it('image-result has the image label', () => {

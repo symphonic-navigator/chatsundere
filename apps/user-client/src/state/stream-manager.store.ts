@@ -70,6 +70,10 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
    * in the send path. Absent/null = no libraries assigned → no knowledge tool.
    */
   knowledge?: import('../knowledge/query-tool.js').KnowledgeContext | null;
+  /** Band-2 lore segment text for this send; '' when nothing fired. */
+  loreContext?: string;
+  /** Lore result driving the kb-injection pill; null/absent when nothing fired. */
+  lore?: import('../knowledge/lore.js').LoreResult | null;
   /** Resolved expert model call context; absent = no ask_expert tool offered. */
   expertBase?: ExpertBase;
   /** Display label for the expert model (e.g. "DeepSeek R2"). */
@@ -321,14 +325,31 @@ function runIntoDraft(
   const db = getClientDataDb();
   const now = Date.now();
   const controller = new AbortController();
+  // Lore pill: deterministic, built up-front (unlike tool-call pills from the engine) and closed over by both the finalise and error paths below.
+  const lorePill: PillRow | null =
+    args.lore && args.lore.entries.length > 0
+      ? {
+          id: uuidv7(),
+          messageId: '',
+          kind: 'kb-injection',
+          positionHint: 'above-text',
+          status: 'completed',
+          payload: {
+            entries: args.lore.entries,
+            omittedCount: args.lore.omittedCount,
+            truncatedCount: args.lore.truncatedCount,
+          },
+          createdAt: now,
+        }
+      : null;
   const handle: StreamHandle = {
     chatId: args.chatId,
     personaId: args.persona.id,
     draftMessageId,
     controller,
     status: 'streaming',
-    contentBuffer: [],
-    pillBuffer: [],
+    contentBuffer: lorePill ? [{ type: 'pill', pillId: lorePill.id }] : [],
+    pillBuffer: lorePill ? [lorePill] : [],
     startedAt: now,
     reusedDraft,
   };
@@ -407,6 +428,7 @@ function runIntoDraft(
         ...args,
         toolsInstruction,
         knowledgeLibrariesContext,
+        loreContext: args.loreContext ?? '',
         tools,
         toolExchange,
         signal: controller.signal,
@@ -447,14 +469,18 @@ function runIntoDraft(
         return { streams: m };
       });
 
-      const pillsWithMessageId = result.pillRows.map((p) => ({
+      const allPillRows = lorePill ? [lorePill, ...result.pillRows] : result.pillRows;
+      const pillsWithMessageId = allPillRows.map((p) => ({
         ...p,
         messageId: draftMessageId,
       }));
+      const finalContentBlocks = lorePill
+        ? [{ type: 'pill' as const, pillId: lorePill.id }, ...result.finalContentBlocks]
+        : result.finalContentBlocks;
 
       await db.transaction('rw', db.messages, db.pills, db.chats, async () => {
         await db.messages.update(draftMessageId, {
-          contentBlocks: result.finalContentBlocks,
+          contentBlocks: finalContentBlocks,
           streamingState: 'complete',
         });
         if (pillsWithMessageId.length) await db.pills.bulkAdd(pillsWithMessageId);
@@ -513,6 +539,13 @@ function runIntoDraft(
         contentBlocks: current.contentBuffer,
         streamingState: 'incomplete',
       });
+      // Persist the lore pill row so the pill block already seeded into
+      // contentBuffer can resolve — without this the pointer would dangle
+      // when the incomplete message is reloaded from Dexie. put() (not add())
+      // is idempotent against a prior partial persist on retry.
+      if (lorePill !== null) {
+        await db.pills.put({ ...lorePill, messageId: draftMessageId });
+      }
       void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
 
       // Free the slot so the Cockpit Send button re-enables for this

@@ -11,6 +11,12 @@ const ICON: Record<PillRow['kind'], string> = {
   'voice-expression': '~',
 };
 
+interface LoreEntryShape {
+  libraryName: string;
+  documentTitle: string;
+  injectedText: string;
+}
+
 interface PillPayloadShape {
   name?: string;
   kbName?: string;
@@ -18,12 +24,15 @@ interface PillPayloadShape {
   argumentsJson?: string;
   result?: string;
   error?: string;
+  entries?: LoreEntryShape[];
+  omittedCount?: number;
+  truncatedCount?: number;
 }
 
 function labelFor(row: PillRow): string {
   const p = row.payload as PillPayloadShape | undefined;
   if (row.kind === 'tool-call') return p?.name ?? 'tool';
-  if (row.kind === 'kb-injection') return `KB${p?.kbName ? ` ${p.kbName}` : ''}`;
+  if (row.kind === 'kb-injection') return `Lore · ${p?.entries?.length ?? 0}`;
   if (row.kind === 'image-result') return 'image';
   return p?.expression ?? 'voice';
 }
@@ -72,8 +81,10 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
   }
 
   const payload = row.payload as PillPayloadShape | undefined;
+  const isLore = row.kind === 'kb-injection';
   const expandable =
-    row.kind === 'tool-call' && (!!codeOf(payload) || !!payload?.result || !!payload?.error);
+    (row.kind === 'tool-call' && (!!codeOf(payload) || !!payload?.result || !!payload?.error)) ||
+    (isLore && (payload?.entries?.length ?? 0) > 0);
   const code = codeOf(payload);
 
   return (
@@ -92,11 +103,29 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
       </button>
       {expandable && expanded && (
         <span className="pill-detail">
-          {code !== null && <code className="pill-detail-code">{code}</code>}
-          {payload?.result !== undefined && (
-            <code className="pill-detail-result">{payload.result}</code>
+          {isLore ? (
+            <>
+              {payload?.entries?.map((e, i) => (
+                <span key={`${e.libraryName}-${e.documentTitle}-${i}`} className="pill-detail-lore">
+                  <span className="pill-detail-lore-source">{`${e.libraryName} › ${e.documentTitle}`}</span>
+                  <code className="pill-detail-result">{e.injectedText}</code>
+                </span>
+              ))}
+              {(payload?.omittedCount ?? 0) > 0 || (payload?.truncatedCount ?? 0) > 0 ? (
+                <span className="pill-detail-lore-note">
+                  {`${payload?.truncatedCount ?? 0} truncated, ${payload?.omittedCount ?? 0} omitted (budget).`}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {code !== null && <code className="pill-detail-code">{code}</code>}
+              {payload?.result !== undefined && (
+                <code className="pill-detail-result">{payload.result}</code>
+              )}
+              {payload?.error && <code className="pill-detail-error">{payload.error}</code>}
+            </>
           )}
-          {payload?.error && <code className="pill-detail-error">{payload.error}</code>}
         </span>
       )}
     </span>

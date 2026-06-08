@@ -8,6 +8,8 @@ import {
   collectTags,
   formatBytes,
   formatToType,
+  normalisePhraseText,
+  normalisePhrases,
   normaliseTags,
 } from '../../src/lib/treasury-filter.js';
 
@@ -87,3 +89,16 @@ test('applyTreasuryFilters sorts newest-first with id tiebreaker', () => {
 function base(p: Partial<TreasuryFilters>): TreasuryFilters {
   return { type: 'all', personaId: null, tags: [], favourite: false, query: '', ...p };
 }
+
+test('normalisePhraseText lowercases, trims, collapses internal whitespace (incl. newlines)', () => {
+  expect(normalisePhraseText('  Roter   Drache ')).toBe('roter drache');
+  expect(normalisePhraseText('Roter\n Drache')).toBe('roter drache');
+  expect(normalisePhraseText('   ')).toBe('');
+});
+
+test('normalisePhrases normalises, drops empties, dedupes order-preserving', () => {
+  expect(normalisePhrases(['Roter  Drache', 'roter drache', '  ', 'Drachenblut'])).toEqual([
+    'roter drache',
+    'drachenblut',
+  ]);
+});

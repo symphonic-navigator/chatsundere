@@ -19,6 +19,28 @@ export function formatToType(format: ArtefactRow['format']): Exclude<TreasuryTyp
   }
 }
 
+/** Normalise a single phrase: trim + lowercase + collapse all whitespace runs
+ *  (incl. newlines) to one space. The whitespace-collapse is what `normaliseTags`
+ *  lacks — a user typing "roter  drache" must match "roter drache". */
+export function normalisePhraseText(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Normalise a phrase list via `normalisePhraseText`: drop empties, dedupe
+ *  (order-preserving). Used by the lore editor and the matcher. */
+export function normalisePhrases(phrases: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of phrases) {
+    const p = normalisePhraseText(raw);
+    if (p !== '' && !seen.has(p)) {
+      seen.add(p);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 /** Normalise a tag list: trim + lowercase, drop empties, dedupe (order-preserving). */
 export function normaliseTags(tags: string[]): string[] {
   const seen = new Set<string>();

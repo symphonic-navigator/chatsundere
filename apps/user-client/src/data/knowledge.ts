@@ -9,6 +9,7 @@ import {
   getKnowledgeVectorStore,
 } from '../boot/knowledge-vectors-db.js';
 import { enqueueDocument } from '../knowledge/start-ingestion.js';
+import { normalisePhrases } from '../lib/treasury-filter.js';
 import { materialiseReferencesForDocument } from './attachments.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
@@ -191,23 +192,34 @@ export async function addDocuments(
   return rows.map((r) => r.id);
 }
 
-/** Update a document. A `content` change re-queues embedding; title-only does not. */
+/** Update a document. A `content` change re-queues embedding; everything else
+ *  (title, trigger phrases, companion toggle) does not. Trigger phrases are
+ *  normalised on write. */
 export async function updateDocument(
   id: string,
-  patch: { title?: string; content?: string },
+  patch: {
+    title?: string;
+    content?: string;
+    triggerPhrases?: string[];
+    triggerOnCompanion?: boolean;
+  },
 ): Promise<void> {
   const db = getClientDataDb();
   const now = Date.now();
-  if (patch.content !== undefined) {
+  const normalised =
+    patch.triggerPhrases !== undefined
+      ? { ...patch, triggerPhrases: normalisePhrases(patch.triggerPhrases) }
+      : patch;
+  if (normalised.content !== undefined) {
     await db.documents.update(id, {
-      ...patch,
+      ...normalised,
       embeddingStatus: 'pending',
       embeddingError: null,
       updatedAt: now,
     });
     enqueueDocument(id);
   } else {
-    await db.documents.update(id, { ...patch, updatedAt: now });
+    await db.documents.update(id, { ...normalised, updatedAt: now });
   }
 }
 
@@ -244,8 +256,15 @@ export function useAddDocuments(libraryId: string) {
 export function useUpdateDocument(libraryId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; patch: { title?: string; content?: string } }) =>
-      updateDocument(args.id, args.patch),
+    mutationFn: (args: {
+      id: string;
+      patch: {
+        title?: string;
+        content?: string;
+        triggerPhrases?: string[];
+        triggerOnCompanion?: boolean;
+      };
+    }) => updateDocument(args.id, args.patch),
     onSuccess: (_v, args) => {
       qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
       qc.invalidateQueries({ queryKey: QK.document(args.id) });
