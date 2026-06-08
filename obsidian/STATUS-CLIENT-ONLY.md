@@ -16,7 +16,38 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (later) — **Knowledgebase Chunk C (Lorebooks /
+**Last updated:** 2026-06-08 (latest) — **Lore re-injection cooldown gate added**
+(squashed on master `a77dd5c`, **NOT pushed**) — Chris's first post-device-test
+refinement, after confirming Chunk C works "erstklassig". **The problem:** a chat
+that keeps mentioning an entity (his example: "Farbkraft") re-injected the **same**
+document every turn → repetition that bloats context. **The gate:** a lore
+document injected in the last `KNOWLEDGE_LORE_OPTS.cooldownRounds` (**8**,
+device-tunable) **rounds** is not re-injected; after 8 rounds without a
+(re-)injection it's eligible again. **Dedup by document id** — each `kb-injection`
+pill entry now carries its `documentId`, so the **pills are the injection
+history** (single source of truth, no separate tracking, graceful on old pills
+that predate the field). The send path collects the doc ids from the last 8
+**persona-turn** pills (`injectedDocIdsFromPills`) and `selectLore` excludes those
+documents **before** the budget stage (so a cooled-down doc never consumes budget
+nor counts as omitted). **Suppression is silent** (Chris's call — no pill noise; a
+turn where everything matched is on cooldown produces no pill at all, consistent
+with "nothing fired"). **Regenerate is correct:** the cooldown scan uses the
+re-roll's `priorMessages` (which excludes the discarded target turn), so a re-roll
+may re-inject what the abandoned attempt had. Built **subagent-driven** in an
+isolated worktree (2 TDD tasks, per-task spec+quality review; the end-to-end loop
+— `selectLore` emits `documentId` → store persists it in the pill payload
+unchanged → `injectedDocIdsFromPills` reads it back next turn — traced + verified).
+**Not a Larissa change** (client-only; no new egress). Verification (on master):
+`pnpm typecheck` **14/14**; llm-unified `bun test` **283/0**; user-client vitest
+**1147 pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline); biome clean; `git diff master..branch` empty
+(full-tree capture). **Device test:** chat repeatedly about a phrase-triggered
+document → the lore injects **once**, then the pill stops appearing for the next ~8
+turns even though the phrase keeps matching; after ~8 turns it may re-fire. **Next:**
+Chris device-tests the cooldown → Liz pushes the master backlog (now **11 ahead**)
+on his word. See the Chunk C entry below for the base feature.
+
+**Earlier 2026-06-08 (later) — Knowledgebase Chunk C (Lorebooks /
 phrase-triggered injection) landed** (squashed on master `015bda6`, **NOT
 pushed**; merged cleanly with the parallel **ask_expert** feature on master
 `6d91bd5`). The last Block-5 knowledge-base feature before v0.2.0. Brainstormed
