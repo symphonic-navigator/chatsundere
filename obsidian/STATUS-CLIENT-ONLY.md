@@ -16,7 +16,58 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **Subagent improvements landed**
+**Last updated:** 2026-06-08 (latest) — **MCP client landed** (squashed onto master
+`6e766fa`, **NOT pushed**; **NOT yet device-verified** — device-test checklist below
+is outstanding). Brainstormed end-to-end with Chris, built **subagent-driven** in an
+isolated worktree (11 TDD tasks, per-task spec+quality review + a final **opus**
+holistic review + a **Larissa** security round = **READY TO SQUASH**, no
+critical/high). Connects the browser to **external HTTPS MCP servers** and exposes
+their **tools** to companions (tools-only scope; resources/prompts/OAuth/stdio
+deferred). **What landed:** (1) a browser MCP **JSON-RPC transport over Streamable
+HTTP** (`mcp/mcp-client.ts`, ported from chatsune — initialise → notifications/initialized
+→ tools/list/tools/call, JSON **and** SSE replies, `Mcp-Session-Id` lifecycle, 404
+re-init). (2) A per-server **connection test** (`mcp/mcp-connectivity.ts`): tries
+**direct first, proxy fallback** (when a CORS proxy is configured) across **bare +
+`/mcp`** URL variants, stores the resolved routing/endpoint, re-runnable when a
+provider changes its CORS. (3) MCP tools wired as a **fourth context-tools category**
+in `resolveActiveTools` (the knowledge/expert precedent — *not* the `Integration`
+array, since MCP servers carry no `ServiceKind`); **stable per-server tool-name
+prefix**, sanitised + collision-safe (`mcp/tool-naming.ts`). (4) Gating: a server
+**`onByDefault`** flag + a **per-persona tri-state override** (`PersonaRow.mcpOverrides`,
+unset → default) — new on-by-default servers are instantly available everywhere; no
+cockpit chip (Chris's call). (5) **Approval gate** — non-`autoRun` servers surface a
+chat **modal** (server · tool · args → Approve / Deny / "always allow") that pauses
+`execute` until the user decides; deny aborts **before** any key decrypt or network
+(test-pinned). (6) Per-server **auth** (Bearer or custom header), MasterKey-sealed
+(slot `mcp/<id>/api-key`), opened only at call time. (7) UI: an **MCP Servers**
+settings accordion (`McpServersSection` + `McpServerSheet` with the Test button) and a
+**per-persona override** section in the persona editor. **Dexie v18** (`mcpServers`
+table + `mcpOverrides`; v17 was the parallel expertWeb feature — renumbered to avoid
+the collision). **Not a §9-gated path** (client-only; no auth/sync/proxy/crypto), but
+the new **outbound egress** + credential handling + approval gate got a Larissa round
+anyway — egress + the M1 (malicious-server prompt-injection, gate-mitigated) acceptance
+logged in [[insights/security-deferrals]]. Merged onto the lore/duplicate-send master
+cleanly (auto-merge, no conflicts in the two shared files `stream-manager`/`chat-page`).
+Verification (on master after squash): `pnpm typecheck` **0 errors**; user-client
+vitest **1204 pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline, verified identical on master); `pnpm run build` **9/9**;
+biome clean on the staged tree (note: a **pre-existing** `index.css` biome-format issue
+exists on master from the parallel picker work — **not** from MCP, untouched here).
+Spec/plan: [[../superpowers/specs/2026-06-08-mcp-client-design]],
+[[../superpowers/plans/2026-06-08-mcp-client]]. **Device test (spec §14):** add a
+stateless public HTTPS MCP server (no proxy → resolves `direct`, tools appear); a
+proxy-only server (its host must be in the `cors-proxy.tidesson.net` **allowlist**; if
+session-based, the proxy must forward + **expose** the `mcp-session-id` header —
+`Access-Control-Expose-Headers` — the test surfaces both gaps distinctly); a `/mcp`-suffix
+discovery; two servers with a same-named tool (both wire names unique); the
+default + per-persona override matrix; the approval modal (deny → companion explains;
+approve → runs; "always allow" → skips next time); prefix edit + tool-hide; a
+custom-header server; and a **multi-turn** loop (the companion answers from the tool
+result in its own voice). **Next:** Chris device-tests → **Liz pushes the master
+backlog on his word** (Liz must NOT push). MCP is the first external-tool surface;
+remaining roadmap items unchanged (memory/Block-1 port still the notable gap).
+
+**Earlier 2026-06-08 — Subagent improvements landed**
 (squashed onto master `146328e`, **NOT pushed**; **NOT yet device-verified**).
 Three threads in one feature unit, brainstormed end-to-end with Chris, built
 **subagent-driven** in an isolated worktree (13 tasks, per-task review + a final
