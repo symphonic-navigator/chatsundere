@@ -35,6 +35,7 @@ test('accumulates token text, fires onProgress with running char counts, strips 
   const out = await authorArtefact({
     base,
     brief: 'a heading',
+    reasoning: { enabled: false },
     onProgress,
     streamFn: streamFn as never,
   });
@@ -48,6 +49,7 @@ test('throws on an error chunk and on empty output', async () => {
     authorArtefact({
       base,
       brief: 'x',
+      reasoning: { enabled: false },
       streamFn: fakeStream([{ type: 'error', message: 'boom' }]) as never,
     }),
   ).rejects.toThrow(/boom/);
@@ -55,6 +57,7 @@ test('throws on an error chunk and on empty output', async () => {
     authorArtefact({
       base,
       brief: 'x',
+      reasoning: { enabled: false },
       streamFn: fakeStream([{ type: 'finish', reason: 'stop' }]) as never,
     }),
   ).rejects.toThrow(/empty/i);

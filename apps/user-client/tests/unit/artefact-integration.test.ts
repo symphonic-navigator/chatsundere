@@ -42,12 +42,15 @@ test('execute authors a file, persists it, returns the id via meta + progress', 
       return '<!doctype html><title>x</title>';
     },
     resolveBase: () => ({
-      provider: {} as never,
-      providerConfig: {} as never,
-      apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
-      target: { slug: 'glm-5.1' } as never,
+      base: {
+        provider: {} as never,
+        providerConfig: {} as never,
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        target: { slug: 'glm-5.1' } as never,
+      },
+      reasoning: { enabled: false },
     }),
   });
   const r = await tool.execute({ title: 'Calc', brief: 'a calculator' }, undefined, onProgress);
@@ -66,12 +69,15 @@ test('invalidates the chat artefacts query so the lightbox sees the new row', as
   const tool = makeArtefactTool(ctx(), {
     author: async () => '<!doctype html><title>x</title>',
     resolveBase: () => ({
-      provider: {} as never,
-      providerConfig: {} as never,
-      apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
-      target: { slug: 'glm-5.1' } as never,
+      base: {
+        provider: {} as never,
+        providerConfig: {} as never,
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        target: { slug: 'glm-5.1' } as never,
+      },
+      reasoning: { enabled: false },
     }),
   });
   await tool.execute({ title: 'Calc', brief: 'a calculator' });
@@ -83,12 +89,15 @@ test('missing key → failed result, nothing persisted', async () => {
   const tool = makeArtefactTool(ctx({ getKey: async () => null }), {
     author: async () => '<x>',
     resolveBase: () => ({
-      provider: {} as never,
-      providerConfig: {} as never,
-      apiKey: '',
-      corsProxyUrl: null,
-      corsProxyKey: null,
-      target: {} as never,
+      base: {
+        provider: {} as never,
+        providerConfig: {} as never,
+        apiKey: '',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        target: {} as never,
+      },
+      reasoning: { enabled: false },
     }),
   });
   const r = await tool.execute({ title: 'A', brief: 'b' });

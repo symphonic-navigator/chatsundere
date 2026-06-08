@@ -23,12 +23,13 @@ import {
 } from '../data/attachments.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
+import { buildWebTools } from '../integrations/web/build-web-tools.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
 import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
-import type { ExpertBase } from '../tools/ask-expert.js';
+import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
 import {
   dispatch as dispatchTool,
   resolveActiveTools,
@@ -80,6 +81,8 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   expertModelLabel?: string;
   /** Reasoning intent for the expert call (typically max-effort). */
   expertReasoning?: ReasoningIntent;
+  /** Resolved expert web backends; null = no web tools for the expert. */
+  expertWeb?: import('../lib/resolve-expert-web.js').ResolvedExpertWeb | null;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -386,6 +389,17 @@ function runIntoDraft(
         modelLabel: args.expertModelLabel ?? 'expert',
         reasoning: args.expertReasoning ?? { enabled: true },
         runtimeEnabled: useCurrentChatStore.getState().askExpert,
+        web: args.expertWeb
+          ? {
+              tools: buildWebTools({
+                search: args.expertWeb.search,
+                fetch: args.expertWeb.fetch,
+                ctx: args.expertWeb.ctx,
+                getKey: integrationCtx.getKey,
+              }),
+              maxRounds: EXPERT_MAX_ROUNDS,
+            }
+          : undefined,
       }
     : null;
   const activeTools = toolsActive ? resolveActiveTools(integrationCtx, knowledge, expert) : [];

@@ -1,25 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
-  type CompletionTarget,
-  type ProviderConfig,
-  type ProviderDefinition,
   type ReasoningIntent,
   type StreamChunk,
+  type ToolDef,
   type WireMessage,
   streamCompletion,
 } from '@chatsundere/llm-unified';
-import type { Tool, ToolResult } from './types.js';
+import type { SubagentBase } from '../lib/subagent-base.js';
+import { dispatch, toolDefs } from './tool-defs.js';
+import type { Tool, ToolProgress, ToolResult } from './types.js';
 
-/** The shared subset of StreamCompletionArgs the expert call needs (resolved on
- *  the send path, which holds the MasterKey). */
-export interface ExpertBase {
-  provider: ProviderDefinition;
-  providerConfig: ProviderConfig;
-  apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
-  target: CompletionTarget;
-}
+/** @deprecated alias — use SubagentBase. Kept so existing imports resolve. */
+export type ExpertBase = SubagentBase;
+
+/** Default cap on web-executing rounds before a tools-less answer is forced. */
+export const EXPERT_MAX_ROUNDS = 8;
 
 export const EXPERT_SYSTEM_PROMPT =
   'You are a subject-matter expert consulted on a single, self-contained technical ' +
@@ -27,6 +22,8 @@ export const EXPERT_SYSTEM_PROMPT =
   'domain. Answer it precisely, rigorously, and completely; show the key steps where they ' +
   'aid correctness. You have no access to any prior conversation, so treat the question as ' +
   'wholly standalone and do not ask for clarification — state any assumptions you must make. ' +
+  'You may use web_search / web_fetch when current or external facts would improve the answer; ' +
+  'keep it to a few focused searches, then answer. ' +
   'Answer the question as asked, without moralising or adding unsolicited caveats.';
 
 const INSTRUCTION =
@@ -38,12 +35,20 @@ const INSTRUCTION =
   'expert, nothing else from this conversation. Then weave the expert’s answer into your own ' +
   'reply, in your own voice.';
 
+/** Optional web access for the expert: the web tools (from buildWebTools) and the
+ *  round cap for the tool loop. */
+export interface ExpertWeb {
+  tools: Tool[];
+  maxRounds: number;
+}
+
 /**
  * Build the ask_expert tool over a resolved expert model. The expert sees ONLY
- * `[system(EXPERT_SYSTEM_PROMPT), user(question)]` — no history, no persona, no
- * tools (the structural-isolation invariant). The caller is expected to pass
- * max-effort reasoning (via `maxReasoningIntent`) so the reasoning pill can show
- * live progress and a long trace is not timeout-capped.
+ * `[system(EXPERT_SYSTEM_PROMPT), user(question)]` — no history, no persona. When
+ * `expertWeb` is supplied the expert may additionally call web tools, with the
+ * conversation bounded by `expertWeb.maxRounds` before a final tools-less answer
+ * is forced. Without `expertWeb` the structural-isolation invariant holds: a single
+ * `streamCompletion` call with no tools.
  * `runtimeEnabled` is the per-chat cockpit toggle: when false the tool stays in
  * `toolDefs` (cache-prefix stable) but execute returns a constructive error.
  */
@@ -53,6 +58,7 @@ export function createAskExpertTool(
   reasoning: ReasoningIntent,
   runtimeEnabled: boolean,
   streamFn: typeof streamCompletion = streamCompletion,
+  expertWeb?: ExpertWeb,
 ): Tool {
   return {
     name: 'ask_expert',
@@ -85,46 +91,112 @@ export function createAskExpertTool(
         return { ok: false, output: '', error: 'No question provided.' };
       }
 
+      const webTools = expertWeb?.tools ?? [];
+      const webDefs: ToolDef[] = webTools.length > 0 ? toolDefs(webTools) : [];
+      const maxRounds = expertWeb?.maxRounds ?? 0;
+
+      // INVARIANT (isolation): the conversation begins with EXACTLY the expert
+      // system prompt + the sanitised question. Only the expert's OWN tool calls
+      // and their results are appended below — never persona/history/about-me.
       const messages: WireMessage[] = [
         { role: 'system', content: EXPERT_SYSTEM_PROMPT },
         { role: 'user', content: question },
       ];
       let answer = '';
       let reasoningChars = 0;
-      try {
-        for await (const chunk of streamFn({
-          provider: base.provider,
-          providerConfig: base.providerConfig,
-          apiKey: base.apiKey,
-          corsProxyUrl: base.corsProxyUrl,
-          corsProxyKey: base.corsProxyKey,
-          target: base.target,
-          messages,
-          bodyExtras: { reasoning },
-          signal,
-        } as Parameters<typeof streamCompletion>[0])) {
-          const c = chunk as StreamChunk;
-          if (c.type === 'reasoning') {
-            reasoningChars += c.text.length;
-            onProgress?.({ charCount: reasoningChars, phase: 'reasoning' });
-          } else if (c.type === 'token') {
-            answer += c.text;
-            onProgress?.({ charCount: answer.length, phase: 'answer' });
-          } else if (c.type === 'error') {
-            throw new Error(c.message);
+      const webSteps: { kind: 'searching' | 'fetching'; detail: string }[] = [];
+
+      for (let round = 0; ; round++) {
+        const forceAnswer = maxRounds === 0 || round >= maxRounds;
+        let roundAnswer = '';
+        const roundCalls: { toolCallId: string; name: string; argumentsJson: string }[] = [];
+        try {
+          for await (const chunk of streamFn({
+            provider: base.provider,
+            providerConfig: base.providerConfig,
+            apiKey: base.apiKey,
+            corsProxyUrl: base.corsProxyUrl,
+            corsProxyKey: base.corsProxyKey,
+            target: base.target,
+            messages,
+            bodyExtras: { reasoning },
+            tools: forceAnswer || webDefs.length === 0 ? undefined : webDefs,
+            signal,
+          } as Parameters<typeof streamCompletion>[0])) {
+            const c = chunk as StreamChunk;
+            if (c.type === 'reasoning') {
+              reasoningChars += c.text.length;
+              onProgress?.({ charCount: reasoningChars, phase: 'reasoning' });
+            } else if (c.type === 'token') {
+              roundAnswer += c.text;
+              onProgress?.({ charCount: roundAnswer.length, phase: 'answer' });
+            } else if (c.type === 'tool-call') {
+              roundCalls.push({
+                toolCallId: c.toolCallId,
+                name: c.name,
+                argumentsJson: c.argumentsJson,
+              });
+            } else if (c.type === 'error') {
+              throw new Error(c.message);
+            }
           }
+        } catch (e) {
+          return {
+            ok: false,
+            output: '',
+            error: e instanceof Error ? e.message : 'Expert call failed.',
+          };
         }
-      } catch (e) {
-        return {
-          ok: false,
-          output: '',
-          error: e instanceof Error ? e.message : 'Expert call failed.',
-        };
+
+        if (roundCalls.length === 0 || forceAnswer) {
+          answer = roundAnswer;
+          break;
+        }
+
+        const toolResultMsgs: WireMessage[] = [];
+        for (const call of roundCalls) {
+          const onWebProgress = (p: ToolProgress): void => {
+            if (p.phase === 'searching' || p.phase === 'fetching') {
+              webSteps.push({ kind: p.phase, detail: p.detail ?? '' });
+              onProgress?.({ charCount: p.charCount, phase: p.phase, detail: p.detail });
+            }
+          };
+          const parsed = ((): Record<string, unknown> => {
+            try {
+              const v = JSON.parse(call.argumentsJson);
+              return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+            } catch {
+              return {};
+            }
+          })();
+          const r = await dispatch(webTools, call.name, parsed, signal, onWebProgress);
+          toolResultMsgs.push({
+            role: 'tool',
+            tool_call_id: call.toolCallId,
+            content: r.ok ? r.output : (r.error ?? ''),
+          });
+        }
+        messages.push({
+          role: 'assistant',
+          content: roundAnswer,
+          tool_calls: roundCalls.map((c) => ({
+            id: c.toolCallId,
+            type: 'function',
+            function: { name: c.name, arguments: c.argumentsJson },
+          })),
+        });
+        messages.push(...toolResultMsgs);
       }
+
       if (answer.trim().length === 0) {
         return { ok: false, output: '', error: 'The expert returned no answer.' };
       }
-      return { ok: true, output: answer, error: null, meta: { question, model: modelLabel } };
+      return {
+        ok: true,
+        output: answer,
+        error: null,
+        meta: { question, model: modelLabel, webSteps },
+      };
     },
   };
 }

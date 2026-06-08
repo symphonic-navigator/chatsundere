@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { getOffering, getProvider, offeringToTarget } from '@chatsundere/llm-unified';
+import {
+  type ReasoningIntent,
+  getOffering,
+  getProvider,
+  offeringToTarget,
+} from '@chatsundere/llm-unified';
 import { addGeneratedArtefact } from '../../data/artefacts.js';
 import { QK } from '../../data/queryKeys.js';
 import {
@@ -8,6 +13,8 @@ import {
   authorArtefact,
 } from '../../lib/artefact-author.js';
 import { queryClient } from '../../lib/queryClient.js';
+import { initialReasoningState, resolveReasoningBodyExtras } from '../../lib/reasoning-resolver.js';
+import type { SubagentBase } from '../../lib/subagent-base.js';
 import type { Tool, ToolResult } from '../../tools/types.js';
 import type { Integration, IntegrationContext } from '../types.js';
 
@@ -22,24 +29,33 @@ const INSTRUCTION =
 /** Injectable seams (real defaults below) so the tool is unit-testable. */
 export interface ArtefactToolDeps {
   author?: (args: AuthorArtefactArgs) => Promise<string>;
-  resolveBase?: (ctx: IntegrationContext) => AuthorBase;
+  resolveBase?: (ctx: IntegrationContext) => { base: SubagentBase; reasoning: ReasoningIntent };
 }
 
-function defaultResolveBase(ctx: IntegrationContext): AuthorBase {
+function defaultResolveBase(ctx: IntegrationContext): {
+  base: SubagentBase;
+  reasoning: ReasoningIntent;
+} {
   const providerDef = getProvider(ctx.personaOffering.providerId);
   const offering = getOffering(ctx.personaOffering.providerId, ctx.personaOffering.upstreamSlug);
   if (!providerDef || !offering) throw new Error('Artefact author: persona model not resolvable');
+  const control = offering.profile.reasoning;
+  const reasoning = (resolveReasoningBodyExtras(control, initialReasoningState(control))
+    .reasoning as ReasoningIntent | undefined) ?? { enabled: false };
   return {
-    provider: providerDef,
-    providerConfig: {
-      baseUrl: providerDef.baseUrl,
-      routing:
-        providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+    base: {
+      provider: providerDef,
+      providerConfig: {
+        baseUrl: providerDef.baseUrl,
+        routing:
+          providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+      },
+      apiKey: '', // filled by execute (async key fetch)
+      corsProxyUrl: ctx.corsProxyUrl,
+      corsProxyKey: ctx.corsProxyKey,
+      target: offeringToTarget(offering),
     },
-    apiKey: '', // filled by execute (async key fetch)
-    corsProxyUrl: ctx.corsProxyUrl,
-    corsProxyKey: ctx.corsProxyKey,
-    target: offeringToTarget(offering),
+    reasoning,
   };
 }
 
@@ -76,10 +92,12 @@ export function makeArtefactTool(ctx: IntegrationContext, deps: ArtefactToolDeps
         const key = await ctx.getKey(ctx.personaOffering.providerId);
         if (!key)
           return { ok: false, output: '', error: 'No API key for the artefact author model.' };
-        const base = { ...resolveBase(ctx), apiKey: key };
+        const resolved = resolveBase(ctx);
+        const base = { ...resolved.base, apiKey: key };
         const content = await author({
           base,
           brief,
+          reasoning: resolved.reasoning,
           signal,
           onProgress: (n) => onProgress?.({ charCount: n }),
         });

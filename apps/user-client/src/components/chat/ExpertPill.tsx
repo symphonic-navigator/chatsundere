@@ -9,7 +9,9 @@ interface ExpertPayload {
   result?: string;
   error?: string;
   charCount?: number;
-  phase?: 'reasoning' | 'answer';
+  phase?: 'reasoning' | 'answer' | 'searching' | 'fetching';
+  detail?: string;
+  webSteps?: { kind: 'searching' | 'fetching'; detail: string }[];
 }
 
 function questionOf(p: ExpertPayload): string {
@@ -33,16 +35,34 @@ export function ExpertPill({ row }: { row: PillRow }): JSX.Element {
   const chars = (p.charCount ?? 0).toLocaleString();
 
   if (row.status === 'pending') {
-    const verb = p.phase === 'answer' ? 'answering' : 'thinking';
+    let sub: JSX.Element;
+    if (p.phase === 'searching') {
+      sub = (
+        <>
+          searching the web · <em>{p.detail}</em>
+        </>
+      );
+    } else if (p.phase === 'fetching') {
+      sub = (
+        <>
+          reading · <em>{p.detail}</em>
+        </>
+      );
+    } else {
+      const verb = p.phase === 'answer' ? 'answering' : 'thinking';
+      sub = (
+        <>
+          {verb} · {chars} chars
+        </>
+      );
+    }
     return (
       <span className="artefact-pill" data-state="building">
         <span className="artefact-pill-ic" aria-hidden>
           ↑
         </span>
         <span className="artefact-pill-ttl">{model}</span>
-        <span className="artefact-pill-sub">
-          {verb} · {chars} chars
-        </span>
+        <span className="artefact-pill-sub">{sub}</span>
         <span className="artefact-pill-bar">
           <i />
         </span>
@@ -85,6 +105,15 @@ export function ExpertPill({ row }: { row: PillRow }): JSX.Element {
       {expanded ? (
         <span className="pill-detail">
           {question && <code className="pill-detail-code">{question}</code>}
+          {p.webSteps && p.webSteps.length > 0 ? (
+            <span className="pill-detail-websteps">
+              {p.webSteps.map((s, i) => (
+                <span key={`${s.kind}-${i}`} className="pill-webstep">
+                  {s.kind === 'searching' ? 'searched' : 'read'} · {s.detail}
+                </span>
+              ))}
+            </span>
+          ) : null}
           {p.result !== undefined && <code className="pill-detail-result">{p.result}</code>}
         </span>
       ) : null}

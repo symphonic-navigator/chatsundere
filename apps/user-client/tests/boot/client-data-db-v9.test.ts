@@ -70,7 +70,7 @@ describe('client-data-db v9 (tonality flag + global-instructions rename)', () =>
   it('reports verno === 11 on a fresh install and seeds globalInstructions', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(16);
+    expect(db.verno).toBe(17);
     const settings = await db.settings.get(1);
     expect(settings).toHaveProperty('globalInstructions');
     expect((settings as unknown as Record<string, unknown>).globalUnlockerPrompt).toBeUndefined();
@@ -81,7 +81,7 @@ describe('client-data-db v9 (tonality flag + global-instructions rename)', () =>
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(16);
+    expect(db.verno).toBe(17);
     const settings = await db.settings.get(1);
     const persona = await db.personas.get('p1');
     expect(settings?.globalInstructions).toBe('OLD UNLOCKER TEXT');

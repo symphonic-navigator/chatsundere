@@ -23,6 +23,7 @@ import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
 import { buildLoreContext } from '../knowledge/lore-context.js';
 import { KNOWLEDGE_LORE_OPTS } from '../knowledge/lore.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
+import { type ResolvedExpertWeb, resolveExpertWeb } from '../lib/resolve-expert-web.js';
 import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
 import { webBackendOptions } from '../lib/web-backend-options.js';
@@ -85,6 +86,7 @@ interface PersonaContext {
   expertBase: ExpertBase | null;
   expertModelLabel: string | null;
   expertReasoning: ReasoningIntent | null;
+  expertWeb: ResolvedExpertWeb | null;
 }
 
 /**
@@ -137,6 +139,16 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
 
   const expert = await resolveExpert(settings.expertModel ?? null, mk, corsProxyUrl, corsProxyKey);
 
+  const expertWeb = settings.expertModel
+    ? resolveExpertWeb({
+        expertWeb: settings.expertWeb ?? { search: null, fetch: null, searchTierId: null },
+        options: webOptions,
+        nsfwAllowed: persona.adultPersona,
+        corsProxyUrl,
+        corsProxyKey,
+      })
+    : null;
+
   return {
     chat,
     persona,
@@ -157,6 +169,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     expertBase: expert?.base ?? null,
     expertModelLabel: expert?.modelLabel ?? null,
     expertReasoning: expert?.reasoning ?? null,
+    expertWeb: expertWeb ?? null,
   };
 }
 
@@ -410,6 +423,7 @@ export function useSendMessage() {
         expertBase: ctx.expertBase ?? undefined,
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,
+        expertWeb: ctx.expertWeb ?? null,
       });
 
       return chatId;
@@ -520,6 +534,7 @@ export function useRegenerate() {
         expertBase: ctx.expertBase ?? undefined,
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,
+        expertWeb: ctx.expertWeb ?? null,
       });
     },
 

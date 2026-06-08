@@ -20,6 +20,9 @@ export interface SettingsRow {
   adultMode: 'nsfw' | 'sfw';
   corsProxy: { url: string; sharedKey: EncryptedBlob } | null;
   webInterfacing: { search: WebBackendSetting; fetch: WebBackendSetting };
+  /** Independent web search/fetch backends for the expert uplink. null fields mean "auto"
+   *  (resolved to exa+neural when available). searchTierId controls search depth. */
+  expertWeb: { search: WebBackendSetting; fetch: WebBackendSetting; searchTierId: string | null };
   /** Global substitute vision model — an offering ref "providerId:upstreamSlug"; null = none. */
   substituteVisionModel: string | null;
   /** Global expert model — an offering ref "templateId:upstreamSlug"; null = none.
@@ -570,6 +573,22 @@ class ClientDataDb extends Dexie {
             if (typeof p.askExpertDefault !== 'boolean') p.askExpertDefault = false;
           });
       });
+
+    // Version 17 — expert web access. Settings gain an independent `expertWeb`
+    // block selecting the expert uplink's own web search/fetch backends + depth.
+    // null backends mean "auto" (resolved to exa+neural when available).
+    this.version(17)
+      .stores({ settings: 'id' })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            if (s.expertWeb === undefined) {
+              s.expertWeb = { search: null, fetch: null, searchTierId: null };
+            }
+          });
+      });
   }
 }
 
@@ -679,6 +698,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         adultMode: 'nsfw',
         corsProxy: null,
         webInterfacing: { search: null, fetch: null },
+        expertWeb: { search: null, fetch: null, searchTierId: null },
         substituteVisionModel: null,
         expertModel: null,
         createdAt: now,

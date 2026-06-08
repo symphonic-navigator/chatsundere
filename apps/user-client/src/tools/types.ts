@@ -3,9 +3,12 @@
 /** Incremental progress a tool may report while executing (for live pills). */
 export interface ToolProgress {
   charCount: number;
-  /** Multi-phase tools (e.g. ask_expert) report which phase the count belongs to.
+  /** Multi-phase tools report which phase the count belongs to. ask_expert uses
+   *  'reasoning'/'answer' and, when the expert has web access, 'searching'/'fetching'.
    *  Optional — single-phase tools (artefact author) omit it. */
-  phase?: 'reasoning' | 'answer';
+  phase?: 'reasoning' | 'answer' | 'searching' | 'fetching';
+  /** Optional human-readable detail for the phase (search query, fetched host). */
+  detail?: string;
 }
 
 /** The outcome of executing a tool. `output` is handed to the model verbatim

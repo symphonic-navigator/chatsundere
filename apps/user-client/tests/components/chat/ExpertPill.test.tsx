@@ -68,4 +68,39 @@ describe('ExpertPill', () => {
     render(<ExpertPill row={row({ status: 'failed' }, { model: 'Big Model', error: 'boom' })} />);
     expect(screen.getByText(/boom/)).toBeInTheDocument();
   });
+
+  it('shows the searching phase with the query while pending', () => {
+    render(
+      <ExpertPill
+        row={row(
+          { status: 'pending' },
+          { model: 'opus', phase: 'searching', detail: 'lie groups', charCount: 9 },
+        )}
+      />,
+    );
+    expect(screen.getByText(/searching the web/i)).toBeInTheDocument();
+    expect(screen.getByText(/lie groups/i)).toBeInTheDocument();
+  });
+
+  it('lists web steps in the expanded completed pill', () => {
+    render(
+      <ExpertPill
+        row={row(
+          { status: 'completed' },
+          {
+            model: 'opus',
+            question: 'Q',
+            result: 'A',
+            webSteps: [
+              { kind: 'searching', detail: 'q1' },
+              { kind: 'fetching', detail: 'example.com' },
+            ],
+          },
+        )}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText(/q1/)).toBeInTheDocument();
+    expect(screen.getByText(/example\.com/)).toBeInTheDocument();
+  });
 });

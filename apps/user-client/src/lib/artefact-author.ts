@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
-  type CompletionTarget,
-  type ProviderConfig,
-  type ProviderDefinition,
+  type ReasoningIntent,
   type StreamChunk,
   type WireMessage,
   streamCompletion,
 } from '@chatsundere/llm-unified';
+import type { SubagentBase } from './subagent-base.js';
 
 export const AUTHOR_SYSTEM_PROMPT =
   'You are a single-file web-app author. Output EXACTLY ONE self-contained HTML file and ' +
@@ -25,18 +24,14 @@ export function stripFences(text: string): string {
   return t.trim();
 }
 
-export interface AuthorBase {
-  provider: ProviderDefinition;
-  providerConfig: ProviderConfig;
-  apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
-  target: CompletionTarget;
-}
+/** @deprecated alias — use SubagentBase. Kept so existing imports resolve. */
+export type AuthorBase = SubagentBase;
 
 export interface AuthorArtefactArgs {
   base: AuthorBase;
   brief: string;
+  /** The author model's reasoning intent (its chat-default, resolved by the caller). */
+  reasoning: ReasoningIntent;
   signal?: AbortSignal;
   /** Live running character count of the file so far. */
   onProgress?: (charCount: number) => void;
@@ -51,6 +46,9 @@ export async function authorArtefact(args: AuthorArtefactArgs): Promise<string> 
     { role: 'system', content: AUTHOR_SYSTEM_PROMPT },
     { role: 'user', content: args.brief },
   ];
+  // When reasoning is on, double the token budget so reasoning tokens don't
+  // crowd out the actual HTML output.
+  const reasoningEnabled = args.reasoning.enabled === true;
   let acc = '';
   for await (const chunk of stream({
     provider: args.base.provider,
@@ -60,8 +58,11 @@ export async function authorArtefact(args: AuthorArtefactArgs): Promise<string> 
     corsProxyKey: args.base.corsProxyKey,
     target: args.base.target,
     messages,
-    // No reasoning (we want the file, not a trace), no tools, generous output.
-    bodyExtras: { temperature: 0.4, max_tokens: 8192, reasoning: { enabled: false } },
+    bodyExtras: {
+      temperature: 0.4,
+      max_tokens: reasoningEnabled ? 16384 : 8192,
+      reasoning: args.reasoning,
+    },
     signal: args.signal,
   } as Parameters<typeof streamCompletion>[0])) {
     const c = chunk as StreamChunk;

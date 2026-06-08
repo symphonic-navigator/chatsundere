@@ -3,6 +3,7 @@
 import {
   type ServiceKind,
   aggregateServiceKinds,
+  getOffering,
   getProvider,
   providerServiceKinds,
   providersContributing,
@@ -17,6 +18,8 @@ import { CapBadgeRow } from '../../components/CapBadgeRow.js';
 import { CorsProxyBlock } from '../../components/CorsProxyBlock.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
+import { ExpertWebSection } from '../../components/ExpertWebSection.js';
+import type { ExpertWebValue } from '../../components/ExpertWebSection.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
@@ -26,6 +29,7 @@ import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../lib/built-in-providers.js';
+import { pickExpertSearchRef } from '../../lib/resolve-expert-web.js';
 import { usableTemplateIds, useUsableTemplateIds } from '../../lib/usable-providers.js';
 import { webBackendOptions } from '../../lib/web-backend-options.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
@@ -238,6 +242,59 @@ export function ProvidersSection(): JSX.Element {
 }
 
 /**
+ * Expert web settings: search/fetch backend pickers and depth control for the
+ * expert uplink's own web access. Hidden-until-unlocked (same gate as chat web).
+ * Disabled-over-hidden for the needs-proxy and needs-expert-model states.
+ * Owns the data wiring so `ExpertWebSection` stays pure.
+ */
+function ExpertWebSettings(): JSX.Element | null {
+  const usable = useUsableTemplateIds();
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  if (!aggregateServiceKinds(usable).includes('web')) return null;
+  const hasProxy = settings.data?.corsProxy != null;
+  const options = webBackendOptions(usable, hasProxy);
+  if (options.length === 0) {
+    return (
+      <AccordionCard icon="◍" label="Expert web" meta="Search & fetch for the expert">
+        <p className="web-needs-proxy">
+          The expert&apos;s web search and fetch need a CORS proxy. Set one up under Upstream
+          Providers above to enable them.
+        </p>
+      </AccordionCard>
+    );
+  }
+  if (settings.data?.expertModel == null) {
+    return (
+      <AccordionCard icon="◍" label="Expert web" meta="Search & fetch for the expert">
+        <p className="web-needs-proxy">
+          Choose an expert model above to enable the expert&apos;s web access.
+        </p>
+      </AccordionCard>
+    );
+  }
+  const ew: ExpertWebValue = settings.data?.expertWeb ?? {
+    search: null,
+    fetch: null,
+    searchTierId: null,
+  };
+  const searchRef = pickExpertSearchRef(ew.search, options);
+  const searchTiers = searchRef
+    ? (getOffering(searchRef.providerId, searchRef.upstreamSlug)?.web?.searchTiers ?? [])
+    : [];
+  return (
+    <AccordionCard icon="◍" label="Expert web" meta="Search & fetch for the expert">
+      <ExpertWebSection
+        options={options}
+        value={ew}
+        searchTiers={searchTiers}
+        onChange={(next) => update.mutate({ expertWeb: next })}
+      />
+    </AccordionCard>
+  );
+}
+
+/**
  * Web-interfacing settings, hidden-until-unlocked: only mounts once a usable
  * provider contributes a `web` offering (spec §2.5 — a deliberate exception to
  * "disabled over hidden", which still applies *within* the section). All web
@@ -428,6 +485,8 @@ export function Settings(): JSX.Element {
       <AccordionCard icon="↑" label="Expert uplink" meta="Ask a stronger model for hard questions">
         <ExpertModelSetting />
       </AccordionCard>
+
+      <ExpertWebSettings />
 
       <SaveBar
         onCancel={onCancel}

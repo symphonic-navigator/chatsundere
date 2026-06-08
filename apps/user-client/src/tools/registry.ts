@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ReasoningIntent, ToolDef } from '@chatsundere/llm-unified';
+import type { ReasoningIntent } from '@chatsundere/llm-unified';
 import { INTEGRATIONS } from '../integrations/index.js';
 import type { IntegrationContext } from '../integrations/types.js';
 import { type KnowledgeContext, contributeKnowledgeTools } from '../knowledge/query-tool.js';
-import { type ExpertBase, createAskExpertTool } from './ask-expert.js';
+import { type ExpertBase, type ExpertWeb, createAskExpertTool } from './ask-expert.js';
 import { calculateJs } from './calculate-js.js';
-import type { Tool, ToolResult } from './types.js';
+import type { Tool } from './types.js';
 
 /** Always-on tools (omakase — no per-tool toggle). */
 const STATIC_TOOLS: readonly Tool[] = [calculateJs];
@@ -16,6 +16,8 @@ export interface ExpertToolContext {
   modelLabel: string;
   reasoning: ReasoningIntent;
   runtimeEnabled: boolean;
+  /** Optional web access for the expert: resolved tools + round cap. */
+  web?: ExpertWeb;
 }
 
 /** The active tool set for this send: static tools, every integration-contributed
@@ -37,15 +39,12 @@ export function resolveActiveTools(
             expert.modelLabel,
             expert.reasoning,
             expert.runtimeEnabled,
+            undefined,
+            expert.web,
           ),
         ]
       : []),
   ];
-}
-
-/** Wire tool definitions for the given active tools. */
-export function toolDefs(tools: Tool[]): ToolDef[] {
-  return tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
 }
 
 /** Joined non-null `systemPromptInstruction`s for the Band-3 tools segment, or
@@ -55,18 +54,4 @@ export function systemPromptSegment(tools: Tool[]): string | null {
   return lines.length > 0 ? lines.join('\n\n') : null;
 }
 
-/** Execute a tool by name within the given active set. An unknown name returns a
- *  structured error rather than throwing — a model can hallucinate a tool name. */
-export function dispatch(
-  tools: Tool[],
-  name: string,
-  args: Record<string, unknown>,
-  signal?: AbortSignal,
-  onProgress?: (p: import('./types.js').ToolProgress) => void,
-): Promise<ToolResult> {
-  const tool = tools.find((t) => t.name === name);
-  if (!tool) {
-    return Promise.resolve({ ok: false, output: '', error: `Unknown tool: ${name}` });
-  }
-  return tool.execute(args, signal, onProgress);
-}
+export { dispatch, toolDefs } from './tool-defs.js';
