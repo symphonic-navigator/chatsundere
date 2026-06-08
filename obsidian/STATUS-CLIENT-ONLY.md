@@ -32,7 +32,12 @@ usability defects **block the squash** like a Larissa critical (not deferrable
 without Chris's sign-off); taste is advisory (Chris arbitrates). Gate discipline in
 CLAUDE.md **§9 renamed "Audit Gates"** (9.1 Larissa, 9.2 Laura) + §1-roster and
 §15-index entries; deferrals log `obsidian/insights/ux-deferrals.md`. **Design
-language still deferred** (its own upcoming session). **First real run: the TTI
+language — round-1 brainstorm held 2026-06-08, then consciously parked by Chris**
+(1-2 days to reflect; direction approved in spirit). First reference
+`visuals/redesign-idea-1.png` (380 px Entrance-Hall: Instrument-Serif heading,
+status pills, "Continue page" anchor, 2-col grid of eight neon-glow "My X" cards).
+Capture + the four ranked tensions + the open push/pop-vs-expand-in-place fork in
+[[insights/2026-06-08-design-language-brainstorm-1]]. **First real Laura run: the TTI
 spec-pass.** Spec/plan:
 [[../superpowers/specs/2026-06-08-laura-ux-auditor-design]],
 [[../superpowers/plans/2026-06-08-laura-ux-auditor]]. **Next:** TTI feature — Laura
