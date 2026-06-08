@@ -17,7 +17,8 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-08 (latest) — **Substitute-vision as a live in-stream pill**
-(squashed onto master `a7c05d0`, **NOT pushed**; **NOT yet device-verified**). A UX
+(squashed onto master `a7c05d0`, **NOT pushed**; **DEVICE-CONFIRMED by Chris 2026-06-08**
+— "ich mag es sehr, so wie es jetzt ist! großartig!"). A UX
 redesign of the substitute-vision flow (active model can't see images → a substitute
 vision model describes them), brainstormed end-to-end with Chris, built
 **subagent-driven** in an isolated worktree (4 TDD tasks + a label-polish fix, Task-4
