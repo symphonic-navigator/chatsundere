@@ -32,6 +32,7 @@ describe('Dexie v10 migration', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

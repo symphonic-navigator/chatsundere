@@ -3,6 +3,9 @@
 /** Incremental progress a tool may report while executing (for live pills). */
 export interface ToolProgress {
   charCount: number;
+  /** Multi-phase tools (e.g. ask_expert) report which phase the count belongs to.
+   *  Optional — single-phase tools (artefact author) omit it. */
+  phase?: 'reasoning' | 'answer';
 }
 
 /** The outcome of executing a tool. `output` is handed to the model verbatim

@@ -63,6 +63,7 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -159,6 +160,7 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: now,
       updatedAt: now,
     });

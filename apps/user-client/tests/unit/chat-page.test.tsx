@@ -63,6 +63,7 @@ async function seedPersonaWithMindspace() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -101,6 +102,7 @@ describe('ChatPage', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: 1,
       updatedAt: 1,
     });
@@ -240,6 +242,7 @@ describe('ChatPage', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: 1,
       updatedAt: 1,
     });

@@ -143,6 +143,7 @@ async function seedFixtures(): Promise<{ persona: PersonaRow; chat: ChatRow }> {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: 1,
     updatedAt: 1,
   };

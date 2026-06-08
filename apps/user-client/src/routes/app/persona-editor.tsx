@@ -82,6 +82,7 @@ function defaultDraft(
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
   };
 }
 
@@ -587,6 +588,38 @@ export function PersonaEditor(): JSX.Element {
             <span
               className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
                 draft.chatsundereTonality ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm text-paper">Ask an expert by default</div>
+            <p className="text-[11px] text-paper-soft">
+              Default for new chats; override per chat from the cockpit.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Ask an expert by default"
+            aria-pressed={draft.askExpertDefault}
+            disabled={settings.data?.expertModel == null}
+            title={
+              settings.data?.expertModel == null
+                ? 'Choose a global expert model in Settings first.'
+                : undefined
+            }
+            onClick={() => patch({ askExpertDefault: !draft.askExpertDefault })}
+            className={`h-6 w-12 shrink-0 rounded-full border ${
+              draft.askExpertDefault
+                ? 'border-paper bg-paper/30'
+                : 'border-paper-soft/30 bg-white/5'
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            <span
+              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                draft.askExpertDefault ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
           </button>

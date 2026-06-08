@@ -39,6 +39,7 @@ async function seedPersona(id: string, name: string, adultPersona = false): Prom
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: now,
     updatedAt: now,
   });

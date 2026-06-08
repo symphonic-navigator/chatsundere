@@ -29,6 +29,7 @@ async function seedChat() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -695,6 +696,116 @@ describe('stream-manager.store', () => {
 
     expect(capturedToolDefs.some((d) => d.name === 'query_knowledgebase')).toBe(true);
     expect(capturedStreamArgs.knowledgeLibrariesContext).toContain('Farblehre');
+    await store.abortDiscard(myChatId);
+  });
+
+  it('offers ask_expert tool when expertBase is provided and tool calls supported', async () => {
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-ask-expert-on';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    let capturedToolDefs: { name: string }[] = [];
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      toolDefs: { name: string }[];
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      capturedToolDefs = args.toolDefs;
+      void args.streamOnce({}, []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      (() =>
+        new Promise(() => {
+          /* never */
+        })) as never,
+    );
+
+    // Minimal ExpertBase — only shape matters; no real crypto or network call.
+    const expertBase = {
+      provider: nanoGpt,
+      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' as const } },
+      apiKey: 'expert-key',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      target: { slug: nanoGpt.offerings[0]?.upstreamSlug ?? '', bodyExtras: {} },
+    };
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      offering: { ...(model as object), profile: { toolCalls: { supported: true } } },
+      expertBase,
+      expertModelLabel: 'Test Expert',
+      expertReasoning: { enabled: true },
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedToolDefs.some((d) => d.name === 'ask_expert')).toBe(true);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('does not offer ask_expert when no expertBase is provided', async () => {
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-ask-expert-off';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    let capturedToolDefs: { name: string }[] = [];
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      toolDefs: { name: string }[];
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      capturedToolDefs = args.toolDefs;
+      void args.streamOnce({}, []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      (() =>
+        new Promise(() => {
+          /* never */
+        })) as never,
+    );
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      offering: { ...(model as object), profile: { toolCalls: { supported: true } } },
+      // no expertBase
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedToolDefs.some((d) => d.name === 'ask_expert')).toBe(false);
     await store.abortDiscard(myChatId);
   });
 

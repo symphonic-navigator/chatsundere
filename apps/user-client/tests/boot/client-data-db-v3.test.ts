@@ -97,6 +97,7 @@ describe('client-data-db v3 migration', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

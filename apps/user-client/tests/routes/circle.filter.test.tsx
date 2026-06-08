@@ -34,6 +34,7 @@ async function seedSfwAndNsfw() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: now,
     updatedAt: now,
   });
@@ -55,6 +56,7 @@ async function seedSfwAndNsfw() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -152,6 +154,7 @@ describe('Circle filter (adult mode)', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: now,
       updatedAt: now,
     });

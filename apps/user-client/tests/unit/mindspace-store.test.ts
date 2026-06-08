@@ -45,6 +45,7 @@ function persona(id: string, mindspaceId: string | null): PersonaRow {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: 0,
     updatedAt: 0,
   };

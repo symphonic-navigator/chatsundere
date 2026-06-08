@@ -10,6 +10,9 @@ interface Props {
   searchTiers?: SearchTier[];
   searchTierId?: string | null;
   onSearchTierChange?: (id: string) => void;
+  askExpertAvailable?: boolean;
+  askExpert?: boolean;
+  onAskExpertChange?: (on: boolean) => void;
 }
 
 export function CockpitMenu(p: Props): JSX.Element | null {
@@ -19,7 +22,7 @@ export function CockpitMenu(p: Props): JSX.Element | null {
   // Highlight the stored tier, or fall back to the default when the stored id
   // belongs to a different backend (the id is global, not per-backend).
   const activeTierId = tiers.some((t) => t.id === p.searchTierId) ? p.searchTierId : tiers[0]?.id;
-  if (!hasReasoning && !hasDepth) return null;
+  if (!hasReasoning && !hasDepth && !p.askExpertAvailable) return null;
 
   return (
     <div className="cockpit-menu" role="menu">
@@ -39,6 +42,15 @@ export function CockpitMenu(p: Props): JSX.Element | null {
                 dataAttr: ['data-tier', t.id],
               }),
             )}
+          </div>
+        </div>
+      ) : null}
+      {p.askExpertAvailable ? (
+        <div className="cockpit-menu-section" data-section="ask-expert">
+          <div className="cockpit-menu-label">Ask expert</div>
+          <div className="cockpit-menu-chips">
+            {chip('On', p.askExpert === true, { onClick: () => p.onAskExpertChange?.(true) })}
+            {chip('Off', p.askExpert !== true, { onClick: () => p.onAskExpertChange?.(false) })}
           </div>
         </div>
       ) : null}

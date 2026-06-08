@@ -43,6 +43,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: 0,
       updatedAt: 0,
     },
@@ -64,6 +65,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: 0,
       updatedAt: 0,
     },
@@ -263,6 +265,7 @@ describe('HistoryPage', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: 0,
       updatedAt: 0,
     });

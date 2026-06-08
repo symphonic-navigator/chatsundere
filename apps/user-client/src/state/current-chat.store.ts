@@ -21,6 +21,7 @@ interface CurrentChatStore {
   chatPersonaIsAdult: boolean | null;
   reasoning: ReasoningState;
   webSearchTierId: string | null;
+  askExpert: boolean;
   /** Artefact lightbox: the id of the artefact currently open, or null. */
   openArtefactId: string | null;
   /** Whether the artefact sidebar sheet is open. */
@@ -43,6 +44,7 @@ interface CurrentChatStore {
   togglePin: () => void;
   setReasoning: (r: ReasoningState) => void;
   setWebSearchTierId: (id: string | null) => void;
+  setAskExpert: (on: boolean) => void;
   /** Open an artefact in the lightbox; closes the sidebar sheet. */
   openArtefact: (id: string) => void;
   /** Close the artefact lightbox. */
@@ -66,6 +68,7 @@ type InitialState = Omit<
   | 'togglePin'
   | 'setReasoning'
   | 'setWebSearchTierId'
+  | 'setAskExpert'
   | 'openArtefact'
   | 'closeArtefact'
   | 'setArtefactSheetOpen'
@@ -83,6 +86,7 @@ const initial: InitialState = {
   chatPersonaIsAdult: null,
   reasoning: { kind: 'off' },
   webSearchTierId: null,
+  askExpert: false,
   openArtefactId: null,
   isArtefactSheetOpen: false,
 };
@@ -113,6 +117,7 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),
   setReasoning: (r) => set({ reasoning: r }),
   setWebSearchTierId: (id) => set({ webSearchTierId: id }),
+  setAskExpert: (on) => set({ askExpert: on }),
   openArtefact: (id) => set({ openArtefactId: id, isArtefactSheetOpen: false }),
   closeArtefact: () => set({ openArtefactId: null }),
   setArtefactSheetOpen: (open) => set({ isArtefactSheetOpen: open }),

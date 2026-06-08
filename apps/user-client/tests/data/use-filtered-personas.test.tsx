@@ -33,6 +33,7 @@ async function seedPersonas() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: now,
     updatedAt: now,
   });
@@ -54,6 +55,7 @@ async function seedPersonas() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: now + 1,
     updatedAt: now + 1,
   });

@@ -105,6 +105,55 @@ export function SubstituteVisionSetting(): JSX.Element {
   );
 }
 
+/**
+ * Global expert-model picker. Shows a `<select>` of ALL offerings across registered
+ * providers (no capability filter — any model can serve as the expert). Persists the
+ * chosen ref as `"${templateId}:${upstreamSlug}"` in `settings.expertModel` — the
+ * same format `resolveExpert` parses.
+ *
+ * Disabled-over-hidden when no provider has been configured; a tooltip explains why.
+ */
+export function ExpertModelSetting(): JSX.Element {
+  const { data: settings } = useSettings();
+  const update = useUpdateSettings();
+
+  const allOfferings = listProviders().flatMap((pr) =>
+    pr.offerings.map((o) => ({
+      ref: `${pr.id}:${o.upstreamSlug}`,
+      label: `${o.upstreamSlug} (${pr.displayName})`,
+    })),
+  );
+  const disabled = allOfferings.length === 0;
+
+  return (
+    <div>
+      <p className="mb-3 text-[11px] text-paper-soft">
+        When you tap "Ask an expert", the active model delegates your question to this model for a
+        stronger answer. One global choice — applies across all personas.
+      </p>
+      <p className="mb-3 text-[11px] text-paper-soft">
+        Only the sanitised question you see in the pill leaves your device — never your
+        conversation, persona, or personal details.
+      </p>
+      <select
+        className="cockpit-select"
+        aria-label="Expert model"
+        disabled={disabled}
+        title={disabled ? 'Add a provider first' : undefined}
+        value={settings?.expertModel ?? ''}
+        onChange={(e) => update.mutate({ expertModel: e.target.value || null })}
+      >
+        <option value="">None</option>
+        {allOfferings.map((o) => (
+          <option key={o.ref} value={o.ref}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** Upstream Providers: proxy block, summary, configured list, add-picker. */
 export function ProvidersSection(): JSX.Element {
   const providers = useProviders();
@@ -392,6 +441,10 @@ export function Settings(): JSX.Element {
 
       <AccordionCard icon="◫" label="Image understanding" meta="For models without vision">
         <SubstituteVisionSetting />
+      </AccordionCard>
+
+      <AccordionCard icon="↑" label="Expert uplink" meta="Ask a stronger model for hard questions">
+        <ExpertModelSetting />
       </AccordionCard>
 
       <SaveBar

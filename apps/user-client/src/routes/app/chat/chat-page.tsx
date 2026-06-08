@@ -69,6 +69,7 @@ export function ChatPage(): JSX.Element {
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
+  const setAskExpert = useCurrentChatStore((s) => s.setAskExpert);
 
   const isArtefactSheetOpen = useCurrentChatStore((s) => s.isArtefactSheetOpen);
   const setArtefactSheetOpen = useCurrentChatStore((s) => s.setArtefactSheetOpen);
@@ -194,6 +195,11 @@ export function ChatPage(): JSX.Element {
   useEffect(() => {
     if (offering) setReasoning(initialReasoningState(offering.profile.reasoning));
   }, [offering, setReasoning]);
+
+  // Initialise the ask-expert runtime toggle from the persona's default.
+  useEffect(() => {
+    if (effectivePersona) setAskExpert(effectivePersona.askExpertDefault);
+  }, [effectivePersona, setAskExpert]);
 
   // Settings (for displayName and token estimate).
   const settingsQuery = useQuery({

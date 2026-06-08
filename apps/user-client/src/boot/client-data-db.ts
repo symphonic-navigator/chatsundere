@@ -22,6 +22,9 @@ export interface SettingsRow {
   webInterfacing: { search: WebBackendSetting; fetch: WebBackendSetting };
   /** Global substitute vision model — an offering ref "providerId:upstreamSlug"; null = none. */
   substituteVisionModel: string | null;
+  /** Global expert model — an offering ref "templateId:upstreamSlug"; null = none.
+   *  Forwards a single sanitised question via the ask_expert tool. */
+  expertModel: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -88,6 +91,9 @@ export interface PersonaRow {
   contextWindow: number | null;
   /** Knowledge libraries assigned to this persona (Chunk B). */
   libraryIds: string[];
+  /** Default on/off state of the per-chat ask_expert runtime toggle for new chats
+   *  of this persona. false = off (opt-in uplink). */
+  askExpertDefault: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -538,6 +544,28 @@ class ClientDataDb extends Dexie {
             if (!Array.isArray(c.libraryIds)) c.libraryIds = [];
           });
       });
+
+    // Version 16 — ask_expert. Settings gain a global `expertModel` ref; personas
+    // gain `askExpertDefault` (the default state of the per-chat runtime toggle).
+    this.version(16)
+      .stores({
+        settings: 'id',
+        personas: 'id, providerId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            if (s.expertModel === undefined) s.expertModel = null;
+          });
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            if (typeof p.askExpertDefault !== 'boolean') p.askExpertDefault = false;
+          });
+      });
   }
 }
 
@@ -648,6 +676,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         corsProxy: null,
         webInterfacing: { search: null, fetch: null },
         substituteVisionModel: null,
+        expertModel: null,
         createdAt: now,
         updatedAt: now,
       });

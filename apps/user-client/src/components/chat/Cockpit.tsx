@@ -16,6 +16,7 @@ import {
 import { useChat, useSetChatLibraries } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
 import { QK } from '../../data/queryKeys.js';
+import { useSettings } from '../../data/settings.js';
 import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
@@ -103,6 +104,9 @@ export function Cockpit(p: Props): JSX.Element {
   const searchTiers = useActiveSearchTiers();
   const searchTierId = useCurrentChatStore((s) => s.webSearchTierId);
   const setSearchTierId = useCurrentChatStore((s) => s.setWebSearchTierId);
+  const askExpert = useCurrentChatStore((s) => s.askExpert);
+  const setAskExpert = useCurrentChatStore((s) => s.setAskExpert);
+  const settings = useSettings();
 
   // Attachments: the pending set for this chat, plus the mutation hooks the
   // lightbox drives (rename / remove / edit-text), and the local UI state for
@@ -155,6 +159,13 @@ export function Cockpit(p: Props): JSX.Element {
     setReasoning(r);
     setMenuOpen(false);
   };
+
+  const onAskExpertChange = (on: boolean): void => {
+    setAskExpert(on);
+    setMenuOpen(false);
+  };
+
+  const askExpertAvailable = settings.data?.expertModel != null;
 
   // Send affordances (ADR/CLAUDE.md §4: 1024px is the single desktop boundary):
   //   - Desktop: plain Enter sends, Shift+Enter inserts a newline.
@@ -377,6 +388,9 @@ export function Cockpit(p: Props): JSX.Element {
               searchTierId={searchTierId}
               onSearchTierChange={setSearchTierId}
               onClose={() => setMenuOpen(false)}
+              askExpertAvailable={askExpertAvailable}
+              askExpert={askExpert}
+              onAskExpertChange={onAskExpertChange}
             />
           ) : null}
         </div>

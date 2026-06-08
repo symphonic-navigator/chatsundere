@@ -2,6 +2,7 @@ import type { ReasoningControl } from '@chatsundere/llm-unified';
 import { describe, expect, it } from 'vitest';
 import {
   initialReasoningState,
+  maxReasoningIntent,
   resolveReasoningBodyExtras,
 } from '../../src/lib/reasoning-resolver.js';
 
@@ -47,4 +48,34 @@ describe('resolveReasoningBodyExtras', () => {
     expect(resolveReasoningBodyExtras(STEPS, { kind: 'off' })).toEqual({
       reasoning: { enabled: false },
     }));
+});
+
+describe('maxReasoningIntent', () => {
+  it('none → disabled', () => {
+    expect(maxReasoningIntent({ mode: 'none' })).toEqual({ enabled: false });
+  });
+  it('fixed-on → enabled', () => {
+    expect(maxReasoningIntent({ mode: 'fixed-on' })).toEqual({ enabled: true });
+  });
+  it('toggle → enabled', () => {
+    expect(maxReasoningIntent({ mode: 'toggle', defaultOn: false })).toEqual({ enabled: true });
+  });
+  it('steps → highest standard effort, offStep excluded', () => {
+    const c: ReasoningControl = {
+      mode: 'steps',
+      steps: ['none', 'low', 'medium', 'high'],
+      offStep: 'none',
+      defaultStep: 'low',
+    };
+    expect(maxReasoningIntent(c)).toEqual({ enabled: true, effort: 'high' });
+  });
+  it('steps with non-standard labels → bare enabled', () => {
+    const c: ReasoningControl = {
+      mode: 'steps',
+      steps: ['quick', 'deep'],
+      offStep: null,
+      defaultStep: 'quick',
+    };
+    expect(maxReasoningIntent(c)).toEqual({ enabled: true });
+  });
 });

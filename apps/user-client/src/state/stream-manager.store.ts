@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
   type OneShotArgs,
+  type ReasoningIntent,
   type StreamChunk,
   type WireContentPart,
   getOffering,
@@ -27,6 +28,7 @@ import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
+import type { ExpertBase } from '../tools/ask-expert.js';
 import {
   dispatch as dispatchTool,
   resolveActiveTools,
@@ -68,6 +70,12 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
    * in the send path. Absent/null = no libraries assigned → no knowledge tool.
    */
   knowledge?: import('../knowledge/query-tool.js').KnowledgeContext | null;
+  /** Resolved expert model call context; absent = no ask_expert tool offered. */
+  expertBase?: ExpertBase;
+  /** Display label for the expert model (e.g. "DeepSeek R2"). */
+  expertModelLabel?: string;
+  /** Reasoning intent for the expert call (typically max-effort). */
+  expertReasoning?: ReasoningIntent;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -351,7 +359,15 @@ function runIntoDraft(
     },
   );
   const knowledge = args.knowledge ?? null;
-  const activeTools = toolsActive ? resolveActiveTools(integrationCtx, knowledge) : [];
+  const expert = args.expertBase
+    ? {
+        base: args.expertBase,
+        modelLabel: args.expertModelLabel ?? 'expert',
+        reasoning: args.expertReasoning ?? { enabled: true },
+        runtimeEnabled: useCurrentChatStore.getState().askExpert,
+      }
+    : null;
+  const activeTools = toolsActive ? resolveActiveTools(integrationCtx, knowledge, expert) : [];
   const activeToolDefs = toolDefs(activeTools);
   const toolsInstruction = systemPromptSegment(activeTools) ?? '';
   const knowledgeLibrariesContext =

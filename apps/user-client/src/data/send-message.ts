@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MasterKey } from '@chatsundere/crypto';
-import { getOffering, getProvider, offeringToTarget } from '@chatsundere/llm-unified';
+import { getCanonical, getOffering, getProvider, offeringToTarget } from '@chatsundere/llm-unified';
 import type {
   Offering,
   OneShotArgs,
   ProviderConfig,
   ProviderDefinition,
+  ReasoningIntent,
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,12 +14,13 @@ import { uuidv7 } from 'uuidv7';
 import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
-import type { ReasoningState } from '../lib/reasoning-resolver.js';
+import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
 import { webBackendOptions } from '../lib/web-backend-options.js';
 import { resolveWebBackend } from '../lib/web-backends.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
+import type { ExpertBase } from '../tools/ask-expert.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolvePersonaContext — shared helper
@@ -37,6 +39,9 @@ interface PersonaContext {
   globalAboutMe: string;
   webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
   knowledge: import('../knowledge/query-tool.js').KnowledgeContext | null;
+  expertBase: ExpertBase | null;
+  expertModelLabel: string | null;
+  expertReasoning: ReasoningIntent | null;
 }
 
 /**
@@ -87,6 +92,8 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
 
   const knowledge = await buildKnowledgeContext(persona, chat);
 
+  const expert = await resolveExpert(settings.expertModel ?? null, mk, corsProxyUrl, corsProxyKey);
+
   return {
     chat,
     persona,
@@ -104,6 +111,9 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     globalAboutMe: settings.globalAboutMe,
     webInterfacing,
     knowledge,
+    expertBase: expert?.base ?? null,
+    expertModelLabel: expert?.modelLabel ?? null,
+    expertReasoning: expert?.reasoning ?? null,
   };
 }
 
@@ -165,6 +175,73 @@ async function resolveSubstituteVision(
     corsProxyUrl,
     corsProxyKey,
     target: offeringToTarget(offering),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resolveExpert — streaming call context for the global expert model
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the global expert model (`settings.expertModel`, a
+ * "templateId:upstreamSlug" ref) into the ask_expert tool's streaming call
+ * base, its display label, and its MAX reasoning intent. Returns `null` when
+ * unconfigured or unresolvable (no enabled provider row / unknown offering /
+ * corrupt key) — the tool is simply not offered. Decryption happens here (the
+ * send path holds the MasterKey).
+ *
+ * The model label is taken from the canonical registry
+ * (`getCanonical(offering.canonicalRef)?.displayName`) with the upstream slug
+ * as a fallback, since `Offering` carries no display name of its own.
+ */
+export async function resolveExpert(
+  ref: string | null,
+  mk: MasterKey,
+  corsProxyUrl: string | null,
+  corsProxyKey: string | null,
+): Promise<{ base: ExpertBase; modelLabel: string; reasoning: ReasoningIntent } | null> {
+  if (!ref) return null;
+  const idx = ref.indexOf(':');
+  if (idx < 0) return null;
+  const templateId = ref.slice(0, idx);
+  const slug = ref.slice(idx + 1);
+
+  const providerDef = getProvider(templateId);
+  const offering = getOffering(templateId, slug);
+  if (!providerDef || !offering) return null;
+
+  const db = getClientDataDb();
+  const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
+    (p) => p.enabled,
+  );
+  if (!providerRow) return null;
+
+  let apiKey: string;
+  try {
+    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+  } catch {
+    console.warn('resolveExpert: failed to decrypt api-key — falling back to null');
+    return null;
+  }
+
+  const modelLabel =
+    getCanonical(offering.canonicalRef ?? '')?.displayName ?? offering.upstreamSlug;
+
+  return {
+    base: {
+      provider: providerDef,
+      providerConfig: {
+        baseUrl: providerDef.baseUrl,
+        routing:
+          providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+      },
+      apiKey,
+      corsProxyUrl,
+      corsProxyKey,
+      target: offeringToTarget(offering),
+    },
+    modelLabel,
+    reasoning: maxReasoningIntent(offering.profile.reasoning),
   };
 }
 
@@ -270,6 +347,9 @@ export function useSendMessage() {
         knowledge: ctx.knowledge,
         substituteVisionModel,
         substituteOneShotBase: substituteOneShotBase ?? undefined,
+        expertBase: ctx.expertBase ?? undefined,
+        expertModelLabel: ctx.expertModelLabel ?? undefined,
+        expertReasoning: ctx.expertReasoning ?? undefined,
       });
 
       return chatId;
@@ -360,6 +440,9 @@ export function useRegenerate() {
         globalAboutMe: ctx.globalAboutMe,
         webInterfacing: ctx.webInterfacing,
         knowledge: ctx.knowledge,
+        expertBase: ctx.expertBase ?? undefined,
+        expertModelLabel: ctx.expertModelLabel ?? undefined,
+        expertReasoning: ctx.expertReasoning ?? undefined,
       });
     },
 

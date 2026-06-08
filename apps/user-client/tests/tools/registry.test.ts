@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import type { IntegrationContext } from '../../src/integrations/types.js';
 import type { KnowledgeContext } from '../../src/knowledge/query-tool.js';
+import type { ExpertBase } from '../../src/tools/ask-expert.js';
 import {
+  type ExpertToolContext,
   dispatch,
   resolveActiveTools,
   systemPromptSegment,
@@ -79,5 +81,32 @@ describe('tool registry composition', () => {
     const miss = await dispatch([fakeTool], 'nope', {});
     expect(miss.ok).toBe(false);
     expect(miss.error).toContain('Unknown tool');
+  });
+
+  it('includes ask_expert iff an expert context is given', () => {
+    const expert: ExpertToolContext = {
+      base: {} as ExpertBase,
+      modelLabel: 'M',
+      reasoning: { enabled: true },
+      runtimeEnabled: true,
+    };
+    expect(resolveActiveTools(dormantCtx, null, null).some((t) => t.name === 'ask_expert')).toBe(
+      false,
+    );
+    expect(resolveActiveTools(dormantCtx, null, expert).some((t) => t.name === 'ask_expert')).toBe(
+      true,
+    );
+  });
+
+  it('runtimeEnabled:false still includes the tool (cache-prefix stability)', () => {
+    const expert: ExpertToolContext = {
+      base: {} as ExpertBase,
+      modelLabel: 'M',
+      reasoning: { enabled: true },
+      runtimeEnabled: false,
+    };
+    expect(resolveActiveTools(dormantCtx, null, expert).some((t) => t.name === 'ask_expert')).toBe(
+      true,
+    );
   });
 });

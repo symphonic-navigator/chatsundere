@@ -120,6 +120,7 @@ describe('EntranceHall', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -164,6 +165,7 @@ describe('EntranceHall', () => {
       chatsundereTonality: true,
       contextWindow: null,
       libraryIds: [],
+      askExpertDefault: false,
       createdAt: now,
       updatedAt: now,
     });

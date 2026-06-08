@@ -51,3 +51,24 @@ export function resolveReasoningBodyExtras(
       : { enabled: true };
   return { reasoning: intent };
 }
+
+/**
+ * The strongest reasoning intent a control allows — used by the ask_expert tool
+ * to run the expert at full effort regardless of any UI step. `none` stays off;
+ * `steps` picks the last non-`offStep` step and maps standard labels onto effort.
+ */
+export function maxReasoningIntent(control: ReasoningControl): ReasoningIntent {
+  switch (control.mode) {
+    case 'none':
+      return { enabled: false };
+    case 'fixed-on':
+    case 'toggle':
+      return { enabled: true };
+    case 'steps': {
+      const max = control.steps.filter((s) => s !== control.offStep).at(-1);
+      return max === 'low' || max === 'medium' || max === 'high'
+        ? { enabled: true, effort: max }
+        : { enabled: true };
+    }
+  }
+}

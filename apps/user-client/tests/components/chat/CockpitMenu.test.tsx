@@ -11,6 +11,120 @@ const twoTiers: SearchTier[] = [
   { id: 'neural', label: 'Neural', params: { depth: 'advanced' } },
 ];
 
+describe('CockpitMenu — ask expert section', () => {
+  it('renders the ask-expert section with On/Off chips when askExpertAvailable is true', () => {
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        askExpertAvailable={true}
+        askExpert={false}
+        onAskExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('Ask expert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^on$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^off$/i })).toBeInTheDocument();
+  });
+
+  it('marks On chip as active when askExpert is true', () => {
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        askExpertAvailable={true}
+        askExpert={true}
+        onAskExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBe('true');
+    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBeNull();
+  });
+
+  it('marks Off chip as active when askExpert is false', () => {
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        askExpertAvailable={true}
+        askExpert={false}
+        onAskExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBe('true');
+    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBeNull();
+  });
+
+  it('clicking On chip calls onAskExpertChange(true)', () => {
+    const onChange = vi.fn();
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        askExpertAvailable={true}
+        askExpert={false}
+        onAskExpertChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('clicking Off chip calls onAskExpertChange(false)', () => {
+    const onChange = vi.fn();
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        askExpertAvailable={true}
+        askExpert={true}
+        onAskExpertChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(false);
+  });
+
+  it('does NOT render the ask-expert section when askExpertAvailable is false', () => {
+    const { container } = render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        askExpertAvailable={false}
+      />,
+    );
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('Ask expert')).toBeNull();
+  });
+
+  it('does NOT render the ask-expert section when askExpertAvailable is omitted', () => {
+    const { container } = render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('Ask expert')).toBeNull();
+  });
+});
+
 describe('CockpitMenu — web depth section', () => {
   it('renders when reasoning is none but 2 search tiers are provided', () => {
     render(

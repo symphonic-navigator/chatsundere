@@ -54,6 +54,14 @@ describe('useCurrentChatStore', () => {
     expect(useCurrentChatStore.getState().chatPersonaIsAdult).toBeNull();
   });
 
+  it('askExpert defaults false, setAskExpert sets it, reset clears it', () => {
+    expect(useCurrentChatStore.getState().askExpert).toBe(false);
+    useCurrentChatStore.getState().setAskExpert(true);
+    expect(useCurrentChatStore.getState().askExpert).toBe(true);
+    useCurrentChatStore.getState().reset();
+    expect(useCurrentChatStore.getState().askExpert).toBe(false);
+  });
+
   it('reset returns everything to initial', () => {
     const s = useCurrentChatStore.getState();
     s.setChatId('chat-1');

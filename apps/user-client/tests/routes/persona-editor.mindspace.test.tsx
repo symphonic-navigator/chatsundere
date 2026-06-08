@@ -37,6 +37,7 @@ async function seedPersonaWithMindspace() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: now,
     updatedAt: now,
   });

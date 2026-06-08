@@ -63,6 +63,7 @@ async function seed() {
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: 1,
     updatedAt: 1,
   });

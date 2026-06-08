@@ -56,6 +56,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     chatsundereTonality: true,
     contextWindow: null,
     libraryIds: [],
+    askExpertDefault: false,
     createdAt: 1,
     updatedAt: 1,
   });
