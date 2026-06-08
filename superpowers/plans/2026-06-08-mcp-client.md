@@ -4,7 +4,9 @@
 
 **Goal:** Let companions call tools from external HTTPS MCP servers, configured in a new "MCP Servers" settings tab, routed through the user's CORS proxy when direct calls are CORS-blocked, gated per-persona and behind a per-server approval prompt.
 
-**Architecture:** A browser-side MCP client (JSON-RPC over Streamable HTTP, ported from chatsune) wrapped as a **context-tools category** in `resolveActiveTools` (the knowledge/expert precedent, NOT the `Integration` array). Servers live in a new Dexie v17 `mcpServers` table; per-persona tri-state overrides on `PersonaRow.mcpOverrides`; tool calls pause for an approval prompt unless the server is `autoRun`.
+**Architecture:** A browser-side MCP client (JSON-RPC over Streamable HTTP, ported from chatsune) wrapped as a **context-tools category** in `resolveActiveTools` (the knowledge/expert precedent, NOT the `Integration` array). Servers live in a new Dexie **v18** `mcpServers` table; per-persona tri-state overrides on `PersonaRow.mcpOverrides`; tool calls pause for an approval prompt unless the server is `autoRun`.
+
+> **⚠️ Dexie version note (updated 2026-06-08):** Parallel `expertWeb` work landed **v17** on master *after* this plan was first drafted. MCP therefore owns **v18**, not v17. Every "v17" below has been corrected to **v18**. Before implementing Task 4, confirm `client-data-db.ts` still tops out at `this.version(17)` (expertWeb) and append `this.version(18)`.
 
 **Tech Stack:** TypeScript (strict), React 18, Dexie, TanStack Query, Zustand, Bun test runner (llm-unified) / Vitest (user-client), `@chatsundere/crypto` (`sealSecret`/`openSecret`), Biome.
 
@@ -19,7 +21,7 @@ Spec: `superpowers/specs/2026-06-08-mcp-client-design.md`. Read it first.
 - Context-tools wiring: `apps/user-client/src/tools/registry.ts`, `apps/user-client/src/knowledge/query-tool.ts`
 - JSON-RPC client to port: `~/workspace/chatsune/frontend/src/features/mcp/mcpClient.ts` (+ its `__tests__/mcpClient.test.ts`)
 - Sealing: `apps/user-client/src/lib/secrets.ts`, `apps/user-client/src/components/ProviderSheet.tsx`, `apps/user-client/src/credentials/sources/provider-key-source.ts`
-- Dexie versions: `apps/user-client/src/boot/client-data-db.ts` (current highest = **v16**)
+- Dexie versions: `apps/user-client/src/boot/client-data-db.ts` (current highest = **v17 / expertWeb**; MCP appends **v18**)
 - Settings UI: `apps/user-client/src/routes/app/settings.tsx` (`ExpertModelSetting`, `ProvidersSection`, `WebInterfacingSettings`, `AccordionCard` usage)
 - Data hooks: `apps/user-client/src/data/providers.ts`, `apps/user-client/src/data/settings.ts`
 - Persona sub-section: `apps/user-client/src/components/persona-editor/KnowledgeSection.tsx`; route `apps/user-client/src/routes/app/persona-editor.tsx`
@@ -737,7 +739,7 @@ git commit -m "Add MCP connection test (direct/proxy, URL variants)"
 
 ---
 
-## Task 4: Dexie v17 — mcpServers table + persona overrides + data layer
+## Task 4: Dexie v18 — mcpServers table + persona overrides + data layer
 
 **Files:**
 - Modify: `apps/user-client/src/boot/client-data-db.ts`
@@ -745,7 +747,7 @@ git commit -m "Add MCP connection test (direct/proxy, URL variants)"
 - Create: `apps/user-client/src/mcp/resolve-active.ts`
 - Test: `apps/user-client/src/mcp/resolve-active.test.ts`
 
-- [ ] **Step 1: Add `McpServerRow`, the table, `mcpOverrides`, and version 17**
+- [ ] **Step 1: Add `McpServerRow`, the table, `mcpOverrides`, and version 18**
 
 In `client-data-db.ts`, add the row interface (near `ProviderRow`):
 
@@ -788,12 +790,12 @@ Add the table property to the `ClientDataDb` class (after `documents!`):
   mcpServers!: Table<McpServerRow, string>;
 ```
 
-Append version 17 (after the v16 block):
+Append version 18 (after the v17 / expertWeb block):
 
 ```ts
-    // Version 17 — MCP client. New `mcpServers` table; personas gain
+    // Version 18 — MCP client. New `mcpServers` table; personas gain
     // `mcpOverrides` (tri-state per server; unset → the server default).
-    this.version(17)
+    this.version(18)
       .stores({
         mcpServers: 'id',
         personas: 'id, providerId',
@@ -947,7 +949,7 @@ export async function openMcpKey(row: McpServerRow, mk: MasterKey): Promise<stri
 }
 ```
 
-> If `mcpServers.orderBy('createdAt')` requires `createdAt` to be indexed, change the v17 store string to `mcpServers: 'id, createdAt'`. Otherwise read `.toArray()` and sort in memory. Pick whichever matches the `providers.ts` convention you observe.
+> If `mcpServers.orderBy('createdAt')` requires `createdAt` to be indexed, change the v18 store string to `mcpServers: 'id, createdAt'`. Otherwise read `.toArray()` and sort in memory. Pick whichever matches the `providers.ts` convention you observe.
 
 - [ ] **Step 7: Run the resolve-active test + full typecheck**
 
@@ -960,7 +962,7 @@ Expected: green (fixtures updated in Step 2).
 
 ```bash
 git add apps/user-client/src/boot/client-data-db.ts apps/user-client/src/data/mcp-servers.ts apps/user-client/src/mcp/resolve-active.ts apps/user-client/src/mcp/resolve-active.test.ts apps/user-client/src
-git commit -m "Add Dexie v17 mcpServers table, persona overrides, and data layer"
+git commit -m "Add Dexie v18 mcpServers table, persona overrides, and data layer"
 ```
 
 ---
@@ -1887,7 +1889,7 @@ Expected: typecheck green; user-client vitest at the master baseline (the known 
 
 - [ ] **Step 4: Update `STATUS-CLIENT-ONLY.md`**
 
-Add the MCP-client landing entry (what shipped, Dexie v17, the proxy allowlist/session-header device-verification items, spec/plan links, the device checklist from spec §14). Refresh the `Last updated:` line and the "Next session" block.
+Add the MCP-client landing entry (what shipped, Dexie v18, the proxy allowlist/session-header device-verification items, spec/plan links, the device checklist from spec §14). Refresh the `Last updated:` line and the "Next session" block.
 
 - [ ] **Step 5: Commit**
 
@@ -1906,5 +1908,5 @@ Run the spec §14 checklist on device: a stateless public server (direct); a pro
 
 ## Self-review notes (filled by the plan author)
 
-- **Spec coverage:** D1 (Task 3 connection test), D2 (Task 1 prefixing), D3 (Task 3 variants), D4 (Task 4 resolve-active + Task 10 overrides), D5 (Task 5 store + Task 6 gate + Task 11 UI), D6 tools-only (no resources/prompts anywhere), D7 (Task 9 sheet auth), D8 no cockpit chip (none added), D9 user-client (all paths under apps/user-client), D10 Larissa (Task 12). Dexie v17 (Task 4). Proxy risk surfaced (Task 3 errors, Task 9 status, Task 12 device check).
+- **Spec coverage:** D1 (Task 3 connection test), D2 (Task 1 prefixing), D3 (Task 3 variants), D4 (Task 4 resolve-active + Task 10 overrides), D5 (Task 5 store + Task 6 gate + Task 11 UI), D6 tools-only (no resources/prompts anywhere), D7 (Task 9 sheet auth), D8 no cockpit chip (none added), D9 user-client (all paths under apps/user-client), D10 Larissa (Task 12). Dexie v18 (Task 4 — renumbered from v17 after the parallel expertWeb landing). Proxy risk surfaced (Task 3 errors, Task 9 status, Task 12 device check).
 - **Type consistency:** `McpEndpoint`, `McpToolDefinition`, `McpAuthResolved`, `McpToolContext`, `McpActiveServer`, `McpServerRow`, `resolveActiveServers`, `contributeMcpTools`, `buildMcpContext`, `mcpToolsCall`/`mcpToolsList`, `testMcpConnection`/`buildCandidates`/`resolveConnection` — names used consistently across tasks.

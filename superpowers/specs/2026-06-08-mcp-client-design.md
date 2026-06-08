@@ -133,11 +133,12 @@ path carrying the MCP endpoint path, with the auth header forwarded to the upstr
 > the proxy needs a one-line update (`Access-Control-Expose-Headers`). **Stateless**
 > servers work immediately regardless.
 
-## 6. Data model (Dexie **v17**)
+## 6. Data model (Dexie **v18**)
 
-> ⚠️ Current schema is **v16**. MCP owns **v17**. If any parallel work bumps the
-> schema, coordinate the version number (see the parallel-feature Dexie ownership
-> lesson) — additive merges only, one owner per version.
+> ⚠️ Parallel `expertWeb` work landed **v17** on master after this spec was first
+> drafted; MCP therefore owns **v18** (see the parallel-feature Dexie ownership
+> lesson) — additive merges only, one owner per version. Before implementing,
+> confirm the schema tops out at v17 and append v18.
 
 New table **`mcpServers`**:
 
@@ -168,7 +169,7 @@ The credential `key` is a **MasterKey-sealed `EncryptedBlob`** (mirrors
 plaintext.
 
 `PersonaRow` gains **`mcpOverrides?: Record<string, 'on' | 'off'>`** (non-indexed;
-the v17 migration backfills `{}` and updates the persona fixtures).
+the v18 migration backfills `{}` and updates the persona fixtures).
 
 **Resolution** (`resolveActiveServers(persona, servers)`): for each enabled server, an
 override entry wins if present; otherwise `server.onByDefault` decides. A server whose
@@ -301,7 +302,8 @@ the tool result, not merely that a tool *fires* — the documented web-search le
 
 ## 15. Open coordination
 
-- **Dexie v17 ownership** — flag to Chris before any parallel schema work.
+- **Dexie v18 ownership** — flag to Chris before any parallel schema work (v17 is
+  already taken by the parallel expertWeb feature).
 - **Proxy allowlist** — for any server resolving `proxy`, its host must be added to
   the user's CORS-proxy allowlist (operator action; the reference proxy is
   `cors-proxy.tidesson.net`). The test surfaces a clear allowlist-miss error.
