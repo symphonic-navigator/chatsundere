@@ -40,8 +40,10 @@ chat **modal** (server · tool · args → Approve / Deny / "always allow") that
 `execute` until the user decides; deny aborts **before** any key decrypt or network
 (test-pinned). (6) Per-server **auth** (Bearer or custom header), MasterKey-sealed
 (slot `mcp/<id>/api-key`), opened only at call time. (7) UI: an **MCP Servers**
-settings accordion (`McpServersSection` + `McpServerSheet` with the Test button) and a
-**per-persona override** section in the persona editor. **Dexie v18** (`mcpServers`
+section (`McpServersSection` + `McpServerSheet` with the Test button) in a **new
+`/app/integrations` room** (the previously "Coming soon" My Integrations
+entrance-hall tile is now live — `4fe76f8`), plus a **per-persona override** section
+in the persona editor. **Dexie v18** (`mcpServers`
 table + `mcpOverrides`; v17 was the parallel expertWeb feature — renumbered to avoid
 the collision). **Not a §9-gated path** (client-only; no auth/sync/proxy/crypto), but
 the new **outbound egress** + credential handling + approval gate got a Larissa round
