@@ -16,7 +16,48 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **MCP client landed** (squashed onto master
+**Last updated:** 2026-06-08 (latest) — **Substitute-vision as a live in-stream pill**
+(squashed onto master `a7c05d0`, **NOT pushed**; **NOT yet device-verified**). A UX
+redesign of the substitute-vision flow (active model can't see images → a substitute
+vision model describes them), brainstormed end-to-end with Chris, built
+**subagent-driven** in an isolated worktree (4 TDD tasks + a label-polish fix, Task-4
+spec review + a final **opus** holistic review = no critical/important). **The
+problem (device-found):** the describe ran *before* the stream handle existed, so the
+only progress signal was a cockpit footer hint, and the empty persona draft briefly
+read as "stream interrupted" — plus a duplicate-send window. Two interim band-aids
+landed (`isSending` guard, footer suppression, a `describingChats` flag + cockpit
+"Describing image…" hint), now **superseded/removed** by this redesign. **What it
+does:** the persona response goes **live immediately** (the stream handle is created
+**before** the describe → `isStreamLive` covers the whole window, which alone
+suppresses the footer and blocks a duplicate send). Each **uncached** substitute image
+emits a **`describe_image` pill** (a `tool-call`-kind pill → new **`VisionPill`**,
+modelled on `ExpertPill`): pending **"Reading image · *file*"** with a live bar →
+completed **"Read image · *file*"**, expandable to the description **+ "via *model*"**
+(friendly name, not the raw ref) → failed **"Couldn't read image"** (image degrades to
+a text placeholder, the answer still streams). Pills sit **above** the lore pill (the
+image is part of the input), one **per image**, emitted via new
+`resolveAttachmentParts` **`onDescribeStart`/`onDescribeEnd`** callbacks; the LLM
+tokens stream once the describe completes (they depend on the description in the wire).
+`resolveUserContent` moved from `start` into `runIntoDraft` (gated `!reusedDraft` —
+**regenerate does not re-describe**); vision pills **persist** with the message (both
+finalise paths) and survive reload. **No Dexie change** (a `tool-call` pill, no new
+kind). **Not a Larissa change** (client-only; no new egress — the describe already
+existed). Verification (on master after squash): full-tree capture verified (18=18
+files, empty `branch..master` diff) + `pnpm typecheck --force` **14/14**; user-client
+vitest **1210 pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
+localStorage-jsdom baseline; new vision-pill/resolve-attachment-parts/stream-manager
+tests green); `pnpm run build` **9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-08-substitute-vision-live-pill-design]],
+[[../superpowers/plans/2026-06-08-substitute-vision-live-pill]]. **Device test:** active
+model without vision + an image substitute set; upload an image, send → the response
+appears immediately with a **"Reading image"** pill (live bar), **no** "interrupted",
+**no** cockpit bottom hint, **no** duplicate on a second click; the pill flips to "Read
+image" + the answer streams; expand → description + **via *friendly model name***; two
+images → two pills; reopen the chat → pills persist; a describe failure → "Couldn't read
+image" + the answer still streams; regenerate → no new describe. **Next:** Chris
+device-tests → pushes the master backlog himself (Liz must NOT push).
+
+**Earlier 2026-06-08 — MCP client landed** (squashed onto master
 `6e766fa`, **NOT pushed**; **NOT yet device-verified** — device-test checklist below
 is outstanding). Brainstormed end-to-end with Chris, built **subagent-driven** in an
 isolated worktree (11 TDD tasks, per-task spec+quality review + a final **opus**
