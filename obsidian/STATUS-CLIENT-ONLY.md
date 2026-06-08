@@ -41,11 +41,12 @@ unchanged → `injectedDocIdsFromPills` reads it back next turn — traced + ver
 `pnpm typecheck` **14/14**; llm-unified `bun test` **283/0**; user-client vitest
 **1147 pass / 8 fail** (the unchanged `cockpit-draft`/`chat-page`/`chat-route`
 localStorage-jsdom baseline); biome clean; `git diff master..branch` empty
-(full-tree capture). **Device test:** chat repeatedly about a phrase-triggered
-document → the lore injects **once**, then the pill stops appearing for the next ~8
-turns even though the phrase keeps matching; after ~8 turns it may re-fire. **Next:**
-Chris device-tests the cooldown → Liz pushes the master backlog (now **11 ahead**)
-on his word. See the Chunk C entry below for the base feature.
+(full-tree capture). **DEVICE-CONFIRMED by Chris 2026-06-08** ("das funktioniert! großartig
+sogar!") — both Chunk C and the cooldown work on device. **Next:** **Chris pushes
+the master backlog himself** (now **11 ahead** — backlog + ask_expert + Chunk C +
+cooldown; Liz must NOT push). Knowledge base (Block 5) is feature-complete; next
+per [[ROADMAP]] is the v0.2.0 gate. See the Chunk C entry below for the base
+feature.
 
 **Earlier 2026-06-08 (later) — Knowledgebase Chunk C (Lorebooks /
 phrase-triggered injection) landed** (squashed on master `015bda6`, **NOT
