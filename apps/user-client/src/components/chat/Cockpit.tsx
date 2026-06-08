@@ -22,6 +22,7 @@ import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
+import { useStreamManagerStore } from '../../state/stream-manager.store.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
 import { attachmentToViewable } from '../lightbox/viewable-item.js';
@@ -38,6 +39,9 @@ interface Props {
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
   isStreamLive: boolean;
+  /** True while a send is being prepared (before its stream handle exists) —
+   *  blocks a second send during the substitute-vision describe window. */
+  isSending: boolean;
   /** Open the per-chat ToC / bookmarks sheet (omitted → button hidden). */
   onOpenToc?: () => void;
   /** Open the per-chat artefact sheet (omitted → button hidden). */
@@ -96,6 +100,9 @@ export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  // The substitute-vision describe (a slow pre-stream phase) reports itself here
+  // so the user sees the first send is working rather than retrying it.
+  const describingImage = useStreamManagerStore((s) => s.describingChats.has(p.chatId));
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
@@ -181,7 +188,7 @@ export function Cockpit(p: Props): JSX.Element {
     const desktopPlainEnter =
       !ctrlEnter && !e.shiftKey && window.matchMedia('(min-width: 1024px)').matches;
     if (!ctrlEnter && !desktopPlainEnter) return;
-    if (p.isStreamLive || p.draftValue.trim().length === 0) return;
+    if (p.isStreamLive || p.isSending || p.draftValue.trim().length === 0) return;
     e.preventDefault();
     p.onSend(p.draftValue);
   };
@@ -486,10 +493,12 @@ export function Cockpit(p: Props): JSX.Element {
         <DualActionBtn
           hasText={p.draftValue.trim().length > 0}
           isStreamLive={p.isStreamLive}
+          isSending={p.isSending}
           personaName={p.persona.name}
           onSend={() => p.onSend(p.draftValue)}
         />
       </div>
+      {describingImage && <output className="cockpit-describing">Describing image…</output>}
       {dragging && <div className="cockpit-drop-overlay">Drop files to attach</div>}
       {reject && (
         <div className="cockpit-reject" role="alert" onAnimationEnd={() => setReject(null)}>

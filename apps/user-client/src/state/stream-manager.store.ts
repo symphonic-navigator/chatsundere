@@ -92,6 +92,10 @@ export type RegenerateStreamArgs = StartArgs & {
 
 interface StreamManagerStore {
   streams: Map<string, StreamHandle>;
+  /** Chats whose current send is running a substitute-vision describe — the slow
+   *  network phase that happens after the user message is persisted but before
+   *  the stream handle exists. Drives the cockpit's "Describing image…" hint. */
+  describingChats: Set<string>;
   start: (args: StartArgs) => Promise<void>;
   regenerate: (args: RegenerateStreamArgs) => Promise<void>;
   abortDiscard: (chatId: string) => Promise<void>;
@@ -128,6 +132,7 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
 
 export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   streams: new Map(),
+  describingChats: new Set(),
 
   has: (chatId) => get().streams.has(chatId),
 
@@ -184,7 +189,16 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
 
     // Resolve the user turn's attachments into multimodal wire content, then
     // stream. Text-only turns short-circuit to the plain string (unchanged path).
-    const userContent = await resolveUserContent(args, userMessageId);
+    // `markDescribing` flips the per-chat hint on only while a real substitute
+    // describe is in flight (the slow, pre-handle phase).
+    const markDescribing = (on: boolean): void =>
+      set((s) => {
+        const n = new Set(s.describingChats);
+        if (on) n.add(args.chatId);
+        else n.delete(args.chatId);
+        return { describingChats: n };
+      });
+    const userContent = await resolveUserContent(args, userMessageId, markDescribing);
 
     runIntoDraft({ ...args, userMessageText: userContent }, draftMessageId, set, get, false);
   },
@@ -271,8 +285,10 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
 async function resolveUserContent(
   args: StartArgs,
   userMessageId: string,
+  markDescribing?: (on: boolean) => void,
 ): Promise<string | WireContentPart[]> {
   const db = getClientDataDb();
+  let describingOn = false;
   try {
     const atts = await listMessageAttachments(userMessageId);
     if (atts.length === 0) return args.userText;
@@ -287,6 +303,20 @@ async function resolveUserContent(
       return getOffering(ref.slice(0, idx), ref.slice(idx + 1));
     };
     const disposition = imageDisposition(activeRef, substituteRef, lookup);
+
+    // Flip the "Describing image…" hint on only when a real describe will run:
+    // substitute disposition with at least one image lacking a cached description
+    // for this substitute model. Cached/direct/text turns resolve instantly.
+    if (
+      disposition === 'substitute' &&
+      substituteRef !== null &&
+      atts.some(
+        (a) => a.kind !== 'text' && a.blob != null && a.visionDescription?.model !== substituteRef,
+      )
+    ) {
+      describingOn = true;
+      markDescribing?.(true);
+    }
 
     const base = args.substituteOneShotBase;
     const parts = await resolveAttachmentParts(atts, disposition, substituteRef, {
@@ -308,6 +338,8 @@ async function resolveUserContent(
   } catch (err) {
     console.error('[stream-manager] attachment resolution failed; sending text only', err);
     return args.userText;
+  } finally {
+    if (describingOn) markDescribing?.(false);
   }
 }
 

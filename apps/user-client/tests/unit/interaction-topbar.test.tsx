@@ -362,6 +362,7 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
         draftValue=""
         onDraftChange={vi.fn()}
         isStreamLive={false}
+        isSending={false}
         onSend={vi.fn()}
         onExit={vi.fn()}
         onRenameChat={onRename}

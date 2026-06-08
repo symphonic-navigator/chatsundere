@@ -3,13 +3,19 @@
 interface Props {
   hasText: boolean;
   isStreamLive: boolean;
+  /** True while the previous send is still being prepared (message persisted,
+   *  attachments bound, substitute-vision describe in flight) — before the stream
+   *  handle exists. Blocks a second send during that window so the same text +
+   *  already-consumed attachments cannot produce a duplicate turn. */
+  isSending?: boolean;
   personaName: string;
   onSend: () => void;
 }
 
 export function DualActionBtn(p: Props): JSX.Element {
-  const disabled = !p.hasText || p.isStreamLive;
-  const title = p.isStreamLive
+  const busy = p.isStreamLive || p.isSending === true;
+  const disabled = !p.hasText || busy;
+  const title = busy
     ? `${p.personaName} is still replying…`
     : p.hasText
       ? 'Send'
@@ -22,7 +28,7 @@ export function DualActionBtn(p: Props): JSX.Element {
       disabled={disabled}
       title={title}
       aria-label={p.hasText ? 'Send' : 'Microphone (disabled)'}
-      onClick={p.hasText && !p.isStreamLive ? p.onSend : undefined}
+      onClick={p.hasText && !busy ? p.onSend : undefined}
     >
       {p.hasText ? (
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">

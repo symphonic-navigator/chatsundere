@@ -18,6 +18,9 @@ interface Props {
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
   isStreamLive: boolean;
+  /** True while a send is in flight before its stream handle exists — threaded to
+   *  the Cockpit so it blocks a duplicate send during the substitute-vision window. */
+  isSending: boolean;
   onExit: () => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
@@ -180,6 +183,7 @@ export function InteractionMode(p: Props): JSX.Element {
           onDraftChange={p.onDraftChange}
           onSend={handleSend}
           isStreamLive={p.isStreamLive}
+          isSending={p.isSending}
           onOpenToc={p.onOpenToc}
           onOpenArtefacts={p.onOpenArtefacts}
           onAttachFromTreasury={p.onAttachFromTreasury}

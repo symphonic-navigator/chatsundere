@@ -332,7 +332,12 @@ export function ChatPage(): JSX.Element {
   };
 
   const onSend = async (text: string): Promise<void> => {
-    if (!effectivePersona) return;
+    // Block a re-entrant send while one is already in flight. Without this, the
+    // substitute-vision describe (a slow network call inside the send, before the
+    // stream handle exists) leaves the cockpit enabled long enough for a second
+    // send, which would create a duplicate text-only turn (the original
+    // attachments are already bound to the first message). See DualActionBtn.
+    if (!effectivePersona || sendMessage.isPending) return;
     const newChatId = await sendMessage.mutateAsync({
       chatId: activeChatId,
       personaId: effectivePersona.id,
@@ -578,6 +583,7 @@ export function ChatPage(): JSX.Element {
           onDraftChange={setDraft}
           onSend={(t) => void onSend(t)}
           isStreamLive={isStreamLive}
+          isSending={sendMessage.isPending}
           onExit={onExitToEntranceHall}
           onRenameChat={onRenameChat}
           onOpenPersonaEditor={onOpenPersonaEditor}

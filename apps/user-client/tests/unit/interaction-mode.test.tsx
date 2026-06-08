@@ -51,6 +51,7 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
           onDraftChange={vi.fn()}
           onSend={vi.fn()}
           isStreamLive={false}
+          isSending={false}
           onExit={vi.fn()}
           onRenameChat={vi.fn()}
           {...extra}

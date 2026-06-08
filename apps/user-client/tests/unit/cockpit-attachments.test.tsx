@@ -41,6 +41,7 @@ describe('Cockpit attachments', () => {
         onDraftChange={() => {}}
         onSend={() => {}}
         isStreamLive={false}
+        isSending={false}
       />,
       { wrapper: wrap(qc) },
     );
@@ -63,6 +64,7 @@ describe('Cockpit attachments', () => {
         onDraftChange={() => {}}
         onSend={() => {}}
         isStreamLive={false}
+        isSending={false}
       />,
       { wrapper: wrap(qc) },
     );

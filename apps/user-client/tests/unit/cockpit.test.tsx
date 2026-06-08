@@ -56,6 +56,7 @@ function renderCockpit(props: Partial<ComponentProps<typeof Cockpit>> = {}) {
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
         isStreamLive={false}
+        isSending={false}
         {...props}
       />
     </QueryClientProvider>,
