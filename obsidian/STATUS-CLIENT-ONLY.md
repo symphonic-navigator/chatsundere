@@ -16,7 +16,29 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **Chat polish: cancel inference, table
+**Last updated:** 2026-06-08 (latest) — **Laura — UX auditor landed**
+(process/tooling; squashed onto master, **NOT pushed**). Codified read-only audit
+subagent (`.claude/agents/laura.md`) — the **UX twin of Larissa** — brainstormed
+end-to-end with Chris (spec → plan → inline build). Her rubric *is* her system
+prompt (single source of truth, no drift): an **empowerment north star**
+("does this feel like empowerment, or like nagging?" — the chat as a *readable
+shared work*, read-only mode the canonical example), the five principles, two
+product tenets (*everything at their fingertips*; *chat at the centre, ~95% of use
+time*), and an objective **hard-defect checklist** (click-depth, visibility,
+burial, reachability, dead-ends, misdirection). **Three modes:** spec-pass (early
+= the main lever, catches "the wrong thing" for the price of a paragraph) /
+pre-squash verify / holistic sweep at milestones. **Two-tier authority:** hard
+usability defects **block the squash** like a Larissa critical (not deferrable
+without Chris's sign-off); taste is advisory (Chris arbitrates). Gate discipline in
+CLAUDE.md **§9 renamed "Audit Gates"** (9.1 Larissa, 9.2 Laura) + §1-roster and
+§15-index entries; deferrals log `obsidian/insights/ux-deferrals.md`. **Design
+language still deferred** (its own upcoming session). **First real run: the TTI
+spec-pass.** Spec/plan:
+[[../superpowers/specs/2026-06-08-laura-ux-auditor-design]],
+[[../superpowers/plans/2026-06-08-laura-ux-auditor]]. **Next:** TTI feature — Laura
+audits its spec before Liz builds; then the design-language session.
+
+**Earlier 2026-06-08 (chat-polish) — Chat polish: cancel inference, table
 overflow, read-only home** (squashed onto master `cfe6923`, **NOT pushed**;
 **NOT yet device-verified**). One client-only feature unit bundling three chat-surface
 polish items Chris hit during device testing, brainstormed end-to-end with Chris,

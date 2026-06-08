@@ -13,6 +13,7 @@ Chatsundere is built by a five-entity team:
 - **Liz** (Claude Code, this instance) — Chefentwicklerin / lead developer. I implement: read briefs, write code, run tests, summon Larissa, push commits.
 - **Lyra** (Claude on the web) — architecture sparring and design partner with Chris. She produces the briefs in `obsidian/briefs/`. I treat her briefs as peer-reviewed input; I raise tensions with Chris rather than diverging silently.
 - **Larissa** (Opus-class subagent, summoned by me) — security audit. She reviews changes touching `apps/auth-service`, `apps/sync-service`, `apps/proxy-service`, or `packages/crypto` before I squash them. Details in §9.
+- **Laura** (Opus-class subagent, summoned by me) — UX audit. She audits the user-client's UX: design specs before I build (her main lever), pre-squash diffs, and whole-app sweeps at milestones. Pure auditor; she never builds. Details in §9.
 - **Ann** (human) — marketing.
 - **Chris** (human) — product owner, vision, evangelist. Arbitrates when briefs disagree, when I am uncertain, when Lyra and I see things differently.
 
@@ -140,7 +141,11 @@ Enforced as a hard rule in §3 because Chatsune drifted on this point repeatedly
 
 ---
 
-## 9. Larissa Security Gate
+## 9. Audit Gates
+
+Two Opus-class audit subagents I summon before squashing. Larissa guards security; Laura guards UX. Both follow the same discipline: I summon, they report findings with severity, I fix or consciously defer, then squash. The discipline is mine; there is no git hook fallback. Subagents never merge, push, or switch branches.
+
+### 9.1 Larissa — Security
 
 Larissa is an Opus-class audit subagent I summon before squashing changes that touch:
 
@@ -161,6 +166,20 @@ Flow:
 6. Squash and commit.
 
 Critical and high findings are not deferrable without explicit Chris sign-off in the deferrals file. The discipline is mine; there is no git hook fallback.
+
+### 9.2 Laura — UX
+
+Laura is codified in [`.claude/agents/laura.md`](.claude/agents/laura.md) — her rubric *is* her system prompt, loaded verbatim on every summon (single source of truth, no drift). I summon her when a change in `apps/user-client` adds or alters a user-reachable flow, state, or the reachability/position of a function. Pure internals, refactors, copy fixes, and performance work are skipped — the judgement call is mine.
+
+Three modes:
+
+- **Spec-pass** (her main lever) — she audits a design spec *before* I build, catching "the wrong thing" for the price of a paragraph.
+- **Pre-squash pass** (light) — she verifies the built flow honours the UX intent approved at spec-pass.
+- **Holistic sweep** (milestones) — she walks the whole path-graph and catches emergent decay no single pass sees.
+
+Her authority is two-tier. **Hard defects** — objective usability failures (excessive click-depth, buried functions, invisible affordances, unreachable functions, dead-ends, active misdirection) — block the squash like a Larissa critical; a genuinely blocking one is not deferrable without Chris's sign-off. **Soft findings** — taste, elegance, *deredere* phrasing — are advisory; Chris arbitrates design.
+
+Deferrals consciously taken go in [`obsidian/insights/ux-deferrals.md`](obsidian/insights/ux-deferrals.md), mirroring the security-deferrals log.
 
 ---
 
@@ -258,6 +277,8 @@ Load these when their topic comes up. Do not preload.
 | Past architectural decisions | `obsidian/decisions/` |
 | Project journal, gotchas, observations | `obsidian/insights/` |
 | Larissa audit deferrals | `obsidian/insights/security-deferrals.md` |
+| Laura UX audit (rubric, modes, authority) | `.claude/agents/laura.md` |
+| Laura UX deferrals | `obsidian/insights/ux-deferrals.md` |
 | Brief hygiene for Lyra | `obsidian/briefs/README.md` |
 | Spec for this file | `superpowers/specs/2026-05-18-claude-md-design.md` |
 | Prior wisdom (read-only reference) | `~/workspace/chatsune/INSIGHTS.md`, `PRE-BRANCHING.md`, `CLAUDE.md` |
