@@ -62,7 +62,6 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
           onDraftChange={() => {}}
           onSend={() => {}}
           isStreamLive={false}
-          isSending={false}
           onExit={() => {}}
           onRenameChat={() => {}}
           onOpenPersonaEditor={() => {}}

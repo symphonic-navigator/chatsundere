@@ -7,6 +7,13 @@ export interface ResolveDeps {
   toDataUrl: (blob: Blob) => Promise<string>;
   describe: (dataUrl: string, model: string) => Promise<string>;
   cacheDescription: (attachmentId: string, model: string, text: string) => Promise<void>;
+  /** Fired immediately before a real (uncached) substitute describe for an image. */
+  onDescribeStart?: (a: AttachmentRow) => void;
+  /** Fired after that describe resolves or fails. */
+  onDescribeEnd?: (
+    a: AttachmentRow,
+    outcome: { ok: true; text: string } | { ok: false; error: string },
+  ) => void;
 }
 
 /** Turn a message's attachments into resolved wire parts, running/caching substitute-vision as needed. */
@@ -35,10 +42,16 @@ export async function resolveAttachmentParts(
       let description =
         a.visionDescription?.model === substituteModel ? a.visionDescription.text : null;
       if (description === null) {
+        deps.onDescribeStart?.(a);
         try {
           description = await deps.describe(await deps.toDataUrl(a.blob), substituteModel);
           await deps.cacheDescription(a.id, substituteModel, description);
-        } catch {
+          deps.onDescribeEnd?.(a, { ok: true, text: description });
+        } catch (e) {
+          deps.onDescribeEnd?.(a, {
+            ok: false,
+            error: e instanceof Error ? e.message : 'Vision describe failed.',
+          });
           // Substitute model unavailable — degrade this image to a placeholder rather than
           // letting the error abort the entire attachment list.
           parts.push({ kind: 'image-placeholder', fileName: a.fileName });

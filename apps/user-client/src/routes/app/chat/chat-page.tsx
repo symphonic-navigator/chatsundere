@@ -333,12 +333,7 @@ export function ChatPage(): JSX.Element {
   };
 
   const onSend = async (text: string): Promise<void> => {
-    // Block a re-entrant send while one is already in flight. Without this, the
-    // substitute-vision describe (a slow network call inside the send, before the
-    // stream handle exists) leaves the cockpit enabled long enough for a second
-    // send, which would create a duplicate text-only turn (the original
-    // attachments are already bound to the first message). See DualActionBtn.
-    if (!effectivePersona || sendMessage.isPending) return;
+    if (!effectivePersona) return;
     const newChatId = await sendMessage.mutateAsync({
       chatId: activeChatId,
       personaId: effectivePersona.id,
@@ -427,11 +422,8 @@ export function ChatPage(): JSX.Element {
         // The streamingState schema is binary: 'incomplete' covers both
         // *active streaming* and *interrupted-needs-recovery*. The footer
         // is for the recovery case only — suppress it while a stream is
-        // actually live for this chat, OR while a send is still being
-        // prepared (the persona draft is persisted as 'incomplete' before the
-        // slow substitute-vision describe, so the stream handle does not exist
-        // yet — without this it would briefly read as "interrupted").
-        if (isStreamLive || sendMessage.isPending) return null;
+        // actually live for this chat.
+        if (isStreamLive) return null;
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
@@ -590,7 +582,6 @@ export function ChatPage(): JSX.Element {
           onDraftChange={setDraft}
           onSend={(t) => void onSend(t)}
           isStreamLive={isStreamLive}
-          isSending={sendMessage.isPending}
           onExit={onExitToEntranceHall}
           onRenameChat={onRenameChat}
           onOpenPersonaEditor={onOpenPersonaEditor}

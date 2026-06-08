@@ -32,7 +32,6 @@ function renderCockpit(extra: Record<string, unknown> = {}) {
       onDraftChange={() => {}}
       onSend={() => {}}
       isStreamLive={false}
-      isSending={false}
       {...extra}
     />,
     { wrapper: wrap(qc) },

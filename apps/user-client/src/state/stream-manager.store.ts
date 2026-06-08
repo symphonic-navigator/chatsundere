@@ -4,6 +4,7 @@ import {
   type ReasoningIntent,
   type StreamChunk,
   type WireContentPart,
+  getCanonical,
   getOffering,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
@@ -15,7 +16,12 @@ import { resolveAttachmentParts } from '../attachments/resolve-send.js';
 import { describeImage } from '../attachments/substitute-vision.js';
 import { imageDisposition } from '../attachments/vision-gate.js';
 import { buildUserWireContent } from '../attachments/wire-injection.js';
-import { type ContentBlock, type PillRow, getClientDataDb } from '../boot/client-data-db.js';
+import {
+  type AttachmentRow,
+  type ContentBlock,
+  type PillRow,
+  getClientDataDb,
+} from '../boot/client-data-db.js';
 import {
   attachPendingToMessage,
   listMessageAttachments,
@@ -95,10 +101,6 @@ export type RegenerateStreamArgs = StartArgs & {
 
 interface StreamManagerStore {
   streams: Map<string, StreamHandle>;
-  /** Chats whose current send is running a substitute-vision describe — the slow
-   *  network phase that happens after the user message is persisted but before
-   *  the stream handle exists. Drives the cockpit's "Describing image…" hint. */
-  describingChats: Set<string>;
   start: (args: StartArgs) => Promise<void>;
   regenerate: (args: RegenerateStreamArgs) => Promise<void>;
   abortDiscard: (chatId: string) => Promise<void>;
@@ -135,7 +137,6 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
 
 export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   streams: new Map(),
-  describingChats: new Set(),
 
   has: (chatId) => get().streams.has(chatId),
 
@@ -190,20 +191,10 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       await db.chats.update(args.chatId, { lastMessageAt: now + 1, draftInput: '' });
     });
 
-    // Resolve the user turn's attachments into multimodal wire content, then
-    // stream. Text-only turns short-circuit to the plain string (unchanged path).
-    // `markDescribing` flips the per-chat hint on only while a real substitute
-    // describe is in flight (the slow, pre-handle phase).
-    const markDescribing = (on: boolean): void =>
-      set((s) => {
-        const n = new Set(s.describingChats);
-        if (on) n.add(args.chatId);
-        else n.delete(args.chatId);
-        return { describingChats: n };
-      });
-    const userContent = await resolveUserContent(args, userMessageId, markDescribing);
-
-    runIntoDraft({ ...args, userMessageText: userContent }, draftMessageId, set, get, false);
+    // The persona response goes live immediately; runIntoDraft resolves the user
+    // turn's attachments (running substitute-vision describes as live pills)
+    // inside the live stream for a fresh send.
+    runIntoDraft(args, draftMessageId, set, get, false, userMessageId);
   },
 
   regenerate: async (args) => {
@@ -288,10 +279,17 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
 async function resolveUserContent(
   args: StartArgs,
   userMessageId: string,
-  markDescribing?: (on: boolean) => void,
+  // signal reserved for describe cancellation (outer abort already tears down the send)
+  _signal: AbortSignal,
+  callbacks: {
+    onDescribeStart: (a: AttachmentRow) => void;
+    onDescribeEnd: (
+      a: AttachmentRow,
+      outcome: { ok: true; text: string } | { ok: false; error: string },
+    ) => void;
+  },
 ): Promise<string | WireContentPart[]> {
   const db = getClientDataDb();
-  let describingOn = false;
   try {
     const atts = await listMessageAttachments(userMessageId);
     if (atts.length === 0) return args.userText;
@@ -306,20 +304,6 @@ async function resolveUserContent(
       return getOffering(ref.slice(0, idx), ref.slice(idx + 1));
     };
     const disposition = imageDisposition(activeRef, substituteRef, lookup);
-
-    // Flip the "Describing image…" hint on only when a real describe will run:
-    // substitute disposition with at least one image lacking a cached description
-    // for this substitute model. Cached/direct/text turns resolve instantly.
-    if (
-      disposition === 'substitute' &&
-      substituteRef !== null &&
-      atts.some(
-        (a) => a.kind !== 'text' && a.blob != null && a.visionDescription?.model !== substituteRef,
-      )
-    ) {
-      describingOn = true;
-      markDescribing?.(true);
-    }
 
     const base = args.substituteOneShotBase;
     const parts = await resolveAttachmentParts(atts, disposition, substituteRef, {
@@ -336,13 +320,13 @@ async function resolveUserContent(
       cacheDescription: async (id, model, text) => {
         await db.attachments.update(id, { visionDescription: { model, text } });
       },
+      onDescribeStart: callbacks.onDescribeStart,
+      onDescribeEnd: callbacks.onDescribeEnd,
     });
     return buildUserWireContent(args.userText, parts);
   } catch (err) {
     console.error('[stream-manager] attachment resolution failed; sending text only', err);
     return args.userText;
-  } finally {
-    if (describingOn) markDescribing?.(false);
   }
 }
 
@@ -353,13 +337,14 @@ async function resolveUserContent(
  * and `regenerate` (re-roll of the last answer). Does NOT insert any rows —
  * the caller owns row creation/clearing.
  */
-function runIntoDraft(
+async function runIntoDraft(
   args: StartArgs,
   draftMessageId: string,
   set: (fn: (s: StreamManagerStore) => Partial<StreamManagerStore>) => void,
   get: () => StreamManagerStore,
   reusedDraft: boolean,
-): void {
+  userMessageId: string | null = null,
+): Promise<void> {
   const db = getClientDataDb();
   const now = Date.now();
   const controller = new AbortController();
@@ -397,6 +382,74 @@ function runIntoDraft(
     m.set(args.chatId, handle);
     return { streams: m };
   });
+
+  // Vision pills emitted during the live describe phase (fresh send only).
+  // Declared here so the .then finalise path can close over them and persist
+  // them alongside lore and tool-call pills.
+  const visionPills: PillRow[] = [];
+  // Friendly display name for the substitute model (the raw ref is
+  // "templateId:slug"); mirrors how the expert pill resolves its label.
+  const substituteLabel = ((): string => {
+    const ref = args.substituteVisionModel;
+    if (!ref) return 'vision model';
+    const idx = ref.indexOf(':');
+    if (idx < 0) return ref;
+    const off = getOffering(ref.slice(0, idx), ref.slice(idx + 1));
+    return getCanonical(off?.canonicalRef ?? '')?.displayName ?? off?.upstreamSlug ?? ref;
+  })();
+
+  // Resolve the fresh user turn's attachments into wire content, emitting a live
+  // describe_image pill per uncached substitute image (ahead of the lore pill).
+  // Regenerate (reusedDraft) keeps args.userMessageText as-is (no re-describe).
+  let userMessageText = args.userMessageText;
+  if (!reusedDraft && userMessageId) {
+    const rebuildBuffers = (): void => {
+      set((s) => {
+        const live = s.streams.get(args.chatId);
+        if (!live) return s;
+        const contentBuffer: ContentBlock[] = [
+          ...visionPills.map((vp) => ({ type: 'pill', pillId: vp.id }) as ContentBlock),
+          ...(lorePill ? [{ type: 'pill', pillId: lorePill.id } as ContentBlock] : []),
+        ];
+        const pillBuffer: PillRow[] = [...visionPills, ...(lorePill ? [lorePill] : [])];
+        const m = new Map(s.streams);
+        m.set(args.chatId, { ...live, contentBuffer, pillBuffer });
+        return { streams: m };
+      });
+    };
+    userMessageText = await resolveUserContent(args, userMessageId, controller.signal, {
+      onDescribeStart: (a) => {
+        visionPills.push({
+          id: uuidv7(),
+          messageId: '',
+          kind: 'tool-call',
+          positionHint: 'above-text',
+          status: 'pending',
+          payload: {
+            name: 'describe_image',
+            model: substituteLabel,
+            fileName: a.fileName,
+          },
+          createdAt: Date.now(),
+        });
+        rebuildBuffers();
+      },
+      onDescribeEnd: (a, outcome) => {
+        const vp = visionPills.find(
+          (x) =>
+            (x.payload as { fileName?: string }).fileName === a.fileName && x.status === 'pending',
+        );
+        if (vp) {
+          vp.status = outcome.ok ? 'completed' : 'failed';
+          vp.payload = {
+            ...(vp.payload as Record<string, unknown>),
+            ...(outcome.ok ? { result: outcome.text } : { error: outcome.error }),
+          };
+        }
+        rebuildBuffers();
+      },
+    });
+  }
 
   const toolsActive = args.offering.profile.toolCalls.supported;
   const integrationCtx = buildIntegrationContext(
@@ -477,6 +530,7 @@ function runIntoDraft(
     streamOnce: (toolExchange, tools) =>
       runStreamEngine({
         ...args,
+        userMessageText,
         toolsInstruction,
         knowledgeLibrariesContext,
         loreContext: args.loreContext ?? '',
@@ -520,14 +574,18 @@ function runIntoDraft(
         return { streams: m };
       });
 
-      const allPillRows = lorePill ? [lorePill, ...result.pillRows] : result.pillRows;
+      // Vision pills (describe_image) come first, then the lore pill, then tool-call rows.
+      const allPillRows = [...visionPills, ...(lorePill ? [lorePill] : []), ...result.pillRows];
       const pillsWithMessageId = allPillRows.map((p) => ({
         ...p,
         messageId: draftMessageId,
       }));
-      const finalContentBlocks = lorePill
-        ? [{ type: 'pill' as const, pillId: lorePill.id }, ...result.finalContentBlocks]
-        : result.finalContentBlocks;
+      // Content blocks: vision pill refs first, then lore pill ref, then engine blocks.
+      const finalContentBlocks = [
+        ...visionPills.map((vp) => ({ type: 'pill' as const, pillId: vp.id })),
+        ...(lorePill ? [{ type: 'pill' as const, pillId: lorePill.id }] : []),
+        ...result.finalContentBlocks,
+      ];
 
       await db.transaction('rw', db.messages, db.pills, db.chats, async () => {
         await db.messages.update(draftMessageId, {
@@ -590,12 +648,16 @@ function runIntoDraft(
         contentBlocks: current.contentBuffer,
         streamingState: 'incomplete',
       });
-      // Persist the lore pill row so the pill block already seeded into
-      // contentBuffer can resolve — without this the pointer would dangle
-      // when the incomplete message is reloaded from Dexie. put() (not add())
-      // is idempotent against a prior partial persist on retry.
+      // Persist the lore pill row and any vision pill rows so the pill blocks
+      // already seeded into contentBuffer can resolve — without this the
+      // pointers would dangle when the incomplete message is reloaded from
+      // Dexie. put() (not add()) is idempotent against a prior partial persist
+      // on retry.
       if (lorePill !== null) {
         await db.pills.put({ ...lorePill, messageId: draftMessageId });
+      }
+      for (const vp of visionPills) {
+        await db.pills.put({ ...vp, messageId: draftMessageId });
       }
       void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
 

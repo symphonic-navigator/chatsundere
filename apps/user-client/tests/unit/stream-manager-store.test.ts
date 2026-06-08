@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
+import * as llmUnified from '../../../../packages/llm-unified/src/index';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
+import * as resolveSend from '../../src/attachments/resolve-send';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import * as engine from '../../src/lib/stream-engine';
 import * as titleGen from '../../src/lib/title-generator';
@@ -985,5 +987,237 @@ describe('stream-manager.store', () => {
     expect(personaMsg?.streamingState).toBe('incomplete');
     const firstBlock = personaMsg?.contentBlocks[0];
     expect(firstBlock).toEqual({ type: 'pill', pillId: kb?.id });
+  });
+
+  it('persists a describe_image pill after substitute-vision describe completes on a fresh send', async () => {
+    // Contract: when the active model has no vision and a substitute is set,
+    // each uncached image attachment is described during the live stream phase.
+    // After the send completes the persona message must contain a describe_image
+    // pill (status:'completed', payload carries the description).
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const baseModel = nanoGpt.offerings[0];
+    const myChatId = 'c-describe-pill';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    // Seed a pending image attachment for this chat (no messageId = pending).
+    const attId = 'att-img-1';
+    await db.attachments.add({
+      id: attId,
+      chatId: myChatId,
+      messageId: null,
+      origin: 'upload',
+      kind: 'image',
+      fileName: 'photo.jpg',
+      mime: 'image/jpeg',
+      order: 0,
+      state: 'active',
+      blob: new Blob(['x'], { type: 'image/jpeg' }),
+      createdAt: 1,
+    });
+
+    // Active model: vision=false; substitute ref: vision=true.
+    const activeModel = {
+      ...(baseModel as object),
+      profile: { toolCalls: { supported: false }, vision: false },
+    };
+    const substituteRef = 'nano-gpt:gpt-4o-mini';
+    vi.spyOn(llmUnified, 'getOffering').mockImplementation((_providerId, slug) => {
+      if (slug === 'gpt-4o-mini') {
+        return {
+          ...(baseModel as object),
+          profile: { vision: true, toolCalls: { supported: false } },
+        } as never;
+      }
+      // Active model has no vision.
+      return {
+        ...(baseModel as object),
+        profile: { vision: false, toolCalls: { supported: false } },
+      } as never;
+    });
+
+    // Simulate resolveAttachmentParts firing onDescribeStart + onDescribeEnd then returning.
+    vi.spyOn(resolveSend, 'resolveAttachmentParts').mockImplementation(
+      async (_atts, _disposition, _sub, deps) => {
+        const fakeAtt = {
+          id: attId,
+          chatId: myChatId,
+          messageId: null,
+          origin: 'upload',
+          kind: 'image',
+          fileName: 'photo.jpg',
+          mime: 'image/jpeg',
+          order: 0,
+          state: 'active',
+          blob: new Blob(['x'], { type: 'image/jpeg' }),
+          createdAt: 1,
+        } as never;
+        deps.onDescribeStart?.(fakeAtt);
+        deps.onDescribeEnd?.(fakeAtt, { ok: true as const, text: 'A photo of a cat.' });
+        return [
+          {
+            kind: 'image-description' as const,
+            fileName: 'photo.jpg',
+            model: substituteRef,
+            description: 'A photo of a cat.',
+          },
+        ];
+      },
+    );
+
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'Nice photo!' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, activeModel),
+      chatId: myChatId,
+      chat: {
+        id: myChatId,
+        personaId,
+        title: 'kept',
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      },
+      offering: activeModel,
+      substituteVisionModel: substituteRef,
+      substituteOneShotBase: {
+        provider: nanoGpt,
+        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' as const } },
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        target: { slug: 'gpt-4o-mini', bodyExtras: {} },
+      },
+    } as never);
+    // Give the async runIntoDraft resolution + then-chain time to complete.
+    await new Promise((r) => setTimeout(r, 80));
+
+    const msgs = await db.messages.where('chatId').equals(myChatId).sortBy('createdAt');
+    const personaMsg = msgs.find((m) => m.role === 'persona');
+    expect(personaMsg?.streamingState).toBe('complete');
+
+    const pills = await db.pills.toArray();
+    const describePill = pills.find(
+      (p) => p.kind === 'tool-call' && (p.payload as { name?: string }).name === 'describe_image',
+    );
+    expect(describePill).toBeDefined();
+    expect(describePill?.status).toBe('completed');
+    expect((describePill?.payload as { result?: string }).result).toBe('A photo of a cat.');
+
+    // The persona message's content blocks must reference the describe_image pill.
+    const hasDescribeBlock = personaMsg?.contentBlocks.some(
+      (b) => b.type === 'pill' && b.pillId === describePill?.id,
+    );
+    expect(hasDescribeBlock).toBe(true);
+  });
+
+  it('regenerate produces no describe_image pill (no re-describe on re-roll)', async () => {
+    // Contract: regenerate re-uses the existing user message — no new attachment
+    // resolution runs, so no describe_image pill appears.
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const baseModel = nanoGpt.offerings[0];
+    const myChatId = 'c-regen-no-describe';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const userId = 'u-regen-1';
+    const personaMsgId = 'pm-regen-1';
+    await db.messages.add({
+      id: userId,
+      chatId: myChatId,
+      role: 'user',
+      contentBlocks: [{ type: 'text', text: 'look at this' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    await db.messages.add({
+      id: personaMsgId,
+      chatId: myChatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'old answer' }],
+      createdAt: 3,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+
+    const resolveAttSpy = vi.spyOn(resolveSend, 'resolveAttachmentParts');
+
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'new answer' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+
+    const activeModel = {
+      ...(baseModel as object),
+      profile: { toolCalls: { supported: false }, vision: false },
+    };
+    const store = useStreamManagerStore.getState();
+    await store.regenerate({
+      ...baseStartArgs(myChatId, persona, activeModel),
+      chatId: myChatId,
+      chat: {
+        id: myChatId,
+        personaId,
+        title: 'kept',
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      },
+      offering: activeModel,
+      substituteVisionModel: 'nano-gpt:gpt-4o-mini',
+      substituteOneShotBase: {
+        provider: nanoGpt,
+        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' as const } },
+        apiKey: 'k',
+        corsProxyUrl: null,
+        corsProxyKey: null,
+        target: { slug: 'gpt-4o-mini', bodyExtras: {} },
+      },
+      userMessageText: 'look at this',
+      priorMessages: [],
+      targetMessageId: personaMsgId,
+    } as never);
+    await new Promise((r) => setTimeout(r, 80));
+
+    // resolveAttachmentParts must NOT have been called during a regenerate.
+    expect(resolveAttSpy).not.toHaveBeenCalled();
+
+    const pills = await db.pills.toArray();
+    const describePill = pills.find(
+      (p) => p.kind === 'tool-call' && (p.payload as { name?: string }).name === 'describe_image',
+    );
+    expect(describePill).toBeUndefined();
   });
 });
