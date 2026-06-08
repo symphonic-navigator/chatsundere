@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import {
-  type Offering,
-  getCanonical,
-  getOffering,
-  getProvider,
-  listOfferings,
-} from '@chatsundere/llm-unified';
+import { type Offering, getOffering, listOfferings } from '@chatsundere/llm-unified';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -278,13 +272,6 @@ export function PersonaEditor(): JSX.Element {
   }
 
   // Dynamic accordion metas
-  const selectedCanonical = draft.canonicalId ? getCanonical(draft.canonicalId) : undefined;
-  const selectedProvider = providers.data?.find((p) => p.id === draft.providerId);
-  const modelMeta: ReactNode =
-    selectedCanonical && selectedProvider
-      ? `${selectedCanonical.displayName} · via ${getProvider(selectedProvider.templateId)?.displayName ?? selectedProvider.templateId}`
-      : 'Pick a model';
-
   const behaviourMeta: ReactNode = (
     <span>
       Temperature
@@ -443,10 +430,26 @@ export function PersonaEditor(): JSX.Element {
         ) : null}
       </EditorSticky>
 
-      {/* Identity — always visible, outside the accordion */}
+      {/* Identity — always visible, outside the accordion.
+          Order top→bottom: avatar, name, tagline, model. */}
       <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">
         <header className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Identity</header>
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Avatar</div>
+        <AvatarField
+          personaId={isCreate ? null : (id ?? null)}
+          name={draft.name || 'New Persona'}
+          colour={draft.colour}
+          pending={pendingAvatar}
+          onPick={(f) => {
+            setIsDirty(true);
+            void onPickAvatar(f);
+          }}
+          onRemove={() => {
+            setIsDirty(true);
+            setPendingAvatar('remove');
+          }}
+        />
+        <div className="mb-2 mt-3 flex items-center gap-2">
           <label
             className="text-xs uppercase tracking-widest text-paper-soft"
             htmlFor="persona-name"
@@ -477,50 +480,16 @@ export function PersonaEditor(): JSX.Element {
           type="text"
           value={draft.tagline}
           onChange={(e) => patch({ tagline: e.target.value })}
-          className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none focus:border-paper-soft"
+          className="mb-3 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none focus:border-paper-soft"
         />
-        <div className="mt-3">
-          <div className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Avatar</div>
-          <AvatarField
-            personaId={isCreate ? null : (id ?? null)}
-            name={draft.name || 'New Persona'}
-            colour={draft.colour}
-            pending={pendingAvatar}
-            onPick={(f) => {
-              setIsDirty(true);
-              void onPickAvatar(f);
-            }}
-            onRemove={() => {
-              setIsDirty(true);
-              setPendingAvatar('remove');
-            }}
-          />
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-xs uppercase tracking-widest text-paper-soft">Model</span>
+          {!draft.canonicalId || !draft.providerId || !draft.modelId ? (
+            <span aria-label="Model is required" className="text-danger" data-required-marker>
+              ✕
+            </span>
+          ) : null}
         </div>
-      </section>
-
-      {/* ❶ Custom Instructions */}
-      <AccordionCard
-        icon="≣"
-        label="Custom Instructions"
-        meta="Who this persona is"
-        requiredMarker={!draft.instructions}
-      >
-        <AutoSizeTextarea
-          aria-label="Custom instructions"
-          minRows={5}
-          maxRows={30}
-          value={draft.instructions}
-          onChange={(v) => patch({ instructions: v })}
-        />
-      </AccordionCard>
-
-      {/* ❷ Model */}
-      <AccordionCard
-        icon="⬡"
-        label="Model"
-        meta={modelMeta}
-        requiredMarker={!draft.canonicalId || !draft.providerId || !draft.modelId}
-      >
         <ModelPickerField
           providers={providers.data ?? []}
           configuredTemplateIds={usableTemplateIds(
@@ -561,9 +530,25 @@ export function PersonaEditor(): JSX.Element {
           onBrowseProviders={() => navigate('/app/settings')}
           emptyLabel="Choose a model"
         />
+      </section>
+
+      {/* ❶ Custom Instructions */}
+      <AccordionCard
+        icon="≣"
+        label="Custom Instructions"
+        meta="Who this persona is"
+        requiredMarker={!draft.instructions}
+      >
+        <AutoSizeTextarea
+          aria-label="Custom instructions"
+          minRows={5}
+          maxRows={30}
+          value={draft.instructions}
+          onChange={(v) => patch({ instructions: v })}
+        />
       </AccordionCard>
 
-      {/* ❸ Behavior */}
+      {/* ❷ Behavior */}
       <AccordionCard icon="∿" label="Behavior" meta={behaviourMeta}>
         <label
           htmlFor="persona-temperature"

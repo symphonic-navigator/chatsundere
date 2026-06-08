@@ -100,14 +100,24 @@ describe('PersonaEditor — required-field markers', () => {
     expect(ci?.querySelector('[aria-label="Custom Instructions is required"]')).not.toBeNull();
   });
 
-  it('orders accordion sections as Custom Instructions → Model → Behavior → Font and Voice → Mindspace → About-Me-Override → Knowledge', () => {
+  it('places Model in the Identity section, outside any accordion', () => {
+    setup();
+    const model = screen.getByText('Model');
+    expect(model.closest('[data-accordion-card]')).toBeNull();
+  });
+
+  it('shows the inline ✕ marker next to Model while no model is selected', () => {
+    setup();
+    expect(screen.getByLabelText(/model is required/i)).toBeInTheDocument();
+  });
+
+  it('orders accordion sections as Custom Instructions → Behavior → Font and Voice → Mindspace → About-Me-Override → Knowledge', () => {
     setup();
     const headers = Array.from(
       document.querySelectorAll('[data-accordion-card] [data-accordion-label]'),
     ).map((n) => n.textContent?.trim() ?? '');
     expect(headers).toEqual([
       'Custom Instructions',
-      'Model',
       'Behavior',
       'Font and Voice',
       'Mindspace — Override',

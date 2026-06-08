@@ -107,12 +107,6 @@ function setup(path: string) {
 }
 
 describe('PersonaEditor — dynamic accordion meta', () => {
-  it('Model meta shows canonical · via provider when canonicalId and providerId are set', () => {
-    setup('/app/persona/p-1');
-    const header = screen.getByText(/^model$/i).closest('[data-accordion-card]');
-    expect(header?.textContent).toMatch(/GLM 5\.1.*via nano-gpt\.com/);
-  });
-
   it('Behavior meta shows an NSFW badge when adultPersona is true', () => {
     setup('/app/persona/p-1');
     const header = screen.getByText(/^behavior$/i).closest('[data-accordion-card]');

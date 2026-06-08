@@ -76,7 +76,6 @@ describe('PersonaEditor — Font and Voice section', () => {
     ).map((n) => n.textContent?.trim() ?? '');
     expect(headers).toEqual([
       'Custom Instructions',
-      'Model',
       'Behavior',
       'Font and Voice',
       'Mindspace — Override',
