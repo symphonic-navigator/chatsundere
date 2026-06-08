@@ -53,10 +53,10 @@ describe('EntranceHall', () => {
     });
   });
 
-  it('renders Integrations as a disabled stub and Knowledge as a live tile', async () => {
+  it('renders Integrations and Knowledge as live tiles', async () => {
     wrap('/app');
     const integrations = await screen.findByText('My Integrations');
-    expect(integrations.closest('[aria-disabled="true"]')).not.toBeNull();
+    expect(integrations.closest('[aria-disabled="true"]')).toBeNull();
     const knowledge = await screen.findByText('My Knowledge');
     expect(knowledge.closest('[aria-disabled="true"]')).toBeNull();
   });

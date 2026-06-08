@@ -25,7 +25,6 @@ import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
 import { SaveBar } from '../../components/SaveBar.js';
 import { WebInterfacingSection } from '../../components/WebInterfacingSection.js';
-import { McpServersSection } from '../../components/mcp/McpServersSection.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
@@ -488,10 +487,6 @@ export function Settings(): JSX.Element {
       </AccordionCard>
 
       <ExpertWebSettings />
-
-      <AccordionCard icon="⧉" label="MCP Servers" meta="External tool servers">
-        <McpServersSection />
-      </AccordionCard>
 
       <SaveBar
         onCancel={onCancel}

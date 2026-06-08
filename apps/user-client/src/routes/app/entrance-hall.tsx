@@ -135,13 +135,7 @@ export function EntranceHall(): JSX.Element {
           meta={libraryCount === 0 ? 'empty' : `${libraryCount} libraries`}
           to="/app/knowledge"
         />
-        <RoomTile
-          label="My Integrations"
-          icon="⊞"
-          meta="Coming soon"
-          disabled
-          tooltip="Coming soon"
-        />
+        <RoomTile label="My Integrations" icon="⊞" meta="MCP servers" to="/app/integrations" />
         <RoomTile
           label="My Settings"
           icon="⚙"
