@@ -41,9 +41,11 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   const [renamingField, setRenamingField] = useState<'title' | 'fileName' | null>(null);
   const [override, setOverride] = useState<PreviewFormat | null>(null);
   const [copied, setCopied] = useState(false);
-  // Edit buffer + last-saved baseline for the current text item.
+  // Edit buffer + last-saved baseline for the current text item, plus the id of the
+  // item the buffer belongs to — used to reset the buffer synchronously on item change.
   const [draft, setDraft] = useState(p.items[p.index]?.text ?? '');
   const [baseline, setBaseline] = useState(p.items[p.index]?.text ?? '');
+  const [draftItemId, setDraftItemId] = useState(p.items[p.index]?.id);
   // When set, a destructive navigation/close is pending behind the dirty-confirm bar.
   const [confirming, setConfirming] = useState<{ run: () => void } | null>(null);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -56,6 +58,21 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   });
   const navRef = useRef<{ prev: () => void; next: () => void }>({ prev: () => {}, next: () => {} });
   const item = p.items[i];
+
+  // Reset the per-item view + edit state synchronously when the viewed item changes —
+  // during render, NOT in an effect. An effect runs a render too late, so the freshly
+  // selected item painted one frame with the previous item's draft; for an HTML artefact
+  // that meant the sandbox iframe mounted with the neighbour's text and then relied on a
+  // flaky srcDoc-update reload, leaving the preview blank until a reopen. Keying on item
+  // id (not index) is also correct when the list shrinks under a stable index.
+  if (item && item.id !== draftItemId) {
+    setDraftItemId(item.id);
+    setDraft(item.text ?? '');
+    setBaseline(item.text ?? '');
+    setOverride(null);
+    setCopied(false);
+    setConfirming(null);
+  }
 
   // Keep the index valid as items shrink (e.g. after a remove).
   useEffect(() => {
@@ -133,17 +150,6 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, []);
-
-  // Reset per-item view state (override, copied flash, edit buffer, confirm bar)
-  // whenever the viewed item changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `i` is intentionally the only trigger; the body reads the freshly-indexed item and calls stable setters
-  useEffect(() => {
-    setOverride(null);
-    setCopied(false);
-    setDraft(p.items[i]?.text ?? '');
-    setBaseline(p.items[i]?.text ?? '');
-    setConfirming(null);
-  }, [i]);
 
   if (!item) return null;
 
