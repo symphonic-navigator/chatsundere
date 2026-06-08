@@ -58,8 +58,17 @@ image" + the answer still streams; regenerate → no new describe. **Next:** Chr
 device-tests → pushes the master backlog himself (Liz must NOT push).
 
 **Earlier 2026-06-08 — MCP client landed** (squashed onto master
-`6e766fa`, **NOT pushed**; **NOT yet device-verified** — device-test checklist below
-is outstanding). Brainstormed end-to-end with Chris, built **subagent-driven** in an
+`6e766fa`, relocated to the My Integrations room `4fe76f8`, **NOT pushed**;
+**DEVICE-CONFIRMED by Chris 2026-06-08** — quotewise (18 tools, via the user's CORS
+proxy) end-to-end: the model called `quotes_about` with self-chosen args
+(`about:"courage", limit:15, language:"de"`), the **approval modal showed the args**,
+Approve → quote returned → companion answered. The reported "tools not called in
+'frag nach'" was **diagnosed as model nondeterminism, not a bug** — `autoRun` gates
+only `execute`, never tool *offering* (proven by `[mcp-offer]` instrumentation: server
+active, 18 tools built, identical to trusted); with a clear trigger prompt the model
+calls the tool and the approval flow works. Temporary debug instrumentation was added
+to the working tree during diagnosis and **fully reverted** (tree clean)). Brainstormed
+end-to-end with Chris, built **subagent-driven** in an
 isolated worktree (11 TDD tasks, per-task spec+quality review + a final **opus**
 holistic review + a **Larissa** security round = **READY TO SQUASH**, no
 critical/high). Connects the browser to **external HTTPS MCP servers** and exposes
