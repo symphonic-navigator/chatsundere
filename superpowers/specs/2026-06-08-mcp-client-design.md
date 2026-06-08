@@ -66,12 +66,16 @@ streaming), explicitly including **public** servers. No stdio. No gateway.
 
 ## 5. Architecture
 
-A new **MCP integration** in the user-client, following the `web-integration`
-pattern: it implements the existing `Integration` interface
-(`apps/user-client/src/integrations/types.ts`) and, via `contributesTools(ctx)`,
+MCP tools are a **context-tools category** in `resolveActiveTools`, mirroring the
+**knowledge** (`query_knowledgebase`) and **expert** (`ask_expert`) precedent — *not*
+an entry in the `INTEGRATIONS` array. The `Integration` abstraction is keyed by a
+`ServiceKind` (`llm | web | tts | stt | tti`), and MCP servers are not catalogue
+offerings with a `ServiceKind`, exactly as knowledge tools "deliberately do not fit
+the Integration abstraction". So `resolveActiveTools` gains a fourth context
+parameter `mcp: McpToolContext | null` and a `contributeMcpTools(mcp)` builder that
 returns dynamically built `Tool[]` from the servers that resolve **active** for the
-current persona. It is registered in `apps/user-client/src/integrations/index.ts`
-alongside `webIntegration` and `artefactIntegration`.
+current persona. The per-tool `execute` shape (lazy network call, cached `tools/list`,
+constructive `ToolResult`) still mirrors the `web-integration` tool shape.
 
 The JSON-RPC mechanics are **ported from chatsune's `mcpClient.ts`** (it is solid):
 `initialize` → `notifications/initialized` → `tools/list` / `tools/call`; both
@@ -93,10 +97,11 @@ version `2025-06-18`.
    `[a-zA-Z0-9_-]`, clips to ≤64 chars; builds the reverse map
    `prefixedName → { serverId, originalName }`; resolves prefix collisions across the
    active server set deterministically.
-4. **`integrations/mcp/mcp-integration.ts`** — implements `Integration`. Resolves the
-   persona's active servers (default + override), builds the prefixed `Tool[]` from
-   each server's **cached** `tools/list`, and each tool's `execute` runs the approval
-   gate then calls `mcp-client.toolsCall` through the server's resolved routing.
+4. **`mcp/mcp-tools.ts`** — `contributeMcpTools(mcp: McpToolContext): Tool[]`. Builds
+   the prefixed `Tool[]` from each active server's **cached** `tools/list`; each
+   tool's `execute` runs the approval gate then calls `mcp-client.toolsCall` through
+   the server's resolved routing. Wired into `resolveActiveTools` as a fourth context
+   (mirrors `contributeKnowledgeTools` / `createAskExpertTool`).
 5. **`data/mcp-servers.ts`** — Dexie CRUD for the `mcpServers` table plus
    read/write helpers for persona overrides and the override-resolution function.
 6. **`state/mcp-approval.store.ts`** — the pending-approval queue backing the
