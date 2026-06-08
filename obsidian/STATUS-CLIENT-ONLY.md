@@ -16,7 +16,51 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **Reusable model-picker landed**
+**Last updated:** 2026-06-08 (latest) — **Subagent improvements landed**
+(squashed onto master `146328e`, **NOT pushed**; **NOT yet device-verified**).
+Three threads in one feature unit, brainstormed end-to-end with Chris, built
+**subagent-driven** in an isolated worktree (13 tasks, per-task review + a final
+**opus** holistic review = **no critical/important**; the load-bearing isolation
+invariant re-verified intact). **(a) Author default reasoning:** the artefact-author
+subagent now runs at its model's **chat-default** reasoning (was hard-disabled), with
+a conditional output budget (16384 tokens when reasoning on, 8192 off) so reasoning
+tokens don't truncate the HTML. **(b) Expert web access:** the `ask_expert` expert
+uplink can now use **`web_search` / `web_fetch`** via a **bounded tool loop** (round
+cap 8), with its own **independent settings** (`settings.expertWeb`, **Dexie v17**),
+an **auto-default of exa + neural** when resolvable (degrades to single-shot when no
+backend resolves or set to Off), and **visible web activity in the ExpertPill**
+(`searching the web · <query>` / `reading · <host>` live; the executed searches/fetches
+listed in the expanded pill). New **My Settings** section "Expert web access" (search/
+fetch backend pickers + a depth picker, proxy-gated, the displayed effective backend
+matches what actually runs via the exa-preference). **(c) Unification:** the identical
+`AuthorBase`/`ExpertBase` descriptor merged into **`SubagentBase`**, and the
+`web_search`/`web_fetch` tool builders extracted into a shared **`buildWebTools`** used
+by both the chat integration and the expert; **no shared tool-loop engine by design**
+(author = one-shot generator, expert = tool-loop agent — recorded as decision D5).
+**Not a Larissa change** (client-only; no auth/sync/proxy/crypto). **New outbound
+egress** (the expert's web queries) logged in [[insights/security-deferrals]] —
+isolation preserved (web queries derive only from the sanitised standalone question;
+`nsfwAllowed` from the persona, same as chat web). Full-tree capture verified
+(`git diff branch..master` empty over the 33 touched files) + `pnpm typecheck --force`
+**14/14** on master before worktree cleanup. Verification (on master after squash):
+typecheck **14/14**; user-client vitest **1162 pass / 8 fail** (the unchanged
+`cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline, +16 new feature
+tests all green); llm-unified `bun test` **283/0**; `pnpm run build` **9/9**; biome
+clean (the lone `index.css` format drift is pre-existing on master, not ours). Spec/plan:
+[[../superpowers/specs/2026-06-08-subagent-improvements-design]],
+[[../superpowers/plans/2026-06-08-subagent-improvements]]. **Device test (spec §9):**
+(1) reasoning-capable persona → ask for an artefact → the author reasons, the file is
+complete; (2) with nano-gpt + a proxy + an expert model set, My Settings → "Expert web
+access" shows **exa / Neural** as the auto default; (3) small-model persona + expert
+chip on → ask a question needing current facts → the ExpertPill shows
+`searching the web · "…"` (possibly several) then `thinking → answering`; expand the
+finished pill → the standalone question, the executed searches, the expert answer, the
+companion replies in its own voice; (4) set expert web Off → the expert answers from
+its own knowledge, no web phases; (5) no proxy → the section shows the "needs a proxy"
+notice; (6) the expanded pill's question carries no personal context from the chat.
+**Next:** Chris device-tests → pushes the master backlog himself (Liz must NOT push).
+
+**Earlier 2026-06-08 — Reusable model-picker landed**
 (squashed onto master, **NOT pushed**; **NOT yet device-verified** — Chris chose to
 land it before the device test, so the device checklist is still outstanding). One
 **`ModelPickerField`** (trigger button) + animated **`ModelPickerModal`**
