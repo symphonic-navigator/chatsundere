@@ -17,8 +17,12 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-08 — **`ask_expert` expert-uplink tool shipped**
-(squashed on `master` `6d91bd5`, **NOT pushed** — awaiting Chris's device test;
-Liz pushes on his word). Client-only, **inserted experimental** feature,
+(squashed on `master` `6d91bd5`, **DEVICE-CONFIRMED by Chris 2026-06-08** —
+**Gemma 4 → Opus 4.8** on a Lie-groups question: the forwarded prompt was a clean
+standalone technical query (no personal context — isolation held in the wild) and
+Gemma answered in its own buddy-friendly voice (knowledge from the expert, warmth
+from the companion — the design goal, proven live). **NOT pushed** — Liz pushes on
+his word). Client-only, **inserted experimental** feature,
 brainstormed end-to-end with Chris, built **subagent-driven** in an isolated
 worktree (14 TDD tasks, per-task spec+quality review + a final **opus** holistic
 review = READY TO SQUASH, no critical/important; all **7 cross-cutting invariants
