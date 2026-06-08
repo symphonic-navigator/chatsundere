@@ -16,7 +16,68 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 — **`ask_expert` expert-uplink tool shipped**
+**Last updated:** 2026-06-08 (later) — **Knowledgebase Chunk C (Lorebooks /
+phrase-triggered injection) landed** (squashed on master `015bda6`, **NOT
+pushed**; merged cleanly with the parallel **ask_expert** feature on master
+`6d91bd5`). The last Block-5 knowledge-base feature before v0.2.0. Brainstormed
+end-to-end with Chris, built **subagent-driven** in an isolated worktree (12 TDD
+tasks, per-task spec+quality review + a final **opus** holistic review = READY TO
+SQUASH, no critical/important). **What it does:** when a normalised trigger phrase
+appears in the current exchange, the matching knowledge document's **full**
+content is injected into the prompt (budget-capped) and surfaced as a transparent
+**`kb-injection` pill** — the deterministic, per-turn, **ephemeral** counterpart
+to retrieval (no tool, no model decision). **Design (Chris's calls):** (1) a
+lorebook entry **is** a knowledge document with `triggerPhrases` (the field
+reserved in Chunk A → **no Dexie migration**); any document can be retrieval-able
+*and* phrase-triggered. (2) Phrases + scanned text both normalised
+(`trim`→`toLowerCase`→collapse whitespace; `normalisePhrases`/`normalisePhraseText`)
+— Chris makes accidental double-spaces. (3) **Word-boundary** match via Unicode
+lookarounds `(?<![\p{L}\p{N}])…(?![\p{L}\p{N}])` (NOT ASCII `\b` — umlauts):
+`blume` doesn't fire on `blumen`, a story's `blumenwiese e.v.` doesn't derail a
+flowers chat — precision over wild injection, Chris's explicit ask. (4) Scan = the
+just-sent user message always; a per-document **`triggerOnCompanion`** toggle
+(default off, non-indexed → no migration) also scans the *immediately preceding*
+companion message **independently** (a cross-join false-positive was caught & fixed
+— no match spans the user/companion boundary); no wider window (a phrase that fell
+earlier already triggered then). (5) **Same scope as retrieval**
+(`computeEffectiveLibraries`, persona ∪ chat, NSFW-gated) — assignment is the
+safety valve against derailment. (6) Budget `KNOWLEDGE_LORE_OPTS = { maxEntries:
+8, maxTotalChars: 8000 }` (device-tunable): whole entries until the cap, overflow
+truncated with `…`, rest omitted, counts shown in the pill. (7) Band-2 **`lore`**
+prompt segment (after `memories`, before retrieval-awareness); pill persisted on
+success **and** on stream failure (a dangling-pointer bug the quality review
+caught). UI: shared **`TagEditor`** in `edit` mode (Chris's ask — trigger phrases
+ARE tags) with `normalisePhrases`, plus the companion toggle
+disabled-until-a-phrase-exists, in `DocumentEditor`; phrase/toggle edits do **not**
+re-embed. **Not a Larissa change** (client-only; no auth/sync/proxy/crypto; **no new
+network egress** — lore rides the on-device prompt path; opus-confirmed).
+**Integration with ask_expert (Chris's Dexie heads-up):** both features touched
+`client-data-db.ts`/`Pill.tsx`/`send-message.ts`/`stream-manager.store.ts`; the
+merge was **clean/additive** (3 trivial both-keep conflicts in StartArgs + the
+send-path arg objects). **No Dexie collision** — ask_expert owns **v16**, Chunk C
+bumps no version (only a non-indexed field). Merge verified green before squash.
+**Squash hygiene:** staged diff = exactly the 23 Chunk-C files (no ask_expert
+files); `git diff master..branch` empty (full-tree capture); typecheck on master
+before worktree cleanup ([[feedback_verify_worktree_squash_captured_full_tree]]).
+Verification (on master, integrated with ask_expert): `pnpm typecheck` **14/14**;
+llm-unified `bun test` **283/0**; user-client vitest **1140 pass / 8 fail** (the
+unchanged `cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline —
+the failing files are exactly those three, verified); `pnpm run build` **9/9**;
+biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-08-knowledgebase-chunk-c-lorebooks-design]],
+[[../superpowers/plans/2026-06-08-knowledgebase-chunk-c-lorebooks]]. **Device test
+(spec §10):** give a small SFW document (assigned to a persona) the phrases `red
+dragon`, `dragonblood`; in a chat mention "Red Dragon" → a `kb-injection` pill
+appears (expand → library › doc + injected content), reply reflects the lore; a
+near-miss ("dragons" in general, no exact phrase) does **not** fire; flip the
+companion toggle on, have the companion mention the phrase → fires next turn; flip
+off → stops; overflow the budget → pill shows omitted/truncated counts; unassign
+the library → lore stops entirely; editing a phrase does **not** re-embed.
+**Next:** Chris device-tests Chunk C → Liz pushes the master backlog (now **8
+ahead**, incl. ask_expert + Chunk C) on his word. **Block 5 (knowledge base) is now
+feature-complete** through Chunk C — next per [[ROADMAP]] is the v0.2.0 gate.
+
+**Earlier 2026-06-08 — `ask_expert` expert-uplink tool shipped**
 (squashed on `master` `6d91bd5`, **DEVICE-CONFIRMED by Chris 2026-06-08** —
 **Gemma 4 → Opus 4.8** on a Lie-groups question: the forwarded prompt was a clean
 standalone technical query (no personal context — isolation held in the wild) and
