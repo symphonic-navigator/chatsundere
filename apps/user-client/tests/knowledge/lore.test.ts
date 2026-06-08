@@ -89,6 +89,7 @@ describe('selectLore', () => {
     const r = selectLore([big, next], lib, 'red dragon', null, {
       maxEntries: 8,
       maxTotalChars: 10,
+      cooldownRounds: 8,
     });
     expect(r.entries).toHaveLength(1);
     expect(r.entries[0]?.injectedText).toBe(`${'x'.repeat(10)}…`);
@@ -103,6 +104,7 @@ describe('selectLore', () => {
     const r = selectLore(docs, lib, 'red dragon', null, {
       maxEntries: 2,
       maxTotalChars: 8000,
+      cooldownRounds: 8,
     });
     expect(r.entries).toHaveLength(2);
     expect(r.omittedCount).toBe(3);
@@ -138,13 +140,32 @@ describe('selectLore', () => {
     const r = selectLore([orphan], lib, 'red dragon', null, KNOWLEDGE_LORE_OPTS);
     expect(r.entries).toHaveLength(0);
   });
+
+  it('excludes a document that was recently injected (cooldown)', () => {
+    const d = doc({ id: 'cool', triggerPhrases: ['red dragon'] });
+    const recent = new Set(['cool']);
+    const r = selectLore([d], lib, 'the red dragon', null, KNOWLEDGE_LORE_OPTS, recent);
+    expect(r.entries).toHaveLength(0);
+  });
+
+  it('emits the documentId on each entry', () => {
+    const r = selectLore(
+      [doc({ id: 'doc-1' })],
+      lib,
+      'the red dragon',
+      null,
+      KNOWLEDGE_LORE_OPTS,
+      new Set(),
+    );
+    expect(r.entries[0]?.documentId).toBe('doc-1');
+  });
 });
 
 describe('formatLore', () => {
   it('renders provenance-headed blocks, empty when none', () => {
     expect(formatLore([])).toBe('');
     const out = formatLore([
-      { libraryName: 'Story', documentTitle: 'Red Dragon', injectedText: 'X.' },
+      { documentId: 'x', libraryName: 'Story', documentTitle: 'Red Dragon', injectedText: 'X.' },
     ]);
     expect(out).toContain("Relevant background from the user's knowledge:");
     expect(out).toContain('[Story › Red Dragon]\nX.');

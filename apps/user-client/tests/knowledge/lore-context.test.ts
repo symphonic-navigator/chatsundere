@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
 import type { DocumentRow, LibraryRow } from '../../src/boot/client-data-db.js';
 import { buildLoreContext } from '../../src/knowledge/lore-context.js';
@@ -23,6 +24,7 @@ function docRow(p: Partial<DocumentRow>): DocumentRow {
     embeddingError: null,
     chunkCount: 1,
     triggerPhrases: ['red dragon'],
+    triggerOnCompanion: false,
     createdAt: 1,
     updatedAt: 1,
     ...p,
@@ -38,7 +40,14 @@ describe('buildLoreContext', () => {
       listLibraries: async () => [lib({})],
       listDocumentsInLibraries: async () => [docRow({})],
     };
-    const out = await buildLoreContext(persona, chat, 'about the red dragon', null, deps);
+    const out = await buildLoreContext(
+      persona,
+      chat,
+      'about the red dragon',
+      null,
+      new Set(),
+      deps,
+    );
     expect(out).not.toBeNull();
     expect(out?.loreContext).toContain('[Story › Red Dragon]');
     expect(out?.lore.entries).toHaveLength(1);
@@ -54,6 +63,7 @@ describe('buildLoreContext', () => {
       chat,
       'red dragon',
       null,
+      new Set(),
       deps,
     );
     expect(out).toBeNull();
@@ -64,7 +74,14 @@ describe('buildLoreContext', () => {
       listLibraries: async () => [lib({})],
       listDocumentsInLibraries: async () => [docRow({})],
     };
-    const out = await buildLoreContext(persona, chat, 'let us talk about the weather', null, deps);
+    const out = await buildLoreContext(
+      persona,
+      chat,
+      'let us talk about the weather',
+      null,
+      new Set(),
+      deps,
+    );
     expect(out).toBeNull();
   });
 
@@ -73,7 +90,7 @@ describe('buildLoreContext', () => {
       listLibraries: async () => [lib({ nsfw: true })],
       listDocumentsInLibraries: async () => [docRow({})],
     };
-    const out = await buildLoreContext(persona, chat, 'red dragon', null, deps);
+    const out = await buildLoreContext(persona, chat, 'red dragon', null, new Set(), deps);
     expect(out).toBeNull();
   });
 
@@ -82,7 +99,14 @@ describe('buildLoreContext', () => {
       listLibraries: async () => [lib({})],
       listDocumentsInLibraries: async () => [docRow({ triggerOnCompanion: true })],
     };
-    const out = await buildLoreContext(persona, chat, 'and then?', 'The red dragon rose up.', deps);
+    const out = await buildLoreContext(
+      persona,
+      chat,
+      'and then?',
+      'The red dragon rose up.',
+      new Set(),
+      deps,
+    );
     expect(out).not.toBeNull();
     expect(out?.lore.entries).toHaveLength(1);
   });
@@ -92,7 +116,23 @@ describe('buildLoreContext', () => {
       listLibraries: async () => [lib({})],
       listDocumentsInLibraries: async () => [docRow({ triggerOnCompanion: false })],
     };
-    const out = await buildLoreContext(persona, chat, 'and then?', 'The red dragon rose up.', deps);
+    const out = await buildLoreContext(
+      persona,
+      chat,
+      'and then?',
+      'The red dragon rose up.',
+      new Set(),
+      deps,
+    );
+    expect(out).toBeNull();
+  });
+
+  it('returns null when the only matching document is on cooldown', async () => {
+    const deps = {
+      listLibraries: async () => [lib({})],
+      listDocumentsInLibraries: async () => [docRow({ id: 'd' })],
+    };
+    const out = await buildLoreContext(persona, chat, 'red dragon', null, new Set(['d']), deps);
     expect(out).toBeNull();
   });
 });

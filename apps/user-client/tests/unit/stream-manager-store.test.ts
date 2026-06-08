@@ -877,7 +877,14 @@ describe('stream-manager.store', () => {
     const model = nanoGpt.offerings[0];
 
     const lore = {
-      entries: [{ libraryName: 'Story', documentTitle: 'Red Dragon', injectedText: 'X.' }],
+      entries: [
+        {
+          documentId: 'some-id',
+          libraryName: 'Story',
+          documentTitle: 'Red Dragon',
+          injectedText: 'X.',
+        },
+      ],
       omittedCount: 0,
       truncatedCount: 0,
     };
@@ -929,7 +936,14 @@ describe('stream-manager.store', () => {
     });
 
     const lore = {
-      entries: [{ libraryName: 'Lore', documentTitle: 'Chapter 1', injectedText: 'Y.' }],
+      entries: [
+        {
+          documentId: 'some-id',
+          libraryName: 'Lore',
+          documentTitle: 'Chapter 1',
+          injectedText: 'Y.',
+        },
+      ],
       omittedCount: 0,
       truncatedCount: 0,
     };

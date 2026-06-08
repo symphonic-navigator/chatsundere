@@ -40,6 +40,7 @@ export async function buildLoreContext(
   chat: Pick<ChatRow, 'libraryIds'>,
   userText: string,
   precedingCompanionText: string | null,
+  recentlyInjectedDocumentIds: ReadonlySet<string> = new Set(),
   deps: LoreContextDeps = liveDeps(),
 ): Promise<LoreContext | null> {
   const all = await deps.listLibraries();
@@ -68,6 +69,7 @@ export async function buildLoreContext(
     userText,
     precedingCompanionText,
     KNOWLEDGE_LORE_OPTS,
+    recentlyInjectedDocumentIds,
   );
   if (result.entries.length === 0) return null;
 

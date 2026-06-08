@@ -15,11 +15,13 @@ import {
   type ChatRow,
   type MessageRow,
   type PersonaRow,
+  type PillRow,
   getClientDataDb,
 } from '../boot/client-data-db.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
 import { buildLoreContext } from '../knowledge/lore-context.js';
+import { KNOWLEDGE_LORE_OPTS } from '../knowledge/lore.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
@@ -44,6 +46,23 @@ export function lastCompanionText(messages: readonly MessageRow[]): string | nul
     .map((b) => b.text)
     .join('');
   return text === '' ? null : text;
+}
+
+/** The kb-injection pill payload shape this reader depends on (PillRow.payload is `unknown`). */
+type KbInjectionPayload = { entries?: { documentId?: string }[] };
+
+/** Document ids injected by the given kb-injection pills — the lore-cooldown
+ *  history. Non-kb-injection pills and entries without a documentId are ignored. */
+export function injectedDocIdsFromPills(pills: readonly PillRow[]): Set<string> {
+  const ids = new Set<string>();
+  for (const pill of pills) {
+    if (pill.kind !== 'kb-injection') continue;
+    const entries = (pill.payload as KbInjectionPayload | undefined)?.entries ?? [];
+    for (const entry of entries) {
+      if (entry.documentId) ids.add(entry.documentId);
+    }
+  }
+  return ids;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -348,11 +367,19 @@ export function useSendMessage() {
         ctx.corsProxyKey,
       );
 
+      const recentPersonaIds = priorMessages
+        .filter((m) => m.role === 'persona')
+        .slice(-KNOWLEDGE_LORE_OPTS.cooldownRounds)
+        .map((m) => m.id);
+      const recentPills = recentPersonaIds.length
+        ? await db.pills.where('messageId').anyOf(recentPersonaIds).toArray()
+        : [];
       const lore = await buildLoreContext(
         ctx.persona,
         ctx.chat,
         args.text,
         lastCompanionText(priorMessages),
+        injectedDocIdsFromPills(recentPills),
       );
 
       await useStreamManagerStore.getState().start({
@@ -454,11 +481,19 @@ export function useRegenerate() {
       // Resolve persona chain + decrypt, then re-roll.
       const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
 
+      const recentPersonaIds = priorMessages
+        .filter((m) => m.role === 'persona')
+        .slice(-KNOWLEDGE_LORE_OPTS.cooldownRounds)
+        .map((m) => m.id);
+      const recentPills = recentPersonaIds.length
+        ? await db.pills.where('messageId').anyOf(recentPersonaIds).toArray()
+        : [];
       const lore = await buildLoreContext(
         ctx.persona,
         ctx.chat,
         userMessageText,
         lastCompanionText(priorMessages),
+        injectedDocIdsFromPills(recentPills),
       );
 
       await useStreamManagerStore.getState().regenerate({

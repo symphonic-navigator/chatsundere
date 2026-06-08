@@ -21,10 +21,14 @@ export interface LoreLibraryMeta {
 export interface LoreOptions {
   maxEntries: number;
   maxTotalChars: number;
+  /** How many recent rounds count as "recently injected". The caller uses this
+   *  to build `recentlyInjectedDocumentIds`; `selectLore` only consumes that set. */
+  cooldownRounds: number;
 }
 
 /** One injected entry (post-budget, post-truncation). */
 export interface LoreEntry {
+  documentId: string;
   libraryName: string;
   documentTitle: string;
   injectedText: string;
@@ -37,7 +41,11 @@ export interface LoreResult {
 }
 
 /** Device-tunable lore budget (mirrors KNOWLEDGE_RETRIEVAL_OPTS). */
-export const KNOWLEDGE_LORE_OPTS: LoreOptions = { maxEntries: 8, maxTotalChars: 8000 };
+export const KNOWLEDGE_LORE_OPTS: LoreOptions = {
+  maxEntries: 8,
+  maxTotalChars: 8000,
+  cooldownRounds: 8,
+};
 
 /** Escape regex metacharacters in a literal phrase. */
 function escapeRegExp(s: string): string {
@@ -72,6 +80,7 @@ export function selectLore(
   userText: string,
   precedingCompanionText: string | null,
   opts: LoreOptions,
+  recentlyInjectedDocumentIds: ReadonlySet<string> = new Set(),
 ): LoreResult {
   const order = new Map(libraries.map((l, i) => [l.id, i] as const));
   const nameOf = new Map(libraries.map((l) => [l.id, l.name] as const));
@@ -80,6 +89,7 @@ export function selectLore(
 
   const matched = documents
     .filter((d) => order.has(d.libraryId) && d.triggerPhrases.length > 0)
+    .filter((d) => !recentlyInjectedDocumentIds.has(d.id))
     .filter((d) => {
       // Scan the two texts independently so a phrase can never match across the
       // user/companion boundary (e.g. user ends "…roter", companion starts "drache…").
@@ -111,10 +121,16 @@ export function selectLore(
     }
     const libraryName = nameOf.get(d.libraryId) ?? '';
     if (d.content.length <= remaining) {
-      entries.push({ libraryName, documentTitle: d.title, injectedText: d.content });
+      entries.push({
+        documentId: d.id,
+        libraryName,
+        documentTitle: d.title,
+        injectedText: d.content,
+      });
       totalChars += d.content.length;
     } else {
       entries.push({
+        documentId: d.id,
         libraryName,
         documentTitle: d.title,
         injectedText: `${d.content.slice(0, remaining)}…`,

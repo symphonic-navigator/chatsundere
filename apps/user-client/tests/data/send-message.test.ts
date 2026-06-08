@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
-import type { MessageRow } from '../../src/boot/client-data-db.js';
-import { lastCompanionText } from '../../src/data/send-message.js';
+import type { MessageRow, PillRow } from '../../src/boot/client-data-db.js';
+import { injectedDocIdsFromPills, lastCompanionText } from '../../src/data/send-message.js';
 
 function msg(p: Partial<MessageRow>): MessageRow {
   return {
@@ -15,6 +15,46 @@ function msg(p: Partial<MessageRow>): MessageRow {
     ...p,
   };
 }
+
+function pill(p: Partial<PillRow>): PillRow {
+  return {
+    id: 'p',
+    messageId: 'm',
+    kind: 'kb-injection',
+    positionHint: 'above-text',
+    status: 'completed',
+    payload: { entries: [] },
+    createdAt: 1,
+    ...p,
+  };
+}
+
+describe('injectedDocIdsFromPills', () => {
+  it('collects documentIds from kb-injection pill entries', () => {
+    const pills = [
+      pill({ id: 'a', payload: { entries: [{ documentId: 'd1' }, { documentId: 'd2' }] } }),
+      pill({ id: 'b', payload: { entries: [{ documentId: 'd3' }] } }),
+    ];
+    expect(injectedDocIdsFromPills(pills)).toEqual(new Set(['d1', 'd2', 'd3']));
+  });
+  it('ignores non-kb-injection pills and entries without a documentId', () => {
+    const pills = [
+      pill({ id: 'a', kind: 'tool-call', payload: { entries: [{ documentId: 'nope' }] } }),
+      pill({ id: 'b', payload: { entries: [{ documentId: 'd1' }, {}] } }),
+    ];
+    expect(injectedDocIdsFromPills(pills)).toEqual(new Set(['d1']));
+  });
+  it('returns an empty set for no pills', () => {
+    expect(injectedDocIdsFromPills([])).toEqual(new Set());
+  });
+  it('deduplicates a documentId that appears in multiple pills', () => {
+    const pills = [
+      pill({ id: 'a', payload: { entries: [{ documentId: 'd1' }] } }),
+      pill({ id: 'b', payload: { entries: [{ documentId: 'd1' }] } }),
+    ];
+    expect(injectedDocIdsFromPills(pills)).toEqual(new Set(['d1']));
+  });
+});
 
 describe('lastCompanionText', () => {
   it('returns the most recent complete persona message text', () => {
