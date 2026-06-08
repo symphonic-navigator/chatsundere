@@ -40,6 +40,7 @@ async function seedPersona(id: string, name: string, adultPersona = false): Prom
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: now,
     updatedAt: now,
   });

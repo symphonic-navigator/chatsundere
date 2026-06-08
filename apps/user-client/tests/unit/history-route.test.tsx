@@ -44,6 +44,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: 0,
       updatedAt: 0,
     },
@@ -66,6 +67,7 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: 0,
       updatedAt: 0,
     },
@@ -266,6 +268,7 @@ describe('HistoryPage', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: 0,
       updatedAt: 0,
     });

@@ -60,6 +60,7 @@ describe('usePersonas + CUD mutations', () => {
         contextWindow: null,
         libraryIds: [],
         askExpertDefault: false,
+        mcpOverrides: {},
       });
       createdId = created.id;
     });

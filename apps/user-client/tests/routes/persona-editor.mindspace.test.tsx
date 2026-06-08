@@ -38,6 +38,7 @@ async function seedPersonaWithMindspace() {
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: now,
     updatedAt: now,
   });

@@ -121,6 +121,7 @@ describe('EntranceHall', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: now,
       updatedAt: now,
     });
@@ -166,6 +167,7 @@ describe('EntranceHall', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: now,
       updatedAt: now,
     });

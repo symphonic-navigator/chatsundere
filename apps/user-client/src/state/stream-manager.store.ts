@@ -83,6 +83,9 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   expertReasoning?: ReasoningIntent;
   /** Resolved expert web backends; null = no web tools for the expert. */
   expertWeb?: import('../lib/resolve-expert-web.js').ResolvedExpertWeb | null;
+  /** Per-send MCP tool context (active servers + key opener + approval hook),
+   *  resolved in the send path which holds the MasterKey. null/absent = no MCP tools. */
+  mcp?: import('../mcp/mcp-tools.js').McpToolContext | null;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -434,7 +437,9 @@ function runIntoDraft(
           : undefined,
       }
     : null;
-  const activeTools = toolsActive ? resolveActiveTools(integrationCtx, knowledge, expert) : [];
+  const activeTools = toolsActive
+    ? resolveActiveTools(integrationCtx, knowledge, expert, args.mcp ?? null)
+    : [];
   const activeToolDefs = toolDefs(activeTools);
   const toolsInstruction = systemPromptSegment(activeTools) ?? '';
   const knowledgeLibrariesContext =

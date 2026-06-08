@@ -33,6 +33,7 @@ describe('Dexie v10 migration', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

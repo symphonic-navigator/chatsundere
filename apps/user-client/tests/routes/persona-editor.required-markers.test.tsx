@@ -111,7 +111,7 @@ describe('PersonaEditor — required-field markers', () => {
     expect(screen.getByLabelText(/model is required/i)).toBeInTheDocument();
   });
 
-  it('orders accordion sections as Custom Instructions → Behavior → Font and Voice → Mindspace → About-Me-Override → Knowledge', () => {
+  it('orders accordion sections as Custom Instructions → Behavior → Font and Voice → Mindspace → About-Me-Override → Knowledge → MCP Servers', () => {
     setup();
     const headers = Array.from(
       document.querySelectorAll('[data-accordion-card] [data-accordion-label]'),
@@ -123,6 +123,7 @@ describe('PersonaEditor — required-field markers', () => {
       'Mindspace — Override',
       'About Me — Override',
       'Knowledge',
+      'MCP Servers',
     ]);
   });
 });

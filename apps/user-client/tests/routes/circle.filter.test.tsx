@@ -35,6 +35,7 @@ async function seedSfwAndNsfw() {
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: now,
     updatedAt: now,
   });
@@ -57,6 +58,7 @@ async function seedSfwAndNsfw() {
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -155,6 +157,7 @@ describe('Circle filter (adult mode)', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: now,
       updatedAt: now,
     });

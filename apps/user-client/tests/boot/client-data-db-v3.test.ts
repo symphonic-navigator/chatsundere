@@ -98,6 +98,7 @@ describe('client-data-db v3 migration', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

@@ -57,6 +57,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: 1,
     updatedAt: 1,
   });

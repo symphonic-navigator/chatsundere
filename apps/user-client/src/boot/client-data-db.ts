@@ -4,6 +4,7 @@ import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
 import type { WebBackendSetting } from '../lib/web-backends.js';
+import type { McpToolDefinition } from '../mcp/types.js';
 
 const DB_NAME = 'chatsundere_client_data';
 
@@ -40,6 +41,28 @@ export interface ProviderRow {
   apiKey: EncryptedBlob;
   routing: { kind: 'direct' } | { kind: 'cors-proxy' };
   enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface McpServerRow {
+  id: string;
+  name: string;
+  url: string;
+  prefix: string;
+  auth:
+    | { scheme: 'bearer'; key: EncryptedBlob }
+    | { scheme: 'header'; headerName: string; key: EncryptedBlob }
+    | null;
+  onByDefault: boolean;
+  autoRun: boolean;
+  enabled: boolean;
+  routing: 'direct' | 'proxy' | null;
+  resolvedEndpoint: string | null;
+  tools: McpToolDefinition[];
+  hiddenTools: string[];
+  lastTestedAt: number | null;
+  lastError: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -97,6 +120,8 @@ export interface PersonaRow {
   /** Default on/off state of the per-chat ask_expert runtime toggle for new chats
    *  of this persona. false = off (opt-in uplink). */
   askExpertDefault: boolean;
+  /** Per-persona MCP server overrides. Unset key → server.onByDefault applies. */
+  mcpOverrides: Record<string, 'on' | 'off'>;
   createdAt: number;
   updatedAt: number;
 }
@@ -270,6 +295,7 @@ class ClientDataDb extends Dexie {
   artefacts!: Table<ArtefactRow, string>;
   libraries!: Table<LibraryRow, string>;
   documents!: Table<DocumentRow, string>;
+  mcpServers!: Table<McpServerRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -587,6 +613,22 @@ class ClientDataDb extends Dexie {
             if (s.expertWeb === undefined) {
               s.expertWeb = { search: null, fetch: null, searchTierId: null };
             }
+          });
+      });
+
+    // Version 18 — MCP client. New `mcpServers` table; personas gain
+    // `mcpOverrides` (tri-state per server; unset → the server default).
+    this.version(18)
+      .stores({
+        mcpServers: 'id, createdAt',
+        personas: 'id, providerId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            if (typeof p.mcpOverrides !== 'object' || p.mcpOverrides === null) p.mcpOverrides = {};
           });
       });
   }

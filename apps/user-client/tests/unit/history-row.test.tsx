@@ -26,6 +26,7 @@ const persona: PersonaRow = {
   contextWindow: null,
   libraryIds: [],
   askExpertDefault: false,
+  mcpOverrides: {},
   createdAt: 0,
   updatedAt: 0,
 };

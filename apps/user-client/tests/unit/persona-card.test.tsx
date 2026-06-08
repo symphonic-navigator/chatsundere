@@ -30,6 +30,7 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: 0,
     updatedAt: 0,
     ...overrides,

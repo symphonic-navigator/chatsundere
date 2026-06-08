@@ -18,6 +18,7 @@ import { TocSheet } from '../../../components/chat/TocSheet.js';
 import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js';
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
 import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
+import { McpApprovalPrompt } from '../../../components/mcp/McpApprovalPrompt.js';
 import {
   useChatArtefacts,
   useDeleteArtefact,
@@ -574,6 +575,9 @@ export function ChatPage(): JSX.Element {
         affordance of the unpinned, read-heavy cockpit).
       */}
       <DimOverlay active={isInteractionMode && inputFocused && !isPinned} />
+
+      {/* MCP tool-call approval — explicit modal, not tap-to-dismiss; z-50 renders above the cockpit */}
+      <McpApprovalPrompt />
 
       {isInteractionMode && effectivePersona && offering ? (
         <InteractionMode

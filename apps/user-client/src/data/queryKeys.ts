@@ -26,4 +26,5 @@ export const QK = {
   documents: (libraryId: string) => ['documents', 'library', libraryId] as const,
   document: (id: string) => ['documents', 'item', id] as const,
   documentCounts: ['documents', 'counts'] as const,
+  mcpServers: ['mcp-servers'] as const,
 };

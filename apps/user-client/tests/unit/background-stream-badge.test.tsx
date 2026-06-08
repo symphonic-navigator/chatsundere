@@ -83,6 +83,7 @@ describe('BackgroundStreamBadge', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: 1,
       updatedAt: 1,
     });

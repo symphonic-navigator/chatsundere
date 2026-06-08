@@ -28,6 +28,9 @@ import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
 import { webBackendOptions } from '../lib/web-backend-options.js';
 import { resolveWebBackend } from '../lib/web-backends.js';
+import { buildMcpContext } from '../mcp/build-mcp-context.js';
+import type { McpToolContext } from '../mcp/mcp-tools.js';
+import { useMcpApprovalStore } from '../state/mcp-approval.store.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import type { ExpertBase } from '../tools/ask-expert.js';
 
@@ -87,6 +90,7 @@ interface PersonaContext {
   expertModelLabel: string | null;
   expertReasoning: ReasoningIntent | null;
   expertWeb: ResolvedExpertWeb | null;
+  mcp: McpToolContext | null;
 }
 
 /**
@@ -149,6 +153,17 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
       })
     : null;
 
+  const mcpServers = await db.mcpServers.toArray();
+  const mcp = buildMcpContext({
+    servers: mcpServers,
+    overrides: persona.mcpOverrides ?? {},
+    hasProxy,
+    corsProxyUrl,
+    corsProxyKey,
+    mk,
+    requestApproval: (req) => useMcpApprovalStore.getState().request(req),
+  });
+
   return {
     chat,
     persona,
@@ -170,6 +185,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     expertModelLabel: expert?.modelLabel ?? null,
     expertReasoning: expert?.reasoning ?? null,
     expertWeb: expertWeb ?? null,
+    mcp,
   };
 }
 
@@ -424,6 +440,7 @@ export function useSendMessage() {
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,
         expertWeb: ctx.expertWeb ?? null,
+        mcp: ctx.mcp ?? null,
       });
 
       return chatId;
@@ -535,6 +552,7 @@ export function useRegenerate() {
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,
         expertWeb: ctx.expertWeb ?? null,
+        mcp: ctx.mcp ?? null,
       });
     },
 

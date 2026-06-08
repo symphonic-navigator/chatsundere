@@ -23,6 +23,7 @@ function persona(id: string, name: string): PersonaRow {
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: 0,
     updatedAt: 0,
   };

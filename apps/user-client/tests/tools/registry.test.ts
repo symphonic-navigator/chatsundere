@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { IntegrationContext } from '../../src/integrations/types.js';
 import type { KnowledgeContext } from '../../src/knowledge/query-tool.js';
+import type { McpToolContext } from '../../src/mcp/mcp-tools.js';
 import type { ExpertBase } from '../../src/tools/ask-expert.js';
 import {
   type ExpertToolContext,
@@ -108,5 +109,34 @@ describe('tool registry composition', () => {
     expect(resolveActiveTools(dormantCtx, null, expert).some((t) => t.name === 'ask_expert')).toBe(
       true,
     );
+  });
+
+  it('includes MCP tools when an mcp context is given', () => {
+    const mcp: McpToolContext = {
+      servers: [
+        {
+          id: 's',
+          name: 'S',
+          prefix: 'srv',
+          routing: 'direct',
+          resolvedEndpoint: 'https://s/mcp',
+          auth: null,
+          autoRun: true,
+          tools: [{ name: 'go', description: 'd', inputSchema: {} }],
+          hiddenTools: [],
+        },
+      ],
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      getServerKey: async () => null,
+      requestApproval: async () => true,
+    };
+    const tools = resolveActiveTools(dormantCtx, null, null, mcp);
+    expect(tools.some((t) => t.name === 'srv_go')).toBe(true);
+  });
+
+  it('omits MCP tools when mcp context is null', () => {
+    const tools = resolveActiveTools(dormantCtx, null, null, null);
+    expect(tools.every((t) => !t.name.startsWith('srv_'))).toBe(true);
   });
 });

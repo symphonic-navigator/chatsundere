@@ -70,6 +70,7 @@ describe('Circle route', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: now,
       updatedAt: now,
     });

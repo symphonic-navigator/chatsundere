@@ -64,6 +64,7 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: now,
       updatedAt: now,
     });
@@ -161,6 +162,7 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       contextWindow: null,
       libraryIds: [],
       askExpertDefault: false,
+      mcpOverrides: {},
       createdAt: now,
       updatedAt: now,
     });

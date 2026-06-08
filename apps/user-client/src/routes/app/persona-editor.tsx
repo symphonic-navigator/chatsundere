@@ -20,7 +20,9 @@ import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
+import { McpOverrideSection } from '../../components/persona-editor/McpOverrideSection.js';
 import { useChats } from '../../data/chats.js';
+import { useMcpServers } from '../../data/mcp-servers.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useRemovePersonaAvatar, useSetPersonaAvatar } from '../../data/persona-avatars.js';
 import {
@@ -75,6 +77,7 @@ function defaultDraft(
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
   };
 }
 
@@ -199,6 +202,7 @@ export function PersonaEditor(): JSX.Element {
   const mindspaces = useMindspaces();
   const providers = useProviders();
   const chats = useChats();
+  const mcpServers = useMcpServers();
   const create = useCreatePersona();
   const update = useUpdatePersona();
   const del = useDeletePersona();
@@ -751,6 +755,15 @@ export function PersonaEditor(): JSX.Element {
           selected={draft.libraryIds}
           onChange={(ids) => patch({ libraryIds: ids })}
           adultPersona={draft.adultPersona}
+        />
+      </AccordionCard>
+
+      {/* ❼ MCP Servers */}
+      <AccordionCard icon="⧉" label="MCP Servers" meta="Per-persona tool access">
+        <McpOverrideSection
+          servers={mcpServers.data ?? []}
+          overrides={draft.mcpOverrides}
+          onChange={(next) => patch({ mcpOverrides: next })}
         />
       </AccordionCard>
 

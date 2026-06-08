@@ -45,6 +45,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     contextWindow: null,
     libraryIds: [],
     askExpertDefault: false,
+    mcpOverrides: {},
     createdAt: 1,
     updatedAt: 1,
   });
