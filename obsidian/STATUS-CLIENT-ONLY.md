@@ -16,7 +16,32 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **Lore re-injection cooldown gate added**
+**Last updated:** 2026-06-08 (latest) — **Reusable model-picker landed**
+(squashed onto master, **NOT pushed**; **NOT yet device-verified** — Chris chose to
+land it before the device test, so the device checklist is still outstanding). One
+**`ModelPickerField`** (trigger button) + animated **`ModelPickerModal`**
+(bottom-sheet, two-step: **family-grouped, searchable** model list → provider list;
+single-tap provider selects & closes; "always show step 2" even for single-provider)
+now replaces all **three** model-selection surfaces — persona editor (was inline
+two-tier list), substitute-vision setting and ask-expert setting (were native
+`<select>`s). Stored formats unchanged. Brainstormed end-to-end with Chris (his
+calls: two-step drill, family grouping + name-only search, single-click-closes);
+built **subagent-driven** (8 tasks, per-task spec+quality review + a final **opus**
+holistic review). Review caught & fixed: a **constructive-stale regression** (the
+field now names a provider to add, honouring the *dere* value) + a **modal-close
+wedge** (timeout fallback so a reduced-motion-disabled animation can't strand the
+sheet) + an **honest persona-stale** (no masquerading an unchosen provider). Pure
+logic unit-tested (**`buildPickerData`** family-grouping/search/capability-filter +
+a field stale-state guard); UX **still to be device-verified**. Obsolete `<select>`
+DOM tests removed. **Not a Larissa change** (client-only; no auth/sync/proxy/crypto).
+Full typecheck green; user-client suite at the **master baseline** (only 8
+**pre-existing** failures in cockpit-draft/chat-page/chat-route — unrelated). Merged
+onto the lore-cooldown master cleanly (code is disjoint; only this STATUS file
+overlapped). Touched only `apps/user-client`; **no Dexie**. Spec
+`superpowers/specs/2026-06-08-model-picker-modal-design.md`, plan
+`superpowers/plans/2026-06-08-model-picker-modal.md`.
+
+**Earlier 2026-06-08 (lore cooldown) — Lore re-injection cooldown gate added**
 (squashed on master `a77dd5c`, **NOT pushed**) — Chris's first post-device-test
 refinement, after confirming Chunk C works "erstklassig". **The problem:** a chat
 that keeps mentioning an entity (his example: "Farbkraft") re-injected the **same**

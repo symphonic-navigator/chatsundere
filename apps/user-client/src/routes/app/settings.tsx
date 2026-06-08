@@ -4,7 +4,6 @@ import {
   type ServiceKind,
   aggregateServiceKinds,
   getProvider,
-  listProviders,
   providerServiceKinds,
   providersContributing,
 } from '@chatsundere/llm-unified';
@@ -19,6 +18,7 @@ import { CorsProxyBlock } from '../../components/CorsProxyBlock.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
+import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
 import { SaveBar } from '../../components/SaveBar.js';
 import { WebInterfacingSection } from '../../components/WebInterfacingSection.js';
@@ -29,6 +29,16 @@ import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../lib/built-in-
 import { usableTemplateIds, useUsableTemplateIds } from '../../lib/usable-providers.js';
 import { webBackendOptions } from '../../lib/web-backend-options.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
+
+/** Parse a stored "${templateId}:${upstreamSlug}" ref into picker `current`. */
+function parseModelRef(
+  ref: string | null | undefined,
+): { providerTemplateId: string; upstreamSlug: string } | null {
+  if (!ref) return null;
+  const idx = ref.indexOf(':');
+  if (idx < 0) return null;
+  return { providerTemplateId: ref.slice(0, idx), upstreamSlug: ref.slice(idx + 1) };
+}
 
 interface SettingsDraft {
   globalAboutMe: string;
@@ -56,28 +66,16 @@ function isSameDraft(a: SettingsDraft, b: SettingsDraft): boolean {
 }
 
 /**
- * Global substitute-vision model picker. Shows a `<select>` of all vision-capable
- * offerings (those with `profile.vision === true`) across registered providers.
- * Persists the chosen ref as `"${providerId}:${upstreamSlug}"` in
- * `settings.substituteVisionModel` — the format the send path parses with
- * `getProvider(providerId)` / `getOffering(providerId, upstreamSlug)`.
- *
- * Disabled-over-hidden when no vision-capable offering is registered; a tooltip
- * explains why.
+ * Global substitute-vision model picker. Uses `ModelPickerField` to pick a
+ * vision-capable model. Persists the chosen ref as `"${templateId}:${upstreamSlug}"`
+ * in `settings.substituteVisionModel` — the format the send path parses.
  */
 export function SubstituteVisionSetting(): JSX.Element {
   const { data: settings } = useSettings();
   const update = useUpdateSettings();
-
-  const visionOfferings = listProviders().flatMap((pr) =>
-    pr.offerings
-      .filter((o) => o.profile.vision)
-      .map((o) => ({
-        ref: `${pr.id}:${o.upstreamSlug}`,
-        label: `${o.upstreamSlug} (${pr.displayName})`,
-      })),
-  );
-  const disabled = visionOfferings.length === 0;
+  const { data: providerRows } = useProviders();
+  const rows = providerRows ?? [];
+  const configuredTemplateIds = usableTemplateIds(rows, !!settings?.corsProxy);
 
   return (
     <div>
@@ -86,44 +84,32 @@ export function SubstituteVisionSetting(): JSX.Element {
         its own can still read them. One global choice for all personas — used only when your active
         model cannot see images.
       </p>
-      <select
-        className="cockpit-select"
-        aria-label="Substitute vision model"
-        disabled={disabled}
-        title={disabled ? 'Configure a vision-capable provider first' : undefined}
-        value={settings?.substituteVisionModel ?? ''}
-        onChange={(e) => update.mutate({ substituteVisionModel: e.target.value || null })}
-      >
-        <option value="">None</option>
-        {visionOfferings.map((o) => (
-          <option key={o.ref} value={o.ref}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <ModelPickerField
+        providers={rows}
+        configuredTemplateIds={configuredTemplateIds}
+        filter="vision"
+        current={parseModelRef(settings?.substituteVisionModel)}
+        onSelect={(sel) =>
+          update.mutate({ substituteVisionModel: `${sel.providerTemplateId}:${sel.upstreamSlug}` })
+        }
+        onClear={() => update.mutate({ substituteVisionModel: null })}
+        emptyLabel="None — pick a vision model"
+      />
     </div>
   );
 }
 
 /**
- * Global expert-model picker. Shows a `<select>` of ALL offerings across registered
- * providers (no capability filter — any model can serve as the expert). Persists the
- * chosen ref as `"${templateId}:${upstreamSlug}"` in `settings.expertModel` — the
- * same format `resolveExpert` parses.
- *
- * Disabled-over-hidden when no provider has been configured; a tooltip explains why.
+ * Global expert-model picker. Uses `ModelPickerField` to pick any model (no
+ * capability filter). Persists the chosen ref as `"${templateId}:${upstreamSlug}"`
+ * in `settings.expertModel` — the same format `resolveExpert` parses.
  */
 export function ExpertModelSetting(): JSX.Element {
   const { data: settings } = useSettings();
   const update = useUpdateSettings();
-
-  const allOfferings = listProviders().flatMap((pr) =>
-    pr.offerings.map((o) => ({
-      ref: `${pr.id}:${o.upstreamSlug}`,
-      label: `${o.upstreamSlug} (${pr.displayName})`,
-    })),
-  );
-  const disabled = allOfferings.length === 0;
+  const { data: providerRows } = useProviders();
+  const rows = providerRows ?? [];
+  const configuredTemplateIds = usableTemplateIds(rows, !!settings?.corsProxy);
 
   return (
     <div>
@@ -135,21 +121,17 @@ export function ExpertModelSetting(): JSX.Element {
         Only the sanitised question you see in the pill leaves your device — never your
         conversation, persona, or personal details.
       </p>
-      <select
-        className="cockpit-select"
-        aria-label="Expert model"
-        disabled={disabled}
-        title={disabled ? 'Add a provider first' : undefined}
-        value={settings?.expertModel ?? ''}
-        onChange={(e) => update.mutate({ expertModel: e.target.value || null })}
-      >
-        <option value="">None</option>
-        {allOfferings.map((o) => (
-          <option key={o.ref} value={o.ref}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <ModelPickerField
+        providers={rows}
+        configuredTemplateIds={configuredTemplateIds}
+        filter="all"
+        current={parseModelRef(settings?.expertModel)}
+        onSelect={(sel) =>
+          update.mutate({ expertModel: `${sel.providerTemplateId}:${sel.upstreamSlug}` })
+        }
+        onClear={() => update.mutate({ expertModel: null })}
+        emptyLabel="None — pick an expert model"
+      />
     </div>
   );
 }

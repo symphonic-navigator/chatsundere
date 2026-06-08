@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import {
-  type FreedomState,
   type Offering,
-  availableCanonicals,
-  effectiveFreedom,
   getCanonical,
   getOffering,
   getProvider,
@@ -26,6 +23,7 @@ import { AvatarCropModal } from '../../components/AvatarCropModal.js';
 import { EditorSticky } from '../../components/EditorSticky.js';
 import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
+import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { useChats } from '../../data/chats.js';
@@ -523,19 +521,45 @@ export function PersonaEditor(): JSX.Element {
         meta={modelMeta}
         requiredMarker={!draft.canonicalId || !draft.providerId || !draft.modelId}
       >
-        <ModelList
+        <ModelPickerField
           providers={providers.data ?? []}
           configuredTemplateIds={usableTemplateIds(
             providers.data ?? [],
             !!settings.data?.corsProxy,
           )}
-          selectedCanonicalId={draft.canonicalId}
-          selectedProviderId={draft.providerId}
-          selectedModelId={draft.modelId}
-          onSelect={(canonicalId, providerId, modelId) =>
-            patch({ canonicalId, providerId, modelId })
+          filter="all"
+          current={(() => {
+            const row = providers.data?.find((p) => p.id === draft.providerId);
+            if (row && draft.modelId) {
+              return { providerTemplateId: row.templateId, upstreamSlug: draft.modelId };
+            }
+            // The chosen deployment is gone. Only surface a constructive stale
+            // hint when the model is reachable on NO configured provider; if it
+            // is still reachable elsewhere, leave the field empty so the user
+            // re-picks cleanly rather than masquerading a provider they never
+            // chose (which would block Save with no visible reason).
+            if (draft.canonicalId) {
+              const configured = new Set(
+                (providers.data ?? []).filter((p) => p.enabled).map((p) => p.templateId),
+              );
+              const offers = listOfferings(draft.canonicalId);
+              const reachable = offers.some((o) => configured.has(o.providerId));
+              const hint = offers[0];
+              if (!reachable && hint) {
+                return { providerTemplateId: hint.providerId, upstreamSlug: hint.upstreamSlug };
+              }
+            }
+            return null;
+          })()}
+          onSelect={(sel) =>
+            patch({
+              canonicalId: sel.canonicalId,
+              providerId: sel.providerRowId,
+              modelId: sel.upstreamSlug,
+            })
           }
           onBrowseProviders={() => navigate('/app/settings')}
+          emptyLabel="Choose a model"
         />
       </AccordionCard>
 
@@ -867,233 +891,6 @@ export function ContextWindowControl({
             ? 'Above the recommended window — higher is costlier, slower, and often weaker.'
             : `Default ${recommended.toLocaleString()}. Lower trims cost; the red zone goes up to the model maximum.`}
       </p>
-    </div>
-  );
-}
-
-/**
- * Coloured trust badge — TEE (trusted execution, mint) and ZDR (zero data
- * retention, lavender). The title attribute spells out the acronym so the
- * user never has to guess (Don't make me think).
- */
-function TrustBadge({ kind }: { kind: 'tee' | 'zdr' }): JSX.Element {
-  const cfg =
-    kind === 'tee'
-      ? {
-          label: 'TEE',
-          title: 'Trusted Execution Environment — the host cannot read your data',
-          cls: 'bg-success/15 text-success border-success/40',
-        }
-      : {
-          label: 'ZDR',
-          title: 'Zero Data Retention — the provider stores nothing after the request',
-          cls: 'bg-aurora-500/20 text-aurora-200 border-aurora-500/50',
-        };
-  return (
-    <span
-      title={cfg.title}
-      className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${cfg.cls}`}
-    >
-      {cfg.label}
-    </span>
-  );
-}
-
-/**
- * The loud, honest signal for a censored model. Only 'restricted' carries a
- * badge today (free/unknown stay unmarked); restricted means the model — or its
- * deployment — applies content restrictions somewhere in the stack. For Claude
- * and ChatGPT the model is censored at source while the router routes verbatim;
- * we route via the anonymising router (LLM-VPN, ADR 0032), so the server still
- * never sees plaintext, but the censorship is real and we name it.
- */
-function FreedomBadge({ state }: { state: FreedomState }): JSX.Element | null {
-  if (state !== 'restricted') return null;
-  return (
-    <span
-      title="This model is censored by its maker. Reached via an anonymising router — the server never sees your data — but the model itself applies content restrictions."
-      className="rounded border border-danger/40 bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-danger"
-    >
-      Censored
-    </span>
-  );
-}
-
-/**
- * Jurisdiction badge — the legal home of the deployment (e.g. EU), in the same
- * aurora palette as ZDR so trust signals read as a set. The title spells it out.
- */
-function JurisdictionBadge({ code }: { code: string }): JSX.Element {
-  return (
-    <span
-      title={`Jurisdiction: ${code}`}
-      className="rounded border border-aurora-500/40 bg-aurora-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-aurora-200"
-    >
-      {code}
-    </span>
-  );
-}
-
-function ModelList({
-  providers,
-  configuredTemplateIds,
-  selectedCanonicalId,
-  selectedProviderId,
-  selectedModelId,
-  onSelect,
-  onBrowseProviders,
-}: {
-  providers: ProviderRow[];
-  configuredTemplateIds: string[];
-  selectedCanonicalId: string | null;
-  selectedProviderId: string;
-  selectedModelId: string;
-  onSelect: (canonicalId: string, providerId: string, upstreamSlug: string) => void;
-  onBrowseProviders: () => void;
-}): JSX.Element {
-  const enabled = providers.filter((p) => p.enabled);
-  // Provider templates the user has configured, for intersecting offerings.
-  const configuredByTemplate = new Map(enabled.map((p) => [p.templateId, p]));
-  // Only canonicals with a usable offering are shown; the rest are counted for
-  // the quiet footer that points the user at My Settings.
-  const { available, hiddenCount } = availableCanonicals(configuredTemplateIds);
-
-  return (
-    <div className="flex flex-col gap-2">
-      {/* If the persona's chosen model is no longer reachable (its provider was
-          removed or disabled), surface it as a quiet danger row with the
-          constructive next step rather than silently dropping the selection. */}
-      {selectedCanonicalId && !available.some((c) => c.id === selectedCanonicalId)
-        ? (() => {
-            const stale = getCanonical(selectedCanonicalId);
-            const anyOffer = listOfferings(selectedCanonicalId)[0];
-            const provName = anyOffer
-              ? (getProvider(anyOffer.providerId)?.displayName ?? anyOffer.providerId)
-              : null;
-            return (
-              <div className="rounded-md border border-danger/30 bg-danger/[0.04] p-3">
-                <div className="font-display text-sm text-paper">
-                  {stale?.displayName ?? selectedCanonicalId}
-                </div>
-                <div className="text-xs text-danger">
-                  Currently unavailable
-                  {provName ? ` — add ${provName} or pick another model` : ' — pick another model'}
-                </div>
-              </div>
-            );
-          })()
-        : null}
-      {available.map((c) => {
-        // Configured-only offerings — every deployment row is now reachable,
-        // and the trust badges and provider count reflect what the user can use.
-        const offers = listOfferings(c.id).filter((o) => configuredByTemplate.has(o.providerId));
-        const teeAvailable = offers.some((o) => o.trust.tee);
-        const zdrAvailable = offers.some((o) => o.trust.zdr);
-        const active = selectedCanonicalId === c.id;
-        return (
-          <div key={c.id} className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                // Pre-select the top-ranked offering. The list only shows
-                // canonicals with a configured offering, so `offers` is never
-                // empty and a configured provider row always exists.
-                const suggested = offers[0];
-                if (!suggested) return;
-                const row = configuredByTemplate.get(suggested.providerId);
-                onSelect(c.id, row?.id ?? '', suggested.upstreamSlug);
-              }}
-              className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left ${
-                active
-                  ? 'border-paper bg-white/[0.04]'
-                  : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
-              }`}
-            >
-              <div className="font-display text-sm text-paper">{c.displayName}</div>
-              <div className="flex items-center gap-2 text-xs text-paper-soft">
-                {teeAvailable ? <TrustBadge kind="tee" /> : null}
-                {zdrAvailable ? <TrustBadge kind="zdr" /> : null}
-                <span>
-                  {offers.length} provider{offers.length === 1 ? '' : 's'}
-                </span>
-              </div>
-            </button>
-
-            {/* Deployments inline, directly under the chosen model — not below
-                the whole list. */}
-            {active ? (
-              <div className="flex flex-col gap-2 border-l border-white/10 pl-3">
-                <div className="text-xs uppercase tracking-wider text-paper-soft">Deployment</div>
-                {offers.map((o) => {
-                  // `offers` is configured-only, so the provider row always
-                  // exists for every deployment shown here.
-                  const row = configuredByTemplate.get(o.providerId);
-                  if (!row) return null;
-                  const def = getProvider(o.providerId);
-                  const isActive =
-                    selectedProviderId === row.id && selectedModelId === o.upstreamSlug;
-                  return (
-                    <button
-                      key={`${o.providerId}:${o.upstreamSlug}`}
-                      type="button"
-                      onClick={() => onSelect(c.id, row.id, o.upstreamSlug)}
-                      className={`flex items-center justify-between gap-3 rounded-md border p-3 text-left ${
-                        isActive
-                          ? 'border-paper bg-white/[0.04]'
-                          : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-display text-sm text-paper">
-                            {def?.displayName ?? o.providerId}
-                          </span>
-                          {o.trust.tee ? <TrustBadge kind="tee" /> : null}
-                          {o.trust.zdr ? <TrustBadge kind="zdr" /> : null}
-                          {o.trust.jurisdiction ? (
-                            <JurisdictionBadge code={o.trust.jurisdiction} />
-                          ) : null}
-                          <FreedomBadge
-                            state={effectiveFreedom(c.freedomOriented, o.freedomOrientedDeployment)}
-                          />
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-paper-soft">
-                          <span>{o.context.recommended.toLocaleString()} ctx</span>
-                          {/* Every offering here is configured/reachable, so these
-                              capability hints describe what the user can actually use. */}
-                          <span className="flex gap-1">
-                            {o.profile.toolCalls.supported ? (
-                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
-                                Tools
-                              </span>
-                            ) : null}
-                            {o.profile.vision ? (
-                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
-                                Vision
-                              </span>
-                            ) : null}
-                          </span>
-                        </div>
-                      </div>
-                      {isActive ? <span>✓</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={onBrowseProviders}
-          className="mt-1 text-left text-[11px] text-paper-soft/70 hover:text-paper-soft"
-        >
-          ＋{hiddenCount} more model{hiddenCount === 1 ? '' : 's'} once you add providers → My
-          Settings
-        </button>
-      ) : null}
     </div>
   );
 }
