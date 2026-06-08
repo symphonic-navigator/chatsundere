@@ -426,8 +426,11 @@ export function ChatPage(): JSX.Element {
         // The streamingState schema is binary: 'incomplete' covers both
         // *active streaming* and *interrupted-needs-recovery*. The footer
         // is for the recovery case only — suppress it while a stream is
-        // actually live for this chat.
-        if (isStreamLive) return null;
+        // actually live for this chat, OR while a send is still being
+        // prepared (the persona draft is persisted as 'incomplete' before the
+        // slow substitute-vision describe, so the stream handle does not exist
+        // yet — without this it would briefly read as "interrupted").
+        if (isStreamLive || sendMessage.isPending) return null;
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
