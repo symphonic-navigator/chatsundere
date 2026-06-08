@@ -16,7 +16,54 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 — **B2 device-testing in progress; one lightbox bug
+**Last updated:** 2026-06-08 — **`ask_expert` expert-uplink tool shipped**
+(squashed on `master` `6d91bd5`, **NOT pushed** — awaiting Chris's device test;
+Liz pushes on his word). Client-only, **inserted experimental** feature,
+brainstormed end-to-end with Chris, built **subagent-driven** in an isolated
+worktree (14 TDD tasks, per-task spec+quality review + a final **opus** holistic
+review = READY TO SQUASH, no critical/important; all **7 cross-cutting invariants
+test-confirmed**). Small/local conversation models get an **uplink**: an
+`ask_expert` tool forwards a single **structurally-isolated** question (the expert
+sees *exactly* `[system(EXPERT_PROMPT), user(question)]` — **no** history / persona
+/ about-me; isolation enforced in code + pinned by a load-bearing test, not by
+trusting the weak model to filter) to a user-chosen global expert model, streamed
+at **maximum reasoning** with a live thinking/answering pill (`ExpertPill`), then
+woven back in the companion's voice — Chris's *"best of both worlds"* for the
+privacy-first stance. **Three control layers:** global model
+(`SettingsRow.expertModel`, My Settings, default none → tool absent) → persona
+default (`PersonaRow.askExpertDefault`, **ships off** — opt-in uplink) → per-chat
+cockpit runtime chip (mirrors the reasoning toggle; **runtime-off keeps the tool in
+the wire defs** for cache-prefix stability and returns a constructive error). Neutral
+non-censoring expert prompt (anti-paternalistic). **Dexie v16** (`expertModel`,
+`askExpertDefault`; the v16 migration backfills both + 37 persona fixtures updated).
+**Not a Larissa change** (client-only; no auth/sync/proxy/crypto; new **outbound
+egress** — the sanitised question — logged in [[insights/security-deferrals]]).
+Verification (on master after squash): `pnpm typecheck` **14/14**; `pnpm run build`
+**9/9**; user-client vitest **1104 pass / 8 fail** (the unchanged
+`cockpit-draft`/`chat-page`/`chat-route` localStorage-jsdom baseline, identical on
+master); biome clean. Full-tree capture verified (squash tree == branch-tip) +
+typecheck on master before merge. Spec/plan:
+[[../superpowers/specs/2026-06-08-ask-expert-tool-design]],
+[[../superpowers/plans/2026-06-08-ask-expert-tool]]. **Device test (spec §15):**
+(1) no global expert model → persona Behaviour toggle + cockpit "Ask expert" chip
+**disabled-with-tooltip**; (2) pick a strong model in My Settings → toggles enable;
+(3) small-model persona, chip **on** → ask a hard maths/physics question → an
+"Asked expert · *model*" pill appears, shows **live** "thinking → answering" chars,
+expand the finished pill → clean technical question + expert answer, companion
+replies in its own voice; (4) chip **off** mid-chat → model answers itself (no retry
+loop); (5) regenerate keeps the tool. No setup needed (no `packages/*` change → HMR,
+no model provisioning — just pick a catalogue model). **Deferred (logged, both
+Minor, spec-compliant):** the settings picker lists registered-not-resolvable
+offerings (toggles can show "on" while the tool is silently not offered — identical
+to the substitute-vision picker precedent); the failed pill shows only the error,
+not the question. **⚠ Merge note for the parallel Chunk-C work:** this claimed
+**Dexie v16** — Chunk C (lorebooks) must renumber to v17 if it also bumps the schema
+([[../superpowers/specs/2026-06-08-ask-expert-tool-design]] §13 lists every conflict
+point: Dexie verno, `resolveActiveTools` signature, `stream-manager`, `send-message`,
+`persona-editor`, `settings`, `current-chat.store`, `CockpitMenu`, `chat-page`).
+**Next:** Chris device-tests → Liz pushes the master backlog on his word.
+
+**Earlier 2026-06-08 — B2 device-testing in progress; one lightbox bug
 found & fixed.** During Chris's device test of B2, an **HTML artefact attached as an
 attachment went blank when navigating ‹/› away and back** in the lightbox. Root
 cause: the per-item edit-buffer reset ran in a `useEffect` (one render late), so the
