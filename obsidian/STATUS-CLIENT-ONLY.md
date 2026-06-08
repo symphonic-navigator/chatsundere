@@ -39,7 +39,10 @@ Full typecheck green; user-client suite at the **master baseline** (only 8
 onto the lore-cooldown master cleanly (code is disjoint; only this STATUS file
 overlapped). Touched only `apps/user-client`; **no Dexie**. Spec
 `superpowers/specs/2026-06-08-model-picker-modal-design.md`, plan
-`superpowers/plans/2026-06-08-model-picker-modal.md`.
+`superpowers/plans/2026-06-08-model-picker-modal.md`. **Follow-up (`a12d846`):** the
+model picker now lives in the persona **Identity** block (order avatar → name →
+tagline → model), no longer its own accordion — Chris's polish ask; structure tests
+updated.
 
 **Earlier 2026-06-08 (lore cooldown) — Lore re-injection cooldown gate added**
 (squashed on master `a77dd5c`, **NOT pushed**) — Chris's first post-device-test
