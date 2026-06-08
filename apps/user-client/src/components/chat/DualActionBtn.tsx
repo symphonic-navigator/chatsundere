@@ -5,15 +5,32 @@ interface Props {
   isStreamLive: boolean;
   personaName: string;
   onSend: () => void;
+  onStop: () => void;
 }
 
 export function DualActionBtn(p: Props): JSX.Element {
-  const disabled = !p.hasText || p.isStreamLive;
-  const title = p.isStreamLive
-    ? `${p.personaName} is still replying…`
-    : p.hasText
-      ? 'Send'
-      : 'Voice arrives with Block 4';
+  // While a reply streams, the same button becomes a Stop control (least
+  // astonishing: the button you pressed halts the reply). Otherwise it is the
+  // send arrow (enabled with text) or a disabled mic placeholder (Block 4).
+  if (p.isStreamLive) {
+    return (
+      <button
+        type="button"
+        className="dual-action-btn"
+        data-dual="stop"
+        title={`Stop ${p.personaName}`}
+        aria-label="Stop"
+        onClick={p.onStop}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </svg>
+      </button>
+    );
+  }
+
+  const disabled = !p.hasText;
+  const title = p.hasText ? 'Send' : 'Voice arrives with Block 4';
   return (
     <button
       type="button"
@@ -22,7 +39,7 @@ export function DualActionBtn(p: Props): JSX.Element {
       disabled={disabled}
       title={title}
       aria-label={p.hasText ? 'Send' : 'Microphone (disabled)'}
-      onClick={p.hasText && !p.isStreamLive ? p.onSend : undefined}
+      onClick={p.hasText ? p.onSend : undefined}
     >
       {p.hasText ? (
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">

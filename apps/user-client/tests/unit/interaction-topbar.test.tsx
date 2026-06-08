@@ -364,6 +364,7 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
         onDraftChange={vi.fn()}
         isStreamLive={false}
         onSend={vi.fn()}
+        onStop={vi.fn()}
         onExit={vi.fn()}
         onRenameChat={onRename}
         onOpenPersonaEditor={vi.fn()}

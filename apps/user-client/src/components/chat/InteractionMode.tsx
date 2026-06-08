@@ -17,6 +17,7 @@ interface Props {
   draftValue: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
+  onStop: () => void;
   isStreamLive: boolean;
   onExit: () => void;
   onRenameChat: (next: string | null) => void;
@@ -179,6 +180,7 @@ export function InteractionMode(p: Props): JSX.Element {
           draftValue={p.draftValue}
           onDraftChange={p.onDraftChange}
           onSend={handleSend}
+          onStop={p.onStop}
           isStreamLive={p.isStreamLive}
           onOpenToc={p.onOpenToc}
           onOpenArtefacts={p.onOpenArtefacts}

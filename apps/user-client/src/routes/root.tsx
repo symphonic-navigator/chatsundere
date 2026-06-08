@@ -115,24 +115,29 @@ export function Root() {
           }`}
         >
           {/* Left cluster — logo + transient background-stream badge. The logo
-              is hidden in read-only chat mode so the bar can collapse and the
-              chat surface rises into the reclaimed space. */}
+              renders in every mode; in read-only (reading) chat mode it shrinks
+              to the small variant (twinkle dropped) to fit the thin collapsed
+              bar while still providing a quick route home. */}
           <div className="flex items-center gap-2">
-            {!isReadingChat && (
-              <Link to="/" className="brand-logo" style={{ opacity: topbarLogoVisible ? 1 : 0 }}>
-                <span
-                  ref={(el) => {
-                    topbarLogoRef.current = el;
-                  }}
-                  className="brand-logo-text"
-                >
-                  Chatsundere
-                </span>
+            <Link
+              to="/"
+              className={`brand-logo${isReadingChat ? ' brand-logo-small' : ''}`}
+              style={{ opacity: topbarLogoVisible ? 1 : 0 }}
+            >
+              <span
+                ref={(el) => {
+                  topbarLogoRef.current = el;
+                }}
+                className="brand-logo-text"
+              >
+                Chatsundere
+              </span>
+              {!isReadingChat && (
                 <span className="brand-logo-twinkle" aria-hidden="true">
                   ✦
                 </span>
-              </Link>
-            )}
+              )}
+            </Link>
             <BackgroundStreamBadge />
           </div>
           {/* Right cluster — adult-mode pill kept off-centre (away from device

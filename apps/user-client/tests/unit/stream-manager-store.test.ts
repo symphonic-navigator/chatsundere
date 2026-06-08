@@ -5,6 +5,7 @@ import * as llmUnified from '../../../../packages/llm-unified/src/index';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
 import * as resolveSend from '../../src/attachments/resolve-send';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
+import { queryClient } from '../../src/lib/queryClient';
 import * as engine from '../../src/lib/stream-engine';
 import * as titleGen from '../../src/lib/title-generator';
 import * as toolLoop from '../../src/lib/tool-loop';
@@ -1127,6 +1128,64 @@ describe('stream-manager.store', () => {
       (b) => b.type === 'pill' && b.pillId === describePill?.id,
     );
     expect(hasDescribeBlock).toBe(true);
+  });
+
+  it('abortPreserve keeps a fresh-send draft as incomplete (not deleted)', async () => {
+    const { db, personaId } = await seedChat();
+    const myChatId = 'c-abort-preserve';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    // Fire one token then hang, so contentBuffer is non-empty when we abort.
+    // This pattern mirrors the 'live contentBuffer' test above; the captured
+    // onChunk lets us push a known block into the buffer before aborting.
+    type OnChunk = (c: { type: 'token'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never resolves */
+      });
+    }) as never);
+    const store = useStreamManagerStore.getState();
+    void store.start({ ...baseStartArgs(myChatId, persona, model), chatId: myChatId } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(true);
+    expect(captured).not.toBeNull();
+    // Push a known partial token into the live buffer before aborting.
+    (captured as unknown as OnChunk)({ type: 'token', text: 'partial' });
+
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    await store.abortPreserve(myChatId);
+
+    const msgs = await db.messages.where('chatId').equals(myChatId).toArray();
+    // The user message survives, AND the persona draft survives as incomplete.
+    expect(msgs.filter((m) => m.role === 'user').length).toBe(1);
+    const personaRow = msgs.find((m) => m.role === 'persona');
+    expect(personaRow).toBeDefined();
+    expect(personaRow?.streamingState).toBe('incomplete');
+    // The partial buffer must be persisted — this is the "preserve" contract.
+    // An empty-buffer write would still mark incomplete but would silently drop
+    // the content the user had already received, which is the whole point of
+    // abortPreserve vs abortDiscard.
+    expect(personaRow?.contentBlocks).toEqual([{ type: 'text', text: 'partial' }]);
+    // The handle is gone — the input is free again.
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(false);
+    // Both query keys must be invalidated so the message list re-renders from
+    // the freshly-written Dexie row rather than a stale empty-bubble snapshot.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chats', myChatId] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chats'] });
+    invalidateSpy.mockRestore();
   });
 
   it('regenerate produces no describe_image pill (no re-describe on re-roll)', async () => {

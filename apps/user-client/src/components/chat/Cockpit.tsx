@@ -37,6 +37,7 @@ interface Props {
   draftValue: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
+  onStop: () => void;
   isStreamLive: boolean;
   /** Open the per-chat ToC / bookmarks sheet (omitted → button hidden). */
   onOpenToc?: () => void;
@@ -488,6 +489,7 @@ export function Cockpit(p: Props): JSX.Element {
           isStreamLive={p.isStreamLive}
           personaName={p.persona.name}
           onSend={() => p.onSend(p.draftValue)}
+          onStop={p.onStop}
         />
       </div>
       {dragging && <div className="cockpit-drop-overlay">Drop files to attach</div>}

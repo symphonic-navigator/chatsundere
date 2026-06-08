@@ -36,9 +36,11 @@ describe('Root brand-bar chrome trims inside a chat', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('reading-chat hides both the logo and the connectivity badge', () => {
+  it('reading-chat shows a small home logo and hides the connectivity badge', () => {
     renderAt('/app/chat/abc'); // interaction mode is false by default → reading
-    expect(screen.queryByText('Chatsundere')).toBeNull();
+    expect(screen.getByText('Chatsundere')).toBeInTheDocument();
+    expect(screen.getByText('Chatsundere').closest('.brand-logo')).toHaveClass('brand-logo-small');
+    expect(screen.queryByText('✦')).toBeNull();
     expect(screen.queryByText(/local|linked|server/i)).toBeNull();
   });
 

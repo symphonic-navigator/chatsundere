@@ -40,6 +40,7 @@ describe('Cockpit attachments', () => {
         draftValue=""
         onDraftChange={() => {}}
         onSend={() => {}}
+        onStop={() => {}}
         isStreamLive={false}
       />,
       { wrapper: wrap(qc) },
@@ -62,6 +63,7 @@ describe('Cockpit attachments', () => {
         draftValue=""
         onDraftChange={() => {}}
         onSend={() => {}}
+        onStop={() => {}}
         isStreamLive={false}
       />,
       { wrapper: wrap(qc) },

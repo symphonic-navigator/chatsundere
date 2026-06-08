@@ -53,5 +53,16 @@ export function createMarkdownComponents(highlighter: Highlighter | null): Compo
     img(props: ComponentPropsWithoutRef<'img'>) {
       return <ImageMarker {...props} />;
     },
+    table(props: ComponentPropsWithoutRef<'table'>) {
+      // A GFM table wider than the 380px chat column would otherwise stretch
+      // the whole stream and force a page-level horizontal scrollbar. Wrap it
+      // in a scroll container (same pattern as code blocks / KaTeX) so it
+      // scrolls inside its own bubble instead.
+      return (
+        <div className="msg-table-wrap">
+          <table {...props} />
+        </div>
+      );
+    },
   };
 }

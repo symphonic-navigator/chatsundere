@@ -581,6 +581,9 @@ export function ChatPage(): JSX.Element {
           draftValue={draft}
           onDraftChange={setDraft}
           onSend={(t) => void onSend(t)}
+          onStop={() =>
+            void useStreamManagerStore.getState().abortPreserve(chat?.id ?? activeChatId ?? '')
+          }
           isStreamLive={isStreamLive}
           onExit={onExitToEntranceHall}
           onRenameChat={onRenameChat}

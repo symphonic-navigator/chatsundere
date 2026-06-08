@@ -56,6 +56,7 @@ function renderCockpit(props: Partial<ComponentProps<typeof Cockpit>> = {}) {
         draftValue=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
+        onStop={vi.fn()}
         isStreamLive={false}
         {...props}
       />
@@ -121,11 +122,13 @@ describe('Cockpit', () => {
     expect(onChange).toHaveBeenCalledWith('hi');
   });
 
-  it('Send disabled while stream live, with hint', () => {
+  it('Shows stop button while stream live', () => {
     const { container } = renderCockpit({ draftValue: 'hello', isStreamLive: true });
-    const btn = container.querySelector('[data-dual="action"]') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-    expect(btn.title).toMatch(/aurum.*replying|still replying/i);
+    // When a stream is live, DualActionBtn renders the stop control, not the send button.
+    const stopBtn = container.querySelector('[data-dual="stop"]') as HTMLButtonElement;
+    expect(stopBtn).not.toBeNull();
+    expect(stopBtn.disabled).toBe(false);
+    expect(container.querySelector('[data-dual="action"]')).toBeNull();
   });
 
   it('Send invokes onSend then clears via onDraftChange when text present', () => {
@@ -179,5 +182,12 @@ describe('Cockpit', () => {
     useCurrentChatStore.setState({ isPinned: false });
     ({ container } = renderCockpit());
     expect(container.querySelector('.cockpit')?.getAttribute('data-pinned')).toBe('false');
+  });
+
+  it('renders a stop button that calls onStop when a stream is live', () => {
+    const onStop = vi.fn();
+    const { getByRole } = renderCockpit({ isStreamLive: true, onStop });
+    fireEvent.click(getByRole('button', { name: /stop/i }));
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 });

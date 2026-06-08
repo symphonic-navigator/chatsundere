@@ -105,6 +105,7 @@ interface StreamManagerStore {
   regenerate: (args: RegenerateStreamArgs) => Promise<void>;
   abortDiscard: (chatId: string) => Promise<void>;
   abortAllForPersonaDiscard: (personaId: string) => Promise<void>;
+  abortPreserve: (chatId: string) => Promise<void>;
   abortAllForPersonaPreserve: (personaId: string) => Promise<void>;
   has: (chatId: string) => boolean;
   getDraftMessage: (chatId: string) => { id: string; contentBlocks: ContentBlock[] } | null;
@@ -242,23 +243,30 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     for (const h of matching) await get().abortDiscard(h.chatId);
   },
 
+  abortPreserve: async (chatId) => {
+    const h = get().streams.get(chatId);
+    if (!h) return;
+    h.controller.abort();
+    const db = getClientDataDb();
+    // Persist the partial buffer + mark incomplete so the StreamInterruptedFooter
+    // offers Retry — for a fresh send AND a regenerate (unlike abortDiscard, which
+    // deletes a fresh-send draft). The user decides: keep what they have, or retry.
+    await db.messages.update(h.draftMessageId, {
+      contentBlocks: h.contentBuffer,
+      streamingState: 'incomplete',
+    });
+    set((s) => {
+      const m = new Map(s.streams);
+      m.delete(chatId);
+      return { streams: m };
+    });
+    void queryClient.invalidateQueries({ queryKey: ['chats', chatId] });
+    void queryClient.invalidateQueries({ queryKey: ['chats'] });
+  },
+
   abortAllForPersonaPreserve: async (personaId) => {
     const matching = [...get().streams.values()].filter((h) => h.personaId === personaId);
-    const db = getClientDataDb();
-    for (const h of matching) {
-      h.controller.abort();
-      // Persist the partial buffer + mark as incomplete so the user sees
-      // StreamInterruptedFooter on re-visit. No Dexie delete.
-      await db.messages.update(h.draftMessageId, {
-        contentBlocks: h.contentBuffer,
-        streamingState: 'incomplete',
-      });
-      set((s) => {
-        const m = new Map(s.streams);
-        m.delete(h.chatId);
-        return { streams: m };
-      });
-    }
+    for (const h of matching) await get().abortPreserve(h.chatId);
   },
 }));
 
