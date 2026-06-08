@@ -16,9 +16,22 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-07 — **Knowledgebase Chunk B2 (Attach document)
-landed** (squashed on master `88f5c7d`, **NOT pushed** — awaiting Chris's device
-test; Liz pushes on his word). Block-5 feature (v0.2.0), client-only.
+**Last updated:** 2026-06-08 — **B2 device-testing in progress; one lightbox bug
+found & fixed.** During Chris's device test of B2, an **HTML artefact attached as an
+attachment went blank when navigating ‹/› away and back** in the lightbox. Root
+cause: the per-item edit-buffer reset ran in a `useEffect` (one render late), so the
+sandbox iframe mounted with the *previous* item's draft and relied on a flaky
+`srcDoc`-update reload. Fixed by resetting the buffer **synchronously during render,
+keyed on `item.id`** (`Lightbox.tsx`); regression test `lightbox-item-switch.test.tsx`.
+**Device-confirmed smooth by Chris** (commit `bdd6110`). Also a **WATCH** entry logged
+in [[insights/follow-ups-index]] for a *not-yet-reproducible* intermittent "Remove
+leaves the counter stuck on a mixed pending set" report — probe-first plan on
+recurrence. **master now carries 5 unpushed commits** (4× B2
+`392750f`/`33ed425`/`88f5c7d`/`2136cdd` + the fix `bdd6110`); **still NOT pushed** —
+Liz pushes the stack on Chris's word once the full B2 device test is through.
+
+**Knowledgebase Chunk B2 (Attach document) landed** (squashed on master `88f5c7d`).
+Block-5 feature (v0.2.0), client-only.
 Brainstormed end-to-end with Chris (visual companion for the picker layout), built
 **subagent-driven** in an isolated worktree (12 TDD tasks, per-task spec+quality
 review + a final **opus** holistic review = **READY TO SQUASH**, no
