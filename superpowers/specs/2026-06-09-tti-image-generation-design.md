@@ -475,6 +475,14 @@ CORS-closed to browsers. The existing `cors-proxy` routing remains available
 per provider row as the general fallback, but nothing in this feature depends
 on it.
 
+> **Implementation note (2026-06-09, supersedes "fully direct" for xAI):** the
+> built adapter derives routing from the provider's `corsHint` like every other
+> call (the substitute-vision precedent), so xAI image POSTs travel through the
+> user's CORS proxy — which any xAI user already has, since Grok chat requires
+> it. nano-gpt runs direct as probed. The `b64_json` choice stands regardless
+> (no CDN fetch either way). See `obsidian/insights/security-deferrals.md`
+> 2026-06-09.
+
 ---
 
 ## 11. Testing

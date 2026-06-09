@@ -16,7 +16,47 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-09 — **TTI image-generation spec approved (Laura's
+**Last updated:** 2026-06-09 (late) — **TTI image generation LANDED** (squashed
+onto master `d80ad73`, **NOT pushed**; **NOT yet device-verified**). Companions
+can paint: `generate_image` is **always offered** (unconfigured call → a
+constructive pointer to My Settings → Image generation = the in-chat discovery
+path), optional `count` (default 1, clamped per group) and schema-gated `nsfw`
+parameters; three curated **`serviceKind: 'tti'` offerings** in llm-unified
+(**Grok Imagine** on xAI — routed via the CORS proxy per `corsHint`, supersedes
+spec §10's "fully direct" for xAI; **Z-Image** + **Seedream 4.5** on nano-gpt,
+direct; xAI uses `b64_json` since its image CDN is CORS-closed, nano-gpt
+`url` + bare R2 GET without auth header); **Dexie v19** (`imageGeneration`
+primary + always-visible disabled-with-closed-loop-copy NSFW slot);
+immediate-persist **Image generation** section in My Settings; every image is a
+**`kind: 'image'` artefact** (blob + thumb + dimensions + `genMeta` provenance —
+Treasury `Img` tab now alive, lightbox incl. image download + copyable
+prompt-provenance, persona-provenance NSFW gating for free); in-chat
+**ImagePill** (`Painting · model` live → expandable prompt with Copy →
+inline thumbnails → lightbox). Built **subagent-driven** in an isolated
+worktree (11 TDD tasks, per-task spec+quality review, ~5 fix cycles, final
+**opus holistic review = READY TO SQUASH** — its two Minors logged in
+[[insights/follow-ups-index]]) + **Laura pre-squash pass: no hard defects**,
+her one soft finding (decision-9 lightbox provenance gap) **fixed in-branch**
+rather than deferred. New egress class (image prompts to the providers + R2
+fetches) logged in [[insights/security-deferrals]] — **not a Larissa path**
+(client-only). Verification (on master after squash): `pnpm typecheck --force`
+**14/14**; llm-unified `bun test` **312/0**; user-client vitest **1263 pass /
+8 fail** (the unchanged cockpit-draft/chat-page/chat-route localStorage-jsdom
+baseline); `pnpm run build` **9/9**; biome clean; full-tree capture verified
+(`git diff master..branch` empty) + typecheck on master before worktree
+cleanup. Spec/plan: [[../superpowers/specs/2026-06-09-tti-image-generation-design]],
+[[../superpowers/plans/2026-06-09-tti-image-generation]]. **Device test (spec
+§13):** the nine steps — unconfigured discovery (companion points to settings),
+Z-Image turbo happy path (pill → inline thumbnail → lightbox → Treasury),
+"three variants" → grid + 3 artefacts, Grok quality/2k/16:9 honoured (xAI key +
+CORS proxy required), Seedream ultra + silent clamp (asks 5 → gets 4),
+moderation (Grok blocks → constructive), no `nsfw` param without an NSFW model,
+SFW-mode hides adult-persona images, reload persistence + chat cascade-delete.
+**Restart `pnpm dev` first** (packages/llm-unified changed — Vite HMR ignores
+`packages/*`). **Next:** Chris device-tests → Liz pushes the master backlog on
+his word; then the design-language session per the parked round-1 brainstorm.
+
+**Earlier 2026-06-09 — TTI image-generation spec approved (Laura's
 first real spec-pass) + live CORS probes complete.** Design spec at
 [[../superpowers/specs/2026-06-09-tti-image-generation-design]] (commits
 `169ae19` → `50f0d0c`, doc-only, **NOT pushed**), brainstormed end-to-end with
