@@ -2,7 +2,9 @@
 
 **Date:** 2026-06-09
 **Author:** Liz (with Chris)
-**Status:** Approved design — awaiting Laura spec-pass, then implementation plan
+**Status:** Approved design — Laura spec-pass complete (two hard findings
+fixed in place, soft notes applied or consciously kept); next: pre-plan CORS
+probes (§10), then implementation plan
 **Block:** Client-only feature (Block-2 adjacent — first consumer of the
 artefact `kind: 'image'` reserved in the Kern). Ported from chatsune with
 deliberate changes. **First real Laura spec-pass runs on this document.**
@@ -59,26 +61,38 @@ fetches of provider-returned image URLs), logged in
    Z-Image turbo/base and Seedream 4.5 (both nano-gpt). ChatGPT Image 2 is a
    later, separate iteration (Chris studies the model first).
 5. **NSFW slot is visible from day one, disabled-over-hidden (§11).** While no
-   `canDoNsfw` offering exists it renders greyed with the tooltip
-   "No NSFW-capable model available yet". If the primary model itself can do
-   NSFW (future), the slot greys with "Your primary model already supports
-   NSFW". The capability is a visible promise, never a silent absence.
+   `canDoNsfw` offering exists it renders greyed with a tooltip that **closes
+   the loop instead of dangling a task** (Laura hard finding 1): "No
+   NSFW-capable image model exists yet — this slot lights up automatically
+   when one is curated. Nothing for you to do." If the primary model itself
+   can do NSFW (future), the slot greys with "Your primary model already
+   supports NSFW". The capability is a visible promise, never a silent
+   absence — and never an implied action with no action available.
 6. **The `nsfw` tool parameter appears in the schema only when it can work:**
    the persona is `adultPersona` AND the global adult mode is `nsfw` AND an
    NSFW-capable model is configured (second slot, or a `canDoNsfw` primary).
    Most restrictive variant — the runtime error path for an honoured schema
    barely exists. A hallucinated `nsfw: true` outside that gate still gets a
    constructive error, never a crash.
-7. **Tool gating is omakase:** `generate_image` is offered to every persona as
-   soon as a primary image model is configured. No persona toggle, no cockpit
+7. **Tool gating is omakase — and the tool is always offered** (revised after
+   Laura hard finding 2): `generate_image` stands in the wire tool defs for
+   every persona, **even when no image model is configured**. An unconfigured
+   call returns a constructive error pointing the user to My Settings → Image
+   generation, so discovery happens in the chat at the exact moment of need
+   (user asks → model calls → both learn), reusing the constructive-error
+   muscle rather than a system-prompt hint. No persona toggle, no cockpit
    chip — image generation is a core capability, not a risk tool like the
-   expert uplink.
+   expert uplink. Side benefit: the tool def is constant regardless of
+   configuration, so the cached prompt prefix is maximally stable.
 8. **In-chat rendering: inline thumbnails.** The chat is a reading surface and
    the image is the content. A pill carries status + prompt; the thumbnails
    render directly in the message (tap → lightbox). Not pill-only, not
    expand-on-tap.
 9. **The LLM-authored prompt is copyable** — in the expanded pill (copy
-   button) and in the lightbox provenance line.
+   button) and in the lightbox provenance line. Conscious duplication (Laura
+   soft note): the lightbox is the canonical provenance home, the pill copy is
+   the in-stream convenience; the pill copy is dropped later if it reads as
+   clutter once styling lands.
 10. **No "Test image" button in My Settings for v1** (YAGNI — the first real
     chat attempt is the test). Chatsune had one; we add it later if missed.
 11. **CORS is an empirical pre-plan question.** Chatsune called the image APIs
@@ -99,13 +113,13 @@ My Settings ──pick──▶ SettingsRow.imageGeneration
               send path (resolves slots + persona/adult gates)
                               ▼
 stream-manager.runIntoDraft:
-   images = primary ? { primary, nsfwSlot, nsfwParamAllowed } : null
+   images = { primary: slot | null, nsfwSlot, nsfwParamAllowed }   // ALWAYS built
    activeTools = resolveActiveTools(integrationCtx, knowledge, expert, images)
                               │
                               ▼
-   generate_image(prompt, count?, nsfw?)          ← context tool, like
-                              │                      query_knowledgebase
-                              ▼
+   generate_image(prompt, count?, nsfw?)   ← context tool, ALWAYS offered;
+                              │              unconfigured → constructive
+                              ▼              settings pointer (§7.4)
    llm-unified generateImages(offering, config, prompt, count, transport)
        ├─ build per-group payload (ported chatsune helpers)
        ├─ POST {baseUrl}/images/generations   (direct or cors-proxy)
@@ -299,8 +313,13 @@ when the plan is written.
 - **NSFW slot:** rendered always (decision 5), with the two disabled states
   and tooltips described there. When eligible offerings exist, it is the same
   picker + config view, restricted to `canDoNsfw` offerings.
-- Clearing the primary slot disables the tool everywhere (the section explains
-  this inline); the NSFW slot cannot be set without a primary.
+- Clearing the primary slot leaves the tool offered but unconfigured —
+  in-chat calls then return the constructive settings pointer (decision 7);
+  the NSFW slot cannot be set without a primary.
+- **Persistence idiom pinned (Laura soft note):** the section persists
+  **immediately** on every change, like its cited siblings (substitute-vision,
+  expert, expert-web pickers) — it is not governed by the room's `SaveBar`,
+  and nothing in the section may visually imply staged-until-saved behaviour.
 - Styling deliberately minimal — mechanics first; Chris does the polish pass.
 
 ---
@@ -321,7 +340,7 @@ when the plan is written.
     type: 'object',
     properties: {
       prompt: { type: 'string', description: 'A detailed description of the image(s): subject, style, lighting, composition.' },
-      count:  { type: 'integer', minimum: 1, description: 'How many variants to generate. Omit for the normal case of one image; only set when the user explicitly asks for multiple variants.' },
+      count:  { type: 'integer', minimum: 1, description: 'How many variants to generate. Omit for the normal case of one image; only set when the user explicitly asks for multiple variants (e.g. "show me three options" → count: 3).' },
       // nsfw is present ONLY under the §2.6 gate:
       nsfw:   { type: 'boolean', description: 'Set true only when the user asks for explicit adult imagery. Routes to the NSFW-capable model.' },
     },
@@ -332,8 +351,10 @@ when the plan is written.
 
 ### 7.2 Offering & gating
 
-- Offered as a **context tool** (fourth-category precedent) whenever
-  `imageGeneration.primary` is configured. No persona toggle, no cockpit chip.
+- Offered as a **context tool** (fourth-category precedent) **always** — even
+  with no image model configured (decision 7). An unconfigured call returns
+  the constructive settings pointer (§7.4); a configured one generates. No
+  persona toggle, no cockpit chip.
 - The `nsfw` property is included in the schema only when **all three** hold:
   `persona.adultPersona === true`, `settings.adultMode === 'nsfw'`, and an
   NSFW-capable model is configured (the `nsfw` slot, or a `canDoNsfw`
@@ -355,6 +376,9 @@ when the plan is written.
 
 ### 7.4 Constructive errors (the *dere* half)
 
+- No image model configured (the first-run discovery path, decision 7):
+  `"No image model is configured yet. Tell the user that image generation is
+  available once they pick a model in My Settings → Image generation."`
 - `nsfw: true` without an eligible model (hallucinated parameter):
   `"NSFW image generation is not available — no NSFW-capable model is
   configured. Offer the user a non-explicit variant of their idea instead."`
@@ -371,7 +395,9 @@ when the plan is written.
 - **Completed:** collapsed `Painted · <model>`; expanded → the full prompt
   with a **copy button**, the model name, and per-image moderation notes if
   any.
-- **Failed:** `Couldn't paint` + constructive detail on expand.
+- **Failed:** `Couldn't paint` + constructive detail on expand. The expanded
+  failed-state copy is held to the §7.4 bar (Laura soft note): an invitation
+  with a next step, never a bare shrug.
 - Pills persist with the message and survive reload (both finalise paths),
   exactly like vision pills.
 
@@ -452,7 +478,8 @@ Unit (Bun, llm-unified):
 - `maxCountFor` clamp table; `defaultConfigFor`.
 
 Unit (Vitest, user-client):
-- Tool gating matrix: tool absent without a primary model; `nsfw` property
+- Tool gating matrix: tool present even without a primary model, with
+  `execute` returning the constructive settings pointer; `nsfw` property
   present/absent across the §2.6 three-way gate (8 combinations, test-pinned).
 - Count clamping; slot routing (`nsfw: true` → NSFW slot; hallucinated
   `nsfw` → constructive error).
@@ -478,9 +505,12 @@ generation per group against the real APIs, matched in full.
 
 ## 13. Manual verification (Chris, on device)
 
-1. **No model configured:** in a chat, ask for an image → the companion has no
-   `generate_image` tool (answers in prose); My Settings → Image generation
-   shows the empty primary slot and the disabled NSFW slot with tooltip.
+1. **No model configured (first-run discovery):** in a chat, ask for an
+   image → the companion calls `generate_image`, receives the constructive
+   pointer, and tells you image generation is available once a model is
+   picked in My Settings → Image generation; the pill shows the failed state
+   with the constructive detail on expand. My Settings shows the empty
+   primary slot and the disabled NSFW slot with the closed-loop tooltip.
 2. **Configure Z-Image turbo** (free): pick it in the primary slot, set a size
    → in a chat, ask the companion to paint something → a `Painting · Z-Image`
    pill appears with a live bar → the image renders inline below the message →
