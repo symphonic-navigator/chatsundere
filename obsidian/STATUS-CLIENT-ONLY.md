@@ -53,7 +53,23 @@ CORS proxy required), Seedream ultra + silent clamp (asks 5 → gets 4),
 moderation (Grok blocks → constructive), no `nsfw` param without an NSFW model,
 SFW-mode hides adult-persona images, reload persistence + chat cascade-delete.
 **Restart `pnpm dev` first** (packages/llm-unified changed — Vite HMR ignores
-`packages/*`). **Next:** Chris device-tests → Liz pushes the master backlog on
+`packages/*`). **Device test 2026-06-09 (late): MOSTLY PASSING** — Chris ran
+the §13 list the same evening; "FAST alles funktioniert". **Still open:** the
+moderation-provocation step (§13.6). **Three device findings for the next
+session (probe-first, console probes early per house habit):**
+(1) **The image pill should always start on a new line** — it currently sits
+in the inline content flow; UX polish, likely a block-level wrapper around the
+generate_image pill (+ grid). (2) **Images sometimes vanish after having been
+displayed; a chat reload brings them back** — smells like the
+objectURL/query-cache class the reviews circled (ImagePill `urls` useMemo
+cleanup revoking while `<img>`s still reference, or a draft→persisted pill
+remount path); the staleTime-Infinity fix covered the focus-refetch case, so
+another revocation/remount path remains. Probe before theorising. (3)
+**Z-Image appears not to work** — note the ad-hoc console probe (spec §10) hit
+the very same model fine direct, so suspect the in-app path: slot/ref
+resolution (`nano-gpt:z-image-turbo` + enabled row), payload (size/n), or
+routing — probe the actual request from the app first. **Next:** fix the three
+findings + finish §13.6 → Chris re-tests → Liz pushes the master backlog on
 his word; then the design-language session per the parked round-1 brainstorm.
 
 **Earlier 2026-06-09 — TTI image-generation spec approved (Laura's
