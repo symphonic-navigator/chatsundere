@@ -16,7 +16,35 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-08 (latest) — **Laura — UX auditor landed**
+**Last updated:** 2026-06-09 — **TTI image-generation spec approved (Laura's
+first real spec-pass) + live CORS probes complete.** Design spec at
+[[../superpowers/specs/2026-06-09-tti-image-generation-design]] (commits
+`169ae19` → `50f0d0c`, doc-only, **NOT pushed**), brainstormed end-to-end with
+Chris and **approved after his own read**. Port of chatsune's TTI stack with
+four deliberate changes: global model slots in My Settings (primary + a
+visible-but-disabled NSFW slot until a `canDoNsfw` model is curated — all
+three launch models are `false`), image count moved from user config to an
+LLM tool parameter (`count`, default 1, clamped per group), `generate_image`
+**always offered** (an unconfigured call returns a constructive settings
+pointer = the in-chat discovery path), and images persisted as **artefacts**
+(`kind: 'image'`, inline thumbnails in the stream, the Treasury `Img` tab
+comes alive, NSFW gating via persona provenance for free). Three launch
+offerings as `serviceKind: 'tti'` in llm-unified: **Grok Imagine** (xAI),
+**Z-Image** + **Seedream 4.5** (nano-gpt); config types are the chatsune
+discriminated union minus `n`. **Laura's first summon paid off immediately:**
+two hard findings (a dangling disabled-slot tooltip; first-run capability
+invisible in the chat), both fixed in the spec; five soft notes
+applied/consciously kept. **Live CORS probes with Chris (serial, real
+generations):** both providers fully **`direct`** — nano-gpt POST + R2
+signed-URL fetch CORS-open (`response_format: 'url'`, R2 fetched **without**
+auth header); xAI POST open but `imgen.x.ai` CORS-closed → the xAI adapter
+uses **`response_format: 'b64_json'`** (bytes inline). No proxy dependency on
+the happy path. **Dexie v19 claimed** for the settings migration (head is
+v18 — re-verify at plan time per the parallel-version-ownership rule).
+**Next:** implementation plan (writing-plans), then build; inline vs
+overnight-handoff still to be decided with Chris.
+
+**Earlier 2026-06-08 — Laura — UX auditor landed**
 (process/tooling; squashed onto master, **NOT pushed**). Codified read-only audit
 subagent (`.claude/agents/laura.md`) — the **UX twin of Larissa** — brainstormed
 end-to-end with Chris (spec → plan → inline build). Her rubric *is* her system
