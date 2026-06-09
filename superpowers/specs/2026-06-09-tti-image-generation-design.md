@@ -122,9 +122,10 @@ stream-manager.runIntoDraft:
                               ▼              settings pointer (§7.4)
    llm-unified generateImages(offering, config, prompt, count, transport)
        ├─ build per-group payload (ported chatsune helpers)
-       ├─ POST {baseUrl}/images/generations   (direct or cors-proxy)
+       ├─ POST {baseUrl}/images/generations   (probed: direct, both providers)
        ├─ parse response (xAI: per-item moderation; nano-gpt: 4xx on refusal)
-       └─ fetch result URLs → bytes            (nano-gpt R2: NO auth header)
+       ├─ xAI: decode inline b64_json → bytes  (imgen.x.ai is CORS-closed)
+       └─ nano-gpt: fetch R2 urls → bytes      (CORS-open; NO auth header)
                               │
                               ▼
    user-client: measure dims (createImageBitmap), thumbnail, persist
@@ -238,17 +239,23 @@ POST {baseUrl}/images/generations          POST {baseUrl}/images/generations
   model: 'grok-imagine-image'                model: 'z-image-turbo' | 'z-image-base'
        | 'grok-imagine-image-quality',            | 'seedream-v4.5',
   prompt, n,                                 prompt, n,
-  response_format: 'url',                    size: '<WxH>',          // Seedream via
+  response_format: 'b64_json',               size: '<WxH>',          // Seedream via
   aspect_ratio: config.aspect,               response_format: 'url'  // resolution table
   resolution: config.resolution
 }                                          }
 ```
 
+The two providers deliberately use **different `response_format`s**, driven by
+the §10 probe results: xAI's image CDN (`imgen.x.ai`) is CORS-closed to the
+browser, but `b64_json` puts the bytes inline in the (CORS-open) POST
+response — no second fetch, no proxy. nano-gpt's R2 bucket is CORS-open, so
+`url` avoids inflating the POST response there.
+
 ### 5.2 Response handling
 
-- **xAI:** `data[]` items carry `url`, optional `mime_type`, and
-  `respect_moderation: false` + `reason` for blocked items → those become
-  per-image moderation results, the rest are fetched.
+- **xAI:** `data[]` items carry `b64_json` (decoded client-side to a Blob),
+  optional `mime_type`, and `respect_moderation: false` + `reason` for blocked
+  items → those become per-image moderation results.
 - **nano-gpt:** `data[]` items carry `url` (Cloudflare R2 signed URL). No
   per-image moderation; a refused prompt fails the whole POST with 4xx →
   constructive error. `cost` may be absent (Z-Image turbo) — read defensively.
@@ -256,7 +263,7 @@ POST {baseUrl}/images/generations          POST {baseUrl}/images/generations
   `GET` and **no `Authorization` header** — a Bearer token collides with the
   AWS-V4 signature and yields 403.
 - **Timeouts:** 60 s for the xAI POST; 300 s for nano-gpt (Z-Image base at
-  count 4 takes ~3 min); 60 s per result-URL fetch.
+  count 4 takes ~3 min); 60 s per nano-gpt result-URL fetch.
 - **Dimensions** are measured client-side after the fetch
   (`createImageBitmap`), not trusted from provider metadata.
 
@@ -448,23 +455,25 @@ One `ArtefactRow` per successful image (`count` images → up to `count` rows):
 
 ---
 
-## 10. Pre-plan CORS probes (empirical gate)
+## 10. CORS probe results (empirical, 2026-06-09)
 
-Run with Chris at the browser console, with his real keys, **before the
-implementation plan is written** (serial, one probe at a time):
+Run with Chris at the browser console (app origin `http://localhost:3000`),
+serial, with real keys and real generations:
 
-1. `fetch('https://nano-gpt.com/api/v1/images/generations', { method: 'POST', … })`
-   from the app origin — does CORS allow the POST? (Cheapest model:
-   Z-Image turbo, free.)
-2. Fetch the returned R2 signed URL from the browser — CORS on the bucket?
-3. The same pair against `https://api.x.ai/v1/images/generations`
-   (1 image, `1k`).
+| Probe | Result |
+|---|---|
+| nano-gpt `POST /images/generations` (Z-Image turbo) | **PASS** — 200, CORS-open; response shape matches the chatsune map (`data[].url` + `storageKey`, `cost` absent for turbo) |
+| nano-gpt R2 signed-URL fetch (bare GET, no auth header) | **PASS** — 200, `image/jpeg`, 321 KB, `createImageBitmap` → 1024×1024 |
+| xAI `POST /images/generations` (`response_format: 'url'`) | **PASS** — 200, CORS-open (`usage.cost_in_usd_ticks` present) |
+| xAI `imgen.x.ai` image fetch | **FAIL** — HTTP 200 but no `Access-Control-Allow-Origin`; the browser cannot read the bytes |
+| xAI `POST` with `response_format: 'b64_json'` | **PASS** — 200, `data[].b64_json` inline (decoded → valid 1024×1024 JPEG) |
 
-Outcomes wire the offerings' default routing expectation: if an endpoint is
-CORS-closed, the path is `cors-proxy` (the existing fallback the user-client
-already supports for chat). If the R2 bucket is CORS-closed, the image bytes
-must come through the proxy as well — the probe tells us before we design the
-fetch path wrongly.
+**Consequence (wired into §5):** both providers run fully `direct` — no CORS
+proxy involvement on the happy path. nano-gpt uses `response_format: 'url'` +
+the R2 fetch; xAI uses `response_format: 'b64_json'` because its image CDN is
+CORS-closed to browsers. The existing `cors-proxy` routing remains available
+per provider row as the general fallback, but nothing in this feature depends
+on it.
 
 ---
 
