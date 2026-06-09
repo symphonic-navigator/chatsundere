@@ -2,10 +2,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TagEditor } from '../artefact/TagEditor.js';
+import { CopyButton } from '../chat/markdown/CopyButton.js';
 import { FormatPicker } from './FormatPicker';
 import { LightboxTextBody } from './LightboxTextBody';
 import { type PreviewFormat, detectFormat, formatToExtension } from './format-detect';
-import { copyText, downloadText } from './lightbox-actions';
+import { copyText, downloadText, downloadUrl } from './lightbox-actions';
 import type { ViewableItem } from './viewable-item';
 
 export interface LightboxProps {
@@ -356,6 +357,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
           {item.provenance ? (
             <p className="lightbox-provenance" aria-label="Source">
               {item.provenance}
+              <CopyButton text={item.provenance} />
             </p>
           ) : null}
           <div className="lightbox-actions">
@@ -379,7 +381,13 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               <button
                 type="button"
                 className="lightbox-btn"
-                onClick={() => downloadText(draft, formatToExtension(item.fileName, format))}
+                onClick={() => {
+                  // Image items carry their bytes behind imageUrl; the text
+                  // draft would download an empty file for them.
+                  if (item.kind === 'image' && item.imageUrl)
+                    downloadUrl(item.imageUrl, item.fileName);
+                  else downloadText(draft, formatToExtension(item.fileName, format));
+                }}
               >
                 Download
               </button>

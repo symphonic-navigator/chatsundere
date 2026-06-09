@@ -73,6 +73,11 @@ export function listOfferings(canonicalId: string): Offering[] {
   return rankOfferings(all.filter((o) => o.canonicalRef === canonicalId));
 }
 
+/** Every curated TTI offering across all registered providers. */
+export function listTtiOfferings(): Offering[] {
+  return listProviders().flatMap((p) => p.offerings.filter((o) => o.serviceKind === 'tti'));
+}
+
 /** Exact lookup for the send path: provider template id + upstream slug. */
 export function getOffering(
   providerTemplateId: string,

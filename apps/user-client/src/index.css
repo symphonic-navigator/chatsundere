@@ -2988,6 +2988,32 @@ h1 {
   }
 }
 
+/* ===== Generated-image thumbnails (ImagePill) ===== */
+.image-pill-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-block: 0.25rem 0.75rem;
+}
+/* 2+ thumbnails → 2-column grid (still comfortable at 380px). */
+.image-pill-grid:has(> :nth-child(2)) {
+  grid-template-columns: 1fr 1fr;
+}
+.image-pill-grid > button {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.image-pill-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-paper) 12%, transparent);
+}
+
 /* ===== Artefact sheet (mirrors .toc-sheet-root / .toc-sheet) ============== */
 
 .artefact-sheet-root {

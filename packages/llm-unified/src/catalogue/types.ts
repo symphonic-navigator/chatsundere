@@ -50,6 +50,17 @@ export interface Offering {
   serviceKind: ServiceKind;
   /** Capability metadata when `serviceKind === 'web'`; undefined for `llm`. */
   web?: WebOfferingMeta;
+  /** Capability metadata when `serviceKind === 'tti'`; undefined otherwise. */
+  tti?: TtiOfferingMeta;
+}
+
+/** Image-generation metadata when `serviceKind === 'tti'`; undefined otherwise. */
+export interface TtiOfferingMeta {
+  groupId: 'xai-imagine' | 'zimage' | 'seedream';
+  /** Whether the upstream accepts adult prompts. All launch models: false. */
+  canDoNsfw: boolean;
+  /** Human-readable model name (TTI offerings have no CanonicalModel). */
+  displayName: string;
 }
 
 const MODES = new Set(['none', 'fixed-on', 'toggle', 'steps']);

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { ImageModelConfig } from '@chatsundere/llm-unified';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
@@ -29,6 +30,13 @@ export interface SettingsRow {
   /** Global expert model — an offering ref "templateId:upstreamSlug"; null = none.
    *  Forwards a single sanitised question via the ask_expert tool. */
   expertModel: string | null;
+  /** Global image-generation models. `ref` = "providerTemplateId:upstreamSlug".
+   *  `primary` drives generate_image; `nsfw` is the NSFW-capable second slot
+   *  (spec 2026-06-09 §6). Both null until the user picks. */
+  imageGeneration: {
+    primary: { ref: string; config: ImageModelConfig } | null;
+    nsfw: { ref: string; config: ImageModelConfig } | null;
+  };
   createdAt: number;
   updatedAt: number;
 }
@@ -199,6 +207,20 @@ export interface ArtefactRow {
   favourite: boolean;
   createdAt: number;
   updatedAt: number;
+  /** kind === 'image' — the original provider bytes, unmodified. */
+  blob?: Blob;
+  /** kind === 'image' — downscaled JPEG for the chat stream + Treasury. */
+  thumbBlob?: Blob;
+  /** kind === 'image' — measured via createImageBitmap after fetch. */
+  width?: number;
+  height?: number;
+  /** origin === 'generated' images — generation provenance (prompt copyable). */
+  genMeta?: {
+    prompt: string;
+    modelRef: string;
+    modelLabel: string;
+    configSnapshot: ImageModelConfig;
+  };
 }
 
 export interface AttachmentRow {
@@ -631,6 +653,21 @@ class ClientDataDb extends Dexie {
             if (typeof p.mcpOverrides !== 'object' || p.mcpOverrides === null) p.mcpOverrides = {};
           });
       });
+
+    // Version 19 — TTI image generation. Settings gain `imageGeneration`
+    // (primary + NSFW model slots, spec 2026-06-09).
+    this.version(19)
+      .stores({ settings: 'id' })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            if (s.imageGeneration === undefined) {
+              s.imageGeneration = { primary: null, nsfw: null };
+            }
+          });
+      });
   }
 }
 
@@ -743,6 +780,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         expertWeb: { search: null, fetch: null, searchTierId: null },
         substituteVisionModel: null,
         expertModel: null,
+        imageGeneration: { primary: null, nsfw: null },
         createdAt: now,
         updatedAt: now,
       });

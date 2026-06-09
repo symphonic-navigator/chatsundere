@@ -7,11 +7,11 @@ afterEach(async () => {
   await _resetClientDataDbForTests();
 });
 
-describe('Dexie v17 expertWeb', () => {
-  it('seeds expertWeb on a fresh settings singleton', async () => {
+describe('Dexie v19 imageGeneration', () => {
+  it('seeds imageGeneration on a fresh settings singleton', async () => {
     const db = await openClientDataDb();
     const s = await db.settings.get(1);
-    expect(s?.expertWeb).toEqual({ search: null, fetch: null, searchTierId: null });
+    expect(s?.imageGeneration).toEqual({ primary: null, nsfw: null });
     expect(db.verno).toBe(19);
   });
 });

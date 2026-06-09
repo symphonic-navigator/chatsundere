@@ -813,6 +813,115 @@ describe('stream-manager.store', () => {
     await store.abortDiscard(myChatId);
   });
 
+  it('offers generate_image when an images context is provided and tool calls supported', async () => {
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-images-on';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    let capturedToolDefs: { name: string }[] = [];
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      toolDefs: { name: string }[];
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      capturedToolDefs = args.toolDefs;
+      void args.streamOnce({}, []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      (() =>
+        new Promise(() => {
+          /* never */
+        })) as never,
+    );
+
+    // Minimal ImageToolContext — always-offered design, even with no slot configured.
+    const images = {
+      chatId: myChatId,
+      personaId,
+      primary: null,
+      nsfwSlot: null,
+      nsfwParamAllowed: false,
+      generate: async () => ({ items: [] }),
+      persistImage: async () => 'a1',
+    };
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      offering: { ...(model as object), profile: { toolCalls: { supported: true } } },
+      images,
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedToolDefs.some((d) => d.name === 'generate_image')).toBe(true);
+    await store.abortDiscard(myChatId);
+  });
+
+  it('does not offer generate_image when no images context is provided', async () => {
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-images-off';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    let capturedToolDefs: { name: string }[] = [];
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      toolDefs: { name: string }[];
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      capturedToolDefs = args.toolDefs;
+      void args.streamOnce({}, []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      (() =>
+        new Promise(() => {
+          /* never */
+        })) as never,
+    );
+
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      offering: { ...(model as object), profile: { toolCalls: { supported: true } } },
+      // no images context
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedToolDefs.some((d) => d.name === 'generate_image')).toBe(false);
+    await store.abortDiscard(myChatId);
+  });
+
   it('gating: knowledge awareness stays empty when tool calls unsupported', async () => {
     // Kept last in the file: the abortAllForPersonaDiscard test above asserts an
     // exact streams.size, so it must not race a lingering handle from here.

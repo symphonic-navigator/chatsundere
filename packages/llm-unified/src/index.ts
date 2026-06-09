@@ -22,6 +22,7 @@ export {
   rankOfferings,
   listOfferings,
   getOffering,
+  listTtiOfferings,
   MODALITY_ORDER,
   providerServiceKinds,
   aggregateServiceKinds,
@@ -76,6 +77,24 @@ export {
 // Catalogue data model (CanonicalModel, Offering, ModelProfile, validation, freedom).
 export * from './catalogue/index.js';
 
+export {
+  defaultConfigFor,
+  isImageModelConfig,
+  maxCountFor,
+  type ImageModelConfig,
+  type SeedreamConfig,
+  type TtiGroupId,
+  type XaiImagineConfig,
+  type ZImageConfig,
+} from './tti/config.js';
+export {
+  generateImages,
+  ImageGenerationError,
+  type GenerateImagesArgs,
+  type GenerateImagesResult,
+  type ImageGenItem,
+  type ImageRequestBase,
+} from './tti/generate-images.js';
 // Register Block-1 built-in providers on first import.
 import { registerBuiltinProviders } from './providers/_register-builtins.js';
 registerBuiltinProviders();

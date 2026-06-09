@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { ImageModelConfig } from '@chatsundere/llm-unified';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ArtefactRow, getClientDataDb } from '../boot/client-data-db.js';
@@ -42,6 +43,68 @@ export async function addGeneratedArtefact(input: AddGeneratedArtefactInput): Pr
     favourite: false,
     createdAt: now,
     updatedAt: now,
+  };
+  await getClientDataDb().artefacts.add(row);
+  return id;
+}
+
+/** Title = the prompt's first five words (renameable later, like every artefact). */
+export function titleFromPrompt(prompt: string): string {
+  const words = prompt.trim().split(/\s+/).slice(0, 5).join(' ');
+  return words.length > 0 ? words : 'Generated image';
+}
+
+function extensionForMime(mime: string): string {
+  return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+}
+
+export interface AddGeneratedImageArtefactInput {
+  chatId: string;
+  personaId: string;
+  prompt: string;
+  modelRef: string;
+  modelLabel: string;
+  configSnapshot: ImageModelConfig;
+  bytes: Blob;
+  mime: string;
+  thumbBlob: Blob;
+  width: number;
+  height: number;
+}
+
+/** Insert one generated image as a kind:'image' artefact and return its id. */
+export async function addGeneratedImageArtefact(
+  input: AddGeneratedImageArtefactInput,
+): Promise<string> {
+  const id = uuidv7();
+  const now = Date.now();
+  const title = titleFromPrompt(input.prompt);
+  const row: ArtefactRow = {
+    id,
+    chatId: input.chatId,
+    personaId: input.personaId,
+    projectId: null,
+    origin: 'generated',
+    kind: 'image',
+    format: 'image',
+    title,
+    fileName: `${slugify(title)}.${extensionForMime(input.mime)}`,
+    mime: input.mime,
+    content: '',
+    tags: [],
+    favourite: false,
+    createdAt: now,
+    updatedAt: now,
+    blob: input.bytes,
+    thumbBlob: input.thumbBlob,
+    width: input.width,
+    height: input.height,
+    genMeta: {
+      prompt: input.prompt,
+      modelRef: input.modelRef,
+      modelLabel: input.modelLabel,
+      configSnapshot: input.configSnapshot,
+    },
   };
   await getClientDataDb().artefacts.add(row);
   return id;

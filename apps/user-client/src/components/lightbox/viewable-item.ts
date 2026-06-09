@@ -41,8 +41,32 @@ export interface ViewableItem {
 }
 
 /** Map a stored artefact to a viewable. Generated artefacts are first-class:
- *  editable, copyable, downloadable, deletable. */
+ *  editable, copyable, downloadable, deletable. Image artefacts view the full
+ *  blob (thumbnail fallback); the object URL created here follows the
+ *  creator-revokes contract of the attachment path — callers that map rows
+ *  ad hoc and never unmount simply let it live for the page's lifetime. */
 export function artefactToViewable(row: ArtefactRow): ViewableItem {
+  if (row.kind === 'image') {
+    return {
+      id: row.id,
+      kind: 'image',
+      fileName: row.fileName,
+      title: row.title,
+      mime: row.mime,
+      imageUrl: URL.createObjectURL(row.blob ?? row.thumbBlob ?? new Blob()),
+      tags: row.tags,
+      provenance: row.genMeta ? `${row.genMeta.prompt} — via ${row.genMeta.modelLabel}` : undefined,
+      caps: {
+        rename: true,
+        remove: false,
+        copy: false,
+        download: true,
+        delete: true,
+        editSource: false,
+        editTags: true,
+      },
+    };
+  }
   return {
     id: row.id,
     kind: 'text',

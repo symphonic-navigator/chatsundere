@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
 import { ArtefactPill } from './ArtefactPill.js';
 import { ExpertPill } from './ExpertPill.js';
+import { ImagePill } from './ImagePill.js';
 import { VisionPill } from './VisionPill.js';
 
 const ICON: Record<PillRow['kind'], string> = {
@@ -77,6 +78,13 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
     (row.payload as { name?: string } | undefined)?.name === 'describe_image'
   ) {
     return <VisionPill row={row} />;
+  }
+
+  if (
+    row.kind === 'tool-call' &&
+    (row.payload as { name?: string } | undefined)?.name === 'generate_image'
+  ) {
+    return <ImagePill row={row} />;
   }
 
   if (row.positionHint === 'above-text') {

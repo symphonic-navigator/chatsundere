@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it, vi } from 'vitest';
-import { copyText, downloadText } from '../../src/components/lightbox/lightbox-actions';
+import {
+  copyText,
+  downloadText,
+  downloadUrl,
+} from '../../src/components/lightbox/lightbox-actions';
 
 describe('copyText', () => {
   it('writes the text to the clipboard', async () => {
@@ -34,5 +38,30 @@ describe('downloadText', () => {
     expect(revokeUrl).toHaveBeenCalledWith('blob:x');
     createEl.mockRestore();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('downloadUrl', () => {
+  it('clicks an anchor at the existing URL without revoking it', () => {
+    const click = vi.fn();
+    const createEl = vi.spyOn(document, 'createElement');
+    const revokeUrl = vi.spyOn(URL, 'revokeObjectURL');
+    createEl.mockImplementation((tag: string) => {
+      const el = Object.assign(document.createElementNS('http://www.w3.org/1999/xhtml', tag), {
+        click,
+      });
+      return el as HTMLElement;
+    });
+
+    downloadUrl('blob:existing', 'a-fox.jpg');
+
+    const anchor = createEl.mock.results[0]?.value as HTMLAnchorElement;
+    expect(anchor.getAttribute('href')).toBe('blob:existing');
+    expect(anchor.getAttribute('download')).toBe('a-fox.jpg');
+    expect(click).toHaveBeenCalled();
+    // The object URL is owned by whoever created it — downloadUrl must not revoke.
+    expect(revokeUrl).not.toHaveBeenCalled();
+    createEl.mockRestore();
+    revokeUrl.mockRestore();
   });
 });

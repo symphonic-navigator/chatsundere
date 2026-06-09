@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { registerAdapter } from '../adapter-registry.js';
 import { xaiAdapter } from '../adapters/xai-openai.js';
-import type { Offering } from '../catalogue/types.js';
+import type { Offering, TtiOfferingMeta } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
 import { apiKeyField } from './_helpers.js';
+
+const TTI_META: TtiOfferingMeta = {
+  groupId: 'xai-imagine',
+  canDoNsfw: false,
+  displayName: 'Grok Imagine',
+};
 
 const offerings: Offering[] = [
   {
@@ -33,6 +39,25 @@ const offerings: Offering[] = [
     source: 'curated',
     confidence: 'verified', // run-xai-suite.ts: core 44/44 + vision 4/4, 0 fail (2026-06-02)
     serviceKind: 'llm',
+  },
+  {
+    canonicalRef: null,
+    providerId: 'xai',
+    upstreamSlug: 'grok-imagine-image',
+    adapter: { kind: 'generic' }, // image calls bypass chat adapters entirely
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    context: { recommended: 0, max: 0 },
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified', // live CORS + generation probes with Chris, 2026-06-09 (spec §10)
+    serviceKind: 'tti',
+    tti: TTI_META,
   },
 ];
 

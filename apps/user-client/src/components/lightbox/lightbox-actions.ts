@@ -14,3 +14,12 @@ export function downloadText(text: string, fileName: string): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** Download an already-materialised object URL (image items) under the given
+ *  filename. The URL is owned by whoever created it, so it is NOT revoked. */
+export function downloadUrl(url: string, fileName: string): void {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+}

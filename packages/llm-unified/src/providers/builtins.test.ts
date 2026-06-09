@@ -36,8 +36,8 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 7 Claude + 4 web = 20.
-      expect(p.offerings).toHaveLength(20);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 7 Claude + 4 web + 2 tti = 22.
+      expect(p.offerings).toHaveLength(22);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -150,17 +150,22 @@ describe('built-in providers', () => {
     }
   });
 
-  it('registers xai with a single verified grok-4.3 offering', () => {
+  it('registers xai with grok-4.3 (llm) and grok-imagine-image (tti)', () => {
     const p = getProvider('xai');
     expect(p?.corsHint).toBe('requires-proxy');
     expect(p?.capabilities).toContain('vision');
-    expect(p?.offerings).toHaveLength(1);
-    const o = p?.offerings[0];
-    expect(o?.canonicalRef).toBe('grok-4.3');
-    expect(o?.context).toEqual({ recommended: 200_000, max: 1_000_000 });
-    expect(o?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
-    expect(o?.freedomOrientedDeployment).toBe(true);
-    expect(o?.confidence).toBe('verified');
+    expect(p?.offerings).toHaveLength(2);
+    const llm = p?.offerings.find((o) => o.serviceKind === 'llm');
+    expect(llm?.canonicalRef).toBe('grok-4.3');
+    expect(llm?.context).toEqual({ recommended: 200_000, max: 1_000_000 });
+    expect(llm?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
+    expect(llm?.freedomOrientedDeployment).toBe(true);
+    expect(llm?.confidence).toBe('verified');
+    const tti = p?.offerings.find((o) => o.serviceKind === 'tti');
+    expect(tti?.upstreamSlug).toBe('grok-imagine-image');
+    expect(tti?.tti?.groupId).toBe('xai-imagine');
+    expect(tti?.tti?.canDoNsfw).toBe(false);
+    expect(tti?.tti?.displayName).toBe('Grok Imagine');
   });
 
   it('nano-gpt has 3 web search offerings + 1 fetch offering with traits/tiers', () => {

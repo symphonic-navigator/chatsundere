@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MasterKey } from '@chatsundere/crypto';
-import { getCanonical, getOffering, getProvider, offeringToTarget } from '@chatsundere/llm-unified';
+import {
+  generateImages,
+  getCanonical,
+  getOffering,
+  getProvider,
+  isImageModelConfig,
+  offeringToTarget,
+} from '@chatsundere/llm-unified';
 import type {
+  ImageModelConfig,
+  ImageRequestBase,
   Offering,
   OneShotArgs,
   ProviderConfig,
@@ -16,12 +25,14 @@ import {
   type MessageRow,
   type PersonaRow,
   type PillRow,
+  type SettingsRow,
   getClientDataDb,
 } from '../boot/client-data-db.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
 import { buildLoreContext } from '../knowledge/lore-context.js';
 import { KNOWLEDGE_LORE_OPTS } from '../knowledge/lore.js';
+import { thumbnailFromBlob } from '../lib/image-thumbnail.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { type ResolvedExpertWeb, resolveExpertWeb } from '../lib/resolve-expert-web.js';
 import { openSecret } from '../lib/secrets.js';
@@ -33,6 +44,12 @@ import type { McpToolContext } from '../mcp/mcp-tools.js';
 import { useMcpApprovalStore } from '../state/mcp-approval.store.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import type { ExpertBase } from '../tools/ask-expert.js';
+import {
+  type ImageGenerationSlot,
+  type ImageToolContext,
+  computeNsfwParamAllowed,
+} from '../tools/generate-image.js';
+import { addGeneratedImageArtefact } from './artefacts.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // lastCompanionText — lorebook companion-scan helper
@@ -91,6 +108,7 @@ interface PersonaContext {
   expertReasoning: ReasoningIntent | null;
   expertWeb: ResolvedExpertWeb | null;
   mcp: McpToolContext | null;
+  images: ImageToolContext;
 }
 
 /**
@@ -153,6 +171,15 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
       })
     : null;
 
+  const images = await resolveImageGeneration(
+    settings,
+    persona,
+    chatId,
+    mk,
+    corsProxyUrl,
+    corsProxyKey,
+  );
+
   const mcpServers = await db.mcpServers.toArray();
   const mcp = buildMcpContext({
     servers: mcpServers,
@@ -186,6 +213,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     expertReasoning: expert?.reasoning ?? null,
     expertWeb: expertWeb ?? null,
     mcp,
+    images,
   };
 }
 
@@ -247,6 +275,129 @@ async function resolveSubstituteVision(
     corsProxyUrl,
     corsProxyKey,
     target: offeringToTarget(offering),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resolveImageGeneration — per-send context for the generate_image tool
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ResolvedImageSlot {
+  slot: ImageGenerationSlot;
+  base: ImageRequestBase;
+}
+
+/** Resolve one stored settings slot into a tool slot + request base. Mirrors
+ *  resolveSubstituteVision: ref → provider def + offering → enabled row → key. */
+async function resolveImageSlot(
+  stored: { ref: string; config: ImageModelConfig } | null,
+  mk: MasterKey,
+  corsProxyUrl: string | null,
+  corsProxyKey: string | null,
+): Promise<ResolvedImageSlot | null> {
+  if (!stored) return null;
+  const idx = stored.ref.indexOf(':');
+  if (idx < 0) return null;
+  const templateId = stored.ref.slice(0, idx);
+  const slug = stored.ref.slice(idx + 1);
+
+  const providerDef = getProvider(templateId);
+  const offering = getOffering(templateId, slug);
+  if (!providerDef || !offering || offering.serviceKind !== 'tti' || !offering.tti) return null;
+  if (!isImageModelConfig(stored.config)) return null;
+
+  const db = getClientDataDb();
+  const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
+    (p) => p.enabled,
+  );
+  if (!providerRow) return null;
+
+  let apiKey: string;
+  try {
+    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+  } catch {
+    console.warn('resolveImageSlot: failed to decrypt api-key — slot unavailable');
+    return null;
+  }
+
+  return {
+    slot: {
+      ref: stored.ref,
+      modelLabel: offering.tti.displayName,
+      canDoNsfw: offering.tti.canDoNsfw,
+      config: stored.config,
+    },
+    base: {
+      providerConfig: {
+        baseUrl: providerDef.baseUrl,
+        routing:
+          providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+      },
+      apiKey,
+      corsProxyUrl,
+      corsProxyKey,
+    },
+  };
+}
+
+/** Build the per-send ImageToolContext. ALWAYS returns a context (the tool is
+ *  offered even unconfigured — first-run discovery); slots null when unresolvable. */
+async function resolveImageGeneration(
+  settings: SettingsRow | undefined,
+  persona: PersonaRow,
+  chatId: string,
+  mk: MasterKey,
+  corsProxyUrl: string | null,
+  corsProxyKey: string | null,
+): Promise<ImageToolContext> {
+  const primary = await resolveImageSlot(
+    settings?.imageGeneration?.primary ?? null,
+    mk,
+    corsProxyUrl,
+    corsProxyKey,
+  );
+  const nsfw = await resolveImageSlot(
+    settings?.imageGeneration?.nsfw ?? null,
+    mk,
+    corsProxyUrl,
+    corsProxyKey,
+  );
+
+  const baseByRef = new Map<string, ImageRequestBase>();
+  if (primary) baseByRef.set(primary.slot.ref, primary.base);
+  if (nsfw) baseByRef.set(nsfw.slot.ref, nsfw.base);
+
+  return {
+    chatId,
+    personaId: persona.id,
+    primary: primary?.slot ?? null,
+    nsfwSlot: nsfw?.slot ?? null,
+    nsfwParamAllowed: computeNsfwParamAllowed(
+      persona.adultPersona,
+      settings?.adultMode ?? 'sfw',
+      Boolean(nsfw) || Boolean(primary?.slot.canDoNsfw),
+    ),
+    generate: (slot, prompt, count, signal) => {
+      const base = baseByRef.get(slot.ref);
+      if (!base) return Promise.reject(new Error('image slot base missing'));
+      return generateImages({ ...base, config: slot.config, prompt, count, signal });
+    },
+    persistImage: async (item, meta) => {
+      const { thumbBlob, width, height } = await thumbnailFromBlob(item.bytes);
+      return addGeneratedImageArtefact({
+        chatId,
+        personaId: persona.id,
+        prompt: meta.prompt,
+        modelRef: meta.slot.ref,
+        modelLabel: meta.slot.modelLabel,
+        configSnapshot: meta.slot.config,
+        bytes: item.bytes,
+        mime: item.mime,
+        thumbBlob,
+        width,
+        height,
+      });
+    },
   };
 }
 
@@ -441,6 +592,7 @@ export function useSendMessage() {
         expertReasoning: ctx.expertReasoning ?? undefined,
         expertWeb: ctx.expertWeb ?? null,
         mcp: ctx.mcp ?? null,
+        images: ctx.images,
       });
 
       return chatId;
@@ -553,6 +705,7 @@ export function useRegenerate() {
         expertReasoning: ctx.expertReasoning ?? undefined,
         expertWeb: ctx.expertWeb ?? null,
         mcp: ctx.mcp ?? null,
+        images: ctx.images,
       });
     },
 

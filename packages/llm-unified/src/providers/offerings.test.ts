@@ -15,8 +15,8 @@ describe('provider offerings', () => {
     for (const p of PROVIDERS) {
       expect(p.offerings.length).toBeGreaterThan(0);
       for (const o of p.offerings) {
-        // Web offerings legitimately have no canonical model reference.
-        if (o.serviceKind === 'web') continue;
+        // Web and TTI offerings legitimately have no canonical model reference.
+        if (o.serviceKind === 'web' || o.serviceKind === 'tti') continue;
         expect(o.providerId).toBe(p.id);
         const canonical = o.canonicalRef ? getCanonical(o.canonicalRef) : undefined;
         expect(canonical).toBeDefined();
@@ -43,10 +43,16 @@ describe('provider offerings', () => {
     ]) {
       expect(o.trust.tee).toBe(false);
       if (o.confidence === 'verified') {
-        expect(o.adapter).toEqual({
-          kind: 'catalogue',
-          adapterId: `${o.providerId}:${o.upstreamSlug}`,
-        });
+        // TTI offerings are verified but use the generic adapter (image calls
+        // bypass the chat-adapter pipeline entirely).
+        if (o.serviceKind === 'tti') {
+          expect(o.adapter).toEqual({ kind: 'generic' });
+        } else {
+          expect(o.adapter).toEqual({
+            kind: 'catalogue',
+            adapterId: `${o.providerId}:${o.upstreamSlug}`,
+          });
+        }
       } else {
         expect(o.adapter).toEqual({ kind: 'generic' });
       }

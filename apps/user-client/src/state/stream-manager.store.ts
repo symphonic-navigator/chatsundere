@@ -92,6 +92,9 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   /** Per-send MCP tool context (active servers + key opener + approval hook),
    *  resolved in the send path which holds the MasterKey. null/absent = no MCP tools. */
   mcp?: import('../mcp/mcp-tools.js').McpToolContext | null;
+  /** Per-send image-generation context, resolved in the send path which holds
+   *  the MasterKey. null/absent = no generate_image tool. */
+  images?: import('../tools/generate-image.js').ImageToolContext | null;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -499,7 +502,7 @@ async function runIntoDraft(
       }
     : null;
   const activeTools = toolsActive
-    ? resolveActiveTools(integrationCtx, knowledge, expert, args.mcp ?? null)
+    ? resolveActiveTools(integrationCtx, knowledge, expert, args.mcp ?? null, args.images ?? null)
     : [];
   const activeToolDefs = toolDefs(activeTools);
   const toolsInstruction = systemPromptSegment(activeTools) ?? '';

@@ -25,6 +25,7 @@ import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { ProviderSheet } from '../../components/ProviderSheet.js';
 import { SaveBar } from '../../components/SaveBar.js';
 import { WebInterfacingSection } from '../../components/WebInterfacingSection.js';
+import { ImageGenerationSection } from '../../components/image-gen/ImageGenerationSection.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
@@ -480,6 +481,10 @@ export function Settings(): JSX.Element {
 
       <AccordionCard icon="◫" label="Image understanding" meta="For models without vision">
         <SubstituteVisionSetting />
+      </AccordionCard>
+
+      <AccordionCard icon="✦" label="Image generation" meta="Models for generated images">
+        <ImageGenerationSection />
       </AccordionCard>
 
       <AccordionCard icon="↑" label="Expert uplink" meta="Ask a stronger model for hard questions">

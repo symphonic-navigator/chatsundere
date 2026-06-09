@@ -3,7 +3,7 @@
 import { registerAdapter } from '../adapter-registry.js';
 import { claudeAdapter } from '../adapters/anthropic-claude.js';
 import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
-import type { Offering, ReasoningControl } from '../catalogue/types.js';
+import type { Offering, ReasoningControl, TtiOfferingMeta } from '../catalogue/types.js';
 import { registerWebAdapter } from '../integrations/web-adapter-registry.js';
 import type { SearchTier, WebOfferingMeta } from '../integrations/web-interfacing.js';
 import { registerProvider } from '../registry.js';
@@ -200,6 +200,38 @@ function webSearchOffering(slug: string, meta: WebOfferingMeta): Offering {
   };
 }
 
+function ttiOffering(slug: string, tti: TtiOfferingMeta): Offering {
+  return {
+    canonicalRef: null,
+    providerId: 'nano-gpt',
+    upstreamSlug: slug,
+    adapter: { kind: 'generic' }, // image calls bypass chat adapters entirely
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    // Not a chat model — the context-window concept does not apply.
+    context: { recommended: 0, max: 0 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified', // live CORS + generation probes with Chris, 2026-06-09 (spec §10)
+    serviceKind: 'tti',
+    tti,
+  };
+}
+
+const ttiOfferings: Offering[] = [
+  ttiOffering('z-image-turbo', { groupId: 'zimage', canDoNsfw: false, displayName: 'Z-Image' }),
+  ttiOffering('seedream-v4.5', {
+    groupId: 'seedream',
+    canDoNsfw: false,
+    displayName: 'Seedream 4.5',
+  }),
+];
+
 const webOfferings: Offering[] = [
   webSearchOffering('web-linkup', {
     canSearch: true,
@@ -263,6 +295,7 @@ const offerings: Offering[] = [
   ),
   ...CLAUDE_SPECS.map(claudeOffering),
   ...webOfferings,
+  ...ttiOfferings,
 ];
 
 export const nanoGpt: ProviderDefinition = {
@@ -285,6 +318,7 @@ export function registerNanoGpt(): void {
   for (const o of offerings) {
     if (o.adapter.kind !== 'catalogue') continue;
     if (o.serviceKind === 'web') continue;
+    if (o.serviceKind === 'tti') continue;
     if (o.canonicalRef?.startsWith('claude-')) {
       registerAdapter(
         o.adapter.adapterId,
