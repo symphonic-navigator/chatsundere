@@ -16,7 +16,27 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-10 (evening) — **Parallel tool-call pills fixed**
+**Last updated:** 2026-06-10 (late evening) — **GPT Image 2 curated on
+nano-gpt** (squash `156f3d1` on master, **NOT pushed**; **NOT yet
+device-verified**). Fourth TTI offering: `GptImage2Config` with 8 aspects
+(incl. **21:9**) × 1k/2k × low/medium/high quality (default 1:1/1k/medium,
+Chris's call). Key empirical findings (18 live probes + end-to-end
+`generateImages()` run, all in [[models/gpt-image-2]]): `quality` **passes
+through** nano-gpt to the upstream and bills per tier (low $0.018/~24 s,
+medium $0.066/~71 s, high $0.156/~3.5 min at 1K → group POST timeout 600 s);
+sizes return **pixel-exact iff both dimensions are /32** (off-grid snaps up
+ratio-preserving) — the hardcoded table in `gpt-image-2-resolutions.ts` was
+verified cell-by-cell. Not a Larissa path (no auth/sync/proxy/crypto); not a
+Laura path (one more picker entry + a third OptionRow in the established
+config-view pattern). Gates: llm-unified `bun test` 326/0, `pnpm typecheck
+--force` 14/14, `pnpm run build` 9/9, biome clean (user-client vitest 8 fail =
+unchanged pre-existing baseline trio, verified against clean master).
+**Device test (restart `pnpm dev` first — packages/* changed):** pick GPT
+Image 2 in My Settings → Image generation, generate at 21:9/1k/medium, then
+one low and one high run to feel the latency spread. **Next:** unchanged —
+the design-language session per the parked round-1 brainstorm.
+
+**Earlier 2026-06-10 (evening) — Parallel tool-call pills fixed**
 (client-only bugfix on master, **NOT pushed**). Device-found during Chris's
 Fable 5 test: a three-tool parallel turn (calculate_js + generate_image +
 web_search) executed **all three** tools (console-proven: all requests fired,
