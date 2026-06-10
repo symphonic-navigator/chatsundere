@@ -16,7 +16,31 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-09 (late) — **TTI image generation LANDED** (squashed
+**Last updated:** 2026-06-10 — **TTI device findings resolved** (commit
+`3607093` on master, **NOT pushed**). Finding 1 (pill in the inline flow) fixed
+with a block-level `.image-pill-block` wrapper at the Pill dispatch site.
+Finding 2 (vanishing images, reload heals) **root-caused via live console
+probes with Chris**: object URLs were created in `useMemo` during render, so
+StrictMode's mount effect cycle (effect → cleanup → effect) revoked them on any
+remount with a warm artefact query cache — entrance hall → straight back
+sufficed; the probe log showed CREATE → immediate REVOKE from the ImagePill
+cleanup → `ERR_FILE_NOT_FOUND` at React's `commitMount`. Fixed by creating the
+URLs **inside the effect that owns their revocation** (the AttachmentThumb
+pattern — the working counterpart found by pattern comparison; PersonaAvatar
+verified already correct), plus a stable `EMPTY_ARTEFACTS` fallback (a
+per-render `= []` default would have looped the new effect — caught red-handed
+as a vitest hang). Finding 3 (Z-Image "not working") was a **false alarm** —
+odd LLM behaviour, struck by Chris. Two new tests pin the StrictMode-remount
+path and the block wrapper. Not a Larissa/Laura path (client-only bugfix +
+agreed polish, no flow change). Gates: `pnpm typecheck --force` **14/14**;
+user-client vitest **1265 pass / 8 fail** (the unchanged baseline trio);
+`pnpm run build` **9/9**; biome clean on changed files (index.css picker drift
+pre-existing). **Still open:** device re-test of the two fixes (images must
+survive entrance-hall-and-back; pill on its own line) + the
+moderation-provocation step (§13.6) → Chris's word → Liz pushes the master
+backlog; then the design-language session per the parked round-1 brainstorm.
+
+**Earlier 2026-06-09 (late) — TTI image generation LANDED** (squashed
 onto master `d80ad73`, **NOT pushed**; **NOT yet device-verified**). Companions
 can paint: `generate_image` is **always offered** (unconfigured call → a
 constructive pointer to My Settings → Image generation = the in-chat discovery
