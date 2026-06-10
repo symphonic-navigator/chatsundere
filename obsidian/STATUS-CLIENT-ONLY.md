@@ -17,8 +17,10 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-10 (late evening) — **GPT Image 2 curated on
-nano-gpt** (squash `156f3d1` on master, **NOT pushed**; **NOT yet
-device-verified**). Fourth TTI offering: `GptImage2Config` with 8 aspects
+nano-gpt** (squash `156f3d1` on master, **NOT pushed**; **DEVICE-CONFIRMED
+by Chris 2026-06-10**: full tool-loop runs with Fable 5 as host model fired
+`generate_image` and rendered both 16:9 and 21:9 results — `visuals/fable_1.png`
+and `fable_2.png`). Fourth TTI offering: `GptImage2Config` with 8 aspects
 (incl. **21:9**) × 1k/2k × low/medium/high quality (default 1:1/1k/medium,
 Chris's call). Key empirical findings (18 live probes + end-to-end
 `generateImages()` run, all in [[models/gpt-image-2]]): `quality` **passes
