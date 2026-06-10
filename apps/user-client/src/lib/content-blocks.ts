@@ -46,13 +46,15 @@ export function coalesceAdjacent(blocks: ContentBlock[]): ContentBlock[] {
  * Walk the block array once and partition into ordered runs of same-type
  * blocks. The renderer dispatches one component per group: a
  * `<span class="msg-text">` for `'text'`, a `<ReasoningPill>` for
- * `'reasoning'`, a `<Pill>` for `'pill'`.
+ * `'reasoning'`, a `<Pill>` for `'pill'`. Pill blocks are never grouped —
+ * the renderer draws one `<Pill>` per group, so grouping adjacent pills
+ * (a parallel tool-call turn) would swallow every pill after the first.
  */
 export function groupAdjacent(blocks: ContentBlock[]): BlockGroup[] {
   const out: BlockGroup[] = [];
   for (const b of blocks) {
     const last = out[out.length - 1];
-    if (last && last.type === b.type) {
+    if (last && last.type === b.type && b.type !== 'pill') {
       last.blocks.push(b);
     } else {
       out.push({ type: b.type, blocks: [b] });

@@ -257,6 +257,51 @@ describe('MessageBlock', () => {
     expect(text.indexOf('web_search')).toBeLessThan(text.indexOf('last'));
   });
 
+  it('renders every pill of a parallel tool-call turn (adjacent pill blocks)', () => {
+    const mkPill = (id: string, name: string): PillRow => ({
+      id,
+      messageId: 'm-p',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: { name },
+      createdAt: 1,
+    });
+    const msg = personaMsg({
+      contentBlocks: [
+        { type: 'pill', pillId: 'p1' },
+        { type: 'pill', pillId: 'p2' },
+        { type: 'pill', pillId: 'p3' },
+        { type: 'text', text: 'all three done' },
+      ],
+    });
+    const { container } = render(
+      <MessageBlock
+        message={msg}
+        pills={
+          new Map([
+            ['p1', mkPill('p1', 'calculate_js')],
+            ['p2', mkPill('p2', 'generate_image')],
+            ['p3', mkPill('p3', 'web_search')],
+          ])
+        }
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+      />,
+      { wrapper: qcWrapper },
+    );
+    const text = container.querySelector('.msg-text')?.textContent ?? '';
+    expect(text).toContain('calculate_js');
+    // generate_image renders as an ImagePill, whose label is "Painted · <model>".
+    expect(text).toContain('Painted');
+    expect(text).toContain('web_search');
+  });
+
   it('expanded state shows timestamp and controls', () => {
     const { container } = render(
       <MessageBlock

@@ -108,4 +108,20 @@ describe('groupAdjacent', () => {
   it('returns empty array for empty input', () => {
     expect(groupAdjacent([])).toEqual([]);
   });
+
+  it('keeps adjacent pill blocks as separate groups (pillId identity is load-bearing)', () => {
+    // A parallel tool-call turn produces several pill blocks with no text in
+    // between; the renderer draws group.blocks[0] only, so grouping them would
+    // swallow every pill after the first (the Fable parallel-tools bug).
+    const blocks: ContentBlock[] = [
+      { type: 'pill', pillId: 'p-1' },
+      { type: 'pill', pillId: 'p-2' },
+      { type: 'pill', pillId: 'p-3' },
+    ];
+    expect(groupAdjacent(blocks)).toEqual([
+      { type: 'pill', blocks: [{ type: 'pill', pillId: 'p-1' }] },
+      { type: 'pill', blocks: [{ type: 'pill', pillId: 'p-2' }] },
+      { type: 'pill', blocks: [{ type: 'pill', pillId: 'p-3' }] },
+    ]);
+  });
 });

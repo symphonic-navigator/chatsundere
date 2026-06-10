@@ -16,7 +16,34 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-10 (later) — **Claude Fable 5 curated on nano-gpt**
+**Last updated:** 2026-06-10 (evening) — **Parallel tool-call pills fixed**
+(client-only bugfix on master, **NOT pushed**). Device-found during Chris's
+Fable 5 test: a three-tool parallel turn (calculate_js + generate_image +
+web_search) executed **all three** tools (console-proven: all requests fired,
+results woven into the answer) but rendered **only the first pill**. Probe
+chain: live SSE probe first (the wire is clean — one delta, three complete
+tool calls with distinct index/ids; adapter, engine, tool-loop and persistence
+all correct), then down the render path. Root cause: `groupAdjacent`
+(content-blocks.ts) grouped **adjacent pill blocks** into one group while the
+renderer (MessageBlock) draws only `group.blocks[0]` per pill group — its
+"pills never coalesce" comment described `coalesceAdjacent` (which has the
+pill exception), not `groupAdjacent` (which didn't). A pure tool-call turn
+has no text between pills → pills 2+3 swallowed. Latent since Phase 4; first
+surfaced by the first real parallel-tool turn (also covered the latent
+vision-pill + lore-pill adjacency). Fix: pills never group — one group per
+pill block. TDD: red component test reproduced the swallow exactly, green
+after; +2 tests (groupAdjacent identity + MessageBlock three-pill render;
+note generate_image renders as ImagePill labelled "Painted · <model>").
+Note for the books: the model's in-chat "confession" that it had only
+confabulated the calls was itself confabulated — trust probes, not the
+model's self-reports. Gates: `pnpm typecheck --force` **14/14**; user-client
+vitest **1267 pass / 8 fail** (unchanged baseline trio); `pnpm run build`
+**9/9**; biome clean. Not a Larissa/Laura path (render bugfix, no flow
+change). **Device re-test:** repeat the three-tool prompt → three pills
+(calculate, Painted-ImagePill, web_search) live AND after reload. **Next:**
+unchanged — the design-language session.
+
+**Earlier 2026-06-10 (later) — Claude Fable 5 curated on nano-gpt**
 (mode-2 `/curate`, inline, squashed on master, **NOT pushed**). Eighth member of
 the `claude` family, but mechanically its own animal: **no thinking sibling
 slug** — reasoning is a body flag `reasoning: { enabled, effort }` with
