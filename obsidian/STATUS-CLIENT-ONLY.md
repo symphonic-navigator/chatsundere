@@ -35,10 +35,10 @@ path and the block wrapper. Not a Larissa/Laura path (client-only bugfix +
 agreed polish, no flow change). Gates: `pnpm typecheck --force` **14/14**;
 user-client vitest **1265 pass / 8 fail** (the unchanged baseline trio);
 `pnpm run build` **9/9**; biome clean on changed files (index.css picker drift
-pre-existing). **Still open:** device re-test of the two fixes (images must
-survive entrance-hall-and-back; pill on its own line) + the
-moderation-provocation step (§13.6) → Chris's word → Liz pushes the master
-backlog; then the design-language session per the parked round-1 brainstorm.
+pre-existing). **Both fixes DEVICE-CONFIRMED by Chris 2026-06-10** (images
+survive entrance-hall-and-back; pill on its own line) — **Chris is pushing the
+master backlog himself**. **Still open:** the moderation-provocation step
+(§13.6); then the design-language session per the parked round-1 brainstorm.
 
 **Earlier 2026-06-09 (late) — TTI image generation LANDED** (squashed
 onto master `d80ad73`, **NOT pushed**; **NOT yet device-verified**). Companions
