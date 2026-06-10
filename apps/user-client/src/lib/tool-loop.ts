@@ -74,6 +74,9 @@ export async function runToolLoop(deps: ToolLoopDeps): Promise<StreamEngineResul
     const toolMessages: WireMessage[] = [];
     for (const pill of toolPills) {
       const payload = pill.payload as ToolCallPayload;
+      console.info(
+        `[tool-call] ${payload.name} · args ${payload.argumentsJson.length} chars · ${payload.argumentsJson.slice(0, 100)}`,
+      );
       pill.status = 'pending';
       deps.onPillUpdate?.(pill);
 
