@@ -49,6 +49,14 @@ Claude models:
   `claude-sonnet-4-5-20250929`, `claude-opus-4-5-20251101`) and `anthropic/`-
   prefixed (`anthropic/claude-{sonnet-4.6,opus-4.6,opus-4.7,opus-4.8}`). See
   [[../models/claude-4]].
+- **Claude Fable 5 is the slug-swap exception** (probed 2026-06-10): NO thinking
+  sibling exists — reasoning is a **body flag** `reasoning: { enabled, effort }`
+  with **mandatory effort** when on (`{ enabled: true }` alone is a silent
+  no-op). Steps control (off/low/medium/high), adaptive thinking,
+  `reasoning_tokens` always 0 (rolled into `completion_tokens`). Cache passes
+  through identically (turn-2 cached ≈ full prefix). The floating
+  `anthropic/claude-fable-latest` alias is deliberately not curated. See
+  [[../models/claude-fable-5]].
 
 ## ChatGPT (OpenAI) — Phase B finding (recorded ahead)
 

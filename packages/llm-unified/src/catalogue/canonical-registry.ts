@@ -200,6 +200,15 @@ export const CANONICALS: CanonicalModel[] = [
       'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
   },
   {
+    id: 'claude-fable-5',
+    displayName: 'Claude Fable 5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. SM-Bench run 2adbdf74 (2026-06-09): NSFW (System Prompt) 98.62% clears the canary, but Overfit 34.43%, EQ Boundaries 53.65% and Adversarial (Hostile Logic) 79.51% all miss the 90% bar. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
     id: 'grok-4.3',
     displayName: 'Grok 4.3',
     family: 'grok',

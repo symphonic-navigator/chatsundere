@@ -36,8 +36,8 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 7 Claude + 4 web + 2 tti = 22.
-      expect(p.offerings).toHaveLength(22);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 8 Claude + 4 web + 2 tti = 23.
+      expect(p.offerings).toHaveLength(23);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -62,11 +62,12 @@ describe('built-in providers', () => {
     }
   });
 
-  it('registers the seven Claude offerings on nano-gpt with the cache adapter and CENSORED freedom', () => {
+  it('registers the eight Claude offerings on nano-gpt with the cache adapter and CENSORED freedom', () => {
     const p = getProvider('nano-gpt');
     expect(p).toBeDefined();
     const claude = p?.offerings.filter((o) => o.canonicalRef?.startsWith('claude-')) ?? [];
     expect(claude.map((o) => o.canonicalRef).sort()).toEqual([
+      'claude-fable-5',
       'claude-haiku-4.5',
       'claude-opus-4.5',
       'claude-opus-4.6',

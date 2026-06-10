@@ -57,3 +57,55 @@ export function claudeAdapter(baseSlug: string, opts: ClaudeAdapterOptions): Mod
     },
   };
 }
+
+export interface ClaudeEffortAdapterOptions {
+  vision: boolean;
+  /** The offering's reasoning control — a `steps` union for the Fable family. */
+  reasoning: ReasoningControl;
+  /** Cache-breakpoint tuning. Defaults: tail 5m, anchor grid 8192 tokens. */
+  cache?: CacheOptions;
+}
+
+/**
+ * Effort-based Claude (the Fable family) via nano-gpt. Unlike the Claude 4
+ * family there is NO thinking sibling slug — reasoning is steered by a body
+ * flag, `reasoning: { enabled, effort }`. The effort value is MANDATORY when
+ * reasoning is on: `{ enabled: true }` alone is a silent no-op (probed live
+ * 2026-06-10 — zero reasoning tokens, plain completion back), so the adapter
+ * falls back to `medium` if the intent carries no effort. Thinking is also
+ * adaptive — on trivial prompts Fable may skip reasoning even at high effort,
+ * and `usage.reasoning_tokens` stays 0 with the trace rolled into
+ * `completion_tokens`. SSE parsing is identical to the rest of the nano-gpt
+ * surface (thinking on the `reasoning` delta channel), so it is reused from
+ * the slug-swap adapter, as is the Anthropic `cache_control` injection.
+ */
+export function claudeEffortAdapter(slug: string, opts: ClaudeEffortAdapterOptions): ModelAdapter {
+  const base = nanoGptSlugSwapAdapter(slug, opts.vision, opts.reasoning, slug);
+
+  return {
+    profile: base.profile,
+
+    buildRequest(req: CanonicalRequest): WireRequest {
+      const body: Record<string, unknown> = {
+        model: slug,
+        messages: applyCacheControl(req.messages, opts.cache),
+        stream: true,
+        stream_options: { include_usage: true },
+        reasoning: req.reasoning.enabled
+          ? { enabled: true, effort: req.reasoning.effort ?? 'medium' }
+          : { enabled: false },
+      };
+      if (req.tools?.length) {
+        body.tools = req.tools.map((t) => ({
+          type: 'function',
+          function: { name: t.name, description: t.description, parameters: t.parameters },
+        }));
+      }
+      return { model: slug, body };
+    },
+
+    parseChunk(raw: unknown, state: ParseState): { events: StreamChunk[]; state: ParseState } {
+      return base.parseChunk(raw, state);
+    },
+  };
+}

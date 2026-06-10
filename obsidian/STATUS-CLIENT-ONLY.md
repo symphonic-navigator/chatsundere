@@ -16,7 +16,30 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-10 — **TTI device findings resolved** (commit
+**Last updated:** 2026-06-10 (later) — **Claude Fable 5 curated on nano-gpt**
+(mode-2 `/curate`, inline, squashed on master, **NOT pushed**). Eighth member of
+the `claude` family, but mechanically its own animal: **no thinking sibling
+slug** — reasoning is a body flag `reasoning: { enabled, effort }` with
+**mandatory effort** when on (`{ enabled: true }` alone is a silent no-op,
+probed live; the new `claudeEffortAdapter` falls back to `medium`, and the
+suite's enabled-without-effort permutation proved the guard live). Steps
+control (off/low/medium/high, default medium), **adaptive thinking** (trivial
+prompts may skip the trace even at high — expected, not a bug),
+`reasoning_tokens` always 0 (rolled into `completion_tokens`), cache
+**ENGAGED** (turn-2 cached=11591 ≈ full prefix), vision live-probed. Canonical
+`claude-fable-5` is **CENSORED** per the SM-Bench yardstick (run `2adbdf74`:
+NSFW-SP 98.62% clears the canary, but Overfit 34.43% / EQ Boundaries 53.65% /
+Adversarial 79.51% miss the 90% bar) — criteria now in Liz's memory + the
+Model Curation Record [[models/claude-fable-5]]; provider record updated. The
+floating `claude-fable-latest` alias deliberately not curated. Validation:
+conversation-suite **55/55** + cache check; llm-unified `bun test` 318/0.
+Not a Larissa path (no auth/sync/proxy/crypto; no new egress class — existing
+nano-gpt route); not a Laura path (no flow change — one more picker entry).
+**Device test:** restart `pnpm dev` (packages/* changed), then the six steps in
+the record's Manual-verification section. **Next:** unchanged — the
+design-language session per the parked round-1 brainstorm.
+
+**Earlier 2026-06-10 — TTI device findings resolved** (commit
 `3607093` on master, **NOT pushed**). Finding 1 (pill in the inline flow) fixed
 with a block-level `.image-pill-block` wrapper at the Pill dispatch site.
 Finding 2 (vanishing images, reload heals) **root-caused via live console

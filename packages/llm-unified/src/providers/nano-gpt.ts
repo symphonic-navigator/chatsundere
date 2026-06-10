@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { registerAdapter } from '../adapter-registry.js';
-import { claudeAdapter } from '../adapters/anthropic-claude.js';
+import { claudeAdapter, claudeEffortAdapter } from '../adapters/anthropic-claude.js';
 import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
 import type { Offering, ReasoningControl, TtiOfferingMeta } from '../catalogue/types.js';
 import { registerWebAdapter } from '../integrations/web-adapter-registry.js';
@@ -98,6 +98,19 @@ const CLAUDE_SPECS: ClaudeSpec[] = [
 const claudeThinkingByBase: Record<string, string> = Object.fromEntries(
   CLAUDE_SPECS.map((s) => [s.base, s.thinking]),
 );
+
+// Claude Fable 5 breaks the family pattern: nano-gpt exposes NO thinking
+// sibling slug — reasoning is a body flag with MANDATORY effort buckets
+// (probed live 2026-06-10; `enabled: true` alone is a silent no-op). Steps
+// control with a genuine off, mirroring the DeepSeek V4 shape.
+const FABLE_SLUG = 'anthropic/claude-fable-5';
+const FABLE_CANONICAL = 'claude-fable-5';
+const FABLE_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
 
 /**
  * A Claude offering on nano-gpt. The model is censored by Anthropic
@@ -294,6 +307,27 @@ const offerings: Offering[] = [
     262_144,
   ),
   ...CLAUDE_SPECS.map(claudeOffering),
+  {
+    canonicalRef: FABLE_CANONICAL,
+    providerId: 'nano-gpt',
+    upstreamSlug: FABLE_SLUG,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${FABLE_SLUG}` },
+    profile: {
+      reasoning: FABLE_STEPS,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      // Signature replay deferred like the rest of the family (spec §5.2);
+      // Fable accepts unsigned thinking replay, so wiring it later is cheap.
+      replayReasoning: false,
+    },
+    // 200k sweet-spot like the family; 1M hard ceiling per Anthropic's window.
+    context: { recommended: 200_000, max: 1_000_000 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  },
   ...webOfferings,
   ...ttiOfferings,
 ];
@@ -319,7 +353,15 @@ export function registerNanoGpt(): void {
     if (o.adapter.kind !== 'catalogue') continue;
     if (o.serviceKind === 'web') continue;
     if (o.serviceKind === 'tti') continue;
-    if (o.canonicalRef?.startsWith('claude-')) {
+    if (o.canonicalRef === FABLE_CANONICAL) {
+      registerAdapter(
+        o.adapter.adapterId,
+        claudeEffortAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
+        }),
+      );
+    } else if (o.canonicalRef?.startsWith('claude-')) {
       registerAdapter(
         o.adapter.adapterId,
         claudeAdapter(o.upstreamSlug, {

@@ -3,9 +3,16 @@ import { describe, expect, it } from 'bun:test';
 import type { CanonicalRequest, ParseState } from '../adapter-contract.js';
 import type { ReasoningControl } from '../catalogue/types.js';
 import type { WireContentPart, WireMessage } from '../types.js';
-import { claudeAdapter } from './anthropic-claude.js';
+import { claudeAdapter, claudeEffortAdapter } from './anthropic-claude.js';
 
 const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
+
+const FABLE_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
 
 const OPTS = {
   vision: true,
@@ -98,5 +105,59 @@ describe('claudeAdapter.profile', () => {
     expect(a.profile.vision).toBe(true);
     // Signature replay is deferred (spec §5.2); no replay wired today.
     expect(a.profile.replayReasoning).toBe(false);
+  });
+});
+
+describe('claudeEffortAdapter.buildRequest', () => {
+  const FABLE_OPTS = { vision: true, reasoning: FABLE_STEPS };
+  const a = claudeEffortAdapter('anthropic/claude-fable-5', FABLE_OPTS);
+
+  it('keeps the single slug and sends an explicit reasoning-off flag', () => {
+    const wire = a.buildRequest(req({}));
+    expect(wire.model).toBe('anthropic/claude-fable-5');
+    expect(wire.body.model).toBe('anthropic/claude-fable-5');
+    expect(wire.body.reasoning).toEqual({ enabled: false });
+    expect(wire.body.stream).toBe(true);
+    expect(wire.body.stream_options).toEqual({ include_usage: true });
+  });
+
+  it('sends the chosen effort with reasoning on', () => {
+    const wire = a.buildRequest(req({ reasoning: { enabled: true, effort: 'high' } }));
+    expect(wire.body.reasoning).toEqual({ enabled: true, effort: 'high' });
+  });
+
+  it('falls back to medium effort — enabled alone is a silent no-op upstream', () => {
+    const wire = a.buildRequest(req({ reasoning: { enabled: true } }));
+    expect(wire.body.reasoning).toEqual({ enabled: true, effort: 'medium' });
+  });
+
+  it('injects cache_control on the system prefix and the rolling tail', () => {
+    const wire = a.buildRequest(req({}));
+    const messages = wire.body.messages as WireMessage[];
+    const sysPart = (messages[0]?.content as WireContentPart[])[0];
+    const tailPart = (messages[1]?.content as WireContentPart[])[0];
+    expect(sysPart?.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(tailPart?.cache_control).toEqual({ type: 'ephemeral', ttl: '5m' });
+  });
+
+  it('maps tool definitions into the OpenAI-compatible shape', () => {
+    const wire = a.buildRequest(
+      req({
+        tools: [{ name: 'ping', description: 'Ping.', parameters: { type: 'object' } }],
+      }),
+    );
+    expect(wire.body.tools).toEqual([
+      {
+        type: 'function',
+        function: { name: 'ping', description: 'Ping.', parameters: { type: 'object' } },
+      },
+    ]);
+  });
+
+  it('reports the steps control and reuses the nano-gpt parser', () => {
+    expect(a.profile.reasoning).toBe(FABLE_STEPS);
+    expect(a.profile.replayReasoning).toBe(false);
+    const r = a.parseChunk({ choices: [{ delta: { reasoning: 'hm…' } }] }, {});
+    expect(r.events).toEqual([{ type: 'reasoning', text: 'hm…' }]);
   });
 });

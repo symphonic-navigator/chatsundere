@@ -1,9 +1,11 @@
 # Model Curation Record — Claude 4 family (Haiku/Sonnet/Opus)
 
-> Curation record for all seven curated Claude models. They share identical
+> Curation record for the seven slug-swap Claude models. They share identical
 > mechanics on nano-gpt, so one record with a per-model slug table beats seven
 > near-duplicate files. See [[../providers/nano-gpt]] for the shared mechanics
 > and [[../decisions/0032-premium-censored-models-via-routers]] for the policy.
+> **Claude Fable 5 has different mechanics** (flag-mode reasoning, mandatory
+> effort) and lives in its own record: [[claude-fable-5]].
 
 - **Family:** `claude` · **Provider:** nano-gpt only (ADR 0032 — OpenRouter is
   excluded for Anthropic; its limited-keys path routes to Bedrock, no caching).
