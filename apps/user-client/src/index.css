@@ -2989,6 +2989,12 @@ h1 {
 }
 
 /* ===== Generated-image thumbnails (ImagePill) ===== */
+/* The generate_image pill always breaks onto its own line; the inner
+ * .pill-wrap / .artefact-pill keep their inline-flex shrink-wrap sizing. */
+.image-pill-block {
+  display: block;
+  margin-block: 0.25rem;
+}
 .image-pill-grid {
   display: grid;
   grid-template-columns: 1fr;

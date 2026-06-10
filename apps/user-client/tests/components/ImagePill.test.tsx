@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import type { PillRow } from '../../src/boot/client-data-db.js';
@@ -175,6 +176,71 @@ test('lightbox shows provenance when a thumbnail is clicked', async () => {
   // The lightbox provenance line should contain the prompt.
   await waitFor(() => expect(screen.getByLabelText('Source')).toBeInTheDocument());
   expect(screen.getByLabelText('Source').textContent).toContain('a snowy owl');
+});
+
+test('thumbnails survive a StrictMode remount with a warm query cache', async () => {
+  // Device-found bug class: object URLs revoked while an <img> still
+  // references them. The first display works (the artefact query resolves
+  // asynchronously), but a remount with warm cached data delivered the rows
+  // synchronously, and StrictMode's mount effect cycle (effect → cleanup →
+  // effect) revoked URLs created during render with no way to recreate them.
+  const origCreate = URL.createObjectURL;
+  const origRevoke = URL.revokeObjectURL;
+  let seq = 0;
+  const live = new Set<string>();
+  URL.createObjectURL = () => {
+    const u = `blob:test-${seq}`;
+    seq += 1;
+    live.add(u);
+    return u;
+  };
+  URL.revokeObjectURL = (u: string) => {
+    live.delete(u);
+  };
+
+  try {
+    const id1 = await seedImageArtefact('a raccoon statue');
+    const client = new QueryClient();
+    const ui = (
+      <StrictMode>
+        <QueryClientProvider client={client}>
+          <ImagePill
+            row={pill(
+              { status: 'completed' },
+              {
+                prompt: 'a raccoon statue',
+                modelLabel: 'Z-Image',
+                artefactIds: [id1],
+                moderatedReasons: [],
+              },
+            )}
+          />
+        </QueryClientProvider>
+      </StrictMode>
+    );
+
+    const first = render(ui);
+    await first.findByAltText('a raccoon statue');
+    first.unmount();
+
+    // Remount with the warm cache — the path the device test hit by
+    // navigating to the entrance hall and straight back into the chat.
+    const second = render(ui);
+    const img = (await second.findByAltText('a raccoon statue')) as HTMLImageElement;
+    await waitFor(() => expect(live.has(img.src)).toBe(true));
+  } finally {
+    URL.createObjectURL = origCreate;
+    URL.revokeObjectURL = origRevoke;
+  }
+});
+
+test('Pill renders generate_image in a block-level wrapper so it starts on its own line', () => {
+  const { container } = render(
+    wrap(
+      <Pill row={pill({ status: 'pending' }, { argumentsJson: '{"prompt":"a fox","count":1}' })} />,
+    ),
+  );
+  expect(container.querySelector('.image-pill-block')).not.toBeNull();
 });
 
 test('moderated reasons surface in the expanded detail', () => {

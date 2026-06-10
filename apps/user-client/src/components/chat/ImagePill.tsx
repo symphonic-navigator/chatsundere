@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { type ArtefactRow, type PillRow, getClientDataDb } from '../../boot/client-data-db.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
 import type { ViewableItem } from '../lightbox/viewable-item.js';
@@ -29,6 +29,7 @@ function countOf(p: ImagePayload): number {
 }
 
 const EMPTY_IDS: string[] = [];
+const EMPTY_ARTEFACTS: ArtefactRow[] = [];
 
 /** Pill for generate_image tool-calls: live "painting" while pending, expandable
  *  prompt + provenance when done, with inline thumbnails opening a lightbox. */
@@ -39,7 +40,9 @@ export function ImagePill({ row }: { row: PillRow }): JSX.Element {
   const model = p.modelLabel ?? 'image model';
   const artefactIds = p.artefactIds ?? EMPTY_IDS;
 
-  const { data: artefacts = [] } = useQuery({
+  // Stable fallback: a fresh `= []` default per render would re-trigger the
+  // URL effect (which sets state) every render — an update loop.
+  const { data: artefacts = EMPTY_ARTEFACTS } = useQuery({
     queryKey: ['artefacts', 'image-pill', row.id, artefactIds],
     queryFn: async () => {
       const rows = await getClientDataDb().artefacts.bulkGet(artefactIds);
@@ -52,8 +55,13 @@ export function ImagePill({ row }: { row: PillRow }): JSX.Element {
   });
 
   // Object URLs for the loaded rows: thumbnail prefers thumbBlob, lightbox
-  // prefers the full blob. Revoked on change/unmount to prevent leaks.
-  const urls = useMemo(() => {
+  // prefers the full blob. Created INSIDE the effect (AttachmentThumb pattern)
+  // so each effect run owns the URLs its own cleanup revokes — creating them
+  // in render/useMemo let StrictMode's mount cycle (effect → cleanup → effect)
+  // revoke them with no way to recreate, blanking the <img>s on any remount
+  // that found the artefact query cache warm.
+  const [urls, setUrls] = useState<Map<string, { thumb: string; full: string }>>(new Map());
+  useEffect(() => {
     const m = new Map<string, { thumb: string; full: string }>();
     for (const a of artefacts) {
       const thumbBlob = a.thumbBlob ?? a.blob;
@@ -61,17 +69,14 @@ export function ImagePill({ row }: { row: PillRow }): JSX.Element {
       if (!thumbBlob || !fullBlob) continue;
       m.set(a.id, { thumb: URL.createObjectURL(thumbBlob), full: URL.createObjectURL(fullBlob) });
     }
-    return m;
-  }, [artefacts]);
-  useEffect(
-    () => () => {
-      for (const u of urls.values()) {
+    setUrls(m);
+    return () => {
+      for (const u of m.values()) {
         URL.revokeObjectURL(u.thumb);
         URL.revokeObjectURL(u.full);
       }
-    },
-    [urls],
-  );
+    };
+  }, [artefacts]);
 
   const images = artefacts.filter((a) => urls.has(a.id));
   // Inline ViewableItems — deliberately NOT artefactToViewable: in the chat

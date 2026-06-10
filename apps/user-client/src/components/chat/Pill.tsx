@@ -84,7 +84,13 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
     row.kind === 'tool-call' &&
     (row.payload as { name?: string } | undefined)?.name === 'generate_image'
   ) {
-    return <ImagePill row={row} />;
+    // Block-level wrapper: the image pill (and its thumbnail grid) always
+    // starts on its own line instead of continuing the inline text flow.
+    return (
+      <div className="image-pill-block">
+        <ImagePill row={row} />
+      </div>
+    );
   }
 
   if (row.positionHint === 'above-text') {
