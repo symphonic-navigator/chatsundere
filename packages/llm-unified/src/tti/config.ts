@@ -31,7 +31,17 @@ export interface SeedreamConfig {
   quality: 'standard' | 'high' | 'ultra';
 }
 
-export type ImageModelConfig = XaiImagineConfig | ZImageConfig | SeedreamConfig;
+/** GPT Image 2 (nano-gpt, wavespeed-routed). `quality` passes through to the
+ *  upstream and steers cost and latency (low ~24 s / medium ~70 s / high ~3.5 min
+ *  at 1K, measured 2026-06-10). Aspect x resolution resolves via the table. */
+export interface GptImage2Config {
+  groupId: 'gpt-image-2';
+  aspect: '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' | '21:9';
+  resolution: '1k' | '2k';
+  quality: 'low' | 'medium' | 'high';
+}
+
+export type ImageModelConfig = XaiImagineConfig | ZImageConfig | SeedreamConfig | GptImage2Config;
 export type TtiGroupId = ImageModelConfig['groupId'];
 
 const XAI_ASPECTS = new Set(['1:1', '16:9', '9:16', '4:3', '3:4']);
@@ -47,6 +57,7 @@ const ZIMAGE_SIZES = new Set([
   '1536x1536',
 ]);
 const SEEDREAM_ASPECTS = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']);
+const GPT_IMAGE_2_ASPECTS = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9']);
 
 /** The defaults a freshly picked model starts from. */
 export function defaultConfigFor(groupId: TtiGroupId): ImageModelConfig {
@@ -57,6 +68,8 @@ export function defaultConfigFor(groupId: TtiGroupId): ImageModelConfig {
       return { groupId, variant: 'turbo', size: '1024x1024' };
     case 'seedream':
       return { groupId, aspect: '1:1', quality: 'standard' };
+    case 'gpt-image-2':
+      return { groupId, aspect: '1:1', resolution: '1k', quality: 'medium' };
   }
 }
 
@@ -68,6 +81,8 @@ export function maxCountFor(config: ImageModelConfig): number {
     case 'zimage':
       return config.variant === 'base' ? 4 : 10;
     case 'seedream':
+      return 4;
+    case 'gpt-image-2':
       return 4;
   }
 }
@@ -95,6 +110,13 @@ export function isImageModelConfig(v: unknown): v is ImageModelConfig {
         typeof c.aspect === 'string' &&
         SEEDREAM_ASPECTS.has(c.aspect) &&
         (c.quality === 'standard' || c.quality === 'high' || c.quality === 'ultra')
+      );
+    case 'gpt-image-2':
+      return (
+        typeof c.aspect === 'string' &&
+        GPT_IMAGE_2_ASPECTS.has(c.aspect) &&
+        (c.resolution === '1k' || c.resolution === '2k') &&
+        (c.quality === 'low' || c.quality === 'medium' || c.quality === 'high')
       );
     default:
       return false;

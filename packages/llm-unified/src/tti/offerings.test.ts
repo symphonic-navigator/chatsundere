@@ -15,10 +15,11 @@ describe('TTI offerings', () => {
     _resetAdapterRegistryForTests();
   });
 
-  test('the three launch offerings are curated and none can do NSFW', () => {
+  test('the four curated offerings are present and none can do NSFW', () => {
     const ttis = listTtiOfferings();
     const refs = ttis.map((o) => `${o.providerId}:${o.upstreamSlug}`).sort();
     expect(refs).toEqual([
+      'nano-gpt:gpt-image-2',
       'nano-gpt:seedream-v4.5',
       'nano-gpt:z-image-turbo',
       'xai:grok-imagine-image',
@@ -27,6 +28,7 @@ describe('TTI offerings', () => {
       'xai:grok-imagine-image': 'Grok Imagine',
       'nano-gpt:z-image-turbo': 'Z-Image',
       'nano-gpt:seedream-v4.5': 'Seedream 4.5',
+      'nano-gpt:gpt-image-2': 'GPT Image 2',
     };
     for (const o of ttis) {
       expect(o.serviceKind).toBe('tti');
@@ -39,5 +41,6 @@ describe('TTI offerings', () => {
     expect(getOffering('xai', 'grok-imagine-image')?.tti?.groupId).toBe('xai-imagine');
     expect(getOffering('nano-gpt', 'z-image-turbo')?.tti?.groupId).toBe('zimage');
     expect(getOffering('nano-gpt', 'seedream-v4.5')?.tti?.groupId).toBe('seedream');
+    expect(getOffering('nano-gpt', 'gpt-image-2')?.tti?.groupId).toBe('gpt-image-2');
   });
 });

@@ -81,6 +81,7 @@ export {
   defaultConfigFor,
   isImageModelConfig,
   maxCountFor,
+  type GptImage2Config,
   type ImageModelConfig,
   type SeedreamConfig,
   type TtiGroupId,

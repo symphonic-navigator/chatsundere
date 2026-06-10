@@ -243,6 +243,11 @@ const ttiOfferings: Offering[] = [
     canDoNsfw: false,
     displayName: 'Seedream 4.5',
   }),
+  ttiOffering('gpt-image-2', {
+    groupId: 'gpt-image-2',
+    canDoNsfw: false,
+    displayName: 'GPT Image 2',
+  }),
 ];
 
 const webOfferings: Offering[] = [

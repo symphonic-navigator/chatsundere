@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type {
+  GptImage2Config,
   ImageModelConfig,
   SeedreamConfig,
   XaiImagineConfig,
@@ -173,6 +174,53 @@ export function SeedreamConfigView({
   );
 }
 
+const GPT_IMAGE_2_ASPECTS = (
+  ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'] as const
+).map((a) => ({ value: a, label: a }));
+
+const GPT_IMAGE_2_RESOLUTIONS = [
+  { value: '1k', label: '1k' },
+  { value: '2k', label: '2k' },
+] as const satisfies ReadonlyArray<{ value: GptImage2Config['resolution']; label: string }>;
+
+const GPT_IMAGE_2_QUALITIES = [
+  { value: 'low', label: 'Low (fast)' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High (~3 min)' },
+] as const satisfies ReadonlyArray<{ value: GptImage2Config['quality']; label: string }>;
+
+/** GPT Image 2: aspect, resolution and quality rows. */
+export function GptImage2ConfigView({
+  config,
+  onChange,
+}: {
+  config: GptImage2Config;
+  onChange: (c: GptImage2Config) => void;
+}): JSX.Element {
+  return (
+    <div className="flex flex-col gap-2">
+      <OptionRow
+        label="Aspect"
+        options={GPT_IMAGE_2_ASPECTS}
+        value={config.aspect}
+        onChange={(aspect) => onChange({ ...config, aspect })}
+      />
+      <OptionRow
+        label="Resolution"
+        options={GPT_IMAGE_2_RESOLUTIONS}
+        value={config.resolution}
+        onChange={(resolution) => onChange({ ...config, resolution })}
+      />
+      <OptionRow
+        label="Quality"
+        options={GPT_IMAGE_2_QUALITIES}
+        value={config.quality}
+        onChange={(quality) => onChange({ ...config, quality })}
+      />
+    </div>
+  );
+}
+
 /** Dispatch on the stored config's group — one view per image-model family. */
 export function ImageModelConfigView({
   config,
@@ -188,5 +236,7 @@ export function ImageModelConfigView({
       return <ZImageConfigView config={config} onChange={onChange} />;
     case 'seedream':
       return <SeedreamConfigView config={config} onChange={onChange} />;
+    case 'gpt-image-2':
+      return <GptImage2ConfigView config={config} onChange={onChange} />;
   }
 }

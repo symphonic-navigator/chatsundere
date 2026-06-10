@@ -5,11 +5,13 @@ import type { ImageModelConfig } from './config.js';
 import { parseImagesResponse } from './parse.js';
 import { buildImagePayload } from './payloads.js';
 
-/** xAI returns within ~tens of seconds; Z-Image base at count 4 takes ~3 min. */
+/** xAI returns within ~tens of seconds; Z-Image base at count 4 takes ~3 min.
+ *  GPT Image 2 at quality high took ~3.5 min for a single 1K image. */
 const POST_TIMEOUT_MS: Record<ImageModelConfig['groupId'], number> = {
   'xai-imagine': 60_000,
   zimage: 300_000,
   seedream: 300_000,
+  'gpt-image-2': 600_000,
 };
 const URL_FETCH_TIMEOUT_MS = 60_000;
 

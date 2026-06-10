@@ -25,6 +25,14 @@ describe('defaultConfigFor', () => {
       quality: 'standard',
     });
   });
+  test('gpt-image-2 defaults to 1:1/1k/medium', () => {
+    expect(defaultConfigFor('gpt-image-2')).toEqual({
+      groupId: 'gpt-image-2',
+      aspect: '1:1',
+      resolution: '1k',
+      quality: 'medium',
+    });
+  });
 });
 
 describe('maxCountFor', () => {
@@ -38,6 +46,9 @@ describe('maxCountFor', () => {
   test('seedream is hard-capped at 4', () => {
     expect(maxCountFor(defaultConfigFor('seedream'))).toBe(4);
   });
+  test('gpt-image-2 is hard-capped at 4', () => {
+    expect(maxCountFor(defaultConfigFor('gpt-image-2'))).toBe(4);
+  });
 });
 
 describe('isImageModelConfig', () => {
@@ -45,6 +56,7 @@ describe('isImageModelConfig', () => {
     expect(isImageModelConfig(defaultConfigFor('xai-imagine'))).toBe(true);
     expect(isImageModelConfig(defaultConfigFor('zimage'))).toBe(true);
     expect(isImageModelConfig(defaultConfigFor('seedream'))).toBe(true);
+    expect(isImageModelConfig(defaultConfigFor('gpt-image-2'))).toBe(true);
   });
   test('rejects junk', () => {
     expect(isImageModelConfig(null)).toBe(false);
@@ -65,6 +77,22 @@ describe('isImageModelConfig', () => {
     );
     expect(
       isImageModelConfig({ groupId: 'seedream', aspect: 'INVALID', quality: 'standard' }),
+    ).toBe(false);
+    expect(
+      isImageModelConfig({
+        groupId: 'gpt-image-2',
+        aspect: '21:9',
+        resolution: '4k',
+        quality: 'medium',
+      }),
+    ).toBe(false);
+    expect(
+      isImageModelConfig({
+        groupId: 'gpt-image-2',
+        aspect: '1:1',
+        resolution: '1k',
+        quality: 'ultra',
+      }),
     ).toBe(false);
   });
 });

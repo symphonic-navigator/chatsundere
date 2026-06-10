@@ -73,7 +73,22 @@ for this route. 4o variants resolved: pinned dated snapshots are genuine 4o, the
 floating `openai/gpt-4o` alias is the uncertain one; `azure-gpt-4o` is a bare
 Azure slug.
 
+## Image generation (TTI)
+
+Three TTI offerings ride the OpenAI-compatible `/images/generations` endpoint:
+`z-image-turbo`, `seedream-v4.5` and `gpt-image-2` (see
+[[../models/gpt-image-2]]). Shared mechanics: `response_format: 'url'` (the R2
+bucket is CORS-open; result URLs are fetched with a bare, header-free GET —
+a Bearer token collides with the AWS-V4 signature), no per-item moderation
+(a refused prompt fails the whole POST with a 4xx), and **model-specific
+parameters pass through** to the upstream — empirically confirmed for
+`quality` on `gpt-image-2`, which even bills per tier. The authoritative
+catalogue is `GET /api/v1/image-models?detailed=true` (auth optional), but its
+`resolutions` lists are suggestions, not contracts — probe before trusting.
+
 ## Validation
 
 Claude: `bun run curation/run-claude-suite.ts` (keys under `keys/`, never CI) —
 all seven green + cache engaged (2026-06-01).
+GPT Image 2: 18 live probes + end-to-end `generateImages()` run (2026-06-10),
+see [[../models/gpt-image-2]].

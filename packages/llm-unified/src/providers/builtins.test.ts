@@ -36,8 +36,8 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 8 Claude + 4 web + 2 tti = 23.
-      expect(p.offerings).toHaveLength(23);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 8 Claude + 4 web + 3 tti = 24.
+      expect(p.offerings).toHaveLength(24);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });

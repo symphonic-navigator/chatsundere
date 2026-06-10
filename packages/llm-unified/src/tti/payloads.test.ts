@@ -46,6 +46,22 @@ describe('buildImagePayload', () => {
     );
     expect(body.model).toBe('z-image-turbo');
   });
+  test('gpt-image-2 resolves size from its table and passes quality through', () => {
+    expect(
+      buildImagePayload(
+        { groupId: 'gpt-image-2', aspect: '21:9', resolution: '2k', quality: 'high' },
+        'a fox',
+        2,
+      ),
+    ).toEqual({
+      model: 'gpt-image-2',
+      prompt: 'a fox',
+      n: 2,
+      size: '2464x1056',
+      quality: 'high',
+      response_format: 'url',
+    });
+  });
   test('seedream resolves size from the resolution table', () => {
     const body = buildImagePayload(
       { groupId: 'seedream', aspect: '16:9', quality: 'ultra' },

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ImageModelConfig } from './config.js';
+import { gptImage2Resolution } from './gpt-image-2-resolutions.js';
 import { seedreamResolution } from './seedream-resolutions.js';
 
 /**
@@ -38,6 +39,20 @@ export function buildImagePayload(
         prompt,
         n,
         size: `${w}x${h}`,
+        response_format: 'url',
+      };
+    }
+    case 'gpt-image-2': {
+      // `quality` passes through nano-gpt to the upstream and steers both cost
+      // and latency (probed 2026-06-10: low $0.018/~24 s, medium $0.066/~70 s,
+      // high $0.156/~3.5 min at 1024x1024).
+      const [w, h] = gptImage2Resolution(config.aspect, config.resolution);
+      return {
+        model: 'gpt-image-2',
+        prompt,
+        n,
+        size: `${w}x${h}`,
+        quality: config.quality,
         response_format: 'url',
       };
     }
