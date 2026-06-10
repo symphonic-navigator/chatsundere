@@ -40,8 +40,11 @@ model's self-reports. Gates: `pnpm typecheck --force` **14/14**; user-client
 vitest **1267 pass / 8 fail** (unchanged baseline trio); `pnpm run build`
 **9/9**; biome clean. Not a Larissa/Laura path (render bugfix, no flow
 change). **Device re-test:** repeat the three-tool prompt → three pills
-(calculate, Painted-ImagePill, web_search) live AND after reload. **Next:**
-unchanged — the design-language session.
+(calculate, Painted-ImagePill, web_search) live AND after reload —
+**DEVICE-CONFIRMED by Chris 2026-06-10** ("ja, funktioniert!"). Follow-up on
+his ask: every dispatched tool call now logs one `[tool-call]` console.info
+line (name · args size · first 100 chars) at the tool-loop choke point
+(`f3e016e`). **Next:** unchanged — the design-language session.
 
 **Earlier 2026-06-10 (later) — Claude Fable 5 curated on nano-gpt**
 (mode-2 `/curate`, inline, squashed on master, **NOT pushed**). Eighth member of
