@@ -37,8 +37,12 @@ user-client vitest **1265 pass / 8 fail** (the unchanged baseline trio);
 `pnpm run build` **9/9**; biome clean on changed files (index.css picker drift
 pre-existing). **Both fixes DEVICE-CONFIRMED by Chris 2026-06-10** (images
 survive entrance-hall-and-back; pill on its own line) — **Chris is pushing the
-master backlog himself**. **Still open:** the moderation-provocation step
-(§13.6); then the design-language session per the parked round-1 brainstorm.
+master backlog himself**. **§13.6 moderation step also DEVICE-CONFIRMED
+2026-06-10**: Grok refused a provocation prompt with a 400 and the failed call
+surfaced the constructive tool result (tell the user; suggest rephrasing or
+retrying) — the §13 device-test list is now **fully passing**. TTI is
+complete. **Next:** the design-language session per the parked round-1
+brainstorm.
 
 **Earlier 2026-06-09 (late) — TTI image generation LANDED** (squashed
 onto master `d80ad73`, **NOT pushed**; **NOT yet device-verified**). Companions
