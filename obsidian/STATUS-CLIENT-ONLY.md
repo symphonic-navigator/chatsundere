@@ -16,7 +16,28 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-10 (late evening) — **GPT Image 2 curated on
+**Last updated:** 2026-06-10 (night) — **Voice feature feasibility assessed**
+(assessment only, no code). Chris opens a four-day deep-design weekend
+starting **2026-06-11 15:00**: voice as one **fully integrated unit** marrying
+**roleplay-mode, narration, TTS/live voice and provider-agnostic expressions**
+(he brings two further ideas to the table tomorrow). Playback in two modes —
+smart sentence-by-sentence and paragraph-by-paragraph — with the playing
+segment glowing in/out, in both live voice mode and read-aloud. Liz's
+data-model verdict: `contentBlocks` need **no change** — segments are derived
+at runtime, never stored; **one segmentation function as single source of
+truth** for both the spoken plaintext and the highlight spans (drift between
+the two is the classic failure mode). Concrete deltas: one Dexie settings
+bump (v20; v19 is head), optional audio-blob cache later. Difficulty map:
+paragraph glow **easy** (custom `markdown-components` precedent), sentence
+glow **medium** (rehype plugin + native `Intl.Segmenter`), per-segment
+synthesis makes timing sync trivial (`onended` advances the glow),
+**live-voice-during-streaming is the hardest part** (raw `stream-tok` spans
+carry no semantic structure yet). TTS providers ride the TTI precedent as a
+new `serviceKind: 'tts'` in llm-unified. **Next:** the voice/roleplay/
+narration brainstorm with Chris (supersedes design-language as next-up; that
+session stays parked).
+
+**Earlier 2026-06-10 (late evening) — GPT Image 2 curated on
 nano-gpt** (squash `156f3d1` on master, **NOT pushed**; **DEVICE-CONFIRMED
 by Chris 2026-06-10**: full tool-loop runs with Fable 5 as host model fired
 `generate_image` and rendered both 16:9 and 21:9 results — `visuals/fable_1.png`
