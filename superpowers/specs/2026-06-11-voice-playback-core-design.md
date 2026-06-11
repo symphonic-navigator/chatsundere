@@ -255,10 +255,16 @@ Mechanics-first; styling stays minimal for Chris's pass.
   control starts playback; a **transport governs it**. While the machine is
   `active`, `paused`, or `failed`, a single always-visible affordance
   (play/pause · stop) is bound to the machine — **independent of
-  `expandedMessageId`, scrolling, and the mode**. Reading Mode hosts it in
-  the `ReadingToolStrip` (the `position:fixed`-in-transform trap is already
-  solved there); Interaction Mode gets an equivalent compact surface. The
-  audio deliberately outlives the message rail (§3.3), so its controls must
+  `expandedMessageId`, scrolling, and the mode**. It is a new floating
+  component (`VoiceTransport`), bound to `.chat-page` via
+  `position: absolute` — NOT `position: fixed`, which the mindspace
+  transform layers clip (the documented containing-block trap that made the
+  former reading tool strip invisible). Note: the old `ReadingToolStrip`
+  was deliberately **removed** in `4f6fd02` ("less distraction"); the
+  transport honours that decision by existing **only while the machine is
+  non-idle** — an idle chat shows no strip at all. It renders in both
+  modes; in Interaction Mode it sits above the cockpit. The audio
+  deliberately outlives the message rail (§3.3), so its controls must
   too — without this, collapsing a message strands the user with running
   audio and no reachable stop.
 - **Resume on return** (Laura spec-pass, hard finding): on entering a chat
