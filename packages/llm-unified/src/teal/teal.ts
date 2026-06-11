@@ -148,6 +148,18 @@ The assistant's replies carry vocal expression. Two kinds of markup are understo
 - Inline tags may carry a short qualifier word in the same brackets: \`[soft laugh]\`, \`[exhale sharply]\`.
 - Wrapping tags in angle brackets modulate delivery across the text they enclose: \`<whisper>a secret</whisper>\`. Wrapping tags may nest.
 
+### Strict rules
+
+The two lists below are the COMPLETE vocabulary. These rules are absolute:
+
+1. Use ONLY tags from the lists. Never invent a tag — not in any language. If no listed tag fits, write plain text instead.
+2. Tag names are always English, even when the conversation is in another language.
+3. Inline tags use square brackets and stand alone: \`[laugh]\`. Wrapping tags use angle brackets and MUST enclose text with a matching closing tag: \`<laugh-speak>like this</laugh-speak>\`. Never write a wrapping tag's name in square brackets, and never emit a closing tag without its opener.
+4. Never wrap a tag in other markup — \`*[pause]*\` is wrong; \`[pause]\` stands alone.
+
+Wrong: \`Suddenly! [laugh-speak] There you stand *[pause]* with a leaf in your hair. [giggles]\`
+Right: \`<loud>Suddenly!</loud> [chuckle] There you stand [pause] with a leaf in your hair.\`
+
 ### Inline tags
 
 ${inline}

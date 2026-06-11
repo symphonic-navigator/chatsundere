@@ -68,4 +68,13 @@ describe('TEAL_EXPRESSION_PROMPT', () => {
     expect(TEAL_EXPRESSION_PROMPT).toContain('0–2 markups');
     expect(TEAL_EXPRESSION_PROMPT).toContain('asterisks');
   });
+
+  it('carries the strict closed-vocabulary rules for weaker models (structural markers)', () => {
+    expect(TEAL_EXPRESSION_PROMPT).toContain('COMPLETE vocabulary');
+    expect(TEAL_EXPRESSION_PROMPT).toContain('Never invent a tag');
+    expect(TEAL_EXPRESSION_PROMPT).toContain("wrapping tag's name in square brackets");
+    expect(TEAL_EXPRESSION_PROMPT).toContain('always English');
+    expect(TEAL_EXPRESSION_PROMPT).toContain('Wrong:');
+    expect(TEAL_EXPRESSION_PROMPT).toContain('Right:');
+  });
 });
