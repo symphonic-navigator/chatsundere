@@ -116,6 +116,7 @@ export function rehypeVoiceAnchor(options: RehypeVoiceAnchorOptions) {
   const { segments, blockIndex, opts, processedSource, rawSource } = options;
 
   const processedRanges = paragraphRanges(processedSource);
+  const rawRanges = paragraphRanges(rawSource);
   const { processedToRaw, rawK } = buildRawMapping(rawSource, processedRanges.length);
 
   const paragraphs: ProcessedParagraph[] = processedRanges.map(([start, end], index) => ({
@@ -172,11 +173,25 @@ export function rehypeVoiceAnchor(options: RehypeVoiceAnchorOptions) {
       if (emitted.length !== ttsIds.length) continue;
 
       // Single emitted segment in paragraph mode: tag the element, no spans.
+      // (Safe regardless of preprocessing differences — the whole paragraph IS
+      // the segment, so no intra-paragraph boundary precision is involved.)
       if (opts.mode === 'paragraph' && emitted.length === 1) {
         const id = ttsIds[0];
         if (id !== undefined) setData(node, 'dataVoiceSeg', id);
         continue;
       }
+
+      // Sentence-exact spans are only sound when the renderer's preprocessing
+      // changed NOTHING in this paragraph: the TTS side segments the RAW slice,
+      // this plugin the PROCESSED one, and any TEAL/math rewrite shifts
+      // effective lengths — which shifts min-length merge decisions and
+      // speakability drops between the two sides. Equal counts can then pair
+      // the right ids onto the wrong boundaries (device finding 2026-06-11:
+      // music-glyph spans glowing for a different sentence). Identical slices
+      // ⇒ identical algorithm output by construction; anything else degrades
+      // to the calm paragraph-level glow.
+      const rawRange = rawRanges[paragraph.rawIndex];
+      if (rawRange === undefined || rawSource.slice(rawRange[0], rawRange[1]) !== slice) continue;
 
       // Otherwise wrap each emitted range in a span. Re-base paragraph-relative
       // ranges onto absolute processed-source offsets to match text positions.

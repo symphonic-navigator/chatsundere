@@ -295,3 +295,22 @@ describe('segmentBlock — non-speakable segments (device finding 2026-06-11)', 
     expect(emittedRangesForParagraph('…… * **', opts, true)).toEqual([]);
   });
 });
+
+describe('segmentBlock — TEAL-aware speakability (device finding 2026-06-11, sentence-glow drift)', () => {
+  const opts = { mode: 'paragraph' as const, roleplay: false };
+
+  it('drops a tag-only paragraph — the provider strip would leave empty input', () => {
+    const segs = segmentBlock('Real sentence before.\n\n[laugh]\n\nReal sentence after.', 0, opts);
+    expect(segs.map((s) => s.spokenText)).toEqual([
+      'Real sentence before.',
+      'Real sentence after.',
+    ]);
+    expect(segs[1]?.paragraphIndex).toBe(2);
+  });
+
+  it('keeps a wrapped-tag segment whose enclosed text is speakable', () => {
+    const segs = segmentBlock('<whisper>a real secret</whisper>', 0, opts);
+    expect(segs).toHaveLength(1);
+    expect(segs[0]?.spokenText).toContain('a real secret');
+  });
+});

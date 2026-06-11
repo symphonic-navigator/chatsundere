@@ -136,19 +136,29 @@ describe('rehypeVoiceAnchor — sentence mode', () => {
 describe('rehypeVoiceAnchor — TEAL invariant', () => {
   const opts: SegmentationOpts = { mode: 'sentence', roleplay: false };
 
-  it('pairs correctly when raw carries a TEAL tag (segments on raw, plugin on processed)', async () => {
-    // `[laugh]` is present in the RAW text (→ emoji in processed). Offsets differ
-    // between raw and processed; structural pairing must still land.
+  it('degrades a TEAL-bearing paragraph to paragraph-level glow (sentence pairing is unsound across preprocessing)', async () => {
+    // `[laugh]` is present in the RAW text (→ emoji in processed). The two
+    // sides then segment DIFFERENT strings: effective lengths shift the
+    // min-length merges, so equal counts can pair ids onto wrong boundaries
+    // (device finding 2026-06-11). The contract is therefore: any paragraph
+    // the preprocessors touched gets NO sentence spans — only the calm
+    // paragraph-level anchor — while untouched paragraphs keep exact spans.
     const raw =
       'Oh that is genuinely hilarious [laugh] and I cannot stop smiling now here. ' +
-      'But seriously, let us return to the actual matter at hand together.';
+      'But seriously, let us return to the actual matter at hand together.\n\n' +
+      'This untouched paragraph has one full sentence standing comfortably alone. ' +
+      'And a second full sentence that is also comfortably long enough to stand.';
     const { tree, segments } = await runPipeline(raw, opts);
     const els = topElements(tree);
+    // TEAL paragraph: anchored, but span-free.
     expect(els[0]?.properties?.dataVoicePara).toBe('0:0');
-    const spans = voiceSegs(els[0] as Element);
-    // One span per emitted segment, ids paired in order.
-    expect(spans.map(([id]) => id)).toEqual(segments.map((s) => s.segmentId));
-    expect(spans.length).toBeGreaterThanOrEqual(1);
+    expect(voiceSegs(els[0] as Element)).toHaveLength(0);
+    // Untouched paragraph: exact sentence spans, ids paired in order.
+    expect(els[1]?.properties?.dataVoicePara).toBe('0:1');
+    const spans = voiceSegs(els[1] as Element);
+    const para1Ids = segments.filter((s) => s.paragraphIndex === 1).map((s) => s.segmentId);
+    expect(spans.map(([id]) => id)).toEqual(para1Ids);
+    expect(spans.length).toBeGreaterThanOrEqual(2);
   });
 });
 

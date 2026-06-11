@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { stripTeal } from '@chatsundere/llm-unified';
 import type { ContentBlock } from '../../boot/client-data-db.js';
 import { maskCodeRegions } from '../markdown/code-mask.js';
 
@@ -325,8 +326,12 @@ export function emittedRangesForParagraph(
     // Speakability gate: a segment without a single letter or digit (thematic
     // breaks like `---`, stray emphasis rubble, bare ellipses) must never reach
     // synthesis — providers reject such input (device finding 2026-06-11).
-    // Living here keeps the TTS side and the glow side identical by construction.
-    if (!/[\p{L}\p{N}]/u.test(spokenText)) return;
+    // Judged on the TEAL-stripped text: a tag-only segment such as `[laugh]`
+    // would survive a raw test but reach a strip-hook provider as EMPTY input.
+    // (A lone tag is genuinely speakable for a future passthrough provider —
+    // revisit at xAI TTS onboarding; logged in follow-ups.) Living here keeps
+    // the TTS side and the glow side identical by construction.
+    if (!/[\p{L}\p{N}]/u.test(stripTeal(spokenText))) return;
     out.push({ range, spokenText, voice });
   };
 
