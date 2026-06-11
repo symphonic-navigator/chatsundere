@@ -1,7 +1,8 @@
 # Voice Playback Core — read-aloud, segmentation, cache, first TTS provider
 
 **Date:** 2026-06-11
-**Status:** Draft — awaiting Laura spec-pass and Chris's review
+**Status:** Laura spec-pass complete (2 hard findings fixed in-spec, 5 soft
+notes incorporated) — awaiting Chris's review
 **Part of:** the voice design weekend (roleplay → TEAL → **audio state**)
 **Related:** [TEAL design](2026-06-11-teal-voice-expression-language-design.md),
 [Roleplay design](2026-06-11-roleplay-mode-and-user-greeting-design.md),
@@ -246,20 +247,48 @@ interface VoiceAudioRow {
 
 Mechanics-first; styling stays minimal for Chris's pass.
 
-- **Read-aloud control** on every persona message. Primary home: **Reading
-  Mode** (chatting is ~80 % reading; navigation and consumption belong
-  there). The control reflects the machine: play → pause/stop while active,
-  *Resume* when a remembered position exists for that message, "from the
-  beginning" reachable alongside Resume. Exact placement and affordance are
-  Laura spec-pass territory.
-- **No TTS provider configured** → the control renders **disabled with a
-  tooltip** pointing to My Settings (disabled over hidden; the tooltip names
-  the missing piece — constructive, not a dead end).
+- **Read-aloud control** on every persona message — it **starts** playback,
+  nothing more. Primary home: **Reading Mode** (chatting is ~80 % reading;
+  navigation and consumption belong there). It is revealed by the existing
+  tap-to-expand message rail.
+- **Persistent transport** (Laura spec-pass, hard finding): the per-message
+  control starts playback; a **transport governs it**. While the machine is
+  `active`, `paused`, or `failed`, a single always-visible affordance
+  (play/pause · stop) is bound to the machine — **independent of
+  `expandedMessageId`, scrolling, and the mode**. Reading Mode hosts it in
+  the `ReadingToolStrip` (the `position:fixed`-in-transform trap is already
+  solved there); Interaction Mode gets an equivalent compact surface. The
+  audio deliberately outlives the message rail (§3.3), so its controls must
+  too — without this, collapsing a message strands the user with running
+  audio and no reachable stop.
+- **Resume on return** (Laura spec-pass, hard finding): on entering a chat
+  with a same-session remembered position, the transport surfaces
+  **Resume · ¶k** with a secondary **Start over** — a first-class
+  invitation, not a property of an expanded message the user must
+  rediscover. Resume is offered only while a same-session position exists;
+  after a reload the transport simply does not appear and the per-message
+  control returns to its plain play state (no stale Resume that secretly
+  starts over).
+- **One canonical restart**: mid-playback the transport offers *Stop* only —
+  restarting is just playing again from idle; on return the pair is
+  *Resume* / *Start over*. No third restart affordance anywhere.
+- **No TTS provider configured / no persona voice** → the control renders
+  **disabled with a tooltip** (disabled over hidden). Tooltip tone is
+  differentiated: these two are **actionable invitations** naming the fix
+  ("Set a voice in My Settings"), whereas the nothing-readable case (§5) is
+  a calm statement of fact — the user must never go hunting in settings for
+  a "problem" that is just a code block.
 - **Glow**: the block (paragraph mode) or span (sentence mode, via
   `charRange`) carrying `currentSegmentId` glows in and out with a CSS
-  transition; organic variation per house style. Paragraph glow rides the
-  existing `markdown-components` block-wrapper precedent; sentence glow
-  wraps the range in a span at render time.
+  transition. The playback glow is a **steady tracking indicator, not an
+  organic effect**: fixed intensity, one calm in/out per segment, no
+  per-segment random motion, no layout shift at 380 px, and it degrades to
+  a static tint under `prefers-reduced-motion`. (The house "organic
+  variation" rule is authored for sparse moments of presence; a highlight
+  firing dozens of times per reply is exactly what the neurodivergent
+  audience finds taxing.) Paragraph glow rides the existing
+  `markdown-components` block-wrapper precedent; sentence glow wraps the
+  range in a span at render time.
 - **Settings**:
   - My Settings → new **Voice** section: interleave mode
     (paragraph default — omakase; sentence as the alternative). The section
@@ -273,9 +302,14 @@ Mechanics-first; styling stays minimal for Chris's pass.
 Constructive throughout (the *dere* half):
 
 - **Synthesis failure mid-playback**: the machine parks in
-  `failed(segmentIndex)`; the position is preserved; the message surfaces a
-  compact note with **Retry** (re-synthesise this segment) and **Skip**
-  (advance to the next). No silent stop, no lost position.
+  `failed(segmentIndex)`; the position is preserved; a compact note with
+  **Retry** (re-synthesise this segment) and **Skip** (advance to the next)
+  appears **on the persistent transport** (§4 — not on the expanded-message
+  rail, which may be collapsed). No silent stop, no lost position.
+- **Skip off the end**: if Skip from the final failed segment reaches
+  `done`, the transport closes with a one-line constructive note
+  ("Couldn't finish reading aloud — Retry?") instead of a bare stop — a
+  partial read-through is acknowledged, never silently terminated.
 - **All-segments-empty** (e.g. a message that is one code block): the
   control is disabled for that message with a tooltip ("nothing to read
   aloud here").
@@ -332,8 +366,11 @@ Restart `pnpm dev` first — `packages/llm-unified` changes.
 4. Pause mid-word → resume → it continues exactly where it stopped (not at
    the segment start). Stop → from-the-beginning restarts.
 5. While playing, switch Reading↔Interaction mode and scroll — playback is
-   undisturbed. Navigate to the Entrance Hall — playback stops. Return to
-   the chat → the control offers Resume at the remembered segment.
+   undisturbed **and the transport stays visible and operable in both
+   modes**; collapse the speaking message (tap another message) → audio
+   continues and pause/stop remain one tap away on the transport. Navigate
+   to the Entrance Hall — playback stops. Return to the chat → the
+   transport offers **Resume · ¶k** with *Start over* beside it.
 6. Play the same message twice — the second run starts audibly instantly
    and the network tab shows no synthesis requests (cache hit).
 7. Regenerate a reply that repeats a paragraph verbatim → that paragraph
@@ -345,6 +382,11 @@ Restart `pnpm dev` first — `packages/llm-unified` changes.
    has a disabled read-aloud control with the explanatory tooltip.
 10. Remove the persona's voice → the control disables with the tooltip
     naming the missing configuration.
+11. Reload the app mid-listen → no Resume is offered anywhere; the
+    per-message control is back to plain play (position memory is
+    session-only and honest about it).
+12. With `prefers-reduced-motion` enabled (OS setting), play a message →
+    the glow degrades to a static tint, no pulsing.
 
 ## 9. Decisions
 
@@ -363,3 +405,5 @@ Restart `pnpm dev` first — `packages/llm-unified` changes.
 | D11 | Mode/voice changes apply at next PLAY, never mid-flight | least astonishment; no mid-flight remapping |
 | D12 | Mistral first, direct (CORS open), xAI/nano-gpt via later onboarding sessions | simplest provider proves the pipeline end-to-end; relieves the proxy |
 | D13 | No speed/pitch modulation in v1 | scope discipline; chatsune's SoundTouch path adds latency and complexity with no current ask |
+| D14 | Persistent transport governs playback, independent of the tap-to-expand rail; per-message control only starts it | Laura spec-pass hard findings 1+2 — the audio outlives the message rail, so its controls must too; also carries Resume-on-return and the failure Retry/Skip |
+| D15 | Playback glow is a steady tracking indicator (fixed intensity, no organic variation, reduced-motion fallback) | Laura spec-pass — continuous randomised motion is taxing for the ND audience; "organic variation" is for sparse moments of presence |
