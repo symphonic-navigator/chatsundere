@@ -70,6 +70,8 @@ async function seed() {
     narration: 'first',
     greetingEnabled: true,
     greetingInstructions: 'Say hello warmly.',
+    voice: null,
+    narratorVoice: null,
     createdAt: 1,
     updatedAt: 1,
   });

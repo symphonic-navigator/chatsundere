@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
 import { useToggleBookmark } from '../../data/chats.js';
 import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { outOfWindowCount } from '../../lib/context-window.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
 import { estimateTokens } from '../../lib/token-estimator.js';
+import { segmentMessage } from '../../lib/voice/segmentation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
@@ -67,6 +68,17 @@ export interface ChatStreamProps {
   contextBudget?: number;
   /** Estimated system-prompt tokens, reserved before fitting history. */
   systemTokens?: number;
+  /** Start reading a persona message aloud. */
+  onReadAloud?: (message: MessageRow) => void;
+  /** Provider/voice-level disable reason (null when TTS is actionable). The
+   *  per-message 'nothing' tone is derived here from segmentation. */
+  voiceDisabledReason?: 'no-provider' | 'no-voice' | null;
+  /** Active segmentation mode (read at play time; here only for the
+   *  speakability probe that drives the per-message 'nothing' tooltip). */
+  voiceMode?: 'paragraph' | 'sentence';
+  /** The segment currently spoken aloud; threaded to MessageBlock for the
+   *  voice glow (next task). */
+  currentSegmentId?: string | null;
 }
 
 /** Scroll container that sorts messages chronologically, inserts DateSeparators
@@ -150,6 +162,29 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
     if (nearBottom !== autoFollow) setAutoFollow(nearBottom);
   };
 
+  // Per-message speakability for the Read control's 'nothing' tone. A persona
+  // message with zero speakable segments is disabled with the calm fact tooltip
+  // even when a provider + voice exist. Memoised so segmentation runs only when
+  // the message set or the mode changes.
+  const roleplay = p.persona?.roleplay ?? false;
+  const speakable = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const m of p.messages) {
+      if (m.role !== 'persona') continue;
+      const segs = segmentMessage(m.contentBlocks, {
+        mode: p.voiceMode ?? 'paragraph',
+        roleplay,
+      });
+      map.set(m.id, segs.length > 0);
+    }
+    return map;
+  }, [p.messages, p.voiceMode, roleplay]);
+
+  const readReasonFor = (m: MessageRow): 'no-provider' | 'no-voice' | 'nothing' | null => {
+    if (p.voiceDisabledReason) return p.voiceDisabledReason;
+    return speakable.get(m.id) ? null : 'nothing';
+  };
+
   // Index of the last persona message — the only one that gets an onRegenerate handler.
   const lastPersonaIdx = (() => {
     for (let i = sorted.length - 1; i >= 0; i--) {
@@ -201,6 +236,12 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 branchDisabled={p.branchDisabled}
                 isStreamingDraft={isDraft}
                 isPinned={isPinned}
+                onReadAloud={
+                  m.role === 'persona' && p.onReadAloud ? () => p.onReadAloud?.(m) : undefined
+                }
+                readDisabledReason={m.role === 'persona' ? readReasonFor(m) : undefined}
+                currentSegmentId={p.currentSegmentId}
+                voiceMode={p.voiceMode}
               />
               {isDraft ? <StreamingCursor /> : null}
             </div>

@@ -42,6 +42,57 @@ describe('MessageControls branch button', () => {
   });
 });
 
+describe('MessageControls read-aloud button', () => {
+  it('calls onReadAloud when enabled (no disabled reason)', () => {
+    const onReadAloud = vi.fn();
+    render(
+      <MessageControls
+        message={msg}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onReadAloud={onReadAloud}
+        readDisabledReason={null}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /Read/ });
+    expect(btn).toBeEnabled();
+    expect(btn).toHaveAttribute('title', 'Read this message aloud');
+    fireEvent.click(btn);
+    expect(onReadAloud).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['no-provider', 'Set up a TTS provider in My Settings'],
+    ['no-voice', 'Give this persona a voice in its editor'],
+    ['nothing', 'Nothing to read aloud in this message'],
+  ] as const)('disables with the %s tone tooltip', (reason, tooltip) => {
+    render(
+      <MessageControls
+        message={msg}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onReadAloud={() => {}}
+        readDisabledReason={reason}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /Read/ });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute('title', tooltip);
+  });
+
+  it('omits the Read button on user messages', () => {
+    render(
+      <MessageControls
+        message={{ ...msg, role: 'user' }}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onReadAloud={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Read/ })).toBeNull();
+  });
+});
+
 describe('MessageControls regenerate tooltip', () => {
   it('titles the regenerate button "Regenerate this reply" for a normal reply', () => {
     render(

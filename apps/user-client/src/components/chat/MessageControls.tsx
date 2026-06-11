@@ -14,7 +14,23 @@ interface Props {
   onSave?: () => void;
   /** Whether the message has text to save (disabled-over-hidden otherwise). */
   canSave?: boolean;
+  /** Start reading this message aloud (persona messages only). */
+  onReadAloud?: () => void;
+  /**
+   * Why the Read control is disabled, or null when it is actionable.
+   * Drives the three constructive disabled-tooltip tones (spec §4):
+   *   'no-provider' → set up a TTS provider
+   *   'no-voice'    → give this persona a voice
+   *   'nothing'     → nothing speakable in this message
+   */
+  readDisabledReason?: 'no-provider' | 'no-voice' | 'nothing' | null;
 }
+
+const READ_TOOLTIP: Record<'no-provider' | 'no-voice' | 'nothing', string> = {
+  'no-provider': 'Set up a TTS provider in My Settings',
+  'no-voice': 'Give this persona a voice in its editor',
+  nothing: 'Nothing to read aloud in this message',
+};
 
 function stop(e: React.MouseEvent): void {
   e.stopPropagation();
@@ -67,15 +83,20 @@ export function MessageControls(p: Props): JSX.Element {
       >
         ◆ Save
       </button>
-      <button
-        type="button"
-        data-ctrl="read"
-        disabled
-        title="Voice arrives with Block 4"
-        className="ctrl-btn"
-      >
-        ▸ Read
-      </button>
+      {p.message.role === 'persona' ? (
+        <button
+          type="button"
+          data-ctrl="read"
+          onClick={p.onReadAloud}
+          disabled={!p.onReadAloud || (p.readDisabledReason ?? null) !== null}
+          title={
+            p.readDisabledReason ? READ_TOOLTIP[p.readDisabledReason] : 'Read this message aloud'
+          }
+          className="ctrl-btn"
+        >
+          ▸ Read
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -568,6 +568,27 @@ h1 {
    Tuned for the Aurora dark theme: ink-soft code surfaces with a single
    restrained aurora glow, accent-lilac links, serif headings, marker-pill
    inline code. */
+/* Playback glow (spec D15): a steady tracking indicator, NOT organic
+   variation. The currently-spoken segment (or paragraph, on the fallback
+   path) wears `.voice-glow-active`. Fixed-intensity tint + soft shadow, eased
+   in and out over 600ms; no transform/layout properties so the line never
+   reflows under the highlight. Minimal — Chris styles the final look later. */
+.msg-text [data-voice-seg],
+.msg-text [data-voice-para] {
+  border-radius: 0.25rem;
+  transition: background-color 600ms ease, box-shadow 600ms ease;
+}
+.msg-text .voice-glow-active {
+  background-color: color-mix(in srgb, var(--color-aurora-500) 14%, transparent);
+  box-shadow: 0 0 0.5rem color-mix(in srgb, var(--color-aurora-500) 22%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-text [data-voice-seg],
+  .msg-text [data-voice-para] {
+    transition: none;
+  }
+}
+
 .msg-text p {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
@@ -860,6 +881,60 @@ h1 {
     animation: none;
     opacity: 1;
   }
+}
+
+/* ===== Voice transport =====
+ * Functional positioning only — Chris owns the styling pass. Absolutely
+ * positioned within .chat-page (which establishes a containing block via its
+ * own position: fixed), so the transport floats bottom-centre independent of
+ * scroll, message expansion, and Reading↔Interaction mode. In interaction mode
+ * the cockpit occupies the page floor, so the transport is lifted clear of it
+ * by a sane fixed offset (the cockpit height is variable; this is a device
+ * tuning knob, not a measured value). */
+.voice-transport {
+  position: absolute;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(10, 10, 10, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+}
+.chat-page[data-mode="interaction"] .voice-transport {
+  /* Lift above the cockpit (order: 1000 flex-child on the page floor). */
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+.chat-page[data-mode="reading"] .voice-transport {
+  /* In reading mode the BottomAffordance band sits on the page floor (normal-flow
+   * flex child: ~0.75rem top + 2rem bottom padding + safe-area). The transport's
+   * default 1rem offset overlaps it at 380px, so lift it clear of the band. The
+   * exact offset is a device-tuning knob for Chris's styling pass. */
+  bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+}
+.voice-transport-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  color: var(--color-paper-soft, #e6e6e6);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.voice-transport-btn:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+}
+.voice-transport-btn-secondary {
+  opacity: 0.75;
+}
+.voice-transport-note {
+  font-size: 0.8rem;
+  color: var(--color-paper-muted, #8a8a8a);
 }
 
 /*

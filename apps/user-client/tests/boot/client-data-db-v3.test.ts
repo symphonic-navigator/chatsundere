@@ -103,6 +103,8 @@ describe('client-data-db v3 migration', () => {
       narration: 'first',
       greetingEnabled: false,
       greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

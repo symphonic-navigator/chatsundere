@@ -22,6 +22,7 @@ export {
   rankOfferings,
   listOfferings,
   getOffering,
+  listTtsOfferings,
   listTtiOfferings,
   MODALITY_ORDER,
   providerServiceKinds,
@@ -108,6 +109,13 @@ export {
   type ImageGenItem,
   type ImageRequestBase,
 } from './tti/generate-images.js';
+export {
+  synthesiseSpeech,
+  SpeechSynthesisError,
+  type SynthesiseSpeechArgs,
+  type SynthesiseSpeechResult,
+} from './tts/synthesise-speech.js';
+export { listTtsVoices, type TtsVoice, type ListTtsVoicesArgs } from './tts/voices.js';
 // Register Block-1 built-in providers on first import.
 import { registerBuiltinProviders } from './providers/_register-builtins.js';
 registerBuiltinProviders();

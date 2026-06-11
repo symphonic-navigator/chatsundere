@@ -73,6 +73,11 @@ export function listOfferings(canonicalId: string): Offering[] {
   return rankOfferings(all.filter((o) => o.canonicalRef === canonicalId));
 }
 
+/** Every curated TTS offering across all registered providers. */
+export function listTtsOfferings(): Offering[] {
+  return listProviders().flatMap((p) => p.offerings.filter((o) => o.serviceKind === 'tts'));
+}
+
 /** Every curated TTI offering across all registered providers. */
 export function listTtiOfferings(): Offering[] {
   return listProviders().flatMap((p) => p.offerings.filter((o) => o.serviceKind === 'tti'));

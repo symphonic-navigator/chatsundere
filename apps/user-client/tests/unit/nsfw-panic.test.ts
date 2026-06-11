@@ -50,6 +50,8 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: 1,
     updatedAt: 1,
   });

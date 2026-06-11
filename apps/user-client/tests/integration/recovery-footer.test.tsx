@@ -62,6 +62,8 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: 1,
     updatedAt: 1,
   });

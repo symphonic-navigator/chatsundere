@@ -69,6 +69,8 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       narration: 'first',
       greetingEnabled: false,
       greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -171,6 +173,8 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       narration: 'first',
       greetingEnabled: false,
       greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
       createdAt: now,
       updatedAt: now,
     });

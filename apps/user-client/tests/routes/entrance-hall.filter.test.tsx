@@ -40,6 +40,8 @@ async function seedSfwAndNsfw() {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -67,6 +69,8 @@ async function seedSfwAndNsfw() {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -135,6 +139,8 @@ describe('Entrance Hall filter (adult mode)', () => {
       narration: 'first',
       greetingEnabled: false,
       greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
       createdAt: now,
       updatedAt: now,
     });

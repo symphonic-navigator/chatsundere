@@ -21,6 +21,7 @@ import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { McpOverrideSection } from '../../components/persona-editor/McpOverrideSection.js';
+import { VoicePicker } from '../../components/voice/VoicePicker.js';
 import { useChats } from '../../data/chats.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { useMindspaces } from '../../data/mindspaces.js';
@@ -43,6 +44,7 @@ import {
 } from '../../lib/context-window.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
+import { resolveTtsTransport } from '../../lib/voice/resolve-tts.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import { toastStore } from '../../state/toast.store.js';
 
@@ -82,6 +84,8 @@ function defaultDraft(
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
   };
 }
 
@@ -236,6 +240,15 @@ export function PersonaEditor(): JSX.Element {
 
   const [isDirty, setIsDirty] = useState(false);
   const setMindspace = useMindspaceStore((s) => s.update);
+
+  // One-time probe: resolve whether a TTS provider is configured. null = still probing (treated
+  // as enabled so the picker isn't prematurely locked during load); false = no provider.
+  const [hasTtsProvider, setHasTtsProvider] = useState<boolean | null>(null);
+  useEffect(() => {
+    void resolveTtsTransport()
+      .then((t) => setHasTtsProvider(t !== null))
+      .catch(() => setHasTtsProvider(false));
+  }, []);
 
   useEffect(() => {
     if (!mindspaces.data || !settings.data) return;
@@ -803,8 +816,32 @@ export function PersonaEditor(): JSX.Element {
         </div>
         <p className="mt-3 text-[11px] text-paper-soft">
           Font is the persona's visual voice — serif for informal, sans for formal, cursive for
-          dolce vita. Voice (text-to-speech) lands later.
+          dolce vita.
         </p>
+
+        <div className="mt-4 flex flex-col gap-3">
+          <VoicePicker
+            label="Voice"
+            value={draft.voice}
+            onSelect={(v) => patch({ voice: v })}
+            disabled={hasTtsProvider === false}
+            disabledHint="Add the Mistral provider in My Settings to enable voice."
+          />
+          {draft.roleplay ? (
+            <div>
+              <VoicePicker
+                label="Narrator voice"
+                value={draft.narratorVoice}
+                onSelect={(v) => patch({ narratorVoice: v })}
+                disabled={hasTtsProvider === false}
+                disabledHint="Add the Mistral provider in My Settings to enable voice."
+              />
+              <p className="mt-1 text-[11px] text-paper-soft">
+                Used for <em>asterisk narration</em> in roleplay; defaults to the main voice.
+              </p>
+            </div>
+          ) : null}
+        </div>
       </AccordionCard>
 
       {/* ❺ Mindspace — Override */}

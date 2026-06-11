@@ -55,6 +55,8 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
+    voice: overrides.voice ?? null,
+    narratorVoice: overrides.narratorVoice ?? null,
   };
 }
 

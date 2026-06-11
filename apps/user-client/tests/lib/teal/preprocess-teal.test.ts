@@ -45,6 +45,11 @@ describe('preprocessTeal — code immunity', () => {
     expect(preprocessTeal(src)).toBe('before\n```\n[laugh] <whisper>x</whisper>\n```\nafter 😄');
   });
 
+  it('never rewrites inside an unclosed (streaming) fenced code block', () => {
+    const src = '```\n[laugh]';
+    expect(preprocessTeal(src)).toBe(src);
+  });
+
   it('never rewrites inside inline code', () => {
     expect(preprocessTeal('use `[pause]` here [pause]')).toBe('use `[pause]` here  … ');
   });

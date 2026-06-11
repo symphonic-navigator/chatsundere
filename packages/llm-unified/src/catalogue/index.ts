@@ -7,6 +7,7 @@ export type {
   AdapterRef,
   ServiceKind,
   TtiOfferingMeta,
+  TtsOfferingMeta,
 } from './types.js';
 export { isReasoningControl } from './types.js';
 export { effectiveFreedom, type FreedomState } from './freedom.js';

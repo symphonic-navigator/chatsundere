@@ -67,6 +67,8 @@ const aurum: PersonaRow = {
   narration: 'first',
   greetingEnabled: false,
   greetingInstructions: '',
+  voice: null,
+  narratorVoice: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -461,7 +463,7 @@ describe('MessageBlock', () => {
     expect(branch?.title).toMatch(/branching paused/i);
   });
 
-  it('Read button is disabled with tooltip', () => {
+  it('Read button is disabled when no read-aloud handler is wired', () => {
     const { container } = render(
       <MessageBlock
         message={personaMsg()}
@@ -479,7 +481,30 @@ describe('MessageBlock', () => {
     );
     const read = container.querySelector('[data-ctrl="read"]') as HTMLButtonElement | null;
     expect(read?.disabled).toBe(true);
-    expect(read?.title).toMatch(/voice|block 4/i);
+  });
+
+  it('Read button is actionable once a read-aloud handler is wired', () => {
+    const onReadAloud = vi.fn();
+    const { container } = render(
+      <MessageBlock
+        message={personaMsg()}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={true}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        onRegenerate={vi.fn()}
+        onReadAloud={onReadAloud}
+        readDisabledReason={null}
+      />,
+      { wrapper: qcWrapper },
+    );
+    const read = container.querySelector('[data-ctrl="read"]') as HTMLButtonElement | null;
+    expect(read?.disabled).toBe(false);
+    expect(read?.title).toMatch(/read this message aloud/i);
   });
 
   it('Regenerate hidden when prop missing', () => {

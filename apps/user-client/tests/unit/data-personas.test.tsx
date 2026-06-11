@@ -65,6 +65,8 @@ describe('usePersonas + CUD mutations', () => {
         narration: 'first',
         greetingEnabled: false,
         greetingInstructions: '',
+        voice: null,
+        narratorVoice: null,
       });
       createdId = created.id;
     });

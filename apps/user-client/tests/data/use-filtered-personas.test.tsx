@@ -39,6 +39,8 @@ async function seedPersonas() {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -66,6 +68,8 @@ async function seedPersonas() {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: now + 1,
     updatedAt: now + 1,
   });

@@ -51,6 +51,8 @@ function persona(id: string, mindspaceId: string | null): PersonaRow {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: 0,
     updatedAt: 0,
   };

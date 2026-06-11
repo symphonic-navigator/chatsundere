@@ -26,6 +26,11 @@ describe('preprocessMath', () => {
     expect(preprocessMath(src)).toBe(src);
   });
 
+  it('does not rewrite maths inside an unclosed (streaming) fenced code block', () => {
+    const src = '```\n\\[E=mc^2\\]';
+    expect(preprocessMath(src)).toBe(src);
+  });
+
   it('does not treat \\\\[5pt] line-break spacing as display math', () => {
     const src = 'a &= b \\\\[5pt]\nc &= d';
     // The \[ rule must not fire on the bracket of \\[5pt].

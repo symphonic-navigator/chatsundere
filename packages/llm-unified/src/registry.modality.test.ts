@@ -51,7 +51,7 @@ describe('modality derivation', () => {
     expect(providersContributing('llm')).toContain('wafer');
   });
 
-  it('providersContributing returns empty when no provider offers the kind', () => {
-    expect(providersContributing('tts')).toEqual([]);
+  it('providersContributing returns the contributing provider when a kind is offered', () => {
+    expect(providersContributing('tts')).toEqual(['mistral']);
   });
 });

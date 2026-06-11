@@ -50,8 +50,22 @@ export interface Offering {
   serviceKind: ServiceKind;
   /** Capability metadata when `serviceKind === 'web'`; undefined for `llm`. */
   web?: WebOfferingMeta;
+  /** Capability metadata when `serviceKind === 'tts'`; undefined otherwise. */
+  tts?: TtsOfferingMeta;
   /** Capability metadata when `serviceKind === 'tti'`; undefined otherwise. */
   tti?: TtiOfferingMeta;
+}
+
+/** Metadata carried by a `serviceKind: 'tts'` offering. */
+export interface TtsOfferingMeta {
+  displayName: string;
+  /**
+   * How this provider treats TEAL expression markup in the input text:
+   * 'strip' removes the tags before synthesis (provider has no expressive
+   * markup support); 'passthrough' sends them verbatim (TEAL v1 is the xAI
+   * snapshot, so the future xAI offering passes through natively).
+   */
+  teal: 'strip' | 'passthrough';
 }
 
 /** Image-generation metadata when `serviceKind === 'tti'`; undefined otherwise. */

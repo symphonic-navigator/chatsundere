@@ -57,6 +57,8 @@ async function seedChatWithProvider() {
     narration: 'first',
     greetingEnabled: true,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -113,6 +115,8 @@ async function seedChatWithExchange() {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: 1,
     updatedAt: 1,
   });

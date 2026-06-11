@@ -38,6 +38,8 @@ function makePersona(overrides: Partial<PersonaRow> = {}): PersonaRow {
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
+    voice: overrides.voice ?? null,
+    narratorVoice: overrides.narratorVoice ?? null,
   };
 }
 

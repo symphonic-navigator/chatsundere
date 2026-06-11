@@ -45,6 +45,8 @@ async function seedPersona(id: string, name: string, adultPersona = false): Prom
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: now,
     updatedAt: now,
   });

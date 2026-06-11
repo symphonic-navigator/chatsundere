@@ -9,6 +9,11 @@ import { codeSnippetTitle, messageSnippetTitle } from '../../lib/artefact-titles
 import { groupAdjacent } from '../../lib/content-blocks.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { transformTealStream } from '../../lib/teal/teal-streaming.js';
+import {
+  type SegmentationOpts,
+  type SpeechSegment,
+  segmentBlock,
+} from '../../lib/voice/segmentation.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { toastStore } from '../../state/toast.store.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
@@ -17,7 +22,7 @@ import { AttachmentStrip } from './AttachmentStrip.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
 import { ReasoningPill } from './ReasoningPill.js';
-import { MarkdownContent } from './markdown/MarkdownContent.js';
+import { MarkdownContent, type VoiceGlow } from './markdown/MarkdownContent.js';
 import { ArtefactSaveContext } from './markdown/artefact-save-context.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -51,6 +56,16 @@ export interface MessageBlockProps {
    *  click again to expand it. Keeps control in the user's hands rather than
    *  snatching focus and selection away in a single gesture. */
   isPinned?: boolean;
+  /** Start reading this message aloud (persona messages only). */
+  onReadAloud?: () => void;
+  /** Why the Read control is disabled, or null when actionable. */
+  readDisabledReason?: 'no-provider' | 'no-voice' | 'nothing' | null;
+  /** The segment currently spoken aloud, or null. Drives the voice glow:
+   *  the matching `[data-voice-seg]` (or, on count-mismatch, the segment's
+   *  `[data-voice-para]`) element wears `voice-glow-active`. */
+  currentSegmentId?: string | null;
+  /** Voice segmentation mode for the glow anchoring (paragraph | sentence). */
+  voiceMode?: 'paragraph' | 'sentence';
 }
 
 /** Renders a single chat message row with optional expanded controls. */
@@ -156,6 +171,81 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
 
   const personaId = p.persona?.id ?? null;
 
+  // ---- Voice glow: per-block segments + active-state toggling ----
+  // Persona messages only; user messages never speak. Memoised on the exact
+  // segmentation inputs so a segment ADVANCE (currentSegmentId change) never
+  // re-runs segmentation or re-parses the markdown — only the effect below
+  // toggles a class. `segmentBlock` here is the SAME pure call the playback
+  // hook fed to the machine, so the ids it produces match `currentSegmentId`.
+  const isPersona = p.message.role === 'persona';
+  const segOpts = useMemo<SegmentationOpts>(
+    () => ({ mode: p.voiceMode ?? 'paragraph', roleplay: p.persona?.roleplay ?? false }),
+    [p.voiceMode, p.persona?.roleplay],
+  );
+  const blockSegments = useMemo<Map<number, SpeechSegment[]>>(() => {
+    const map = new Map<number, SpeechSegment[]>();
+    if (!isPersona) return map;
+    p.message.contentBlocks.forEach((block, index) => {
+      if (block.type !== 'text') return;
+      const segs = segmentBlock(block.text, index, segOpts);
+      if (segs.length > 0) map.set(index, segs);
+    });
+    return map;
+  }, [isPersona, p.message.contentBlocks, segOpts]);
+  // Index `currentSegmentId` → its block- and paragraph-index, so the
+  // paragraph-level fallback can find the right `[data-voice-para]` when no
+  // span matches. The value is the block-qualified attribute string written by
+  // `rehypeVoiceAnchor` — `"<blockIndex>:<paragraphIndex>"`.
+  const segParaById = useMemo<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    for (const segs of blockSegments.values()) {
+      for (const s of segs) map.set(s.segmentId, `${s.blockIndex}:${s.paragraphIndex}`);
+    }
+    return map;
+  }, [blockSegments]);
+  // Per content-block-index glow props, memoised so their references stay
+  // STABLE across a segment-advance render (which changes only
+  // `currentSegmentId`). A new reference here would defeat MarkdownContent's
+  // memo and re-parse the markdown on every segment step — the one thing the
+  // glow must not do. The active segment is intentionally not a dependency.
+  const glowByBlockIndex = useMemo<Map<number, VoiceGlow>>(() => {
+    const map = new Map<number, VoiceGlow>();
+    for (const [blockIndex, segments] of blockSegments) {
+      const block = p.message.contentBlocks[blockIndex];
+      const rawSource = block?.type === 'text' ? block.text : '';
+      map.set(blockIndex, { segments, blockIndex, opts: segOpts, rawSource });
+    }
+    return map;
+  }, [blockSegments, segOpts, p.message.contentBlocks]);
+
+  const textRef = useRef<HTMLDivElement>(null);
+  const activeId = p.currentSegmentId ?? null;
+  useEffect(() => {
+    const container = textRef.current;
+    if (!container) return;
+    // Clear any prior highlight before applying the new one.
+    for (const el of container.querySelectorAll('.voice-glow-active')) {
+      el.classList.remove('voice-glow-active');
+    }
+    if (activeId === null) return;
+    const escaped = CSS.escape(activeId);
+    const seg = container.querySelector(`[data-voice-seg="${escaped}"]`);
+    if (seg) {
+      seg.classList.add('voice-glow-active');
+      return;
+    }
+    // No span matched → paragraph-level fallback (count-mismatch degrade, or
+    // paragraph-mode where the id sits on the <p> via data-voice-seg already).
+    // `paraKey` is the block-qualified attribute value written by the plugin:
+    // "<blockIndex>:<paragraphIndex>". Using a bare paragraph index would
+    // mis-highlight the wrong block when multiple text blocks share the same
+    // local paragraph-0 (the never-mis-highlight contract).
+    const paraKey = segParaById.get(activeId);
+    if (paraKey === undefined) return;
+    const para = container.querySelector(`[data-voice-para="${CSS.escape(paraKey)}"]`);
+    if (para) para.classList.add('voice-glow-active');
+  }, [activeId, segParaById]);
+
   const textContent = p.message.contentBlocks
     .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
     .map((b) => b.text)
@@ -213,6 +303,7 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
         <div className="msg-timestamp">{formatTimestamp(p.message.createdAt)}</div>
       ) : null}
       <div
+        ref={textRef}
         className="msg-text"
         style={p.persona ? { fontFamily: FONT_VAR[p.persona.font] } : undefined}
       >
@@ -223,6 +314,7 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
             p.isStreamingDraft === true,
             p.persona,
             p.mindspace,
+            glowByBlockIndex,
           )}
         </ArtefactSaveContext.Provider>
       </div>
@@ -257,6 +349,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           branchDisabled={p.branchDisabled}
           onSave={handleSaveMessage}
           canSave={canSaveMessage}
+          onReadAloud={p.onReadAloud}
+          readDisabledReason={p.readDisabledReason}
         />
       ) : null}
     </div>
@@ -269,11 +363,28 @@ function renderBlocks(
   isStreamingDraft: boolean,
   persona: PersonaRow | null,
   mindspace: ResolvedMindspace,
+  // Per content-block-index glow props (empty/absent for user messages,
+  // non-text blocks, or blocks with nothing to say). References are stable
+  // across segment-advance renders so MarkdownContent never re-parses.
+  glowByBlockIndex: Map<number, VoiceGlow>,
 ): (JSX.Element | null)[] {
   // Partition into ordered runs of same-type blocks — one component per run.
   // Pills never coalesce (their `pillId` identity is load-bearing); text and
   // reasoning runs merge into a single span / pill respectively.
   const groups = groupAdjacent(blocks);
+
+  // Map each group back to the content-block index of its FIRST block, so a
+  // text group can look up its segments. Finalised persona messages coalesce
+  // adjacent text blocks engine-side (stream-engine.appendText), so a text
+  // group is a single block there — the glow's per-block segment ids line up.
+  const groupFirstIndex: number[] = [];
+  {
+    let cursor = 0;
+    for (const g of groups) {
+      groupFirstIndex.push(cursor);
+      cursor += g.blocks.length;
+    }
+  }
 
   // Only the LAST reasoning group of a streaming-draft message wears the
   // live indicator. Finalised messages (and all earlier groups within a
@@ -318,8 +429,17 @@ function renderBlocks(
         );
       }
       const text = group.blocks.map((b) => (b as { type: 'text'; text: string }).text).join('');
+      // A single-block text group (the finalised case) can glow: its segments
+      // were computed under the same content-block index. Multi-block text
+      // groups only occur mid-stream (no glow then) — guard on length so the
+      // ids never misalign with the joined text.
+      const blockIndex = groupFirstIndex[idx];
+      const glow =
+        group.blocks.length === 1 && blockIndex !== undefined
+          ? glowByBlockIndex.get(blockIndex)
+          : undefined;
       // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across token appends (append-only)
-      return <MarkdownContent key={`g-${idx}`} text={text} />;
+      return <MarkdownContent key={`g-${idx}`} text={text} glow={glow} />;
     }
     if (group.type === 'reasoning') {
       const trace = group.blocks

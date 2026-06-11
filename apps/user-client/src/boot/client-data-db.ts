@@ -37,6 +37,9 @@ export interface SettingsRow {
     primary: { ref: string; config: ImageModelConfig } | null;
     nsfw: { ref: string; config: ImageModelConfig } | null;
   };
+  /** Voice playback granularity: paragraph = one segment per paragraph,
+   *  sentence = one segment per sentence. */
+  voiceMode: 'paragraph' | 'sentence';
   createdAt: number;
   updatedAt: number;
 }
@@ -138,6 +141,10 @@ export interface PersonaRow {
   greetingEnabled: boolean;
   /** User-authored rules the opener is composed from. */
   greetingInstructions: string;
+  /** TTS voice id for this persona's spoken dialogue. null = TTS not configured. */
+  voice: string | null;
+  /** TTS voice id for asterisk narration lines. null = use voice, or TTS not configured. */
+  narratorVoice: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -286,6 +293,21 @@ export interface PersonaAvatarRow {
   updatedAt: number;
 }
 
+// ===== Voice audio cache (v21) =====
+
+export interface VoiceAudioRow {
+  /** Deterministic cache key produced by voiceCacheKey(). */
+  key: string;
+  /** Raw audio bytes from the TTS provider. */
+  blob: Blob;
+  /** MIME type of the audio (e.g. "audio/mpeg"). */
+  mimeType: string;
+  /** Blob byte size — stored separately to avoid loading the blob for LRU accounting. */
+  bytes: number;
+  /** Unix-ms timestamp of the last read or write — used for LRU eviction ordering. */
+  lastUsedAt: number;
+}
+
 // ===== Knowledgebase (v14) =====
 
 /** A library is a named container of documents. */
@@ -335,6 +357,7 @@ class ClientDataDb extends Dexie {
   libraries!: Table<LibraryRow, string>;
   documents!: Table<DocumentRow, string>;
   mcpServers!: Table<McpServerRow, string>;
+  voiceAudio!: Table<VoiceAudioRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -701,6 +724,29 @@ class ClientDataDb extends Dexie {
             if (typeof p.greetingInstructions !== 'string') p.greetingInstructions = '';
           });
       });
+
+    // Version 21 — voice playback core. Settings gain a `voiceMode` toggle;
+    // personas gain `voice` and `narratorVoice` TTS voice-id slots (both null
+    // until the user configures them). A new `voiceAudio` table persists the
+    // LRU audio cache (key, blob, mimeType, bytes, lastUsedAt).
+    this.version(21)
+      .stores({ voiceAudio: 'key, lastUsedAt' })
+      .upgrade(async (tx) => {
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            if (s.voiceMode !== 'paragraph' && s.voiceMode !== 'sentence')
+              s.voiceMode = 'paragraph';
+          });
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            if (typeof p.voice !== 'string') p.voice = null;
+            if (typeof p.narratorVoice !== 'string') p.narratorVoice = null;
+          });
+      });
   }
 }
 
@@ -814,6 +860,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         substituteVisionModel: null,
         expertModel: null,
         imageGeneration: { primary: null, nsfw: null },
+        voiceMode: 'paragraph',
         createdAt: now,
         updatedAt: now,
       });

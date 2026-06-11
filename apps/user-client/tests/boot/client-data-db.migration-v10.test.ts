@@ -38,6 +38,8 @@ describe('Dexie v10 migration', () => {
       narration: 'first',
       greetingEnabled: false,
       greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

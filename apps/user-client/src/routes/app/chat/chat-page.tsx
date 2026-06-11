@@ -15,6 +15,7 @@ import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { TocSheet } from '../../../components/chat/TocSheet.js';
+import { VoiceTransport } from '../../../components/chat/VoiceTransport.js';
 import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js';
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
 import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
@@ -37,6 +38,7 @@ import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
+import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
@@ -440,6 +442,13 @@ export function ChatPage(): JSX.Element {
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
 
+  // Voice playback. Owns one machine actor + AudioSink for this chat view; the
+  // persistent transport (rendered below) governs an in-flight read-aloud
+  // independently of message expansion, scrolling, and Reading↔Interaction mode.
+  const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages);
+  const resumeParagraphLabel =
+    voice.resumeOffer !== null ? `¶${voice.resumeOffer.paragraphIndex + 1}` : null;
+
   // Artefact hooks — keyed to the active chat (non-null when chat-mode).
   const { data: chatArtefacts = [] } = useChatArtefacts(activeChatId ?? '');
   const renameArtefact = useRenameArtefact(activeChatId ?? '');
@@ -497,6 +506,10 @@ export function ChatPage(): JSX.Element {
             setBranchPointId(messageId);
           }}
           branchDisabled={isStreamLive}
+          onReadAloud={(message) => void voice.playMessage(message)}
+          voiceDisabledReason={voice.disabledReason}
+          voiceMode={settingsQuery.data?.voiceMode ?? 'paragraph'}
+          currentSegmentId={voice.currentSegmentId}
         />
       ) : null}
 
@@ -582,6 +595,26 @@ export function ChatPage(): JSX.Element {
           }}
         />
       ) : null}
+
+      {/*
+        The persistent voice transport. Absolutely positioned within .chat-page
+        (which establishes a containing block via position: fixed), so it floats
+        bottom-centre regardless of scroll, message expansion, or mode. Renders
+        nothing while idle without a resume offer — honouring the "less
+        distraction" intent that retired the old ReadingToolStrip.
+      */}
+      <VoiceTransport
+        state={voice.transportState}
+        resumeOffer={resumeParagraphLabel ? { paragraphLabel: resumeParagraphLabel } : null}
+        onPause={voice.pause}
+        onResume={voice.resumeAudio}
+        onStop={voice.stop}
+        onRetry={voice.retry}
+        onSkip={voice.skip}
+        onResumePlayback={voice.resume}
+        onStartOver={voice.startOver}
+        onDismiss={voice.dismissPartial}
+      />
 
       {tocOpen ? (
         <TocSheet messages={messages} onClose={() => setTocOpen(false)} onJump={jumpToMessage} />

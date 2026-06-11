@@ -54,6 +54,8 @@ async function seedPersonaWithMindspace() {
     narration: 'first',
     greetingEnabled: false,
     greetingInstructions: '',
+    voice: null,
+    narratorVoice: null,
     createdAt: 1,
     updatedAt: 1,
   });
