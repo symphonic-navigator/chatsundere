@@ -31,6 +31,7 @@ import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
+import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
@@ -338,6 +339,9 @@ export function ChatPage(): JSX.Element {
       {
         tonalityEnabled: effectivePersona.chatsundereTonality,
         nsfwEnabled: effectivePersona.adultPersona,
+        roleplayEnabled: effectivePersona.roleplay,
+        narration: effectivePersona.narration,
+        personaName: effectivePersona.name,
         globalInstructions: settingsQuery.data.globalInstructions,
         aboutMe: effectivePersona.aboutMeOverride?.trim()
           ? effectivePersona.aboutMeOverride
@@ -349,7 +353,8 @@ export function ChatPage(): JSX.Element {
       },
       'chat',
     );
-    const msgTexts = (chatQuery.data?.messages ?? []).map((m) =>
+    // Openers never reach the wire (isContextMessage), so they don't count here.
+    const msgTexts = (chatQuery.data?.messages ?? []).filter(isContextMessage).map((m) =>
       m.contentBlocks
         .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
         .map((b) => b.text)
