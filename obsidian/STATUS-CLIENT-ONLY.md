@@ -16,7 +16,51 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-11 — **Roleplay Mode & User Greeting LANDED** (squashed
+**Last updated:** 2026-06-11 (afternoon) — **TEAL voice expression language LANDED**
+(squashed onto master `c3a6932`, **NOT pushed**; **NOT yet device-verified**). Part 2
+of the voice design weekend. TEAL (*Transformative Expression and Anthropomorphisation
+Layer*) is the canonical voice expression language: a **closed, versioned vocabulary**
+(v1 = xAI snapshot 2026-06-11; 16 inline + 13 wrapping tags, qualifiers, nesting) in
+`packages/llm-unified/src/teal/`, an **always-on Band-1 prompt segment** (order 3,
+**before** roleplay — the roleplay→persona-CI adjacency is untouched, D9) for the
+**chat + greeting** jobs only (title/memory excluded, D8; the context gauge counts it
+automatically), and **human-friendly display rendering**: the user never sees raw tags —
+`[laugh]` → 😄, `[pause]` → ` … `, `<whisper>` → dimmed italics (colour-mix, not
+opacity), `<loud>`/`<emphasis>`/`<laugh-speak>` → bold, `<singing>` → ♪…♪, `<slow>` →
+letter-spaced, voice-only modulation silent. The mapping is **one curated data file**
+(`apps/user-client/src/lib/teal/teal-render-map.ts`, longest-match: `soft laugh` → 🤭
+before core-word fallback) — Chris edits rows, the plugins are generic. Finalised path:
+`preprocessTeal` (inline tags + PUA-sentinel wraps, code-masked via the extracted shared
+`code-mask.ts`) → `rehypeTeal` (sentinels → classed spans, one active-class stack across
+the whole tree = cross-paragraph + progressive-unclosed semantics). Streaming path:
+**append-stable chunk state machine** (`teal-streaming.ts`) wired into MessageBlock —
+split tags complete across chunk boundaries, half-typed tags at the stream tip are
+suppressed, fenced/inline code passes through, span keys stay stable (no re-fade).
+Unknown tags stay **literal** (closed vocabulary = the false-positive guard and the
+observation source for v2). Built **subagent-driven** in an isolated worktree (9 code
+tasks + per-task spec/quality reviews + fix rounds + final **opus holistic review =
+READY TO SQUASH**; its two accepted streaming transients + the **workbox 2 MiB
+precache edge** the build was sitting on — stopgap limit raise in `vite.config.ts`,
+code-splitting follow-up — logged in [[insights/follow-ups-index]]). **Not a Larissa
+path** (client-only, no auth/sync/proxy/crypto, no new egress). **Not a Laura path**
+(judgement call: no flow/state/reachability change — message text renders friendlier;
+no new controls). Gates (Liz-verified on master after squash): `pnpm typecheck --force`
+**14/14**; llm-unified `bun test` **347/0**; user-client vitest **1347 pass / 8 fail**
+(the unchanged cockpit-draft/chat-page/chat-route localStorage-jsdom baseline);
+`pnpm run build --force` **9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-11-teal-voice-expression-language-design]],
+[[../superpowers/plans/2026-06-11-teal-voice-expression-language]]. **Device test
+(spec §8, seven steps; restart `pnpm dev` first — packages/llm-unified changed — and
+run `pnpm install` once, `@types/hast` was added):** expressive story →
+emojis/italics/bold, no raw tags; whisper italic + pause-ellipsis + ♪; roleplay
+coexistence without double-marking; greeting opener carries expressions; `[pause]` in a
+code block stays literal; no half-tag flash at the stream tip; user-typed `[laugh]`
+renders 😄 in the own bubble. **Next:** Chris device-tests → Liz pushes the master
+backlog on his word; then the voice design weekend continues (TTS/live voice — the
+TEAL→backend translators consume this language, incl. the emoji→expression input rule
+from spec §6).
+
+**Earlier 2026-06-11 — Roleplay Mode & User Greeting LANDED** (squashed
 onto master `ef5a478`, **NOT pushed**; **DEVICE-CONFIRMED by Chris 2026-06-11**:
 roleplay mode tested with **Mistral Small 4** ("wunderbar für Sci-Fi") — his
 Klingon buddy persona Kirok stayed in character and reached for Klingon phrases
