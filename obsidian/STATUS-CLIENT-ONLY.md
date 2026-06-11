@@ -16,7 +16,47 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-10 (night) — **Voice feature feasibility assessed**
+**Last updated:** 2026-06-11 — **Roleplay Mode & User Greeting LANDED** (squashed
+onto master `ef5a478`, **NOT pushed**; **NOT yet device-verified**). Part 1 of the
+voice design weekend (voice itself still unbuilt). Personas gain (a) an opt-in
+**Roleplay** behaviour switch — a curated Band-1 prompt segment (embodiment +
+asterisk-narration formatting with a **first/third-person narration** selector,
+field-tested behaviour facts, and an **NSFW re-unlock** that rides `adultPersona`)
+inserted **directly before the persona CI** (spatial proximity is load-bearing —
+Chris's empirical ERP finding), and (b) an independent opt-in **User Greeting** —
+every new chat opens with a freshly generated, **live-streamed** in-character
+message guided by user-written rules, persisted as a `kind: 'opener'` persona
+message that renders normally but is **excluded from every model context** via the
+single shared `isContextMessage` predicate (wire, title-gen incl. the count gate
+that would otherwise never fire, lore companion scan, lore-cooldown window).
+`ChatRow.openerPending` (creation-time snapshot) guards generation — no
+retrofitting; failure falls back to "{name} is listening" + constructive Retry;
+Stop keeps the partial; Regenerate re-rolls ("Re-roll the greeting" tooltip).
+**Deliberately NO per-chat roleplay toggle** — roleplay characters and AI
+companions are separate worlds (protective product decision, in Liz's memory).
+**Dexie v20 now belongs to roleplay** (persona-fields backfill) — the voice
+settings bump moves to **v21**. Built **subagent-driven** in an isolated worktree
+(10 tasks + per-task spec/quality reviews + ~5 fix rounds + final **opus holistic
+review = READY TO SQUASH**; its one non-blocking note + a Laura observation logged
+in [[insights/follow-ups-index]]). **Laura spec-pass** (5 soft notes, all
+incorporated pre-build) + **Laura pre-squash pass: clean, no hard defects** (her
+one soft finding — §6.4 flag clearing on send — turned out implemented in
+`store.start()`; no deferral). Not a Larissa path (client-only, no new egress —
+the opener rides the per-persona inference path). Gates (Liz-verified on master):
+`pnpm typecheck --force` **14/14**; llm-unified `bun test` **334/0**; user-client
+vitest **1311 pass / 8 fail** (the unchanged cockpit-draft/chat-page/chat-route
+localStorage-jsdom baseline); `pnpm run build` **9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-11-roleplay-mode-and-user-greeting-design]],
+[[../superpowers/plans/2026-06-11-roleplay-mode-and-user-greeting]]. **Device test
+(spec §10, ten steps; restart `pnpm dev` first — packages/llm-unified changed):**
+roleplay bard persona (short in-character paragraphs, asterisk narration,
+first/third person), NSFW re-unlock quality check, mid-chat activation, greeting
+streams on a new chat, wire exclusion via the network tab, stop/regenerate,
+failure path + Retry, save gate, no retrofitting. **Next:** Chris device-tests →
+Liz pushes the master backlog on his word; then the voice design weekend
+continues (TTS/live voice + expressions on top of this narration foundation).
+
+**Earlier 2026-06-10 (night) — Voice feature feasibility assessed**
 (assessment only, no code). Chris opens a four-day deep-design weekend
 starting **2026-06-11 15:00**: voice as one **fully integrated unit** marrying
 **roleplay-mode, narration, TTS/live voice and provider-agnostic expressions**
