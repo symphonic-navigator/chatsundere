@@ -688,6 +688,37 @@ h1 {
   overflow-x: auto;
   overflow-y: hidden;
 }
+/* TEAL — expression rendering (spec 2026-06-11 §4.3). Shared by the
+   finalised Markdown path (.msg-text) and the live stream (.msg-stream-text). */
+.msg-text .teal-italic,
+.msg-stream-text .teal-italic {
+  font-style: italic;
+}
+.msg-text .teal-whisper,
+.msg-stream-text .teal-whisper {
+  font-style: italic;
+  color: color-mix(in srgb, currentColor 75%, transparent);
+}
+.msg-text .teal-bold,
+.msg-stream-text .teal-bold {
+  font-weight: 600;
+}
+.msg-text .teal-slow,
+.msg-stream-text .teal-slow {
+  letter-spacing: 0.08em;
+}
+.msg-text .teal-singing,
+.msg-stream-text .teal-singing {
+  font-style: italic;
+}
+.msg-text .teal-singing::before,
+.msg-stream-text .teal-singing::before {
+  content: '♪ ';
+}
+.msg-text .teal-singing::after,
+.msg-stream-text .teal-singing::after {
+  content: ' ♪';
+}
 /* Image marker — the privacy-preserving tap-to-load pill that stands in for a
    model-emitted image until the user consents (see ImageMarker.tsx). Inline
    marker aesthetic, matching the inline-code pill. */

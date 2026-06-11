@@ -7,6 +7,7 @@ import {
   TONALITY_PROMPT,
   roleplayFormattingPrompt,
 } from './identity/chatsundere-identity.js';
+import { TEAL_EXPRESSION_PROMPT } from './teal/teal.js';
 
 /** The job a prompt is being built for. `chat` is the main conversation turn;
  *  `title` drives title generation; `memory` is reserved for memory extraction;
@@ -47,6 +48,7 @@ type SegmentId =
   | 'tonality'
   | 'nsfw'
   | 'global'
+  | 'teal'
   | 'roleplay'
   | 'persona'
   | 'aboutMe'
@@ -93,13 +95,17 @@ const SEGMENTS: readonly SegmentSpec[] = [
     resolve: (i) => (i.nsfwEnabled ? NSFW_PROMPT : ''),
   },
   { id: 'global', band: 1, order: 2, jobs: ALL_JOBS, resolve: (i) => i.globalInstructions },
-  // Runs in every Band-1 job on purpose (spec 2026-06-11 §4.1): the title job's
+  // Always-on expression layer (TEAL spec 2026-06-11, D1/D9): placed before the
+  // roleplay segment so the roleplay → persona adjacency stays intact. Chat and
+  // greeting only — title and memory produce no spoken text (D8).
+  { id: 'teal', band: 1, order: 3, jobs: CHAT_AND_GREETING, resolve: () => TEAL_EXPRESSION_PROMPT },
+  // Runs in every Band-1 job on purpose (roleplay spec 2026-06-11 §4.1): the title job's
   // trailing instruction overrides the embodiment rules in practice — the same
   // mechanism that lets the NSFW segment coexist with title generation.
   {
     id: 'roleplay',
     band: 1,
-    order: 3,
+    order: 4,
     jobs: ALL_JOBS,
     resolve: (i) =>
       i.roleplayEnabled
@@ -110,7 +116,7 @@ const SEGMENTS: readonly SegmentSpec[] = [
           ].join('\n\n')
         : '',
   },
-  { id: 'persona', band: 1, order: 4, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
+  { id: 'persona', band: 1, order: 5, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
   { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_AND_GREETING, resolve: (i) => i.aboutMe },
   { id: 'project', band: 2, order: 1, jobs: CHAT_ONLY, resolve: (i) => i.projectInstructions },
   { id: 'memories', band: 2, order: 2, jobs: CHAT_ONLY, resolve: (i) => i.memoryContext },

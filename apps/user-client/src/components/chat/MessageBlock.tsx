@@ -8,6 +8,7 @@ import { QK } from '../../data/queryKeys.js';
 import { codeSnippetTitle, messageSnippetTitle } from '../../lib/artefact-titles.js';
 import { groupAdjacent } from '../../lib/content-blocks.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
+import { transformTealStream } from '../../lib/teal/teal-streaming.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { toastStore } from '../../state/toast.store.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
@@ -288,20 +289,31 @@ function renderBlocks(
   return groups.map((group, idx) => {
     if (group.type === 'text') {
       // While streaming, each upstream chunk is its own (un-coalesced) text
-      // block — see stream-manager.appendStreamChunk. Render one span per
-      // chunk so newly-appended spans mount and fade in individually, giving
-      // a live per-token fade. Raw text only (no Markdown re-parse per token);
-      // once the draft finalises the blocks coalesce and re-render as Markdown.
+      // block — see stream-manager.appendStreamChunk. Chunks pass through
+      // transformTealStream so TEAL inline tags become emoji/text and wrapping
+      // tags carry CSS classes; per-chunk spans may split further where styling
+      // changes. Raw text only (no Markdown re-parse per token); once the draft
+      // finalises the blocks coalesce and re-render as Markdown.
       if (isStreamingDraft) {
+        const chunkSpans = transformTealStream(
+          group.blocks.map((b) => (b as { type: 'text'; text: string }).text),
+        );
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across token appends (append-only)
           <span className="msg-stream-text" key={`g-${idx}`}>
-            {group.blocks.map((b, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: append-only chunk index; existing spans keep their key so only fresh ones animate
-              <span className="stream-tok" key={i}>
-                {(b as { type: 'text'; text: string }).text}
-              </span>
-            ))}
+            {chunkSpans.map((spans, i) =>
+              spans.map((s, j) => (
+                <span
+                  className={
+                    s.classNames.length > 0 ? `stream-tok ${s.classNames.join(' ')}` : 'stream-tok'
+                  }
+                  // biome-ignore lint/suspicious/noArrayIndexKey: transform output is append-stable (earlier chunks render identically), so existing spans keep their key and only fresh ones animate
+                  key={`${i}-${j}`}
+                >
+                  {s.text}
+                </span>
+              )),
+            )}
           </span>
         );
       }

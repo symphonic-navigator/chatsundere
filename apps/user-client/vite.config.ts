@@ -97,6 +97,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
+        // The main chunk crossed workbox's 2 MiB precache default (master sat
+        // <1 kB under it). The app shell MUST be precached for offline, so the
+        // limit is raised; the real cure is code-splitting the main chunk —
+        // tracked in obsidian/insights/follow-ups-index.md.
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         // `/model/` serves the self-hosted embedding weights (config/tokenizer
         // JSON + the int8 ONNX). Without this denylist entry the SW's

@@ -33,6 +33,18 @@ export { registerAdapter, getAdapter } from './adapter-registry.js';
 export { buildPrompt, type BuildPromptInputs, type PromptJob } from './composition.js';
 export { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js';
 
+export {
+  TEAL_EXPRESSION_PROMPT,
+  TEAL_INLINE_TAGS,
+  TEAL_WRAPPING_TAGS,
+  TEAL_VERSION,
+  type TealInlineTag,
+  type TealWrappingTag,
+  isTealWrapping,
+  matchTealInline,
+  stripTeal,
+} from './teal/teal.js';
+
 export { buildRequest, type BuildRequestArgs } from './transport.js';
 
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';

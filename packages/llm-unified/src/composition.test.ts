@@ -2,7 +2,12 @@
 
 import { describe, expect, it } from 'bun:test';
 import { type BuildPromptInputs, buildPrompt } from './composition.js';
-import { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js';
+import {
+  NSFW_PROMPT,
+  ROLEPLAY_BEHAVIOUR_PROMPT,
+  TONALITY_PROMPT,
+} from './identity/chatsundere-identity.js';
+import { TEAL_EXPRESSION_PROMPT } from './teal/teal.js';
 
 function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
   return {
@@ -20,7 +25,9 @@ function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
 
 describe('buildPrompt', () => {
   it('returns just the persona instructions when nothing else is set', () => {
-    expect(buildPrompt(inputs(), 'chat')).toBe('You are a helpful assistant.');
+    // TEAL is always present in the chat job; use title (no spoken text, D8) to
+    // verify that no other optional segment resolves when all toggles are off.
+    expect(buildPrompt(inputs(), 'title')).toBe('You are a helpful assistant.');
   });
 
   it('orders segments by band then position', () => {
@@ -36,17 +43,25 @@ describe('buildPrompt', () => {
       }),
       'chat',
     );
-    // Band 1: tonality, nsfw, global, persona — Band 2 before Band 3
+    // Band 1: tonality, nsfw, global, teal (always-on), persona (roleplay absent — disabled) — Band 2 before Band 3
     expect(out).toBe(
-      [TONALITY_PROMPT, NSFW_PROMPT, 'GLOBAL', 'PERSONA', 'ABOUT', 'PROJECT', 'MEMORY'].join(
-        '\n\n',
-      ),
+      [
+        TONALITY_PROMPT,
+        NSFW_PROMPT,
+        'GLOBAL',
+        TEAL_EXPRESSION_PROMPT,
+        'PERSONA',
+        'ABOUT',
+        'PROJECT',
+        'MEMORY',
+      ].join('\n\n'),
     );
   });
 
   it('omits the tonality segment when the toggle is off', () => {
     const out = buildPrompt(inputs({ tonalityEnabled: false, personaInstructions: 'P' }), 'chat');
-    expect(out).toBe('P');
+    expect(out).not.toContain(TONALITY_PROMPT);
+    expect(out).toContain('P');
   });
 
   it('omits the NSFW segment when the persona is not adult', () => {
@@ -64,7 +79,11 @@ describe('buildPrompt', () => {
       inputs({ globalInstructions: '  \n ', personaInstructions: 'P', aboutMe: 'A' }),
       'chat',
     );
-    expect(out).toBe('P\n\nA');
+    // Whitespace-only global must not leave a blank gap between segments.
+    expect(out).not.toContain('\n\n\n');
+    expect(out).toContain('P');
+    expect(out).toContain('A');
+    expect(out.indexOf('P')).toBeLessThan(out.indexOf('A'));
   });
 
   it('drops Band 2 and Band 3 segments for the title job', () => {
@@ -134,7 +153,9 @@ describe('tools segment', () => {
 
   it('drops the segment when the instruction is empty', () => {
     const out = buildPrompt(baseInputs, 'chat');
-    expect(out).toBe('You are a helpful companion.');
+    // No tools instruction — the tools segment must be absent.
+    expect(out).not.toContain('calculate_js');
+    expect(out).toContain('You are a helpful companion.');
   });
 });
 
@@ -186,7 +207,9 @@ describe('lore segment', () => {
 
   it('omits the lore segment when empty', () => {
     const out = buildPrompt(inputs({ personaInstructions: 'P' }), 'chat');
-    expect(out).toBe('P');
+    // No lore context provided — the lore segment must be absent.
+    expect(out).not.toContain('LORE');
+    expect(out).toContain('P');
   });
 
   it('drops the lore segment for the title job', () => {
@@ -257,5 +280,40 @@ describe('greeting job', () => {
     expect(out).not.toContain('TOOLS-MARK');
     expect(out).not.toContain('PROJECT-MARK');
     expect(out).not.toContain('MEMORY-MARK');
+  });
+});
+
+describe('teal segment', () => {
+  it('is always present in chat and greeting', () => {
+    for (const job of ['chat', 'greeting'] as const) {
+      const out = buildPrompt(inputs({}), job);
+      expect(out).toContain('Expressive delivery');
+    }
+  });
+
+  it('is absent from title and memory jobs', () => {
+    for (const job of ['title', 'memory'] as const) {
+      const out = buildPrompt(inputs({}), job);
+      expect(out).not.toContain('Expressive delivery');
+    }
+  });
+
+  it('sits before roleplay, which stays directly before persona', () => {
+    const out = buildPrompt(
+      inputs({
+        roleplayEnabled: true,
+        personaInstructions: 'PERSONA-MARK',
+      }),
+      'chat',
+    );
+    const tealIdx = out.indexOf('Expressive delivery');
+    const rpIdx = out.indexOf('roleplay mode');
+    const pIdx = out.indexOf('PERSONA-MARK');
+    expect(tealIdx).toBeGreaterThanOrEqual(0);
+    expect(tealIdx).toBeLessThan(rpIdx);
+    expect(rpIdx).toBeLessThan(pIdx);
+    // Nothing between the end of the roleplay block and the start of persona.
+    const rpEnd = out.indexOf(ROLEPLAY_BEHAVIOUR_PROMPT) + ROLEPLAY_BEHAVIOUR_PROMPT.length;
+    expect(out.slice(rpEnd, pIdx)).toBe('\n\n');
   });
 });

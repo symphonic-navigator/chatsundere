@@ -196,6 +196,37 @@ describe('MessageBlock', () => {
     expect(text.textContent).toBe('Hi world');
   });
 
+  it('transforms TEAL tags in streaming drafts', () => {
+    const msg = personaMsg({
+      contentBlocks: [
+        { type: 'text', text: 'Hello [lau' },
+        { type: 'text', text: 'gh] <whisper>hi' },
+      ],
+    });
+    const { container } = render(
+      <MessageBlock
+        message={msg}
+        pills={new Map()}
+        mindspace={mindspaceStub}
+        persona={aurum}
+        displayName="Chris"
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onCopy={vi.fn()}
+        onBookmark={vi.fn()}
+        isStreamingDraft={true}
+      />,
+      { wrapper: qcWrapper },
+    );
+    const text = container.querySelector('.msg-text') as HTMLElement;
+    // The split tag completed across the chunk boundary; the wrap styles from
+    // its opening tag onwards; no raw markup reaches the DOM.
+    expect(text.textContent).toBe('Hello 😄 hi');
+    expect(text.textContent).not.toContain('[lau');
+    const whisper = container.querySelector('.stream-tok.teal-whisper');
+    expect(whisper?.textContent).toBe('hi');
+  });
+
   it('finalised message renders text as joined Markdown, no fade spans', () => {
     const msg = personaMsg({
       contentBlocks: [

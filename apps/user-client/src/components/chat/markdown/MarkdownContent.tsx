@@ -8,15 +8,19 @@ import remarkMath from 'remark-math';
 import type { PluggableList } from 'unified';
 import { useHighlighter } from '../../../lib/markdown/highlighter.js';
 import { preprocessMath } from '../../../lib/markdown/preprocess-math.js';
+import { preprocessTeal } from '../../../lib/teal/preprocess-teal.js';
+import { rehypeTeal } from '../../../lib/teal/rehype-teal.js';
 import { createMarkdownComponents } from './markdown-components.js';
 
 const remarkPlugins: PluggableList = [remarkGfm, remarkMath];
-const rehypePlugins: PluggableList = [[rehypeKatex, { throwOnError: false }]];
+// rehypeTeal runs after rehype-katex so maths output is never re-walked for TEAL markers.
+const rehypePlugins: PluggableList = [[rehypeKatex, { throwOnError: false }], rehypeTeal];
 
 function MarkdownContentBase({ text }: { text: string }): JSX.Element {
   const highlighter = useHighlighter();
   const components = useMemo(() => createMarkdownComponents(highlighter), [highlighter]);
-  const processed = useMemo(() => preprocessMath(text), [text]);
+  // preprocessTeal before preprocessMath — both mask code fences; either order is otherwise safe.
+  const processed = useMemo(() => preprocessMath(preprocessTeal(text)), [text]);
   return (
     <ReactMarkdown
       remarkPlugins={remarkPlugins}
