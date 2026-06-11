@@ -16,8 +16,62 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-11 (afternoon) — **TEAL voice expression language LANDED**
-(squashed onto master `c3a6932`, **NOT pushed**; **NOT yet device-verified**). Part 2
+**Last updated:** 2026-06-11 (evening) — **VOICE PLAYBACK CORE LANDED**
+(squashed onto master `7eea044`, **NOT pushed**; **NOT yet device-verified**). Part 3
+of the voice design weekend — Spec 1 of the audio-state trilogy (core → dictation →
+live voice; specs 2+3 still to be brainstormed). Read-aloud of persona messages:
+**paragraph-by-paragraph (default) and smart-sentence interleave modes**; an
+**XState v5 playback machine** ([ADR 0034](decisions/0034-xstate-for-the-voice-domain.md)
+— XState for the voice domain ONLY) with one-ahead prefetch, a pause gate that never
+cancels the in-flight actor, failure Retry/Skip and ended-partial semantics, and
+auto-aborting actors; the **segmentation library as single source of truth**
+(`lib/voice/segmentation.ts`, raw-text/TEAL-neutral — empirical finding: the planned
+renderer-identical preprocessing would have destroyed TTS tag passthrough since
+`preprocessTeal` converts `[laugh]`→😄; glow pairs structurally instead, raw↔processed
+paragraph mapping handles multiline-math splits, count-mismatch degrades to
+paragraph-level, never mis-highlights); a **persistent `VoiceTransport`** (Laura's two
+spec-pass hard findings honoured: governs playback independent of the tap-to-expand
+rail; carries `Resume · ¶k`/Start over on return, Retry/Skip, the ended-partial
+closing note; renders nothing when idle — the removed-ReadingToolStrip
+less-distraction decision survives; `position:absolute` per the transform trap);
+**steady tracking glow** (fixed intensity, reduced-motion static tint, D15);
+**Dexie v21** (`voiceAudio` LRU blob cache — 64 MiB byte budget, write-counts-as-use,
+key = hash(spokenText·provider·model·voice), never the message id → regeneration
+reuse + self-invalidation; `voiceMode` setting; persona `voice`/`narratorVoice`);
+**dual voice in roleplay only** (asterisk narration → narrator voice, falls back to
+the main voice); **`serviceKind: 'tts'` in llm-unified** with the **Mistral Voxtral
+offering** (`voxtral-mini-tts-2603`, **direct — CORS open, no proxy**, base64-MP3,
+per-offering TEAL `strip`/`passthrough` hook — xAI later passes TEAL natively);
+**My Settings → Voice** section (mode toggle, provider state line) + persona-editor
+voice pickers (narrator picker only when roleplay is on; disabled-with-hint without
+a provider). Built **subagent-driven** in an isolated worktree (9 tasks + per-task
+spec/quality reviews + ~8 fix rounds + **opus holistic review** whose blocking
+multiline-math glow finding was fixed in-branch + **Laura pre-squash pass: clean, no
+hard defects**, one advisory logged in [[insights/follow-ups-index]] with five Minor
+deferrals). New egress class (spoken message text to the TTS provider,
+user-initiated) logged in [[insights/security-deferrals]] — **not a Larissa path**
+(client-only). Gates (Liz-verified on master after squash): `pnpm typecheck --force`
+**14/14**; `pnpm run build --force` **9/9**; user-client vitest **1468 pass / 8 fail**
+(the unchanged cockpit-draft/chat-page/chat-route baseline); llm-unified `bun test`
+**353/0**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-11-voice-playback-core-design]],
+[[../superpowers/plans/2026-06-11-voice-playback-core]]. **Device test (spec §8,
+twelve steps; run `pnpm install` once — xstate is new — and restart `pnpm dev` —
+packages/llm-unified changed; needs an enabled Mistral provider + a persona voice
+picked in the editor):** paragraph read-aloud with walking glow; sentence mode;
+roleplay narrator-voice alternation; pause-mid-word resume; mode-switch + scroll
+survival, Entrance-Hall stop, `Resume · ¶k` on return; instant cache replay (network
+tab silent); regeneration cache reuse; flight-mode failure → Retry/Skip; TEAL tags
+silent, code-only message disabled-with-tooltip; voiceless persona disabled control;
+reload → no stale Resume; reduced-motion static glow. **Next:** Chris device-tests →
+Liz pushes the master backlog on his word; then the voice design weekend continues —
+**Spec 2 (dictation/STT incl. hold-listen) and Spec 3 (live voice mode: barging,
+auto-read, orchestration)** brainstorms, plus xAI/nano-gpt TTS onboarding sessions
+against the now-stable `serviceKind: 'tts'` interface.
+
+**Earlier 2026-06-11 (afternoon) — TEAL voice expression language LANDED**
+(squashed onto master `c3a6932`, **DEVICE-CONFIRMED by Chris 2026-06-11 and pushed
+by him** with the then-backlog). Part 2
 of the voice design weekend. TEAL (*Transformative Expression and Anthropomorphisation
 Layer*) is the canonical voice expression language: a **closed, versioned vocabulary**
 (v1 = xAI snapshot 2026-06-11; 16 inline + 13 wrapping tags, qualifiers, nesting) in
