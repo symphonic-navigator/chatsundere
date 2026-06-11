@@ -17,7 +17,13 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-11 — **Roleplay Mode & User Greeting LANDED** (squashed
-onto master `ef5a478`, **NOT pushed**; **NOT yet device-verified**). Part 1 of the
+onto master `ef5a478`, **NOT pushed**; **DEVICE-CONFIRMED by Chris 2026-06-11**:
+roleplay mode tested with **Mistral Small 4** ("wunderbar für Sci-Fi") — his
+Klingon buddy persona Kirok stayed in character and reached for Klingon phrases
+unprompted; "der roleplay mode ist großartig". Same-day follow-up `114e967`:
+the context-token gauge now counts the roleplay segment and excludes openers
+via `isContextMessage`. Further roleplay-feature work planned the same day
+after a `/clear`.) Part 1 of the
 voice design weekend (voice itself still unbuilt). Personas gain (a) an opt-in
 **Roleplay** behaviour switch — a curated Band-1 prompt segment (embodiment +
 asterisk-narration formatting with a **first/third-person narration** selector,
