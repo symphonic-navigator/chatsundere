@@ -274,3 +274,24 @@ describe('segmentMessage', () => {
     expect(segs[0]?.spokenText).toBe('Visible answer here.');
   });
 });
+
+describe('segmentBlock — non-speakable segments (device finding 2026-06-11)', () => {
+  const opts = { mode: 'paragraph' as const, roleplay: false };
+
+  it('drops a thematic-break divider paragraph instead of sending "---" to the provider', () => {
+    const segs = segmentBlock('Intro text here.\n\n---\n\nJoke text follows on.', 0, opts);
+    expect(segs.map((s) => s.spokenText)).toEqual(['Intro text here.', 'Joke text follows on.']);
+    // The divider still counts as a paragraph (glow alignment).
+    expect(segs[1]?.paragraphIndex).toBe(2);
+  });
+
+  it('drops paragraphs that are only emphasis rubble and punctuation', () => {
+    const segs = segmentBlock('Real sentence here.\n\n…… * **\n\nAnother real one.', 0, opts);
+    expect(segs.map((s) => s.spokenText)).toEqual(['Real sentence here.', 'Another real one.']);
+  });
+
+  it('emittedRangesForParagraph applies the same speakability gate (glow consistency)', () => {
+    expect(emittedRangesForParagraph('---', opts, true)).toEqual([]);
+    expect(emittedRangesForParagraph('…… * **', opts, true)).toEqual([]);
+  });
+});

@@ -322,6 +322,11 @@ export function emittedRangesForParagraph(
     spokenText: string,
     voice: VoiceRange['voice'],
   ): void => {
+    // Speakability gate: a segment without a single letter or digit (thematic
+    // breaks like `---`, stray emphasis rubble, bare ellipses) must never reach
+    // synthesis — providers reject such input (device finding 2026-06-11).
+    // Living here keeps the TTS side and the glow side identical by construction.
+    if (!/[\p{L}\p{N}]/u.test(spokenText)) return;
     out.push({ range, spokenText, voice });
   };
 
@@ -330,7 +335,7 @@ export function emittedRangesForParagraph(
       const spoken = stripForSpeech(paragraphSource.slice(v.start, v.end), {
         stripSingleAsteriskEmphasis: stripSingle,
       });
-      if (spoken.length > 0) collect([v.start, v.end], spoken, v.voice);
+      collect([v.start, v.end], spoken, v.voice);
       continue;
     }
     // Sentence mode: split this voice range into sentences, with merge-forward.
