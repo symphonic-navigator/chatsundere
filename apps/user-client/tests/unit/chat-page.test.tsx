@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import React from 'react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
@@ -65,6 +66,10 @@ async function seedPersonaWithMindspace() {
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
     createdAt: 1,
     updatedAt: 1,
   });
@@ -105,6 +110,10 @@ describe('ChatPage', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: 1,
       updatedAt: 1,
     });
@@ -246,6 +255,10 @@ describe('ChatPage', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: 1,
       updatedAt: 1,
     });
@@ -281,6 +294,74 @@ describe('ChatPage', () => {
       expect(container.querySelector('.msg.from-user')).not.toBeNull();
     });
     expect(container.querySelector('.msg-text')?.textContent).toContain('hello');
+  });
+});
+
+describe('ChatPage eager opener-chat creation', () => {
+  // This jsdom build does not provide `localStorage` (the same gap behind the
+  // documented baseline failures), and ChatPage reads the lazy draft via it on
+  // mount. Provide a minimal in-memory stand-in so the eager-creation path can
+  // run. Scoped to this describe to leave the shared baseline untouched.
+  beforeEach(() => {
+    if (typeof globalThis.localStorage === 'undefined') {
+      const store = new Map<string, string>();
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: {
+          getItem: (k: string) => store.get(k) ?? null,
+          setItem: (k: string, v: string) => store.set(k, String(v)),
+          removeItem: (k: string) => store.delete(k),
+          clear: () => store.clear(),
+        },
+      });
+    }
+  });
+  afterEach(() => {
+    // Restore the as-found "no localStorage" state so the rest of the file's
+    // tests still reproduce the documented baseline.
+    // biome-ignore lint/performance/noDelete: test teardown removing a global stub — perf is irrelevant
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+  });
+
+  it('creates exactly one opener-pending chat for a greeting-enabled persona and navigates to it', async () => {
+    const { db, personaId } = await seedPersonaWithMindspace();
+    await db.personas.update(personaId, { greetingEnabled: true });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Wrapper = makeWrapper(qc, `/app/chat/new?personaId=${personaId}`);
+    render(
+      <React.StrictMode>
+        <ChatPage />
+      </React.StrictMode>,
+      { wrapper: Wrapper },
+    );
+
+    await waitFor(async () => {
+      expect(await db.chats.where('personaId').equals(personaId).count()).toBe(1);
+    });
+    // Give StrictMode-style double-mount a chance to (wrongly) create a second.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    const chats = await db.chats.where('personaId').equals(personaId).toArray();
+    expect(chats).toHaveLength(1);
+    expect(chats[0]?.openerPending).toBe(true);
+  });
+
+  it('does NOT create a chat for a persona without greeting (lazy behaviour preserved)', async () => {
+    const { db, personaId } = await seedPersonaWithMindspace();
+    // seedPersonaWithMindspace already sets greetingEnabled: false.
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<ChatPage />, {
+      wrapper: makeWrapper(qc, `/app/chat/new?personaId=${personaId}`),
+    });
+
+    await waitFor(() => expect(container.querySelector('.persona-greeting')).not.toBeNull());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(await db.chats.where('personaId').equals(personaId).count()).toBe(0);
   });
 });
 

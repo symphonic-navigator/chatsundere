@@ -35,7 +35,13 @@ export function MessageControls(p: Props): JSX.Element {
         ✎ Branch
       </button>
       {p.onRegenerate ? (
-        <button type="button" data-ctrl="regenerate" onClick={p.onRegenerate} className="ctrl-btn">
+        <button
+          type="button"
+          data-ctrl="regenerate"
+          onClick={p.onRegenerate}
+          title={p.message.kind === 'opener' ? 'Re-roll the greeting' : 'Regenerate this reply'}
+          className="ctrl-btn"
+        >
           ↻ Regenerate
         </button>
       ) : null}

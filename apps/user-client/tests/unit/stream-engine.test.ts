@@ -54,6 +54,10 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: 1,
       updatedAt: 1,
     },
@@ -130,6 +134,10 @@ describe('runStreamEngine', () => {
           libraryIds: [],
           askExpertDefault: false,
           mcpOverrides: {},
+          roleplay: false,
+          narration: 'first',
+          greetingEnabled: false,
+          greetingInstructions: '',
           createdAt: 1,
           updatedAt: 1,
         },
@@ -296,5 +304,33 @@ describe('buildEngineWireMessages', () => {
       'tool',
     ]);
     expect(out.at(-1)).toEqual({ role: 'tool', tool_call_id: 't1', content: '3' });
+  });
+});
+
+function makeMessage(
+  fields: Partial<MessageRow> & { role: MessageRow['role']; text?: string; kind?: 'opener' },
+): MessageRow {
+  return {
+    id: `m-${Math.random()}`,
+    chatId: 'c1',
+    contentBlocks: fields.text ? [{ type: 'text', text: fields.text }] : [],
+    createdAt: Date.now(),
+    bookmarked: false,
+    streamingState: 'complete',
+    ...fields,
+  };
+}
+
+describe('opener wire exclusion', () => {
+  it('buildEngineWireMessages drops kind=opener rows from prior history', () => {
+    const opener = makeMessage({ role: 'persona', kind: 'opener', text: 'hello there' });
+    const user = makeMessage({ role: 'user', text: 'hi!' });
+    const reply = makeMessage({ role: 'persona', text: 'welcome' });
+    const wire = buildEngineWireMessages('SYS', [opener, user, reply], 'next turn', []);
+    expect(wire).toHaveLength(4); // system + user + assistant + active user turn
+    expect(
+      wire.some((m) => typeof m.content === 'string' && m.content.includes('hello there')),
+    ).toBe(false);
+    expect(wire[1]).toMatchObject({ role: 'user' });
   });
 });

@@ -31,6 +31,7 @@ import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildWebTools } from '../integrations/web/build-web-tools.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
+import { buildOpenerInstruction } from '../lib/opener.js';
 import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
@@ -57,6 +58,9 @@ export interface StreamHandle {
   /** True when the draft is an existing message re-rolled in place (regenerate),
    *  so abort must preserve it as incomplete rather than delete it. */
   reusedDraft: boolean;
+  /** True when the stream is generating an opener (greeting) message. Used by
+   *  abortPreserve to clear openerPending when the user stops the opener. */
+  isOpener?: boolean;
 }
 
 type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
@@ -102,10 +106,33 @@ export type RegenerateStreamArgs = StartArgs & {
   targetMessageId: string;
 };
 
+/** Arguments required to generate or re-generate an opener greeting. A strict
+ *  subset of StartArgs — no user text, no attachments, no tool contexts. */
+export type OpenerArgs = {
+  chatId: string;
+  chat: import('../boot/client-data-db.js').ChatRow;
+  persona: import('../boot/client-data-db.js').PersonaRow;
+  provider: import('@chatsundere/llm-unified').ProviderDefinition;
+  providerConfig: import('@chatsundere/llm-unified').ProviderConfig;
+  apiKey: string;
+  corsProxyUrl: string | null;
+  corsProxyKey: string | null;
+  offering: import('@chatsundere/llm-unified').Offering;
+  reasoning: import('../lib/reasoning-resolver.js').ReasoningState;
+  globalInstructions: string;
+  globalAboutMe: string;
+};
+
+export type RegenerateOpenerArgs = OpenerArgs & {
+  targetMessageId: string;
+};
+
 interface StreamManagerStore {
   streams: Map<string, StreamHandle>;
   start: (args: StartArgs) => Promise<void>;
   regenerate: (args: RegenerateStreamArgs) => Promise<void>;
+  startOpener: (args: OpenerArgs) => Promise<void>;
+  regenerateOpener: (args: RegenerateOpenerArgs) => Promise<void>;
   abortDiscard: (chatId: string) => Promise<void>;
   abortAllForPersonaDiscard: (personaId: string) => Promise<void>;
   abortPreserve: (chatId: string) => Promise<void>;
@@ -150,6 +177,9 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   },
 
   start: async (args) => {
+    if (get().streams.has(args.chatId)) {
+      throw new Error('stream-manager.start: a stream is already live for this chat');
+    }
     const db = getClientDataDb();
     const now = Date.now();
     const userMessageId = uuidv7();
@@ -192,7 +222,11 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       await snapshotPendingDocumentReferences(args.chatId);
       // Bind all pending attachments for this chat to the new user message atomically.
       await attachPendingToMessage(args.chatId, userMessageId);
-      await db.chats.update(args.chatId, { lastMessageAt: now + 1, draftInput: '' });
+      await db.chats.update(args.chatId, {
+        lastMessageAt: now + 1,
+        draftInput: '',
+        openerPending: false,
+      });
     });
 
     // The persona response goes live immediately; runIntoDraft resolves the user
@@ -216,6 +250,64 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     });
 
     runIntoDraft(args, args.targetMessageId, set, get, true);
+  },
+
+  startOpener: async (args) => {
+    // Idempotence guard 1: bail immediately if a stream is already live for this chat.
+    if (get().streams.has(args.chatId)) return;
+
+    const db = getClientDataDb();
+    const now = Date.now();
+    const draftMessageId = uuidv7();
+
+    // Idempotence guard 2: re-check inside the creation transaction.
+    let shouldProceed = false;
+    await db.transaction('rw', db.messages, db.chats, async () => {
+      const chat = await db.chats.get(args.chatId);
+      if (!chat?.openerPending) return;
+      const messageCount = await db.messages.where('chatId').equals(args.chatId).count();
+      if (messageCount > 0) return;
+      await db.messages.add({
+        id: draftMessageId,
+        chatId: args.chatId,
+        role: 'persona',
+        kind: 'opener',
+        contentBlocks: [],
+        createdAt: now,
+        bookmarked: false,
+        streamingState: 'incomplete',
+      });
+      shouldProceed = true;
+    });
+
+    if (!shouldProceed) return;
+
+    // Invalidate the chat query so the live opener bubble is visible during streaming.
+    void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+
+    await runOpenerStream(args, draftMessageId, set, get, { reroll: false });
+  },
+
+  regenerateOpener: async (args) => {
+    // Bail when a stream is already live for this chat.
+    if (get().streams.has(args.chatId)) return;
+
+    const db = getClientDataDb();
+    const now = Date.now();
+
+    // Clear the existing opener row so it renders as a fresh draft.
+    await db.transaction('rw', db.messages, db.chats, async () => {
+      await db.messages.update(args.targetMessageId, {
+        contentBlocks: [],
+        streamingState: 'incomplete',
+      });
+      await db.chats.update(args.chatId, { lastMessageAt: now });
+    });
+
+    // Invalidate the chat query so the cleared draft row is visible during streaming.
+    void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+
+    await runOpenerStream(args, args.targetMessageId, set, get, { reroll: true });
   },
 
   abortDiscard: async (chatId) => {
@@ -249,7 +341,16 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   abortPreserve: async (chatId) => {
     const h = get().streams.get(chatId);
     if (!h) return;
+    // Abort first, then remove the handle synchronously before any await so the
+    // aborted stream's rejection in runOpenerStream/runIntoDraft sees no handle
+    // and exits via the early-return guard rather than hitting the failure path
+    // that would delete the row we are about to persist.
     h.controller.abort();
+    set((s) => {
+      const m = new Map(s.streams);
+      m.delete(chatId);
+      return { streams: m };
+    });
     const db = getClientDataDb();
     // Persist the partial buffer + mark incomplete so the StreamInterruptedFooter
     // offers Retry — for a fresh send AND a regenerate (unlike abortDiscard, which
@@ -258,11 +359,9 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       contentBlocks: h.contentBuffer,
       streamingState: 'incomplete',
     });
-    set((s) => {
-      const m = new Map(s.streams);
-      m.delete(chatId);
-      return { streams: m };
-    });
+    if (h.isOpener) {
+      await db.chats.update(chatId, { openerPending: false });
+    }
     void queryClient.invalidateQueries({ queryKey: ['chats', chatId] });
     void queryClient.invalidateQueries({ queryKey: ['chats'] });
   },
@@ -619,7 +718,9 @@ async function runIntoDraft(
         const personaMsgCount = await db.messages
           .where('chatId')
           .equals(args.chatId)
-          .filter((m) => m.role === 'persona' && m.streamingState === 'complete')
+          .filter(
+            (m) => m.role === 'persona' && m.streamingState === 'complete' && m.kind !== 'opener',
+          )
           .count();
         if (personaMsgCount === 1) {
           void fireTitleGen(args, result.finalContentBlocks);
@@ -682,6 +783,172 @@ async function runIntoDraft(
 
       // Surface the failure for the away-from-chat case — the inline
       // footer covers the in-chat case.
+      toastStore.show({
+        message: `${args.persona.name} couldn't reach the model — retry from the chat`,
+        tone: 'warn',
+        durationMs: 6000,
+      });
+    });
+}
+
+/**
+ * Stream one opener turn into an already-persisted draft persona-message with
+ * `kind: 'opener'`. Mirrors `runIntoDraft`'s handle/chunk/finalise patterns but
+ * calls `runStreamEngine` directly (no tool loop) and drives the
+ * opener-specific success/failure contract.
+ *
+ * `opts.reroll` distinguishes the initial generation (false) from a
+ * regeneration (true). The two paths differ only in their error handling:
+ * initial failure deletes the draft and rethrows; reroll keeps it incomplete.
+ */
+async function runOpenerStream(
+  args: OpenerArgs,
+  draftMessageId: string,
+  set: (fn: (s: StreamManagerStore) => Partial<StreamManagerStore>) => void,
+  get: () => StreamManagerStore,
+  opts: { reroll: boolean },
+): Promise<void> {
+  const db = getClientDataDb();
+  const now = Date.now();
+  const controller = new AbortController();
+
+  const handle: StreamHandle = {
+    chatId: args.chatId,
+    personaId: args.persona.id,
+    draftMessageId,
+    controller,
+    status: 'streaming',
+    contentBuffer: [],
+    pillBuffer: [],
+    startedAt: now,
+    reusedDraft: opts.reroll,
+    isOpener: true,
+  };
+
+  set((s) => {
+    const m = new Map(s.streams);
+    m.set(args.chatId, handle);
+    return { streams: m };
+  });
+
+  const onChunk = (chunk: import('@chatsundere/llm-unified').StreamChunk): void => {
+    if (chunk.type !== 'token' && chunk.type !== 'reasoning') return;
+    set((s) => {
+      const live = s.streams.get(args.chatId);
+      if (!live) return s;
+      const nextBuf = [...live.contentBuffer];
+      appendStreamChunk(nextBuf, {
+        kind: chunk.type === 'reasoning' ? 'reasoning' : 'text',
+        text: chunk.text,
+      });
+      const nextHandle = { ...live, contentBuffer: nextBuf };
+      const m = new Map(s.streams);
+      m.set(args.chatId, nextHandle);
+      return { streams: m };
+    });
+  };
+
+  const enginePromise = runStreamEngine({
+    chat: args.chat,
+    persona: args.persona,
+    provider: args.provider,
+    providerConfig: args.providerConfig,
+    apiKey: args.apiKey,
+    corsProxyUrl: args.corsProxyUrl,
+    corsProxyKey: args.corsProxyKey,
+    offering: args.offering,
+    priorMessages: [],
+    userMessageText: buildOpenerInstruction(args.persona.greetingInstructions),
+    reasoning: args.reasoning,
+    globalInstructions: args.globalInstructions,
+    globalAboutMe: args.globalAboutMe,
+    job: 'greeting',
+    signal: controller.signal,
+    onChunk,
+  });
+
+  return enginePromise
+    .then(async (result) => {
+      const current = get().streams.get(args.chatId);
+      if (!current) return;
+
+      set((s) => {
+        const live = s.streams.get(args.chatId);
+        if (!live) return s;
+        const m = new Map(s.streams);
+        m.set(args.chatId, { ...live, status: 'finalising' });
+        return { streams: m };
+      });
+
+      await db.transaction('rw', db.messages, db.chats, async () => {
+        await db.messages.update(draftMessageId, {
+          contentBlocks: result.finalContentBlocks,
+          streamingState: 'complete',
+        });
+        await db.chats.update(args.chatId, {
+          lastMessageAt: Date.now(),
+          openerPending: false,
+        });
+      });
+
+      void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+
+      set((s) => {
+        const live = s.streams.get(args.chatId);
+        if (!live) return s;
+        const m = new Map(s.streams);
+        m.set(args.chatId, { ...live, status: 'done' });
+        return { streams: m };
+      });
+
+      setTimeout(() => {
+        set((s) => {
+          const m = new Map(s.streams);
+          m.delete(args.chatId);
+          return { streams: m };
+        });
+      }, 200);
+    })
+    .catch(async (err) => {
+      const current = get().streams.get(args.chatId);
+
+      if (!opts.reroll) {
+        // Initial generation failure path.
+        if (!current) {
+          // Handle already gone (abortPreserve already cleaned up) — return silently.
+          return;
+        }
+        // Delete the draft row; keep openerPending set (no chat update).
+        await db.messages.delete(draftMessageId);
+        set((s) => {
+          const m = new Map(s.streams);
+          m.delete(args.chatId);
+          return { streams: m };
+        });
+        void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+        void queryClient.invalidateQueries({ queryKey: ['chats'] });
+        throw err;
+      }
+
+      // Reroll failure path: keep partial as incomplete, show toast, no rethrow.
+      if (!current) return;
+
+      console.error('[stream-manager] opener re-roll failed for chat', args.chatId, err);
+
+      await db.messages.update(draftMessageId, {
+        contentBlocks: current.contentBuffer,
+        streamingState: 'incomplete',
+      });
+
+      set((s) => {
+        const m = new Map(s.streams);
+        m.delete(args.chatId);
+        return { streams: m };
+      });
+
+      void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+
       toastStore.show({
         message: `${args.persona.name} couldn't reach the model — retry from the chat`,
         tone: 'warn',

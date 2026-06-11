@@ -36,4 +36,14 @@ describe('AutoSizeTextarea', () => {
     expect(ta.rows).toBe(3);
     expect(ta.style.maxHeight).not.toBe('');
   });
+
+  it('renders disabled when disabled prop is true, and enabled when absent', () => {
+    const { getByRole, rerender } = render(
+      <AutoSizeTextarea value="" onChange={() => {}} aria-label="t" disabled={true} />,
+    );
+    expect(getByRole('textbox')).toBeDisabled();
+
+    rerender(<AutoSizeTextarea value="" onChange={() => {}} aria-label="t" />);
+    expect(getByRole('textbox')).not.toBeDisabled();
+  });
 });

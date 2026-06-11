@@ -122,6 +122,10 @@ describe('EntranceHall', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: now,
       updatedAt: now,
     });
@@ -168,6 +172,10 @@ describe('EntranceHall', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: now,
       updatedAt: now,
     });

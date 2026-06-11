@@ -911,15 +911,56 @@ h1 {
 }
 
 /* ===== Persona Greeting (Lazy chat) ===== */
-.persona-greeting {
+.persona-greeting-wrap {
   display: flex;
   flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.persona-greeting {
+  display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
   font-style: italic;
   pointer-events: none;
   user-select: none;
+  text-align: center;
+}
+
+/* Opener-failure notice + Retry. Centred inside the empty-state container so it
+ * never overlaps the cockpit input. pointer-events restored (the greeting line
+ * above is inert). */
+.persona-greeting-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 20rem;
+  padding: 0 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.persona-greeting-retry {
+  pointer-events: auto;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: transparent;
+  color: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.persona-greeting-retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 /* ===== Chat Stream =====

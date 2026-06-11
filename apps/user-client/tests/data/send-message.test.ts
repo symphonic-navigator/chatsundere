@@ -79,6 +79,27 @@ describe('lastCompanionText', () => {
     expect(lastCompanionText([msg({ role: 'user' })])).toBeNull();
     expect(lastCompanionText([msg({ streamingState: 'incomplete' })])).toBeNull();
   });
+  it('skips opener messages', () => {
+    const msgs = [
+      msg({ role: 'persona', contentBlocks: [{ type: 'text', text: 'real reply' }] }),
+      msg({
+        role: 'persona',
+        kind: 'opener',
+        contentBlocks: [{ type: 'text', text: 'greeting text' }],
+      }),
+    ];
+    expect(lastCompanionText(msgs)).toBe('real reply');
+  });
+  it('returns null when the only persona message is an opener', () => {
+    const msgs = [
+      msg({
+        role: 'persona',
+        kind: 'opener',
+        contentBlocks: [{ type: 'text', text: 'greeting text' }],
+      }),
+    ];
+    expect(lastCompanionText(msgs)).toBeNull();
+  });
   it('skips a most-recent incomplete persona message and falls back to the earlier complete one', () => {
     const msgs = [
       msg({

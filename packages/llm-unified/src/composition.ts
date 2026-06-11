@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
-import { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js';
+import {
+  NSFW_PROMPT,
+  ROLEPLAY_BEHAVIOUR_PROMPT,
+  ROLEPLAY_NSFW_PROMPT,
+  TONALITY_PROMPT,
+  roleplayFormattingPrompt,
+} from './identity/chatsundere-identity.js';
 
-/** The job a prompt is being built for. Only `chat` and `title` have live
- *  callers today; `memory` is reserved for the future memory-extraction job. */
-export type PromptJob = 'chat' | 'title' | 'memory';
+/** The job a prompt is being built for. `chat` is the main conversation turn;
+ *  `title` drives title generation; `memory` is reserved for memory extraction;
+ *  `greeting` drives the opener generation (Band 1 + About Me only). */
+export type PromptJob = 'chat' | 'title' | 'memory' | 'greeting';
 
 /** Resolved per-turn inputs the builder turns into segment content. */
 export interface BuildPromptInputs {
@@ -28,12 +35,19 @@ export interface BuildPromptInputs {
   knowledgeLibrariesContext?: string;
   /** Band-3 tools segment — joined tool system-prompt instructions (chat only). */
   toolsInstruction: string;
+  /** Persona toggle — roleplay mode. Injects the curated roleplay blocks. */
+  roleplayEnabled?: boolean;
+  /** Narration perspective for the roleplay formatting block. Default 'first'. */
+  narration?: 'first' | 'third';
+  /** Persona display name — templated into the third-person narration example. */
+  personaName?: string;
 }
 
 type SegmentId =
   | 'tonality'
   | 'nsfw'
   | 'global'
+  | 'roleplay'
   | 'persona'
   | 'aboutMe'
   | 'project'
@@ -50,15 +64,18 @@ interface SegmentSpec {
   resolve: (i: BuildPromptInputs) => string;
 }
 
-const ALL_JOBS: readonly PromptJob[] = ['chat', 'title', 'memory'];
+const ALL_JOBS: readonly PromptJob[] = ['chat', 'title', 'memory', 'greeting'];
 const CHAT_ONLY: readonly PromptJob[] = ['chat'];
+const CHAT_AND_GREETING: readonly PromptJob[] = ['chat', 'greeting'];
 
 /**
  * Static segment registry. Band 1 (Behaviour & Voice) runs in every job;
- * Band 2 (Context & Knowledge) runs in chat only; Band 3 (Technical —
- * formatting/tools/voice) runs in chat only. The `tools` segment (band 3,
- * order 0) carries joined tool system-prompt instructions when present.
- * See the system-prompt builder spec (2026-06-01) §4–§5.
+ * Band 2 (Context & Knowledge) runs in chat only (except `aboutMe`, which
+ * also runs in `greeting`); Band 3 (Technical — formatting/tools/voice) runs
+ * in chat only. The `tools` segment (band 3, order 0) carries joined tool
+ * system-prompt instructions when present. The `greeting` job includes Band 1
+ * + About Me to drive opener generation; all other Band-2/3 segments are
+ * chat-only. See the system-prompt builder spec (2026-06-01) §4–§5.
  */
 const SEGMENTS: readonly SegmentSpec[] = [
   {
@@ -76,8 +93,25 @@ const SEGMENTS: readonly SegmentSpec[] = [
     resolve: (i) => (i.nsfwEnabled ? NSFW_PROMPT : ''),
   },
   { id: 'global', band: 1, order: 2, jobs: ALL_JOBS, resolve: (i) => i.globalInstructions },
-  { id: 'persona', band: 1, order: 3, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
-  { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_ONLY, resolve: (i) => i.aboutMe },
+  // Runs in every Band-1 job on purpose (spec 2026-06-11 §4.1): the title job's
+  // trailing instruction overrides the embodiment rules in practice — the same
+  // mechanism that lets the NSFW segment coexist with title generation.
+  {
+    id: 'roleplay',
+    band: 1,
+    order: 3,
+    jobs: ALL_JOBS,
+    resolve: (i) =>
+      i.roleplayEnabled
+        ? [
+            roleplayFormattingPrompt(i.narration ?? 'first', i.personaName ?? 'the character'),
+            ROLEPLAY_BEHAVIOUR_PROMPT,
+            ...(i.nsfwEnabled ? [ROLEPLAY_NSFW_PROMPT] : []),
+          ].join('\n\n')
+        : '',
+  },
+  { id: 'persona', band: 1, order: 4, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
+  { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_AND_GREETING, resolve: (i) => i.aboutMe },
   { id: 'project', band: 2, order: 1, jobs: CHAT_ONLY, resolve: (i) => i.projectInstructions },
   { id: 'memories', band: 2, order: 2, jobs: CHAT_ONLY, resolve: (i) => i.memoryContext },
   { id: 'lore', band: 2, order: 3, jobs: CHAT_ONLY, resolve: (i) => i.loreContext ?? '' },

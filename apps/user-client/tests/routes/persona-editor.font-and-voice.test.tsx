@@ -69,7 +69,7 @@ function setup() {
 }
 
 describe('PersonaEditor — Font and Voice section', () => {
-  it('renders a Font and Voice accordion between Behavior and Mindspace-Override', () => {
+  it('renders a Font and Voice accordion between Greeting and Mindspace-Override', () => {
     setup();
     const headers = Array.from(
       document.querySelectorAll('[data-accordion-card] [data-accordion-label]'),
@@ -77,6 +77,7 @@ describe('PersonaEditor — Font and Voice section', () => {
     expect(headers).toEqual([
       'Custom Instructions',
       'Behavior',
+      'Greeting',
       'Font and Voice',
       'Mindspace — Override',
       'About Me — Override',

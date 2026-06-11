@@ -100,6 +100,9 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
         projectInstructions: '',
         memoryContext: '',
         toolsInstruction: '',
+        roleplayEnabled: args.persona.roleplay,
+        narration: args.persona.narration,
+        personaName: args.persona.name,
       },
       'title',
     );

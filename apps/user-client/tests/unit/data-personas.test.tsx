@@ -61,6 +61,10 @@ describe('usePersonas + CUD mutations', () => {
         libraryIds: [],
         askExpertDefault: false,
         mcpOverrides: {},
+        roleplay: false,
+        narration: 'first',
+        greetingEnabled: false,
+        greetingInstructions: '',
       });
       createdId = created.id;
     });

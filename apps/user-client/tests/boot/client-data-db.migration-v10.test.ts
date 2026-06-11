@@ -34,6 +34,10 @@ describe('Dexie v10 migration', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

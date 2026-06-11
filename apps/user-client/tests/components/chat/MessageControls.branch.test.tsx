@@ -41,3 +41,35 @@ describe('MessageControls branch button', () => {
     expect(btn).toBeDisabled();
   });
 });
+
+describe('MessageControls regenerate tooltip', () => {
+  it('titles the regenerate button "Regenerate this reply" for a normal reply', () => {
+    render(
+      <MessageControls
+        message={msg}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onRegenerate={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Regenerate/ })).toHaveAttribute(
+      'title',
+      'Regenerate this reply',
+    );
+  });
+
+  it('titles the regenerate button "Re-roll the greeting" for an opener message', () => {
+    render(
+      <MessageControls
+        message={{ ...msg, kind: 'opener' }}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onRegenerate={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Regenerate/ })).toHaveAttribute(
+      'title',
+      'Re-roll the greeting',
+    );
+  });
+});

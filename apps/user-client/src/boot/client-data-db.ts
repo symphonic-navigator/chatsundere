@@ -130,6 +130,14 @@ export interface PersonaRow {
   askExpertDefault: boolean;
   /** Per-persona MCP server overrides. Unset key → server.onByDefault applies. */
   mcpOverrides: Record<string, 'on' | 'off'>;
+  /** Roleplay mode — the persona embodies a character (curated Band-1 blocks). */
+  roleplay: boolean;
+  /** Narration perspective for roleplay (asterisk narration). */
+  narration: 'first' | 'third';
+  /** The persona opens every new chat with a generated greeting. */
+  greetingEnabled: boolean;
+  /** User-authored rules the opener is composed from. */
+  greetingInstructions: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -145,6 +153,11 @@ export interface ChatRow {
   draftInput: string; // NEW — Phase 3 cockpit autosave
   /** Ad-hoc knowledge libraries for this chat only (Chunk B). */
   libraryIds: string[];
+  /** Creation-time snapshot: persona had greetingEnabled, opener not yet
+   *  delivered. Cleared on opener completion, stop, or first user send.
+   *  Never set retroactively — flipping the persona switch later must not
+   *  retrofit openers onto existing chats. */
+  openerPending?: boolean;
 }
 
 export type ContentBlock =
@@ -163,6 +176,10 @@ export interface MessageRow {
    *  the message text. Non-indexed: Dexie stores it schemalessly, so adding
    *  it needs no version bump. */
   bookmarkLabel?: string | null;
+  /** 'opener' = generated greeting: shown in the UI and stored in history, but
+   *  excluded from every model context (wire, title-gen, lore scan). Absent on
+   *  normal messages. Non-indexed — no version bump needed for this field. */
+  kind?: 'opener';
   streamingState: 'complete' | 'incomplete';
 }
 
@@ -666,6 +683,22 @@ class ClientDataDb extends Dexie {
             if (s.imageGeneration === undefined) {
               s.imageGeneration = { primary: null, nsfw: null };
             }
+          });
+      });
+
+    // Version 20 — roleplay mode & user greeting. Personas gain the roleplay
+    // toggle, narration perspective, and greeting fields (spec 2026-06-11).
+    this.version(20)
+      .stores({ personas: 'id, providerId' })
+      .upgrade(async (tx) => {
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            if (typeof p.roleplay !== 'boolean') p.roleplay = false;
+            if (p.narration !== 'first' && p.narration !== 'third') p.narration = 'first';
+            if (typeof p.greetingEnabled !== 'boolean') p.greetingEnabled = false;
+            if (typeof p.greetingInstructions !== 'string') p.greetingInstructions = '';
           });
       });
   }

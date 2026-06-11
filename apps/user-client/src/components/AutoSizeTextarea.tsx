@@ -17,6 +17,7 @@ interface Props {
   autoFocus?: boolean;
   /** Optional key-down passthrough — e.g. the chat cockpit's desktop Enter-to-send. */
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  disabled?: boolean;
 }
 
 const LINE_HEIGHT_PX = 22;
@@ -34,6 +35,7 @@ export function AutoSizeTextarea(props: Props): JSX.Element {
     id,
     autoFocus,
     onKeyDown,
+    disabled,
   } = props;
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -64,13 +66,14 @@ export function AutoSizeTextarea(props: Props): JSX.Element {
       // biome-ignore lint/a11y/noAutofocus: deliberate — the cockpit opens precisely so the user can type
       autoFocus={autoFocus}
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
       onBlur={(e) => onBlur?.(e.target.value)}
       placeholder={placeholder}
       rows={minRows}
       style={{ maxHeight, overflowY: 'hidden', resize: 'none' }}
-      className={`w-full rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm leading-snug text-paper outline-none focus:border-paper-soft ${className}`}
+      className={`w-full rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm leading-snug text-paper outline-none focus:border-paper-soft disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
     />
   );
 }

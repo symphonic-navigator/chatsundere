@@ -20,7 +20,7 @@ import type {
   PersonaRow,
   PillRow,
 } from '../boot/client-data-db.js';
-import { flattenAnswerText } from './content-blocks.js';
+import { flattenAnswerText, isContextMessage } from './content-blocks.js';
 import { resolveContextWindow, truncateToWindow } from './context-window.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
 
@@ -51,6 +51,9 @@ export interface StartStreamArgs {
   /** Accumulated assistant(tool_calls) / tool messages from prior loop rounds,
    *  appended after the active user turn. */
   toolExchange?: WireMessage[];
+  /** Prompt job — 'greeting' builds the opener prompt (Band 1 + About Me, no
+   *  lore/knowledge/tools). Default 'chat'. */
+  job?: 'chat' | 'greeting';
   signal: AbortSignal;
   onChunk: (chunk: StreamChunk) => void;
 }
@@ -82,8 +85,11 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       loreContext: args.loreContext ?? '',
       knowledgeLibrariesContext: args.knowledgeLibrariesContext ?? '',
       toolsInstruction: args.toolsInstruction ?? '',
+      roleplayEnabled: args.persona.roleplay,
+      narration: args.persona.narration,
+      personaName: args.persona.name,
     },
-    'chat',
+    args.job ?? 'chat',
   );
 
   const wireMessages = buildEngineWireMessages(
@@ -192,7 +198,7 @@ export function buildEngineWireMessages(
 ): WireMessage[] {
   return [
     { role: 'system', content: systemPrompt },
-    ...priorMessages.map(toWireMessage),
+    ...priorMessages.filter(isContextMessage).map(toWireMessage),
     { role: 'user', content: userContent },
     ...toolExchange,
   ];

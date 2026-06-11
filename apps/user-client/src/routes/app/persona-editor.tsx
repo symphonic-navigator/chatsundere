@@ -78,6 +78,10 @@ function defaultDraft(
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
   };
 }
 
@@ -279,6 +283,14 @@ export function PersonaEditor(): JSX.Element {
   const behaviourMeta: ReactNode = (
     <span>
       Temperature
+      {draft.roleplay ? (
+        <>
+          {' · '}
+          <span className="rounded-full border border-paper-soft/50 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-paper-soft">
+            Roleplay
+          </span>
+        </>
+      ) : null}
       {draft.adultPersona ? (
         <>
           {' · '}
@@ -328,6 +340,8 @@ export function PersonaEditor(): JSX.Element {
   const personaInvalid =
     !draft.name || !draft.instructions || !draft.canonicalId || !draft.providerId || !draft.modelId;
 
+  const greetingInvalid = draft.greetingEnabled && draft.greetingInstructions.trim() === '';
+
   // Most recent chat for this persona, if any. `useChats` returns rows sorted
   // by `lastMessageAt` descending, so `find` picks the freshest.
   const recentChatForThisPersona =
@@ -370,19 +384,15 @@ export function PersonaEditor(): JSX.Element {
           onSaveAndBack={() => {
             void onSaveAndBack();
           }}
-          saveDisabled={
-            !draft.name ||
-            !draft.instructions ||
-            !draft.canonicalId ||
-            !draft.providerId ||
-            !draft.modelId
-          }
+          saveDisabled={personaInvalid || greetingInvalid}
           saveTooltip={
             !draft.canonicalId
               ? 'Pick a model'
               : !draft.providerId || !draft.modelId
                 ? 'Choose a deployment (or add its provider in Settings)'
-                : 'Fill in name and instructions'
+                : greetingInvalid
+                  ? 'Write the greeting rules (or turn the greeting off)'
+                  : 'Fill in name and instructions'
           }
         />
 
@@ -662,6 +672,53 @@ export function PersonaEditor(): JSX.Element {
           </button>
         </div>
 
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm text-paper">Roleplay</div>
+            <p className="text-[11px] text-paper-soft">
+              The persona becomes a roleplay character: fully in character, short conversational
+              replies, narration between asterisks.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Roleplay"
+            aria-pressed={draft.roleplay}
+            onClick={() => patch({ roleplay: !draft.roleplay })}
+            className={`h-6 w-12 shrink-0 rounded-full border ${
+              draft.roleplay ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
+            }`}
+          >
+            <span
+              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                draft.roleplay ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(['first', 'third'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              disabled={!draft.roleplay}
+              aria-pressed={draft.narration === p}
+              title={
+                !draft.roleplay ? 'Enable Roleplay to choose the narration perspective' : undefined
+              }
+              onClick={() => patch({ narration: p })}
+              className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wider ${
+                draft.narration === p
+                  ? 'border-paper text-paper'
+                  : 'border-paper-soft/40 text-paper-soft'
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              {p === 'first' ? 'First person' : 'Third person'}
+            </button>
+          ))}
+        </div>
+
         {(() => {
           const prov = providers.data?.find((pr) => pr.id === draft.providerId);
           const off =
@@ -674,6 +731,53 @@ export function PersonaEditor(): JSX.Element {
             />
           ) : null;
         })()}
+      </AccordionCard>
+
+      {/* ❸ Greeting */}
+      <AccordionCard
+        icon="✦"
+        label="Greeting"
+        meta={draft.greetingEnabled ? 'Opens new chats' : 'Off'}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm text-paper">User greeting</div>
+            <p className="text-[11px] text-paper-soft">
+              The persona opens every new chat with a freshly generated message following your rules
+              below.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="User greeting"
+            aria-pressed={draft.greetingEnabled}
+            onClick={() => patch({ greetingEnabled: !draft.greetingEnabled })}
+            className={`h-6 w-12 shrink-0 rounded-full border ${
+              draft.greetingEnabled ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
+            }`}
+          >
+            <span
+              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                draft.greetingEnabled ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+        <AutoSizeTextarea
+          aria-label="Greeting rules"
+          minRows={3}
+          maxRows={12}
+          value={draft.greetingInstructions}
+          onChange={(v) => patch({ greetingInstructions: v })}
+          disabled={!draft.greetingEnabled}
+          placeholder="Greet the user as if you had just discovered them on OkCupid."
+          className="mt-3"
+        />
+        {greetingInvalid ? (
+          <p className="mt-1 text-[11px] text-amber-300/80">
+            Write the greeting rules, or turn the greeting off.
+          </p>
+        ) : null}
       </AccordionCard>
 
       {/* ❹ Font and Voice */}

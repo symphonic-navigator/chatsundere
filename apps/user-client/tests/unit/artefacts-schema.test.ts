@@ -13,7 +13,7 @@ beforeEach(async () => {
 
 test('schema is at version 13 and exposes the artefacts table', async () => {
   const db = await openClientDataDb();
-  expect(db.verno).toBe(19);
+  expect(db.verno).toBe(20);
   expect(db.tables.map((t) => t.name)).toContain('artefacts');
   const row: ArtefactRow = {
     id: 'a1',

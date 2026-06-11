@@ -71,6 +71,10 @@ describe('Circle route', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: now,
       updatedAt: now,
     });

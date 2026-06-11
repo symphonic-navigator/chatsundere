@@ -36,6 +36,10 @@ async function seedSfwAndNsfw() {
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
     createdAt: now,
     updatedAt: now,
   });
@@ -59,6 +63,10 @@ async function seedSfwAndNsfw() {
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
     createdAt: now + 1,
     updatedAt: now + 1,
   });
@@ -158,6 +166,10 @@ describe('Circle filter (adult mode)', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: now,
       updatedAt: now,
     });

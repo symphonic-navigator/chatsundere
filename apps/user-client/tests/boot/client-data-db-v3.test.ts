@@ -99,6 +99,10 @@ describe('client-data-db v3 migration', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

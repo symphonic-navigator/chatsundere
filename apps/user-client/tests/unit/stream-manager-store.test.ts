@@ -34,6 +34,10 @@ async function seedChat() {
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
     createdAt: 1,
     updatedAt: 1,
   });
@@ -87,7 +91,7 @@ function baseStartArgs(chatId: string, persona: unknown, model: unknown) {
     offering: model,
     priorMessages: [],
     userMessageText: 'Hello',
-    reasoning: { mode: 'on' as const },
+    reasoning: { kind: 'on' as const },
     globalInstructions: '',
     globalAboutMe: '',
   };
@@ -100,6 +104,7 @@ describe('stream-manager.store', () => {
   afterEach(async () => {
     await _resetClientDataDbForTests({ keepData: false });
     vi.restoreAllMocks();
+    useStreamManagerStore.setState({ streams: new Map() });
   });
 
   it('start inserts user-msg + draft, engine resolve persists final', async () => {
@@ -404,6 +409,36 @@ describe('stream-manager.store', () => {
     await store.start(baseStartArgs(chatId, persona, model) as never);
     await new Promise((r) => setTimeout(r, 80));
     expect(titleSpy).not.toHaveBeenCalled();
+  });
+
+  it('fires title-gen after the first real persona response even when an opener already exists', async () => {
+    // An opener (kind='opener') must not count toward the personaMsgCount gate —
+    // without the fix the count is 2 and title-gen is never called for greeting chats.
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    // Seed the opener that would have been written by the greeting job.
+    await db.messages.add({
+      id: 'opener-p',
+      chatId,
+      role: 'persona',
+      kind: 'opener',
+      contentBlocks: [{ type: 'text', text: 'Hello there!' }],
+      createdAt: 50,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    const titleSpy = vi.spyOn(titleGen, 'generateTitleAsync').mockResolvedValue();
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'first real reply' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+    const store = useStreamManagerStore.getState();
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 80));
+    // The opener does not count — this is the first real response, so title-gen fires.
+    expect(titleSpy).toHaveBeenCalled();
   });
 
   it('does not fire title-gen if chat.title is already set', async () => {
@@ -1387,5 +1422,455 @@ describe('stream-manager.store', () => {
       (p) => p.kind === 'tool-call' && (p.payload as { name?: string }).name === 'describe_image',
     );
     expect(describePill).toBeUndefined();
+  });
+
+  // ── Opener stream actions ──────────────────────────────────────────────────
+
+  function baseOpenerArgs(chatId: string, persona: unknown, model: unknown) {
+    return {
+      chatId,
+      chat: {
+        id: chatId,
+        personaId: 'p1',
+        title: null,
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+        openerPending: true,
+      },
+      persona,
+      provider: nanoGpt,
+      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } as const },
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      offering: model,
+      reasoning: { kind: 'on' as const },
+      globalInstructions: '',
+      globalAboutMe: '',
+    };
+  }
+
+  it('startOpener creates an opener draft and on engine success the row is complete with kind=opener and openerPending=false', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { openerPending: true });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'Hello there!' }],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+
+    const store = useStreamManagerStore.getState();
+    await store.startOpener(baseOpenerArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 80));
+
+    const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+    expect(msgs.length).toBe(1);
+    const row = msgs[0];
+    expect(row?.role).toBe('persona');
+    expect(row?.kind).toBe('opener');
+    expect(row?.streamingState).toBe('complete');
+    expect(row?.contentBlocks).toEqual([{ type: 'text', text: 'Hello there!' }]);
+
+    const chat = await db.chats.get(chatId);
+    expect(chat?.openerPending).toBe(false);
+  });
+
+  it('startOpener is idempotent: bails when messages already exist', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { openerPending: true });
+    // Seed an existing message so the guard fires.
+    await db.messages.add({
+      id: 'existing',
+      chatId,
+      role: 'persona',
+      contentBlocks: [],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const spy = vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+
+    const store = useStreamManagerStore.getState();
+    await store.startOpener(baseOpenerArgs(chatId, persona, model) as never);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(spy).not.toHaveBeenCalled();
+    const count = await db.messages.where('chatId').equals(chatId).count();
+    expect(count).toBe(1);
+  });
+
+  it('startOpener is idempotent: bails when openerPending is false', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    // Chat does NOT have openerPending set (undefined = falsy).
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const spy = vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [],
+      pillRows: [],
+      finishReason: 'stop',
+    });
+
+    const store = useStreamManagerStore.getState();
+    await store.startOpener({
+      ...baseOpenerArgs(chatId, persona, model),
+      chat: { ...(baseOpenerArgs(chatId, persona, model).chat as object), openerPending: false },
+    } as never);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(spy).not.toHaveBeenCalled();
+    const count = await db.messages.where('chatId').equals(chatId).count();
+    expect(count).toBe(0);
+  });
+
+  it('startOpener is idempotent: a second call while stream is live adds exactly one row', async () => {
+    const myChatId = 'c-opener-double';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      () =>
+        new Promise(() => {
+          /* never */
+        }),
+    );
+
+    const store = useStreamManagerStore.getState();
+    void store.startOpener({
+      ...baseOpenerArgs(myChatId, persona, model),
+      chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Second call while stream is live — must be a no-op.
+    await store.startOpener({
+      ...baseOpenerArgs(myChatId, persona, model),
+      chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+
+    const count = await db.messages.where('chatId').equals(myChatId).count();
+    expect(count).toBe(1);
+
+    await store.abortDiscard(myChatId);
+  });
+
+  it('startOpener initial failure: draft row deleted, openerPending stays true, promise rejects', async () => {
+    const myChatId = 'c-opener-fail';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    vi.spyOn(engine, 'runStreamEngine').mockRejectedValue(new Error('network error'));
+
+    const store = useStreamManagerStore.getState();
+    await expect(
+      store.startOpener({
+        ...baseOpenerArgs(myChatId, persona, model),
+        chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+      } as never),
+    ).rejects.toThrow('network error');
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Draft row must have been deleted.
+    const msgs = await db.messages.where('chatId').equals(myChatId).toArray();
+    expect(msgs.length).toBe(0);
+
+    // openerPending must still be true.
+    const chat = await db.chats.get(myChatId);
+    expect(chat?.openerPending).toBe(true);
+  });
+
+  it('abortPreserve on an opener handle persists the partial buffer as incomplete AND clears openerPending', async () => {
+    const myChatId = 'c-opener-abort';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    type OnChunk = (c: { type: 'token'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    const store = useStreamManagerStore.getState();
+    void store.startOpener({
+      ...baseOpenerArgs(myChatId, persona, model),
+      chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    (captured as unknown as OnChunk)({ type: 'token', text: 'Hello' });
+
+    await store.abortPreserve(myChatId);
+
+    // Partial buffer persisted as incomplete.
+    const msgs = await db.messages.where('chatId').equals(myChatId).toArray();
+    const row = msgs[0];
+    expect(row?.streamingState).toBe('incomplete');
+    expect(row?.contentBlocks).toEqual([{ type: 'text', text: 'Hello' }]);
+
+    // openerPending cleared because user stopped the opener.
+    const chat = await db.chats.get(myChatId);
+    expect(chat?.openerPending).toBe(false);
+  });
+
+  it('regenerateOpener re-roll failure: row stays incomplete with kind=opener, contentBuffer persisted, no rejection', async () => {
+    const myChatId = 'c-opener-regen-fail';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const openerMsgId = 'opener-msg-1';
+    await db.messages.add({
+      id: openerMsgId,
+      chatId: myChatId,
+      role: 'persona',
+      kind: 'opener',
+      contentBlocks: [{ type: 'text', text: 'original greeting' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    type OnChunk = (c: { type: 'token'; text: string }) => void;
+    let onChunkCb: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      onChunkCb = args.onChunk;
+      return Promise.reject(new Error('upstream down'));
+    }) as never);
+
+    const store = useStreamManagerStore.getState();
+    // Must NOT reject.
+    await expect(
+      store.regenerateOpener({
+        ...baseOpenerArgs(myChatId, persona, model),
+        chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+        targetMessageId: openerMsgId,
+      } as never),
+    ).resolves.toBeUndefined();
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const row = await db.messages.get(openerMsgId);
+    expect(row?.kind).toBe('opener');
+    expect(row?.streamingState).toBe('incomplete');
+    // onChunkCb was never called (immediate rejection), so contentBuffer is [].
+    void onChunkCb;
+  });
+
+  it('startOpener fires invalidateQueries for chatId before streaming begins', async () => {
+    // Finding 1: the chat query must be invalidated between the creation transaction
+    // and runOpenerStream so the live opener bubble is visible during streaming.
+    const myChatId = 'c-opener-invalidate';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    // Never-resolving engine — startOpener will never settle, which is fine;
+    // the invalidation fires before runOpenerStream is called.
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      () =>
+        new Promise(() => {
+          /* never */
+        }),
+    );
+
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    // Fire but do not await — startOpener will hang inside runOpenerStream.
+    void useStreamManagerStore.getState().startOpener({
+      ...baseOpenerArgs(myChatId, persona, model),
+      chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+    } as never);
+
+    // Wait until the invalidation fires rather than sleeping for a fixed interval.
+    await vi.waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chats', myChatId] });
+    });
+
+    invalidateSpy.mockRestore();
+    await useStreamManagerStore.getState().abortDiscard(myChatId);
+  });
+
+  it('abortPreserve on an opener removes the handle synchronously so the failure path cannot delete the row', async () => {
+    // Finding 2 (strengthened): after abortPreserve resolves the handle must be
+    // gone from the map. This verifies the synchronous removal that prevents the
+    // aborted stream's rejection from hitting the initial-failure delete path.
+    const myChatId = 'c-opener-abort-sync';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    type OnChunk = (c: { type: 'token'; text: string }) => void;
+    let captured: OnChunk | null = null;
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: { onChunk: OnChunk }) => {
+      captured = args.onChunk;
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    const store = useStreamManagerStore.getState();
+    void store.startOpener({
+      ...baseOpenerArgs(myChatId, persona, model),
+      chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(captured).not.toBeNull();
+    (captured as unknown as OnChunk)({ type: 'token', text: 'partial' });
+
+    await store.abortPreserve(myChatId);
+
+    // Handle must be gone immediately after abortPreserve resolves.
+    expect(useStreamManagerStore.getState().has(myChatId)).toBe(false);
+
+    // Row must exist with partial content — NOT deleted.
+    const msgs = await db.messages.where('chatId').equals(myChatId).toArray();
+    const row = msgs[0];
+    expect(row).toBeDefined();
+    expect(row?.streamingState).toBe('incomplete');
+    expect(row?.contentBlocks).toEqual([{ type: 'text', text: 'partial' }]);
+
+    // openerPending cleared.
+    const chat = await db.chats.get(myChatId);
+    expect(chat?.openerPending).toBe(false);
+  });
+
+  it('start() clears openerPending when chat had it set', async () => {
+    const myChatId = 'c-start-clears-opener';
+    const { db, personaId } = await seedChat();
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      () =>
+        new Promise(() => {
+          /* never */
+        }),
+    );
+
+    const store = useStreamManagerStore.getState();
+    void store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      chat: {
+        id: myChatId,
+        personaId,
+        title: null,
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+        openerPending: true,
+      },
+    } as never);
+    await new Promise((r) => setTimeout(r, 30));
+
+    const chat = await db.chats.get(myChatId);
+    expect(chat?.openerPending).toBe(false);
+
+    await store.abortDiscard(myChatId);
   });
 });

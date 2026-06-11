@@ -65,6 +65,10 @@ describe('PersonaEditor — Identity / Instructions / About-Me-Override', () => 
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: now,
       updatedAt: now,
     });
@@ -163,6 +167,10 @@ describe('PersonaEditor — Delete + Save-And-Back', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: now,
       updatedAt: now,
     });

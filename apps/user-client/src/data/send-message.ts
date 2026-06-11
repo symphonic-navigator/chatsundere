@@ -32,6 +32,7 @@ import type { OfferingRef } from '../integrations/types.js';
 import { buildKnowledgeContext } from '../knowledge/knowledge-context.js';
 import { buildLoreContext } from '../knowledge/lore-context.js';
 import { KNOWLEDGE_LORE_OPTS } from '../knowledge/lore.js';
+import { isContextMessage } from '../lib/content-blocks.js';
 import { thumbnailFromBlob } from '../lib/image-thumbnail.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { type ResolvedExpertWeb, resolveExpertWeb } from '../lib/resolve-expert-web.js';
@@ -60,7 +61,7 @@ import { addGeneratedImageArtefact } from './artefacts.js';
 export function lastCompanionText(messages: readonly MessageRow[]): string | null {
   const last = [...messages]
     .reverse()
-    .find((m) => m.role === 'persona' && m.streamingState === 'complete');
+    .find((m) => m.role === 'persona' && m.streamingState === 'complete' && isContextMessage(m));
   if (!last) return null;
   const text = last.contentBlocks
     .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
@@ -469,6 +470,48 @@ export async function resolveExpert(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// useStartOpener
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface StartOpenerArgs {
+  chatId: string;
+  reasoning: ReasoningState;
+}
+
+/**
+ * Generate the greeting opener for a freshly created chat (spec 2026-06-11 §6).
+ * Resolves the persona chain (needs the MasterKey) and delegates to the
+ * stream-manager. Rejects on initial-generation failure so the page can show
+ * the constructive notice + Retry; `openerPending` stays set for auto-retry.
+ */
+export function useStartOpener() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: StartOpenerArgs): Promise<void> => {
+      const ctx = await resolvePersonaContext(args.chatId, 'useStartOpener');
+      await useStreamManagerStore.getState().startOpener({
+        chatId: args.chatId,
+        chat: ctx.chat,
+        persona: ctx.persona,
+        provider: ctx.providerDef,
+        providerConfig: ctx.providerConfig,
+        apiKey: ctx.apiKey,
+        corsProxyUrl: ctx.corsProxyUrl,
+        corsProxyKey: ctx.corsProxyKey,
+        offering: ctx.offering,
+        reasoning: args.reasoning,
+        globalInstructions: ctx.globalInstructions,
+        globalAboutMe: ctx.globalAboutMe,
+      });
+    },
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: ['chats', vars.chatId] });
+      void qc.invalidateQueries({ queryKey: ['chats'] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // useSendMessage
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -548,7 +591,7 @@ export function useSendMessage() {
       );
 
       const recentPersonaIds = priorMessages
-        .filter((m) => m.role === 'persona')
+        .filter((m) => m.role === 'persona' && isContextMessage(m))
         .slice(-KNOWLEDGE_LORE_OPTS.cooldownRounds)
         .map((m) => m.id);
       const recentPills = recentPersonaIds.length
@@ -644,9 +687,37 @@ export function useRegenerate() {
 
       // Locate the answer to re-roll + the prompt to replay.
       const msgs = await db.messages.where('chatId').equals(args.chatId).sortBy('createdAt');
+
+      // Opener-only chat: no user message exists yet — re-roll the greeting instead.
+      const hasUserMessage = msgs.some((m) => m.role === 'user');
+      if (!hasUserMessage) {
+        const opener = [...msgs].reverse().find((m) => m.role === 'persona' && m.kind === 'opener');
+        if (!opener) throw new Error('useRegenerate: nothing to regenerate');
+        const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
+        await useStreamManagerStore.getState().regenerateOpener({
+          chatId: args.chatId,
+          targetMessageId: opener.id,
+          chat: ctx.chat,
+          persona: ctx.persona,
+          provider: ctx.providerDef,
+          providerConfig: ctx.providerConfig,
+          apiKey: ctx.apiKey,
+          corsProxyUrl: ctx.corsProxyUrl,
+          corsProxyKey: ctx.corsProxyKey,
+          offering: ctx.offering,
+          reasoning: args.reasoning,
+          globalInstructions: ctx.globalInstructions,
+          globalAboutMe: ctx.globalAboutMe,
+        });
+        return;
+      }
+
+      // Normal chat: find the last complete persona reply that is not an opener.
       const target = [...msgs]
         .reverse()
-        .find((m) => m.role === 'persona' && m.streamingState === 'complete');
+        .find(
+          (m) => m.role === 'persona' && m.streamingState === 'complete' && m.kind !== 'opener',
+        );
       if (!target) throw new Error('useRegenerate: no last persona message');
 
       const lastUser = [...msgs]
@@ -665,7 +736,7 @@ export function useRegenerate() {
       const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
 
       const recentPersonaIds = priorMessages
-        .filter((m) => m.role === 'persona')
+        .filter((m) => m.role === 'persona' && isContextMessage(m))
         .slice(-KNOWLEDGE_LORE_OPTS.cooldownRounds)
         .map((m) => m.id);
       const recentPills = recentPersonaIds.length

@@ -20,6 +20,17 @@ export function flattenAnswerText(blocks: ContentBlock[]): string {
 }
 
 /**
+ * Whether a persisted message belongs in the model's context. Openers are
+ * shown in the UI but never sent — some models refuse a conversation that
+ * begins with an assistant message, and the opener is presentation, not
+ * dialogue history. Single shared predicate: the wire builder, title-gen
+ * and the lore companion-scan must all agree.
+ */
+export function isContextMessage(m: { kind?: 'opener' }): boolean {
+  return m.kind !== 'opener';
+}
+
+/**
  * Merge consecutive blocks of the same kind into one. Pill blocks are
  * never merged — they carry a `pillId` identity that must be preserved.
  */

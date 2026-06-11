@@ -49,7 +49,11 @@ export function useChat(chatId: string | null) {
 export function useCreateChat() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { personaId: string }): Promise<string> => {
+    mutationFn: async (args: {
+      personaId: string;
+      openerPending?: boolean;
+      draftInput?: string;
+    }): Promise<string> => {
       const db = getClientDataDb();
       const persona = await db.personas.get(args.personaId);
       if (!persona) throw new Error(`useCreateChat: persona ${args.personaId} not found`);
@@ -66,8 +70,9 @@ export function useCreateChat() {
         createdAt: now,
         lastMessageAt: now,
         bookmarkedMessageCount: 0,
-        draftInput: '',
+        draftInput: args.draftInput ?? '',
         libraryIds: [],
+        ...(args.openerPending ? { openerPending: true } : {}),
       });
       return id;
     },
@@ -255,6 +260,7 @@ export function useBranchChat() {
             createdAt: m.createdAt,
             bookmarked: m.bookmarked,
             bookmarkLabel: m.bookmarkLabel,
+            kind: m.kind,
             streamingState: m.streamingState,
           });
         }

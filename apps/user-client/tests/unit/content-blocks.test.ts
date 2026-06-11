@@ -6,6 +6,7 @@ import {
   coalesceAdjacent,
   flattenAnswerText,
   groupAdjacent,
+  isContextMessage,
 } from '../../src/lib/content-blocks.js';
 
 describe('flattenAnswerText', () => {
@@ -78,6 +79,13 @@ describe('coalesceAdjacent', () => {
       { type: 'text', text: 'answer here' },
       { type: 'reasoning', text: 'second-pass' },
     ]);
+  });
+});
+
+describe('isContextMessage', () => {
+  it('is false only for opener-kind messages', () => {
+    expect(isContextMessage({ kind: 'opener' })).toBe(false);
+    expect(isContextMessage({})).toBe(true);
   });
 });
 

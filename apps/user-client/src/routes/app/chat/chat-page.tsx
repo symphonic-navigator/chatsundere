@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { buildPrompt, getOffering } from '@chatsundere/llm-unified';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
@@ -26,9 +26,9 @@ import {
   useSetArtefactTags,
   useUpdateArtefactContent,
 } from '../../../data/artefacts.js';
-import { useBranchChat, useChat, useUpdateChat } from '../../../data/chats.js';
+import { useBranchChat, useChat, useCreateChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
-import { useRegenerate, useSendMessage } from '../../../data/send-message.js';
+import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
 import { useDisplayName } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
@@ -58,6 +58,8 @@ export function ChatPage(): JSX.Element {
   const regenerate = useRegenerate();
   const updateChat = useUpdateChat();
   const branchChat = useBranchChat();
+  const createChat = useCreateChat();
+  const startOpener = useStartOpener();
 
   const setChatId = useCurrentChatStore((s) => s.setChatId);
   const setLazy = useCurrentChatStore((s) => s.setLazy);
@@ -161,6 +163,30 @@ export function ChatPage(): JSX.Element {
     ? (lazyPersonaQuery.data ?? null)
     : (chatPersonaQuery.data ?? null);
 
+  // Eager opener-chat creation. On the lazy route, when the persona has a
+  // greeting, we create the ChatRow immediately (openerPending) and redirect
+  // to the real chat route — so the opener can stream the moment the page
+  // opens, rather than waiting for the first user send. Personas WITHOUT a
+  // greeting keep the deferred lazy-creation behaviour (created on first send).
+  // The ref guards against StrictMode's double-mount creating two chats.
+  const eagerCreateFiredRef = useRef(false);
+  useEffect(() => {
+    if (!isLazy || !personaIdFromQuery || !effectivePersona) return;
+    if (!effectivePersona.greetingEnabled) return;
+    if (eagerCreateFiredRef.current) return;
+    eagerCreateFiredRef.current = true;
+    void createChat
+      .mutateAsync({
+        personaId: personaIdFromQuery,
+        openerPending: true,
+        draftInput: loadLazyDraft(personaIdFromQuery),
+      })
+      .then((newId) => {
+        clearLazyDraft(personaIdFromQuery);
+        navigate(`/app/chat/${newId}`, { replace: true });
+      });
+  }, [isLazy, personaIdFromQuery, effectivePersona, createChat, navigate]);
+
   // Publish whether this chat's persona is adult so the brand-bar
   // AdultModeToggle can hide itself for SFW personas (a calmer chat screen).
   // `null` while the persona is still resolving / on unmount → toggle shows.
@@ -240,10 +266,16 @@ export function ChatPage(): JSX.Element {
   }, [isLazy, dbDraft]);
 
   // Debounced save — lazy mode → localStorage; chat-mode → DB.
+  // The lazy-mode callback guards against firing after eager creation has already
+  // called clearLazyDraft (eagerCreateFiredRef is true by that point), closing
+  // the narrow window between clearLazyDraft and React's effect cleanup.
   useEffect(() => {
     if (isLazy) {
       if (!personaIdFromQuery) return;
-      const t = setTimeout(() => saveLazyDraft(personaIdFromQuery, draft), DRAFT_DEBOUNCE_MS);
+      const t = setTimeout(() => {
+        if (eagerCreateFiredRef.current) return;
+        saveLazyDraft(personaIdFromQuery, draft);
+      }, DRAFT_DEBOUNCE_MS);
       return () => clearTimeout(t);
     }
     if (activeChatId && draft !== dbDraft) {
@@ -260,6 +292,41 @@ export function ChatPage(): JSX.Element {
     activeChatId ? (s.streams.get(activeChatId) ?? null) : null,
   );
   const isStreamLive = !!streamHandle;
+
+  // Clear stale opener error state when the active chat changes. Without this,
+  // navigating from chat A (where the opener failed) to chat B would carry over
+  // chat A's isError, briefly showing a failure notice for the new chat.
+  const { reset: resetStartOpener } = startOpener;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger — resetStartOpener is a stable reference included for correctness
+  useEffect(() => {
+    resetStartOpener();
+  }, [activeChatId, resetStartOpener]);
+
+  // Opener trigger. On a real chat whose opener is still pending and which has
+  // no messages and no live stream, fire the opener exactly once per mount
+  // (keyed on chat id). The store keeps openerPending set on failure, so the
+  // automatic retry happens on the NEXT open — never by looping within a mount.
+  const openerFiredForChatRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isLazy || !activeChatId) return;
+    if (!chatQuery.data?.chat?.openerPending) return;
+    if ((chatQuery.data?.messages?.length ?? 0) > 0) return;
+    if (streamHandle) return;
+    if (openerFiredForChatRef.current === activeChatId) return;
+    openerFiredForChatRef.current = activeChatId;
+    void startOpener.mutateAsync({ chatId: activeChatId, reasoning }).catch(() => {
+      // Rejection is expected on initial-generation failure — the notice +
+      // Retry below surface it; openerPending stays set for the next open.
+    });
+  }, [
+    isLazy,
+    activeChatId,
+    chatQuery.data?.chat?.openerPending,
+    chatQuery.data?.messages?.length,
+    streamHandle,
+    startOpener,
+    reasoning,
+  ]);
 
   // Token estimate for the context gauge and the out-of-window marker.
   const { usedTokens, systemTokens } = useMemo(() => {
@@ -391,11 +458,23 @@ export function ChatPage(): JSX.Element {
 
   return (
     <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
-      {isLazy && !hasMessages && effectivePersona ? (
+      {!hasMessages && !isStreamLive && effectivePersona ? (
         <PersonaGreeting
           name={effectivePersona.name}
           font={effectivePersona.font}
           colour={effectivePersona.colour}
+          notice={
+            startOpener.isError
+              ? `${effectivePersona.name} couldn't compose the greeting`
+              : undefined
+          }
+          onRetry={
+            startOpener.isError && activeChatId
+              ? () => {
+                  void startOpener.mutateAsync({ chatId: activeChatId, reasoning }).catch(() => {});
+                }
+              : undefined
+          }
         />
       ) : activeChatId ? (
         <ChatStream
@@ -443,8 +522,16 @@ export function ChatPage(): JSX.Element {
                     m.role === 'user' &&
                     m.createdAt < (incomplete?.createdAt ?? Number.POSITIVE_INFINITY),
                 );
+              if (!priorUser) {
+                // No user turn to replay — this is an opener-only chat whose
+                // greeting was stopped/interrupted. Re-roll the greeting in
+                // place; useRegenerate's opener branch reuses the existing row
+                // (so do NOT delete it first).
+                await regenerate.mutateAsync({ chatId: activeChatId, reasoning });
+                return;
+              }
               if (incomplete) await db.messages.delete(incomplete.id);
-              if (priorUser && effectivePersona) {
+              if (effectivePersona) {
                 const text = priorUser.contentBlocks
                   .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
                   .map((b) => b.text)

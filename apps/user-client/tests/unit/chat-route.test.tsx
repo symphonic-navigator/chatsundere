@@ -5,7 +5,7 @@
 import { asMasterKey, getRandomBytes } from '@chatsundere/crypto';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
@@ -111,6 +111,10 @@ describe('ChatPage regenerate wiring', () => {
       libraryIds: [],
       askExpertDefault: false,
       mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
       createdAt: 1,
       updatedAt: 1,
     });
@@ -179,5 +183,222 @@ describe('ChatPage regenerate wiring', () => {
     const user = await db.messages.get(userMsgId);
     expect(user?.contentBlocks).toEqual([{ type: 'text', text: 'tell me a joke' }]);
     expect(await db.messages.where('chatId').equals(chatId).count()).toBe(2);
+  });
+});
+
+describe('ChatPage opener trigger', () => {
+  // This jsdom build does not provide `localStorage` (same gap as the documented
+  // baseline); ChatPage reads the lazy draft via it on mount. Provide a minimal
+  // in-memory stand-in, scoped here to leave the shared baseline untouched.
+  beforeEach(() => {
+    if (typeof globalThis.localStorage === 'undefined') {
+      const store = new Map<string, string>();
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: {
+          getItem: (k: string) => store.get(k) ?? null,
+          setItem: (k: string, v: string) => store.set(k, String(v)),
+          removeItem: (k: string) => store.delete(k),
+          clear: () => store.clear(),
+        },
+      });
+    }
+  });
+  afterEach(() => {
+    // biome-ignore lint/performance/noDelete: test teardown removing a global stub — perf is irrelevant
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+    useStreamManagerStore.setState({ streams: new Map() });
+    useSessionStore.setState({ mk: null, session: null } as never);
+    vi.clearAllMocks();
+  });
+
+  it('fires the opener once for an openerPending chat with no messages', async () => {
+    const db = await openClientDataDb();
+    const mk = asMasterKey(getRandomBytes(32));
+    useSessionStore.setState({ mk } as never);
+
+    const providerId = uuidv7();
+    const apiKey = await sealSecret('k', mk, `provider/${providerId}/api-key`);
+    await db.providers.add({
+      id: providerId,
+      templateId: 'nano-gpt',
+      displayName: 'nano-gpt',
+      baseUrl: nanoGpt.baseUrl,
+      apiKey,
+      routing: { kind: 'direct' },
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const offering = nanoGpt.offerings[0];
+    if (!offering) throw new Error('no offering');
+    const personaId = uuidv7();
+    await db.personas.add({
+      id: personaId,
+      name: 'Aurum',
+      tagline: '',
+      colour: '#c9a84c',
+      font: 'serif',
+      instructions: 'instr',
+      canonicalId: null,
+      providerId,
+      modelId: offering.upstreamSlug,
+      mindspaceId: null,
+      aboutMeOverride: null,
+      textureOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
+      libraryIds: [],
+      askExpertDefault: false,
+      mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: true,
+      greetingInstructions: '',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+      openerPending: true,
+    });
+
+    let engineCalls = 0;
+    vi.mocked(runStreamEngine).mockImplementation((async (a: {
+      onChunk: (c: unknown) => void;
+    }) => {
+      engineCalls += 1;
+      a.onChunk({ type: 'token', text: 'hello there' });
+      return {
+        finalContentBlocks: [{ type: 'text', text: 'hello there' }],
+        pillRows: [],
+        finishReason: 'stop',
+      };
+    }) as never);
+
+    render(<ChatPage />, { wrapper: wrap(`/app/chat/${chatId}`) });
+
+    // The opener message is created and streamed exactly once.
+    await waitFor(async () => {
+      const opener = (await db.messages.where('chatId').equals(chatId).toArray()).find(
+        (m) => m.kind === 'opener',
+      );
+      expect(opener?.contentBlocks).toEqual([{ type: 'text', text: 'hello there' }]);
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(engineCalls).toBe(1);
+    expect(await db.messages.where('chatId').equals(chatId).count()).toBe(1);
+  });
+
+  it('footer Retry on a chat whose only message is an incomplete opener re-rolls via regenerate', async () => {
+    const db = await openClientDataDb();
+    const mk = asMasterKey(getRandomBytes(32));
+    useSessionStore.setState({ mk } as never);
+
+    const providerId = uuidv7();
+    const apiKey = await sealSecret('k', mk, `provider/${providerId}/api-key`);
+    await db.providers.add({
+      id: providerId,
+      templateId: 'nano-gpt',
+      displayName: 'nano-gpt',
+      baseUrl: nanoGpt.baseUrl,
+      apiKey,
+      routing: { kind: 'direct' },
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const offering = nanoGpt.offerings[0];
+    if (!offering) throw new Error('no offering');
+    const personaId = uuidv7();
+    await db.personas.add({
+      id: personaId,
+      name: 'Aurum',
+      tagline: '',
+      colour: '#c9a84c',
+      font: 'serif',
+      instructions: 'instr',
+      canonicalId: null,
+      providerId,
+      modelId: offering.upstreamSlug,
+      mindspaceId: null,
+      aboutMeOverride: null,
+      textureOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
+      libraryIds: [],
+      askExpertDefault: false,
+      mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: true,
+      greetingInstructions: '',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const chatId = uuidv7();
+    // openerPending already false (it was attempted): only an incomplete opener row remains.
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 2,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const openerId = uuidv7();
+    await db.messages.add({
+      id: openerId,
+      chatId,
+      role: 'persona',
+      kind: 'opener',
+      contentBlocks: [{ type: 'text', text: 'partial gree' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'incomplete',
+    });
+
+    vi.mocked(runStreamEngine).mockImplementation((async (a: {
+      onChunk: (c: unknown) => void;
+    }) => {
+      a.onChunk({ type: 'token', text: 'a fresh greeting' });
+      return {
+        finalContentBlocks: [{ type: 'text', text: 'a fresh greeting' }],
+        pillRows: [],
+        finishReason: 'stop',
+      };
+    }) as never);
+
+    render(<ChatPage />, { wrapper: wrap(`/app/chat/${chatId}`) });
+
+    const retryBtn = await screen.findByRole('button', { name: /Retry/ });
+    fireEvent.click(retryBtn);
+
+    // The footer Retry path reaches the regenerate mutation, which re-rolls the
+    // greeting in place — same opener row, now complete with fresh content.
+    await waitFor(async () => {
+      const opener = await db.messages.get(openerId);
+      expect(opener?.streamingState).toBe('complete');
+      expect(opener?.contentBlocks).toEqual([{ type: 'text', text: 'a fresh greeting' }]);
+    });
+    expect(await db.messages.where('chatId').equals(chatId).count()).toBe(1);
   });
 });

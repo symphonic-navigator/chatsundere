@@ -27,6 +27,10 @@ const persona: PersonaRow = {
   libraryIds: [],
   askExpertDefault: false,
   mcpOverrides: {},
+  roleplay: false,
+  narration: 'first',
+  greetingEnabled: false,
+  greetingInstructions: '',
   createdAt: 0,
   updatedAt: 0,
 };

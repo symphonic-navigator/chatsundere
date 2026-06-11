@@ -1,5 +1,5 @@
-import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { PersonaGreeting } from '../../src/components/chat/PersonaGreeting';
 
 describe('PersonaGreeting', () => {
@@ -29,5 +29,52 @@ describe('PersonaGreeting', () => {
     const { container } = render(<PersonaGreeting name="X" font="serif" colour="#fff" />);
     const el = container.querySelector('.persona-greeting') as HTMLElement;
     expect(el.style.opacity).toBe('0.4');
+  });
+
+  it('renders no failure notice or Retry button when notice prop is unset', () => {
+    render(<PersonaGreeting name="Aurum" font="serif" colour="#fff" />);
+    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull();
+  });
+
+  it('renders the failure notice and a Retry button when notice is set', () => {
+    render(
+      <PersonaGreeting
+        name="Aurum"
+        font="serif"
+        colour="#fff"
+        notice="Aurum couldn't compose the greeting"
+        onRetry={() => {}}
+      />,
+    );
+    expect(screen.getByText("Aurum couldn't compose the greeting")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Retry/ })).toBeInTheDocument();
+  });
+
+  it('renders the failure notice but NO Retry button when onRetry is not provided', () => {
+    render(
+      <PersonaGreeting
+        name="Aurum"
+        font="serif"
+        colour="#fff"
+        notice="Aurum couldn't compose the greeting"
+      />,
+    );
+    expect(screen.getByText("Aurum couldn't compose the greeting")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull();
+  });
+
+  it('calls onRetry when the Retry button is clicked', () => {
+    const onRetry = vi.fn();
+    render(
+      <PersonaGreeting
+        name="Aurum"
+        font="serif"
+        colour="#fff"
+        notice="Aurum couldn't compose the greeting"
+        onRetry={onRetry}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

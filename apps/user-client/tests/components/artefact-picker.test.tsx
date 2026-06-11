@@ -41,6 +41,10 @@ async function seedPersona(id: string, name: string, adultPersona = false): Prom
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
     createdAt: now,
     updatedAt: now,
   });

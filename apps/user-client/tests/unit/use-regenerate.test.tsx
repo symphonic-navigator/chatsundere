@@ -13,6 +13,56 @@ import { useRegenerate } from '../../src/data/send-message';
 import { sealSecret } from '../../src/lib/secrets';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
 
+async function seedChatWithProvider() {
+  const mk = asMasterKey(getRandomBytes(32));
+  useSessionStore.setState({ mk } as never);
+  const db = await openClientDataDb();
+  const personaId = uuidv7();
+  const providerId = uuidv7();
+  const apiKey = await sealSecret('test-key', mk, `provider/${providerId}/api-key`);
+  await db.providers.add({
+    id: providerId,
+    templateId: 'nano-gpt',
+    displayName: 'nano-gpt',
+    baseUrl: nanoGpt.baseUrl,
+    apiKey,
+    routing: { kind: 'direct' },
+    enabled: true,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  const offering = nanoGpt.offerings[0];
+  if (!offering) throw new Error('nano-gpt has no offerings');
+  await db.personas.add({
+    id: personaId,
+    name: 'Aurum',
+    tagline: '',
+    colour: '#c9a84c',
+    font: 'serif',
+    instructions: 'instr',
+    canonicalId: null,
+    providerId,
+    modelId: offering.upstreamSlug,
+    mindspaceId: null,
+    aboutMeOverride: null,
+    textureOverride: null,
+    temperature: 0.85,
+    adultPersona: false,
+    chatsundereTonality: true,
+    contextWindow: null,
+    libraryIds: [],
+    askExpertDefault: false,
+    mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: true,
+    greetingInstructions: '',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  return { db, personaId, providerId, mk };
+}
+
 function wrapper(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
@@ -59,6 +109,10 @@ async function seedChatWithExchange() {
     libraryIds: [],
     askExpertDefault: false,
     mcpOverrides: {},
+    roleplay: false,
+    narration: 'first',
+    greetingEnabled: false,
+    greetingInstructions: '',
     createdAt: 1,
     updatedAt: 1,
   });
@@ -183,7 +237,162 @@ describe('useRegenerate (non-destructive)', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
     await expect(result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } })).rejects.toThrow(
-      /no last persona message|no prior user-message/,
+      /no last persona message|no prior user-message|nothing to regenerate/,
     );
+  });
+
+  it('opener-only chat (complete): calls regenerateOpener instead of throwing no-prior-user-message', async () => {
+    const { db, personaId } = await seedChatWithProvider();
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 2,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const openerId = uuidv7();
+    await db.messages.add({
+      id: openerId,
+      chatId,
+      role: 'persona',
+      kind: 'opener',
+      contentBlocks: [{ type: 'text', text: 'Hello there!' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+
+    const regenOpenerSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'regenerateOpener')
+      .mockResolvedValue(undefined);
+    const regenSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'regenerate')
+      .mockResolvedValue(undefined);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
+    });
+
+    expect(regenOpenerSpy).toHaveBeenCalledTimes(1);
+    expect(regenSpy).not.toHaveBeenCalled();
+    const arg = regenOpenerSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.chatId).toBe(chatId);
+    expect(arg.targetMessageId).toBe(openerId);
+  });
+
+  it('opener-only chat (incomplete): calls regenerateOpener instead of throwing no-prior-user-message', async () => {
+    const { db, personaId } = await seedChatWithProvider();
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 2,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const openerId = uuidv7();
+    await db.messages.add({
+      id: openerId,
+      chatId,
+      role: 'persona',
+      kind: 'opener',
+      contentBlocks: [],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'incomplete',
+    });
+
+    const regenOpenerSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'regenerateOpener')
+      .mockResolvedValue(undefined);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
+    });
+
+    expect(regenOpenerSpy).toHaveBeenCalledTimes(1);
+    const arg = regenOpenerSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.targetMessageId).toBe(openerId);
+  });
+
+  it('normal chat with opener: ignores opener row when locating the regenerate target', async () => {
+    // Seed: [opener(persona), user, reply(persona)] — target must be reply, not opener.
+    const { db, personaId } = await seedChatWithProvider();
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: null,
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      lastMessageAt: 4,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const openerId = uuidv7();
+    await db.messages.add({
+      id: openerId,
+      chatId,
+      role: 'persona',
+      kind: 'opener',
+      contentBlocks: [{ type: 'text', text: 'Hello!' }],
+      createdAt: 2,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    const userMsgId = uuidv7();
+    await db.messages.add({
+      id: userMsgId,
+      chatId,
+      role: 'user',
+      contentBlocks: [{ type: 'text', text: 'tell me a joke' }],
+      createdAt: 3,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+    const replyId = uuidv7();
+    await db.messages.add({
+      id: replyId,
+      chatId,
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: 'Why did the chicken' }],
+      createdAt: 4,
+      bookmarked: false,
+      streamingState: 'complete',
+    });
+
+    const regenSpy = vi
+      .spyOn(useStreamManagerStore.getState(), 'regenerate')
+      .mockResolvedValue(undefined);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ chatId, reasoning: { kind: 'on' } });
+    });
+
+    expect(regenSpy).toHaveBeenCalledTimes(1);
+    const arg = regenSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    // Must target the reply, not the opener.
+    expect(arg.targetMessageId).toBe(replyId);
+    // Must replay the user turn.
+    expect(arg.userMessageText).toBe('tell me a joke');
   });
 });

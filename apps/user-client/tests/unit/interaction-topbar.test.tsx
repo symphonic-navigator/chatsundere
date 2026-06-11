@@ -28,6 +28,10 @@ const aurum: PersonaRow = {
   libraryIds: [],
   askExpertDefault: false,
   mcpOverrides: {},
+  roleplay: false,
+  narration: 'first',
+  greetingEnabled: false,
+  greetingInstructions: '',
   createdAt: 1,
   updatedAt: 1,
 };

@@ -39,4 +39,26 @@ describe('title-gen prompt composition', () => {
     );
     expect(out).toContain('explicit erotica');
   });
+
+  it('includes the roleplay block when the persona is a roleplay persona', () => {
+    // Band-1 segments run in every job — roleplay is Band-1 — so the title job
+    // must carry the roleplay block when the persona has roleplay:true.
+    const out = buildPrompt(
+      {
+        tonalityEnabled: false,
+        nsfwEnabled: false,
+        globalInstructions: '',
+        personaInstructions: 'You are Mira.',
+        aboutMe: '',
+        projectInstructions: '',
+        memoryContext: '',
+        toolsInstruction: '',
+        roleplayEnabled: true,
+        narration: 'third',
+        personaName: 'Mira',
+      },
+      'title',
+    );
+    expect(out).toContain('roleplay mode');
+  });
 });
