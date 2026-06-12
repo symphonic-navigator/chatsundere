@@ -1,7 +1,10 @@
 # xAI Voice Onboarding — Grok TTS/STT via Two Paths + Voice Slot Pickers
 
 **Date:** 2026-06-12
-**Status:** Approved by Chris (design conversation 2026-06-12, late session)
+**Status:** Approved by Chris (design conversation 2026-06-12, late session).
+Laura spec-pass: **no hard defects, five soft notes — all five incorporated below**
+(picker labels, slot-switch notice, visible auto-default, pinned disabled-hint copy,
+egress disclosure at the picker).
 **Scope:** Snack-sized session between dictation/STT (landed `3deb242` + `acc9092`) and Spec 3 (live voice).
 
 ## 1. Context & Goal
@@ -139,17 +142,37 @@ working seamlessly.
 ## 5. Voice Slot Pickers — My Settings → Voice
 
 Two new pickers in the existing Voice section, following the image-generation slot
-pattern:
+pattern. Labels are direction-anchored (Laura SOFT-1) — the verb, not the abstract
+"provider":
 
-- **Voice provider** (TTS slot) — lists Grok TTS via xAI and Grok TTS via nano-gpt.
-  Mistral Voxtral TTS is **not listed** (superseded — fully absent, not disabled; it is
-  dropped, not "coming soon").
-- **Dictation provider** (STT slot) — lists Voxtral Mini STT via Mistral AI, Grok STT
+- **Read-aloud voice** (TTS slot, in the existing Provider group near the read-aloud
+  mode toggle) — subtitle "The voice that reads messages aloud." Lists Grok TTS via
+  xAI and Grok TTS via nano-gpt. Mistral Voxtral TTS is **not listed** (superseded —
+  fully absent, not disabled; it is dropped, not "coming soon").
+- **Speech-to-text** (STT slot, inside the existing Dictation group) — subtitle
+  "What turns your speech into text." Lists Voxtral Mini STT via Mistral AI, Grok STT
   via xAI, Grok STT via nano-gpt.
 
 Offerings whose provider is not configured/enabled render **disabled-with-hint**
-(disabled over hidden). The existing offering status line and the dictation settings
-group stay where they are.
+(disabled over hidden). The hint copy is pinned per offering, provider-named and
+actionable (Laura SOFT-4): "Add the xAI provider in My Settings to enable this." /
+"Add the nano-gpt provider in My Settings to enable this." / "Add the Mistral AI
+provider in My Settings to enable this." The existing offering status line and the
+dictation settings group stay where they are.
+
+**Egress disclosure at the decision point (Laura SOFT-5):** the picker entries carry a
+subtle one-line note stating where the data goes — STT entries: "Sends microphone audio
+to xAI (US)" / "Sends microphone audio via nano-gpt to xAI (US)" / "Sends microphone
+audio to Mistral AI (EU)"; TTS entries: "Sends message text to xAI (US)" / "Sends
+message text via nano-gpt to xAI (US)". The conscious opt-in is conscious in the UI,
+not only in this spec.
+
+**Slot-switch notice (Laura SOFT-2, Chris's call to include):** after the user changes
+the Read-aloud-voice slot, a calm static inline note renders under the picker:
+"Personas keep their voice picks — if a voice came from the previous provider, re-pick
+it in the persona editor." No validation round-trip (the §7 scope cut stands); the
+note converts the reactive surprise into an invitation. It clears on leaving the
+settings room.
 
 ### 5.1 Selection semantics & defaults
 
@@ -173,6 +196,12 @@ providers at resolve time:
 An explicit pick persists the ref and wins. If a picked offering's provider later
 becomes unconfigured, resolution falls back to the auto-default order (and the picker
 shows the stale pick as disabled-with-hint).
+
+**The auto-default is visible, never blank (Laura SOFT-3):** while a slot is `null`,
+the picker renders the *resolved* offering with an "(auto)" affordance — e.g.
+"Grok TTS via xAI (auto)" — so the user can always see which provider is actually
+speaking/listening without a network tab. When nothing resolves (no provider
+configured), the slot shows the existing unconfigured hint.
 
 `resolveTts`/`resolveStt` replace `offerings[0]` with this selection logic; everything
 downstream (key decryption, CORS routing, cache) is untouched. The `voiceAudio` cache
@@ -205,7 +234,9 @@ to xAI, stored Mistral voice IDs are orphaned:
 - Read-aloud with an orphaned voice goes through the existing constructive error path
   (provider rejects the unknown voice → Retry/Skip + honest copy).
 - **No validation round-trip at read-aloud time** — deliberately out of scope for this
-  snack-sized unit. Logged as a UX deferral if Laura flags it.
+  snack-sized unit. Laura's spec-pass confirmed this path is constructively recoverable
+  (not a dead-end); her SOFT-2 concern — the *silent* orphaning at the moment of the
+  slot switch — is answered by the §5 slot-switch notice, so no deferral is needed.
 
 Between the two xAI paths the five shared names are expected to match (§4 probe), so
 that switch should be lossless.
@@ -236,9 +267,11 @@ Probe results land in the curation records under `obsidian/models/`.
   webm→Matroska spoof gated to nano-gpt), static-voice-list resolution, offering
   registration (`listTtsOfferings`/`listSttOfferings` counts and metas).
 - **user-client (vitest):** slot-picker rendering (configured/unconfigured/disabled
-  states, Mistral TTS absent from the TTS picker), selection persistence + auto-default
-  resolution order in `resolveTts`/`resolveStt`, `VoicePicker` per-offering memo keying,
-  `TtsModerationNotice` reading the selected offering, Dexie v23 migration.
+  states with the pinned hint copy, egress notes, Mistral TTS absent from the TTS
+  picker, "(auto)" rendering of the resolved default, the slot-switch notice),
+  selection persistence + auto-default resolution order in `resolveTts`/`resolveStt`,
+  `VoicePicker` per-offering memo keying, `TtsModerationNotice` reading the selected
+  offering, Dexie v23 migration.
 - No live-provider calls in CI (house rule); live behaviour is covered by the §8 probes
   and §11 manual verification.
 
@@ -257,19 +290,25 @@ Probe results land in the curation records under `obsidian/models/`.
 Restart `pnpm dev` first — `packages/llm-unified` changes (Vite HMR ignores
 `packages/*`).
 
-1. **Slot pickers appear:** My Settings → Voice shows "Voice provider" and "Dictation
-   provider" pickers. With xAI + nano-gpt + Mistral configured: TTS picker offers the
-   two Grok paths (no Mistral entry); STT picker offers all three.
-2. **Auto-defaults:** with both slots untouched, read-aloud uses Grok TTS via xAI
-   (network tab: `api.x.ai`), dictation uses Mistral (network tab: `api.mistral.ai`).
+1. **Slot pickers appear:** My Settings → Voice shows the "Read-aloud voice" and
+   "Speech-to-text" pickers with their subtitles. With xAI + nano-gpt + Mistral
+   configured: TTS picker offers the two Grok paths (no Mistral entry); STT picker
+   offers all three; each entry carries its egress note ("Sends microphone audio to
+   xAI (US)" etc.).
+2. **Auto-defaults visible:** with both slots untouched, the TTS slot reads
+   "Grok TTS via xAI (auto)" and the STT slot "Voxtral Mini STT via Mistral AI (auto)";
+   read-aloud actually uses xAI (network tab: `api.x.ai`), dictation Mistral
+   (network tab: `api.mistral.ai`).
 3. **Grok voice happy path:** pick a Grok voice in the persona editor (voice list loads
    from xAI), read a persona message aloud → MP3 plays, glow walks.
 4. **TEAL passthrough:** have the persona produce an expressive message (`[laugh]`,
    `<whisper>`) → the voice audibly laughs/whispers; no tag text is spoken.
 5. **Moderation canary:** the known "eintauchen" sentence reads aloud without a skip
    note (Voxtral 403 trigger passes on xAI).
-6. **Path switch:** flip the TTS slot to Grok TTS via nano-gpt → same persona voice
-   still works (shared voice names), network tab shows `nano-gpt.com`.
+6. **Path switch:** flip the TTS slot to Grok TTS via nano-gpt → the calm slot-switch
+   note appears under the picker ("Personas keep their voice picks…") and clears on
+   leaving the room; the same persona voice still works (shared voice names), network
+   tab shows `nano-gpt.com`.
 7. **xAI dictation:** flip the STT slot to Grok STT via xAI → PTT and VAD dictation
    both transcribe.
 8. **nano-gpt dictation incl. spoof:** flip to Grok STT via nano-gpt → PTT on
