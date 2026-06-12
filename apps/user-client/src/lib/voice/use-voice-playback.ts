@@ -12,6 +12,7 @@ import {
   type TransportState,
   type VoiceDeps,
   selectCurrentSegmentId,
+  selectProviderSkips,
   selectTransportState,
   voiceMachine,
 } from './voice-machine.js';
@@ -22,6 +23,8 @@ export type DisabledReason = 'no-provider' | 'no-voice' | null;
 export interface VoicePlayback {
   transportState: TransportState;
   currentSegmentId: string | null;
+  /** Count of segments the provider declined (auto-skipped) in the current/last read. */
+  providerSkips: number;
   /** Start reading a message aloud from `startIndex`. Returns a not-ok reason if TTS cannot run. */
   playMessage: (
     message: MessageRow,
@@ -117,6 +120,7 @@ export function useVoicePlayback(
 
   const transportState = useSelector(actor, selectTransportState);
   const currentSegmentId = useSelector(actor, selectCurrentSegmentId);
+  const providerSkips = useSelector(actor, selectProviderSkips);
 
   // Dispose the sink on unmount (the actor stops with the component).
   useEffect(() => {
@@ -147,6 +151,26 @@ export function useVoicePlayback(
     }),
     [settings.data?.voiceMode, persona?.roleplay],
   );
+
+  // Mode / roleplay change → stop any active read (Chris's call, device finding
+  // 2026-06-12). The machine froze its segment list AND its `${block}:${ordinal}`
+  // segment-id namespace at PLAY time, but the renderer re-segments live from the
+  // new setting — so after a toggle the glow ids no longer match the rendered
+  // spans and the highlight falls out. Stopping re-syncs both sides on the next
+  // play. The resume offer is dropped too: its remembered segment index is
+  // mode-relative, so it would resume into the wrong sentence under the new mode.
+  // The very first settings resolution is not a change, so the initial mount
+  // never stops.
+  const segKey = `${segmentationOpts.mode}:${segmentationOpts.roleplay}`;
+  const prevSegKeyRef = useRef<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on segKey alone — actor is stable and clearOffer must not retrigger the stop
+  useEffect(() => {
+    const prev = prevSegKeyRef.current;
+    prevSegKeyRef.current = segKey;
+    if (prev === null || prev === segKey) return;
+    clearOffer();
+    if (!actor.getSnapshot().matches('idle')) actor.send({ type: 'STOP' });
+  }, [segKey]);
 
   // The single internal start path: every play (fresh, resume, ended-partial
   // retry) funnels through here so resolution, lastPlayRef and the cleared
@@ -269,6 +293,7 @@ export function useVoicePlayback(
   return {
     transportState,
     currentSegmentId,
+    providerSkips,
     playMessage,
     resume,
     startOver,

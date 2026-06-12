@@ -58,6 +58,9 @@ function mistralOffering(canonicalRef: string, slug: string, args: MistralOfferi
 const TTS_META: TtsOfferingMeta = {
   displayName: 'Voxtral Mini TTS',
   teal: 'strip',
+  // Voxtral runs a content-moderation filter that 403s on benign text (device
+  // finding 2026-06-12). Surfaced to the user; read-aloud auto-skips refusals.
+  contentModerated: true,
 };
 
 const offerings: Offering[] = [

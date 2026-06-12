@@ -29,7 +29,7 @@ vi.mock('../../../src/lib/voice/audio-sink.js', () => ({
   },
 }));
 
-const settingsData = { voiceMode: 'paragraph' as const };
+const settingsData: { voiceMode: 'paragraph' | 'sentence' } = { voiceMode: 'paragraph' };
 vi.mock('../../../src/data/settings.js', () => ({
   useSettings: () => ({ data: settingsData }),
 }));
@@ -69,6 +69,7 @@ const okResolution = {
 };
 
 beforeEach(() => {
+  settingsData.voiceMode = 'paragraph';
   _resetResumeMemoryForTests();
   resolveTtsMock.mockReset();
   cacheDeleteMock.mockClear();
@@ -229,6 +230,105 @@ describe('useVoicePlayback', () => {
 
     await waitFor(() => expect(result.current.resumeOffer).toBeNull());
     expect(peekPosition('c1')).toBeNull();
+  });
+
+  it('auto-skips a content refusal (403) and keeps reading, counting the skip', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    // Segment 0:0 is declined on content grounds (403); 0:1 synthesises fine.
+    okResolution.fetchAudio.mockImplementation(async (s: SpeechSegment) => {
+      if (s.segmentId === '0:0')
+        throw Object.assign(new Error('TTS upstream 403'), { status: 403 });
+      return new Blob(['x'], { type: 'audio/mpeg' });
+    });
+    // Hold play open so the machine stays in speaking on the surviving segment.
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {}));
+
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+
+    // The read advanced past the refused segment rather than halting.
+    await waitFor(() => expect(result.current.currentSegmentId).toBe('0:1'));
+    expect(result.current.transportState).toBe('speaking');
+    expect(result.current.providerSkips).toBe(1);
+  });
+
+  it('clears the skipped-passage note on stop', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    okResolution.fetchAudio.mockImplementation(async (s: SpeechSegment) => {
+      if (s.segmentId === '0:0')
+        throw Object.assign(new Error('TTS upstream 403'), { status: 403 });
+      return new Blob(['x'], { type: 'audio/mpeg' });
+    });
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {}));
+
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    await waitFor(() => expect(result.current.providerSkips).toBe(1));
+
+    act(() => {
+      result.current.stop();
+    });
+    await waitFor(() => expect(result.current.providerSkips).toBe(0));
+  });
+
+  it('keeps Retry for a transient failure (500) instead of auto-skipping', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    okResolution.fetchAudio.mockImplementation(async (s: SpeechSegment) => {
+      if (s.segmentId === '0:0')
+        throw Object.assign(new Error('TTS upstream 500'), { status: 500 });
+      return new Blob(['x'], { type: 'audio/mpeg' });
+    });
+
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+
+    await waitFor(() => expect(result.current.transportState).toBe('failed'));
+    expect(result.current.providerSkips).toBe(0);
+  });
+
+  it('stops the active read when the voice mode changes mid-play (mode-desync guard)', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {})); // stay speaking
+
+    const { result, rerender } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    await waitFor(() => expect(result.current.transportState).toBe('speaking'));
+
+    // Toggle the mode while speaking. The machine's frozen segment-id namespace
+    // would otherwise desync from the live re-segmented spans → glow falls out.
+    await act(async () => {
+      settingsData.voiceMode = 'sentence';
+      rerender();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.transportState).toBe('idle'));
+  });
+
+  it('drops a stale resume offer when the voice mode changes while idle', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    rememberPosition('c1', { messageId: 'm1', segmentIndex: 1, paragraphIndex: 1 });
+    const messages = [msg('m1', TWO_PARA)];
+    const { result, rerender } = renderHook(() => useVoicePlayback('c1', persona, messages));
+
+    expect(result.current.resumeOffer).not.toBeNull();
+
+    await act(async () => {
+      settingsData.voiceMode = 'sentence';
+      rerender();
+      await Promise.resolve();
+    });
+
+    // The remembered segment index is mode-relative — a mode change invalidates it.
+    await waitFor(() => expect(result.current.resumeOffer).toBeNull());
   });
 
   it('resume sends PLAY at the remembered index and clears the position', async () => {

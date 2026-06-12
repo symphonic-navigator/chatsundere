@@ -2,6 +2,7 @@
 
 import {
   type Offering,
+  SpeechSynthesisError,
   getProvider,
   listTtsOfferings,
   synthesiseSpeech,
@@ -153,17 +154,35 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
 
     // Cache miss — synthesise from the upstream provider.
     const voiceId = voiceIdFor(segment);
-    const result = await synthesiseSpeech({
-      providerConfig,
-      apiKey,
-      corsProxyUrl,
-      corsProxyKey,
-      upstreamSlug,
-      teal: ttsMeta.teal,
-      text: segment.spokenText,
-      voiceId,
-      signal,
-    });
+    let result: Awaited<ReturnType<typeof synthesiseSpeech>>;
+    try {
+      result = await synthesiseSpeech({
+        providerConfig,
+        apiKey,
+        corsProxyUrl,
+        corsProxyKey,
+        upstreamSlug,
+        teal: ttsMeta.teal,
+        text: segment.spokenText,
+        voiceId,
+        signal,
+      });
+    } catch (err) {
+      // Device finding 2026-06-12: a synthesis failure surfaced only as the
+      // opaque "Couldn't read this part aloud" transport state — the cause was
+      // swallowed. Log the provider boundary (HTTP status + the offending
+      // segment) so the real reason is visible; error handling is unchanged.
+      const status = err instanceof SpeechSynthesisError ? err.status : null;
+      console.error('[voice-tts] synthesis failed', {
+        status,
+        segmentId: segment.segmentId,
+        voice: segment.voice,
+        voiceId,
+        length: segment.spokenText.length,
+        text: segment.spokenText.slice(0, 160),
+      });
+      throw err;
+    }
 
     // Write-through: the just-synthesised blob lands in cache for replay.
     await cachePut({ key, blob: result.blob, mimeType: result.mimeType });

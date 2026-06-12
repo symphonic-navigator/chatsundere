@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { type TtsVoice, listTtsVoices } from '@chatsundere/llm-unified';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { resolveTtsTransport } from '../../lib/voice/resolve-tts.js';
 
 // Module-level memo: one fetch per session, shared across all VoicePicker instances.
@@ -72,6 +72,32 @@ export function VoicePicker({
   const [open, setOpen] = useState(false);
   const [loadState, setLoadState] = useState<VoiceLoadState>({ status: 'idle' });
 
+  // Resolve the selected voice's display NAME without requiring the user to open
+  // the picker. Voices load lazily on open, but the collapsed trigger needs the
+  // name now — otherwise it shows the raw voice id (device finding 2026-06-12).
+  // The fetch is session-memoised (one network call shared across pickers), so
+  // eager resolution is cheap; it runs only when a voice is selected, the control
+  // is enabled, and nothing has been loaded yet.
+  useEffect(() => {
+    if (disabled || value === null) return;
+    let cancelled = false;
+    // Functional update (not a `loadState` dep) so the effect runs only when the
+    // value/disabled inputs change — adding `status` would re-run the effect on
+    // the idle→loading flip and its cleanup would cancel its own in-flight fetch.
+    setLoadState((prev) => (prev.status === 'loaded' ? prev : { status: 'loading' }));
+    fetchVoices().then(
+      (voices) => {
+        if (!cancelled) setLoadState({ status: 'loaded', voices });
+      },
+      () => {
+        if (!cancelled) setLoadState({ status: 'error' });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [disabled, value]);
+
   function handleOpen(): void {
     if (disabled) return;
     setOpen(true);
@@ -99,7 +125,12 @@ export function VoicePicker({
 
   const selectedVoice =
     loadState.status === 'loaded' ? loadState.voices.find((v) => v.id === value) : null;
-  const displayValue = selectedVoice?.name ?? value ?? null;
+  // While the name is still resolving, show a neutral placeholder rather than the
+  // raw id. Once loaded we use the name, falling back to the id only if the stored
+  // voice vanished upstream (or the list failed to load) — an honest last resort.
+  const resolving =
+    value !== null && (loadState.status === 'idle' || loadState.status === 'loading');
+  const displayValue = selectedVoice?.name ?? (resolving ? '…' : (value ?? null));
 
   return (
     <div className="flex flex-col gap-1">

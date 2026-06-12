@@ -614,6 +614,7 @@ export function ChatPage(): JSX.Element {
         onResumePlayback={voice.resume}
         onStartOver={voice.startOver}
         onDismiss={voice.dismissPartial}
+        providerSkips={voice.providerSkips}
       />
 
       {tocOpen ? (

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { type SnapshotFrom, assign, fromPromise, setup } from 'xstate';
+import { type SnapshotFrom, and, assign, fromPromise, setup } from 'xstate';
 import type { SpeechSegment } from './segmentation.js';
 
 /**
@@ -49,6 +49,14 @@ export interface VoiceContext {
   failedIndex: number | null;
   /** True when SKIP walked off the end from a failed final segment (transport shows the partial-finish note). */
   endedPartial: boolean;
+  /**
+   * Count of segments the provider DECLINED on content-moderation grounds
+   * (deterministic 4xx, e.g. Mistral Voxtral's 403 on benign text — device
+   * finding 2026-06-12). These auto-skip rather than halting, because Retry can
+   * never heal them; the transport shows an honest note so the gap is never
+   * silent. Reset on the next PLAY and on DISMISS, mirroring `endedPartial`.
+   */
+  providerSkips: number;
   prefetched: Map<number, Blob>;
 }
 
@@ -115,6 +123,15 @@ export const voiceMachine = setup({
     hasNext: ({ context }) => context.currentIndex + 1 < context.segments.length,
     failedHasNext: ({ context }) =>
       context.failedIndex !== null && context.failedIndex + 1 < context.segments.length,
+    // A deterministic content refusal (HTTP 4xx other than 429): Retry can never
+    // heal it, so the read auto-skips past it. Duck-types `error.status` to keep
+    // the machine free of the llm-unified import (the contract: SpeechSynthesisError
+    // carries a numeric `status`). Network errors / decode failures carry no status
+    // and fall through to the transient `failed` path (Retry stays meaningful).
+    isContentRefusal: ({ event }) => {
+      const status = (event as unknown as { error?: { status?: unknown } }).error?.status;
+      return typeof status === 'number' && status >= 400 && status < 500 && status !== 429;
+    },
   },
 }).createMachine({
   id: 'voice',
@@ -125,6 +142,7 @@ export const voiceMachine = setup({
     currentIndex: 0,
     failedIndex: null,
     endedPartial: false,
+    providerSkips: 0,
     prefetched: new Map(),
   }),
   initial: 'idle',
@@ -150,13 +168,14 @@ export const voiceMachine = setup({
             currentIndex: event.startIndex,
             failedIndex: null,
             endedPartial: false,
+            providerSkips: 0,
             prefetched: new Map<number, Blob>(),
           })),
         },
         // Clear the partial-finish note in place: SKIP-off-the-end leaves us in
         // idle with endedPartial set, and the transport drives DISMISS to drop
         // the closing note without starting a new playback.
-        DISMISS: { actions: assign({ endedPartial: false }) },
+        DISMISS: { actions: assign({ endedPartial: false, providerSkips: 0 }) },
       },
     },
     active: {
@@ -165,8 +184,12 @@ export const voiceMachine = setup({
       // (STOP, LEAVE_CHAT, natural completion, and SKIP-off-the-end).
       exit: ({ context }) => context.deps.stop(),
       on: {
-        STOP: { target: 'idle' },
-        LEAVE_CHAT: { target: 'idle' },
+        // STOP / LEAVE_CHAT abandon the current read, so the skipped-passage note
+        // is cleared too (Chris's call 2026-06-12) — it only describes a read the
+        // user is still in. Natural completion and final-refusal keep the count so
+        // the post-read note can show.
+        STOP: { target: 'idle', actions: assign({ providerSkips: 0 }) },
+        LEAVE_CHAT: { target: 'idle', actions: assign({ providerSkips: 0 }) },
       },
       type: 'parallel',
       states: {
@@ -196,10 +219,63 @@ export const voiceMachine = setup({
                     // Final segment played to completion: natural end → idle.
                     { target: '#voice.idle' },
                   ],
-                  onError: {
-                    target: 'failed',
-                    actions: assign({ failedIndex: ({ context }) => context.currentIndex }),
-                  },
+                  onError: [
+                    // Content refusal with a next segment → auto-skip and keep
+                    // reading (Chris's call 2026-06-12). Counts the skip so the
+                    // transport can show an honest note; never enters `failed`.
+                    {
+                      guard: and(['isContentRefusal', 'hasNext']),
+                      target: 'speaking',
+                      reenter: true,
+                      actions: [
+                        ({ context }) => {
+                          const seg = context.segments[context.currentIndex];
+                          console.warn(
+                            '[voice] segment declined by provider — auto-skipped',
+                            seg?.segmentId,
+                          );
+                        },
+                        assign({
+                          currentIndex: ({ context }) => context.currentIndex + 1,
+                          providerSkips: ({ context }) => context.providerSkips + 1,
+                          failedIndex: null,
+                        }),
+                      ],
+                    },
+                    // Content refusal on the FINAL segment → end cleanly. No
+                    // futile Retry; just count it so the honest note still shows.
+                    {
+                      guard: 'isContentRefusal',
+                      target: '#voice.idle',
+                      actions: [
+                        ({ context }) => {
+                          const seg = context.segments[context.currentIndex];
+                          console.warn(
+                            '[voice] final segment declined by provider — ending read',
+                            seg?.segmentId,
+                          );
+                        },
+                        assign({ providerSkips: ({ context }) => context.providerSkips + 1 }),
+                      ],
+                    },
+                    // Transient failure (429 / 5xx / network / twice-failed
+                    // decode) → halt with Retry/Skip. Catch-all log so no failure
+                    // is ever opaque; the resolve-tts boundary carries the detail.
+                    {
+                      target: 'failed',
+                      actions: [
+                        ({ context, event }) => {
+                          const seg = context.segments[context.currentIndex];
+                          console.error(
+                            '[voice] segment playback failed',
+                            seg?.segmentId,
+                            (event as { error?: unknown }).error,
+                          );
+                        },
+                        assign({ failedIndex: ({ context }) => context.currentIndex }),
+                      ],
+                    },
+                  ],
                 },
                 {
                   // Next-segment look-ahead. Started on every (re-)entry of
@@ -297,6 +373,11 @@ export const voiceMachine = setup({
 });
 
 export type VoiceSnapshot = SnapshotFrom<typeof voiceMachine>;
+
+/** Count of segments the provider declined (auto-skipped) in the current/last read. */
+export function selectProviderSkips(snapshot: VoiceSnapshot): number {
+  return snapshot.context.providerSkips;
+}
 
 /** The segmentId currently being spoken, or null when not active. */
 export function selectCurrentSegmentId(snapshot: VoiceSnapshot): string | null {

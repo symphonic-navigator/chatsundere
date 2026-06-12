@@ -66,6 +66,14 @@ export interface TtsOfferingMeta {
    * snapshot, so the future xAI offering passes through natively).
    */
   teal: 'strip' | 'passthrough';
+  /**
+   * Whether this provider applies content moderation to the input text and may
+   * refuse benign passages (e.g. Mistral Voxtral returns 403 on innocuous German
+   * such as "eintauchen" — device finding 2026-06-12). Chatsundere's stance is
+   * anti-censorship and honest: the UI surfaces this so users are warned, rather
+   * than hiding it. `false` for a provider that synthesises whatever it is given.
+   */
+  contentModerated: boolean;
 }
 
 /** Image-generation metadata when `serviceKind === 'tti'`; undefined otherwise. */

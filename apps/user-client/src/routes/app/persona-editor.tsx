@@ -21,6 +21,7 @@ import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { McpOverrideSection } from '../../components/persona-editor/McpOverrideSection.js';
+import { TtsModerationNotice } from '../../components/voice/TtsModerationNotice.js';
 import { VoicePicker } from '../../components/voice/VoicePicker.js';
 import { useChats } from '../../data/chats.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
@@ -820,6 +821,7 @@ export function PersonaEditor(): JSX.Element {
         </p>
 
         <div className="mt-4 flex flex-col gap-3">
+          <TtsModerationNotice />
           <VoicePicker
             label="Voice"
             value={draft.voice}

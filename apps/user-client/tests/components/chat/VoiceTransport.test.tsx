@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { VoiceTransport } from '../../../src/components/chat/VoiceTransport.js';
 
+// Callbacks plus the non-callback defaults every render needs; explicit props
+// after the spread override (e.g. `providerSkips={2}` for the skip-note tests).
 function callbacks() {
   return {
     onPause: vi.fn(),
@@ -13,6 +15,7 @@ function callbacks() {
     onResumePlayback: vi.fn(),
     onStartOver: vi.fn(),
     onDismiss: vi.fn(),
+    providerSkips: 0,
   };
 }
 
@@ -61,6 +64,22 @@ describe('VoiceTransport', () => {
     fireEvent.click(screen.getByRole('button', { name: /Retry reading/ }));
     fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }));
     expect(cb.onRetry).toHaveBeenCalledTimes(1);
+    expect(cb.onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the honest skip note while still speaking (no Dismiss yet)', () => {
+    const cb = callbacks();
+    render(<VoiceTransport state="speaking" resumeOffer={null} {...cb} providerSkips={1} />);
+    expect(screen.getByText(/Skipped a passage the voice provider declined/)).toBeInTheDocument();
+    // Mid-read the note has no Dismiss — only the speaking controls plus the note.
+    expect(screen.queryByRole('button', { name: /Dismiss/ })).toBeNull();
+  });
+
+  it('idle with skipped passages shows the plural note plus Dismiss', () => {
+    const cb = callbacks();
+    render(<VoiceTransport state="idle" resumeOffer={null} {...cb} providerSkips={2} />);
+    expect(screen.getByText(/Skipped 2 passages the voice provider declined/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }));
     expect(cb.onDismiss).toHaveBeenCalledTimes(1);
   });
 

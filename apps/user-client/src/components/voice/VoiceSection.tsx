@@ -4,6 +4,7 @@ import { getProvider, listTtsOfferings } from '@chatsundere/llm-unified';
 import type { SettingsRow } from '../../boot/client-data-db.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
+import { TtsModerationNotice } from './TtsModerationNotice.js';
 
 type VoiceMode = SettingsRow['voiceMode'];
 
@@ -97,6 +98,9 @@ export function VoiceSection(): JSX.Element {
         ) : (
           <p className="text-sm text-paper-soft">No TTS provider is curated yet.</p>
         )}
+        <div className="mt-2">
+          <TtsModerationNotice />
+        </div>
       </div>
     </div>
   );

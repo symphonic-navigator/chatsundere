@@ -17,6 +17,12 @@ export interface VoiceTransportProps {
   onStartOver: () => void;
   /** Dismiss the partial-finish closing note. */
   onDismiss: () => void;
+  /**
+   * Count of segments the voice provider declined on content grounds and the
+   * read auto-skipped past (e.g. Mistral Voxtral's 403 on benign text). When
+   * non-zero, an honest note is shown so the skipped passage is never silent.
+   */
+  providerSkips: number;
 }
 
 /**
@@ -31,8 +37,8 @@ export interface VoiceTransportProps {
  * the chat page owns the {@link useVoicePlayback} state and wires it here.
  */
 export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
-  // Idle without a resume offer: render nothing at all.
-  if (p.state === 'idle' && !p.resumeOffer) return null;
+  // Idle without a resume offer or a skipped-passage note: render nothing.
+  if (p.state === 'idle' && !p.resumeOffer && p.providerSkips === 0) return null;
 
   return (
     <section className="voice-transport" aria-label="Voice playback">
@@ -149,6 +155,27 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
             Start over
           </button>
         </>
+      ) : null}
+
+      {/* Honest note for passages the provider declined (auto-skipped). Shown
+          live during the read and persisted at idle with a Dismiss — the read
+          never halts on these, but the gap is never silent either. */}
+      {p.providerSkips > 0 ? (
+        <span className="voice-transport-note">
+          {p.providerSkips === 1
+            ? 'Skipped a passage the voice provider declined'
+            : `Skipped ${p.providerSkips} passages the voice provider declined`}
+        </span>
+      ) : null}
+      {p.state === 'idle' && p.providerSkips > 0 ? (
+        <button
+          type="button"
+          className="voice-transport-btn"
+          aria-label="Dismiss"
+          onClick={p.onDismiss}
+        >
+          Dismiss
+        </button>
       ) : null}
     </section>
   );

@@ -23,6 +23,7 @@ describe('TTS offerings', () => {
     const offering = tts[0];
     expect(offering?.serviceKind).toBe('tts');
     expect(offering?.tts?.teal).toBe('strip');
+    expect(offering?.tts?.contentModerated).toBe(true);
     expect(offering?.adapter.kind).toBe('generic');
   });
 });

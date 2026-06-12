@@ -75,6 +75,18 @@ describe('VoicePicker — happy path', () => {
     expect(onSelect).toHaveBeenCalledWith('voice-a');
   });
 
+  it('resolves the selected voice name on the collapsed trigger (no id flash)', async () => {
+    const onSelect = vi.fn();
+    render(<VoicePicker label="Voice" value="voice-a" onSelect={onSelect} />);
+
+    // The trigger label resolves to the voice NAME without the picker being
+    // opened — never the raw id.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /pick voice/i })).toHaveTextContent('Adele');
+    });
+    expect(screen.queryByText('voice-a')).toBeNull();
+  });
+
   it('selecting None calls onSelect with null', async () => {
     const onSelect = vi.fn();
     render(<VoicePicker label="Voice" value="voice-a" onSelect={onSelect} />);
