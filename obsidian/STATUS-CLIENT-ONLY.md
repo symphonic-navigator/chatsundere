@@ -16,7 +16,67 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-12 (late evening) — **DICTATION/STT LANDED &
+**Last updated:** 2026-06-12 (night) — **xAI VOICE ONBOARDING LANDED**
+(squashed onto master `e1df483`, **NOT pushed**; **NOT yet device-verified**).
+The snack-sized session before Spec 3, exactly as planned: **Grok TTS + Grok
+STT, each via two paths** (xAI direct + nano-gpt) as four new
+`serviceKind: 'tts'/'stt'` offerings, and **Mistral Voxtral TTS removed from
+the GUI** (board decision honoured; code/registry/tests stay for a possible
+Mistral comeback). **Live probes first, code second** (all serial, keys from
+`keys/`, full log in [[models/grok-voice]]): xAI's voice endpoints are
+**CORS-wildcard-open** (unlike chat → new per-offering `corsOverride:
+'direct'`); `POST /tts` takes `{text, voice_id, language:'auto'}` (no model
+field) → binary MP3; `GET /tts/voices` is **unpaginated** with `voice_id` and
+**lowercase IDs** (`ara/eve/leo/rex/sal`) that nano-gpt also accepts → **one
+voice-ID namespace, lossless path switching**; nano-gpt audio takes **Bearer**
+(chatsune's x-api-key was habit → planned auth override dropped); nano-gpt STT
+**400s on webm** but takes identical bytes as `audio/x-matroska` (INS-054
+re-proven → `spoofWebmAsMatroska`, needed for PTT-on-Chrome, VAD is WAV);
+the Voxtral-403 **moderation canary passed both paths** + TEAL smoke 200 →
+`contentModerated: false`, `teal: 'passthrough'` everywhere (TEAL v1 IS the
+xAI snapshot — the day-one hook pays off). Client side: **per-offering
+transports** (`mistral-speech`/`xai-native`/`openai-speech`;
+`openai-transcriptions`/`xai-native` + exhaustive `wireFor` dispatch +
+non-audio-response cache-poisoning guard), a pure **slot selector**
+(`select-offering.ts`: explicit settings ref wins; null = curated auto-default
+— TTS xAI→nano-gpt, **STT Mistral-first** as the EU-privacy default, Chris's
+call; Mistral TTS never pickable/auto-resolved), **Dexie v23**
+(`ttsOffering`/`sttOffering`), the shared `voice-transport.ts` resolution
+helper, a per-offering-keyed VoicePicker memo (static five-voice list for
+nano-gpt, no network), and **two slot pickers in My Settings → Voice**
+("Read-aloud voice" / "Speech-to-text" — all five Laura spec-pass notes
+landed verbatim: subtitles, pinned provider-named disabled hints, **egress
+notes at every entry** ("Sends microphone audio to xAI (US)" …), visible
+"(auto)" default that always names the actual speaker even on stale picks,
+and the calm slot-switch notice). `TtsModerationNotice` follows the *selected*
+offering (vanishes on Grok, mechanism stays). Built **subagent-driven** in an
+isolated worktree (9 tasks + per-task spec/quality reviews + a fix round —
+the worktree run also caught Task 5's missed `tests/unit` verno bumps against
+the master baseline — + final holistic review **READY TO SQUASH**, its two
+Minors fixed in-branch). **Laura pre-squash: PASS, no hard defects**; her one
+deferral-candidate (disabled slot rows not keyboard-focusable) logged in
+[[insights/ux-deferrals]] for the Spec 3 accessibility pass. Two new egress
+classes (spoken text → xAI/nano-gpt; mic audio → xAI/nano-gpt, conscious
+opt-in) logged in [[insights/security-deferrals]] — not a Larissa path
+(client-only). Gates (Liz-verified on the branch tip + typecheck re-run on
+master after squash, full-tree capture confirmed): `pnpm typecheck --force`
+**14/14**; `pnpm run build --force` **9/9**; llm-unified `bun test` **372/0**;
+user-client vitest **1601 pass / 8 fail** (the unchanged Node-26-localStorage
+baseline trio). Spec/plan:
+[[../superpowers/specs/2026-06-12-xai-voice-onboarding-design]],
+[[../superpowers/plans/2026-06-12-xai-voice-onboarding]]. **Device test
+(spec §11, eleven steps; restart `pnpm dev` — packages/llm-unified changed;
+no new npm deps):** slot pickers + egress notes; "(auto)" defaults (xAI for
+voice, Mistral for dictation); Grok voice happy path with walking glow; TEAL
+passthrough audible ([laugh]/whisper); the "eintauchen" canary reads without
+a skip; path switch to nano-gpt incl. slot-switch note + same voice; xAI and
+nano-gpt dictation (PTT webm spoof + VAD wav); disabled-with-hint on a
+disabled provider; moderation warning gone; orphaned Mistral voice heals via
+re-pick. **Next:** Chris device-tests → Liz pushes the master backlog on his
+word; then **Spec 3 (live voice: barging, auto-read, orchestration — inherits
+the three logged ux-deferral seams)**.
+
+**Earlier 2026-06-12 (late evening) — DICTATION/STT LANDED &
 DEVICE-CONFIRMED** (squashed onto master `3deb242` + device-finding fix
 `acc9092`; **Chris pushes the backlog himself**; re-test confirmed 2026-06-12:
 "das haut jetzt hin, das ist super"). **NEXT SESSION (Chris's call): xAI
