@@ -16,7 +16,63 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-11 (evening) — **VOICE PLAYBACK CORE LANDED**
+**Last updated:** 2026-06-12 — **VOICE TTS HARDENING SQUASHED** (master
+`657e1d1`, **NOT pushed**; **DEVICE-CONFIRMED by Chris 2026-06-12** — squashed on
+his word; gates re-verified at squash time: `pnpm typecheck --force` 14/14, biome
+clean on the 15 changed files). **NGO board decision (2026-06-12, unanimous):**
+once the dictation/STT base lands, **xAI TTS (direct or via nano-gpt) supersedes
+Mistral TTS** — Mistral stays for **STT only** (the Voxtral TTS moderation
+finding sealed it; Mistral is informed). **Now in progress: Spec 2
+(dictation/STT with Mistral)** — brainstorm under way; chatsune's VAD stack
+(`@ricky0123/vad-web` Silero, three-level sensitivity presets + a separate
+redemption window, PTT/continuous capture) is the reference implementation,
+but Chatsundere calls Mistral **direct from the client** (chatsune proxied via
+its backend — CORS probe needed). Hardening details follow.
+
+**Earlier 2026-06-12 — VOICE TTS HARDENING** (squashed `657e1d1`, see above). First device
+test of the voice-playback core surfaced three issues, fixed inline this session
+(systematic-debugging) plus two follow-on asks. **(1) Mode-desync glow:** toggling
+read-aloud mode (paragraph↔sentence) mid-play desynced the machine's frozen
+`${block}:${ordinal}` segment-id namespace from the renderer's live-re-segmented
+spans → glow fell out. Fix (Chris's call): a mode/roleplay change while active
+**STOPs the read** + drops the now-stale (mode-relative) resume offer
+(`use-voice-playback.ts`). **(2) "Couldn't read this part aloud" = Mistral Voxtral
+403 content-moderation** on benign German ("…direkt eintauchen…"), device-confirmed
+in Mistral AI Studio ("eintauchen"→"beginnen" passes); **context-score based**
+(paragraph context masks it, isolated sentence trips it) — NOT rate-limit (the
+gathered HTTP status killed that hypothesis — evidence over guessing). Endpoint-
+specific: Mistral CHAT models write explicit content fine → see
+[[project_voxtral_tts_moderates]]. Fix (Chris's call): the voice machine `onError`
+now branches — deterministic 4xx≠429 (content refusal) **auto-skips + counts the
+skip + keeps reading**, honest transport note ("Skipped a passage the voice
+provider declined", live + at idle with Dismiss; STOP/LEAVE_CHAT clear it);
+transient (429/5xx/network/twice-failed decode) still halts with Retry/Skip.
+Provider-boundary + catch-all error logging added (`resolve-tts.ts`,
+`voice-machine.ts`). **(3) Voice picker showed the raw voice ID when collapsed**
+(voices load lazily on open, but the trigger needs the name) → eager session-
+memoised name resolution on mount (`VoicePicker.tsx`). **Plus a censorship
+warning:** new `TtsOfferingMeta.contentModerated` flag (Voxtral=true) +
+`TtsModerationNotice` in My Settings → Voice AND the persona editor — the
+"transparency over refusal" stance. **Symptom "voice changes impossible" closed as
+a misread** — `voiceId` is already in the cache key (device-confirmed: Amy 2→Jane
+Neutral switched fine). Gates (Liz-verified): `pnpm typecheck --force` 14/14;
+llm-unified `bun test` 354/0; user-client vitest 1481 pass / 8 fail (the unchanged
+cockpit-draft/chat-page/chat-route baseline — chat-page failure re-verified
+pre-existing via stash); biome clean; +6 new tests. Not a Larissa path
+(client-only, no new egress). Laura: judgement-call skip (corrective bugfix +
+honest notes). **NGO angle:** Chris (Obmann, Second Circuit) raising the Voxtral
+moderation with Mistral; board may drop Mistral TTS once xAI TTS lands (keeping
+Mistral STT, likely uncensored). **Device test (restart `pnpm dev` — llm-unified
+changed):** (a) persona editor + My Settings → Voice show the moderation warning;
+(b) collapsed voice picker shows the NAME not the id; (c) the "eintauchen" sentence
+in sentence mode → auto-skipped, read continues, "Skipped a passage" note → Stop
+clears it; (d) toggle mode mid-read → stops cleanly, restart reads correctly in the
+new mode. **Next:** Chris device-tests → Liz squashes on his word + records the
+squash here (the [[project_voxtral_tts_moderates]] finding is already in memory);
+then the voice weekend continues (Spec 2 dictation/STT, Spec 3 live voice;
+xAI/nano-gpt TTS onboarding — the freedom-oriented TTS that supersedes Voxtral).
+
+**Earlier 2026-06-11 (evening) — VOICE PLAYBACK CORE LANDED**
 (squashed onto master `7eea044`, **NOT pushed**; **NOT yet device-verified**). Part 3
 of the voice design weekend — Spec 1 of the audio-state trilogy (core → dictation →
 live voice; specs 2+3 still to be brainstormed). Read-aloud of persona messages:
