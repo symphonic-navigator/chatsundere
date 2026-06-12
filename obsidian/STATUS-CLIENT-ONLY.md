@@ -16,9 +16,20 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-12 (evening) — **DICTATION/STT LANDED** (squashed onto
-master `3deb242` + device-finding fix `acc9092`, **NOT pushed**; **first device
-test FAILED → root-caused → fixed, RE-TEST PENDING**). **Device finding #1
+**Last updated:** 2026-06-12 (late evening) — **DICTATION/STT LANDED &
+DEVICE-CONFIRMED** (squashed onto master `3deb242` + device-finding fix
+`acc9092`; **Chris pushes the backlog himself**; re-test confirmed 2026-06-12:
+"das haut jetzt hin, das ist super"). **NEXT SESSION (Chris's call): xAI
+TTS + STT onboarding** — a snack-sized session BEFORE Spec 3. Community
+feedback on Mistral Voxtral TTS: **39:0 for dropping it** ("hau sie raus die
+Comstocker"), confirming the unanimous board decision; **Mistral STT stays**
+(transcription is uncensored — device-proven) and xAI STT lands beside it as
+a second `serviceKind: 'stt'` offering. xAI TTS is the prize: TEAL v1 IS the
+xAI snapshot, so expression tags travel **passthrough** (`teal:
+'passthrough'` — the hook built into TtsOfferingMeta from day one); route
+direct or via nano-gpt per [ADR 0032] — probe at curation time (/curate).
+After that: **Spec 3 (live voice: barging, auto-read, orchestration —
+inherits the two logged ux-deferral seams)**. First device test of dictation: **Device finding #1
 (systematic-debugging):** tap-to-stop right after speaking — the normal gesture —
 landed inside Silero's redemption window (default 1.7 s) and `stopContinuous`
 **discarded the in-flight utterance** → almost every single-utterance dictation
