@@ -84,8 +84,16 @@ export interface DictationDeps {
   stopPtt: () => void;
   /** Start a continuous VAD session. Rejects on getUserMedia/MicVAD failure — see `startPtt`. */
   startVad: (cb: CaptureBridge) => Promise<void>;
-  /** Tear down the VAD session, discarding any mid-utterance recording. */
+  /** Tear down the VAD session, flushing any mid-utterance recording as a final delivery. */
   stopVad: () => void;
+  /**
+   * True while the capture layer holds a VAD utterance that has not been
+   * delivered yet: speech started but the redemption window has not elapsed,
+   * or the delivery is deferred behind the MediaRecorder's async 'stop'
+   * event. Read by the vad TAP guard so the stop-tap drains instead of
+   * idling — the flushed delivery must land in drainingVad, not be dropped.
+   */
+  hasInFlightUtterance: () => boolean;
   /** Transcribe one utterance. Must respect the signal (the transport timeout lives inside). */
   transcribe: (blob: Blob, mimeType: string, signal: AbortSignal) => Promise<string>;
   /** Deliver a finished transcript to the composer. */
@@ -336,7 +344,13 @@ export const dictationMachine = setup({
         MISFIRE: {},
         TAP: [
           {
-            guard: ({ context }) => context.pending > 0,
+            // `pending` counts spawned actors; `hasInFlightUtterance` covers
+            // the utterance the stop-tap itself ends (speech started, no
+            // SPEECH_END yet — the NORMAL tap-right-after-speaking gesture,
+            // spec D16). stopVad triggers the capture flush, whose SPEECH_END
+            // delivery arrives AFTER this transition — which is exactly why
+            // drainingVad handles SPEECH_END.
+            guard: ({ context }) => context.pending > 0 || context.deps.hasInFlightUtterance(),
             target: 'drainingVad',
             actions: ({ context }) => context.deps.stopVad(),
           },

@@ -212,6 +212,7 @@ export function useDictation(args: DictationArgs): Dictation {
         audioCapture.stopContinuous();
         resetLevel();
       },
+      hasInFlightUtterance: () => audioCapture.hasInFlightUtterance(),
       transcribe: (blob, mimeType, signal) => {
         const resolution = sttResolutionRef.current;
         if (resolution === null) {

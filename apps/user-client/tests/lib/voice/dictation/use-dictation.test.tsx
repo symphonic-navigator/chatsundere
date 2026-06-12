@@ -50,6 +50,7 @@ const startContinuousMock = vi.fn(async (cb: MockCallbacks, _opts: unknown): Pro
 const stopContinuousMock = vi.fn((): void => {
   vadCallbacks = null;
 });
+const hasInFlightUtteranceMock = vi.fn((): boolean => false);
 
 vi.mock('../../../../src/lib/voice/dictation/capture.js', () => ({
   audioCapture: {
@@ -57,6 +58,7 @@ vi.mock('../../../../src/lib/voice/dictation/capture.js', () => ({
     stopPTT: () => stopPTTMock(),
     startContinuous: (cb: MockCallbacks, opts: unknown) => startContinuousMock(cb, opts),
     stopContinuous: () => stopContinuousMock(),
+    hasInFlightUtterance: () => hasInFlightUtteranceMock(),
   },
 }));
 
@@ -141,6 +143,7 @@ beforeEach(() => {
   stopContinuousMock.mockReset().mockImplementation(() => {
     vadCallbacks = null;
   });
+  hasInFlightUtteranceMock.mockReset().mockImplementation(() => false);
   transcribeMock.mockReset().mockResolvedValue('hi');
   resolveSttMock.mockReset().mockImplementation(async () => ({
     ok: true as const,
@@ -372,6 +375,42 @@ describe('useDictation', () => {
       result.current.tap();
     });
     expect(stopContinuousMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.uiState).toBe('idle'));
+  });
+
+  it('wires hasInFlightUtterance to the capture singleton: a stop-tap mid-utterance drains', async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useDictation(args));
+
+    await startPress(result);
+    await releasePress(result, 100); // tap → VAD session
+    await waitFor(() => expect(startContinuousMock).toHaveBeenCalledTimes(1));
+    const cb = vadCallbacks; // snapshot before stopContinuous nulls it
+
+    // Consume the starting gesture's synthetic click so the genuine
+    // stop-tap below reaches the machine.
+    await act(async () => {
+      result.current.tap();
+    });
+
+    // The capture layer reports an in-flight segment (speech started,
+    // redemption window not yet elapsed) at stop-tap time.
+    hasInFlightUtteranceMock.mockImplementation(() => true);
+    await act(async () => {
+      result.current.pressEnd(); // no-press guard — arms nothing
+      result.current.tap();
+    });
+
+    // The machine consulted the capture singleton and drained instead of idling.
+    expect(hasInFlightUtteranceMock).toHaveBeenCalled();
+    expect(stopContinuousMock).toHaveBeenCalledTimes(1);
+    expect(result.current.uiState).toBe('transcribing');
+
+    // The flush delivery (deferred behind the recorder's 'stop') settles the drain.
+    await act(async () => {
+      cb?.onSpeechEnd(makeAudio('flushed-utterance'));
+    });
+    await waitFor(() => expect(args.onTranscript).toHaveBeenCalledWith('hi'));
     await waitFor(() => expect(result.current.uiState).toBe('idle'));
   });
 

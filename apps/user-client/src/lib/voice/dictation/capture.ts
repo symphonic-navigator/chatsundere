@@ -93,6 +93,11 @@ class AudioCaptureImpl {
   private vadRecorderMime: string | null = null;
   private vadRecorderChunks: Blob[] = [];
   private vadSegmentStartedAt = 0;
+  // True from the moment a VAD speech-end (or stop-flush) finalise begins
+  // until its snapshotted callback has delivered — the MediaRecorder's
+  // 'stop' event is async, so the utterance is in flight but no longer
+  // visible via vadRecorder during that window.
+  private vadDeliveryPending = false;
 
   /**
    * Push-to-talk: record raw audio from mic. No VAD needed.
@@ -388,8 +393,10 @@ class AudioCaptureImpl {
   private handleVadSpeechEnd(pcm: Float32Array): void {
     const cb = this.callbacks;
     const durationMs = Math.max(0, performance.now() - this.vadSegmentStartedAt);
+    this.vadDeliveryPending = true;
 
     const deliver = (blob: Blob, mimeType: string, sampleRate: number): void => {
+      this.vadDeliveryPending = false;
       cb?.onSpeechEnd({ pcm, blob, mimeType, sampleRate, durationMs });
     };
 
@@ -438,34 +445,115 @@ class AudioCaptureImpl {
   }
 
   /**
+   * True while a VAD utterance exists that has not been delivered yet:
+   * either the per-segment recorder is rolling (speech started, redemption
+   * window not yet elapsed) or a speech-end finalise has begun but its async
+   * delivery is still deferred behind the MediaRecorder's 'stop' event.
+   *
+   * Tier-3 limitation (no MediaRecorder): there is no recorded audio
+   * mid-segment by construction — the PCM only materialises when Silero
+   * hands it over at speech-end — so this reports false and a stop-tap
+   * cannot flush a tier-3 utterance.
+   */
+  hasInFlightUtterance(): boolean {
+    if (this.vadDeliveryPending) return true;
+    return this.vadRecorder !== null && this.vadRecorder.state === 'recording';
+  }
+
+  /**
    * Stop continuous (VAD) recording.
+   *
+   * If a VAD segment is mid-recording, the user's stop-tap ENDS that
+   * utterance: it is finalised and delivered via the snapshotted callbacks —
+   * flushing it is the no-silent-loss rule (spec §6 / D16). Silero only
+   * fires speech-end after the redemption window, so tap-right-after-speaking
+   * (the NORMAL gesture) always lands here with the segment still in flight;
+   * discarding it would lose almost every single-utterance dictation.
    */
   stopContinuous(): void {
     // Bump first so any in-flight startContinuous awaiting MicVAD.new sees
     // an invalidated session when it resolves and cleans up its own VAD.
     this.vadSession++;
     this.stopVolumeMeter();
-    this.vad?.pause();
-    this.vad?.destroy();
-    this.vad = null;
-    // If a VAD segment was mid-recording, stop the recorder and discard the
-    // in-flight blob — the caller has torn down, nothing will consume it.
+
+    const cb = this.callbacks;
+    const vad = this.vad;
+    const context = this.vadContext;
     const recorder = this.vadRecorder;
+    const mime = this.vadRecorderMime;
+    const chunks = this.vadRecorderChunks;
+    this.vad = null;
     this.vadRecorder = null;
     this.vadRecorderMime = null;
     this.vadRecorderChunks = [];
-    if (recorder && recorder.state !== 'inactive') {
-      try {
-        recorder.stop();
-      } catch {
-        /* ignore */
-      }
-    }
     this.vadStream = null;
-    this.vadContext?.close();
     this.vadContext = null;
     this.analyser = null;
     this.callbacks = null;
+
+    // Pause inference immediately (no further speech events), but defer the
+    // track-killing destroy until the recorder has flushed — same
+    // teardown-order lesson as stopPTT: the final `dataavailable` must land
+    // BEFORE the MediaStream tracks die, or Chrome emits an empty chunk.
+    try {
+      vad?.pause();
+    } catch {
+      /* ignore */
+    }
+    const teardown = (): void => {
+      try {
+        vad?.destroy();
+      } catch {
+        /* ignore */
+      }
+      context?.close();
+    };
+
+    if (recorder && mime && recorder.state !== 'inactive') {
+      // Mirror handleVadSpeechEnd's finalise: stop → async 'stop' event →
+      // build the blob from the closure-bound chunks → deliver. There is no
+      // Silero PCM (speech-end never fired), so pcm is empty; the bridge
+      // only consumes blob + mimeType.
+      const durationMs = Math.max(0, performance.now() - this.vadSegmentStartedAt);
+      this.vadDeliveryPending = true;
+      const finalise = (): void => {
+        const blob = new Blob(chunks, { type: mime });
+        teardown();
+        this.vadDeliveryPending = false;
+        if (blob.size > 0) {
+          cb?.onSpeechEnd({
+            pcm: new Float32Array(0),
+            blob,
+            mimeType: mime,
+            sampleRate: 0,
+            durationMs,
+          });
+        } else {
+          // Zero bytes recorded: deliver a silent WAV instead — Mistral
+          // handles silent audio (empty transcript, which the emit layer
+          // drops), mirroring stopPTT's always-deliver contract so the
+          // machine's drain always settles.
+          cb?.onSpeechEnd({
+            pcm: new Float32Array(0),
+            blob: float32ToWavBlob(new Float32Array(0)),
+            mimeType: 'audio/wav',
+            sampleRate: VAD_SAMPLE_RATE,
+            durationMs,
+          });
+        }
+      };
+      recorder.addEventListener('stop', finalise, { once: true });
+      try {
+        recorder.stop();
+      } catch {
+        finalise();
+      }
+    } else {
+      // No segment in flight (or the recorder already stopped — a deferred
+      // speech-end finalise still owns its own delivery via its snapshotted
+      // callback and is untouched by this teardown).
+      teardown();
+    }
   }
 
   // -- Volume meter (shared) --

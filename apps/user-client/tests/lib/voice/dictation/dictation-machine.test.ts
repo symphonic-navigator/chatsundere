@@ -17,6 +17,7 @@ function makeDeps(overrides: Partial<DictationDeps> = {}): DictationDeps {
     stopPtt: vi.fn(),
     startVad: vi.fn(async () => {}),
     stopVad: vi.fn(),
+    hasInFlightUtterance: vi.fn(() => false),
     transcribe: vi.fn(async (_blob: Blob, _mimeType: string, _signal: AbortSignal) => 'transcript'),
     emitTranscript: vi.fn(),
     ...overrides,
@@ -175,6 +176,46 @@ describe('dictationMachine — VAD session', () => {
     actor.send({ type: 'DISCARD' });
     await waitFor(actor, (s) => s.matches('idle'));
     expect(selectFailed(actor.getSnapshot())).toBeNull();
+  });
+
+  it('TAP with nothing pending but an in-flight utterance drains it (stop-tap flush, spec D16)', async () => {
+    // THE device-found bug: the user stops right after speaking — Silero has
+    // fired speech-start but the redemption window has not elapsed, so no
+    // SPEECH_END was delivered yet and pending is 0. The capture layer
+    // reports the in-flight segment; stopVad triggers its flush, whose
+    // delivery lands AFTER the transition — in drainingVad.
+    const gate = deferred<string>();
+    const transcribe = vi.fn(
+      (_blob: Blob, _mimeType: string, _signal: AbortSignal) => gate.promise,
+    );
+    const deps = makeDeps({ transcribe, hasInFlightUtterance: vi.fn(() => true) });
+    const actor = start(deps);
+    startVadSession(actor);
+    expect(actor.getSnapshot().context.pending).toBe(0);
+
+    actor.send({ type: 'TAP' });
+    expect(deps.stopVad).toHaveBeenCalledTimes(1);
+    expect(actor.getSnapshot().matches('drainingVad')).toBe(true);
+
+    // The flush delivery from stopContinuous arrives after the transition.
+    actor.send({ type: 'SPEECH_END', blob: new Blob(['flushed']), mimeType: 'audio/webm' });
+    await waitFor(actor, () => transcribe.mock.calls.length === 1);
+
+    gate.resolve('late words');
+    await waitFor(actor, (s) => s.matches('idle'));
+    expect(deps.emitTranscript).toHaveBeenCalledWith('late words');
+  });
+
+  it('TAP with nothing pending and nothing in flight goes straight to idle', () => {
+    const deps = makeDeps();
+    const actor = start(deps);
+    startVadSession(actor);
+
+    actor.send({ type: 'TAP' });
+
+    expect(deps.stopVad).toHaveBeenCalledTimes(1);
+    expect(actor.getSnapshot().matches('idle')).toBe(true);
+    expect(deps.transcribe).not.toHaveBeenCalled();
   });
 
   it('TAP with a pending utterance drains, then idles when it resolves', async () => {

@@ -109,9 +109,12 @@ clipped first syllable.
   order, joined with a single space.
 - **Misfire** (noise burst too short to be speech — Silero fires speech-start
   but never speech-end): silent revert, no error surface.
-- The session ends on button tap or on leaving the chat. A failed
-  transcription does not end the session — only the affected utterance is at
-  stake (§6).
+- The session ends on button tap or on leaving the chat. A stop-tap that
+  lands while an utterance is still in flight (speech started, redemption
+  window not yet elapsed) **ends and flushes that utterance** — it is
+  transcribed, never discarded (the no-silent-loss rule; device finding
+  2026-06-12). A failed transcription does not end the session — only the
+  affected utterance is at stake (§6).
 - Transcripts always append at the **end** of the draft, regardless of the
   caret position — editing mid-session is allowed and never has a late
   transcript land at the caret (Laura spec-pass, soft finding).
@@ -346,3 +349,4 @@ Restart `pnpm dev` first (packages/llm-unified changes; Vite HMR ignores
 | D13 | Starting capture stops read-aloud | the speaker must not dictate into the mic |
 | D14 | In-flight transcription cancellable; hung requests time out into Retry/Discard | Laura hard finding — no dead-ends |
 | D15 | No disabled-mic affordance while text is present | Chris sign-off, ux-deferrals 2026-06-12 — single-button purity (WhatsApp precedent) |
+| D16 | Stop-tap flushes the in-flight utterance | the natural gesture is tap-right-after-speaking; discarding it loses almost every single-utterance dictation |
