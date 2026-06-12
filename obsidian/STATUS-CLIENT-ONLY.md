@@ -16,18 +16,65 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-12 — **VOICE TTS HARDENING SQUASHED** (master
+**Last updated:** 2026-06-12 (evening) — **DICTATION/STT LANDED** (squashed onto
+master `3deb242`, **NOT pushed**; **NOT yet device-verified**). Spec 2 of the
+voice trilogy: speech as a prompt source. **One cockpit button, no mixed mode**
+(Chris's call): DualActionBtn morphs `stop > capture > transcribing > send > mic`
+— hold = PTT, tap = VAD dictation session (Silero via `@ricky0123/vad-web`,
+**chatsune's empirically-tuned sensitivity presets + redemption window ported
+1:1** — user-praised values, never library defaults); utterances transcribed by
+the new **`serviceKind: 'stt'` Voxtral offering** (`voxtral-mini-latest`,
+multipart FormData transport, **direct** — Chris's console probe 2026-06-12:
+HTTP 200 from the app origin, ~375 prompt tokens/audio-second). **XState
+dictation machine** (ADR 0034) with spawned per-utterance transcription actors
+(completion-order emission, a VAD session survives a failed utterance,
+cancel/timeout exits everywhere — Laura's spec-pass hard finding); the
+`useDictation` hook owns the gesture model (tap/hold at 300 ms with capture from
+pointerdown, **synthetic-click suppression** + scratch-utterance suppression +
+**hot-mic LEAVE when the cockpit collapses** — the last three were
+holistic-review catches that would have killed the feature on first device
+contact). Constructive error notes incl. the honest provider-refusal copy
+("the voice provider declined…", deterministic 4xx≠408/429); **Dictation group
+in My Settings → Voice** (sensitivity low/medium/high, pause-tolerance slider
+0.6–11.5 s, auto-send with eyes-open note); **Dexie v22**; **no audio
+persistence anywhere** (blobs live one Retry cycle in machine context). Built
+**subagent-driven** in an isolated worktree (13 tasks + per-task spec/quality
+reviews + adversarial machine/hook reviews + a final **holistic review whose
+NOT-READY verdict found the gesture-click race (C1/C1b), the orphaned hot mic
+(I1), the silently-lost parked failure (I2) and the missing refusal copy (I3) —
+all fixed in-branch and adversarially re-verified: FIXES SOUND**). **Laura
+pre-squash: PASS, no hard defects** (her inert-X soft note fixed in-branch:
+Cancel = Discard in the failed state; 2 deferrals logged in
+[[insights/ux-deferrals]]: pointer-only dictation, read-aloud-over-hot-mic —
+both inherited by Spec 3). New egress class (**recorded microphone audio to
+Mistral, user-initiated, no persistence**) + VAD CDN assets logged in
+[[insights/security-deferrals]] — not a Larissa path (client-only). Gates
+(Liz-verified on master after squash, full-tree capture confirmed): `pnpm
+typecheck --force` **14/14**; `pnpm run build --force` **9/9**; llm-unified
+`bun test` **362/0**; user-client vitest **1563 pass / 8 fail** (the unchanged
+baseline trio — root-caused this session as **Node 26's experimental
+`localStorage`**, environmental, not code). Spec/plan:
+[[../superpowers/specs/2026-06-12-dictation-stt-design]],
+[[../superpowers/plans/2026-06-12-dictation-stt]]. **Device test (spec §11,
+twelve steps + 8b; run `pnpm install` once — vad-web is new — and restart
+`pnpm dev` — packages/llm-unified changed; first VAD use downloads ~14 MB
+engine assets from jsdelivr, then browser-cached):** PTT hold→draft; VAD
+two-sentence session with thinking pause; level glow; sensitivity low/high
+felt; pause-tolerance slider; auto-send on (incl. mid-stream fallback to
+draft); permission-deny constructive note; flight-mode Retry with retained
+audio; Cancel mid-transcription; read-aloud stops on mic tap; no-provider
+disabled tooltip; reduced-motion static glow. **Next:** Chris device-tests →
+Liz pushes the master backlog on his word; then **Spec 3 (live voice:
+barging, auto-read, orchestration — inherits the two logged seams)** and
+**xAI TTS onboarding** (supersedes Mistral TTS per the board decision).
+
+**Earlier 2026-06-12 — VOICE TTS HARDENING SQUASHED** (master
 `657e1d1`, **NOT pushed**; **DEVICE-CONFIRMED by Chris 2026-06-12** — squashed on
 his word; gates re-verified at squash time: `pnpm typecheck --force` 14/14, biome
 clean on the 15 changed files). **NGO board decision (2026-06-12, unanimous):**
 once the dictation/STT base lands, **xAI TTS (direct or via nano-gpt) supersedes
 Mistral TTS** — Mistral stays for **STT only** (the Voxtral TTS moderation
-finding sealed it; Mistral is informed). **Now in progress: Spec 2
-(dictation/STT with Mistral)** — brainstorm under way; chatsune's VAD stack
-(`@ricky0123/vad-web` Silero, three-level sensitivity presets + a separate
-redemption window, PTT/continuous capture) is the reference implementation,
-but Chatsundere calls Mistral **direct from the client** (chatsune proxied via
-its backend — CORS probe needed). Hardening details follow.
+finding sealed it; Mistral is informed). Hardening details follow.
 
 **Earlier 2026-06-12 — VOICE TTS HARDENING** (squashed `657e1d1`, see above). First device
 test of the voice-playback core surfaced three issues, fixed inline this session
