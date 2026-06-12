@@ -17,7 +17,21 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-12 (evening) — **DICTATION/STT LANDED** (squashed onto
-master `3deb242`, **NOT pushed**; **NOT yet device-verified**). Spec 2 of the
+master `3deb242` + device-finding fix `acc9092`, **NOT pushed**; **first device
+test FAILED → root-caused → fixed, RE-TEST PENDING**). **Device finding #1
+(systematic-debugging):** tap-to-stop right after speaking — the normal gesture —
+landed inside Silero's redemption window (default 1.7 s) and `stopContinuous`
+**discarded the in-flight utterance** → almost every single-utterance dictation
+lost ("worked once" = Chris happened to wait out the window). The Task-8
+adversarial review had flagged exactly this as a "spec-level UX question" — it
+was the main case, not an edge. Fix `acc9092`: the stop-tap now **ends and
+flushes** the in-flight utterance (capture finalises + delivers, mirroring
+stopPTT's always-deliver contract incl. silent-WAV fallback for empty blobs +
+a `vadDeliveryPending` window closing the sibling deferred-delivery race); the
+machine's TAP guard drains via the new `hasInFlightUtterance` dep (the F1
+drainingVad SPEECH_END handler consumes the flush). Spec §3.3 + D16 updated
+(no-silent-loss). Gates after fix: typecheck 14/14, focused suites 73/73, full
+vitest at the 8-baseline. Spec 2 of the
 voice trilogy: speech as a prompt source. **One cockpit button, no mixed mode**
 (Chris's call): DualActionBtn morphs `stop > capture > transcribing > send > mic`
 — hold = PTT, tap = VAD dictation session (Silero via `@ricky0123/vad-web`,
