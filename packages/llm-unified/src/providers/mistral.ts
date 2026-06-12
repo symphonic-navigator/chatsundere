@@ -66,6 +66,8 @@ const TTS_META: TtsOfferingMeta = {
   // Voxtral runs a content-moderation filter that 403s on benign text (device
   // finding 2026-06-12). Surfaced to the user; read-aloud auto-skips refusals.
   contentModerated: true,
+  transport: 'mistral-speech',
+  voices: { kind: 'fetch', endpoint: 'mistral-paginated' },
 };
 
 const STT_META: SttOfferingMeta = {
@@ -73,6 +75,7 @@ const STT_META: SttOfferingMeta = {
   // CORS-probed direct 2026-06-12 (HTTP 200 from the app origin); no
   // moderation behaviour observed on transcription — unlike the TTS endpoint.
   contentModerated: false,
+  transport: 'openai-transcriptions',
 };
 
 const offerings: Offering[] = [

@@ -15,6 +15,8 @@ const getProviderMock = vi.fn();
 vi.mock('@chatsundere/llm-unified', () => ({
   synthesiseSpeech: (...args: unknown[]) => synthesiseSpeechMock(...args),
   listTtsOfferings: () => listTtsOfferingsMock(),
+  // select-offering.ts imports this too; TTS resolution never calls it.
+  listSttOfferings: () => [],
   getProvider: (id: string) => getProviderMock(id),
 }));
 
@@ -42,29 +44,63 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 // The cache is real: we exercise the cache-hit branch by seeding it with cachePut,
 // and the write-through branch by observing a second cacheGet hit.
 import { _resetClientDataDbForTests, openClientDataDb } from '../../../src/boot/client-data-db.js';
-import { resolveTts } from '../../../src/lib/voice/resolve-tts.js';
+import { resolveTts, resolveTtsTransport } from '../../../src/lib/voice/resolve-tts.js';
 import { cacheGet, cachePut, voiceCacheKey } from '../../../src/lib/voice/voice-cache.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-const PROVIDER_ID = 'mistral';
-const UPSTREAM_SLUG = 'voxtral-mini-tts-2603';
+const PROVIDER_ID = 'xai';
+const UPSTREAM_SLUG = 'grok-tts';
 const MIME_TYPE = 'audio/mpeg';
 
-/** Minimal TTS offering fixture matching the Mistral Voxtral registration. */
-const OFFERING_FIXTURE = {
+/** xAI Grok TTS fixture — first in the curated auto-default order. */
+const XAI_OFFERING = {
   providerId: PROVIDER_ID,
   upstreamSlug: UPSTREAM_SLUG,
   serviceKind: 'tts',
-  tts: { displayName: 'Voxtral Mini TTS', teal: 'strip' as const },
+  // Voice endpoints are CORS-open even though xAI chat requires the proxy.
+  corsOverride: 'direct' as const,
+  tts: {
+    displayName: 'Grok TTS',
+    teal: 'passthrough' as const,
+    contentModerated: false,
+    transport: 'xai-native' as const,
+    voices: { kind: 'fetch' as const, endpoint: 'xai-flat' as const },
+  },
 };
 
-/** Minimal ProviderDefinition fixture. */
-const PROVIDER_DEF_FIXTURE = {
-  id: PROVIDER_ID,
-  displayName: 'Mistral AI',
-  baseUrl: 'https://api.mistral.ai/v1',
-  corsHint: 'direct' as const,
+/** nano-gpt Grok TTS fixture — second in the auto-default order. */
+const NANO_OFFERING = {
+  providerId: 'nano-gpt',
+  upstreamSlug: 'xai-tts',
+  serviceKind: 'tts',
+  tts: {
+    displayName: 'Grok TTS',
+    teal: 'passthrough' as const,
+    contentModerated: false,
+    transport: 'openai-speech' as const,
+    voices: { kind: 'static' as const, list: [{ id: 'Eve', name: 'Eve' }] },
+  },
+};
+
+/** Minimal ProviderDefinition fixtures keyed by provider id. */
+const XAI_PROVIDER_DEF = {
+  id: 'xai',
+  displayName: 'xAI',
+  baseUrl: 'https://api.x.ai/v1',
+  corsHint: 'requires-proxy' as const,
+};
+
+const NANO_PROVIDER_DEF = {
+  id: 'nano-gpt',
+  displayName: 'nano-gpt',
+  baseUrl: 'https://nano-gpt.com/api/v1',
+  corsHint: 'inofficial' as const,
+};
+
+const PROVIDER_DEFS: Record<string, unknown> = {
+  xai: XAI_PROVIDER_DEF,
+  'nano-gpt': NANO_PROVIDER_DEF,
 };
 
 function seg(spokenText: string, voice: 'dialogue' | 'narrator' = 'dialogue'): SpeechSegment {
@@ -118,17 +154,14 @@ function minimalPersona(overrides: {
   };
 }
 
-/** DB row id for the Mistral provider row seeded in tests. */
-const PROVIDER_ROW_ID = 'provider-row-mistral';
-
-/** Seed a minimal enabled Mistral provider row into the real fake-indexeddb. */
-async function seedProvider(enabled = true): Promise<void> {
+/** Seed a minimal enabled provider row into the real fake-indexeddb. */
+async function seedProvider(templateId = PROVIDER_ID, enabled = true): Promise<void> {
   const db = await openClientDataDb();
   await db.providers.put({
-    id: PROVIDER_ROW_ID,
-    templateId: PROVIDER_ID,
-    displayName: 'Mistral AI',
-    baseUrl: 'https://api.mistral.ai/v1',
+    id: `provider-row-${templateId}`,
+    templateId,
+    displayName: templateId,
+    baseUrl: 'https://example.com/v1',
     // openSecret is mocked, so any non-null EncryptedBlob-shaped value is fine.
     apiKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
     routing: { kind: 'direct' },
@@ -145,8 +178,8 @@ beforeEach(async () => {
   await openClientDataDb();
 
   // Default happy-path mock state — each test overrides what it needs to.
-  listTtsOfferingsMock.mockReturnValue([OFFERING_FIXTURE]);
-  getProviderMock.mockReturnValue(PROVIDER_DEF_FIXTURE);
+  listTtsOfferingsMock.mockReturnValue([XAI_OFFERING, NANO_OFFERING]);
+  getProviderMock.mockImplementation((id: string) => PROVIDER_DEFS[id]);
   openSecretMock.mockResolvedValue('test-api-key');
   synthesiseSpeechMock.mockResolvedValue({
     blob: new Blob(['audio'], { type: MIME_TYPE }),
@@ -170,7 +203,7 @@ describe('resolveTts', () => {
     });
 
     it('returns no-provider when the only matching row is disabled', async () => {
-      await seedProvider(false); // disabled
+      await seedProvider(PROVIDER_ID, false); // disabled
       const result = await resolveTts(minimalPersona({}));
       expect(result).toEqual({ ok: false, reason: 'no-provider' });
     });
@@ -183,7 +216,7 @@ describe('resolveTts', () => {
     });
 
     it('returns no-provider when the offering has no tts metadata', async () => {
-      listTtsOfferingsMock.mockReturnValue([{ ...OFFERING_FIXTURE, tts: undefined }]);
+      listTtsOfferingsMock.mockReturnValue([{ ...XAI_OFFERING, tts: undefined }]);
       await seedProvider();
       const result = await resolveTts(minimalPersona({}));
       expect(result).toEqual({ ok: false, reason: 'no-provider' });
@@ -250,7 +283,8 @@ describe('resolveTts', () => {
       // synthesiseSpeech called once with the right shape.
       expect(synthesiseSpeechMock).toHaveBeenCalledOnce();
       const callArgs = synthesiseSpeechMock.mock.calls[0]?.[0];
-      expect(callArgs?.teal).toBe('strip');
+      expect(callArgs?.teal).toBe('passthrough');
+      expect(callArgs?.transport).toBe('xai-native');
       expect(callArgs?.text).toBe(segment.spokenText);
       expect(callArgs?.voiceId).toBe('voice-beta');
       expect(callArgs?.upstreamSlug).toBe(UPSTREAM_SLUG);
@@ -374,14 +408,19 @@ describe('resolveTts', () => {
     });
   });
 
-  describe('(h) corrupt CORS proxy key → no-provider', () => {
-    it('returns no-provider and warns when the cors-proxy/shared-key decrypt fails', async () => {
-      await seedProvider();
+  describe('(h) corrupt CORS proxy key', () => {
+    it('returns no-provider and warns when the offering routes via the proxy', async () => {
+      // No real TTS offering routes via the proxy today (xAI's voice endpoints
+      // override to direct, nano-gpt is CORS-open), so the cors-proxy branch is
+      // pinned with a contrived requires-proxy definition and no override.
+      await seedProvider('nano-gpt');
+      getProviderMock.mockImplementation((id: string) =>
+        id === 'nano-gpt' ? { ...NANO_PROVIDER_DEF, corsHint: 'requires-proxy' } : undefined,
+      );
 
-      // Patch the existing settings row (seeded by openClientDataDb in beforeEach)
-      // to add corsProxy, so the openSecret proxy-key call is reached.
       const db = await openClientDataDb();
       await db.settings.update(1, {
+        ttsOffering: 'nano-gpt:xai-tts',
         corsProxy: {
           url: 'https://proxy.example.com',
           sharedKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
@@ -402,6 +441,66 @@ describe('resolveTts', () => {
 
       warnSpy.mockRestore();
     });
+
+    it('proceeds with a null proxy key when the offering routes direct', async () => {
+      await seedProvider();
+
+      const db = await openClientDataDb();
+      await db.settings.update(1, {
+        corsProxy: {
+          url: 'https://proxy.example.com',
+          sharedKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
+        },
+      });
+
+      openSecretMock
+        .mockResolvedValueOnce('test-api-key')
+        .mockRejectedValueOnce(new DOMException('AES-GCM auth tag failure'));
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      const transport = await resolveTtsTransport();
+      expect(transport).not.toBeNull();
+      expect(transport?.corsProxyKey).toBeNull();
+      expect(transport?.providerConfig.routing).toEqual({ kind: 'direct' });
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/cors-proxy/);
+
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('offering selection (slot picker)', () => {
+    it('respects an explicit ttsOffering pick from settings', async () => {
+      await seedProvider('xai');
+      await seedProvider('nano-gpt');
+      const db = await openClientDataDb();
+      await db.settings.update(1, { ttsOffering: 'nano-gpt:xai-tts' });
+
+      const transport = await resolveTtsTransport();
+      expect(transport?.offering.upstreamSlug).toBe('xai-tts');
+      expect(transport?.ttsMeta.transport).toBe('openai-speech');
+    });
+
+    it('auto-defaults to the xAI offering when no pick is persisted', async () => {
+      await seedProvider('xai');
+      await seedProvider('nano-gpt');
+
+      const transport = await resolveTtsTransport();
+      expect(transport?.offering.upstreamSlug).toBe('grok-tts');
+    });
+
+    it('routes direct via the per-offering corsOverride without any proxy settings', async () => {
+      // xAI's provider-level corsHint says requires-proxy; the voice offering
+      // overrides to direct, so resolution must succeed with no proxy material.
+      await seedProvider('xai');
+
+      const transport = await resolveTtsTransport();
+      expect(transport).not.toBeNull();
+      expect(transport?.providerConfig.routing).toEqual({ kind: 'direct' });
+      expect(transport?.corsProxyUrl).toBeNull();
+      expect(transport?.corsProxyKey).toBeNull();
+    });
   });
 
   describe('voiceLabel', () => {
@@ -412,7 +511,7 @@ describe('resolveTts', () => {
       expect(resolution.ok).toBe(true);
       if (!resolution.ok) return;
 
-      expect(resolution.voiceLabel).toBe('Voxtral Mini TTS via Mistral AI');
+      expect(resolution.voiceLabel).toBe('Grok TTS via xAI');
     });
   });
 });

@@ -3,16 +3,16 @@
 import {
   type Offering,
   SpeechSynthesisError,
+  type TtsOfferingMeta,
   getProvider,
-  listTtsOfferings,
   synthesiseSpeech,
 } from '@chatsundere/llm-unified';
-import { useSessionStore } from '@chatsundere/ui-shared';
 import type { PersonaRow } from '../../boot/client-data-db.js';
 import { getClientDataDb } from '../../boot/client-data-db.js';
-import { openSecret } from '../secrets.js';
 import type { SpeechSegment } from './segmentation.js';
+import { selectTtsOffering } from './select-offering.js';
 import { cacheGet, cachePut, voiceCacheKey } from './voice-cache.js';
+import { resolveVoiceTransportMaterial } from './voice-transport.js';
 
 export type TtsResolution =
   | {
@@ -26,12 +26,6 @@ export type TtsResolution =
     }
   | { ok: false; reason: 'no-provider' | 'no-voice' };
 
-/** The TTS display metadata (narrowed from Offering.tts, which is optional). */
-interface TtsMeta {
-  displayName: string;
-  teal: 'strip' | 'passthrough';
-}
-
 /** The resolved transport material shared by resolveTts and the voice picker UI. */
 export interface TtsTransport {
   providerConfig: { baseUrl: string; routing: { kind: 'direct' } | { kind: 'cors-proxy' } };
@@ -39,74 +33,38 @@ export interface TtsTransport {
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
   offering: Offering;
-  /** Narrowed TTS metadata — always present when TtsTransport is returned. */
-  ttsMeta: TtsMeta;
+  /** Full TTS metadata — always present when TtsTransport is returned. */
+  ttsMeta: TtsOfferingMeta;
 }
 
 /**
- * Resolve the transport material for the active TTS provider (auth, proxy, offering).
- * Returns null when no enabled TTS provider row exists or when decryption fails.
- * UI-free: no React imports.
+ * Resolve the transport material for the active TTS offering (auth, proxy, offering).
+ * The offering comes from the slot selector: the persisted explicit pick when
+ * one exists, the curated auto-default order otherwise. Returns null when no
+ * enabled offering resolves or when decryption fails. UI-free: no React imports.
  */
 export async function resolveTtsTransport(): Promise<TtsTransport | null> {
-  // Pick the first TTS offering (v1 has exactly one — Mistral Voxtral).
-  const offerings = listTtsOfferings();
-  const offering = offerings[0];
+  const db = getClientDataDb();
+  const providerRows = await db.providers.toArray();
+  const settings = await db.settings.get(1);
+
+  const selected = selectTtsOffering(settings?.ttsOffering ?? null, providerRows);
+  if (!selected) return null;
+  const { offering } = selected;
 
   // Guard: malformed or missing TTS registration.
-  const ttsMeta = offering?.tts;
+  const ttsMeta = offering.tts;
   if (!ttsMeta) return null;
 
-  const providerDef = getProvider(offering.providerId);
-  if (!providerDef) return null;
+  const material = await resolveVoiceTransportMaterial(
+    selected,
+    providerRows,
+    settings,
+    'resolveTts',
+  );
+  if (!material) return null;
 
-  // Locate an enabled provider row whose templateId matches the offering.
-  const db = getClientDataDb();
-  const providerRow = (
-    await db.providers.where('templateId').equals(offering.providerId).toArray()
-  ).find((p) => p.enabled);
-
-  if (!providerRow) return null;
-
-  // Resolve mk from the session store — same pattern as send-message.ts.
-  const mk = useSessionStore.getState().mk;
-
-  let apiKey: string;
-  try {
-    if (!mk) {
-      console.warn('resolveTts: no master key in session — falling back to no-provider');
-      return null;
-    }
-    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
-  } catch {
-    console.warn('resolveTts: failed to decrypt api-key — falling back to no-provider');
-    return null;
-  }
-
-  // Resolve the optional CORS proxy.
-  const settings = await db.settings.get(1);
-  const corsProxyUrl = settings?.corsProxy?.url ?? null;
-  let corsProxyKey: string | null = null;
-  if (settings?.corsProxy && mk) {
-    try {
-      corsProxyKey = await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key');
-    } catch {
-      console.warn(
-        'resolveTts: failed to decrypt cors-proxy/shared-key — falling back to no-provider',
-      );
-      return null;
-    }
-  }
-
-  const providerConfig = {
-    baseUrl: providerDef.baseUrl,
-    routing:
-      providerDef.corsHint === 'requires-proxy'
-        ? ({ kind: 'cors-proxy' } as const)
-        : ({ kind: 'direct' } as const),
-  };
-
-  return { providerConfig, apiKey, corsProxyUrl, corsProxyKey, offering, ttsMeta };
+  return { ...material, offering, ttsMeta };
 }
 
 /**
@@ -163,6 +121,7 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
         corsProxyKey,
         upstreamSlug,
         teal: ttsMeta.teal,
+        transport: ttsMeta.transport,
         text: segment.spokenText,
         voiceId,
         signal,

@@ -134,7 +134,9 @@ describe('PersonaEditor — Voice pickers disabled without TTS provider', () => 
     await openFontAndVoiceAccordion();
     // The disabled hint replaces the open button — wait for the probe effect to settle.
     await waitFor(() => {
-      expect(screen.getByText(/add the mistral provider/i)).toBeTruthy();
+      expect(
+        screen.getAllByText(/add a voice provider \(xai or nano-gpt\)/i).length,
+      ).toBeGreaterThanOrEqual(1);
     });
     expect(screen.queryByRole('button', { name: /pick voice/i })).toBeNull();
   });

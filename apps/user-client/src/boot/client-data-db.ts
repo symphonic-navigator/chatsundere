@@ -46,6 +46,10 @@ export interface SettingsRow {
   dictationRedemptionMs: number;
   /** Dictation: send each completed transcription immediately instead of drafting. */
   dictationAutoSend: boolean;
+  /** Read-aloud TTS offering ref "providerId:upstreamSlug"; null = curated auto-default. */
+  ttsOffering: string | null;
+  /** Dictation STT offering ref "providerId:upstreamSlug"; null = curated auto-default. */
+  sttOffering: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -767,6 +771,18 @@ class ClientDataDb extends Dexie {
           if (typeof s.dictationAutoSend !== 'boolean') s.dictationAutoSend = false;
         });
     });
+
+    // Version 23 — xAI voice onboarding. Settings gain the two voice slot
+    // refs; null means the curated auto-default order resolves at runtime.
+    this.version(23).upgrade(async (tx) => {
+      await tx
+        .table('settings')
+        .toCollection()
+        .modify((s: Record<string, unknown>) => {
+          if (typeof s.ttsOffering !== 'string' && s.ttsOffering !== null) s.ttsOffering = null;
+          if (typeof s.sttOffering !== 'string' && s.sttOffering !== null) s.sttOffering = null;
+        });
+    });
   }
 }
 
@@ -884,6 +900,8 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         dictationSensitivity: 'medium',
         dictationRedemptionMs: 1_728,
         dictationAutoSend: false,
+        ttsOffering: null,
+        sttOffering: null,
         createdAt: now,
         updatedAt: now,
       });

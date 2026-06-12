@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import {
-  TranscriptionError,
-  getProvider,
-  listSttOfferings,
-  transcribeAudio,
-} from '@chatsundere/llm-unified';
-import { useSessionStore } from '@chatsundere/ui-shared';
+import { TranscriptionError, getProvider, transcribeAudio } from '@chatsundere/llm-unified';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
-import { openSecret } from '../../secrets.js';
+import { selectSttOffering } from '../select-offering.js';
+import { resolveVoiceTransportMaterial } from '../voice-transport.js';
 
 export type SttResolution =
   | {
@@ -26,53 +21,31 @@ export type SttResolution =
  * by the returned closure. UI-free: no React imports.
  */
 export async function resolveStt(): Promise<SttResolution> {
-  const offering = listSttOfferings()[0];
-  const sttMeta = offering?.stt;
-  if (!offering || !sttMeta) return { ok: false, reason: 'no-provider' };
-
-  const providerDef = getProvider(offering.providerId);
-  if (!providerDef) return { ok: false, reason: 'no-provider' };
-
   const db = getClientDataDb();
-  const providerRow = (
-    await db.providers.where('templateId').equals(offering.providerId).toArray()
-  ).find((p) => p.enabled);
-  if (!providerRow) return { ok: false, reason: 'no-provider' };
-
-  const mk = useSessionStore.getState().mk;
-  if (!mk) {
-    console.warn('resolveStt: no master key in session — falling back to no-provider');
-    return { ok: false, reason: 'no-provider' };
-  }
-  let apiKey: string;
-  try {
-    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
-  } catch {
-    console.warn('resolveStt: failed to decrypt api-key — falling back to no-provider');
-    return { ok: false, reason: 'no-provider' };
-  }
-
+  const providerRows = await db.providers.toArray();
   const settings = await db.settings.get(1);
-  const corsProxyUrl = settings?.corsProxy?.url ?? null;
-  let corsProxyKey: string | null = null;
-  if (settings?.corsProxy) {
-    try {
-      corsProxyKey = await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key');
-    } catch {
-      console.warn('resolveStt: failed to decrypt cors-proxy key — falling back to no-provider');
-      return { ok: false, reason: 'no-provider' };
-    }
-  }
 
-  const providerConfig = {
-    baseUrl: providerDef.baseUrl,
-    routing:
-      providerDef.corsHint === 'requires-proxy'
-        ? ({ kind: 'cors-proxy' } as const)
-        : ({ kind: 'direct' } as const),
-  };
+  // The offering comes from the slot selector: the persisted explicit pick
+  // when one exists, the curated auto-default order otherwise.
+  const selected = selectSttOffering(settings?.sttOffering ?? null, providerRows);
+  if (!selected) return { ok: false, reason: 'no-provider' };
+  const { offering } = selected;
+
+  const sttMeta = offering.stt;
+  if (!sttMeta) return { ok: false, reason: 'no-provider' };
+
+  const material = await resolveVoiceTransportMaterial(
+    selected,
+    providerRows,
+    settings,
+    'resolveStt',
+  );
+  if (!material) return { ok: false, reason: 'no-provider' };
+  const { providerConfig, apiKey, corsProxyUrl, corsProxyKey } = material;
+
   const { upstreamSlug } = offering;
-  const providerDisplayName = providerDef.displayName;
+  // The helper already verified the provider definition exists.
+  const providerDisplayName = getProvider(offering.providerId)?.displayName ?? offering.providerId;
 
   const transcribe = async (blob: Blob, mimeType: string, signal: AbortSignal): Promise<string> => {
     try {
@@ -82,6 +55,8 @@ export async function resolveStt(): Promise<SttResolution> {
         corsProxyUrl,
         corsProxyKey,
         upstreamSlug,
+        transport: sttMeta.transport,
+        spoofWebmAsMatroska: sttMeta.spoofWebmAsMatroska,
         blob,
         mimeType,
         signal,

@@ -15,15 +15,26 @@ describe('STT offerings', () => {
     _resetAdapterRegistryForTests();
   });
 
-  test('mistral voxtral STT offering is present', () => {
+  test('STT offerings: mistral + the two probed Grok paths', () => {
     const stt = listSttOfferings();
-    expect(stt.map((o) => `${o.providerId}:${o.upstreamSlug}`)).toEqual([
+    expect(stt.map((o) => `${o.providerId}:${o.upstreamSlug}`).sort()).toEqual([
       'mistral:voxtral-mini-latest',
+      'nano-gpt:xai/speech-to-text/v1',
+      'xai:grok-stt',
     ]);
-    const offering = stt[0];
-    expect(offering?.serviceKind).toBe('stt');
-    expect(offering?.stt?.displayName).toBe('Voxtral Mini STT');
-    expect(offering?.stt?.contentModerated).toBe(false);
-    expect(offering?.adapter.kind).toBe('generic');
+
+    const mistral = stt.find((o) => o.providerId === 'mistral');
+    expect(mistral?.stt?.transport).toBe('openai-transcriptions');
+    expect(mistral?.stt?.spoofWebmAsMatroska).toBeUndefined();
+
+    const xaiDirect = stt.find((o) => o.providerId === 'xai');
+    expect(xaiDirect?.stt?.transport).toBe('xai-native');
+    expect(xaiDirect?.stt?.contentModerated).toBe(false);
+    expect(xaiDirect?.corsOverride).toBe('direct');
+
+    const nano = stt.find((o) => o.providerId === 'nano-gpt');
+    expect(nano?.stt?.transport).toBe('openai-transcriptions');
+    expect(nano?.stt?.contentModerated).toBe(false);
+    expect(nano?.stt?.spoofWebmAsMatroska).toBe(true);
   });
 });

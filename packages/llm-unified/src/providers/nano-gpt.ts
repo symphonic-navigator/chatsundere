@@ -3,7 +3,13 @@
 import { registerAdapter } from '../adapter-registry.js';
 import { claudeAdapter, claudeEffortAdapter } from '../adapters/anthropic-claude.js';
 import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
-import type { Offering, ReasoningControl, TtiOfferingMeta } from '../catalogue/types.js';
+import type {
+  Offering,
+  ReasoningControl,
+  SttOfferingMeta,
+  TtiOfferingMeta,
+  TtsOfferingMeta,
+} from '../catalogue/types.js';
 import { registerWebAdapter } from '../integrations/web-adapter-registry.js';
 import type { SearchTier, WebOfferingMeta } from '../integrations/web-interfacing.js';
 import { registerProvider } from '../registry.js';
@@ -250,6 +256,33 @@ const ttiOfferings: Offering[] = [
   }),
 ];
 
+// nano-gpt's xAI voice wrapper exposes no voice-list endpoint; this static
+// list mirrors xAI's five multilingual voices. Lowercase IDs are the canonical
+// namespace — both paths accept them (probed live 2026-06-12), so persona
+// voice picks survive a path switch.
+const GROK_VOICES = [
+  { id: 'ara', name: 'Ara' },
+  { id: 'eve', name: 'Eve' },
+  { id: 'leo', name: 'Leo' },
+  { id: 'rex', name: 'Rex' },
+  { id: 'sal', name: 'Sal' },
+] as const;
+
+const GROK_TTS_META: TtsOfferingMeta = {
+  displayName: 'Grok TTS',
+  teal: 'passthrough', // nano-gpt forwards xAI expression tags untranslated
+  contentModerated: false, // moderation canary passed live 2026-06-12
+  transport: 'openai-speech',
+  voices: { kind: 'static', list: GROK_VOICES },
+};
+
+const GROK_STT_META: SttOfferingMeta = {
+  displayName: 'Grok STT',
+  contentModerated: false,
+  transport: 'openai-transcriptions',
+  spoofWebmAsMatroska: true, // INS-054: webm 400s, identical bytes pass as MKV
+};
+
 const webOfferings: Offering[] = [
   webSearchOffering('web-linkup', {
     canSearch: true,
@@ -335,6 +368,49 @@ const offerings: Offering[] = [
   },
   ...webOfferings,
   ...ttiOfferings,
+  // Grok TTS via nano-gpt's xAI wrapper — text-to-speech; bypasses the chat
+  // adapter entirely. Routes through nano-gpt's OpenAI-shaped speech endpoint.
+  {
+    canonicalRef: null,
+    providerId: 'nano-gpt',
+    upstreamSlug: 'xai-tts',
+    adapter: { kind: 'generic' },
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    context: { recommended: 0, max: 0 },
+    // nano-gpt routes to the xAI upstream — trust reflects that upstream.
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified', // live probes 2026-06-12: synthesis, canary, TEAL passthrough
+    serviceKind: 'tts',
+    tts: GROK_TTS_META,
+  },
+  // Grok STT via nano-gpt's xAI wrapper — speech-to-text.
+  {
+    canonicalRef: null,
+    providerId: 'nano-gpt',
+    upstreamSlug: 'xai/speech-to-text/v1',
+    adapter: { kind: 'generic' },
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    context: { recommended: 0, max: 0 },
+    // nano-gpt routes to the xAI upstream — trust reflects that upstream.
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified', // live probes 2026-06-12: MP3/WAV pass; webm needs the MKV spoof
+    serviceKind: 'stt',
+    stt: GROK_STT_META,
+  },
 ];
 
 export const nanoGpt: ProviderDefinition = {

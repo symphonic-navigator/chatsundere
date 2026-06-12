@@ -827,7 +827,7 @@ export function PersonaEditor(): JSX.Element {
             value={draft.voice}
             onSelect={(v) => patch({ voice: v })}
             disabled={hasTtsProvider === false}
-            disabledHint="Add the Mistral provider in My Settings to enable voice."
+            disabledHint="Add a voice provider (xAI or nano-gpt) in My Settings to enable voice."
           />
           {draft.roleplay ? (
             <div>
@@ -836,7 +836,7 @@ export function PersonaEditor(): JSX.Element {
                 value={draft.narratorVoice}
                 onSelect={(v) => patch({ narratorVoice: v })}
                 disabled={hasTtsProvider === false}
-                disabledHint="Add the Mistral provider in My Settings to enable voice."
+                disabledHint="Add a voice provider (xAI or nano-gpt) in My Settings to enable voice."
               />
               <p className="mt-1 text-[11px] text-paper-soft">
                 Used for <em>asterisk narration</em> in roleplay; defaults to the main voice.

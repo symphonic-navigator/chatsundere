@@ -24,8 +24,12 @@ const STUB_TRANSPORT = {
   apiKey: 'test-key',
   corsProxyUrl: null,
   corsProxyKey: null,
-  offering: {} as unknown,
-  ttsMeta: { displayName: 'Voxtral Mini TTS', teal: 'strip' as const },
+  offering: { providerId: 'mistral', upstreamSlug: 'voxtral-tts' },
+  ttsMeta: {
+    displayName: 'Voxtral Mini TTS',
+    teal: 'strip' as const,
+    voices: { kind: 'fetch' as const, endpoint: 'mistral-paginated' as const },
+  },
 };
 
 const STUB_VOICES = [
@@ -114,6 +118,22 @@ describe('VoicePicker — error state', () => {
     });
   });
 
+  it('uses neutral provider wording in the error copy', async () => {
+    listTtsVoicesMock.mockRejectedValue(new Error('network error'));
+
+    render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /pick voice/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Couldn't load the voice list — check your connection and your voice provider's account.",
+        ),
+      ).toBeTruthy();
+    });
+  });
+
   it('Retry clears the cache and refetches voices', async () => {
     // First call fails, second succeeds.
     listTtsVoicesMock.mockRejectedValueOnce(new Error('network error'));
@@ -131,6 +151,64 @@ describe('VoicePicker — error state', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Adele' })).toBeTruthy();
     });
+    expect(listTtsVoicesMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('VoicePicker — static voice list', () => {
+  it("shows the offering's static list without calling listTtsVoices", async () => {
+    resolveTtsTransportMock.mockResolvedValue({
+      ...STUB_TRANSPORT,
+      offering: { providerId: 'nano-gpt', upstreamSlug: 'xai-tts' },
+      ttsMeta: {
+        ...STUB_TRANSPORT.ttsMeta,
+        voices: {
+          kind: 'static' as const,
+          list: [
+            { id: 'eve', name: 'Eve' },
+            { id: 'ara', name: 'Ara' },
+          ],
+        },
+      },
+    });
+
+    render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /pick voice/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Eve' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Ara' })).toBeTruthy();
+    });
+    expect(listTtsVoicesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('VoicePicker — per-offering memo', () => {
+  it('refetches when the resolved offering changes', async () => {
+    const { unmount } = render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /pick voice/i }));
+    await waitFor(() => screen.getByRole('button', { name: 'Adele' }));
+    expect(listTtsVoicesMock).toHaveBeenCalledTimes(1);
+    unmount();
+
+    // The slot now resolves to a different offering — the memo must not serve
+    // the first offering's list for it.
+    resolveTtsTransportMock.mockResolvedValue({
+      ...STUB_TRANSPORT,
+      offering: { providerId: 'xai', upstreamSlug: 'grok-tts' },
+      ttsMeta: {
+        ...STUB_TRANSPORT.ttsMeta,
+        voices: { kind: 'fetch' as const, endpoint: 'xai-flat' as const },
+      },
+    });
+    listTtsVoicesMock.mockResolvedValue([{ id: 'voice-c', name: 'Cleo' }]);
+
+    render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /pick voice/i }));
+    await waitFor(() => screen.getByRole('button', { name: 'Cleo' }));
     expect(listTtsVoicesMock).toHaveBeenCalledTimes(2);
   });
 });

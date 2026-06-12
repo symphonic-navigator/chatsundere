@@ -17,14 +17,56 @@ export interface ListTtsVoicesArgs {
   apiKey: string;
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
+  /** Wire shape of the voice catalogue; mirrors `TtsVoiceSource`'s fetch endpoint. */
+  endpoint: 'mistral-paginated' | 'xai-flat';
   signal?: AbortSignal;
   /** Test injection; defaults to global fetch. */
   fetchFn?: typeof fetch;
 }
 
-/** Fetch all available TTS voices from the provider, paging through the full catalogue. */
+/**
+ * Fetch all available TTS voices from the provider: `mistral-paginated` pages
+ * through `/audio/voices`, `xai-flat` reads `/tts/voices` in one shot.
+ */
 export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoice[]> {
   const fetchFn = args.fetchFn ?? fetch;
+
+  if (args.endpoint === 'xai-flat') {
+    // xAI returns the whole catalogue in one unpaginated response (probed
+    // 2026-06-12) with `voice_id` rather than `id`.
+    const request = buildRequest({
+      provider: args.providerConfig,
+      apiKey: args.apiKey,
+      corsProxyUrl: args.corsProxyUrl,
+      corsProxyKey: args.corsProxyKey,
+      path: '/tts/voices',
+      method: 'GET',
+    });
+    const response = await fetchFn(request, { signal: args.signal });
+    if (!response.ok) {
+      throw new SpeechSynthesisError(`voices upstream ${response.status}`, response.status);
+    }
+    const payload = (await response.json()) as { voices?: unknown };
+    if (!Array.isArray(payload.voices)) {
+      throw new SpeechSynthesisError('voices response missing voices array', null);
+    }
+    const voices: TtsVoice[] = [];
+    for (const item of payload.voices) {
+      if (
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as { voice_id?: unknown }).voice_id === 'string' &&
+        typeof (item as { name?: unknown }).name === 'string'
+      ) {
+        voices.push({
+          id: (item as { voice_id: string }).voice_id,
+          name: (item as { name: string }).name,
+        });
+      }
+    }
+    return voices;
+  }
+
   const voices: TtsVoice[] = [];
   let page = 1;
   let totalPages = 1;

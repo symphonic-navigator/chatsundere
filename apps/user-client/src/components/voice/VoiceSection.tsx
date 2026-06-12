@@ -1,10 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { getProvider, listSttOfferings, listTtsOfferings } from '@chatsundere/llm-unified';
-import type { SettingsRow } from '../../boot/client-data-db.js';
+import { type Offering, getProvider } from '@chatsundere/llm-unified';
+import { useState } from 'react';
+import type { ProviderRow, SettingsRow } from '../../boot/client-data-db.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { REDEMPTION_MS_MAX, REDEMPTION_MS_MIN } from '../../lib/voice/dictation/vad-presets.js';
+import {
+  type SelectedOffering,
+  offeringRef,
+  pickableSttOfferings,
+  pickableTtsOfferings,
+  selectSttOffering,
+  selectTtsOffering,
+} from '../../lib/voice/select-offering.js';
+import { OfferingSlotPicker, type SlotEntry } from './OfferingSlotPicker.js';
 import { TtsModerationNotice } from './TtsModerationNotice.js';
 
 // One Silero frame (1536 samples @ 16 kHz) ≈ 96 ms — the slider moves in whole frames.
@@ -12,6 +22,42 @@ const REDEMPTION_STEP_MS = 96;
 
 type VoiceMode = SettingsRow['voiceMode'];
 type DictationSensitivity = SettingsRow['dictationSensitivity'];
+
+// Egress disclosure at the decision point (spec §5, Laura SOFT-5): each picker
+// entry states where the data goes, so the privacy choice is a conscious one.
+const EGRESS_NOTES: Record<string, string> = {
+  'xai:grok-tts': 'Sends message text to xAI (US)',
+  'nano-gpt:xai-tts': 'Sends message text via nano-gpt to xAI (US)',
+  'xai:grok-stt': 'Sends microphone audio to xAI (US)',
+  'nano-gpt:xai/speech-to-text/v1': 'Sends microphone audio via nano-gpt to xAI (US)',
+  'mistral:voxtral-mini-latest': 'Sends microphone audio to Mistral AI (EU)',
+};
+
+/** "<offering> via <provider>" label, e.g. "Grok TTS via xAI". */
+function offeringLabel(o: Offering): string {
+  const providerName = getProvider(o.providerId)?.displayName ?? o.providerId;
+  const meta = o.serviceKind === 'tts' ? o.tts : o.stt;
+  return `${meta?.displayName ?? o.upstreamSlug} via ${providerName}`;
+}
+
+/** Build the slot-picker entries for a pickable offering list. */
+function slotEntries(offerings: Offering[], rows: ProviderRow[]): SlotEntry[] {
+  return offerings.map((o) => {
+    const providerName = getProvider(o.providerId)?.displayName ?? o.providerId;
+    return {
+      refId: offeringRef(o),
+      label: offeringLabel(o),
+      egressNote: EGRESS_NOTES[offeringRef(o)] ?? '',
+      configured: rows.some((r) => r.templateId === o.providerId && r.enabled),
+      disabledHint: `Add the ${providerName} provider in My Settings to enable this.`,
+    };
+  });
+}
+
+/** The visible-auto-default label (spec §5.1, Laura SOFT-3), null for explicit picks. */
+function autoLabel(selected: SelectedOffering | null): string | null {
+  return selected?.auto === true ? offeringLabel(selected.offering) : null;
+}
 
 interface ModeOptionProps {
   id: string;
@@ -44,7 +90,7 @@ function ModeOption({ id, label, description, selected, onSelect }: ModeOptionPr
 /**
  * My Settings — voice read-aloud section.
  * Controls the interleave mode (paragraph / sentence) with immediate-persist semantics,
- * and shows the active TTS provider status line.
+ * and the Read-aloud-voice / Speech-to-text slot pickers.
  * Also controls dictation settings: sensitivity, pause tolerance, and auto-send.
  */
 export function VoiceSection(): JSX.Element {
@@ -59,34 +105,20 @@ export function VoiceSection(): JSX.Element {
 
   const rows = providerRows ?? [];
 
-  // ── TTS provider ────────────────────────────────────────────────────────────
-  const ttsOfferings = listTtsOfferings();
-  const ttsOffering = ttsOfferings[0];
-  const ttsProviderDef = ttsOffering ? getProvider(ttsOffering.providerId) : null;
-  const ttsProviderRow = ttsOffering
-    ? rows.find((r) => r.templateId === ttsOffering.providerId && r.enabled)
-    : null;
+  // Plain state on purpose: leaving the settings room unmounts the section and
+  // clears the slot-switch notice (spec §5, Laura SOFT-2 — no persistence).
+  const [showTtsSwitchNote, setShowTtsSwitchNote] = useState(false);
 
-  const ttsOfferingLabel =
-    ttsOffering && ttsProviderDef
-      ? `${ttsOffering.tts?.displayName ?? ttsOffering.upstreamSlug} via ${ttsProviderDef.displayName}`
-      : null;
-
-  // ── STT provider ────────────────────────────────────────────────────────────
-  const sttOfferings = listSttOfferings();
-  const sttOffering = sttOfferings[0];
-  const sttProviderDef = sttOffering ? getProvider(sttOffering.providerId) : null;
-  const sttProviderRow = sttOffering
-    ? rows.find((r) => r.templateId === sttOffering.providerId && r.enabled)
-    : null;
-
-  const sttOfferingLabel =
-    sttOffering && sttProviderDef
-      ? `${sttOffering.stt?.displayName ?? sttOffering.upstreamSlug} via ${sttProviderDef.displayName}`
-      : null;
+  const ttsSelected = selectTtsOffering(settings?.ttsOffering ?? null, rows);
+  const sttSelected = selectSttOffering(settings?.sttOffering ?? null, rows);
 
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-[11px] text-paper-soft">
+        How your Circle speaks and listens. One global choice for all personas — changes apply
+        immediately.
+      </p>
+
       {/* ── Read-aloud mode ─────────────────────────────────────────────────── */}
       <div>
         <div className="mb-2 text-[11px] uppercase tracking-widest text-paper-soft">
@@ -110,19 +142,28 @@ export function VoiceSection(): JSX.Element {
         </div>
       </div>
 
-      {/* ── TTS Provider ────────────────────────────────────────────────────── */}
+      {/* ── Read-aloud voice slot ───────────────────────────────────────────── */}
       <div>
-        <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">Provider</div>
-        {ttsProviderRow && ttsOfferingLabel ? (
-          <p className="text-sm text-paper">{ttsOfferingLabel}</p>
-        ) : ttsOffering && ttsProviderDef ? (
-          <p className="text-sm text-paper-soft">
-            Add the <span className="text-paper">{ttsProviderDef.displayName}</span> provider in My
-            Settings to enable read-aloud.
+        <OfferingSlotPicker
+          label="Read-aloud voice"
+          subtitle="The voice that reads messages aloud."
+          entries={slotEntries(pickableTtsOfferings(), rows)}
+          value={settings?.ttsOffering ?? null}
+          autoLabel={autoLabel(ttsSelected)}
+          unconfiguredCopy="Add the xAI or nano-gpt provider to enable read-aloud."
+          onSelect={(refId) => {
+            // Re-picking the current value changes nothing — no note for a no-op.
+            if (refId === (settings?.ttsOffering ?? null)) return;
+            update.mutate({ ttsOffering: refId });
+            setShowTtsSwitchNote(true);
+          }}
+        />
+        {showTtsSwitchNote ? (
+          <p className="mt-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-paper-soft">
+            Personas keep their voice picks — if a voice came from the previous provider, re-pick it
+            in the persona editor.
           </p>
-        ) : (
-          <p className="text-sm text-paper-soft">No TTS provider is curated yet.</p>
-        )}
+        ) : null}
         <div className="mt-2">
           <TtsModerationNotice />
         </div>
@@ -195,22 +236,16 @@ export function VoiceSection(): JSX.Element {
           )}
         </div>
 
-        {/* STT Provider */}
-        <div>
-          <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">
-            STT Provider
-          </div>
-          {sttProviderRow && sttOfferingLabel ? (
-            <p className="text-sm text-paper">{sttOfferingLabel}</p>
-          ) : sttOffering && sttProviderDef ? (
-            <p className="text-sm text-paper-soft">
-              Add the <span className="text-paper">{sttProviderDef.displayName}</span> provider in
-              My Settings to dictate.
-            </p>
-          ) : (
-            <p className="text-sm text-paper-soft">No STT provider is curated yet.</p>
-          )}
-        </div>
+        {/* Speech-to-text slot */}
+        <OfferingSlotPicker
+          label="Speech-to-text"
+          subtitle="What turns your speech into text."
+          entries={slotEntries(pickableSttOfferings(), rows)}
+          value={settings?.sttOffering ?? null}
+          autoLabel={autoLabel(sttSelected)}
+          unconfiguredCopy="Add the Mistral AI, xAI or nano-gpt provider to dictate."
+          onSelect={(refId) => update.mutate({ sttOffering: refId })}
+        />
       </div>
     </div>
   );

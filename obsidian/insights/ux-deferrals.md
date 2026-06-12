@@ -80,3 +80,28 @@ recorded.
 - **Rationale for deferral:** Spec-sanctioned (§3.5/§4.3/D11): the two voice machines do not communicate in Spec 2 beyond the one stop call — Spec 3 (live voice) owns the full orchestration. Laura ruled acceptable-with-log.
 - **Follow-up commitment:** Spec 3's orchestration design must define the reverse seam explicitly (likely: starting a read stops or pauses listening). Inherited by the Spec 3 brainstorm.
 - **Chris sign-off:** Not required (soft finding, spec-sanctioned).
+
+## 2026-06-12 — Unconfigured voice slot entries are invisible to keyboard/SR traversal
+
+- **Affected flow / surface:** My Settings → Voice, the Read-aloud-voice and
+  Speech-to-text slot pickers (`apps/user-client/src/components/voice/OfferingSlotPicker.tsx`,
+  the unconfigured-entry branch) — xAI voice onboarding unit.
+- **Finding (Laura's summary):** Disabled (unconfigured) entries render as
+  non-focusable `aria-disabled` divs; keyboard and screen-reader users cannot
+  reach the row or hear its actionable hint, partially defeating
+  disabled-over-hidden for that audience. The configured entries, the
+  Automatic row and the trigger are all proper focusable buttons.
+- **Mode:** pre-squash.
+- **Criterion:** CLAUDE.md §11 "disabled over hidden" (perceivability for all
+  audiences); ND-friendly tenet.
+- **Rationale for deferral:** Not a dead-end or buried function — the remedy
+  (configure the provider in My Settings) is reachable through fully
+  keyboardable surfaces, and the visual audience gets the full reasoned
+  signal. Laura ruled deferral-candidate, not blocking. Same bucket as the two
+  existing keyboard deferrals from the dictation unit.
+- **Follow-up commitment:** Render disabled entries as `<button disabled>` (or
+  `tabindex=0` + `aria-describedby` hint) in the Spec 3 voice-surface
+  accessibility pass, alongside the two existing keyboard deferrals. Bubble up
+  at the v0.1.0 release cut otherwise.
+- **Chris sign-off:** Not yet sought (soft-tier per Laura). Listed for his
+  release-cut review.

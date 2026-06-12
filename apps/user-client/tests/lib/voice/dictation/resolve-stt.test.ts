@@ -13,6 +13,8 @@ const getProviderMock = vi.fn();
 vi.mock('@chatsundere/llm-unified', () => ({
   transcribeAudio: (...args: unknown[]) => transcribeAudioMock(...args),
   listSttOfferings: () => listSttOfferingsMock(),
+  // select-offering.ts imports this too; STT resolution never calls it.
+  listTtsOfferings: () => [],
   getProvider: (id: string) => getProviderMock(id),
   TranscriptionError: class TranscriptionError extends Error {
     status: number | null;
@@ -61,28 +63,66 @@ const OFFERING_FIXTURE = {
   providerId: PROVIDER_ID,
   upstreamSlug: UPSTREAM_SLUG,
   serviceKind: 'stt',
-  stt: { displayName: 'Voxtral Mini STT', contentModerated: false },
+  stt: {
+    displayName: 'Voxtral Mini STT',
+    contentModerated: false,
+    transport: 'openai-transcriptions' as const,
+  },
 };
 
-/** Minimal ProviderDefinition fixture. */
-const PROVIDER_DEF_FIXTURE = {
-  id: PROVIDER_ID,
-  displayName: 'Mistral AI',
-  baseUrl: 'https://api.mistral.ai/v1',
-  corsHint: 'direct' as const,
+/** xAI Grok STT fixture — second in the curated auto-default order. */
+const XAI_OFFERING = {
+  providerId: 'xai',
+  upstreamSlug: 'grok-stt',
+  serviceKind: 'stt',
+  // Voice endpoints are CORS-open even though xAI chat requires the proxy.
+  corsOverride: 'direct' as const,
+  stt: { displayName: 'Grok STT', contentModerated: false, transport: 'xai-native' as const },
 };
 
-/** DB row id for the Mistral provider row seeded in tests. */
-const PROVIDER_ROW_ID = 'provider-row-mistral';
+/** nano-gpt Grok STT fixture — third in the auto-default order. */
+const NANO_OFFERING = {
+  providerId: 'nano-gpt',
+  upstreamSlug: 'xai/speech-to-text/v1',
+  serviceKind: 'stt',
+  stt: {
+    displayName: 'Grok STT',
+    contentModerated: false,
+    transport: 'openai-transcriptions' as const,
+    spoofWebmAsMatroska: true,
+  },
+};
 
-/** Seed a minimal enabled Mistral provider row into the real fake-indexeddb. */
-async function seedProvider(enabled = true): Promise<void> {
-  const db = await openClientDataDb();
-  await db.providers.put({
-    id: PROVIDER_ROW_ID,
-    templateId: PROVIDER_ID,
+/** Minimal ProviderDefinition fixtures keyed by provider id. */
+const PROVIDER_DEFS: Record<string, unknown> = {
+  mistral: {
+    id: PROVIDER_ID,
     displayName: 'Mistral AI',
     baseUrl: 'https://api.mistral.ai/v1',
+    corsHint: 'direct' as const,
+  },
+  xai: {
+    id: 'xai',
+    displayName: 'xAI',
+    baseUrl: 'https://api.x.ai/v1',
+    corsHint: 'requires-proxy' as const,
+  },
+  'nano-gpt': {
+    id: 'nano-gpt',
+    displayName: 'nano-gpt',
+    baseUrl: 'https://nano-gpt.com/api/v1',
+    corsHint: 'inofficial' as const,
+  },
+};
+
+/** Seed a minimal enabled provider row into the real fake-indexeddb. */
+async function seedProvider(templateId = PROVIDER_ID, enabled = true): Promise<void> {
+  const db = await openClientDataDb();
+  await db.providers.put({
+    id: `provider-row-${templateId}`,
+    templateId,
+    displayName: templateId,
+    baseUrl: 'https://example.com/v1',
     // openSecret is mocked, so any non-null EncryptedBlob-shaped value is fine.
     apiKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
     routing: { kind: 'direct' },
@@ -99,8 +139,8 @@ beforeEach(async () => {
   await openClientDataDb();
 
   // Default happy-path mock state — each test overrides what it needs to.
-  listSttOfferingsMock.mockReturnValue([OFFERING_FIXTURE]);
-  getProviderMock.mockReturnValue(PROVIDER_DEF_FIXTURE);
+  listSttOfferingsMock.mockReturnValue([OFFERING_FIXTURE, XAI_OFFERING, NANO_OFFERING]);
+  getProviderMock.mockImplementation((id: string) => PROVIDER_DEFS[id]);
   openSecretMock.mockResolvedValue('test-api-key');
   transcribeAudioMock.mockResolvedValue({ text: 'Hello world' });
 });
@@ -121,7 +161,7 @@ describe('resolveStt', () => {
     });
 
     it('returns no-provider when the only matching row is disabled', async () => {
-      await seedProvider(false); // disabled
+      await seedProvider(PROVIDER_ID, false); // disabled
       const result = await resolveStt();
       expect(result).toEqual({ ok: false, reason: 'no-provider' });
     });
@@ -176,6 +216,99 @@ describe('resolveStt', () => {
       expect(callArgs?.blob).toBe(blob);
       expect(callArgs?.mimeType).toBe(mimeType);
       expect(callArgs?.signal).toBe(signal);
+      // Per-offering wire metadata travels with the call.
+      expect(callArgs?.transport).toBe('openai-transcriptions');
+      expect(callArgs?.spoofWebmAsMatroska).toBeUndefined();
+    });
+  });
+
+  describe('(e) offering selection (slot picker)', () => {
+    it('auto-defaults to Mistral when mistral and xai are both enabled', async () => {
+      await seedProvider('mistral');
+      await seedProvider('xai');
+
+      const resolution = await resolveStt();
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      expect(resolution.sttLabel).toBe('Voxtral Mini STT via Mistral AI');
+    });
+
+    it('respects an explicit xai:grok-stt pick and routes direct via corsOverride', async () => {
+      await seedProvider('mistral');
+      await seedProvider('xai');
+      const db = await openClientDataDb();
+      await db.settings.update(1, { sttOffering: 'xai:grok-stt' });
+
+      const resolution = await resolveStt();
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      await resolution.transcribe(
+        new Blob(['audio'], { type: 'audio/webm' }),
+        'audio/webm',
+        new AbortController().signal,
+      );
+      const callArgs = transcribeAudioMock.mock.calls[0]?.[0];
+      expect(callArgs?.upstreamSlug).toBe('grok-stt');
+      expect(callArgs?.transport).toBe('xai-native');
+      // xAI chat needs the proxy; the voice offerings override to direct.
+      expect(callArgs?.providerConfig?.routing).toEqual({ kind: 'direct' });
+    });
+
+    it('forwards spoofWebmAsMatroska for the nano-gpt offering', async () => {
+      await seedProvider('nano-gpt');
+      const db = await openClientDataDb();
+      await db.settings.update(1, { sttOffering: 'nano-gpt:xai/speech-to-text/v1' });
+
+      const resolution = await resolveStt();
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      await resolution.transcribe(
+        new Blob(['audio'], { type: 'audio/webm' }),
+        'audio/webm',
+        new AbortController().signal,
+      );
+      const callArgs = transcribeAudioMock.mock.calls[0]?.[0];
+      expect(callArgs?.upstreamSlug).toBe('xai/speech-to-text/v1');
+      expect(callArgs?.spoofWebmAsMatroska).toBe(true);
+    });
+  });
+
+  describe('(f) corrupt CORS proxy key on direct routing', () => {
+    it('proceeds with a null proxy key and warns', async () => {
+      await seedProvider('mistral');
+      const db = await openClientDataDb();
+      await db.settings.update(1, {
+        corsProxy: {
+          url: 'https://proxy.example.com',
+          sharedKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
+        },
+      });
+
+      // api-key succeeds; proxy-key fails — non-fatal on direct routing.
+      openSecretMock
+        .mockResolvedValueOnce('test-api-key')
+        .mockRejectedValueOnce(new DOMException('AES-GCM auth tag failure'));
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      const resolution = await resolveStt();
+      expect(resolution.ok).toBe(true);
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/cors-proxy/);
+
+      if (!resolution.ok) return;
+      await resolution.transcribe(
+        new Blob(['audio'], { type: 'audio/webm' }),
+        'audio/webm',
+        new AbortController().signal,
+      );
+      const callArgs = transcribeAudioMock.mock.calls[0]?.[0];
+      expect(callArgs?.corsProxyKey).toBeNull();
+
+      warnSpy.mockRestore();
     });
   });
 

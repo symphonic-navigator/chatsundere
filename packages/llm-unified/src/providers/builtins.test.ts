@@ -36,8 +36,9 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 8 Claude + 4 web + 3 tti = 24.
-      expect(p.offerings).toHaveLength(24);
+      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 8 Claude + 4 web
+      // + 3 tti + 2 Grok voice (tts + stt) = 26.
+      expect(p.offerings).toHaveLength(26);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -151,11 +152,11 @@ describe('built-in providers', () => {
     }
   });
 
-  it('registers xai with grok-4.3 (llm) and grok-imagine-image (tti)', () => {
+  it('registers xai with grok-4.3 (llm), grok-imagine-image (tti) and the two voice offerings', () => {
     const p = getProvider('xai');
     expect(p?.corsHint).toBe('requires-proxy');
     expect(p?.capabilities).toContain('vision');
-    expect(p?.offerings).toHaveLength(2);
+    expect(p?.offerings).toHaveLength(4);
     const llm = p?.offerings.find((o) => o.serviceKind === 'llm');
     expect(llm?.canonicalRef).toBe('grok-4.3');
     expect(llm?.context).toEqual({ recommended: 200_000, max: 1_000_000 });

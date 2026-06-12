@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { SttTransportKind } from '../catalogue/types.js';
 import { buildRequest } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 
@@ -22,6 +23,10 @@ export interface TranscribeAudioArgs {
   corsProxyUrl: string | null;
   corsProxyKey: string | null;
   upstreamSlug: string;
+  /** Wire shape of the transcription request (path, multipart fields). */
+  transport: SttTransportKind;
+  /** Declare webm uploads as Matroska — see the comment at the spoof site. */
+  spoofWebmAsMatroska?: boolean;
   blob: Blob;
   mimeType: string;
   signal?: AbortSignal;
@@ -48,19 +53,26 @@ export async function transcribeAudio(args: TranscribeAudioArgs): Promise<Transc
   const fetchFn = args.fetchFn ?? fetch;
   const timeoutSignal = AbortSignal.timeout(POST_TIMEOUT_MS);
   const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
+  // nano-gpt's whitelist 400s on audio/webm but accepts the identical bytes as
+  // Matroska — webm is a restricted MKV profile (chatsune INS-054, re-proven
+  // live 2026-06-12). Bytes are untouched; only the declared type and the
+  // extension hint change.
+  const spoof = args.spoofWebmAsMatroska === true && args.mimeType.startsWith('audio/webm');
+  const fileType = spoof ? 'audio/x-matroska' : args.mimeType;
+  const filename = spoof ? 'recording.mkv' : filenameForMime(args.mimeType);
   const form = new FormData();
-  form.append(
-    'file',
-    new File([args.blob], filenameForMime(args.mimeType), { type: args.mimeType }),
-  );
-  form.append('model', args.upstreamSlug);
-  // `language` deliberately omitted — Voxtral auto-detects (spec D8).
+  form.append('file', new File([args.blob], filename, { type: fileType }));
+  // Both transport checks key on the same literal so a future third transport
+  // coherently inherits the openai-style defaults (model field + path).
+  // xAI's /stt endpoint takes no model field; the slug is internal-only there.
+  if (args.transport !== 'xai-native') form.append('model', args.upstreamSlug);
+  // `language` deliberately omitted on both transports — auto-detect.
   const request = buildRequest({
     provider: args.providerConfig,
     apiKey: args.apiKey,
     corsProxyUrl: args.corsProxyUrl,
     corsProxyKey: args.corsProxyKey,
-    path: '/audio/transcriptions',
+    path: args.transport === 'xai-native' ? '/stt' : '/audio/transcriptions',
     method: 'POST',
     body: form,
   });

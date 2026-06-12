@@ -51,7 +51,7 @@ describe('modality derivation', () => {
     expect(providersContributing('llm')).toContain('wafer');
   });
 
-  it('providersContributing returns the contributing provider when a kind is offered', () => {
-    expect(providersContributing('tts')).toEqual(['mistral']);
+  it('providersContributing returns the contributing providers when a kind is offered', () => {
+    expect(providersContributing('tts').sort()).toEqual(['mistral', 'nano-gpt', 'xai']);
   });
 });

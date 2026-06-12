@@ -46,6 +46,12 @@ export interface Offering {
   freedomOrientedDeployment: boolean | null;
   source: 'curated' | 'discovered';
   confidence: 'verified' | 'partial' | 'heuristic';
+  /**
+   * Routing override for this offering when it diverges from the provider's
+   * corsHint. xAI chat needs the CORS proxy, but its voice endpoints are
+   * wildcard-open (probed 2026-06-12) and route direct.
+   */
+  corsOverride?: 'direct';
   /** Modality this offering provides. */
   serviceKind: ServiceKind;
   /** Capability metadata when `serviceKind === 'web'`; undefined for `llm`. */
@@ -58,6 +64,17 @@ export interface Offering {
   tti?: TtiOfferingMeta;
 }
 
+/** How a TTS offering's synthesis request is shaped on the wire. */
+export type TtsTransportKind = 'mistral-speech' | 'xai-native' | 'openai-speech';
+
+/** How an STT offering's transcription request is shaped on the wire. */
+export type SttTransportKind = 'openai-transcriptions' | 'xai-native';
+
+/** Where a TTS offering's voice list comes from. */
+export type TtsVoiceSource =
+  | { kind: 'fetch'; endpoint: 'mistral-paginated' | 'xai-flat' }
+  | { kind: 'static'; list: ReadonlyArray<{ id: string; name: string }> };
+
 /** Metadata carried by a `serviceKind: 'tts'` offering. */
 export interface TtsOfferingMeta {
   displayName: string;
@@ -65,7 +82,7 @@ export interface TtsOfferingMeta {
    * How this provider treats TEAL expression markup in the input text:
    * 'strip' removes the tags before synthesis (provider has no expressive
    * markup support); 'passthrough' sends them verbatim (TEAL v1 is the xAI
-   * snapshot, so the future xAI offering passes through natively).
+   * snapshot, so the xAI offerings pass through natively).
    */
   teal: 'strip' | 'passthrough';
   /**
@@ -76,6 +93,11 @@ export interface TtsOfferingMeta {
    * than hiding it. `false` for a provider that synthesises whatever it is given.
    */
   contentModerated: boolean;
+  /** Wire shape of the synthesis request — see synthesise-speech.ts. */
+  transport: TtsTransportKind;
+  /** Voice-list source. nano-gpt exposes no voice endpoint, so its Grok
+   *  offering carries a static list (probed live 2026-06-12). */
+  voices: TtsVoiceSource;
 }
 
 /** Metadata carried by a `serviceKind: 'stt'` offering. */
@@ -87,6 +109,14 @@ export interface SttOfferingMeta {
    * moderation behaviour — kept for symmetry and honesty should that change.
    */
   contentModerated: boolean;
+  /** Wire shape of the transcription request — see transcribe-audio.ts. */
+  transport: SttTransportKind;
+  /**
+   * nano-gpt rejects `audio/webm` outright but accepts the identical bytes as
+   * `audio/x-matroska` (webm is a restricted MKV profile — chatsune INS-054,
+   * re-proven live 2026-06-12). When true, webm blobs are sent spoofed.
+   */
+  spoofWebmAsMatroska?: boolean;
 }
 
 /** Image-generation metadata when `serviceKind === 'tti'`; undefined otherwise. */

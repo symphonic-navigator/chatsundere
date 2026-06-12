@@ -15,43 +15,15 @@ vi.mock('../../../src/data/settings.js', () => ({
   useUpdateSettings: () => ({ mutate: updateMutate }),
 }));
 
-// Provider row present by default; individual tests override.
+// Provider rows absent by default; individual tests override.
 const providerRowsMock = vi.fn().mockReturnValue({ data: [] });
 vi.mock('../../../src/data/providers.js', () => ({
   useProviders: () => providerRowsMock(),
 }));
 
-// llm-unified TTS + STT catalogue.
-const listTtsOfferingsMock = vi.fn();
-const listSttOfferingsMock = vi.fn();
-const getProviderMock = vi.fn();
-
-vi.mock('@chatsundere/llm-unified', () => ({
-  listTtsOfferings: () => listTtsOfferingsMock(),
-  listSttOfferings: () => listSttOfferingsMock(),
-  getProvider: (id: string) => getProviderMock(id),
-}));
-
-// ─── Fixtures ────────────────────────────────────────────────────────────────
-
-const STUB_TTS_OFFERING = {
-  providerId: 'mistral',
-  upstreamSlug: 'voxtral-mini-tts-2603',
-  serviceKind: 'tts',
-  tts: { displayName: 'Voxtral Mini TTS', teal: 'strip' },
-};
-
-const STUB_STT_OFFERING = {
-  providerId: 'mistral',
-  upstreamSlug: 'voxtral-mini-stt-2603',
-  serviceKind: 'stt',
-  stt: { displayName: 'Voxtral Mini STT', contentModerated: false },
-};
-
-const STUB_PROVIDER_DEF = {
-  id: 'mistral',
-  displayName: 'Mistral AI',
-};
+// The llm-unified catalogue is deliberately NOT mocked: importing the real
+// package registers the builtin providers, so the pickers list the genuine
+// curated offerings (Grok TTS/STT, Voxtral STT) with their real metadata.
 
 import { VoiceSection } from '../../../src/components/voice/VoiceSection.js';
 
@@ -66,25 +38,52 @@ function setup() {
   );
 }
 
-beforeEach(() => {
-  updateMutate.mockClear();
-  useSettingsMock.mockReturnValue({
+function settingsData(overrides: Record<string, unknown> = {}) {
+  return {
     data: {
       voiceMode: 'paragraph',
       dictationSensitivity: 'medium',
       dictationRedemptionMs: 1_728,
       dictationAutoSend: false,
+      ttsOffering: null,
+      sttOffering: null,
+      ...overrides,
     },
-  });
-  listTtsOfferingsMock.mockReturnValue([STUB_TTS_OFFERING]);
-  listSttOfferingsMock.mockReturnValue([STUB_STT_OFFERING]);
-  getProviderMock.mockReturnValue(STUB_PROVIDER_DEF);
+  };
+}
+
+function providerRows(...templateIds: string[]) {
+  return {
+    data: templateIds.map((templateId, i) => ({
+      id: `pr-${i}`,
+      templateId,
+      enabled: true,
+    })),
+  };
+}
+
+function openTtsPicker(): void {
+  fireEvent.click(screen.getByRole('button', { name: /pick read-aloud voice/i }));
+}
+
+function openSttPicker(): void {
+  fireEvent.click(screen.getByRole('button', { name: /pick speech-to-text/i }));
+}
+
+beforeEach(() => {
+  updateMutate.mockClear();
+  useSettingsMock.mockReturnValue(settingsData());
   providerRowsMock.mockReturnValue({ data: [] });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('VoiceSection — mode toggle', () => {
+  it('states that changes apply immediately (the section is not on the Save bar)', () => {
+    setup();
+    expect(screen.getByText(/changes apply\s*immediately/i)).toBeTruthy();
+  });
+
   it('renders Paragraph and Sentence options', () => {
     setup();
     expect(screen.getByRole('button', { name: /paragraph/i })).toBeTruthy();
@@ -112,24 +111,96 @@ describe('VoiceSection — mode toggle', () => {
   });
 });
 
-describe('VoiceSection — provider state line', () => {
-  it('shows offering label when Mistral provider row is enabled', () => {
-    providerRowsMock.mockReturnValue({
-      data: [{ id: 'pr-1', templateId: 'mistral', enabled: true }],
-    });
+describe('VoiceSection — Read-aloud voice slot picker', () => {
+  it('lists exactly the two Grok entries — Mistral TTS is fully absent', () => {
+    providerRowsMock.mockReturnValue(providerRows('xai', 'nano-gpt', 'mistral'));
     setup();
-    expect(screen.getByText(/voxtral mini tts via mistral ai/i)).toBeTruthy();
+    openTtsPicker();
+    const xaiRow = screen.getByRole('button', { name: /grok tts via xai/i });
+    expect(xaiRow.textContent).toContain('Sends message text to xAI (US)');
+    const nanoRow = screen.getByRole('button', { name: /grok tts via nano-gpt/i });
+    expect(nanoRow.textContent).toContain('Sends message text via nano-gpt to xAI (US)');
+    expect(screen.queryByText(/voxtral mini tts/i)).toBeNull();
   });
 
-  it('shows constructive add-provider hint when no enabled Mistral row exists', () => {
-    // No provider rows — providerRowsMock already returns { data: [] } in beforeEach.
+  it('shows the unconfigured copy and disabled Grok rows when only Mistral is configured', () => {
+    providerRowsMock.mockReturnValue(providerRows('mistral'));
     setup();
-    // The hint text spans multiple elements ("Add the", <span>Mistral AI</span>, "provider…"),
-    // so query for the partial text in the surrounding paragraph.
-    const hint = screen.getByText(/enable read-aloud/i);
-    expect(hint).toBeTruthy();
-    // The span for the provider name is a sibling of the text node.
-    expect(hint.closest('p')?.textContent).toMatch(/Add the Mistral AI provider/i);
+    const trigger = screen.getByRole('button', { name: /pick read-aloud voice/i });
+    expect(trigger.textContent).toContain('Add the xAI or nano-gpt provider to enable read-aloud.');
+    openTtsPicker();
+    const xaiRow = screen.getByText('Grok TTS via xAI').closest('[aria-disabled]');
+    expect(xaiRow?.getAttribute('aria-disabled')).toBe('true');
+    expect(xaiRow?.textContent).toContain('Add the xAI provider in My Settings to enable this.');
+    const nanoRow = screen.getByText('Grok TTS via nano-gpt').closest('[aria-disabled]');
+    expect(nanoRow?.getAttribute('aria-disabled')).toBe('true');
+    expect(nanoRow?.textContent).toContain(
+      'Add the nano-gpt provider in My Settings to enable this.',
+    );
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
+
+  it('shows the visible auto-default "Grok TTS via xAI (auto)" when xAI is enabled and the slot is null', () => {
+    providerRowsMock.mockReturnValue(providerRows('xai'));
+    setup();
+    const trigger = screen.getByRole('button', { name: /pick read-aloud voice/i });
+    expect(trigger.textContent).toContain('Grok TTS via xAI (auto)');
+  });
+
+  it('picking the nano-gpt entry persists ttsOffering and shows the slot-switch notice', () => {
+    providerRowsMock.mockReturnValue(providerRows('xai', 'nano-gpt'));
+    setup();
+    expect(screen.queryByText(/personas keep their voice picks/i)).toBeNull();
+    openTtsPicker();
+    fireEvent.click(screen.getByRole('button', { name: /grok tts via nano-gpt/i }));
+    expect(updateMutate).toHaveBeenCalledWith({ ttsOffering: 'nano-gpt:xai-tts' });
+    expect(
+      screen.getByText(
+        /personas keep their voice picks — if a voice came from the previous provider, re-pick it in the persona editor/i,
+      ),
+    ).toBeTruthy();
+  });
+});
+
+describe('VoiceSection — Speech-to-text slot picker', () => {
+  it('lists all three STT entries with their egress notes', () => {
+    providerRowsMock.mockReturnValue(providerRows('xai', 'nano-gpt', 'mistral'));
+    setup();
+    openSttPicker();
+    const mistralRow = screen.getByRole('button', { name: /voxtral mini stt via mistral ai/i });
+    expect(mistralRow.textContent).toContain('Sends microphone audio to Mistral AI (EU)');
+    const xaiRow = screen.getByRole('button', { name: /grok stt via xai/i });
+    expect(xaiRow.textContent).toContain('Sends microphone audio to xAI (US)');
+    const nanoRow = screen.getByRole('button', { name: /grok stt via nano-gpt/i });
+    expect(nanoRow.textContent).toContain('Sends microphone audio via nano-gpt to xAI (US)');
+  });
+
+  it('shows the Mistral-first auto-default and persists an explicit xAI pick without a switch note', () => {
+    providerRowsMock.mockReturnValue(providerRows('xai', 'mistral'));
+    setup();
+    const trigger = screen.getByRole('button', { name: /pick speech-to-text/i });
+    expect(trigger.textContent).toContain('Voxtral Mini STT via Mistral AI (auto)');
+    openSttPicker();
+    fireEvent.click(screen.getByRole('button', { name: /grok stt via xai/i }));
+    expect(updateMutate).toHaveBeenCalledWith({ sttOffering: 'xai:grok-stt' });
+    expect(screen.queryByText(/personas keep their voice picks/i)).toBeNull();
+  });
+});
+
+describe('VoiceSection — moderation notice follows the selected offering', () => {
+  it('is absent when the slot auto-resolves to an unmoderated Grok path', () => {
+    providerRowsMock.mockReturnValue(providerRows('xai'));
+    setup();
+    expect(screen.queryByText(/content moderation/i)).toBeNull();
+  });
+
+  it('appears when the persisted ref points at a content-moderated offering', () => {
+    // A legacy pre-removal pick of Mistral Voxtral TTS still resolves while its
+    // provider is configured — the mechanism keys off the SELECTED offering.
+    providerRowsMock.mockReturnValue(providerRows('mistral'));
+    useSettingsMock.mockReturnValue(settingsData({ ttsOffering: 'mistral:voxtral-mini-tts-2603' }));
+    setup();
+    expect(screen.getByText(/applies content moderation/i)).toBeTruthy();
   });
 });
 
@@ -204,48 +275,10 @@ describe('VoiceSection — auto-send toggle', () => {
   });
 
   it('eyes-open note IS visible when dictationAutoSend is true', () => {
-    useSettingsMock.mockReturnValueOnce({
-      data: {
-        voiceMode: 'paragraph',
-        dictationSensitivity: 'medium',
-        dictationRedemptionMs: 1_728,
-        dictationAutoSend: true,
-      },
-    });
+    useSettingsMock.mockReturnValueOnce(settingsData({ dictationAutoSend: true }));
     setup();
     expect(
       screen.getByText(/each utterance sends immediately; there is no correction step/i),
     ).toBeTruthy();
-  });
-});
-
-describe('VoiceSection — STT provider state line', () => {
-  it('shows STT offering label when Mistral provider row is enabled', () => {
-    providerRowsMock.mockReturnValue({
-      data: [{ id: 'pr-1', templateId: 'mistral', enabled: true }],
-    });
-    setup();
-    expect(screen.getByText(/voxtral mini stt via mistral ai/i)).toBeTruthy();
-  });
-
-  it('shows add-provider hint when no enabled STT provider row exists', () => {
-    // providerRowsMock returns { data: [] } by default
-    setup();
-    // The hint spans multiple elements ("Add the", <span>Mistral AI</span>, "provider…");
-    // match by the full textContent of the paragraph element.
-    const hint = screen.getByText(
-      (_content, element) =>
-        element?.tagName === 'P' &&
-        (element.textContent ?? '').includes(
-          'Add the Mistral AI provider in My Settings to dictate',
-        ),
-    );
-    expect(hint).toBeTruthy();
-  });
-
-  it('shows "No STT provider is curated yet." when listSttOfferings returns []', () => {
-    listSttOfferingsMock.mockReturnValueOnce([]);
-    setup();
-    expect(screen.getByText(/no stt provider is curated yet/i)).toBeTruthy();
   });
 });
