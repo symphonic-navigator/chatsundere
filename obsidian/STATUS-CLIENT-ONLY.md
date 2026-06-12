@@ -17,7 +17,10 @@
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
 **Last updated:** 2026-06-12 (late night) — **MODEL INSTRUCTIONS LANDED**
-(single squashed commit on master, **NOT pushed**; **NOT yet device-verified**).
+(squash `b59d546` on master, **NOT pushed**; **DEVICE-CONFIRMED by Chris
+2026-06-12** — Mistral itself, asked about the change, replied: "Ist besser so,
+Shakespeare hat ja auch nicht 'To be or not to be' in Sperrschrift
+geschrieben.").
 Curated per-model prompt steering: `CanonicalModel.modelInstructions?` (Valibot
 gate extended), a new Band-1 segment **after TEAL, before roleplay** (the
 roleplay → persona adjacency untouched; persona instructions still override),
