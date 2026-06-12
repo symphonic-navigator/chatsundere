@@ -134,6 +134,9 @@ clipped first syllable.
 - Enabling the toggle shows a one-line in-context note in settings — "Each
   utterance sends immediately; there is no correction step" — so the user
   opts in with eyes open (Laura spec-pass, soft finding).
+- **No mid-stream sends:** an auto-send transcription that completes while a
+  persona reply is still streaming appends to the draft instead (predictable;
+  conversation-loop orchestration is Spec 3's job).
 
 ### 3.5 Collision with read-aloud
 
