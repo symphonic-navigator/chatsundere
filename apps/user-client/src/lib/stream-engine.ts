@@ -9,6 +9,7 @@ import {
   buildPrompt,
   formatRetryEvent,
   offeringToTarget,
+  resolveModelInstructions,
   streamCompletion,
 } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -85,6 +86,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       loreContext: args.loreContext ?? '',
       knowledgeLibrariesContext: args.knowledgeLibrariesContext ?? '',
       toolsInstruction: args.toolsInstruction ?? '',
+      modelInstructions: resolveModelInstructions(args.offering),
       roleplayEnabled: args.persona.roleplay,
       narration: args.persona.narration,
       personaName: args.persona.name,

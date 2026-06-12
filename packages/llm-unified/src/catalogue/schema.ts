@@ -32,6 +32,7 @@ const CanonicalSchema = v.object({
   requiredCaps: v.object({ tools: v.boolean(), reasoning: v.boolean(), vision: v.boolean() }),
   freedomOriented: v.nullable(v.boolean()),
   freedomNote: v.optional(v.string()),
+  modelInstructions: v.optional(v.string()),
   notes: v.optional(v.string()),
 });
 

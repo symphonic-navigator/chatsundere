@@ -63,6 +63,14 @@ describe('parseCatalogueEntry', () => {
     expect(r.ok ? '' : r.errors.join(' ')).toMatch(/capability gate.*vision/i);
   });
 
+  it('accepts and surfaces modelInstructions on the canonical', () => {
+    const entry = structuredClone(validEntry);
+    (entry.canonical as { modelInstructions?: string }).modelInstructions = 'Prefer prose.';
+    const r = parseCatalogueEntry(entry);
+    expect(r.ok).toBe(true);
+    expect(r.ok ? r.entry.canonical.modelInstructions : undefined).toBe('Prefer prose.');
+  });
+
   it('rejects a structurally invalid entry', () => {
     expect(parseCatalogueEntry({ canonical: { id: 'x' } }).ok).toBe(false);
   });

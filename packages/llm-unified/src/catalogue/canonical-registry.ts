@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { listOfferings } from '../registry.js';
+import { MISTRAL_FORMATTING_INSTRUCTIONS } from './model-instructions.js';
 import type { CanonicalModel } from './types.js';
 
 /** Curated, provider-independent identities. The user picks one of these. */
@@ -112,6 +113,7 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: true,
     freedomNote:
       'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression (more so than the open-weight Chinese models), with licences permissive enough for our API integration.',
+    modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
   },
   {
     id: 'mistral-medium-3-5',
@@ -123,6 +125,7 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: true,
     freedomNote:
       'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
+    modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
   },
   {
     id: 'mistral-large-3',
@@ -133,6 +136,7 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: true,
     freedomNote:
       'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
+    modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
   },
   // --- Claude (Anthropic) — via OpenRouter only; censored at source → not
   // freedom-oriented; surfaced with the CENSORED badge. See ADR 0032. ---
@@ -244,4 +248,14 @@ export function availableCanonicals(configuredTemplateIds: string[]): {
     listOfferings(c.id).some((o) => configured.has(o.providerId)),
   );
   return { available, hiddenCount: all.length - available.length };
+}
+
+/**
+ * Curated model instructions for an offering's canonical, or `''` when the
+ * offering has no canonical or the canonical carries none. The empty string
+ * makes the prompt builder drop the segment.
+ */
+export function resolveModelInstructions(offering: { canonicalRef: string | null }): string {
+  if (!offering.canonicalRef) return '';
+  return getCanonical(offering.canonicalRef)?.modelInstructions ?? '';
 }

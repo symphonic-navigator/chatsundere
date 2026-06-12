@@ -49,3 +49,15 @@ and on `nano-gpt` (the `nano-gpt-slug-swap` adapter). Both `confidence: 'verifie
   message-ordering constraint, not an adapter bug — see [[../providers/mistral]]).
   Vision green.
 - **nano-gpt:** core **11/11 green** (incl. memory-echo) + vision green.
+
+## Model instructions (2026-06-12)
+
+The canonical carries the shared `MISTRAL_FORMATTING_INSTRUCTIONS` constant
+(`packages/llm-unified/src/catalogue/model-instructions.ts`), injected as a
+Band-1 prompt segment (chat + greeting jobs). **Why:** the Mistral family is
+warm and creative but chronically over-formats — synopsis-style bullet lists
+where the user asked for a story, spaced-out or all-capital words for emphasis,
+heading cascades in casual chat. That exhausts the reader and is hostile to TTS
+read-aloud. The steering restrains typography, never expression: lists and
+tables remain available when the content is genuinely enumerable or the user
+asks for them. Spec: `superpowers/specs/2026-06-12-model-instructions-design.md`.

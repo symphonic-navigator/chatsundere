@@ -16,7 +16,33 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-12 (night) — **xAI VOICE ONBOARDING LANDED**
+**Last updated:** 2026-06-12 (late night) — **MODEL INSTRUCTIONS LANDED**
+(single squashed commit on master, **NOT pushed**; **NOT yet device-verified**).
+Curated per-model prompt steering: `CanonicalModel.modelInstructions?` (Valibot
+gate extended), a new Band-1 segment **after TEAL, before roleplay** (the
+roleplay → persona adjacency untouched; persona instructions still override),
+jobs **chat + greeting** only. Resolution via the new
+`resolveModelInstructions(offering)` helper at all three `buildPrompt` call
+sites (stream-engine, title-generator, chat-page context gauge — counts the
+segment automatically). First use: the shared `MISTRAL_FORMATTING_INSTRUCTIONS`
+constant on all three Mistral canonicals — prose over bullet-synopses for
+stories, no spaced-out/ALL-CAPS emphasis (acronyms fine), restrains typography
+never expression (Chris-approved wording). No UI, no toggle, no Dexie change;
+not a Larissa path (client-only, no new egress), not a Laura path (no
+flow/state change). Built **inline** (Chris's call). Gates: `pnpm typecheck
+--force` **14/14**; llm-unified `bun test` **380/0** (+8 new); user-client
+vitest **1602 pass / 8 fail** (the unchanged Node-26-localStorage baseline);
+`pnpm run build --force` **9/9**; biome clean. The three Mistral Curation
+Records carry a "Model instructions" section. Spec/plan:
+[[../superpowers/specs/2026-06-12-model-instructions-design]],
+[[../superpowers/plans/2026-06-12-model-instructions]]. **Device test (spec §6,
+six steps; restart `pnpm dev` — packages/llm-unified changed):** Mistral story
+→ prose not bullets; no SPERRSCHRIFT/CAPS emphasis; explicit table request
+still yields a table; greeting opener as prose; GLM 5 unchanged; TTS read-aloud
+flows. **Next:** Chris device-tests this AND the xAI voice onboarding below →
+Liz pushes the master backlog on his word; then **Spec 3 (live voice)**.
+
+**Earlier 2026-06-12 (night) — xAI VOICE ONBOARDING LANDED**
 (squashed onto master `e1df483`, **NOT pushed**; **NOT yet device-verified**).
 The snack-sized session before Spec 3, exactly as planned: **Grok TTS + Grok
 STT, each via two paths** (xAI direct + nano-gpt) as four new

@@ -7,6 +7,7 @@ import {
   buildPrompt,
   formatRetryEvent,
   offeringToTarget,
+  resolveModelInstructions,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
 import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
@@ -100,6 +101,7 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
         projectInstructions: '',
         memoryContext: '',
         toolsInstruction: '',
+        modelInstructions: resolveModelInstructions(args.offering),
         roleplayEnabled: args.persona.roleplay,
         narration: args.persona.narration,
         personaName: args.persona.name,

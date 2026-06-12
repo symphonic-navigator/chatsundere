@@ -36,6 +36,9 @@ export interface BuildPromptInputs {
   knowledgeLibrariesContext?: string;
   /** Band-3 tools segment — joined tool system-prompt instructions (chat only). */
   toolsInstruction: string;
+  /** Curated per-model steering resolved from the active offering's canonical
+   *  (`resolveModelInstructions`); '' when the model carries none. */
+  modelInstructions: string;
   /** Persona toggle — roleplay mode. Injects the curated roleplay blocks. */
   roleplayEnabled?: boolean;
   /** Narration perspective for the roleplay formatting block. Default 'first'. */
@@ -49,6 +52,7 @@ type SegmentId =
   | 'nsfw'
   | 'global'
   | 'teal'
+  | 'modelInstructions'
   | 'roleplay'
   | 'persona'
   | 'aboutMe'
@@ -99,13 +103,24 @@ const SEGMENTS: readonly SegmentSpec[] = [
   // roleplay segment so the roleplay → persona adjacency stays intact. Chat and
   // greeting only — title and memory produce no spoken text (D8).
   { id: 'teal', band: 1, order: 3, jobs: CHAT_AND_GREETING, resolve: () => TEAL_EXPRESSION_PROMPT },
+  // Curated per-model steering (model-instructions spec 2026-06-12): platform
+  // curation like TEAL, placed before roleplay so the empirically load-bearing
+  // roleplay → persona adjacency stays intact and persona instructions can
+  // still override it. Chat + greeting — everywhere the model writes prose.
+  {
+    id: 'modelInstructions',
+    band: 1,
+    order: 4,
+    jobs: CHAT_AND_GREETING,
+    resolve: (i) => i.modelInstructions,
+  },
   // Runs in every Band-1 job on purpose (roleplay spec 2026-06-11 §4.1): the title job's
   // trailing instruction overrides the embodiment rules in practice — the same
   // mechanism that lets the NSFW segment coexist with title generation.
   {
     id: 'roleplay',
     band: 1,
-    order: 4,
+    order: 5,
     jobs: ALL_JOBS,
     resolve: (i) =>
       i.roleplayEnabled
@@ -116,7 +131,7 @@ const SEGMENTS: readonly SegmentSpec[] = [
           ].join('\n\n')
         : '',
   },
-  { id: 'persona', band: 1, order: 5, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
+  { id: 'persona', band: 1, order: 6, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
   { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_AND_GREETING, resolve: (i) => i.aboutMe },
   { id: 'project', band: 2, order: 1, jobs: CHAT_ONLY, resolve: (i) => i.projectInstructions },
   { id: 'memories', band: 2, order: 2, jobs: CHAT_ONLY, resolve: (i) => i.memoryContext },

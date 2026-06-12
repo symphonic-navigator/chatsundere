@@ -19,6 +19,7 @@ function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
     projectInstructions: '',
     memoryContext: '',
     toolsInstruction: '',
+    modelInstructions: '',
     ...overrides,
   };
 }
@@ -132,6 +133,7 @@ const baseInputs: BuildPromptInputs = {
   projectInstructions: '',
   memoryContext: '',
   toolsInstruction: '',
+  modelInstructions: '',
 };
 
 describe('tools segment', () => {
@@ -315,5 +317,45 @@ describe('teal segment', () => {
     // Nothing between the end of the roleplay block and the start of persona.
     const rpEnd = out.indexOf(ROLEPLAY_BEHAVIOUR_PROMPT) + ROLEPLAY_BEHAVIOUR_PROMPT.length;
     expect(out.slice(rpEnd, pIdx)).toBe('\n\n');
+  });
+});
+
+describe('modelInstructions segment', () => {
+  it('is present in chat and greeting when provided', () => {
+    for (const job of ['chat', 'greeting'] as const) {
+      const out = buildPrompt(inputs({ modelInstructions: 'MODEL-MARK' }), job);
+      expect(out).toContain('MODEL-MARK');
+    }
+  });
+
+  it('is absent from title and memory jobs even when provided', () => {
+    for (const job of ['title', 'memory'] as const) {
+      const out = buildPrompt(inputs({ modelInstructions: 'MODEL-MARK' }), job);
+      expect(out).not.toContain('MODEL-MARK');
+    }
+  });
+
+  it('sits after teal and before roleplay, with persona last', () => {
+    const out = buildPrompt(
+      inputs({
+        modelInstructions: 'MODEL-MARK',
+        roleplayEnabled: true,
+        personaInstructions: 'PERSONA-MARK',
+      }),
+      'chat',
+    );
+    const tealIdx = out.indexOf('Expressive delivery');
+    const miIdx = out.indexOf('MODEL-MARK');
+    const rpIdx = out.indexOf('roleplay mode');
+    const pIdx = out.indexOf('PERSONA-MARK');
+    expect(tealIdx).toBeGreaterThanOrEqual(0);
+    expect(tealIdx).toBeLessThan(miIdx);
+    expect(miIdx).toBeLessThan(rpIdx);
+    expect(rpIdx).toBeLessThan(pIdx);
+  });
+
+  it('drops the segment when the string is empty', () => {
+    const out = buildPrompt(inputs({}), 'chat');
+    expect(out).not.toContain('MODEL-MARK');
   });
 });

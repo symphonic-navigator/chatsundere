@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { buildPrompt, getOffering } from '@chatsundere/llm-unified';
+import { buildPrompt, getOffering, resolveModelInstructions } from '@chatsundere/llm-unified';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -353,6 +353,7 @@ export function ChatPage(): JSX.Element {
         projectInstructions: '',
         memoryContext: '',
         toolsInstruction: '',
+        modelInstructions: resolveModelInstructions(offering),
       },
       'chat',
     );

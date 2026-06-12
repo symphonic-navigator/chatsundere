@@ -26,6 +26,10 @@ export interface CanonicalModel {
   /** Model-intrinsic freedom; null = not yet assessed. */
   freedomOriented: boolean | null;
   freedomNote?: string;
+  /** Curated behavioural/formatting steering that travels with the model across
+   *  providers — injected as a Band-1 prompt segment (chat + greeting jobs).
+   *  See the model-instructions spec (2026-06-12). */
+  modelInstructions?: string;
   notes?: string;
 }
 

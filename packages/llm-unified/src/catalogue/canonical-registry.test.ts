@@ -7,7 +7,9 @@ import {
   availableCanonicals,
   getCanonical,
   listCanonicals,
+  resolveModelInstructions,
 } from './canonical-registry.js';
+import { MISTRAL_FORMATTING_INSTRUCTIONS } from './model-instructions.js';
 
 // registerBuiltinProviders also registers catalogue adapters, which have no
 // reset hook and throw on duplicate ids — so register once, like
@@ -76,5 +78,27 @@ describe('availableCanonicals', () => {
     for (const c of available) {
       expect(listOfferings(c.id).some((o) => o.providerId === 'wafer')).toBe(true);
     }
+  });
+});
+
+describe('modelInstructions', () => {
+  test('all three Mistral canonicals share the formatting restraint', () => {
+    for (const id of ['mistral-small-4', 'mistral-medium-3-5', 'mistral-large-3']) {
+      expect(getCanonical(id)?.modelInstructions).toBe(MISTRAL_FORMATTING_INSTRUCTIONS);
+    }
+  });
+
+  test('non-Mistral canonicals carry none', () => {
+    expect(getCanonical('glm-5')?.modelInstructions).toBeUndefined();
+    expect(getCanonical('grok-4.3')?.modelInstructions).toBeUndefined();
+  });
+
+  test('resolveModelInstructions resolves via canonicalRef, empty otherwise', () => {
+    expect(resolveModelInstructions({ canonicalRef: 'mistral-small-4' })).toBe(
+      MISTRAL_FORMATTING_INSTRUCTIONS,
+    );
+    expect(resolveModelInstructions({ canonicalRef: null })).toBe('');
+    expect(resolveModelInstructions({ canonicalRef: 'unknown-model' })).toBe('');
+    expect(resolveModelInstructions({ canonicalRef: 'glm-5' })).toBe('');
   });
 });
