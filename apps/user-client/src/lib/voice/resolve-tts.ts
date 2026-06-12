@@ -103,6 +103,86 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
   const cacheKeyFor = (segment: SpeechSegment): string =>
     voiceCacheKey(segment.spokenText, providerId, upstreamSlug, voiceIdFor(segment));
 
+  // In-flight dedup (device finding 2026-06-12): the machine cancels the
+  // prefetch actor whenever the current segment finishes playing before the
+  // next one's synthesis completes, and playSegment then re-requested the SAME
+  // synthesis from scratch — a doubled upstream call and up to the full
+  // synthesis time of audible silence. Concurrent fetchAudio calls for one
+  // cache key now share a single upstream request; the underlying fetch aborts
+  // only when EVERY consumer has aborted (a real stop), never on a mere
+  // segment advance.
+  interface InFlightSynthesis {
+    promise: Promise<Blob>;
+    retain: (signal: AbortSignal) => void;
+  }
+  const inFlight = new Map<string, InFlightSynthesis>();
+
+  const startSynthesis = (key: string, segment: SpeechSegment): InFlightSynthesis => {
+    const controller = new AbortController();
+    let consumers = 0;
+    const releases: Array<() => void> = [];
+    const retain = (signal: AbortSignal): void => {
+      // An already-aborted consumer contributes nothing; the synthesis then
+      // simply completes into the cache for the next read.
+      if (signal.aborted) return;
+      consumers += 1;
+      const onAbort = (): void => {
+        consumers -= 1;
+        if (consumers === 0) controller.abort();
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      releases.push(() => signal.removeEventListener('abort', onAbort));
+    };
+    const voiceId = voiceIdFor(segment);
+    const promise = (async (): Promise<Blob> => {
+      try {
+        const result = await synthesiseSpeech({
+          providerConfig,
+          apiKey,
+          corsProxyUrl,
+          corsProxyKey,
+          upstreamSlug,
+          teal: ttsMeta.teal,
+          transport: ttsMeta.transport,
+          text: segment.spokenText,
+          voiceId,
+          signal: controller.signal,
+        });
+        // Write-through: the just-synthesised blob lands in cache for replay.
+        await cachePut({ key, blob: result.blob, mimeType: result.mimeType });
+        return result.blob;
+      } catch (err) {
+        // Aborted because every consumer left (user stop / skip) — benign.
+        if (controller.signal.aborted) {
+          console.info('[voice-tts] synthesis aborted (no remaining consumer)', {
+            segmentId: segment.segmentId,
+            length: segment.spokenText.length,
+          });
+          throw err;
+        }
+        // Device finding 2026-06-12: a synthesis failure surfaced only as the
+        // opaque "Couldn't read this part aloud" transport state — the cause
+        // was swallowed. Log the provider boundary so the reason is visible;
+        // error handling is unchanged.
+        const status = err instanceof SpeechSynthesisError ? err.status : null;
+        console.error('[voice-tts] synthesis failed', {
+          status,
+          error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+          segmentId: segment.segmentId,
+          voice: segment.voice,
+          voiceId,
+          length: segment.spokenText.length,
+          text: segment.spokenText.slice(0, 160),
+        });
+        throw err;
+      } finally {
+        inFlight.delete(key);
+        for (const release of releases) release();
+      }
+    })();
+    return { promise, retain };
+  };
+
   const fetchAudio = async (segment: SpeechSegment, signal: AbortSignal): Promise<Blob> => {
     const key = cacheKeyFor(segment);
 
@@ -110,42 +190,14 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
     const cached = await cacheGet(key);
     if (cached) return cached.blob;
 
-    // Cache miss — synthesise from the upstream provider.
-    const voiceId = voiceIdFor(segment);
-    let result: Awaited<ReturnType<typeof synthesiseSpeech>>;
-    try {
-      result = await synthesiseSpeech({
-        providerConfig,
-        apiKey,
-        corsProxyUrl,
-        corsProxyKey,
-        upstreamSlug,
-        teal: ttsMeta.teal,
-        transport: ttsMeta.transport,
-        text: segment.spokenText,
-        voiceId,
-        signal,
-      });
-    } catch (err) {
-      // Device finding 2026-06-12: a synthesis failure surfaced only as the
-      // opaque "Couldn't read this part aloud" transport state — the cause was
-      // swallowed. Log the provider boundary (HTTP status + the offending
-      // segment) so the real reason is visible; error handling is unchanged.
-      const status = err instanceof SpeechSynthesisError ? err.status : null;
-      console.error('[voice-tts] synthesis failed', {
-        status,
-        segmentId: segment.segmentId,
-        voice: segment.voice,
-        voiceId,
-        length: segment.spokenText.length,
-        text: segment.spokenText.slice(0, 160),
-      });
-      throw err;
+    // Cache miss — join the in-flight synthesis for this key, or start one.
+    let entry = inFlight.get(key);
+    if (!entry) {
+      entry = startSynthesis(key, segment);
+      inFlight.set(key, entry);
     }
-
-    // Write-through: the just-synthesised blob lands in cache for replay.
-    await cachePut({ key, blob: result.blob, mimeType: result.mimeType });
-    return result.blob;
+    entry.retain(signal);
+    return entry.promise;
   };
 
   const voiceLabel = `${ttsMeta.displayName} via ${providerDisplayName}`;

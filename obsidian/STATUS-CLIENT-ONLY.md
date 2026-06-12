@@ -16,7 +16,43 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-12 (late night) — **MODEL INSTRUCTIONS LANDED**
+**Last updated:** 2026-06-12 (late night) — **VOICE PREFETCH CANCEL-REFETCH
+RACE FIXED** (single commit on master, **NOT pushed**; root cause
+DEVICE-CONFIRMED by Chris the same evening). Chris reported "every ~6th
+nano-gpt speech generation fails" + an audible pause. **Systematic debugging,
+probes before theories:** 28/28 live nano-gpt `/audio/speech` probes green
+(12 serial back-to-back, 6 concurrent pairs mimicking the machine, realistic
+long/TEAL/umlaut payloads; ~11 s synthesis for ~520 chars) → **no rate limit,
+nothing upstream fails**. The console stack pinned it: the "failures" were the
+**documented benign prefetch race** — the machine cancels the in-flight
+prefetch actor when the current segment finishes playing first
+(`voice-machine.ts` exit), `fetch` throws AbortError (`status: null` in the
+boundary log — not a SpeechSynthesisError), and `playSegment` then re-ran the
+SAME synthesis from scratch: doubled upstream calls (paid twice) and up to the
+full synthesis time of audible silence on long segments. Confirmed live by
+Chris via new instrumentation (the quiet "benign prefetch race" info line +
+"the same pause — genau das!"). **Fix: in-flight dedup in the fetch layer**
+(`resolve-tts.ts`) — a per-resolution `Map<cacheKey, {promise, retain}>`;
+concurrent `fetchAudio` calls for one key share a single upstream request, and
+the underlying fetch aborts only when EVERY consumer has aborted (a real
+STOP), never on a mere segment advance. The XState machine is untouched (its
+abort-on-exit semantics from Spec 1 stay). Pause shrinks from full synthesis
+time to the remaining time; no doubled calls. Boundary log now carries
+`error: "Name: Message"` so real failures are never guess-work again. Not a
+Larissa path (no new egress), not a Laura path (no flow change — transport
+optimisation). TDD: 4 new dedup tests in `tests/lib/voice/resolve-tts.test.ts`
+(join, survive-one-abort, abort-only-when-all-gone, failure-clears-slot) + the
+mock now mirrors `SpeechSynthesisError`. Gates: `pnpm typecheck --force`
+**14/14**; user-client vitest **1606 pass / 8 fail** (unchanged
+Node-26-localStorage baseline); `pnpm run build --force` **9/9**; biome clean.
+**Device test:** read a roleplay chat with long paragraphs aloud via nano-gpt —
+the inter-segment pause shortens noticeably, console shows at most quiet
+`[voice-tts]` info lines (no red), and a STOP mid-synthesis still cancels
+(network tab: request aborted). **Next:** unchanged — Chris device-tests the
+backlog (xAI voice §11 + Mistral model instructions ✓ confirmed) → Liz pushes
+on his word; then Spec 3 (live voice).
+
+**Earlier 2026-06-12 (late night) — MODEL INSTRUCTIONS LANDED**
 (squash `b59d546` on master, **NOT pushed**; **DEVICE-CONFIRMED by Chris
 2026-06-12** — Mistral itself, asked about the change, replied: "Ist besser so,
 Shakespeare hat ja auch nicht 'To be or not to be' in Sperrschrift

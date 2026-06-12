@@ -18,6 +18,16 @@ vi.mock('@chatsundere/llm-unified', () => ({
   // select-offering.ts imports this too; TTS resolution never calls it.
   listSttOfferings: () => [],
   getProvider: (id: string) => getProviderMock(id),
+  // resolve-tts narrows errors with instanceof; mirror the real class shape.
+  SpeechSynthesisError: class SpeechSynthesisError extends Error {
+    constructor(
+      message: string,
+      readonly status: number | null,
+    ) {
+      super(message);
+      this.name = 'SpeechSynthesisError';
+    }
+  },
 }));
 
 // ─── Mock: openSecret / secrets layer ────────────────────────────────────────
@@ -288,7 +298,9 @@ describe('resolveTts', () => {
       expect(callArgs?.text).toBe(segment.spokenText);
       expect(callArgs?.voiceId).toBe('voice-beta');
       expect(callArgs?.upstreamSlug).toBe(UPSTREAM_SLUG);
-      expect(callArgs?.signal).toBe(signal);
+      // The synthesis runs on a shared internal signal (in-flight dedup), not
+      // the caller's signal — see the '(i) in-flight dedup' suite.
+      expect(callArgs?.signal).toBeInstanceOf(AbortSignal);
 
       // Write-through: a second call must hit the cache (synthesiseSpeech NOT called again).
       // Note: fake-indexeddb does not preserve Blob type/identity, so we assert on
@@ -300,6 +312,124 @@ describe('resolveTts', () => {
       const key = voiceCacheKey(segment.spokenText, PROVIDER_ID, UPSTREAM_SLUG, 'voice-beta');
       const cached = await cacheGet(key);
       expect(cached).toBeDefined();
+    });
+  });
+
+  describe('(i) in-flight dedup — the prefetch cancel-refetch race', () => {
+    /** A synthesis the test resolves/holds manually. */
+    function pendingSynthesis(): {
+      resolve: (v: { blob: Blob; mimeType: string }) => void;
+      reject: (e: Error) => void;
+    } {
+      let resolveFn: (v: { blob: Blob; mimeType: string }) => void = () => undefined;
+      let rejectFn: (e: Error) => void = () => undefined;
+      synthesiseSpeechMock.mockReturnValue(
+        new Promise<{ blob: Blob; mimeType: string }>((res, rej) => {
+          resolveFn = res;
+          rejectFn = rej;
+        }),
+      );
+      return { resolve: resolveFn, reject: rejectFn };
+    }
+
+    const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+    it('joins an in-flight synthesis instead of starting a second one', async () => {
+      await seedProvider();
+      const pending = pendingSynthesis();
+
+      const resolution = await resolveTts(minimalPersona({ voice: 'voice-dedup' }));
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      const segment = seg('A long paragraph that is still synthesising');
+      const p1 = resolution.fetchAudio(segment, new AbortController().signal);
+      await tick(); // let the first call pass its cache check and register
+      const p2 = resolution.fetchAudio(segment, new AbortController().signal);
+      await tick();
+
+      expect(synthesiseSpeechMock).toHaveBeenCalledOnce();
+
+      const blob = new Blob(['joined-audio'], { type: MIME_TYPE });
+      pending.resolve({ blob, mimeType: MIME_TYPE });
+      await expect(p1).resolves.toBe(blob);
+      await expect(p2).resolves.toBe(blob);
+    });
+
+    it('keeps the synthesis alive when one of two consumers aborts', async () => {
+      await seedProvider();
+      const pending = pendingSynthesis();
+
+      const resolution = await resolveTts(minimalPersona({ voice: 'voice-dedup' }));
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      const segment = seg('Prefetch races the segment advance');
+      const prefetchCtrl = new AbortController();
+      const p1 = resolution.fetchAudio(segment, prefetchCtrl.signal);
+      await tick();
+      const p2 = resolution.fetchAudio(segment, new AbortController().signal);
+      await tick();
+
+      const sharedSignal = synthesiseSpeechMock.mock.calls[0]?.[0]?.signal as AbortSignal;
+
+      // The machine aborts the prefetch actor — the play consumer remains.
+      prefetchCtrl.abort();
+      expect(sharedSignal.aborted).toBe(false);
+
+      const blob = new Blob(['survived'], { type: MIME_TYPE });
+      pending.resolve({ blob, mimeType: MIME_TYPE });
+      await expect(p2).resolves.toBe(blob);
+      await expect(p1).resolves.toBe(blob); // shared promise; XState discards it
+    });
+
+    it('aborts the underlying synthesis only when ALL consumers have aborted', async () => {
+      await seedProvider();
+      pendingSynthesis(); // never resolved — we only observe the signal
+
+      const resolution = await resolveTts(minimalPersona({ voice: 'voice-dedup' }));
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      const segment = seg('Stopped by the user mid-synthesis');
+      const c1 = new AbortController();
+      const c2 = new AbortController();
+      void resolution.fetchAudio(segment, c1.signal);
+      await tick();
+      void resolution.fetchAudio(segment, c2.signal);
+      await tick();
+
+      const sharedSignal = synthesiseSpeechMock.mock.calls[0]?.[0]?.signal as AbortSignal;
+
+      c1.abort();
+      expect(sharedSignal.aborted).toBe(false);
+      c2.abort();
+      expect(sharedSignal.aborted).toBe(true);
+    });
+
+    it('clears the in-flight slot on failure so a retry starts fresh', async () => {
+      await seedProvider();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      synthesiseSpeechMock.mockRejectedValueOnce(new Error('upstream boom'));
+
+      const resolution = await resolveTts(minimalPersona({ voice: 'voice-dedup' }));
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      const segment = seg('First attempt fails');
+      await expect(resolution.fetchAudio(segment, new AbortController().signal)).rejects.toThrow(
+        'upstream boom',
+      );
+
+      const blob = new Blob(['second-attempt'], { type: MIME_TYPE });
+      synthesiseSpeechMock.mockResolvedValueOnce({ blob, mimeType: MIME_TYPE });
+      await expect(resolution.fetchAudio(segment, new AbortController().signal)).resolves.toBe(
+        blob,
+      );
+      expect(synthesiseSpeechMock).toHaveBeenCalledTimes(2);
+
+      errorSpy.mockRestore();
     });
   });
 
