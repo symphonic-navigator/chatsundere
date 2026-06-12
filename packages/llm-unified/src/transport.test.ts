@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 import { buildRequest } from './transport.js';
 import type { ProviderConfig } from './types.js';
 
@@ -109,5 +109,39 @@ describe('buildRequest', () => {
       method: 'GET',
     });
     expect(req.url).toBe('https://nano-gpt.com/api/v1/models');
+  });
+});
+
+describe('buildRequest bodies', () => {
+  test('JSON body is stringified with the json content-type', async () => {
+    const req = buildRequest({
+      provider: { baseUrl: 'https://api.example.test/v1', routing: { kind: 'direct' } },
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      path: '/chat/completions',
+      method: 'POST',
+      body: { a: 1 },
+    });
+    expect(req.headers.get('Content-Type')).toBe('application/json');
+    expect(await req.text()).toBe('{"a":1}');
+  });
+
+  test('FormData body passes through with a multipart boundary', async () => {
+    const form = new FormData();
+    form.append('model', 'voxtral-mini-latest');
+    const req = buildRequest({
+      provider: { baseUrl: 'https://api.example.test/v1', routing: { kind: 'direct' } },
+      apiKey: 'k',
+      corsProxyUrl: null,
+      corsProxyKey: null,
+      path: '/audio/transcriptions',
+      method: 'POST',
+      body: form,
+    });
+    expect(req.headers.get('Content-Type')).toStartWith('multipart/form-data');
+    expect(req.headers.get('Authorization')).toBe('Bearer k');
+    const echoed = await req.formData();
+    expect(echoed.get('model')).toBe('voxtral-mini-latest');
   });
 });

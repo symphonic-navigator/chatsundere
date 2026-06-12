@@ -60,3 +60,23 @@ recorded.
 - **Chris sign-off:** ✅ Chris, 2026-06-12 ("steht da schon was im Input-Feld,
   dann ist der Button fürs Absenden zuständig" — deliberate single-button
   purity).
+
+## 2026-06-12 — Dictation is pointer-only (no keyboard path to the mic)
+
+- **Affected flow / surface:** Chat cockpit, DualActionBtn mic state (Spec 2 — dictation/STT).
+- **Finding (quality-review summary):** The mic button is wired via pointer events only (`pointerdown`/`pointerup`/`pointerleave`). A keyboard user can Tab to it, but Space/Enter fire `click`, which the mic state does not handle — dictation is unreachable without a pointing device.
+- **Mode:** pre-squash (code-quality review finding, logged Laura-style).
+- **Criterion:** Unreachable function (for keyboard-only users); accessibility.
+- **Rationale for deferral:** Chatsundere is mobile-first (380 px, touch); push-to-talk is inherently a pointer gesture, and a keyboard-only user has the textarea — the input the transcript would land in — directly focused beside the button. The spec deliberately scoped no keyboard gesture design.
+- **Follow-up commitment:** Design a keyboard affordance (e.g. Space toggles a VAD session while the mic is focused) at the Spec 3 (live voice) design session, where the voice surface is rethought anyway. Bubble up at the v0.1.0 release cut otherwise.
+- **Chris sign-off:** Not yet sought (not judged blocking: the affected modality has an equivalent typed path in the same control cluster). Listed for his release-cut review.
+
+## 2026-06-12 — Read-aloud can start over a listening VAD session
+
+- **Affected flow / surface:** Chat — voice playback (Read control) started while a dictation VAD session listens (Spec 2 — dictation/STT).
+- **Finding (Laura's summary):** The dictation→playback direction is wired (starting capture stops read-aloud, spec D13), but the reverse is deliberately uncoupled: a user can start a read-aloud while the mic is hot; the speaker output may then be transcribed into the draft (echoCancellation on the capture stream mitigates in most browsers).
+- **Mode:** pre-squash.
+- **Criterion:** Least astonishment.
+- **Rationale for deferral:** Spec-sanctioned (§3.5/§4.3/D11): the two voice machines do not communicate in Spec 2 beyond the one stop call — Spec 3 (live voice) owns the full orchestration. Laura ruled acceptable-with-log.
+- **Follow-up commitment:** Spec 3's orchestration design must define the reverse seam explicitly (likely: starting a read stops or pauses listening). Inherited by the Spec 3 brainstorm.
+- **Chris sign-off:** Not required (soft finding, spec-sanctioned).

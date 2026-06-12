@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
 import { createLibrary } from '../../src/data/knowledge';
+import { idleDictationStub } from '../helpers/dictation-stub';
 
 function wrap(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
@@ -33,6 +34,7 @@ function renderCockpit(extra: Record<string, unknown> = {}) {
       onSend={() => {}}
       onStop={() => {}}
       isStreamLive={false}
+      dictation={idleDictationStub}
       {...extra}
     />,
     { wrapper: wrap(qc) },

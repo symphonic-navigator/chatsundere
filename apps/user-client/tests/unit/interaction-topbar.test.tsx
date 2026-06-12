@@ -351,6 +351,7 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
 });
 
 import { InteractionMode } from '../../src/components/chat/InteractionMode';
+import { idleDictationStub } from '../helpers/dictation-stub';
 
 // nano-gpt deepseek-v4-flash offering for InteractionMode plumbing test
 // biome-ignore lint/style/noNonNullAssertion: test fixture — this slug is guaranteed to exist in the catalogue
@@ -374,6 +375,7 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
         onExit={vi.fn()}
         onRenameChat={onRename}
         onOpenPersonaEditor={vi.fn()}
+        dictation={idleDictationStub}
       />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);

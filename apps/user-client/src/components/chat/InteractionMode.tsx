@@ -3,6 +3,7 @@ import type { Offering } from '@chatsundere/llm-unified';
 import { useEffect, useRef } from 'react';
 import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { resolveContextWindow } from '../../lib/context-window.js';
+import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { Cockpit } from './Cockpit.js';
 import { InteractionTopbar } from './InteractionTopbar.js';
@@ -27,6 +28,8 @@ interface Props {
   onAttachFromTreasury?: () => void;
   onAttachFromLibrary?: () => void;
   toolsAvailable?: boolean;
+  /** Dictation surface — connected in chat-page via useDictation (spec 2026-06-12 §3). */
+  dictation: Dictation;
 }
 
 /**
@@ -187,6 +190,7 @@ export function InteractionMode(p: Props): JSX.Element {
           onAttachFromTreasury={p.onAttachFromTreasury}
           onAttachFromLibrary={p.onAttachFromLibrary}
           toolsAvailable={p.toolsAvailable}
+          dictation={p.dictation}
         />
       </div>
     </div>

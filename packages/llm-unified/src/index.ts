@@ -23,6 +23,7 @@ export {
   listOfferings,
   getOffering,
   listTtsOfferings,
+  listSttOfferings,
   listTtiOfferings,
   MODALITY_ORDER,
   providerServiceKinds,
@@ -116,6 +117,12 @@ export {
   type SynthesiseSpeechResult,
 } from './tts/synthesise-speech.js';
 export { listTtsVoices, type TtsVoice, type ListTtsVoicesArgs } from './tts/voices.js';
+export {
+  transcribeAudio,
+  TranscriptionError,
+  type TranscribeAudioArgs,
+  type TranscribeAudioResult,
+} from './stt/transcribe-audio.js';
 // Register Block-1 built-in providers on first import.
 import { registerBuiltinProviders } from './providers/_register-builtins.js';
 registerBuiltinProviders();

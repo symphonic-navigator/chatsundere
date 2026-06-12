@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
 import { listPendingAttachments } from '../../src/data/attachments';
+import { idleDictationStub } from '../helpers/dictation-stub';
 
 // Normalisation needs a real canvas; stub it so the cockpit flow is testable in jsdom.
 vi.mock('../../src/attachments/image-normalise', () => ({
@@ -42,6 +43,7 @@ describe('Cockpit attachments', () => {
         onSend={() => {}}
         onStop={() => {}}
         isStreamLive={false}
+        dictation={idleDictationStub}
       />,
       { wrapper: wrap(qc) },
     );
@@ -65,6 +67,7 @@ describe('Cockpit attachments', () => {
         onSend={() => {}}
         onStop={() => {}}
         isStreamLive={false}
+        dictation={idleDictationStub}
       />,
       { wrapper: wrap(qc) },
     );

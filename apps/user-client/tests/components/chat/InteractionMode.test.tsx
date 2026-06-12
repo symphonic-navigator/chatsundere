@@ -8,6 +8,7 @@ import { _resetClientDataDbForTests, openClientDataDb } from '../../../src/boot/
 import type { PersonaRow } from '../../../src/boot/client-data-db.js';
 import { InteractionMode } from '../../../src/components/chat/InteractionMode.js';
 import { useCurrentChatStore } from '../../../src/state/current-chat.store.js';
+import { idleDictationStub } from '../../helpers/dictation-stub.js';
 
 beforeEach(async () => {
   useCurrentChatStore.getState().reset();
@@ -66,6 +67,7 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
           onExit={() => {}}
           onRenameChat={() => {}}
           onOpenPersonaEditor={() => {}}
+          dictation={idleDictationStub}
         />
       </MemoryRouter>
     </QueryClientProvider>,

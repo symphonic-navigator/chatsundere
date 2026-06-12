@@ -46,12 +46,14 @@ export interface Offering {
   freedomOrientedDeployment: boolean | null;
   source: 'curated' | 'discovered';
   confidence: 'verified' | 'partial' | 'heuristic';
-  /** Modality this offering provides. Currently always 'llm'. */
+  /** Modality this offering provides. */
   serviceKind: ServiceKind;
   /** Capability metadata when `serviceKind === 'web'`; undefined for `llm`. */
   web?: WebOfferingMeta;
   /** Capability metadata when `serviceKind === 'tts'`; undefined otherwise. */
   tts?: TtsOfferingMeta;
+  /** Capability metadata when `serviceKind === 'stt'`; undefined otherwise. */
+  stt?: SttOfferingMeta;
   /** Capability metadata when `serviceKind === 'tti'`; undefined otherwise. */
   tti?: TtiOfferingMeta;
 }
@@ -72,6 +74,17 @@ export interface TtsOfferingMeta {
    * such as "eintauchen" — device finding 2026-06-12). Chatsundere's stance is
    * anti-censorship and honest: the UI surfaces this so users are warned, rather
    * than hiding it. `false` for a provider that synthesises whatever it is given.
+   */
+  contentModerated: boolean;
+}
+
+/** Metadata carried by a `serviceKind: 'stt'` offering. */
+export interface SttOfferingMeta {
+  displayName: string;
+  /**
+   * Whether this provider applies content moderation to transcription input.
+   * Unlike Voxtral TTS (which 403s on benign text), the STT endpoint shows no
+   * moderation behaviour — kept for symmetry and honesty should that change.
    */
   contentModerated: boolean;
 }

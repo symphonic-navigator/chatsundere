@@ -21,6 +21,7 @@ import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.j
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
+import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
@@ -50,6 +51,8 @@ interface Props {
   onAttachFromTreasury?: () => void;
   /** Open the knowledge document picker (omitted → no "Attach from knowledge" item). */
   onAttachFromLibrary?: () => void;
+  /** Dictation surface — connected in chat-page via useDictation (spec 2026-06-12 §3). */
+  dictation: Dictation;
 }
 
 /**
@@ -474,11 +477,43 @@ export function Cockpit(p: Props): JSX.Element {
       </div>
       {pending.length > 0 && <div className="cockpit-divider" />}
       <AttachmentStrip attachments={pending} onOpen={(i) => setLightboxIndex(i)} />
+      {p.dictation.failed ? (
+        <div className="cockpit-dictation-note" role="alert">
+          {/* A refusal (deterministic 4xx) names the provider as the actor; Retry
+              stays offered — a context-scored moderation verdict can flip (spec §6). */}
+          <span>
+            {p.dictation.failedKind === 'refusal'
+              ? 'The voice provider declined to transcribe this recording.'
+              : "Couldn't transcribe."}
+          </span>
+          <button type="button" onClick={p.dictation.retry}>
+            Retry
+          </button>
+          <button type="button" onClick={p.dictation.discard}>
+            Discard
+          </button>
+        </div>
+      ) : p.dictation.captureError === 'permission' ? (
+        <div className="cockpit-dictation-note" role="alert">
+          Allow microphone access in your browser settings, then try again.
+        </div>
+      ) : p.dictation.captureError === 'device' ? (
+        <div className="cockpit-dictation-note" role="alert">
+          The microphone could not be started. Check it is connected and not in use, then tap the
+          mic to try again.
+        </div>
+      ) : null}
       <div className="cockpit-row-input">
         <AutoSizeTextarea
           value={p.draftValue}
           onChange={p.onDraftChange}
-          placeholder={`Speak to ${p.persona.name}…`}
+          placeholder={
+            p.dictation.uiState === 'capturing'
+              ? 'Listening…'
+              : p.dictation.uiState === 'transcribing'
+                ? 'Transcribing…'
+                : `Speak to ${p.persona.name}…`
+          }
           maxRows={6}
           className="cockpit-input"
           autoFocus
@@ -490,6 +525,7 @@ export function Cockpit(p: Props): JSX.Element {
           personaName={p.persona.name}
           onSend={() => p.onSend(p.draftValue)}
           onStop={p.onStop}
+          dictation={p.dictation}
         />
       </div>
       {dragging && <div className="cockpit-drop-overlay">Drop files to attach</div>}

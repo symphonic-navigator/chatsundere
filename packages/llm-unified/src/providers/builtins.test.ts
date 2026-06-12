@@ -42,12 +42,12 @@ describe('built-in providers', () => {
     }
   });
 
-  it('mistral has direct CORS hint, four offerings (3 LLM + 1 TTS), and sortPriority 14', () => {
+  it('mistral has direct CORS hint, five offerings (3 LLM + 1 TTS + 1 STT), and sortPriority 14', () => {
     const p = getProvider('mistral');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(4);
+      expect(p.offerings).toHaveLength(5);
       expect(p.sortPriority).toBe(14);
     }
   });

@@ -38,6 +38,7 @@ import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
+import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
@@ -446,6 +447,22 @@ export function ChatPage(): JSX.Element {
   // persistent transport (rendered below) governs an in-flight read-aloud
   // independently of message expansion, scrolling, and Reading↔Interaction mode.
   const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages);
+
+  // Dictation. Transcripts always append at the END of the current draft
+  // (spec §3.3); the functional setter means a late-arriving transcript never
+  // clobbers concurrent typing, and the append flows through the same `draft`
+  // state — and thus the same debounced persistence effect — as a typed change.
+  const dictation = useDictation({
+    onTranscript: (text) =>
+      setDraft((d) => (d.trim().length > 0 ? `${d.trimEnd()} ${text}` : text)),
+    onSend: (text) => void onSend(text),
+    isStreamLive,
+    stopPlayback: voice.stop,
+    // Interaction Mode can collapse without unmounting this page (outside tap
+    // while unpinned, ToC jump) — dictation must not keep a hot mic behind a
+    // vanished cockpit, so the hook LEAVEs whenever this flips false.
+    active: isInteractionMode,
+  });
   const resumeParagraphLabel =
     voice.resumeOffer !== null ? `¶${voice.resumeOffer.paragraphIndex + 1}` : null;
 
@@ -719,6 +736,7 @@ export function ChatPage(): JSX.Element {
           onAttachFromTreasury={() => setPickerOpen(true)}
           onAttachFromLibrary={() => setDocumentPickerOpen(true)}
           toolsAvailable={hasMessages}
+          dictation={dictation}
         />
       ) : null}
     </div>

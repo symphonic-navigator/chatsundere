@@ -40,6 +40,12 @@ export interface SettingsRow {
   /** Voice playback granularity: paragraph = one segment per paragraph,
    *  sentence = one segment per sentence. */
   voiceMode: 'paragraph' | 'sentence';
+  /** Dictation: VAD sensitivity preset (energy thresholds, chatsune-tuned). */
+  dictationSensitivity: 'low' | 'medium' | 'high';
+  /** Dictation: VAD redemption window (silence tolerance) in ms. */
+  dictationRedemptionMs: number;
+  /** Dictation: send each completed transcription immediately instead of drafting. */
+  dictationAutoSend: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -747,6 +753,20 @@ class ClientDataDb extends Dexie {
             if (typeof p.narratorVoice !== 'string') p.narratorVoice = null;
           });
       });
+
+    // Version 22 — dictation/STT. Settings gain the VAD sensitivity preset,
+    // the redemption (silence-tolerance) window and the auto-send toggle.
+    this.version(22).upgrade(async (tx) => {
+      await tx
+        .table('settings')
+        .toCollection()
+        .modify((s: Record<string, unknown>) => {
+          if (s.dictationSensitivity !== 'low' && s.dictationSensitivity !== 'high')
+            s.dictationSensitivity = 'medium';
+          if (typeof s.dictationRedemptionMs !== 'number') s.dictationRedemptionMs = 1_728;
+          if (typeof s.dictationAutoSend !== 'boolean') s.dictationAutoSend = false;
+        });
+    });
   }
 }
 
@@ -861,6 +881,9 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         expertModel: null,
         imageGeneration: { primary: null, nsfw: null },
         voiceMode: 'paragraph',
+        dictationSensitivity: 'medium',
+        dictationRedemptionMs: 1_728,
+        dictationAutoSend: false,
         createdAt: now,
         updatedAt: now,
       });

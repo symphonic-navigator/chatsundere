@@ -2,6 +2,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DualActionBtn } from '../../src/components/chat/DualActionBtn';
+import { idleDictationStub } from '../helpers/dictation-stub';
 
 describe('DualActionBtn', () => {
   it('renders a stop button and calls onStop while a stream is live', () => {
@@ -14,6 +15,7 @@ describe('DualActionBtn', () => {
         personaName="Aurum"
         onSend={onSend}
         onStop={onStop}
+        dictation={idleDictationStub}
       />,
     );
     const btn = getByRole('button', { name: /stop/i });
@@ -33,6 +35,7 @@ describe('DualActionBtn', () => {
         personaName="Aurum"
         onSend={onSend}
         onStop={onStop}
+        dictation={idleDictationStub}
       />,
     );
     const btn = getByRole('button', { name: 'Send' });

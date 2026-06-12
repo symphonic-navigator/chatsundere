@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
+import { idleDictationStub } from '../helpers/dictation-stub';
 
 // The Cockpit resolves the active web-search tiers via a TanStack-query-backed
 // hook; this unit test exercises the cockpit controls, not the depth picker (see
@@ -64,6 +65,7 @@ function renderCockpit(props: Partial<ComponentProps<typeof Cockpit>> = {}) {
         onSend={vi.fn()}
         onStop={vi.fn()}
         isStreamLive={false}
+        dictation={idleDictationStub}
         {...props}
       />
     </QueryClientProvider>,
@@ -154,7 +156,9 @@ describe('Cockpit', () => {
 
   it('Send disabled when input empty (mic shows but is also disabled)', () => {
     const { container } = renderCockpit();
-    const btn = container.querySelector('[data-dual="action"]') as HTMLButtonElement;
+    // With no text and dictation unavailable the mic button renders disabled.
+    const btn = container.querySelector('[data-dual="mic"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
     expect(btn.disabled).toBe(true);
   });
 
@@ -195,5 +199,80 @@ describe('Cockpit', () => {
     const { getByRole } = renderCockpit({ isStreamLive: true, onStop });
     fireEvent.click(getByRole('button', { name: /stop/i }));
     expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  describe('dictation', () => {
+    it('placeholder reflects the dictation uiState', () => {
+      const capturing = renderCockpit({
+        dictation: { ...idleDictationStub, uiState: 'capturing' },
+      });
+      let ta = capturing.container.querySelector('textarea') as HTMLTextAreaElement;
+      expect(ta.placeholder).toBe('Listening…');
+      capturing.unmount();
+
+      const transcribing = renderCockpit({
+        dictation: { ...idleDictationStub, uiState: 'transcribing' },
+      });
+      ta = transcribing.container.querySelector('textarea') as HTMLTextAreaElement;
+      expect(ta.placeholder).toBe('Transcribing…');
+      transcribing.unmount();
+
+      const idle = renderCockpit();
+      ta = idle.container.querySelector('textarea') as HTMLTextAreaElement;
+      expect(ta.placeholder).toBe('Speak to Aurum…');
+    });
+
+    it('failed transcription shows the note with wired Retry and Discard', () => {
+      const retry = vi.fn();
+      const discard = vi.fn();
+      const { container, getByRole } = renderCockpit({
+        dictation: { ...idleDictationStub, failed: true, retry, discard },
+      });
+      const note = container.querySelector('.cockpit-dictation-note');
+      expect(note).not.toBeNull();
+      expect(note?.textContent).toContain("Couldn't transcribe.");
+      fireEvent.click(getByRole('button', { name: 'Retry' }));
+      expect(retry).toHaveBeenCalledTimes(1);
+      fireEvent.click(getByRole('button', { name: 'Discard' }));
+      expect(discard).toHaveBeenCalledTimes(1);
+    });
+
+    it('a refusal failure shows the provider-declined copy, Retry and Discard intact', () => {
+      const retry = vi.fn();
+      const discard = vi.fn();
+      const { container, getByRole } = renderCockpit({
+        dictation: { ...idleDictationStub, failed: true, failedKind: 'refusal', retry, discard },
+      });
+      const note = container.querySelector('.cockpit-dictation-note');
+      expect(note?.textContent).toContain(
+        'The voice provider declined to transcribe this recording.',
+      );
+      // A refusal retry stays allowed — the verdict may have been context-scored.
+      fireEvent.click(getByRole('button', { name: 'Retry' }));
+      expect(retry).toHaveBeenCalledTimes(1);
+      fireEvent.click(getByRole('button', { name: 'Discard' }));
+      expect(discard).toHaveBeenCalledTimes(1);
+    });
+
+    it('permission capture error shows the mic-permission text', () => {
+      const { container } = renderCockpit({
+        dictation: { ...idleDictationStub, captureError: 'permission' },
+      });
+      const note = container.querySelector('.cockpit-dictation-note');
+      expect(note?.textContent).toMatch(/allow microphone access/i);
+    });
+
+    it('device capture error shows the retry affordance text', () => {
+      const { container } = renderCockpit({
+        dictation: { ...idleDictationStub, captureError: 'device' },
+      });
+      const note = container.querySelector('.cockpit-dictation-note');
+      expect(note?.textContent).toMatch(/tap the mic to try again/i);
+    });
+
+    it('no note renders while dictation is healthy', () => {
+      const { container } = renderCockpit();
+      expect(container.querySelector('.cockpit-dictation-note')).toBeNull();
+    });
   });
 });

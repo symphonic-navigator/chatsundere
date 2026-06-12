@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db';
 import { InteractionMode } from '../../src/components/chat/InteractionMode';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
+import { idleDictationStub } from '../helpers/dictation-stub';
 
 const aurum: PersonaRow = {
   id: 'p1',
@@ -61,6 +62,7 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
           isStreamLive={false}
           onExit={vi.fn()}
           onRenameChat={vi.fn()}
+          dictation={idleDictationStub}
           {...extra}
         />
       </MemoryRouter>

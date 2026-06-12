@@ -78,6 +78,11 @@ export function listTtsOfferings(): Offering[] {
   return listProviders().flatMap((p) => p.offerings.filter((o) => o.serviceKind === 'tts'));
 }
 
+/** Every curated STT offering across all registered providers. */
+export function listSttOfferings(): Offering[] {
+  return listProviders().flatMap((p) => p.offerings.filter((o) => o.serviceKind === 'stt'));
+}
+
 /** Every curated TTI offering across all registered providers. */
 export function listTtiOfferings(): Offering[] {
   return listProviders().flatMap((p) => p.offerings.filter((o) => o.serviceKind === 'tti'));

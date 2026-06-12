@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { registerAdapter } from '../adapter-registry.js';
 import { mistralAdapter } from '../adapters/mistral-openai.js';
-import type { Offering, ReasoningControl, TtsOfferingMeta } from '../catalogue/types.js';
+import type {
+  Offering,
+  ReasoningControl,
+  SttOfferingMeta,
+  TtsOfferingMeta,
+} from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
 import { apiKeyField } from './_helpers.js';
@@ -63,6 +68,13 @@ const TTS_META: TtsOfferingMeta = {
   contentModerated: true,
 };
 
+const STT_META: SttOfferingMeta = {
+  displayName: 'Voxtral Mini STT',
+  // CORS-probed direct 2026-06-12 (HTTP 200 from the app origin); no
+  // moderation behaviour observed on transcription — unlike the TTS endpoint.
+  contentModerated: false,
+};
+
 const offerings: Offering[] = [
   // Mistral Small 4 — reasoning toggle (high/none), vision, tools.
   mistralOffering('mistral-small-4', 'mistral-small-latest', {
@@ -99,6 +111,26 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'tts',
     tts: TTS_META,
+  },
+  // Voxtral Mini STT — speech-to-text; bypasses the chat adapter entirely.
+  {
+    canonicalRef: null,
+    providerId: 'mistral',
+    upstreamSlug: 'voxtral-mini-latest',
+    adapter: { kind: 'generic' },
+    profile: {
+      reasoning: { mode: 'none' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    context: { recommended: 0, max: 0 },
+    trust: { tee: false, zdr: false, jurisdiction: 'EU' },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'stt',
+    stt: STT_META,
   },
 ];
 

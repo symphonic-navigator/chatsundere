@@ -27,7 +27,10 @@ export interface BuildRequestArgs {
 export function buildRequest(args: BuildRequestArgs): Request {
   const { provider, apiKey, corsProxyUrl, corsProxyKey, path, method, body, extraHeaders } = args;
   const headers = new Headers({ Authorization: `Bearer ${apiKey}` });
-  if (method === 'POST') headers.set('Content-Type', 'application/json');
+  // FormData carries its own multipart boundary — setting Content-Type here
+  // would destroy it. Only JSON bodies get the explicit header.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (method === 'POST' && !isForm) headers.set('Content-Type', 'application/json');
 
   let url: string;
   if (provider.routing.kind === 'direct') {
@@ -52,7 +55,7 @@ export function buildRequest(args: BuildRequestArgs): Request {
   return new Request(url, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
 }
 
