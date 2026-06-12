@@ -1,10 +1,11 @@
 # Dictation / STT — speech as a prompt source
 
 **Date:** 2026-06-12
-**Status:** Laura spec-pass complete (2 hard findings: 1 fixed in-spec
-(transcription cancel/timeout), 1 deferred with Chris sign-off (mic
-invisibility with text — see ux-deferrals.md); 4 soft notes: 2 incorporated,
-2 consciously kept) — awaiting Chris's review
+**Status:** Approved by Chris 2026-06-12 (Laura spec-pass complete: 2 hard
+findings — 1 fixed in-spec (transcription cancel/timeout), 1 deferred with
+Chris sign-off (mic invisibility with text — see ux-deferrals.md); 4 soft
+notes — 2 incorporated, 2 consciously kept. CORS probe passed: Mistral STT
+direct confirmed, see §4.1)
 **Part of:** the voice design weekend (roleplay → TEAL → playback core → **dictation**)
 **Related:** [Voice Playback Core design](2026-06-11-voice-playback-core-design.md),
 ADR 0034 (XState for the voice domain)
@@ -153,10 +154,16 @@ The TTS precedent, mirrored:
 - Wire: `POST {base}/v1/audio/transcriptions`, multipart form (`file`,
   `model`; `language` omitted → auto-detect), Bearer auth, response
   `{ text }`.
-- **Direct from the client**, gated on the CORS probe (§10). If the endpoint
-  turns out CORS-closed, the call routes via the authenticated CORS proxy
-  using the existing `corsHint` mechanism (the xAI TTI precedent); everything
-  else in this spec is unaffected.
+- **Direct from the client — probe-confirmed.** Chris's console probe
+  (2026-06-12, from the app origin): `POST /v1/audio/transcriptions` with a
+  1 s silent WAV returned **HTTP 200** with
+  `{"model":"voxtral-mini-latest","text":"", "language":null, "segments":[],
+  "usage":{"prompt_audio_seconds":1, …}}` — CORS open, `audio/wav` accepted,
+  audio costs ~375 prompt tokens/second. The response also carries `language`
+  and `segments` (unused in Spec 2; noted for Spec 3). `webm/opus` acceptance
+  is not separately probed but is empirically proven by chatsune in
+  production (its backend forwarded `recording.webm` to the same endpoint);
+  the WAV fallback covers any regression.
 - Filename/format hint chain as in chatsune: `recording.webm` / `recording.m4a`
   / `recording.wav` derived from the blob MIME type.
 
