@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 import { getOffering } from '@chatsundere/llm-unified';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render } from '@testing-library/react';
-// SPDX-License-Identifier: AGPL-3.0-only
 import type { ComponentProps } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
@@ -56,18 +57,23 @@ function renderCockpit(props: Partial<ComponentProps<typeof Cockpit>> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <Cockpit
-        chatId="c1"
-        persona={aurum}
-        offering={offering}
-        draftValue=""
-        onDraftChange={vi.fn()}
-        onSend={vi.fn()}
-        onStop={vi.fn()}
-        isStreamLive={false}
-        dictation={idleDictationStub}
-        {...props}
-      />
+      <MemoryRouter>
+        <Cockpit
+          chatId="c1"
+          persona={aurum}
+          offering={offering}
+          draftValue=""
+          onDraftChange={vi.fn()}
+          onSend={vi.fn()}
+          onStop={vi.fn()}
+          isStreamLive={false}
+          dictation={idleDictationStub}
+          autoReadAloud={false}
+          onToggleAutoRead={vi.fn()}
+          voiceUnavailable={null}
+          {...props}
+        />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

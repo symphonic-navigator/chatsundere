@@ -65,7 +65,7 @@ describe('MessageControls read-aloud button', () => {
     ['no-provider', 'Set up a TTS provider in My Settings'],
     ['no-voice', 'Give this persona a voice in its editor'],
     ['nothing', 'Nothing to read aloud in this message'],
-  ] as const)('disables with the %s tone tooltip', (reason, tooltip) => {
+  ] as const)('marks aria-disabled and sets tooltip for the %s tone', (reason, tooltip) => {
     render(
       <MessageControls
         message={msg}
@@ -76,7 +76,9 @@ describe('MessageControls read-aloud button', () => {
       />,
     );
     const btn = screen.getByRole('button', { name: /Read/ });
-    expect(btn).toBeDisabled();
+    // Button is NOT HTML-disabled (so touch taps register) but is aria-disabled
+    expect(btn).not.toBeDisabled();
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute('title', tooltip);
   });
 

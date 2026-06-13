@@ -3,7 +3,9 @@ import { useActorRef, useSelector } from '@xstate/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MessageRow, PersonaRow } from '../../boot/client-data-db.js';
 import { useSettings } from '../../data/settings.js';
+import { type StreamHandle, useStreamManagerStore } from '../../state/stream-manager.store.js';
 import { AudioSink } from './audio-sink.js';
+import { committedSegments } from './committed-prefix.js';
 import { type TtsResolution, resolveTts } from './resolve-tts.js';
 import { clearPosition, peekPosition, rememberPosition } from './resume-memory.js';
 import { type SpeechSegment, segmentMessage } from './segmentation.js';
@@ -177,6 +179,93 @@ export function useVoicePlayback(
     clearOffer();
     if (!actor.getSnapshot().matches('idle')) actor.send({ type: 'STOP' });
   }, [segKey]);
+
+  // ---- Auto-read driver (spec Task 4) ----------------------------------------
+  // Translates streaming-draft progress into machine events. Lives inside
+  // useVoicePlayback so it shares the one machine actor + AudioSink with manual
+  // read-aloud — no second sequencer, no second sink.
+  const autoReadAloud = settings.data?.autoReadAloud ?? false;
+  const handle = useStreamManagerStore((s: { streams: Map<string, StreamHandle> }) =>
+    chatId ? (s.streams.get(chatId) ?? null) : null,
+  );
+  const autoReadRef = useRef<{ draftId: string; sentCount: number; doneSent: boolean } | null>(
+    null,
+  );
+  const wasAutoOnRef = useRef(autoReadAloud);
+
+  // Toggling the mode off silences any current auto-read playback.
+  useEffect(() => {
+    if (!autoReadAloud && wasAutoOnRef.current) {
+      if (!actor.getSnapshot().matches('idle')) actor.send({ type: 'STOP' });
+      autoReadRef.current = null;
+    }
+    wasAutoOnRef.current = autoReadAloud;
+  }, [autoReadAloud, actor]);
+
+  // The driver: translate streaming-draft progress into machine events.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clearOffer is stable (closure over chatId); actor is stable
+  useEffect(() => {
+    if (!autoReadAloud || !persona || !handle) return;
+    const draftId = handle.draftMessageId;
+    const streamDone = handle.status !== 'streaming';
+    const tracked = autoReadRef.current;
+
+    // A new generation superseded the one we were reading — stop and re-arm.
+    if (tracked && tracked.draftId !== draftId) {
+      if (!actor.getSnapshot().matches('idle')) actor.send({ type: 'STOP' });
+      autoReadRef.current = null;
+    }
+
+    const segments = committedSegments(handle.contentBuffer, streamDone, segmentationOpts);
+    if (segments.length === 0) return;
+
+    if (autoReadRef.current === null) {
+      // Arm: kick off async resolution. Between arming and PLAY the buffer
+      // may have grown, so we recompute `fresh` from the latest handle snapshot
+      // inside `.then` and bail if the draft changed.
+      autoReadRef.current = { draftId, sentCount: 0, doneSent: false };
+      void resolveTts(persona).then((resolution) => {
+        if (!resolution.ok) {
+          autoReadRef.current = null;
+          return;
+        }
+        const live = useStreamManagerStore.getState().streams.get(chatId);
+        if (!live || live.draftMessageId !== draftId) return;
+        const done = live.status !== 'streaming';
+        const fresh = committedSegments(live.contentBuffer, done, segmentationOpts);
+        if (fresh.length === 0) {
+          autoReadRef.current = null;
+          return;
+        }
+        resolutionRef.current = resolution;
+        lastPlayRef.current = { messageId: draftId, segments: fresh };
+        clearOffer();
+        if (!actor.getSnapshot().matches('idle')) actor.send({ type: 'STOP' });
+        actor.send({
+          type: 'PLAY',
+          messageId: draftId,
+          segments: fresh,
+          startIndex: 0,
+          streamComplete: done,
+        });
+        // Record what we sent so subsequent effect runs can skip redundant dispatches.
+        autoReadRef.current = { draftId, sentCount: fresh.length, doneSent: done };
+        if (done) actor.send({ type: 'STREAM_DONE' });
+      });
+      return;
+    }
+
+    // Subsequent-commits branch: only dispatch when something changed.
+    if (segments.length > autoReadRef.current.sentCount) {
+      actor.send({ type: 'SEGMENTS_UPDATED', segments });
+      autoReadRef.current.sentCount = segments.length;
+    }
+    if (streamDone && !autoReadRef.current.doneSent) {
+      actor.send({ type: 'STREAM_DONE' });
+      autoReadRef.current.doneSent = true;
+    }
+  }, [autoReadAloud, persona, handle, chatId, segmentationOpts, actor]);
+  // ---- End auto-read driver ---------------------------------------------------
 
   // The single internal start path: every play (fresh, resume, ended-partial
   // retry) funnels through here so resolution, lastPlayRef and the cleared

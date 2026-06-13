@@ -9,8 +9,8 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 
-/** Store definitions present at v22 (no store changes since voiceAudio in v21). */
-const V22_STORES = {
+/** Store definitions present at v23 (no store changes since voiceAudio in v21). */
+const V23_STORES = {
   settings: 'id',
   providers: 'id, templateId, enabled',
   mindspaces: 'id, builtIn, displayName',
@@ -27,11 +27,11 @@ const V22_STORES = {
   voiceAudio: 'key, lastUsedAt',
 } as const;
 
-/** Plant a v22 database containing a settings row WITHOUT the two voice slot
- *  refs. After reopening at head the v23 upgrade handler must backfill them. */
-async function plantV22Database(): Promise<void> {
+/** Plant a v23 database containing a settings row WITHOUT the two auto-read-aloud
+ *  fields. After reopening at head the v24 upgrade handler must backfill them. */
+async function plantV23Database(): Promise<void> {
   const db = new Dexie('chatsundere_client_data');
-  for (let v = 1; v <= 22; v++) db.version(v).stores(V22_STORES);
+  for (let v = 1; v <= 23; v++) db.version(v).stores(V23_STORES);
   await db.open();
 
   await db.table('settings').add({
@@ -53,7 +53,9 @@ async function plantV22Database(): Promise<void> {
     dictationSensitivity: 'medium',
     dictationRedemptionMs: 1_728,
     dictationAutoSend: false,
-    // ttsOffering and sttOffering deliberately absent
+    ttsOffering: null,
+    sttOffering: null,
+    // autoReadAloud and voiceStopHintSeen deliberately absent
     createdAt: 1,
     updatedAt: 1,
   });
@@ -61,7 +63,7 @@ async function plantV22Database(): Promise<void> {
   db.close();
 }
 
-describe('client-data-db v23 (voice offering slots)', () => {
+describe('client-data-db v24 (auto-read-aloud fields)', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
   });
@@ -70,21 +72,21 @@ describe('client-data-db v23 (voice offering slots)', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('opens at current head verno on a fresh install', async () => {
+  it('opens at verno 24 on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
     expect(db.verno).toBe(24);
   });
 
-  it('seeds both voice slot refs as null on a fresh settings row', async () => {
+  it('seeds autoReadAloud=false and voiceStopHintSeen=false', async () => {
     await openClientDataDb();
-    const settings = await getClientDataDb().settings.get(1);
-    expect(settings?.ttsOffering).toBeNull();
-    expect(settings?.sttOffering).toBeNull();
+    const row = await getClientDataDb().settings.get(1);
+    expect(row?.autoReadAloud).toBe(false);
+    expect(row?.voiceStopHintSeen).toBe(false);
   });
 
-  it('on upgrade from v22: backfills both refs to null when fields are absent', async () => {
-    await plantV22Database();
+  it('on upgrade from v23: backfills both fields to false when absent', async () => {
+    await plantV23Database();
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
 
@@ -92,20 +94,18 @@ describe('client-data-db v23 (voice offering slots)', () => {
     expect(db.verno).toBe(24);
 
     const settings = await db.settings.get(1);
-    expect(settings?.ttsOffering).toBeNull();
-    expect(settings?.sttOffering).toBeNull();
+    expect(settings?.autoReadAloud).toBe(false);
+    expect(settings?.voiceStopHintSeen).toBe(false);
   });
 
-  it('preserves an explicit ttsOffering ref across a re-open', async () => {
+  it('preserves an explicit autoReadAloud=true across a re-open', async () => {
     await openClientDataDb();
-    await getClientDataDb().settings.update(1, { ttsOffering: 'xai:grok-tts' });
+    await getClientDataDb().settings.update(1, { autoReadAloud: true });
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
 
     const settings = await getClientDataDb().settings.get(1);
-    // an explicit string ref persists across reopen/seeding (the v23 upgrade
-    // handler does not re-run once the database is already at verno 23)
-    expect(settings?.ttsOffering).toBe('xai:grok-tts');
-    expect(settings?.sttOffering).toBeNull();
+    expect(settings?.autoReadAloud).toBe(true);
+    expect(settings?.voiceStopHintSeen).toBe(false);
   });
 });

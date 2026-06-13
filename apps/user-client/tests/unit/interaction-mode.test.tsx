@@ -63,6 +63,9 @@ function mount(extra: Partial<Parameters<typeof InteractionMode>[0]> = {}) {
           onExit={vi.fn()}
           onRenameChat={vi.fn()}
           dictation={idleDictationStub}
+          autoReadAloud={false}
+          onToggleAutoRead={vi.fn()}
+          voiceUnavailable={null}
           {...extra}
         />
       </MemoryRouter>

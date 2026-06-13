@@ -93,3 +93,31 @@ describe('VoiceTransport', () => {
     expect(screen.getByText('Resume · ¶3')).toBeInTheDocument();
   });
 });
+
+describe('VoiceTransport waiting', () => {
+  it('shows a calm reading… note while waiting (no Pause/Stop)', () => {
+    const cb = callbacks();
+    render(<VoiceTransport state="waiting" resumeOffer={null} {...cb} />);
+    expect(screen.getByText(/reading…/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pause reading/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Stop reading/ })).toBeNull();
+  });
+});
+
+describe('VoiceTransport stop hint', () => {
+  it('shows the one-shot stop hint and dismisses it', () => {
+    const onDismiss = vi.fn();
+    const { getByText } = render(
+      <VoiceTransport
+        state="idle"
+        resumeOffer={null}
+        {...callbacks()}
+        stopHint
+        onDismissStopHint={onDismiss}
+      />,
+    );
+    expect(getByText(/voice mode is still on/i)).toBeTruthy();
+    fireEvent.click(getByText(/got it/i));
+    expect(onDismiss).toHaveBeenCalled();
+  });
+});

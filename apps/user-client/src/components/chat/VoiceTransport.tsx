@@ -23,6 +23,14 @@ export interface VoiceTransportProps {
    * non-zero, an honest note is shown so the skipped passage is never silent.
    */
   providerSkips: number;
+  /**
+   * When true, the one-shot hint clarifying the Stop vs cockpit-toggle
+   * distinction is shown. The caller is responsible for persisting the "seen"
+   * flag so it is shown at most once per user.
+   */
+  stopHint?: boolean;
+  /** Called when the user dismisses the stop hint via the "Got it" button. */
+  onDismissStopHint?: () => void;
 }
 
 /**
@@ -37,8 +45,8 @@ export interface VoiceTransportProps {
  * the chat page owns the {@link useVoicePlayback} state and wires it here.
  */
 export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
-  // Idle without a resume offer or a skipped-passage note: render nothing.
-  if (p.state === 'idle' && !p.resumeOffer && p.providerSkips === 0) return null;
+  // Idle without a resume offer, skipped-passage note, or stop hint: render nothing.
+  if (p.state === 'idle' && !p.resumeOffer && p.providerSkips === 0 && !p.stopHint) return null;
 
   return (
     <section className="voice-transport" aria-label="Voice playback">
@@ -61,6 +69,12 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
             Stop
           </button>
         </>
+      ) : null}
+
+      {p.state === 'waiting' ? (
+        <span className="voice-transport-note" aria-live="polite">
+          reading…
+        </span>
       ) : null}
 
       {p.state === 'paused' ? (
@@ -176,6 +190,21 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
         >
           Dismiss
         </button>
+      ) : null}
+
+      {/* One-shot hint shown the first time the user taps Stop while auto-read
+          is active. Clarifies Stop (this playback) vs the cockpit toggle (exit
+          voice mode) — different scopes, easy to conflate. */}
+      {p.stopHint ? (
+        <span className="voice-transport-note">
+          Reading stopped — voice mode is still on, so the next reply will read itself. Turn it off
+          in the cockpit.
+          {p.onDismissStopHint ? (
+            <button type="button" className="voice-transport-btn" onClick={p.onDismissStopHint}>
+              Got it
+            </button>
+          ) : null}
+        </span>
       ) : null}
     </section>
   );

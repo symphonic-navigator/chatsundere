@@ -30,6 +30,11 @@ interface Props {
   toolsAvailable?: boolean;
   /** Dictation surface — connected in chat-page via useDictation (spec 2026-06-12 §3). */
   dictation: Dictation;
+  /** Voice-mode (auto-read-aloud) on/off — global setting. */
+  autoReadAloud: boolean;
+  onToggleAutoRead: (next: boolean) => void;
+  /** Why read-aloud is unavailable, or null when a voice is configured. */
+  voiceUnavailable: 'no-provider' | 'no-voice' | null;
 }
 
 /**
@@ -191,6 +196,9 @@ export function InteractionMode(p: Props): JSX.Element {
           onAttachFromLibrary={p.onAttachFromLibrary}
           toolsAvailable={p.toolsAvailable}
           dictation={p.dictation}
+          autoReadAloud={p.autoReadAloud}
+          onToggleAutoRead={p.onToggleAutoRead}
+          voiceUnavailable={p.voiceUnavailable}
         />
       </div>
     </div>

@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
@@ -19,7 +20,9 @@ vi.mock('../../src/attachments/image-normalise', () => ({
 
 function wrap(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
   );
 }
 const persona = { id: 'p', name: 'Aurum', font: 'serif', libraryIds: [] } as never;
@@ -44,6 +47,9 @@ describe('Cockpit attachments', () => {
         onStop={() => {}}
         isStreamLive={false}
         dictation={idleDictationStub}
+        autoReadAloud={false}
+        onToggleAutoRead={() => {}}
+        voiceUnavailable={null}
       />,
       { wrapper: wrap(qc) },
     );
@@ -68,6 +74,9 @@ describe('Cockpit attachments', () => {
         onStop={() => {}}
         isStreamLive={false}
         dictation={idleDictationStub}
+        autoReadAloud={false}
+        onToggleAutoRead={() => {}}
+        voiceUnavailable={null}
       />,
       { wrapper: wrap(qc) },
     );

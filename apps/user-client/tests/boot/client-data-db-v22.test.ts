@@ -100,10 +100,10 @@ describe('client-data-db v22 (dictation/STT settings)', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('opens at verno 23 on a fresh install', async () => {
+  it('opens at current head verno on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(23);
+    expect(db.verno).toBe(24);
   });
 
   it('seeds the three dictation defaults on a fresh settings row', async () => {
@@ -120,7 +120,7 @@ describe('client-data-db v22 (dictation/STT settings)', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(23);
+    expect(db.verno).toBe(24);
 
     const settings = await db.settings.get(1);
     expect(settings?.dictationSensitivity).toBe('medium');
@@ -134,7 +134,7 @@ describe('client-data-db v22 (dictation/STT settings)', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(23);
+    expect(db.verno).toBe(24);
 
     const settings = await db.settings.get(1);
     // 'high' is a valid sentinel value — the upgrade guard must not overwrite it

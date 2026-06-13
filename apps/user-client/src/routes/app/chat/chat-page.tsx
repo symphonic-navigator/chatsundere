@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { buildPrompt, getOffering, resolveModelInstructions } from '@chatsundere/llm-unified';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
@@ -30,7 +30,7 @@ import {
 import { useBranchChat, useChat, useCreateChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
-import { useDisplayName } from '../../../data/settings.js';
+import { useDisplayName, useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
@@ -449,6 +449,24 @@ export function ChatPage(): JSX.Element {
   // independently of message expansion, scrolling, and Reading↔Interaction mode.
   const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages);
 
+  const settings = useSettings();
+  const updateSettings = useUpdateSettings();
+  const autoReadAloud = settings.data?.autoReadAloud ?? false;
+  const onToggleAutoRead = useCallback(
+    (next: boolean) => void updateSettings.mutateAsync({ autoReadAloud: next }),
+    [updateSettings],
+  );
+  const voiceUnavailable = voice.disabledReason;
+  // One-shot hint shown the first time the user taps Stop while auto-read is on.
+  const [stopHint, setStopHint] = useState(false);
+  const onVoiceStop = useCallback(() => {
+    voice.stop();
+    if ((settings.data?.autoReadAloud ?? false) && !(settings.data?.voiceStopHintSeen ?? true)) {
+      setStopHint(true);
+      void updateSettings.mutateAsync({ voiceStopHintSeen: true });
+    }
+  }, [voice, settings.data?.autoReadAloud, settings.data?.voiceStopHintSeen, updateSettings]);
+
   // Dictation. Transcripts always append at the END of the current draft
   // (spec §3.3); the functional setter means a late-arriving transcript never
   // clobbers concurrent typing, and the append flows through the same `draft`
@@ -627,13 +645,15 @@ export function ChatPage(): JSX.Element {
         resumeOffer={resumeParagraphLabel ? { paragraphLabel: resumeParagraphLabel } : null}
         onPause={voice.pause}
         onResume={voice.resumeAudio}
-        onStop={voice.stop}
+        onStop={onVoiceStop}
         onRetry={voice.retry}
         onSkip={voice.skip}
         onResumePlayback={voice.resume}
         onStartOver={voice.startOver}
         onDismiss={voice.dismissPartial}
         providerSkips={voice.providerSkips}
+        stopHint={stopHint}
+        onDismissStopHint={() => setStopHint(false)}
       />
 
       {tocOpen ? (
@@ -739,6 +759,9 @@ export function ChatPage(): JSX.Element {
           onAttachFromLibrary={() => setDocumentPickerOpen(true)}
           toolsAvailable={hasMessages}
           dictation={dictation}
+          autoReadAloud={autoReadAloud}
+          onToggleAutoRead={onToggleAutoRead}
+          voiceUnavailable={voiceUnavailable}
         />
       ) : null}
     </div>

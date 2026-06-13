@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import { Cockpit } from '../../src/components/chat/Cockpit';
@@ -11,7 +12,9 @@ import { idleDictationStub } from '../helpers/dictation-stub';
 
 function wrap(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
   );
 }
 const persona = { id: 'p', name: 'Aurum', font: 'serif', libraryIds: [] } as never;
@@ -35,6 +38,9 @@ function renderCockpit(extra: Record<string, unknown> = {}) {
       onStop={() => {}}
       isStreamLive={false}
       dictation={idleDictationStub}
+      autoReadAloud={false}
+      onToggleAutoRead={() => {}}
+      voiceUnavailable={null}
       {...extra}
     />,
     { wrapper: wrap(qc) },

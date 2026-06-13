@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useState } from 'react';
 import type { MessageRow } from '../../boot/client-data-db.js';
 
 interface Props {
@@ -37,6 +38,7 @@ function stop(e: React.MouseEvent): void {
 }
 
 export function MessageControls(p: Props): JSX.Element {
+  const [readNote, setReadNote] = useState(false);
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: stop-propagation wrapper div — not an interactive element, buttons inside handle keyboard events
     <div className="msg-controls" onClick={stop}>
@@ -84,18 +86,31 @@ export function MessageControls(p: Props): JSX.Element {
         ◆ Save
       </button>
       {p.message.role === 'persona' ? (
-        <button
-          type="button"
-          data-ctrl="read"
-          onClick={p.onReadAloud}
-          disabled={!p.onReadAloud || (p.readDisabledReason ?? null) !== null}
-          title={
-            p.readDisabledReason ? READ_TOOLTIP[p.readDisabledReason] : 'Read this message aloud'
-          }
-          className="ctrl-btn"
-        >
-          ▸ Read
-        </button>
+        <>
+          <button
+            type="button"
+            data-ctrl="read"
+            data-disabled={!p.onReadAloud || p.readDisabledReason ? 'true' : undefined}
+            aria-disabled={!p.onReadAloud || p.readDisabledReason ? true : undefined}
+            onClick={() => {
+              if (p.readDisabledReason) {
+                setReadNote(true);
+                return;
+              }
+              setReadNote(false);
+              p.onReadAloud?.();
+            }}
+            title={
+              p.readDisabledReason ? READ_TOOLTIP[p.readDisabledReason] : 'Read this message aloud'
+            }
+            className="ctrl-btn"
+          >
+            ▸ Read
+          </button>
+          {readNote && p.readDisabledReason ? (
+            <output className="ctrl-note">{READ_TOOLTIP[p.readDisabledReason]}</output>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

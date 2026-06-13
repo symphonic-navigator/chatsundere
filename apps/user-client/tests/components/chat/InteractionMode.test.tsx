@@ -68,6 +68,9 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
           onRenameChat={() => {}}
           onOpenPersonaEditor={() => {}}
           dictation={idleDictationStub}
+          autoReadAloud={false}
+          onToggleAutoRead={() => {}}
+          voiceUnavailable={null}
         />
       </MemoryRouter>
     </QueryClientProvider>,

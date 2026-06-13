@@ -376,6 +376,9 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
         onRenameChat={onRename}
         onOpenPersonaEditor={vi.fn()}
         dictation={idleDictationStub}
+        autoReadAloud={false}
+        onToggleAutoRead={vi.fn()}
+        voiceUnavailable={null}
       />,
     );
     fireEvent.click(container.querySelector('.topbar-title-btn') as HTMLButtonElement);

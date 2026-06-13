@@ -50,6 +50,12 @@ export interface SettingsRow {
   ttsOffering: string | null;
   /** Dictation STT offering ref "providerId:upstreamSlug"; null = curated auto-default. */
   sttOffering: string | null;
+  /** Voice mode: auto-read each newly generated persona reply aloud as it
+   *  streams (behaviour-axis setting — global, persisted). */
+  autoReadAloud: boolean;
+  /** One-shot: the "voice mode is still on" hint shown the first time the user
+   *  stops playback while the mode is on. */
+  voiceStopHintSeen: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -783,6 +789,18 @@ class ClientDataDb extends Dexie {
           if (typeof s.sttOffering !== 'string' && s.sttOffering !== null) s.sttOffering = null;
         });
     });
+
+    // Version 24 — auto-read-aloud. Settings gain the auto-read-aloud switch and
+    // the one-shot stop-hint flag; both default false for existing installs.
+    this.version(24).upgrade(async (tx) => {
+      await tx
+        .table('settings')
+        .toCollection()
+        .modify((s: Record<string, unknown>) => {
+          if (typeof s.autoReadAloud !== 'boolean') s.autoReadAloud = false;
+          if (typeof s.voiceStopHintSeen !== 'boolean') s.voiceStopHintSeen = false;
+        });
+    });
   }
 }
 
@@ -902,6 +920,8 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         dictationAutoSend: false,
         ttsOffering: null,
         sttOffering: null,
+        autoReadAloud: false,
+        voiceStopHintSeen: false,
         createdAt: now,
         updatedAt: now,
       });

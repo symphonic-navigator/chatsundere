@@ -480,7 +480,9 @@ describe('MessageBlock', () => {
       { wrapper: qcWrapper },
     );
     const read = container.querySelector('[data-ctrl="read"]') as HTMLButtonElement | null;
-    expect(read?.disabled).toBe(true);
+    // No longer HTML-disabled (so a tap can reveal the reason on touch); marked
+    // unavailable via aria-disabled when no read-aloud handler is wired.
+    expect(read?.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('Read button is actionable once a read-aloud handler is wired', () => {

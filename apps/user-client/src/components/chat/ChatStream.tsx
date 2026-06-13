@@ -248,6 +248,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 // are not unique across messages, so an ungated pass would light
                 // up every message owning the same `<block>:<ordinal>` id.
                 currentSegmentId={m.id === p.currentMessageId ? p.currentSegmentId : null}
+                currentMessageId={p.currentMessageId}
                 voiceMode={p.voiceMode}
               />
               {isDraft ? <StreamingCursor /> : null}

@@ -2,6 +2,7 @@
 import type { Offering } from '@chatsundere/llm-unified';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { classifyFile } from '../../attachments/file-classify.js';
 import { normaliseImageForLlm } from '../../attachments/image-normalise.js';
 import type { PersonaRow } from '../../boot/client-data-db.js';
@@ -53,6 +54,11 @@ interface Props {
   onAttachFromLibrary?: () => void;
   /** Dictation surface — connected in chat-page via useDictation (spec 2026-06-12 §3). */
   dictation: Dictation;
+  /** Voice-mode (auto-read-aloud) on/off — global setting. */
+  autoReadAloud: boolean;
+  onToggleAutoRead: (next: boolean) => void;
+  /** Why read-aloud is unavailable, or null when a voice is configured. */
+  voiceUnavailable: 'no-provider' | 'no-voice' | null;
 }
 
 /**
@@ -100,6 +106,8 @@ export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const [voiceNote, setVoiceNote] = useState(false);
+  const navigate = useNavigate();
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
@@ -148,6 +156,10 @@ export function Cockpit(p: Props): JSX.Element {
     },
     [objectUrls],
   );
+  // Clear any stale inline note if voice becomes available mid-session.
+  useEffect(() => {
+    if (!p.voiceUnavailable) setVoiceNote(false);
+  }, [p.voiceUnavailable]);
   // Close the menu when the user clicks anywhere outside the wrap, or presses
   // Escape. Without this the menu had no close path: the toggle button only
   // toggled by re-clicking the same icon, and clicks on chips left it open.
@@ -410,6 +422,33 @@ export function Cockpit(p: Props): JSX.Element {
             ≈
           </span>
         </button>
+        <button
+          type="button"
+          className={`cockpit-icon-btn${p.autoReadAloud ? ' active' : ''}`}
+          data-control="autoread"
+          data-disabled={p.voiceUnavailable ? 'true' : undefined}
+          aria-pressed={p.autoReadAloud}
+          aria-disabled={p.voiceUnavailable ? true : undefined}
+          aria-label={
+            p.voiceUnavailable
+              ? 'Read replies aloud (no voice configured)'
+              : p.autoReadAloud
+                ? 'Stop reading replies aloud'
+                : 'Read replies aloud'
+          }
+          onClick={() => {
+            if (p.voiceUnavailable) {
+              setVoiceNote((v) => !v);
+              return;
+            }
+            setVoiceNote(false);
+            p.onToggleAutoRead(!p.autoReadAloud);
+          }}
+        >
+          <span className="cockpit-glyph" aria-hidden="true">
+            {p.autoReadAloud ? '🔊' : '🔈'}
+          </span>
+        </button>
         <div className="cockpit-controls-spacer" />
         {p.toolsAvailable && p.onOpenToc && p.onOpenArtefacts ? (
           <>
@@ -502,6 +541,18 @@ export function Cockpit(p: Props): JSX.Element {
           The microphone could not be started. Check it is connected and not in use, then tap the
           mic to try again.
         </div>
+      ) : null}
+      {voiceNote && p.voiceUnavailable ? (
+        <output className="cockpit-dictation-note">
+          <span>
+            {p.voiceUnavailable === 'no-provider'
+              ? 'No voice yet — set up a voice provider to read replies aloud.'
+              : 'No voice yet — give this companion a voice to read replies aloud.'}
+          </span>
+          <button type="button" onClick={() => navigate('/app/settings')}>
+            Settings → Voice
+          </button>
+        </output>
       ) : null}
       <div className="cockpit-row-input">
         <AutoSizeTextarea

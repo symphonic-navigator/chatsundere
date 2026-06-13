@@ -32,14 +32,22 @@ export interface VoiceDeps {
 }
 
 export type VoiceEvent =
-  | { type: 'PLAY'; messageId: string; segments: SpeechSegment[]; startIndex: number }
+  | {
+      type: 'PLAY';
+      messageId: string;
+      segments: SpeechSegment[];
+      startIndex: number;
+      streamComplete?: boolean;
+    }
   | { type: 'PAUSE' }
   | { type: 'RESUME' }
   | { type: 'STOP' }
   | { type: 'RETRY' }
   | { type: 'SKIP' }
   | { type: 'DISMISS' }
-  | { type: 'LEAVE_CHAT' };
+  | { type: 'LEAVE_CHAT' }
+  | { type: 'SEGMENTS_UPDATED'; segments: SpeechSegment[] }
+  | { type: 'STREAM_DONE' };
 
 export interface VoiceContext {
   deps: VoiceDeps;
@@ -58,6 +66,9 @@ export interface VoiceContext {
    */
   providerSkips: number;
   prefetched: Map<number, Blob>;
+  /** false while a streaming reply is still arriving — the machine parks in
+   *  `waiting` instead of ending when it runs out of known segments. */
+  streamComplete: boolean;
 }
 
 export interface VoiceInput {
@@ -65,7 +76,13 @@ export interface VoiceInput {
 }
 
 /** Coarse UI state for the transport. */
-export type TransportState = 'idle' | 'speaking' | 'paused' | 'failed' | 'ended-partial';
+export type TransportState =
+  | 'idle'
+  | 'speaking'
+  | 'paused'
+  | 'failed'
+  | 'ended-partial'
+  | 'waiting';
 
 const playSegment = fromPromise<
   void,
@@ -132,6 +149,11 @@ export const voiceMachine = setup({
       const status = (event as unknown as { error?: { status?: unknown } }).error?.status;
       return typeof status === 'number' && status >= 400 && status < 500 && status !== 429;
     },
+    streamComplete: ({ context }) => context.streamComplete,
+    // Reads event.segments (the incoming update), not context.segments, because
+    // it gates the waiting→speaking wake BEFORE the assign applies the new array.
+    eventHasNext: ({ context, event }) =>
+      event.type === 'SEGMENTS_UPDATED' && context.currentIndex + 1 < event.segments.length,
   },
 }).createMachine({
   id: 'voice',
@@ -144,6 +166,7 @@ export const voiceMachine = setup({
     endedPartial: false,
     providerSkips: 0,
     prefetched: new Map(),
+    streamComplete: true,
   }),
   initial: 'idle',
   states: {
@@ -170,6 +193,7 @@ export const voiceMachine = setup({
             endedPartial: false,
             providerSkips: 0,
             prefetched: new Map<number, Blob>(),
+            streamComplete: event.streamComplete ?? true,
           })),
         },
         // Clear the partial-finish note in place: SKIP-off-the-end leaves us in
@@ -190,6 +214,14 @@ export const voiceMachine = setup({
         // the post-read note can show.
         STOP: { target: 'idle', actions: assign({ providerSkips: 0 }) },
         LEAVE_CHAT: { target: 'idle', actions: assign({ providerSkips: 0 }) },
+        // Grow the live segment queue while speaking; the `waiting` child state
+        // overrides these with its own handlers that also drive state transitions.
+        SEGMENTS_UPDATED: {
+          actions: assign({
+            segments: ({ event }) => (event.type === 'SEGMENTS_UPDATED' ? event.segments : []),
+          }),
+        },
+        STREAM_DONE: { actions: assign({ streamComplete: true }) },
       },
       type: 'parallel',
       states: {
@@ -216,8 +248,9 @@ export const voiceMachine = setup({
                       reenter: true,
                       actions: assign({ currentIndex: ({ context }) => context.currentIndex + 1 }),
                     },
-                    // Final segment played to completion: natural end → idle.
-                    { target: '#voice.idle' },
+                    // Stream is still arriving — park and wait for more segments.
+                    { guard: 'streamComplete', target: '#voice.idle' },
+                    { target: 'waiting' },
                   ],
                   onError: [
                     // Content refusal with a next segment → auto-skip and keep
@@ -336,6 +369,32 @@ export const voiceMachine = setup({
                 ],
               },
             },
+            waiting: {
+              on: {
+                SEGMENTS_UPDATED: [
+                  {
+                    guard: 'eventHasNext',
+                    target: 'speaking',
+                    reenter: true,
+                    actions: assign({
+                      segments: ({ event }) =>
+                        event.type === 'SEGMENTS_UPDATED' ? event.segments : [],
+                      currentIndex: ({ context }) => context.currentIndex + 1,
+                    }),
+                  },
+                  {
+                    actions: assign({
+                      segments: ({ event }) =>
+                        event.type === 'SEGMENTS_UPDATED' ? event.segments : [],
+                    }),
+                  },
+                ],
+                STREAM_DONE: {
+                  target: '#voice.idle',
+                  actions: assign({ streamComplete: true }),
+                },
+              },
+            },
           },
         },
         gate: {
@@ -407,6 +466,7 @@ export function selectTransportState(snapshot: VoiceSnapshot): TransportState {
   // region takes precedence — the user must see (and act on) the failure, not
   // a misleading 'paused' indicator.
   if (snapshot.matches({ active: { playback: 'failed' } })) return 'failed';
+  if (snapshot.matches({ active: { playback: 'waiting' } })) return 'waiting';
   if (snapshot.matches({ active: { gate: 'frozen' } })) return 'paused';
   return 'speaking';
 }

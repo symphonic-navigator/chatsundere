@@ -10,6 +10,7 @@ import { groupAdjacent } from '../../lib/content-blocks.js';
 import { useHighlighter } from '../../lib/markdown/highlighter.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { transformTealStream } from '../../lib/teal/teal-streaming.js';
+import { splitStreamingContent } from '../../lib/voice/committed-prefix.js';
 import {
   type SegmentationOpts,
   type SpeechSegment,
@@ -67,6 +68,10 @@ export interface MessageBlockProps {
   currentSegmentId?: string | null;
   /** Voice segmentation mode for the glow anchoring (paragraph | sentence). */
   voiceMode?: 'paragraph' | 'sentence';
+  /** The message currently driven by the voice machine, or null. When this
+   *  equals a streaming draft's id, that draft renders progressively (committed
+   *  prefix as markdown, open tail raw). */
+  currentMessageId?: string | null;
 }
 
 /** Renders a single chat message row with optional expanded controls. */
@@ -183,16 +188,30 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     () => ({ mode: p.voiceMode ?? 'paragraph', roleplay: p.persona?.roleplay ?? false }),
     [p.voiceMode, p.persona?.roleplay],
   );
+
+  // Progressive commit: when the voice machine is auto-reading THIS streaming
+  // draft, split the buffer into its committed prefix (render as final markdown
+  // with glow anchors) and the open tail (render raw). When not progressive,
+  // fall back to the normal behaviour for both streaming and finalised messages.
+  const progressive = p.isStreamingDraft === true && p.currentMessageId === p.message.id;
+  const split = useMemo(
+    () => (progressive ? splitStreamingContent(p.message.contentBlocks, false) : null),
+    [progressive, p.message.contentBlocks],
+  );
+  // The glow memos must derive from the same committed view the machine uses,
+  // so their block indices align with the segment ids the machine produces.
+  const renderSourceBlocks = split ? split.committedBlocks : p.message.contentBlocks;
+
   const blockSegments = useMemo<Map<number, SpeechSegment[]>>(() => {
     const map = new Map<number, SpeechSegment[]>();
     if (!isPersona) return map;
-    p.message.contentBlocks.forEach((block, index) => {
+    renderSourceBlocks.forEach((block, index) => {
       if (block.type !== 'text') return;
       const segs = segmentBlock(block.text, index, segOpts);
       if (segs.length > 0) map.set(index, segs);
     });
     return map;
-  }, [isPersona, p.message.contentBlocks, segOpts]);
+  }, [isPersona, renderSourceBlocks, segOpts]);
   // Index `currentSegmentId` → its block- and paragraph-index, so the
   // paragraph-level fallback can find the right `[data-voice-para]` when no
   // span matches. The value is the block-qualified attribute string written by
@@ -212,12 +231,12 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
   const glowByBlockIndex = useMemo<Map<number, VoiceGlow>>(() => {
     const map = new Map<number, VoiceGlow>();
     for (const [blockIndex, segments] of blockSegments) {
-      const block = p.message.contentBlocks[blockIndex];
+      const block = renderSourceBlocks[blockIndex];
       const rawSource = block?.type === 'text' ? block.text : '';
       map.set(blockIndex, { segments, blockIndex, opts: segOpts, rawSource });
     }
     return map;
-  }, [blockSegments, segOpts, p.message.contentBlocks]);
+  }, [blockSegments, segOpts, renderSourceBlocks]);
 
   const textRef = useRef<HTMLDivElement>(null);
   const activeId = p.currentSegmentId ?? null;
@@ -330,13 +349,32 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
       >
         <ArtefactSaveContext.Provider value={saveCtx}>
           {renderBlocks(
-            p.message.contentBlocks,
+            split ? split.committedBlocks : p.message.contentBlocks,
             p.pills,
-            p.isStreamingDraft === true,
+            split ? false : p.isStreamingDraft === true,
             p.persona,
             p.mindspace,
             glowByBlockIndex,
           )}
+          {split && split.tailText.length > 0 ? (
+            <span className="msg-stream-text">
+              {transformTealStream([split.tailText]).map((spans, i) =>
+                spans.map((s, j) => (
+                  <span
+                    className={
+                      s.classNames.length > 0
+                        ? `stream-tok ${s.classNames.join(' ')}`
+                        : 'stream-tok'
+                    }
+                    // biome-ignore lint/suspicious/noArrayIndexKey: append-stable streaming tail
+                    key={`tail-${i}-${j}`}
+                  >
+                    {s.text}
+                  </span>
+                )),
+              )}
+            </span>
+          ) : null}
         </ArtefactSaveContext.Provider>
       </div>
       {isUser && activeAttachments.length > 0 && (
