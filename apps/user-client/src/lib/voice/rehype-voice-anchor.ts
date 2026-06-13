@@ -141,66 +141,100 @@ export function rehypeVoiceAnchor(options: RehypeVoiceAnchorOptions) {
   // later paragraph — read it off the authoritative segment list, not index 0.
   const firstEmittingRaw = segments[0]?.paragraphIndex ?? -1;
 
+  // Anchor one block-level element by the raw paragraph its start offset falls
+  // in. `itemLevel` is set for list items: it never wraps sentence spans (the
+  // list marker shifts processed↔rendered offsets, so span precision is unsafe
+  // inside an <li>), degrading instead to a calm whole-item glow.
+  const tagBlock = (node: Element, itemLevel = false): void => {
+    const offset = node.position?.start?.offset;
+    if (offset === undefined) return;
+
+    const paragraph = paragraphs.find((p) => offset >= p.start && offset < p.end);
+    if (paragraph === undefined) return;
+
+    // Tag with the RAW paragraph index. Multiple processed paragraphs from one
+    // split raw paragraph all carry the same raw index, so paragraph-level
+    // glow covers the whole logical paragraph (correct UX, spec I1).
+    setData(node, 'dataVoicePara', `${blockIndex}:${paragraph.rawIndex}`);
+
+    const ttsIds = ttsByParagraph.get(paragraph.rawIndex) ?? [];
+    if (ttsIds.length === 0) return; // paragraph emits nothing (e.g. a code fence)
+
+    // A split (or defensively-flagged) raw paragraph degrades to paragraph
+    // level: no span pairing, because the processed slice is only a fragment.
+    if ((rawK.get(paragraph.rawIndex) ?? 1) !== 1) return;
+
+    const slice = processedSource.slice(paragraph.start, paragraph.end);
+    const emitted = emittedRangesForParagraph(slice, opts, paragraph.rawIndex === firstEmittingRaw);
+
+    // Count mismatch → degrade this paragraph to paragraph-level glow only.
+    if (emitted.length !== ttsIds.length) return;
+
+    // Single emitted segment in paragraph mode (or any list item): tag the
+    // element, no spans. (Safe regardless of preprocessing differences — the
+    // whole paragraph IS the segment, so no intra-paragraph precision needed.)
+    if (emitted.length === 1 && (opts.mode === 'paragraph' || itemLevel)) {
+      const id = ttsIds[0];
+      if (id !== undefined) setData(node, 'dataVoiceSeg', id);
+      return;
+    }
+    // Multi-sentence list item: leave the whole <li> as paragraph-level glow.
+    if (itemLevel) return;
+
+    // Sentence-exact spans are only sound when the renderer's preprocessing
+    // changed NOTHING in this paragraph: the TTS side segments the RAW slice,
+    // this plugin the PROCESSED one, and any TEAL/math rewrite shifts
+    // effective lengths — which shifts min-length merge decisions and
+    // speakability drops between the two sides. Equal counts can then pair
+    // the right ids onto the wrong boundaries (device finding 2026-06-11:
+    // music-glyph spans glowing for a different sentence). Identical slices
+    // ⇒ identical algorithm output by construction; anything else degrades
+    // to the calm paragraph-level glow.
+    const rawRange = rawRanges[paragraph.rawIndex];
+    if (rawRange === undefined || rawSource.slice(rawRange[0], rawRange[1]) !== slice) return;
+
+    // Otherwise wrap each emitted range in a span. Re-base paragraph-relative
+    // ranges onto absolute processed-source offsets to match text positions.
+    const wraps = emitted.map((e, i) => ({
+      start: paragraph.start + e.range[0],
+      end: paragraph.start + e.range[1],
+      id: ttsIds[i] ?? '',
+    }));
+    wrapRanges(node, wraps);
+  };
+
+  /** The raw paragraph index an element's start offset falls in, or undefined. */
+  const rawParaOf = (node: ElementContent): number | undefined => {
+    if (node.type !== 'element') return undefined;
+    const off = node.position?.start?.offset;
+    if (off === undefined) return undefined;
+    return paragraphs.find((p) => off >= p.start && off < p.end)?.rawIndex;
+  };
+
   return (tree: Root): void => {
     for (const node of tree.children) {
       if (node.type !== 'element') continue;
-      const offset = node.position?.start?.offset;
-      if (offset === undefined) continue;
 
-      const paragraph = paragraphs.find((p) => offset >= p.start && offset < p.end);
-      if (paragraph === undefined) continue;
-
-      // Tag with the RAW paragraph index. Multiple processed paragraphs from one
-      // split raw paragraph all carry the same raw index, so paragraph-level
-      // glow covers the whole logical paragraph (correct UX, spec I1).
-      setData(node, 'dataVoicePara', `${blockIndex}:${paragraph.rawIndex}`);
-
-      const ttsIds = ttsByParagraph.get(paragraph.rawIndex) ?? [];
-      if (ttsIds.length === 0) continue; // paragraph emits nothing (e.g. a code fence)
-
-      // A split (or defensively-flagged) raw paragraph degrades to paragraph
-      // level: no span pairing, because the processed slice is only a fragment.
-      if ((rawK.get(paragraph.rawIndex) ?? 1) !== 1) continue;
-
-      const slice = processedSource.slice(paragraph.start, paragraph.end);
-      const emitted = emittedRangesForParagraph(
-        slice,
-        opts,
-        paragraph.rawIndex === firstEmittingRaw,
-      );
-
-      // Count mismatch → degrade this paragraph to paragraph-level glow only.
-      if (emitted.length !== ttsIds.length) continue;
-
-      // Single emitted segment in paragraph mode: tag the element, no spans.
-      // (Safe regardless of preprocessing differences — the whole paragraph IS
-      // the segment, so no intra-paragraph boundary precision is involved.)
-      if (opts.mode === 'paragraph' && emitted.length === 1) {
-        const id = ttsIds[0];
-        if (id !== undefined) setData(node, 'dataVoiceSeg', id);
-        continue;
+      // A LOOSE list (blank-line-separated items) is several raw paragraphs —
+      // hence several spoken segments — but ReactMarkdown nests them in ONE
+      // <ul>/<ol>. Tagging only the list element would anchor just the first
+      // item's id, leaving later items' segments unanchored so their glow
+      // vanishes (device finding 2026-06-13). When the items span more than one
+      // raw paragraph, anchor each <li> by its own paragraph instead. A TIGHT
+      // list (one segment) keeps the whole-element glow — items all share the
+      // raw paragraph, so the set has size 1 and we fall through.
+      if (node.tagName === 'ul' || node.tagName === 'ol') {
+        const items = node.children.filter(
+          (c): c is Element => c.type === 'element' && c.tagName === 'li',
+        );
+        const paras = new Set(items.map(rawParaOf).filter((x) => x !== undefined));
+        if (paras.size > 1) {
+          for (const li of items) tagBlock(li, true);
+          continue;
+        }
       }
 
-      // Sentence-exact spans are only sound when the renderer's preprocessing
-      // changed NOTHING in this paragraph: the TTS side segments the RAW slice,
-      // this plugin the PROCESSED one, and any TEAL/math rewrite shifts
-      // effective lengths — which shifts min-length merge decisions and
-      // speakability drops between the two sides. Equal counts can then pair
-      // the right ids onto the wrong boundaries (device finding 2026-06-11:
-      // music-glyph spans glowing for a different sentence). Identical slices
-      // ⇒ identical algorithm output by construction; anything else degrades
-      // to the calm paragraph-level glow.
-      const rawRange = rawRanges[paragraph.rawIndex];
-      if (rawRange === undefined || rawSource.slice(rawRange[0], rawRange[1]) !== slice) continue;
-
-      // Otherwise wrap each emitted range in a span. Re-base paragraph-relative
-      // ranges onto absolute processed-source offsets to match text positions.
-      const wraps = emitted.map((e, i) => ({
-        start: paragraph.start + e.range[0],
-        end: paragraph.start + e.range[1],
-        id: ttsIds[i] ?? '',
-      }));
-      wrapRanges(node, wraps);
+      tagBlock(node);
     }
   };
 }

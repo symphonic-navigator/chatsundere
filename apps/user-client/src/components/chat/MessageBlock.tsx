@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
 import { useSaveCodeBlockArtefact, useSaveMessageArtefact } from '../../data/artefacts.js';
 import { renameAttachment, useMessageAttachments } from '../../data/attachments.js';
 import { QK } from '../../data/queryKeys.js';
 import { codeSnippetTitle, messageSnippetTitle } from '../../lib/artefact-titles.js';
 import { groupAdjacent } from '../../lib/content-blocks.js';
+import { useHighlighter } from '../../lib/markdown/highlighter.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { transformTealStream } from '../../lib/teal/teal-streaming.js';
 import {
@@ -220,7 +221,18 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
 
   const textRef = useRef<HTMLDivElement>(null);
   const activeId = p.currentSegmentId ?? null;
-  useEffect(() => {
+  // The glow class lives OUTSIDE React's vdom — it is toggled imperatively on
+  // DOM that ReactMarkdown owns. Any re-parse of the markdown subtree therefore
+  // silently drops it. The one re-parse that does NOT also change `activeId` or
+  // `segParaById` is the async shiki load: `MarkdownContent` re-renders on its
+  // own `useHighlighter` resolving, rebuilding the DOM with the glow gone, while
+  // this parent would otherwise not re-run. Subscribing to the same highlighter
+  // here makes that resolution a dependency, so the glow is re-applied on the
+  // freshly-built nodes. `useLayoutEffect` re-applies before paint — no blank
+  // frame between the rebuild and the restored highlight.
+  const highlighter = useHighlighter();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `highlighter` is a deliberate re-run trigger, not read in the body — its null→instance transition rebuilds the markdown DOM, and re-running here re-applies the dropped glow class
+  useLayoutEffect(() => {
     const container = textRef.current;
     if (!container) return;
     // Clear any prior highlight before applying the new one.
@@ -229,9 +241,16 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     }
     if (activeId === null) return;
     const escaped = CSS.escape(activeId);
-    const seg = container.querySelector(`[data-voice-seg="${escaped}"]`);
-    if (seg) {
-      seg.classList.add('voice-glow-active');
+    // ALL elements carrying the id, not just the first: one spoken segment can
+    // render as several sibling top-level elements when an intro/heading line is
+    // glued to a list with no blank line between them. `paragraphRanges` (blank-
+    // line splitting) treats that as ONE paragraph → ONE segment → ONE audio,
+    // but ReactMarkdown emits <p> + <ul>, both tagged with the same seg id. The
+    // glow must cover the whole segment, or it sticks on the first element while
+    // the audio reads on through the rest (device finding 2026-06-13).
+    const segs = container.querySelectorAll(`[data-voice-seg="${escaped}"]`);
+    if (segs.length > 0) {
+      for (const el of segs) el.classList.add('voice-glow-active');
       return;
     }
     // No span matched → paragraph-level fallback (count-mismatch degrade, or
@@ -239,12 +258,14 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     // `paraKey` is the block-qualified attribute value written by the plugin:
     // "<blockIndex>:<paragraphIndex>". Using a bare paragraph index would
     // mis-highlight the wrong block when multiple text blocks share the same
-    // local paragraph-0 (the never-mis-highlight contract).
+    // local paragraph-0 (the never-mis-highlight contract). querySelectorAll for
+    // the same multi-sibling reason as above.
     const paraKey = segParaById.get(activeId);
     if (paraKey === undefined) return;
-    const para = container.querySelector(`[data-voice-para="${CSS.escape(paraKey)}"]`);
-    if (para) para.classList.add('voice-glow-active');
-  }, [activeId, segParaById]);
+    for (const el of container.querySelectorAll(`[data-voice-para="${CSS.escape(paraKey)}"]`)) {
+      el.classList.add('voice-glow-active');
+    }
+  }, [activeId, segParaById, highlighter]);
 
   const textContent = p.message.contentBlocks
     .filter((b): b is { type: 'text'; text: string } => b.type === 'text')

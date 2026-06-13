@@ -11,6 +11,7 @@ import { cacheDelete } from './voice-cache.js';
 import {
   type TransportState,
   type VoiceDeps,
+  selectCurrentMessageId,
   selectCurrentSegmentId,
   selectProviderSkips,
   selectTransportState,
@@ -23,6 +24,10 @@ export type DisabledReason = 'no-provider' | 'no-voice' | null;
 export interface VoicePlayback {
   transportState: TransportState;
   currentSegmentId: string | null;
+  /** The id of the message being read, or null when idle. Pairs with
+   *  `currentSegmentId` so the glow lands only on the playing message — segment
+   *  ids are not unique across messages. */
+  currentMessageId: string | null;
   /** Count of segments the provider declined (auto-skipped) in the current/last read. */
   providerSkips: number;
   /** Start reading a message aloud from `startIndex`. Returns a not-ok reason if TTS cannot run. */
@@ -120,6 +125,7 @@ export function useVoicePlayback(
 
   const transportState = useSelector(actor, selectTransportState);
   const currentSegmentId = useSelector(actor, selectCurrentSegmentId);
+  const currentMessageId = useSelector(actor, selectCurrentMessageId);
   const providerSkips = useSelector(actor, selectProviderSkips);
 
   // Dispose the sink on unmount (the actor stops with the component).
@@ -293,6 +299,7 @@ export function useVoicePlayback(
   return {
     transportState,
     currentSegmentId,
+    currentMessageId,
     providerSkips,
     playMessage,
     resume,

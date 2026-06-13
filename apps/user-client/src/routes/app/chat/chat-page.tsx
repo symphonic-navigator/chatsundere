@@ -528,6 +528,7 @@ export function ChatPage(): JSX.Element {
           voiceDisabledReason={voice.disabledReason}
           voiceMode={settingsQuery.data?.voiceMode ?? 'paragraph'}
           currentSegmentId={voice.currentSegmentId}
+          currentMessageId={voice.currentMessageId}
         />
       ) : null}
 

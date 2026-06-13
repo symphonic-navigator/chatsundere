@@ -16,7 +16,43 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-12 (late night) — **VOICE PREFETCH CANCEL-REFETCH
+**Last updated:** 2026-06-13 — **READ-ALOUD HIGHLIGHT TRACKING FIXED**
+(single squash on master, **NOT pushed**; **DEVICE-CONFIRMED by Chris** — read a
+full long structured kitten/Mistral message aloud end-to-end, the glow tracks
+correctly throughout: "es läuft wirklich exzellent"). Chris reported the
+playback glow getting stuck, vanishing, and "Nachschleifen" (a block highlighted
+that is no longer playing). **Systematic debugging + a browser-console anchor
+dump from Chris's live session** killed an early wrong "mode-divergence" theory
+and pinned FOUR distinct root causes. **RC1** — segment ids are block-qualified
+only (`block:ord`, NOT message-unique) and `ChatStream` passed `currentSegmentId`
+to every message → phantom glow on same-id segments of other messages → fixed
+with a `currentMessageId` gate (machine selector `selectCurrentMessageId` → hook
+→ ChatStream routes the id only to the playing message). **RC2** — the glow class
+is toggled imperatively on ReactMarkdown-owned DOM; the async shiki load
+re-renders `MarkdownContent` without changing the effect deps, silently dropping
+the class → fixed by subscribing `MessageBlock` to `useHighlighter` (+
+`useLayoutEffect`) so it re-applies on the freshly-built nodes. **RC4** — one
+spoken segment can render as several sibling top-level elements (an intro/heading
+line glued to a list with NO blank line is ONE raw paragraph → ONE audio, but
+`<p>` + `<ul>` both carry the same id); `querySelector` matched only the first →
+`querySelectorAll` glows every element of the segment. **RC5** — a loose list
+(blank-line-separated items) is several raw paragraphs → several segments nested
+in ONE `<ol>`; the top-level-only anchor pass left items 2..N unanchored so their
+glow vanished (observed at "2. Concurrency ohne Koordination") → `rehype-voice-
+anchor` now anchors each `<li>` by its own paragraph when items span >1 raw
+paragraph (tight lists keep the whole-element glow; list items never wrap
+sentence spans — the marker shifts offsets — degrading to a calm whole-item
+glow). Not a Larissa path (frontend), not a Laura path (correctness, no
+reachability change). TDD: failing test first for RC1 (cross-message,
+`ChatStream.glow.test.tsx`) and RC4/RC5 (`MessageBlock.glow.test.tsx`). Gates:
+`pnpm typecheck --force` **14/14**; user-client vitest **1610 pass / 8 fail**
+(unchanged Node-26-localStorage baseline); biome clean. **Segmentation pacing**
+(heading+list read as one breath) left AS-IS on Chris's explicit call — fließtext
+is the main use case and the movement is welcome, not a bug. **Next:** Chris
+pushes, then `/clear`, then a "zwischenfeature" (two, actually) on the way to
+live voice mode (Spec 3).
+
+**Earlier 2026-06-12 (late night) — VOICE PREFETCH CANCEL-REFETCH
 RACE FIXED** (single commit on master, **NOT pushed**; root cause
 DEVICE-CONFIRMED by Chris the same evening). Chris reported "every ~6th
 nano-gpt speech generation fails" + an audible pause. **Systematic debugging,

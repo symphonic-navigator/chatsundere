@@ -77,8 +77,12 @@ export interface ChatStreamProps {
    *  speakability probe that drives the per-message 'nothing' tooltip). */
   voiceMode?: 'paragraph' | 'sentence';
   /** The segment currently spoken aloud; threaded to MessageBlock for the
-   *  voice glow (next task). */
+   *  voice glow. */
   currentSegmentId?: string | null;
+  /** The id of the message being read. Segment ids repeat across messages
+   *  (`<blockIndex>:<ordinal>` only), so the glow is routed to this message
+   *  alone — every other message receives a null id and cannot light up. */
+  currentMessageId?: string | null;
 }
 
 /** Scroll container that sorts messages chronologically, inserts DateSeparators
@@ -240,7 +244,10 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                   m.role === 'persona' && p.onReadAloud ? () => p.onReadAloud?.(m) : undefined
                 }
                 readDisabledReason={m.role === 'persona' ? readReasonFor(m) : undefined}
-                currentSegmentId={p.currentSegmentId}
+                // Route the glow id to the playing message ONLY — segment ids
+                // are not unique across messages, so an ungated pass would light
+                // up every message owning the same `<block>:<ordinal>` id.
+                currentSegmentId={m.id === p.currentMessageId ? p.currentSegmentId : null}
                 voiceMode={p.voiceMode}
               />
               {isDraft ? <StreamingCursor /> : null}

@@ -386,6 +386,17 @@ export function selectCurrentSegmentId(snapshot: VoiceSnapshot): string | null {
   return segments[currentIndex]?.segmentId ?? null;
 }
 
+/**
+ * The id of the message currently being read, or null when not active. The glow
+ * id namespace is only block-qualified (`<blockIndex>:<ordinal>`) and so repeats
+ * across messages; the renderer pairs this with {@link selectCurrentSegmentId}
+ * to route the highlight to the ONE message being read, never its same-id twins.
+ */
+export function selectCurrentMessageId(snapshot: VoiceSnapshot): string | null {
+  if (!snapshot.matches('active')) return null;
+  return snapshot.context.messageId;
+}
+
 /** Coarse UI state for the transport. */
 export function selectTransportState(snapshot: VoiceSnapshot): TransportState {
   if (snapshot.matches('idle')) {

@@ -217,6 +217,60 @@ describe('MessageBlock voice glow', () => {
     expect(para1?.contains(active) || para1 === active).toBe(true);
   });
 
+  it('glows ALL elements of a segment that renders as several siblings (intro line glued to a list)', async () => {
+    // Device finding 2026-06-13: an intro/heading line with NO blank line before
+    // a list is ONE raw paragraph → ONE spoken segment → ONE audio (intro + the
+    // bullets read continuously). But ReactMarkdown renders it as TWO top-level
+    // elements (<p> + <ul>), and the anchor plugin tags BOTH with the same seg
+    // id. The glow must cover the WHOLE segment, not just the first match —
+    // otherwise the highlight sticks on the intro line while the audio reads on
+    // through the list (Chris's "Nachschleifen").
+    const raw =
+      'Stell dir vor, wir haben hier einen kleinen Jazz-Moment:\n' +
+      '* Der User ist der Bandleader, der einfach nur ruft.\n' +
+      '* Ich bin der Saxophonist, der die Noten umsetzt.';
+    const { container } = renderBlock(personaMessage(raw), '0:0', 'paragraph');
+    await waitFor(() => {
+      expect(container.querySelector('[data-voice-seg="0:0"]')).not.toBeNull();
+    });
+    // The bug precondition: BOTH the intro <p> and the list <ul> carry seg 0:0.
+    const tagged = [...container.querySelectorAll('[data-voice-seg="0:0"]')];
+    expect(tagged.length).toBeGreaterThan(1);
+    expect(tagged.some((el) => el.tagName === 'P')).toBe(true);
+    expect(tagged.some((el) => el.tagName === 'UL')).toBe(true);
+    // EVERY element of the segment glows — the list is not left behind.
+    for (const el of tagged) {
+      expect(el.classList.contains('voice-glow-active')).toBe(true);
+    }
+  });
+
+  it('glows a loose-list item whose segment lives inside a nested <li> (no vanish)', async () => {
+    // Device finding 2026-06-13: a loose list (blank-line-separated items) is
+    // several raw paragraphs → several spoken segments, but ReactMarkdown nests
+    // them all in ONE <ol>. The top-level-only anchor pass tagged only the list
+    // element with the FIRST item's id, so segments 2..N had no anchor and the
+    // glow vanished when they played. Each <li> must be anchored by its own
+    // paragraph.
+    const raw =
+      '### Wo der Bug wahrscheinlich sitzt heute:\n' +
+      '1. State Desynchronisation lang genug zum Sprechen hier.\n' +
+      '\n' +
+      '2. Concurrency ohne Koordination lang genug zum Sprechen.\n' +
+      '\n' +
+      '3. Buffer-Overflow im Player lang genug zum Sprechen jetzt.';
+    // Segment ids (paragraph mode): 0:0 = heading + item 1; 0:1 = item 2; 0:2 = item 3.
+    const { container } = renderBlock(personaMessage(raw), '0:1', 'paragraph');
+    await waitFor(() => {
+      expect(container.querySelector('[data-voice-seg="0:1"]')).not.toBeNull();
+    });
+    const glowing = container.querySelector('.voice-glow-active');
+    expect(glowing).not.toBeNull();
+    // The glow lands on item 2's content, never item 1 or item 3.
+    expect(glowing?.textContent).toContain('Concurrency');
+    expect(glowing?.textContent).not.toContain('State Desynchronisation');
+    expect(glowing?.textContent).not.toContain('Buffer-Overflow');
+  });
+
   it('does NOT glow block 0 paragraph when the active segment belongs to block 2 paragraph 0 (never-mis-highlight contract)', async () => {
     // Regression: before the fix, both block 0 and block 2 had data-voice-para="0"
     // (bare paragraph index). The fallback query `[data-voice-para="0"]` would
