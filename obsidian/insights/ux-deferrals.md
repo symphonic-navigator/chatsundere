@@ -105,3 +105,36 @@ recorded.
   at the v0.1.0 release cut otherwise.
 - **Chris sign-off:** Not yet sought (soft-tier per Laura). Listed for his
   release-cut review.
+
+## 2026-06-13 — Auto-read-aloud: two soft notes (Laura pre-squash)
+
+Both raised at Laura's pre-squash pass of the auto-read-aloud unit (squash
+`e39c70b`). Advisory, not blocking; the pass itself was PASS (no hard defects).
+
+1. **Manual read button discloses the reason but offers no route-to-Settings.**
+   - Surface: `apps/user-client/src/components/chat/MessageControls.tsx` (the
+     `ctrl-note` disabled-reason output).
+   - Finding: the cockpit voice-mode toggle taps through to Settings → Voice;
+     the per-message read button only states the reason. Same underlying fix,
+     asymmetric affordance. Spec-conformant (the route was deliberately scoped to
+     the cockpit toggle in §8), so this is a conscious-asymmetry decision, not a
+     defect.
+   - Criterion: constructive error handling / "next step at the fingertips".
+   - Rationale for deferral: spec scoped it; the cockpit is the "home" of voice
+     mode. Reachable fix either way.
+   - Follow-up: Chris arbitrates — either add the same Settings link to the
+     read button's note, or consciously accept the asymmetry. Revisit at the
+     styling pass.
+
+2. **"reading…" carries the whole "still going" reassurance through static copy.**
+   - Surface: `apps/user-client/src/components/chat/VoiceTransport.tsx` (the
+     `waiting`-state note).
+   - Finding: during a long silent `waiting` gap the only signal is a static
+     lowercase "reading…". A subtle breathing/pulse cue (the project's
+     breathing-orb idiom for moments of presence) would carry the "silence =
+     still alive" load better for the ND audience.
+   - Criterion: ND-friendly / least astonishment.
+   - Rationale for deferral: explicitly a styling-pass concern (spec §10 routes
+     calm/typography there); mechanics are sound.
+   - Follow-up: address in the auto-read-aloud / voice styling pass.
+   - Chris sign-off: not sought (soft-tier). Listed for the styling pass.

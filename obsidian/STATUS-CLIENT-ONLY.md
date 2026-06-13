@@ -16,7 +16,52 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-13 — **READ-ALOUD HIGHLIGHT TRACKING FIXED**
+**Last updated:** 2026-06-13 — **AUTO-READ-ALOUD VOICE MODE LANDED**
+(squash `e39c70b` on master, **NOT pushed**, **NOT yet device-verified**). The
+first of two "zwischenfeatures" before Spec 3 (live voice), chosen over the
+spectrum analyzer because it is the architectural bridge — the interleaving of
+LLM inference and TTS. A global, persisted cockpit **voice-mode toggle**: while
+on, every newly generated persona reply **reads itself aloud as it streams**,
+paragraph by paragraph. **One `committedPrefix` view** (paragraphs closed by a
+blank line, fence-aware) drives BOTH the TTS segments AND a **progressive
+markdown render** — committed paragraphs settle into final markdown with the glow
+tracking, the open tail stays raw; segment ids and glow anchors align **by
+construction** (same coalesced view, mirroring `stream-engine.appendText`), which
+dissolves the streaming-vs-finalised block-index problem. The XState voice
+machine gained a streaming **`waiting`** state (the seam Spec 3's mic+barging
+attaches to); an **auto-read driver inside `useVoicePlayback`** feeds it
+PLAY/SEGMENTS_UPDATED/STREAM_DONE off the stream-manager draft (length/done
+dedup, supersede-on-new-draft, mode-off STOP). **Laura H1+H2 incorporated:**
+touch-reachable disabled reason on the cockpit toggle (tap reveals + routes to
+Settings → Voice, not hover-only `title`) AND the manual read button; `aria-disabled`
+for AT; a calm **"reading…"** note during the silent `waiting`; a **one-shot
+first-Stop hint**. Settings gain `autoReadAloud` + `voiceStopHintSeen` (**Dexie
+v24**). Built **subagent-driven** (10 TDD tasks, two-stage review each — the
+reviews caught a real off-by-one in `committedTextLength`, a machine test gap,
+per-token dispatch churn, and a Critical missing `currentMessageId` forward; the
+full-suite gate caught verno head-assertions in `tests/unit` the per-task suites
+missed). Final holistic (Opus) + Laura pre-squash: **PASS, ready to squash**.
+Not a Larissa path (client-only, no new egress). Gates: `pnpm typecheck --force`
+**14/14**; user-client vitest **1647 pass / 8 fail** (unchanged Node-26
+localStorage baseline); `pnpm run build --force` **9/9**; biome clean on all
+feature files (one pre-existing `index.css` quote nit on master is unrelated).
+Spec/plan: [[../superpowers/specs/2026-06-13-auto-read-aloud-design]],
+[[../superpowers/plans/2026-06-13-auto-read-aloud]]. **Device test (spec §11,
+nine steps + 3a; restart `pnpm dev`):** toggle lights / greyed-with-tap-reveal;
+reply speaks after the first paragraph closes while later ones stream, glow
+tracks; multi-paragraph follows + waits silently ("reading…") without a premature
+finish; opener auto-reads; new send stops current; Stop keeps mode on (+ one-shot
+hint once); mode-off silences; toggling on mid-convo does not read history; code
+block reads prose + skips fence without stutter. **Two Laura soft notes (for
+Chris to arbitrate):** manual read button discloses the reason but offers no
+route-to-Settings (asymmetric with the toggle, spec-conformant); "reading…" leans
+on static copy — a breathing/pulse cue is the natural home (styling pass).
+**Next:** Chris device-tests → pushes the master backlog → then the **second
+zwischenfeature: the spectrum analyzer** (port from chatsune's frontend, taller,
+semi-transparent background in the mindspace colour) → then **Spec 3 (live
+voice)**.
+
+**Earlier (2026-06-13) — READ-ALOUD HIGHLIGHT TRACKING FIXED**
 (single squash on master, **NOT pushed**; **DEVICE-CONFIRMED by Chris** — read a
 full long structured kitten/Mistral message aloud end-to-end, the glow tracks
 correctly throughout: "es läuft wirklich exzellent"). Chris reported the
