@@ -734,11 +734,11 @@ h1 {
 }
 .msg-text .teal-singing::before,
 .msg-stream-text .teal-singing::before {
-  content: '♪ ';
+  content: "♪ ";
 }
 .msg-text .teal-singing::after,
 .msg-stream-text .teal-singing::after {
-  content: ' ♪';
+  content: " ♪";
 }
 /* Image marker — the privacy-preserving tap-to-load pill that stands in for a
    model-emitted image until the user consents (see ImageMarker.tsx). Inline
@@ -3035,20 +3035,36 @@ h1 {
 }
 
 @keyframes picker-backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes picker-backdrop-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 @keyframes picker-sheet-in {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 @keyframes picker-sheet-out {
-  from { transform: translateY(0); }
-  to { transform: translateY(100%); }
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
 }
 
 .artefact-pill {
