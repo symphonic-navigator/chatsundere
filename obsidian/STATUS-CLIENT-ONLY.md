@@ -45,8 +45,15 @@ baseline** Node-localStorage failures (unchanged) / 1661 pass; `pnpm run build
 SOFT-1 (off-state sub-controls collapse) → kept + logged in
 [[insights/ux-deferrals]]; SOFT-2 (global `animationsEnabled` has no user-facing
 UI) → [[insights/follow-ups-index]]. **Next:** Chris pushes the master backlog →
-then **Spec 3 (live voice)** — the final voice unit (mic, barging, orchestration),
-where Chris's solved pause-UX lands.
+then **Spec 3 (live voice)** — the final voice unit (mic, barging, orchestration).
+**Chris's pause-UX concept for it (his explicit hand-off, 2026-06-14, design
+together first thing next session):** a **dedicated, specially-designed "control
+bar"** that appears as soon as read-aloud is running AND stays visible in voice
+mode — **"all-inclusive"**, i.e. it houses the full transport (pause / stop /
+skip / etc.) in one purpose-built surface. This **supersedes** both the deferred
+in-canvas tap-to-pause gesture (Pause-Geste brainstorm) and the cockpit-only
+stopgap the spectrum analyser shipped with. Treat it as the agreed home for all
+voice transport in Spec 3. He has the concept fully formed — start there.
 
 **Earlier (2026-06-13)** — **AUTO-READ-ALOUD VOICE MODE LANDED**
 (squash `e39c70b` on master, **NOT pushed**, **device-confirmed by Chris 2026-06-14**). The
