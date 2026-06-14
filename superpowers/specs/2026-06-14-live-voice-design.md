@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-14
 **Author:** Liz (with Chris)
-**Status:** Drafted — pending Chris spec review + Laura state-table confirmation
+**Status:** Approved (Chris spec review 2026-06-14; Laura state-table pass — all four hard defects confirmed closed)
 **Builds on:** [`2026-06-14-audio-toolbar-design`](2026-06-14-audio-toolbar-design.md)
 (the toolbar is the deliberate command-centre foundation; this spec realises its
 "expression (d) = live voice"), and the read-aloud / auto-read-aloud / dictation
