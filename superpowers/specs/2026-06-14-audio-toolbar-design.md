@@ -137,6 +137,13 @@ armed, voice-unavailable-while-armed, or a pending resume offer (which Raus
 declines) — the slot is **Raus**. The rule the user internalises: **Raus = leave
 the voice surface; Dismiss = acknowledge this note.** Both retract the toolbar.
 
+### 3.2a User-facing label is British English
+
+"Raus" is the working name from the design chat. The actual button copy must be
+British English (CLAUDE.md §3.7). The plan uses **"Leave"** as the working label;
+the final copy (e.g. "Leave" / "Exit" / "Done") is Chris's styling-pass call.
+"Dismiss" is already English and stays.
+
 ### 3.3 Sizing
 
 Three large columns on a 380 px viewport: Pause/Resume + Skip on the left, Raus
