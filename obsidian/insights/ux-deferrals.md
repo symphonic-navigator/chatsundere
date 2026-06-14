@@ -138,3 +138,28 @@ Both raised at Laura's pre-squash pass of the auto-read-aloud unit (squash
      calm/typography there); mechanics are sound.
    - Follow-up: address in the auto-read-aloud / voice styling pass.
    - Chris sign-off: not sought (soft-tier). Listed for the styling pass.
+
+## 2026-06-14 — Spectrum analyser: off-state sub-controls collapse (conscious "disabled over hidden" exception)
+
+Raised at Laura's pre-squash pass of the spectrum-analyser unit (squash
+`3279cba`). Soft-tier — Laura explicitly ruled it **not** a hard defect; logged
+here as a conscious, Chris-signed-off exception to the §11 "disabled over hidden"
+house rule, for the release-cut trail.
+
+- **Affected flow / surface:** Settings → Voice → Spectrum analyser
+  (`apps/user-client/src/components/voice/VoiceSection.tsx`).
+- **Finding (Laura's summary):** When the analyser is toggled off, the
+  style / opacity / bar-count sub-controls are not rendered (collapse) rather than
+  shown greyed-disabled with a reason — a literal divergence from "disabled over
+  hidden".
+- **Mode:** pre-squash.
+- **Criterion:** §11 "Disabled over hidden".
+- **Rationale for deferral:** Not a hard defect — the master enable toggle that
+  gates them stays visible directly above, no capability is lost or hidden, and
+  there is no astonishment about why they vanished (the user just toggled the
+  thing they belong to). Collapsing reads calmer for the ND audience than three
+  dead grey rows; distinct from hiding a standalone capability.
+- **Follow-up commitment:** Revisit at the design-language pass — keep the
+  collapse unless the greyed-disabled treatment reads better in context then.
+- **Chris sign-off:** Given 2026-06-14 — keep the collapse, log as a conscious
+  exception (his explicit call when I surfaced Laura's SOFT-1).

@@ -16,8 +16,40 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-13 — **AUTO-READ-ALOUD VOICE MODE LANDED**
-(squash `e39c70b` on master, **NOT pushed**, **NOT yet device-verified**). The
+**Last updated:** 2026-06-14 — **SPECTRUM ANALYSER LANDED** (squash `3279cba` on
+master, **NOT pushed**, **device-confirmed by Chris** — "ganz toll, ich finds
+super"). The **second** of the two "zwischenfeatures" before Spec 3 (live voice).
+An ambient canvas equaliser over the chat that pulses to the persona's TTS during
+read-aloud, tinted in the active **mindspace accent**, ported from chatsune and
+adapted to chatsundere's seams: an **AnalyserNode** inserted into `AudioSink`
+(`source → analyser → destination`, fftSize 256); play/idle driven by the voice
+machine's **`transportState`** (`speaking` → live bins, `waiting` → idle shimmer,
+`paused` → frozen breath, else → park); colour reactively from the mindspace
+store; geometry centred on `.chat-stream` (no sidebar → `chatview` = viewport). A
+**spectral-tilt** compensation (`visualiser-tilt.ts`, `BASS_GAIN 0.45` /
+`TREBLE_GAIN 1.3`, device-tuned with Chris) flattens speech's bass-heavy spectrum
+so the low bars stop saturating. **Decorative only** (`pointer-events: none`,
+`z-1`, occluded for free by `z-50` overlays); transport stays in the cockpit —
+**Chris has a solved pause-UX idea for live voice** ("wird genial", to design
+together next context). Settings (enable / style sharp·soft·glow default soft /
+opacity / barCount) persist via **Dexie v25**; rests under
+`prefers-reduced-motion` AND the global `animationsEnabled` switch. Built
+**subagent-driven** (10 TDD tasks, two-stage review each + final holistic + Laura
+pre-squash — all APPROVED; the full-suite gate caught one stale verno=24 test
+assertion the migration task missed). Not a Larissa path (client-only, no
+egress). Gates: `pnpm typecheck --force` **14/14**; user-client vitest **8
+baseline** Node-localStorage failures (unchanged) / 1661 pass; `pnpm run build
+--force` **9/9**; biome clean. Spec/plan:
+[[../superpowers/specs/2026-06-14-spectrum-analyser-design]],
+[[../superpowers/plans/2026-06-14-spectrum-analyser]]. **Laura:** no hard defects;
+SOFT-1 (off-state sub-controls collapse) → kept + logged in
+[[insights/ux-deferrals]]; SOFT-2 (global `animationsEnabled` has no user-facing
+UI) → [[insights/follow-ups-index]]. **Next:** Chris pushes the master backlog →
+then **Spec 3 (live voice)** — the final voice unit (mic, barging, orchestration),
+where Chris's solved pause-UX lands.
+
+**Earlier (2026-06-13)** — **AUTO-READ-ALOUD VOICE MODE LANDED**
+(squash `e39c70b` on master, **NOT pushed**, **device-confirmed by Chris 2026-06-14**). The
 first of two "zwischenfeatures" before Spec 3 (live voice), chosen over the
 spectrum analyzer because it is the architectural bridge — the interleaving of
 LLM inference and TTS. A global, persisted cockpit **voice-mode toggle**: while
