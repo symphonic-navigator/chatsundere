@@ -52,6 +52,8 @@ export interface VoicePlayback {
   resumeOffer: { messageId: string; segmentIndex: number; paragraphIndex: number } | null;
   /** UI hint for the Read control's disabled state. */
   disabledReason: DisabledReason;
+  /** The TTS playback analyser node for the spectrum visualiser, or null before first play. */
+  getAnalyser: () => AnalyserNode | null;
 }
 
 /**
@@ -410,5 +412,6 @@ export function useVoicePlayback(
     },
     resumeOffer,
     disabledReason,
+    getAnalyser: () => sinkRef.current?.getAnalyser() ?? null,
   };
 }

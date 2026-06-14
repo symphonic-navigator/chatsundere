@@ -56,6 +56,14 @@ export interface SettingsRow {
   /** One-shot: the "voice mode is still on" hint shown the first time the user
    *  stops playback while the mode is on. */
   voiceStopHintSeen: boolean;
+  /** Spectrum analyser: master on/off (behaviour-axis setting — global, persisted). */
+  spectrumEnabled: boolean;
+  /** Spectrum analyser: bar render style. */
+  spectrumStyle: 'sharp' | 'soft' | 'glow';
+  /** Spectrum analyser: bar opacity, clamped [0.05, 0.80]. */
+  spectrumOpacity: number;
+  /** Spectrum analyser: number of bars, clamped [16, 96]. */
+  spectrumBarCount: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -801,6 +809,26 @@ class ClientDataDb extends Dexie {
           if (typeof s.voiceStopHintSeen !== 'boolean') s.voiceStopHintSeen = false;
         });
     });
+
+    // Version 25 — spectrum analyser. Settings gain enable/style/opacity/barCount;
+    // existing installs get the spec defaults (analyser on, soft, 0.5, 24 bars).
+    this.version(25).upgrade(async (tx) => {
+      await tx
+        .table('settings')
+        .toCollection()
+        .modify((s: Record<string, unknown>) => {
+          if (typeof s.spectrumEnabled !== 'boolean') s.spectrumEnabled = true;
+          if (
+            s.spectrumStyle !== 'sharp' &&
+            s.spectrumStyle !== 'soft' &&
+            s.spectrumStyle !== 'glow'
+          ) {
+            s.spectrumStyle = 'soft';
+          }
+          if (typeof s.spectrumOpacity !== 'number') s.spectrumOpacity = 0.5;
+          if (typeof s.spectrumBarCount !== 'number') s.spectrumBarCount = 24;
+        });
+    });
   }
 }
 
@@ -922,6 +950,10 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         sttOffering: null,
         autoReadAloud: false,
         voiceStopHintSeen: false,
+        spectrumEnabled: true,
+        spectrumStyle: 'soft',
+        spectrumOpacity: 0.5,
+        spectrumBarCount: 24,
         createdAt: now,
         updatedAt: now,
       });

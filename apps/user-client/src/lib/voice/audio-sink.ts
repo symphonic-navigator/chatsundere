@@ -8,10 +8,26 @@
 export class AudioSink {
   private ctx: AudioContext | null = null;
   private source: AudioBufferSourceNode | null = null;
+  private analyser: AnalyserNode | null = null;
 
   private ensureCtx(): AudioContext {
-    if (!this.ctx) this.ctx = new AudioContext();
+    if (!this.ctx) {
+      this.ctx = new AudioContext();
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 256; // matches the ported bucketing constants
+      this.analyser.connect(this.ctx.destination);
+    }
     return this.ctx;
+  }
+
+  /** The playback analyser, or null before the first play() creates the context. */
+  getAnalyser(): AnalyserNode | null {
+    return this.analyser;
+  }
+
+  /** Test-only seam: force context+analyser creation without decoding audio. */
+  ensureAnalyserForTest(): void {
+    this.ensureCtx();
   }
 
   /**
@@ -29,7 +45,7 @@ export class AudioSink {
     return new Promise<void>((resolve) => {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(ctx.destination);
+      source.connect(this.analyser ?? ctx.destination);
 
       const abortHandler = () => {
         source.onended = null;
@@ -91,6 +107,7 @@ export class AudioSink {
     if (this.ctx) {
       await this.ctx.close();
       this.ctx = null;
+      this.analyser = null;
     }
   }
 }

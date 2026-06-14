@@ -12,6 +12,6 @@ describe('Dexie v19 imageGeneration', () => {
     const db = await openClientDataDb();
     const s = await db.settings.get(1);
     expect(s?.imageGeneration).toEqual({ primary: null, nsfw: null });
-    expect(db.verno).toBe(24);
+    expect(db.verno).toBe(25);
   });
 });

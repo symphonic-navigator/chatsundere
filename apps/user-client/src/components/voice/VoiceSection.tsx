@@ -14,6 +14,16 @@ import {
   selectSttOffering,
   selectTtsOffering,
 } from '../../lib/voice/select-offering.js';
+import {
+  SPECTRUM_BARCOUNT_MAX,
+  SPECTRUM_BARCOUNT_MIN,
+  SPECTRUM_DEFAULTS,
+  SPECTRUM_OPACITY_MAX,
+  SPECTRUM_OPACITY_MIN,
+  type SpectrumStyle,
+  clampSpectrumBarCount,
+  clampSpectrumOpacity,
+} from '../../lib/voice/spectrum-settings.js';
 import { OfferingSlotPicker, type SlotEntry } from './OfferingSlotPicker.js';
 import { TtsModerationNotice } from './TtsModerationNotice.js';
 
@@ -102,6 +112,11 @@ export function VoiceSection(): JSX.Element {
   const dictationSensitivity: DictationSensitivity = settings?.dictationSensitivity ?? 'medium';
   const dictationRedemptionMs: number = settings?.dictationRedemptionMs ?? 1_728;
   const dictationAutoSend: boolean = settings?.dictationAutoSend ?? false;
+
+  const spectrumEnabled = settings?.spectrumEnabled ?? SPECTRUM_DEFAULTS.spectrumEnabled;
+  const spectrumStyle: SpectrumStyle = settings?.spectrumStyle ?? SPECTRUM_DEFAULTS.spectrumStyle;
+  const spectrumOpacity = settings?.spectrumOpacity ?? SPECTRUM_DEFAULTS.spectrumOpacity;
+  const spectrumBarCount = settings?.spectrumBarCount ?? SPECTRUM_DEFAULTS.spectrumBarCount;
 
   const rows = providerRows ?? [];
 
@@ -246,6 +261,97 @@ export function VoiceSection(): JSX.Element {
           unconfiguredCopy="Add the Mistral AI, xAI or nano-gpt provider to dictate."
           onSelect={(refId) => update.mutate({ sttOffering: refId })}
         />
+      </div>
+
+      {/* ── Spectrum analyser ───────────────────────────────────────────────── */}
+      <div>
+        <div className="mb-2 text-[11px] uppercase tracking-widest text-paper-soft">
+          Spectrum analyser
+        </div>
+
+        {/* Enable */}
+        <div className="mb-3">
+          <button
+            type="button"
+            aria-pressed={spectrumEnabled}
+            onClick={() => update.mutate({ spectrumEnabled: !spectrumEnabled })}
+            className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+              spectrumEnabled
+                ? 'border-paper bg-white/5 text-paper'
+                : 'border-white/5 text-paper-soft hover:border-paper-soft/50'
+            }`}
+          >
+            Show the spectrum analyser
+          </button>
+          <p className="mt-1.5 text-[11px] text-paper-soft">
+            An ambient equaliser that pulses to your Circle's voice while it reads aloud.
+          </p>
+        </div>
+
+        {spectrumEnabled && (
+          <>
+            {/* Style (sharp / soft / glow) */}
+            <div className="mb-3 flex flex-col gap-2">
+              <ModeOption
+                id="sharp"
+                label="Sharp"
+                description="Crisp solid bars"
+                selected={spectrumStyle === 'sharp'}
+                onSelect={() => update.mutate({ spectrumStyle: 'sharp' })}
+              />
+              <ModeOption
+                id="soft"
+                label="Soft"
+                description="Gradient bars (recommended)"
+                selected={spectrumStyle === 'soft'}
+                onSelect={() => update.mutate({ spectrumStyle: 'soft' })}
+              />
+              <ModeOption
+                id="glow"
+                label="Glow"
+                description="Luminous bars with a halo"
+                selected={spectrumStyle === 'glow'}
+                onSelect={() => update.mutate({ spectrumStyle: 'glow' })}
+              />
+            </div>
+
+            {/* Opacity */}
+            <div className="mb-3">
+              <input
+                type="range"
+                min={SPECTRUM_OPACITY_MIN}
+                max={SPECTRUM_OPACITY_MAX}
+                step={0.05}
+                value={spectrumOpacity}
+                aria-label="Spectrum opacity"
+                onChange={(e) =>
+                  update.mutate({ spectrumOpacity: clampSpectrumOpacity(Number(e.target.value)) })
+                }
+                className="w-full"
+              />
+              <span className="text-[11px] text-paper-soft">
+                Opacity {Math.round(spectrumOpacity * 100)}%
+              </span>
+            </div>
+
+            {/* Bar count */}
+            <div className="mb-3">
+              <input
+                type="range"
+                min={SPECTRUM_BARCOUNT_MIN}
+                max={SPECTRUM_BARCOUNT_MAX}
+                step={1}
+                value={spectrumBarCount}
+                aria-label="Spectrum bar count"
+                onChange={(e) =>
+                  update.mutate({ spectrumBarCount: clampSpectrumBarCount(Number(e.target.value)) })
+                }
+                className="w-full"
+              />
+              <span className="text-[11px] text-paper-soft">{spectrumBarCount} bars</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

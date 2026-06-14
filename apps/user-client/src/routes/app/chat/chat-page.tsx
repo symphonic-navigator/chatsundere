@@ -20,6 +20,7 @@ import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js'
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
 import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
 import { McpApprovalPrompt } from '../../../components/mcp/McpApprovalPrompt.js';
+import { SpectrumAnalyser } from '../../../components/voice/SpectrumAnalyser.js';
 import {
   useChatArtefacts,
   useDeleteArtefact,
@@ -508,6 +509,7 @@ export function ChatPage(): JSX.Element {
 
   return (
     <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
+      <SpectrumAnalyser transportState={voice.transportState} getAnalyser={voice.getAnalyser} />
       {!hasMessages && !isStreamLive && effectivePersona ? (
         <PersonaGreeting
           name={effectivePersona.name}
