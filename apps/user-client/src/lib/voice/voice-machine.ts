@@ -339,6 +339,26 @@ export const voiceMachine = setup({
                   onError: {},
                 },
               ],
+              on: {
+                // SKIP mid-read treats the current segment as finished NOW:
+                // advance if there is a next, end cleanly if the stream is
+                // complete, otherwise park in `waiting` for more. Mirrors this
+                // state's own onDone advance logic, so a deliberate skip and a
+                // natural finish converge. The reenter cancels the in-flight
+                // playSegment (its AbortSignal fires, stopping the audio).
+                // Covers `paused` too: the gate is a parallel region, so the
+                // playback region is still `speaking` while frozen.
+                SKIP: [
+                  {
+                    guard: 'hasNext',
+                    target: 'speaking',
+                    reenter: true,
+                    actions: assign({ currentIndex: ({ context }) => context.currentIndex + 1 }),
+                  },
+                  { guard: 'streamComplete', target: '#voice.idle' },
+                  { target: 'waiting' },
+                ],
+              },
             },
             failed: {
               on: {

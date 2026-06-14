@@ -883,58 +883,121 @@ h1 {
   }
 }
 
-/* ===== Voice transport =====
- * Functional positioning only — Chris owns the styling pass. Absolutely
- * positioned within .chat-page (which establishes a containing block via its
- * own position: fixed), so the transport floats bottom-centre independent of
- * scroll, message expansion, and Reading↔Interaction mode. In interaction mode
- * the cockpit occupies the page floor, so the transport is lifted clear of it
- * by a sane fixed offset (the cockpit height is variable; this is a device
- * tuning knob, not a measured value). */
+/* ===== Audio toolbar (voice transport) =====
+ * A real flex-child of .chat-page (like .cockpit / .affordance), NOT floating:
+ * flex-shrink: 0 + order keeps it pinned above the cockpit (order 1000) in
+ * interaction mode and above the affordance band (order 999) in reading mode,
+ * and .chat-stream gives up height for it instead of being overlapped. The
+ * slide-in is the felt mode switch (spec §1.1). Functional layout only — Chris
+ * owns the styling pass (final button copy, exact sizing, colours). */
 .voice-transport {
-  position: absolute;
-  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
+  flex-shrink: 0;
+  order: 998;
   z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(10, 10, 10, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  animation: voice-transport-in 200ms ease;
+}
+@keyframes voice-transport-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+/* The note line is rendered only when it has content (see VoiceTransport), so
+ * the toolbar stays compact in the common states; this just styles it when present. */
+.voice-transport-note {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
-  background: rgba(10, 10, 10, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  backdrop-filter: blur(12px);
+  min-height: 1.1rem;
+  font-size: 0.8rem;
+  color: var(--color-paper-muted, #8a8a8a);
 }
-.chat-page[data-mode="interaction"] .voice-transport {
-  /* Lift above the cockpit (order: 1000 flex-child on the page floor). */
-  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-}
-.chat-page[data-mode="reading"] .voice-transport {
-  /* In reading mode the BottomAffordance band sits on the page floor (normal-flow
-   * flex child: ~0.75rem top + 2rem bottom padding + safe-area). The transport's
-   * default 1rem offset overlaps it at 380px, so lift it clear of the band. The
-   * exact offset is a device-tuning knob for Chris's styling pass. */
-  bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
-}
-.voice-transport-btn {
+.voice-transport-startover {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  padding: 0.25rem 0.7rem;
-  color: var(--color-paper-soft, #e6e6e6);
+  border: 0;
+  padding: 0;
+  color: var(--color-paper-muted, #8a8a8a);
+  text-decoration: underline;
   font-size: 0.8rem;
   cursor: pointer;
 }
-.voice-transport-btn:hover {
+/* Playback icons cluster on the left, the exit pins to the right, and
+ * space-between leaves the breathing room in the middle (Chris's "leave space
+ * free", arrangement A). */
+.voice-transport-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.voice-transport-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+/* Large, thumb-friendly controls (>=56px) — the clumsy-mode / hold-to-talk
+ * target size, deliberately bigger than the cockpit transport buttons. Icon
+ * buttons sit at the 56px square floor; the text resume-offer grows past it. */
+.voice-transport-btn,
+.voice-transport-exit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 56px;
+  min-height: 56px;
+  flex: 0 0 auto;
+  padding: 0 0.7rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  color: var(--color-paper-soft, #e6e6e6);
+  cursor: pointer;
+}
+/* Small caption under each glyph — the icon carries the action, the label
+ * removes any doubt. */
+.voice-transport-label {
+  font-size: 0.6rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--color-paper-muted, #8a8a8a);
+}
+.voice-transport-btn:hover,
+.voice-transport-exit:hover {
   border-color: rgba(201, 168, 76, 0.5);
 }
-.voice-transport-btn-secondary {
-  opacity: 0.75;
+.voice-transport-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
-.voice-transport-note {
-  font-size: 0.8rem;
+.voice-transport-ready {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 56px;
+  padding: 0 0.5rem;
+  font-size: 0.95rem;
   color: var(--color-paper-muted, #8a8a8a);
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-transport {
+    animation: none;
+  }
 }
 
 /*
@@ -1550,6 +1613,12 @@ h1 {
  * it for layout. (The DimOverlay is a direct chat-page child, not nested
  * here, so its un-dim fade survives this wrapper unmounting on close.) */
 .interaction-mode {
+  display: contents;
+}
+/* The focus-capture wrapper around the cockpit must not form a box either, or
+ * the cockpit's order:1000 is scoped to it instead of hoisting to the .chat-page
+ * flex column (which would place the audio toolbar below the cockpit). */
+.cockpit-focus-capture {
   display: contents;
 }
 

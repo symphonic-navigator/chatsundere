@@ -162,8 +162,14 @@ export function InteractionMode(p: Props): JSX.Element {
         onOpenPersonaEditor={p.onOpenPersonaEditor}
       />
       {/* Capture focus/blur on the textarea to drive DimOverlay activation
-          (the overlay itself renders at chat-page level). */}
+          (the overlay itself renders at chat-page level). display: contents so
+          this wrapper does not form a box — without it the cockpit's order:1000
+          would be scoped to this div instead of hoisting to the .chat-page flex
+          column, which would drop the audio toolbar (order 998) below the
+          cockpit. Focus/blur capture is unaffected (React events ignore CSS
+          display). */}
       <div
+        className="cockpit-focus-capture"
         onFocusCapture={(e) => {
           if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
             setInputFocused(true);

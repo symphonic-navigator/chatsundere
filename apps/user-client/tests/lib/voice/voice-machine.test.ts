@@ -278,6 +278,73 @@ describe('voiceMachine — failure & recovery', () => {
   });
 });
 
+describe('voiceMachine — skip while speaking', () => {
+  it('SKIP mid-speaking a non-final segment cancels it and plays the next', async () => {
+    // play never resolves, so the machine stays in `speaking` on segment 0
+    // until the user skips — mirroring an in-progress read.
+    const gate = deferred();
+    const play = vi.fn(
+      async (_blob: Blob, _segment: SpeechSegment, _signal: AbortSignal) => gate.promise,
+    );
+    const deps = makeDeps({ play });
+    const actor = start(deps);
+
+    actor.send({
+      type: 'PLAY',
+      messageId: 'm1',
+      segments: [seg('0:0', 'one'), seg('0:1', 'two')],
+      startIndex: 0,
+    });
+    await waitFor(actor, (s) => selectTransportState(s) === 'speaking');
+    expect(actor.getSnapshot().context.currentIndex).toBe(0);
+
+    actor.send({ type: 'SKIP' });
+    await waitFor(actor, (s) => s.context.currentIndex === 1);
+    expect(selectTransportState(actor.getSnapshot())).toBe('speaking');
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(play.mock.calls[1]?.[1]?.segmentId).toBe('0:1');
+  });
+
+  it('SKIP mid-speaking the FINAL segment ends cleanly (idle, not ended-partial)', async () => {
+    const gate = deferred();
+    const play = vi.fn(async () => gate.promise);
+    const deps = makeDeps({ play });
+    const actor = start(deps);
+
+    // Default PLAY is a one-shot read (streamComplete true), so skipping the
+    // last segment is a deliberate "done", not a partial finish.
+    actor.send({ type: 'PLAY', messageId: 'm1', segments: [seg('0:0', 'one')], startIndex: 0 });
+    await waitFor(actor, (s) => selectTransportState(s) === 'speaking');
+
+    actor.send({ type: 'SKIP' });
+    await waitFor(actor, (s) => s.matches('idle'));
+    expect(actor.getSnapshot().context.endedPartial).toBe(false);
+    expect(selectTransportState(actor.getSnapshot())).toBe('idle');
+  });
+
+  it('SKIP mid-speaking the last KNOWN segment while still streaming parks in waiting', async () => {
+    const gate = deferred();
+    const play = vi.fn(async () => gate.promise);
+    const deps = makeDeps({ play });
+    const actor = start(deps);
+
+    // streamComplete false: more segments may still arrive, so skipping the
+    // last known one must wait for them, not end the read.
+    actor.send({
+      type: 'PLAY',
+      messageId: 'm1',
+      segments: [seg('0:0', 'one')],
+      startIndex: 0,
+      streamComplete: false,
+    });
+    await waitFor(actor, (s) => selectTransportState(s) === 'speaking');
+
+    actor.send({ type: 'SKIP' });
+    await waitFor(actor, (s) => selectTransportState(s) === 'waiting');
+    expect(actor.getSnapshot().context.endedPartial).toBe(false);
+  });
+});
+
 describe('voiceMachine — stop / leave while paused', () => {
   it('STOP while paused never resumes the context (no blip)', async () => {
     const gate = deferred();

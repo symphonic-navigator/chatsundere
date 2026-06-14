@@ -458,15 +458,13 @@ export function ChatPage(): JSX.Element {
     [updateSettings],
   );
   const voiceUnavailable = voice.disabledReason;
-  // One-shot hint shown the first time the user taps Stop while auto-read is on.
-  const [stopHint, setStopHint] = useState(false);
-  const onVoiceStop = useCallback(() => {
+  // "Leave" is the one holistic voice-surface exit: stop this playback and, if
+  // auto-read is armed, turn it off too. This is what makes the toolbar the
+  // single context-correct escape — and what retires the old Stop-vs-toggle hint.
+  const onExitVoice = useCallback(() => {
     voice.stop();
-    if ((settings.data?.autoReadAloud ?? false) && !(settings.data?.voiceStopHintSeen ?? true)) {
-      setStopHint(true);
-      void updateSettings.mutateAsync({ voiceStopHintSeen: true });
-    }
-  }, [voice, settings.data?.autoReadAloud, settings.data?.voiceStopHintSeen, updateSettings]);
+    if (autoReadAloud) void onToggleAutoRead(false);
+  }, [voice, autoReadAloud, onToggleAutoRead]);
 
   // Dictation. Transcripts always append at the END of the current draft
   // (spec §3.3); the functional setter means a late-arriving transcript never
@@ -636,26 +634,27 @@ export function ChatPage(): JSX.Element {
       ) : null}
 
       {/*
-        The persistent voice transport. Absolutely positioned within .chat-page
-        (which establishes a containing block via position: fixed), so it floats
-        bottom-centre regardless of scroll, message expansion, or mode. Renders
-        nothing while idle without a resume offer — honouring the "less
-        distraction" intent that retired the old ReadingToolStrip.
+        The audio toolbar. A space-reserving flex-child of .chat-page (order
+        998), so .chat-stream gives up height for it instead of being
+        overlapped, and it stacks above the cockpit in interaction mode. Visible
+        whenever a voice session is active (playing, auto-read armed, or a resume
+        offer); renders nothing otherwise. The space and cockpit-independence are
+        the foundation for the cockpitless live-voice mode (Spec 3).
       */}
       <VoiceTransport
         state={voice.transportState}
         resumeOffer={resumeParagraphLabel ? { paragraphLabel: resumeParagraphLabel } : null}
+        providerSkips={voice.providerSkips}
+        autoReadOn={autoReadAloud}
+        voiceUnavailable={voiceUnavailable}
         onPause={voice.pause}
         onResume={voice.resumeAudio}
-        onStop={onVoiceStop}
-        onRetry={voice.retry}
         onSkip={voice.skip}
+        onRetry={voice.retry}
         onResumePlayback={voice.resume}
         onStartOver={voice.startOver}
         onDismiss={voice.dismissPartial}
-        providerSkips={voice.providerSkips}
-        stopHint={stopHint}
-        onDismissStopHint={() => setStopHint(false)}
+        onExitVoice={onExitVoice}
       />
 
       {tocOpen ? (

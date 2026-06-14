@@ -4,120 +4,142 @@ import { describe, expect, it, vi } from 'vitest';
 import { VoiceTransport } from '../../../src/components/chat/VoiceTransport.js';
 
 // Callbacks plus the non-callback defaults every render needs; explicit props
-// after the spread override (e.g. `providerSkips={2}` for the skip-note tests).
-function callbacks() {
+// after the spread override (e.g. `autoReadOn` for the armed tests).
+function props() {
   return {
+    resumeOffer: null,
+    providerSkips: 0,
+    autoReadOn: false,
+    voiceUnavailable: null,
     onPause: vi.fn(),
     onResume: vi.fn(),
-    onStop: vi.fn(),
-    onRetry: vi.fn(),
     onSkip: vi.fn(),
+    onRetry: vi.fn(),
     onResumePlayback: vi.fn(),
     onStartOver: vi.fn(),
     onDismiss: vi.fn(),
-    providerSkips: 0,
+    onExitVoice: vi.fn(),
   };
 }
 
-describe('VoiceTransport', () => {
-  it('renders null when idle without a resume offer', () => {
-    const { container } = render(
-      <VoiceTransport state="idle" resumeOffer={null} {...callbacks()} />,
-    );
+describe('VoiceTransport visibility', () => {
+  it('renders null when idle, not armed, no offer, no skips', () => {
+    const { container } = render(<VoiceTransport state="idle" {...props()} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('speaking shows pause + stop and wires them', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="speaking" resumeOffer={null} {...cb} />);
+  it('renders the ready indicator when auto-read is armed (idle but voice mode on)', () => {
+    render(<VoiceTransport state="idle" {...props()} autoReadOn />);
+    // No explanatory text any more — the open toolbar plus the ready indicator
+    // is signal enough; the toolbar stays compact.
+    expect(screen.getByText(/ready/i)).toBeInTheDocument();
+  });
+});
+
+describe('VoiceTransport playing states', () => {
+  it('speaking shows Pause + Skip and a constant Exit; wires them', () => {
+    const p = props();
+    render(<VoiceTransport state="speaking" {...p} />);
     fireEvent.click(screen.getByRole('button', { name: /Pause reading/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Stop reading/ }));
-    expect(cb.onPause).toHaveBeenCalledTimes(1);
-    expect(cb.onStop).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', { name: /Resume reading/ })).toBeNull();
-  });
-
-  it('paused shows resume + stop', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="paused" resumeOffer={null} {...cb} />);
-    fireEvent.click(screen.getByRole('button', { name: /Resume reading/ }));
-    expect(cb.onResume).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: /Stop reading/ })).toBeInTheDocument();
-  });
-
-  it('failed shows the note plus Retry / Skip / Stop', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="failed" resumeOffer={null} {...cb} />);
-    expect(screen.getByText(/Couldn't read this part aloud/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Retry reading this part/ }));
     fireEvent.click(screen.getByRole('button', { name: /Skip this part/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Stop reading/ }));
-    expect(cb.onRetry).toHaveBeenCalledTimes(1);
-    expect(cb.onSkip).toHaveBeenCalledTimes(1);
-    expect(cb.onStop).toHaveBeenCalledTimes(1);
-  });
-
-  it('ended-partial shows the closing note plus Retry / Dismiss', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="ended-partial" resumeOffer={null} {...cb} />);
-    expect(screen.getByText(/Couldn't finish reading aloud — Retry\?/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Retry reading/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }));
-    expect(cb.onRetry).toHaveBeenCalledTimes(1);
-    expect(cb.onDismiss).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders the honest skip note while still speaking (no Dismiss yet)', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="speaking" resumeOffer={null} {...cb} providerSkips={1} />);
-    expect(screen.getByText(/Skipped a passage the voice provider declined/)).toBeInTheDocument();
-    // Mid-read the note has no Dismiss — only the speaking controls plus the note.
+    fireEvent.click(screen.getByRole('button', { name: /Exit voice/ }));
+    expect(p.onPause).toHaveBeenCalledTimes(1);
+    expect(p.onSkip).toHaveBeenCalledTimes(1);
+    expect(p.onExitVoice).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /Dismiss/ })).toBeNull();
   });
 
-  it('idle with skipped passages shows the plural note plus Dismiss', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="idle" resumeOffer={null} {...cb} providerSkips={2} />);
+  it('waiting shows Pause + Skip live plus the reading… note', () => {
+    const p = props();
+    render(<VoiceTransport state="waiting" {...p} />);
+    expect(screen.getByText(/reading…/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pause reading/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Skip this part/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Exit voice/ })).toBeInTheDocument();
+  });
+
+  it('paused shows Resume + Skip + Exit', () => {
+    const p = props();
+    render(<VoiceTransport state="paused" {...p} />);
+    fireEvent.click(screen.getByRole('button', { name: /Resume reading/ }));
+    expect(p.onResume).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /Skip this part/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Exit voice/ })).toBeInTheDocument();
+  });
+});
+
+describe('VoiceTransport armed states', () => {
+  it('armed shows a ready indicator, a DISABLED Skip, and Exit (no greyed Pause)', () => {
+    const p = props();
+    render(<VoiceTransport state="idle" {...p} autoReadOn />);
+    expect(screen.getByText(/ready/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skip this part/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Pause reading/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Exit voice/ }));
+    expect(p.onExitVoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('armed-but-unavailable shows a greyed Pause + the reason, never silently hides', () => {
+    const p = props();
+    render(<VoiceTransport state="idle" {...p} autoReadOn voiceUnavailable="no-voice" />);
+    expect(screen.getByText(/Voice unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pause reading/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Exit voice/ })).toBeInTheDocument();
+  });
+});
+
+describe('VoiceTransport recovery + notices', () => {
+  it('failed shows note + Retry + Skip + Exit', () => {
+    const p = props();
+    render(<VoiceTransport state="failed" {...p} />);
+    expect(screen.getByText(/Couldn't read this part aloud/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Retry reading/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Skip this part/ }));
+    expect(p.onRetry).toHaveBeenCalledTimes(1);
+    expect(p.onSkip).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /Exit voice/ })).toBeInTheDocument();
+  });
+
+  it('ended-partial shows note + Retry, and Dismiss (not Exit)', () => {
+    const p = props();
+    render(<VoiceTransport state="ended-partial" {...p} />);
+    expect(screen.getByText(/Couldn't finish reading aloud/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Retry reading/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }));
+    expect(p.onRetry).toHaveBeenCalledTimes(1);
+    expect(p.onDismiss).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Exit voice/ })).toBeNull();
+    // Skip is intentionally absent here — the read already ended, there is no
+    // current segment to skip; lock that in so a future showSkip edit is caught.
+    expect(screen.queryByRole('button', { name: /Skip this part/ })).toBeNull();
+  });
+
+  it('skip note shows mid-speaking with NO Dismiss (Exit stays)', () => {
+    const p = props();
+    render(<VoiceTransport state="speaking" {...p} providerSkips={1} />);
+    expect(screen.getByText(/Skipped a passage the voice provider declined/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Dismiss/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Exit voice/ })).toBeInTheDocument();
+  });
+
+  it('idle with skipped passages shows the plural note + Dismiss (not Exit)', () => {
+    const p = props();
+    render(<VoiceTransport state="idle" {...p} providerSkips={2} />);
     expect(screen.getByText(/Skipped 2 passages the voice provider declined/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }));
-    expect(cb.onDismiss).toHaveBeenCalledTimes(1);
+    expect(p.onDismiss).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Exit voice/ })).toBeNull();
   });
 
-  it('idle + resume offer shows "Resume · ¶k" and "Start over"', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="idle" resumeOffer={{ paragraphLabel: '¶3' }} {...cb} />);
+  it('idle + resume offer shows the ¶ resume button, Start over, and Exit declines', () => {
+    const p = props();
+    render(<VoiceTransport state="idle" {...p} resumeOffer={{ paragraphLabel: '¶3' }} />);
     fireEvent.click(screen.getByRole('button', { name: /Resume reading from ¶3/ }));
     fireEvent.click(screen.getByRole('button', { name: /Start over/ }));
-    expect(cb.onResumePlayback).toHaveBeenCalledTimes(1);
-    expect(cb.onStartOver).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Resume · ¶3')).toBeInTheDocument();
-  });
-});
-
-describe('VoiceTransport waiting', () => {
-  it('shows a calm reading… note while waiting (no Pause/Stop)', () => {
-    const cb = callbacks();
-    render(<VoiceTransport state="waiting" resumeOffer={null} {...cb} />);
-    expect(screen.getByText(/reading…/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Pause reading/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Stop reading/ })).toBeNull();
-  });
-});
-
-describe('VoiceTransport stop hint', () => {
-  it('shows the one-shot stop hint and dismisses it', () => {
-    const onDismiss = vi.fn();
-    const { getByText } = render(
-      <VoiceTransport
-        state="idle"
-        resumeOffer={null}
-        {...callbacks()}
-        stopHint
-        onDismissStopHint={onDismiss}
-      />,
-    );
-    expect(getByText(/voice mode is still on/i)).toBeTruthy();
-    fireEvent.click(getByText(/got it/i));
-    expect(onDismiss).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Exit voice/ }));
+    expect(p.onResumePlayback).toHaveBeenCalledTimes(1);
+    expect(p.onStartOver).toHaveBeenCalledTimes(1);
+    expect(p.onExitVoice).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('¶3')).toBeInTheDocument();
   });
 });
