@@ -163,3 +163,30 @@ house rule, for the release-cut trail.
   collapse unless the greyed-disabled treatment reads better in context then.
 - **Chris sign-off:** Given 2026-06-14 — keep the collapse, log as a conscious
   exception (his explicit call when I surfaced Laura's SOFT-1).
+
+## 2026-06-14 — Audio toolbar: empty note line collapses (reduced-motion legibility narrowed)
+
+Raised at Laura's final pre-squash sweep of the audio toolbar (squashed into the
+toolbar feature commit). Soft-tier — Laura ruled it **not** a hard defect; logged
+as a conscious narrowing of a spec promise, for the release-cut trail.
+
+- **Affected flow / surface:** the audio toolbar
+  (`apps/user-client/src/components/chat/VoiceTransport.tsx`).
+- **Finding (Laura's summary):** Spec §4.1 argued that under
+  `prefers-reduced-motion` the toolbar loses its only motion cue, so the note
+  line "must be populated immediately" to make the newly reserved space legible.
+  The note line now collapses when empty (Chris's call, to keep the toolbar
+  compact in the common states), so the armed / plain-speaking states appear
+  under reduced-motion as a silent instant block of chrome with no caption.
+- **Mode:** pre-squash (final sweep).
+- **Criterion:** Principle of least astonishment / ND-friendly (spec §4.1).
+- **Rationale for deferral:** Not a hard defect — the space-reservation jump is
+  itself a cue, and every button now carries an in-button caption ("Pause",
+  "Skip", "Exit"), so the surface is labelled even without a note. The dropped
+  text was the auto-read explainer, judged redundant (the open toolbar plus the
+  "● ready" indicator is signal enough, and is the more *dere* choice).
+- **Follow-up commitment:** Revisit at the design-language pass if the
+  reduced-motion path reads as abrupt on device; the in-button captions are
+  judged sufficient legibility for now.
+- **Chris sign-off:** Given 2026-06-14 — drop the armed text and collapse the
+  empty note line (his explicit call after device-testing on multiple sizes).

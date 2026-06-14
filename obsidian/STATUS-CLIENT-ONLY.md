@@ -16,7 +16,49 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-14 — **SPECTRUM ANALYSER LANDED** (squash `3279cba` on
+**Last updated:** 2026-06-14 — **AUDIO TOOLBAR LANDED** (squash `19b9223` on
+master, **NOT pushed**, **device-confirmed by Chris on multiple sizes** — "richtig
+toll von der Bedienung her", "wunderschön"). The realisation of Chris's
+control-bar concept and the foundation for Spec 3's cockpitless live-voice mode —
+and we are now **live-voice ready** (Chris has a "hold to keep talking" button
+concept for the next session). The floating `VoiceTransport` is rededicated into a
+**space-reserving, cockpit-independent audio toolbar**: a flex-child of
+`.chat-page` (order 998) that **shrinks the read region instead of overlapping
+it** and stacks **above** the cockpit in interaction mode. **Icon + label
+controls** (inline SVG, playback cluster left, **Exit** pinned right with
+space-between, "leave space free"); the right slot is a constant escape
+(**Exit** / **Dismiss**). **Skip is first-class wherever something plays** (the
+"skip the boring passage" win). Visibility tracks an **active voice session**
+(playing / auto-read **armed** / resume offer): armed shows a distinct **● ready**
+indicator (not a greyed Pause — §3.1a), armed-but-unavailable shows a greyed
+Pause + reason. The holistic **Exit** stops playback and turns auto-read off
+when armed — which **retires the old one-shot stop hint** (`voiceStopHintSeen`
+left dormant in the settings schema). The **note line collapses when empty**
+(post-device: the auto-read explanatory text dropped, toolbar stays compact;
+honesty-critical notices still surface). Slides in as a felt mode switch; rests
+under `prefers-reduced-motion`.
+
+**Two device-found bugs fixed in this unit:** (1) **Skip was a no-op mid-read** —
+the voice machine only handled `SKIP` in the `failed` state; now handled in
+`speaking` too (mirrors `onDone`: next segment / clean idle when stream complete /
+park in waiting), covering `paused`. 3 new machine tests. (2) **Toolbar sat below
+the cockpit** — the cockpit's `order:1000` was inert because its focus-capture
+wrapper was a normal block; gave the wrapper `display:contents` so the order
+hoists to the `.chat-page` column. Built **subagent-driven** then iterated inline
+on Chris's device feedback (icons+labels, compact note, Exit). **Laura: no hard
+defects** across spec-pass + pre-squash + final sweep; soft notes (reduced-motion
+note-on-first-paint narrowing) logged in [[insights/ux-deferrals]], Chris-signed.
+Not a Larissa path (client-only, no egress). Gates: `pnpm typecheck --force`
+**14/14**; `pnpm run build --force` **9/9**; biome clean; voice-machine **19/19** +
+`VoiceTransport` **12/12**; full user-client vitest baseline unchanged (8
+Node-localStorage + 1 known stream-manager flake). Spec/plan (with post-device
+amendments): [[../superpowers/specs/2026-06-14-audio-toolbar-design]],
+[[../superpowers/plans/2026-06-14-audio-toolbar]]. **Next:** Chris pushes the
+master backlog on his word → then **Spec 3 (live voice)** plugs the hold-to-talk
+button into the toolbar's slot frame (no infrastructure rebuild — the space and
+cockpit-independence already exist; Chris brings the button concept).
+
+**Earlier (2026-06-14) — SPECTRUM ANALYSER LANDED** (squash `3279cba` on
 master, **NOT pushed**, **device-confirmed by Chris** — "ganz toll, ich finds
 super"). The **second** of the two "zwischenfeatures" before Spec 3 (live voice).
 An ambient canvas equaliser over the chat that pulses to the persona's TTS during
@@ -46,14 +88,11 @@ SOFT-1 (off-state sub-controls collapse) → kept + logged in
 [[insights/ux-deferrals]]; SOFT-2 (global `animationsEnabled` has no user-facing
 UI) → [[insights/follow-ups-index]]. **Next:** Chris pushes the master backlog →
 then **Spec 3 (live voice)** — the final voice unit (mic, barging, orchestration).
-**Chris's pause-UX concept for it (his explicit hand-off, 2026-06-14, design
-together first thing next session):** a **dedicated, specially-designed "control
-bar"** that appears as soon as read-aloud is running AND stays visible in voice
-mode — **"all-inclusive"**, i.e. it houses the full transport (pause / stop /
-skip / etc.) in one purpose-built surface. This **supersedes** both the deferred
-in-canvas tap-to-pause gesture (Pause-Geste brainstorm) and the cockpit-only
-stopgap the spectrum analyser shipped with. Treat it as the agreed home for all
-voice transport in Spec 3. He has the concept fully formed — start there.
+**Chris's pause-UX concept for it — NOW BUILT as the audio toolbar (squash
+`3cfda8a`, see top entry).** It superseded both the deferred in-canvas
+tap-to-pause gesture (Pause-Geste brainstorm) and the cockpit-only stopgap the
+spectrum analyser shipped with, exactly as planned, and is the agreed home for
+all voice transport in Spec 3.
 
 **Earlier (2026-06-13)** — **AUTO-READ-ALOUD VOICE MODE LANDED**
 (squash `e39c70b` on master, **NOT pushed**, **device-confirmed by Chris 2026-06-14**). The

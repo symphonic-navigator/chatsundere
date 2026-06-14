@@ -270,3 +270,24 @@ cases:
   on first paint (the meaning is never carried by motion alone).
 - **`waiting`:** a streamed reply mid-read shows "reading…" with Pause/Skip live.
 - Skip past an "as an AI…" paragraph mid-`speaking`.
+
+---
+
+## Post-device amendments (2026-06-14)
+
+Decided after Chris device-tested the built toolbar on multiple sizes; these
+supersede the relevant points above and are the shipped behaviour.
+
+1. **Icon + label buttons.** Transport controls are inline-SVG glyphs with a
+   small caption beneath (icon on top, label below), not text. The exit's
+   working name "Raus"/"Leave" ships as **"Exit"**.
+2. **Layout A.** Playback icons cluster on the left, the exit pins to the right,
+   `justify-content: space-between` leaves the middle breathing (Chris's "leave
+   space free").
+3. **The note line collapses when empty** (supersedes §3.1 point 3 / §4.1's
+   "reserved height" / "populated immediately" promise). The auto-read armed
+   explanatory text is dropped — the open toolbar plus the "● ready" indicator
+   is signal enough, and is the more *dere* choice. Honesty-critical notices
+   (failure, provider-skip, voice-unavailable) and the resume offer still
+   surface. The reduced-motion legibility narrowing is logged in
+   [`ux-deferrals.md`](../../obsidian/insights/ux-deferrals.md), Chris-signed.
