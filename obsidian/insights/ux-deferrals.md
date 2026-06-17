@@ -190,3 +190,34 @@ as a conscious narrowing of a spec promise, for the release-cut trail.
   judged sufficient legibility for now.
 - **Chris sign-off:** Given 2026-06-14 — drop the armed text and collapse the
   empty note line (his explicit call after device-testing on multiple sizes).
+
+## 2026-06-17 — Live voice: Skip is disabled while Held-from-persona-speaking (§4 "per prior phase" divergence)
+
+Raised at Laura's pre-squash pass on the live-voice surface (squashed into the
+live-voice feature commit `7faf336`). Soft-tier — Laura ruled **no hard defects**;
+logged here as a conscious, Chris-signed-off divergence from the §4 table, for the
+release-cut trail.
+
+- **Affected flow / surface:** live-voice toolbar
+  (`apps/user-client/src/components/chat/LiveVoiceBar.tsx`, `canSkip = floor === 'personaSpeaking'`).
+- **Finding (Laura's summary):** The §4 floor table gives the Held row's Skip
+  column as "per prior phase" — if you held *while the persona spoke*, Skip should
+  stay available so you can skip directly from Held. The build disables Skip
+  unconditionally while Held, so you must Resume (→ `personaSpeaking`, where Skip
+  re-enables) and then Skip.
+- **Mode:** pre-squash.
+- **Criterion:** Principle of least astonishment; spec §4 Held row.
+- **Rationale for deferral:** No function is unreachable — Resume-then-Skip works,
+  so it is a one-extra-tap divergence, not a dead-end. Honouring the table is not a
+  pure flag flip: it needs `heldFromPersona` threaded to the bar **and** a device
+  check of what `skip()` does while the playback gate is frozen (skip-while-paused
+  is an untested path). It also slightly breaks the "Held = everything frozen"
+  purity. Passes Chris's deferral filter on all three gates — not needed, costs
+  usability ("eng"), no gamechanger.
+- **Follow-up commitment:** Re-evaluate at the big UI/UX round; otherwise deferred
+  indefinitely unless the alpha surfaces a user need for it (user-driven, classic
+  agile — see [[../decisions/0031-eight-block-roadmap-to-beta]] and the
+  feature-inclusion filter recorded in memory `feedback_feature_inclusion_filter`).
+- **Chris sign-off:** ✅ Chris, 2026-06-17 ("ja, deferral") — explicitly invoking
+  the mobile-usability-over-goldplating filter; this is precisely the class of
+  "functionally easy but UX-tight" feature deferred until requested.
