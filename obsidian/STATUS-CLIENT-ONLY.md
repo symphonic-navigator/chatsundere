@@ -16,7 +16,43 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-17 — **LIVE VOICE LANDED** (squashed on master, **NOT
+**Last updated:** 2026-06-17 — **TTS AUDIO + INNER MONOLOGUE LANDED** (single
+squash `a875cf9` on master, **NOT pushed**, **device-confirmed by Chris** — "ich
+bin super glücklich!"; reverb device-tuned with him to 1.6 s / 60-40 dry-wet,
+280 Hz high-pass). One cohesive audio unit in three movements: (1) a user-selectable
+Butterworth **high-pass cleanup** on all read-aloud (My Settings → Voice: Auto /
+Off / 50 / 100 Hz; Auto follows a per-offering `defaultHighpassHz` in
+`TtsOfferingMeta`, xAI=50 because it is bass-heavy), threaded via a new
+filter-profile param on `AudioSink.play`. (2) the **inner-monologue easter egg** — a
+manual "read this thought aloud" button on an open `ReasoningPill`, vocalised with a
+deliberately *otherworldly* treatment (280 Hz high-pass + a **procedurally-synthesised**
+reverb tail — decaying noise → `ConvolverNode`, no shipped asset; Chris chose the
+ethereal "alternative-substrate entity" character over warm/human), in its own
+isolated `AudioSink`, never auto/live-read, mutually exclusive with read-aloud (both
+directions), disabled-with-remedy-tooltip when unavailable/streaming/live. (3)
+**voice-UI integration** so it stops feeling like a foreign body — `AudioSink.isAudible`
+drives the spectrum's "computing" wave whenever playback is active-but-not-yet-sounding
+(also fixes read-aloud's flat initial-synthesis field), and `chat-page` composes an
+*effective source* feeding the single spectrum + single toolbar from whichever
+playback is active; `VoiceTransport` gains a reduced `mode='monologue'` (no Skip,
+"thinking aloud…" note, "Stop" not "Exit"). Built spec→plan→**subagent-driven**
+implementation (per-task review + final whole-branch audit). **Laura** spec-passes on
+both specs (no hard defects; SOFT findings folded — "Stop" label, plain-language
+filter labels, calm retirement, "thinking aloud…" copy). **opus** whole-branch
+reviews found + fixed: an `AudioSink` chain-disconnect leak, the symmetric
+mutual-exclusion guard, a `SpectrumAnalyser` rAF-restart regression (isAudible now
+read via a stable ref), and a self-reverting monologue Pause during synthesis. Not a
+Larissa path (client-only). Gates: `pnpm typecheck --force` **14/14**; new
+pure-function + RTL tests green (`voice-filter`, `monologue-text`, `monologue-reverb`,
+`voice-transport`, llm-unified registry); full user-client vitest at the **8
+Node-localStorage baseline** (1725 pass). **Dexie v26** for the new setting.
+Specs/plans: [[../superpowers/specs/2026-06-17-tts-highpass-and-inner-monologue-design]],
+[[../superpowers/specs/2026-06-17-monologue-voice-ui-integration-design]] (+ matching
+plans). **Next:** Chris pushes the master backlog on his word; deferred per-spec —
+optional shimmer/detune on the monologue, a presence/voice-band boost (needs field
+data).
+
+**Earlier (2026-06-17) — LIVE VOICE LANDED** (squashed on master, **NOT
 pushed**, **device-confirmed by Chris** — "funktioniert! ganz wunderbar!", after
 extended testing). Spec 3 realised: continuous-VAD turn-taking voice mode built on
 the audio-toolbar slot frame, no infrastructure rebuild. The `liveVoiceMachine`
