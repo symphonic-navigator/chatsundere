@@ -41,6 +41,14 @@ together. The rigid "machine-only writes the lower block" split of the old desig
 is relaxed, but **`parseCatalogueEntry` (Valibot) remains the gate** — nothing
 lands that it rejects.
 
+The rubric behind `freedomOriented` is SCAI's, written up in
+[`obsidian/FREEDOM-CRITERIA.md`](../../../../obsidian/FREEDOM-CRITERIA.md): a
+J. S. Mill-liberal stance (guardrails against the genuinely illegal/dangerous are
+legitimate; "has guardrails" is *not* the test), with the real test being
+consensual-adult ERP, dark adult fiction, explicit prose on request, a
+suppressible "I'm an AI" preamble, and persona warmth. Apply it as a first pass;
+the human confirms.
+
 ## British English
 
 Every artefact you write is British English: `colour`, `behaviour`,
