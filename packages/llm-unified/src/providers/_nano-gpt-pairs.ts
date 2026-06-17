@@ -40,6 +40,11 @@ export const NANO_GPT_PAIRS: Record<string, NanoGptPair> = {
     thinkingSlug: 'zai-org/glm-5.1:thinking',
     switchingMode: 'slug',
   },
+  'zai-org/glm-5.2': {
+    nonThinkingSlug: 'zai-org/glm-5.2',
+    thinkingSlug: 'zai-org/glm-5.2:thinking',
+    switchingMode: 'slug',
+  },
   'moonshotai/kimi-k2.6': {
     nonThinkingSlug: 'moonshotai/kimi-k2.6',
     thinkingSlug: null,

@@ -158,6 +158,9 @@ function slugSwapOffering(
   reasoning: ReasoningControl,
   vision: boolean,
   ctx: number,
+  // Optional hard ceiling distinct from the recommended window. Defaults to
+  // `ctx` (recommended === max).
+  maxCtx: number = ctx,
 ): Offering {
   return {
     canonicalRef,
@@ -170,7 +173,7 @@ function slugSwapOffering(
       vision,
       replayReasoning: false,
     },
-    context: { recommended: ctx, max: ctx },
+    context: { recommended: ctx, max: maxCtx },
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
     source: 'curated',
@@ -318,6 +321,11 @@ const offerings: Offering[] = [
   slugSwapOffering('deepseek-v4-pro', 'deepseek/deepseek-v4-pro', STEPS, false, 200_000),
   slugSwapOffering('glm-5', 'zai-org/glm-5', GLM_FIXED_ON, false, 200_000),
   slugSwapOffering('glm-5.1', 'zai-org/glm-5.1', STEPS, false, 200_000),
+  // GLM 5.2: bare slug is cleanly reasoning-off, `:thinking` honours effort →
+  // the full steps surface (live-probed 2026-06-17, reasoning on the `reasoning`
+  // channel). 1M ceiling from the upstream zai-org model; recommended capped at
+  // 200k (nano-gpt /models reports no window).
+  slugSwapOffering('glm-5.2', 'zai-org/glm-5.2', STEPS, false, 200_000, 1_048_576),
   slugSwapOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', STEPS, true, 256_000),
   slugSwapOffering('gemma-4-31b', 'google/gemma-4-31b-it', STEPS, true, 262_144),
   // Mistral family on nano-gpt (anonymous-router path). Small 4 and Medium 3.5

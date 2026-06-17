@@ -92,6 +92,15 @@ const offerings: Offering[] = [
     reasoning: FIXED_ON,
     recommended: 131_072,
   }),
+  // GLM 5.2 on Tensorix cannot be silenced either: reasoning_effort:'none' with
+  // a UNIQUE prompt leaked a 720-char trace (live-probed 2026-06-17) → fixed-on.
+  // Tensorix /models reports no context window; the 131,072 GLM-family input
+  // window is carried forward (not re-probed for 5.2).
+  tensorixOffering('glm-5.2', 'z-ai/glm-5.2', {
+    vision: false,
+    reasoning: FIXED_ON,
+    recommended: 131_072,
+  }),
   // Kimi K2.6 — vision-capable, 262,144-token input window. Reasoning cannot be
   // turned off on Tensorix (off leaks 6/6) → fixed-on (as on wafer).
   tensorixOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', {

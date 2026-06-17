@@ -36,9 +36,9 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 6 original + 3 Mistral (small-4, medium-3.5, large-3) + 8 Claude + 4 web
-      // + 3 tti + 2 Grok voice (tts + stt) = 26.
-      expect(p.offerings).toHaveLength(26);
+      // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
+      // + 8 Claude + 4 web + 3 tti + 2 Grok voice (tts + stt) = 27.
+      expect(p.offerings).toHaveLength(27);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -91,12 +91,12 @@ describe('built-in providers', () => {
     }
   });
 
-  it('chutes has direct CORS hint, five TEE models, and sortPriority 10', () => {
+  it('chutes has direct CORS hint, six TEE models, and sortPriority 10', () => {
     const p = getProvider('chutes');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(5);
+      expect(p.offerings).toHaveLength(6);
       expect(p.sortPriority).toBe(10);
     }
   });
@@ -118,19 +118,23 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(8);
+      expect(p.offerings).toHaveLength(9);
     }
   });
 
-  it('ollama-cloud has 2 LLM offerings + 2 web offerings (search/fetch)', () => {
+  it('ollama-cloud has 3 LLM offerings + 2 web offerings (search/fetch)', () => {
     const p = getProvider('ollama-cloud');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(4);
+      expect(p.offerings).toHaveLength(5);
 
       const llm = p.offerings.filter((o) => o.serviceKind === 'llm');
-      expect(llm.map((o) => o.upstreamSlug).sort()).toEqual(['deepseek-v4-pro', 'glm-5.1']);
+      expect(llm.map((o) => o.upstreamSlug).sort()).toEqual([
+        'deepseek-v4-pro',
+        'glm-5.1',
+        'glm-5.2:cloud',
+      ]);
       expect(llm.every((o) => o.confidence === 'verified')).toBe(true);
       expect(llm.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
       expect(llm.every((o) => o.profile.reasoning.mode === 'fixed-on')).toBe(true);

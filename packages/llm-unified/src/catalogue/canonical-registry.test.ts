@@ -21,11 +21,12 @@ beforeAll(() => {
 afterAll(() => _resetRegistryForTests());
 
 describe('canonical-registry', () => {
-  test('lists twenty-two canonicals with unique ids', () => {
+  test('lists twenty-three canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(22);
-    expect(new Set(ids).size).toBe(22);
+    expect(ids).toHaveLength(23);
+    expect(new Set(ids).size).toBe(23);
     expect(ids).toContain('glm-5.1');
+    expect(ids).toContain('glm-5.2');
     expect(ids).toContain('deepseek-v3.2');
     expect(ids).toContain('qwen3.5-397b-a17b');
     expect(ids).toContain('mimo-v2.5-omni');

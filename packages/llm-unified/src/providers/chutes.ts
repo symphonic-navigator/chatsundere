@@ -17,6 +17,10 @@ function chutesOffering(
   slug: string,
   vision: boolean,
   ctx: number,
+  // Optional hard ceiling distinct from the recommended window. Defaults to
+  // `ctx` (recommended === max). GLM 5.2's 1M ceiling far exceeds the window
+  // where it stays smart, so its recommended is capped well below max.
+  maxCtx: number = ctx,
 ): Offering {
   return {
     canonicalRef,
@@ -29,7 +33,7 @@ function chutesOffering(
       vision,
       replayReasoning: false,
     },
-    context: { recommended: ctx, max: ctx },
+    context: { recommended: ctx, max: maxCtx },
     trust: { tee: true, zdr: false },
     freedomOrientedDeployment: true,
     source: 'curated',
@@ -43,6 +47,10 @@ const offerings: Offering[] = [
   chutesOffering('kimi-k2.6', 'moonshotai/Kimi-K2.6-TEE', true, 262_144),
   chutesOffering('glm-5', 'zai-org/GLM-5-TEE', false, 202_752),
   chutesOffering('glm-5.1', 'zai-org/GLM-5.1-TEE', false, 202_752),
+  // GLM 5.2: 1M ceiling (chutes /models reports 1,048,576), recommended capped
+  // at 200k (the smart window, carried from the GLM family). Off via the
+  // chat_template_kwargs toggle is genuinely off (live-probed 2026-06-17).
+  chutesOffering('glm-5.2', 'zai-org/GLM-5.2-TEE', false, 200_000, 1_048_576),
   chutesOffering('gemma-4-31b', 'google/gemma-4-31B-turbo-TEE', true, 131_072),
 ];
 

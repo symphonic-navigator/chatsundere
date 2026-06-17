@@ -21,6 +21,9 @@ interface OllamaSpec {
   reasoning: ReasoningControl;
   vision: boolean;
   ctx: number;
+  // Optional hard ceiling distinct from the recommended window. Defaults to
+  // `ctx` (recommended === max).
+  maxCtx?: number;
 }
 
 function ollamaOffering(spec: OllamaSpec): Offering {
@@ -35,7 +38,7 @@ function ollamaOffering(spec: OllamaSpec): Offering {
       vision: spec.vision,
       replayReasoning: false,
     },
-    context: { recommended: spec.ctx, max: spec.ctx },
+    context: { recommended: spec.ctx, max: spec.maxCtx ?? spec.ctx },
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: null,
     source: 'curated',
@@ -56,6 +59,18 @@ function ollamaOffering(spec: OllamaSpec): Offering {
 // result (live-measured); the native endpoint answers correctly.
 const SPECS: OllamaSpec[] = [
   { canonicalRef: 'glm-5.1', slug: 'glm-5.1', reasoning: FIXED_ON, vision: false, ctx: 200_000 },
+  // GLM 5.2 is served under the `:cloud` slug (bare `glm-5.2` 404s on ollama.com).
+  // think:false still streams reasoning (leaks into content) → fixed-on, as for
+  // GLM 5.1. /api/show reports a 1,000,000 ceiling; recommended capped at 200k.
+  // Live-probed 2026-06-17.
+  {
+    canonicalRef: 'glm-5.2',
+    slug: 'glm-5.2:cloud',
+    reasoning: FIXED_ON,
+    vision: false,
+    ctx: 200_000,
+    maxCtx: 1_000_000,
+  },
   {
     canonicalRef: 'deepseek-v4-pro',
     slug: 'deepseek-v4-pro',

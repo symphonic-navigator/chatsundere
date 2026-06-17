@@ -48,6 +48,17 @@ export const CANONICALS: CanonicalModel[] = [
       'z-ai/Zhipu open-weight model; judged freedom-oriented for Chatsundere by Chris (2026-05-30).',
   },
   {
+    id: 'glm-5.2',
+    displayName: 'GLM 5.2',
+    family: 'glm',
+    // Text-only flagship; z-ai markets it for creative writing and roleplay. A
+    // 1M-token context model (vs the ~200k of GLM 5/5.1 — measured per provider).
+    requiredCaps: { tools: true, reasoning: true, vision: false },
+    freedomOriented: true,
+    freedomNote:
+      'z-ai/Zhipu open-weight model; the GLM-family freedom judgement (Chris, 2026-05-30) carried forward to 5.2.',
+  },
+  {
     id: 'kimi-k2.6',
     displayName: 'Kimi K2.6',
     family: 'kimi',

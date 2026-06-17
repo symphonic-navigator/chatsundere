@@ -47,6 +47,10 @@ const offerings: Offering[] = [
   thinkingOffering('deepseek-v4-pro', 'deepseek/deepseek-v4-pro', false, 200_000),
   thinkingOffering('glm-5', 'zai-org/glm-5', false, 200_000),
   thinkingOffering('glm-5.1', 'zai-org/glm-5.1', false, 200_000),
+  // GLM 5.2: 1M ceiling (novita /models reports 1,048,576), recommended capped
+  // at the 200k smart window. Off via enable_thinking is clean (live-probed
+  // 2026-06-17).
+  thinkingOffering('glm-5.2', 'zai-org/glm-5.2', false, 200_000, 1_048_576),
   thinkingOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', true, 256_000),
   thinkingOffering('gemma-4-31b', 'google/gemma-4-31b-it', true, 262_144),
   // MiMo: 1M ceiling, recommended capped at 200k (the smart, non-agentic window
