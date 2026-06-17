@@ -8,12 +8,25 @@ import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
  *  prop surface stable even if the row schema gains fields later. */
 type PersonaFont = PersonaRow['font'];
 
+/** Inner-monologue read controller threaded from the chat page. */
+export interface MonologueController {
+  read: (id: string, trace: string) => void;
+  activeId: string | null;
+  disabledReason: 'no-voice' | null;
+  /** Set when reading is suppressed by mode (live voice) — button renders disabled with that reason. */
+  suppressedReason: 'live-voice' | null;
+}
+
 export interface ReasoningPillProps {
   text: string;
   isLive: boolean;
   isStreamingDraft: boolean;
   mindspace: ResolvedMindspace;
   font: PersonaFont;
+  /** Stable id for this reasoning group (e.g. `${messageId}:${groupIdx}`). */
+  monologueId: string;
+  /** Inner-monologue read controller, or null when unavailable. */
+  monologue: MonologueController | null;
 }
 
 /**
@@ -33,11 +46,23 @@ export function ReasoningPill(p: ReasoningPillProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const personaFont = FONT_VAR[p.font];
 
-  // `mindspace` and `isStreamingDraft` are reserved by the prop contract;
-  // referencing them as void here silences `noUnusedParameters` without
-  // narrowing the public API.
+  // `mindspace` is reserved by the prop contract; referencing it as void here
+  // silences `noUnusedParameters` without narrowing the public API.
   void p.mindspace;
-  void p.isStreamingDraft;
+
+  const m = p.monologue;
+  const streaming = p.isLive || p.isStreamingDraft;
+  const disabledReason: string | null =
+    m === null
+      ? 'Inner monologue is unavailable here.'
+      : m.suppressedReason === 'live-voice'
+        ? 'Not during live voice.'
+        : streaming
+          ? 'Available once the thought is complete.'
+          : m.disabledReason === 'no-voice'
+            ? 'Add a read-aloud voice in My Settings → Voice to hear this.'
+            : null;
+  const isPlaying = m?.activeId === p.monologueId;
 
   const handle = (
     <button
@@ -96,6 +121,30 @@ export function ReasoningPill(p: ReasoningPillProps): JSX.Element {
       >
         {p.text}
       </section>
+      <button
+        type="button"
+        className="reasoning-pill-monologue"
+        data-playing={isPlaying ? 'true' : 'false'}
+        disabled={disabledReason !== null}
+        title={disabledReason ?? (isPlaying ? 'Stop' : 'Read this thought aloud')}
+        aria-label={isPlaying ? 'Stop inner monologue' : 'Read this thought aloud'}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (disabledReason === null && m) m.read(p.monologueId, p.text);
+        }}
+      >
+        {/* simple speaker glyph — visible affordance, present whenever the pill is open */}
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path
+            d="M2 5 H4 L7 2 V12 L4 9 H2 Z M10 4 Q12 7 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
     </div>
   );
 }

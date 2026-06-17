@@ -18,6 +18,10 @@ const FADE_RATE = 0.05;
 interface Props {
   transportState: TransportState;
   getAnalyser: () => AnalyserNode | null;
+  /** Whether playback is currently sounding. When absent or true, behaviour is as
+   *  today. When it returns false during 'speaking' (synthesis not yet audible),
+   *  the synthetic wave is drawn instead of the empty FFT. */
+  isAudible?: () => boolean;
   /**
    * True while live voice is on the persona's thinking floor — the reply is
    * being generated and no audio plays yet (transport is idle). The analyser
@@ -53,7 +57,12 @@ function brighten([r, g, b]: [number, number, number]): [number, number, number]
  * the voice transport state: equaliser bars from the live FFT while speaking,
  * synthetic noise while waiting, and a frozen breathing snapshot while paused.
  */
-export function SpectrumAnalyser({ transportState, getAnalyser, personaThinking = false }: Props) {
+export function SpectrumAnalyser({
+  transportState,
+  getAnalyser,
+  isAudible,
+  personaThinking = false,
+}: Props) {
   const { data: settings } = useSettings();
   const spectrumEnabled = settings?.spectrumEnabled ?? SPECTRUM_DEFAULTS.spectrumEnabled;
   const animationsEnabled = settings?.animationsEnabled ?? true;
@@ -71,6 +80,12 @@ export function SpectrumAnalyser({ transportState, getAnalyser, personaThinking 
   const activeRef = useRef(0);
   const reducedMotionRef = useRef(false);
   const frozenBinsRef = useRef<Float32Array | null>(null);
+
+  // Keep isAudible current without putting it in the rAF effect's deps — an
+  // inline-arrow prop would otherwise restart the loop every parent render
+  // (see use-tts-frequency-data.ts for the same stable-ref rationale).
+  const isAudibleRef = useRef(isAudible);
+  isAudibleRef.current = isAudible;
 
   // Buffer used when the noise branch is the data source.
   // Stable across renders; resized when barCount changes.
@@ -169,7 +184,14 @@ export function SpectrumAnalyser({ transportState, getAnalyser, personaThinking 
 
       if (activeRef.current > 0.005) {
         let bins: Float32Array | null = null;
-        if (transportState === 'speaking') {
+        // 'speaking' is entered before the first audio actually sounds (read-aloud's
+        // initial synthesis, and each monologue chunk's synthesis). While not yet
+        // audible, draw the synthetic wave so the wait reads as presence, not a flat
+        // dead field; once audible, draw the real FFT.
+        if (transportState === 'speaking' && isAudibleRef.current?.() === false) {
+          fillNoiseBins(noiseBufferRef.current, performance.now() / 1000);
+          bins = noiseBufferRef.current;
+        } else if (transportState === 'speaking') {
           bins = accessors.getBins();
         } else if (waitingWave) {
           fillNoiseBins(noiseBufferRef.current, performance.now() / 1000);

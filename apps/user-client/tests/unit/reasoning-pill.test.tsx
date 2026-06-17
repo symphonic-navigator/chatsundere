@@ -20,6 +20,8 @@ describe('<ReasoningPill>', () => {
         isStreamingDraft={false}
         mindspace={mindspaceStub}
         font="serif"
+        monologueId="msg-1:0"
+        monologue={null}
       />,
     );
     const handle = screen.getByRole('button');
@@ -34,6 +36,8 @@ describe('<ReasoningPill>', () => {
         isStreamingDraft={false}
         mindspace={mindspaceStub}
         font="serif"
+        monologueId="msg-1:0"
+        monologue={null}
       />,
     );
     const dotsContainer = screen.getByTestId('reasoning-pill-dots');
@@ -50,6 +54,8 @@ describe('<ReasoningPill>', () => {
         isStreamingDraft={false}
         mindspace={mindspaceStub}
         font="serif"
+        monologueId="msg-1:0"
+        monologue={null}
       />,
     );
     const handle = screen.getByRole('button');
@@ -65,6 +71,8 @@ describe('<ReasoningPill>', () => {
         isStreamingDraft={false}
         mindspace={mindspaceStub}
         font="serif"
+        monologueId="msg-1:0"
+        monologue={null}
       />,
     );
     await user.click(screen.getByRole('button'));
@@ -82,6 +90,8 @@ describe('<ReasoningPill>', () => {
         isStreamingDraft={false}
         mindspace={mindspaceStub}
         font="serif"
+        monologueId="msg-1:0"
+        monologue={null}
       />,
     );
     fireEvent.click(screen.getByRole('button'));

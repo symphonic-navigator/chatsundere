@@ -277,6 +277,8 @@ const GROK_TTS_META: TtsOfferingMeta = {
   contentModerated: false, // moderation canary passed live 2026-06-12
   transport: 'openai-speech',
   voices: { kind: 'static', list: GROK_VOICES },
+  // Same xAI upstream — same bass-heavy characteristic; 50 Hz high-pass recommended.
+  defaultHighpassHz: 50,
 };
 
 const GROK_STT_META: SttOfferingMeta = {

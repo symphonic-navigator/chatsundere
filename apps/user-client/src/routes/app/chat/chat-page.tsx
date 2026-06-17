@@ -43,6 +43,7 @@ import { collectTags } from '../../../lib/treasury-filter.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
 import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
+import { useMonologuePlayback } from '../../../lib/voice/use-monologue-playback.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
@@ -457,6 +458,18 @@ export function ChatPage(): JSX.Element {
   // it streams (the persona's floor), independent of the auto-read toggle.
   const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages, isLiveVoice);
 
+  const monologue = useMonologuePlayback(effectivePersona, () => voice.stop());
+  const monologueActive = monologue.activeId !== null;
+  const monologueController = useMemo(
+    () => ({
+      read: (id: string, trace: string) => void monologue.read(id, trace),
+      activeId: monologue.activeId,
+      disabledReason: monologue.disabledReason,
+      suppressedReason: isLiveVoice ? ('live-voice' as const) : null,
+    }),
+    [monologue.read, monologue.activeId, monologue.disabledReason, isLiveVoice],
+  );
+
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const autoReadAloud = settings.data?.autoReadAloud ?? false;
@@ -502,6 +515,17 @@ export function ChatPage(): JSX.Element {
   useEffect(() => {
     if (isLiveVoice && isPinned && inputFocused) liveVoice.hold();
   }, [isLiveVoice, isPinned, inputFocused, liveVoice]);
+
+  // Stop any in-flight inner-monologue when live voice starts — two audio paths must not overlap.
+  useEffect(() => {
+    if (isLiveVoice) monologue.stop();
+  }, [isLiveVoice, monologue.stop]);
+
+  // Symmetric to the monologue's onStart (which stops read-aloud): when read-aloud
+  // becomes active, stop any in-flight inner monologue — one voice at a time.
+  useEffect(() => {
+    if (voice.currentMessageId !== null) monologue.stop();
+  }, [voice.currentMessageId, monologue.stop]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot teardown per chat id
   useEffect(() => {
@@ -555,8 +579,9 @@ export function ChatPage(): JSX.Element {
   return (
     <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
       <SpectrumAnalyser
-        transportState={voice.transportState}
-        getAnalyser={voice.getAnalyser}
+        transportState={monologueActive ? monologue.transportState : voice.transportState}
+        getAnalyser={monologueActive ? monologue.getAnalyser : voice.getAnalyser}
+        isAudible={monologueActive ? monologue.isAudible : voice.getIsAudible}
         personaThinking={isLiveVoice && liveVoice.floor === 'personaThinking'}
       />
       {!hasMessages && !isStreamLive && effectivePersona ? (
@@ -598,6 +623,7 @@ export function ChatPage(): JSX.Element {
           voiceMode={settingsQuery.data?.voiceMode ?? 'paragraph'}
           currentSegmentId={voice.currentSegmentId}
           currentMessageId={voice.currentMessageId}
+          monologue={monologueController}
         />
       ) : null}
 
@@ -704,6 +730,23 @@ export function ChatPage(): JSX.Element {
           onPressStart={liveVoice.pressStart}
           onPressEnd={liveVoice.pressEnd}
           onTap={liveVoice.tap}
+        />
+      ) : monologueActive ? (
+        <VoiceTransport
+          mode="monologue"
+          state={monologue.transportState}
+          resumeOffer={null}
+          providerSkips={0}
+          autoReadOn={false}
+          voiceUnavailable={null}
+          onPause={monologue.pause}
+          onResume={monologue.resume}
+          onSkip={() => undefined}
+          onRetry={() => undefined}
+          onResumePlayback={() => undefined}
+          onStartOver={() => undefined}
+          onDismiss={monologue.stop}
+          onExitVoice={monologue.stop}
         />
       ) : (
         <VoiceTransport

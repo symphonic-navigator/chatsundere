@@ -23,7 +23,7 @@ import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
-import { ReasoningPill } from './ReasoningPill.js';
+import { type MonologueController, ReasoningPill } from './ReasoningPill.js';
 import { MarkdownContent, type VoiceGlow } from './markdown/MarkdownContent.js';
 import { ArtefactSaveContext } from './markdown/artefact-save-context.js';
 
@@ -72,6 +72,8 @@ export interface MessageBlockProps {
    *  equals a streaming draft's id, that draft renders progressively (committed
    *  prefix as markdown, open tail raw). */
   currentMessageId?: string | null;
+  /** Inner-monologue read controller, or null when unavailable. */
+  monologue?: MonologueController | null;
 }
 
 /** Renders a single chat message row with optional expanded controls. */
@@ -355,6 +357,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
             p.persona,
             p.mindspace,
             glowByBlockIndex,
+            p.message.id,
+            p.monologue ?? null,
           )}
           {split && split.tailText.length > 0 ? (
             <span className="msg-stream-text">
@@ -426,6 +430,8 @@ function renderBlocks(
   // non-text blocks, or blocks with nothing to say). References are stable
   // across segment-advance renders so MarkdownContent never re-parses.
   glowByBlockIndex: Map<number, VoiceGlow>,
+  messageId: string,
+  monologue: MonologueController | null,
 ): (JSX.Element | null)[] {
   // Partition into ordered runs of same-type blocks — one component per run.
   // Pills never coalesce (their `pillId` identity is load-bearing); text and
@@ -513,6 +519,8 @@ function renderBlocks(
           isStreamingDraft={isStreamingDraft}
           mindspace={mindspace}
           font={reasoningFont}
+          monologueId={`${messageId}:${idx}`}
+          monologue={monologue}
         />
       );
     }

@@ -2008,6 +2008,7 @@ h1 {
   flex-direction: column;
   align-items: stretch;
   max-width: 100%;
+  position: relative;
 }
 .reasoning-pill-open > .reasoning-pill {
   border-radius: 14px 14px 0 0;
@@ -2025,6 +2026,21 @@ h1 {
   border-radius: 0 0 14px 14px;
   color: var(--color-paper);
 }
+
+.reasoning-pill-monologue {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 0.3rem;
+  color: var(--color-paper-soft, currentColor);
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+.reasoning-pill-monologue:hover:not(:disabled) { opacity: 1; }
+.reasoning-pill-monologue:disabled { opacity: 0.3; cursor: not-allowed; }
+.reasoning-pill-monologue[data-playing='true'] { opacity: 1; color: var(--color-paper, currentColor); }
 
 @media (prefers-reduced-motion: reduce) {
   .reasoning-pill[data-live="true"] .reasoning-pill-dots .dot {

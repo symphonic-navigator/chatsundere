@@ -10,6 +10,7 @@ import { type TtsResolution, resolveTts } from './resolve-tts.js';
 import { clearPosition, peekPosition, rememberPosition } from './resume-memory.js';
 import { type SpeechSegment, segmentMessage } from './segmentation.js';
 import { cacheDelete } from './voice-cache.js';
+import { type TtsHighpassSetting, resolveCleanupProfile } from './voice-filter.js';
 import {
   type TransportState,
   type VoiceDeps,
@@ -54,6 +55,10 @@ export interface VoicePlayback {
   disabledReason: DisabledReason;
   /** The TTS playback analyser node for the spectrum visualiser, or null before first play. */
   getAnalyser: () => AnalyserNode | null;
+  /** Whether read-aloud is currently sounding — lets the spectrum show the
+   *  synthetic wave during the initial synthesis (transport is 'speaking' before
+   *  audio sounds) rather than a flat empty FFT. */
+  getIsAudible: () => boolean;
 }
 
 /**
@@ -91,6 +96,11 @@ export function useVoicePlayback(
   // The active TTS resolution, set at play time. fetchAudio/play below delegate to it.
   const resolutionRef = useRef<Extract<TtsResolution, { ok: true }> | null>(null);
 
+  // The play closure is built once (useMemo []), so it must read the cleanup
+  // setting through a ref rather than capturing it. Updated every render.
+  const cleanupSettingRef = useRef<TtsHighpassSetting>('auto');
+  cleanupSettingRef.current = settings.data?.ttsHighpass ?? 'auto';
+
   // The deps are built ONCE: they close over the resolution ref above, so the
   // active resolution can change between plays without re-creating the actor.
   const deps = useMemo<VoiceDeps>(() => {
@@ -103,8 +113,12 @@ export function useVoicePlayback(
     const play = async (blob: Blob, segment: SpeechSegment, signal: AbortSignal): Promise<void> => {
       const sink = sinkRef.current;
       if (!sink) throw new Error('voice: play after dispose');
+      const profile = resolveCleanupProfile(
+        cleanupSettingRef.current,
+        resolutionRef.current?.defaultHighpassHz,
+      );
       try {
-        await sink.play(blob, signal);
+        await sink.play(blob, { profile, signal });
       } catch {
         // Decode failure: the cached blob for THIS segment is poisoned. The
         // machine hands us the very segment it played, so we evict and re-fetch
@@ -114,7 +128,7 @@ export function useVoicePlayback(
         if (!resolution) throw new Error('voice: decode-retry with no active resolution');
         await cacheDelete(resolution.cacheKeyFor(segment));
         const fresh = await resolution.fetchAudio(segment, signal);
-        await sink.play(fresh, signal);
+        await sink.play(fresh, { profile, signal });
       }
     };
 
@@ -424,5 +438,6 @@ export function useVoicePlayback(
     resumeOffer,
     disabledReason,
     getAnalyser: () => sinkRef.current?.getAnalyser() ?? null,
+    getIsAudible: () => sinkRef.current?.isAudible() ?? false,
   };
 }

@@ -102,6 +102,13 @@ export interface TtsOfferingMeta {
   /** Voice-list source. nano-gpt exposes no voice endpoint, so its Grok
    *  offering carries a static list (probed live 2026-06-12). */
   voices: TtsVoiceSource;
+  /**
+   * Recommended high-pass cut-off (Hz) for the "Auto" cleanup setting. Bass-heavy
+   * providers — xAI TTS pushes notable energy below ~80 Hz — set 50 so users can
+   * raise the volume without the low end dominating. Providers needing no cleanup
+   * leave this undefined (Auto then resolves to off). See the 2026-06-17 audio spec.
+   */
+  defaultHighpassHz?: 50 | 100;
 }
 
 /** Metadata carried by a `serviceKind: 'stt'` offering. */

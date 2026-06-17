@@ -117,6 +117,7 @@ export function VoiceSection(): JSX.Element {
   const spectrumStyle: SpectrumStyle = settings?.spectrumStyle ?? SPECTRUM_DEFAULTS.spectrumStyle;
   const spectrumOpacity = settings?.spectrumOpacity ?? SPECTRUM_DEFAULTS.spectrumOpacity;
   const spectrumBarCount = settings?.spectrumBarCount ?? SPECTRUM_DEFAULTS.spectrumBarCount;
+  const ttsHighpass = settings?.ttsHighpass ?? 'auto';
 
   const rows = providerRows ?? [];
 
@@ -181,6 +182,43 @@ export function VoiceSection(): JSX.Element {
         ) : null}
         <div className="mt-2">
           <TtsModerationNotice />
+        </div>
+      </div>
+
+      {/* ── Voice cleanup (high-pass) ───────────────────────────────────────── */}
+      <div>
+        <div className="mb-2 text-[11px] uppercase tracking-widest text-paper-soft">
+          Voice cleanup
+        </div>
+        <div className="flex flex-col gap-2">
+          <ModeOption
+            id="hp-auto"
+            label="Auto"
+            description="Cleans up bass-heavy voices automatically (recommended)"
+            selected={ttsHighpass === 'auto'}
+            onSelect={() => update.mutate({ ttsHighpass: 'auto' })}
+          />
+          <ModeOption
+            id="hp-off"
+            label="Off"
+            description="No filtering"
+            selected={ttsHighpass === 'off'}
+            onSelect={() => update.mutate({ ttsHighpass: 'off' })}
+          />
+          <ModeOption
+            id="hp-50"
+            label="50 Hz"
+            description="Gentle low-end trim"
+            selected={ttsHighpass === 50}
+            onSelect={() => update.mutate({ ttsHighpass: 50 })}
+          />
+          <ModeOption
+            id="hp-100"
+            label="100 Hz"
+            description="Stronger low-end trim"
+            selected={ttsHighpass === 100}
+            onSelect={() => update.mutate({ ttsHighpass: 100 })}
+          />
         </div>
       </div>
 

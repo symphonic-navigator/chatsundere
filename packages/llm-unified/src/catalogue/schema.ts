@@ -41,6 +41,24 @@ const AdapterRefSchema = v.variant('kind', [
   v.object({ kind: v.literal('generic') }),
 ]);
 
+const TtsOfferingMetaSchema = v.object({
+  displayName: v.pipe(v.string(), v.minLength(1)),
+  teal: v.picklist(['strip', 'passthrough']),
+  contentModerated: v.boolean(),
+  transport: v.picklist(['mistral-speech', 'xai-native', 'openai-speech']),
+  voices: v.variant('kind', [
+    v.object({
+      kind: v.literal('fetch'),
+      endpoint: v.picklist(['mistral-paginated', 'xai-flat']),
+    }),
+    v.object({
+      kind: v.literal('static'),
+      list: v.array(v.object({ id: v.string(), name: v.string() })),
+    }),
+  ]),
+  defaultHighpassHz: v.optional(v.picklist([50, 100])),
+});
+
 const OfferingSchema = v.object({
   canonicalRef: v.nullable(v.string()),
   providerId: v.pipe(v.string(), v.minLength(1)),
@@ -55,6 +73,7 @@ const OfferingSchema = v.object({
   // Modality defaults to 'llm' when absent, so external/discovered catalogue
   // entries predating ServiceKind remain valid.
   serviceKind: v.optional(v.picklist(['llm', 'web', 'tts', 'stt', 'tti']), 'llm'),
+  tts: v.optional(TtsOfferingMetaSchema),
 });
 
 const EntrySchema = v.object({ canonical: CanonicalSchema, offerings: v.array(OfferingSchema) });

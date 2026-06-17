@@ -25,6 +25,9 @@ const TTS_META: TtsOfferingMeta = {
   contentModerated: false,
   transport: 'xai-native',
   voices: { kind: 'fetch', endpoint: 'xai-flat' },
+  // xAI TTS pushes notable energy below ~80 Hz; a 50 Hz high-pass prevents the
+  // low end from dominating when the user raises the volume. See audio spec 2026-06-17.
+  defaultHighpassHz: 50,
 };
 
 const STT_META: SttOfferingMeta = {

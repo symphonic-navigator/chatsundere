@@ -103,7 +103,7 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
   it('reports verno === 11 after open on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(25);
+    expect(db.verno).toBe(26);
   });
 
   it('round-trips a message with a reasoning ContentBlock', async () => {
@@ -146,7 +146,7 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(25);
+    expect(db.verno).toBe(26);
     const row = await db.messages.get('msg-legacy');
     expect(row).toBeDefined();
     expect(row?.contentBlocks).toEqual([

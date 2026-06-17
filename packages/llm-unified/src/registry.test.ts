@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
-import { beforeEach, describe, expect, it } from 'bun:test';
+import { beforeEach, describe, expect, it, test } from 'bun:test';
+import { _resetAdapterRegistryForTests } from './adapter-registry.js';
+import { registerBuiltinProviders } from './providers/_register-builtins.js';
 import {
   _resetRegistryForTests,
   getProvider,
   listProviders,
+  listTtsOfferings,
   registerProvider,
 } from './registry.js';
 import type { ProviderDefinition } from './types.js';
@@ -63,5 +66,35 @@ describe('provider registry', () => {
     const list = listProviders();
     list.pop();
     expect(listProviders().length).toBe(1);
+  });
+});
+
+describe('defaultHighpassHz cleanup recommendation', () => {
+  // The outer beforeEach resets the provider registry before each test; this
+  // inner beforeEach resets the adapter registry and re-registers all built-ins
+  // so listTtsOfferings() returns real offerings.
+  beforeEach(() => {
+    _resetAdapterRegistryForTests();
+    registerBuiltinProviders();
+  });
+
+  test('xAI TTS offerings recommend a 50 Hz high-pass (bass-heavy)', () => {
+    const xai = listTtsOfferings().filter(
+      (o) => o.upstreamSlug.includes('tts') && o.providerId === 'xai',
+    );
+    expect(xai.length).toBeGreaterThan(0);
+    for (const o of xai) expect(o.tts?.defaultHighpassHz).toBe(50);
+  });
+
+  test('the nano-gpt Grok TTS offering also recommends 50 Hz', () => {
+    const grok = listTtsOfferings().find(
+      (o) => o.providerId === 'nano-gpt' && o.upstreamSlug.includes('tts'),
+    );
+    expect(grok?.tts?.defaultHighpassHz).toBe(50);
+  });
+
+  test('non-xAI TTS offerings leave the recommendation undefined', () => {
+    const mistral = listTtsOfferings().find((o) => o.providerId === 'mistral');
+    expect(mistral?.tts?.defaultHighpassHz).toBeUndefined();
   });
 });

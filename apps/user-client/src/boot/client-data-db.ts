@@ -4,6 +4,7 @@ import type { ImageModelConfig } from '@chatsundere/llm-unified';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
+import type { TtsHighpassSetting } from '../lib/voice/voice-filter.js';
 import type { WebBackendSetting } from '../lib/web-backends.js';
 import type { McpToolDefinition } from '../mcp/types.js';
 
@@ -64,6 +65,9 @@ export interface SettingsRow {
   spectrumOpacity: number;
   /** Spectrum analyser: number of bars, clamped [16, 96]. */
   spectrumBarCount: number;
+  /** TTS cleanup high-pass: 'auto' follows the offering recommendation, 'off'
+   *  disables it, 50/100 force a fixed cut-off (behaviour-axis — global). */
+  ttsHighpass: TtsHighpassSetting;
   createdAt: number;
   updatedAt: number;
 }
@@ -829,6 +833,23 @@ class ClientDataDb extends Dexie {
           if (typeof s.spectrumBarCount !== 'number') s.spectrumBarCount = 24;
         });
     });
+
+    // Version 26 — TTS high-pass cleanup. Settings gain `ttsHighpass`
+    // (behaviour-axis, global), defaulting to the 'auto' recommendation.
+    this.version(26).upgrade(async (tx) => {
+      await tx
+        .table('settings')
+        .toCollection()
+        .modify((s: Partial<SettingsRow>) => {
+          if (
+            s.ttsHighpass !== 'auto' &&
+            s.ttsHighpass !== 'off' &&
+            s.ttsHighpass !== 50 &&
+            s.ttsHighpass !== 100
+          )
+            s.ttsHighpass = 'auto';
+        });
+    });
   }
 }
 
@@ -954,6 +975,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         spectrumStyle: 'soft',
         spectrumOpacity: 0.5,
         spectrumBarCount: 24,
+        ttsHighpass: 'auto',
         createdAt: now,
         updatedAt: now,
       });

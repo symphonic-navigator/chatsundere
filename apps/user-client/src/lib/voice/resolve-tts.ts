@@ -23,6 +23,8 @@ export type TtsResolution =
       voiceLabel: string;
       /** Cache-key inputs exposed so the playback layer can evict a poisoned entry. */
       cacheKeyFor: (segment: SpeechSegment) => string;
+      /** The active offering's cleanup high-pass recommendation, for the 'auto' setting. */
+      defaultHighpassHz: 50 | 100 | undefined;
     }
   | { ok: false; reason: 'no-provider' | 'no-voice' };
 
@@ -202,5 +204,11 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
 
   const voiceLabel = `${ttsMeta.displayName} via ${providerDisplayName}`;
 
-  return { ok: true, fetchAudio, voiceLabel, cacheKeyFor };
+  return {
+    ok: true,
+    fetchAudio,
+    voiceLabel,
+    cacheKeyFor,
+    defaultHighpassHz: ttsMeta.defaultHighpassHz,
+  };
 }

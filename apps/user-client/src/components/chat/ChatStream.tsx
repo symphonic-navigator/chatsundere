@@ -13,6 +13,7 @@ import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
 import { toastStore } from '../../state/toast.store.js';
 import { ContextMemoryMarker } from './ContextMemoryMarker.js';
+import type { MonologueController } from './ReasoningPill.js';
 
 /**
  * Load-bearing default — survives the brief window between component mount
@@ -83,6 +84,8 @@ export interface ChatStreamProps {
    *  (`<blockIndex>:<ordinal>` only), so the glow is routed to this message
    *  alone — every other message receives a null id and cannot light up. */
   currentMessageId?: string | null;
+  /** Inner-monologue read controller, or null when unavailable. */
+  monologue?: MonologueController | null;
 }
 
 /** Scroll container that sorts messages chronologically, inserts DateSeparators
@@ -250,6 +253,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 currentSegmentId={m.id === p.currentMessageId ? p.currentSegmentId : null}
                 currentMessageId={p.currentMessageId}
                 voiceMode={p.voiceMode}
+                monologue={p.monologue ?? null}
               />
               {isDraft ? <StreamingCursor /> : null}
             </div>

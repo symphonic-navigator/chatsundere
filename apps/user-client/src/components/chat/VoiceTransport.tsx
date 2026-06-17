@@ -30,6 +30,9 @@ export interface VoiceTransportProps {
    *  auto-read is armed, turn it off. One context-correct escape — what retires
    *  the old Stop-vs-toggle stop hint. */
   onExitVoice: () => void;
+  /** 'monologue' renders the reduced inner-monologue toolbar: no Skip, a
+   *  "thinking aloud…" note, and a "Stop" right-slot. Default 'read-aloud'. */
+  mode?: 'read-aloud' | 'monologue';
 }
 
 function unavailableNote(reason: DisabledReason): string {
@@ -106,6 +109,13 @@ function ExitIcon(): JSX.Element {
     </svg>
   );
 }
+function StopIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
 function DismissIcon(): JSX.Element {
   return (
     <svg
@@ -145,20 +155,26 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
   const visible = p.state !== 'idle' || armed || p.resumeOffer !== null || p.providerSkips > 0;
   if (!visible) return null;
 
+  const monologue = p.mode === 'monologue';
+
   // Right slot: Dismiss for purely-informational terminal notices (nothing to
   // leave); Leave (holistic exit) in every state with a session/offer/armed mode.
   const rightIsDismiss =
     p.state === 'ended-partial' || (p.state === 'idle' && p.providerSkips > 0 && !armed);
 
   const showSkip =
-    p.state === 'speaking' ||
-    p.state === 'waiting' ||
-    p.state === 'paused' ||
-    p.state === 'failed' ||
-    armed;
+    !monologue &&
+    (p.state === 'speaking' ||
+      p.state === 'waiting' ||
+      p.state === 'paused' ||
+      p.state === 'failed' ||
+      armed);
 
-  const note =
-    p.state === 'waiting'
+  const note = monologue
+    ? p.state === 'waiting' || p.state === 'speaking'
+      ? 'thinking aloud…'
+      : ''
+    : p.state === 'waiting'
       ? 'reading…'
       : p.state === 'failed'
         ? "Couldn't read this part aloud"
@@ -195,7 +211,11 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
 
       <div className="voice-transport-row">
         <div className="voice-transport-left">
-          {p.state === 'speaking' || p.state === 'waiting' ? (
+          {(
+            monologue
+              ? p.state === 'speaking'
+              : p.state === 'speaking' || p.state === 'waiting'
+          ) ? (
             <button
               type="button"
               className="voice-transport-btn"
@@ -282,11 +302,13 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
         <button
           type="button"
           className="voice-transport-exit"
-          aria-label={rightIsDismiss ? 'Dismiss' : 'Exit voice'}
-          onClick={rightIsDismiss ? p.onDismiss : p.onExitVoice}
+          aria-label={monologue ? 'Stop' : rightIsDismiss ? 'Dismiss' : 'Exit voice'}
+          onClick={monologue ? p.onExitVoice : rightIsDismiss ? p.onDismiss : p.onExitVoice}
         >
-          {rightIsDismiss ? <DismissIcon /> : <ExitIcon />}
-          <span className="voice-transport-label">{rightIsDismiss ? 'Dismiss' : 'Exit'}</span>
+          {monologue ? <StopIcon /> : rightIsDismiss ? <DismissIcon /> : <ExitIcon />}
+          <span className="voice-transport-label">
+            {monologue ? 'Stop' : rightIsDismiss ? 'Dismiss' : 'Exit'}
+          </span>
         </button>
       </div>
     </section>
