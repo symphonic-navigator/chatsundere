@@ -75,6 +75,12 @@ export function useVoicePlayback(
   chatId: string,
   persona: PersonaRow | null,
   messages: MessageRow[],
+  /**
+   * Force the streaming read-aloud driver on regardless of the autoReadAloud
+   * setting. Live voice sets this: in that mode every reply is read aloud as it
+   * streams (the persona's floor), independent of the user's auto-read toggle.
+   */
+  forceStreamingRead = false,
 ): VoicePlayback {
   const settings = useSettings();
 
@@ -187,27 +193,32 @@ export function useVoicePlayback(
   // useVoicePlayback so it shares the one machine actor + AudioSink with manual
   // read-aloud — no second sequencer, no second sink.
   const autoReadAloud = settings.data?.autoReadAloud ?? false;
+  // The streaming read runs when the user has auto-read on OR live voice is
+  // active (which reads every reply aloud as the persona's floor, independent
+  // of the auto-read toggle).
+  const wantStreamingRead = autoReadAloud || forceStreamingRead;
   const handle = useStreamManagerStore((s: { streams: Map<string, StreamHandle> }) =>
     chatId ? (s.streams.get(chatId) ?? null) : null,
   );
   const autoReadRef = useRef<{ draftId: string; sentCount: number; doneSent: boolean } | null>(
     null,
   );
-  const wasAutoOnRef = useRef(autoReadAloud);
+  const wasAutoOnRef = useRef(wantStreamingRead);
 
-  // Toggling the mode off silences any current auto-read playback.
+  // Turning the streaming read off (auto-read toggled off, or live voice left)
+  // silences any current auto-read playback and clears the driver's tracking.
   useEffect(() => {
-    if (!autoReadAloud && wasAutoOnRef.current) {
+    if (!wantStreamingRead && wasAutoOnRef.current) {
       if (!actor.getSnapshot().matches('idle')) actor.send({ type: 'STOP' });
       autoReadRef.current = null;
     }
-    wasAutoOnRef.current = autoReadAloud;
-  }, [autoReadAloud, actor]);
+    wasAutoOnRef.current = wantStreamingRead;
+  }, [wantStreamingRead, actor]);
 
   // The driver: translate streaming-draft progress into machine events.
   // biome-ignore lint/correctness/useExhaustiveDependencies: clearOffer is stable (closure over chatId); actor is stable
   useEffect(() => {
-    if (!autoReadAloud || !persona || !handle) return;
+    if (!wantStreamingRead || !persona || !handle) return;
     const draftId = handle.draftMessageId;
     const streamDone = handle.status !== 'streaming';
     const tracked = autoReadRef.current;
@@ -266,7 +277,7 @@ export function useVoicePlayback(
       actor.send({ type: 'STREAM_DONE' });
       autoReadRef.current.doneSent = true;
     }
-  }, [autoReadAloud, persona, handle, chatId, segmentationOpts, actor]);
+  }, [wantStreamingRead, persona, handle, chatId, segmentationOpts, actor]);
   // ---- End auto-read driver ---------------------------------------------------
 
   // The single internal start path: every play (fresh, resume, ended-partial

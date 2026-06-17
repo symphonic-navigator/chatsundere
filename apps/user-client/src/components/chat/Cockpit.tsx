@@ -59,6 +59,10 @@ interface Props {
   onToggleAutoRead: (next: boolean) => void;
   /** Why read-aloud is unavailable, or null when a voice is configured. */
   voiceUnavailable: 'no-provider' | 'no-voice' | null;
+  /** Enter live voice mode — disabled-with-reason when no voice provider is
+   *  configured. Optional so this component stays self-contained; the chat page
+   *  always supplies it through InteractionMode. */
+  onEnterLiveVoice?: () => void;
 }
 
 /**
@@ -414,9 +418,16 @@ export function Cockpit(p: Props): JSX.Element {
           type="button"
           className="cockpit-icon-btn"
           data-control="live"
-          disabled
-          title="Voice arrives with Block 4"
-          aria-label="Live voice mode (coming with Block 4)"
+          onClick={() => p.onEnterLiveVoice?.()}
+          disabled={p.voiceUnavailable !== null}
+          data-disabled={p.voiceUnavailable ? 'true' : undefined}
+          aria-disabled={p.voiceUnavailable ? true : undefined}
+          title={
+            p.voiceUnavailable
+              ? 'No voice provider — set one in Settings → Voice'
+              : 'Live voice mode'
+          }
+          aria-label="Live voice mode"
         >
           <span className="wave-icon" aria-hidden="true">
             ≈

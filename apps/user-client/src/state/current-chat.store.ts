@@ -8,6 +8,7 @@ interface CurrentChatStore {
   expandedMessageId: string | null;
   autoFollowEnabled: boolean;
   isInteractionMode: boolean;
+  isLiveVoice: boolean;
   isPinned: boolean;
   /** True while the cockpit textarea holds focus. Drives the DimOverlay, which
    *  lives at chat-page level (not inside InteractionMode) so the un-dim fade
@@ -39,6 +40,7 @@ interface CurrentChatStore {
   clearExpanded: () => void;
   setAutoFollow: (enabled: boolean) => void;
   setInteractionMode: (on: boolean) => void;
+  setLiveVoice: (on: boolean) => void;
   setInputFocused: (focused: boolean) => void;
   setChatPersonaIsAdult: (isAdult: boolean | null) => void;
   togglePin: () => void;
@@ -63,6 +65,7 @@ type InitialState = Omit<
   | 'clearExpanded'
   | 'setAutoFollow'
   | 'setInteractionMode'
+  | 'setLiveVoice'
   | 'setInputFocused'
   | 'setChatPersonaIsAdult'
   | 'togglePin'
@@ -81,6 +84,7 @@ const initial: InitialState = {
   expandedMessageId: null,
   autoFollowEnabled: true,
   isInteractionMode: false,
+  isLiveVoice: false,
   isPinned: false,
   inputFocused: false,
   chatPersonaIsAdult: null,
@@ -112,6 +116,7 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
         ? { isInteractionMode: true, expandedMessageId: null, inputFocused: false }
         : { isInteractionMode: false, inputFocused: false },
     ),
+  setLiveVoice: (on) => set({ isLiveVoice: on }),
   setInputFocused: (focused) => set({ inputFocused: focused }),
   setChatPersonaIsAdult: (isAdult) => set({ chatPersonaIsAdult: isAdult }),
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),

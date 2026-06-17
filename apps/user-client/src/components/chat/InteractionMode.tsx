@@ -35,6 +35,8 @@ interface Props {
   onToggleAutoRead: (next: boolean) => void;
   /** Why read-aloud is unavailable, or null when a voice is configured. */
   voiceUnavailable: 'no-provider' | 'no-voice' | null;
+  /** Opens live voice mode — forwarded to the cockpit's live button. */
+  onEnterLiveVoice?: () => void;
 }
 
 /**
@@ -205,6 +207,7 @@ export function InteractionMode(p: Props): JSX.Element {
           autoReadAloud={p.autoReadAloud}
           onToggleAutoRead={p.onToggleAutoRead}
           voiceUnavailable={p.voiceUnavailable}
+          onEnterLiveVoice={p.onEnterLiveVoice}
         />
       </div>
     </div>

@@ -49,7 +49,7 @@
 
 ```ts
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { RedemptionTracker } from '../../../../src/lib/voice/dictation/redemption-tracker.js';
 
 const opts = {
@@ -101,7 +101,7 @@ describe('RedemptionTracker', () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/dictation/redemption-tracker.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/dictation/redemption-tracker.test.ts`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -157,7 +157,7 @@ export class RedemptionTracker {
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/dictation/redemption-tracker.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/dictation/redemption-tracker.test.ts`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Typecheck, lint, commit**
@@ -273,7 +273,7 @@ git commit -m "Emit VAD redemption progress for the live-voice countdown"
 
 ```ts
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { mergePcm } from '../../../../src/lib/voice/live/merge-pcm.js';
 
 describe('mergePcm', () => {
@@ -289,7 +289,7 @@ describe('mergePcm', () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/live/merge-pcm.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/live/merge-pcm.test.ts`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
@@ -312,7 +312,7 @@ export function mergePcm(chunks: Float32Array[]): Float32Array {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/live/merge-pcm.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/live/merge-pcm.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Typecheck, lint, commit**
@@ -340,7 +340,7 @@ This task lays down the **types and the idle↔listening entry only**; each late
 
 ```ts
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { createActor } from 'xstate';
 import { type LiveVoiceDeps, liveVoiceMachine, selectFloor } from '../../../../src/lib/voice/live/live-voice-machine.js';
 
@@ -383,7 +383,7 @@ describe('liveVoiceMachine', () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/live/live-voice-machine.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/live/live-voice-machine.test.ts`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write the skeleton (types + idle/listening only)**
@@ -506,7 +506,7 @@ export function selectFill(snapshot: LiveVoiceSnapshot): number {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/live/live-voice-machine.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/live/live-voice-machine.test.ts`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Typecheck, lint, commit**
@@ -603,7 +603,7 @@ describe('liveVoiceMachine — user floor', () => {
 
 - [ ] **Step 2: Run to verify the new tests fail**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/live/live-voice-machine.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/live/live-voice-machine.test.ts`
 Expected: FAIL — `userSpeaking`/`transcribing`/`personaThinking` not reached.
 
 - [ ] **Step 3: Implement the user-floor states**
@@ -707,7 +707,7 @@ Add `_utterance` to `LiveVoiceContext`:
 
 - [ ] **Step 4: Run to verify the tests pass**
 
-Run: `pnpm --filter @chatsundere/user-client exec bun test tests/lib/voice/live/live-voice-machine.test.ts`
+Run: `pnpm --filter @chatsundere/user-client exec vitest run tests/lib/voice/live/live-voice-machine.test.ts`
 Expected: PASS. (The `personaThinking` test passes because `startPlayback` is a no-op stub here.)
 
 - [ ] **Step 5: Typecheck, lint, commit**

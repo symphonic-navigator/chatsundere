@@ -12,6 +12,7 @@ import { BranchSheet } from '../../../components/chat/BranchSheet.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { DimOverlay } from '../../../components/chat/DimOverlay.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
+import { LiveVoiceBar } from '../../../components/chat/LiveVoiceBar.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { TocSheet } from '../../../components/chat/TocSheet.js';
@@ -40,6 +41,8 @@ import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { estimateTokens } from '../../../lib/token-estimator.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
+import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
+import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
@@ -78,6 +81,8 @@ export function ChatPage(): JSX.Element {
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
   const setAskExpert = useCurrentChatStore((s) => s.setAskExpert);
+  const isLiveVoice = useCurrentChatStore((s) => s.isLiveVoice);
+  const setLiveVoice = useCurrentChatStore((s) => s.setLiveVoice);
 
   const isArtefactSheetOpen = useCurrentChatStore((s) => s.isArtefactSheetOpen);
   const setArtefactSheetOpen = useCurrentChatStore((s) => s.setArtefactSheetOpen);
@@ -448,7 +453,9 @@ export function ChatPage(): JSX.Element {
   // Voice playback. Owns one machine actor + AudioSink for this chat view; the
   // persistent transport (rendered below) governs an in-flight read-aloud
   // independently of message expansion, scrolling, and Reading↔Interaction mode.
-  const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages);
+  // forceStreamingRead = isLiveVoice: in live voice every reply is read aloud as
+  // it streams (the persona's floor), independent of the auto-read toggle.
+  const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages, isLiveVoice);
 
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
@@ -465,6 +472,46 @@ export function ChatPage(): JSX.Element {
     voice.stop();
     if (autoReadAloud) void onToggleAutoRead(false);
   }, [voice, autoReadAloud, onToggleAutoRead]);
+
+  const liveVoice = useLiveVoice({
+    onSend: (t) => void onSend(t),
+    voice,
+    // Barge / floor-reclaim aborts the in-flight reply for this chat (the
+    // partial is preserved); a no-op once generation has finished.
+    abortReply: () => {
+      void useStreamManagerStore.getState().abortPreserve(activeChatId ?? '');
+    },
+    // The persona-floor bridge reads this to tell "awaiting first audio" apart
+    // from "the reply finished with nothing speakable".
+    replyStreaming: isStreamLive,
+    sensitivity: settings.data?.dictationSensitivity ?? 'medium',
+    redemptionMs: settings.data?.dictationRedemptionMs ?? REDEMPTION_MS_DEFAULT,
+  });
+
+  const onEnterLiveVoice = useCallback(() => {
+    setLiveVoice(true);
+    liveVoice.enter();
+  }, [setLiveVoice, liveVoice]);
+
+  const onExitLiveVoice = useCallback(() => {
+    liveVoice.exit();
+    setLiveVoice(false);
+  }, [setLiveVoice, liveVoice]);
+
+  // While live + pinned, a focused composer must not also feed the mic.
+  useEffect(() => {
+    if (isLiveVoice && isPinned && inputFocused) liveVoice.hold();
+  }, [isLiveVoice, isPinned, inputFocused, liveVoice]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot teardown per chat id
+  useEffect(() => {
+    return () => {
+      if (useCurrentChatStore.getState().isLiveVoice) {
+        liveVoice.exit();
+        setLiveVoice(false);
+      }
+    };
+  }, [activeChatId]);
 
   // Dictation. Transcripts always append at the END of the current draft
   // (spec §3.3); the functional setter means a late-arriving transcript never
@@ -507,7 +554,11 @@ export function ChatPage(): JSX.Element {
 
   return (
     <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
-      <SpectrumAnalyser transportState={voice.transportState} getAnalyser={voice.getAnalyser} />
+      <SpectrumAnalyser
+        transportState={voice.transportState}
+        getAnalyser={voice.getAnalyser}
+        personaThinking={isLiveVoice && liveVoice.floor === 'personaThinking'}
+      />
       {!hasMessages && !isStreamLive && effectivePersona ? (
         <PersonaGreeting
           name={effectivePersona.name}
@@ -641,21 +692,36 @@ export function ChatPage(): JSX.Element {
         offer); renders nothing otherwise. The space and cockpit-independence are
         the foundation for the cockpitless live-voice mode (Spec 3).
       */}
-      <VoiceTransport
-        state={voice.transportState}
-        resumeOffer={resumeParagraphLabel ? { paragraphLabel: resumeParagraphLabel } : null}
-        providerSkips={voice.providerSkips}
-        autoReadOn={autoReadAloud}
-        voiceUnavailable={voiceUnavailable}
-        onPause={voice.pause}
-        onResume={voice.resumeAudio}
-        onSkip={voice.skip}
-        onRetry={voice.retry}
-        onResumePlayback={voice.resume}
-        onStartOver={voice.startOver}
-        onDismiss={voice.dismissPartial}
-        onExitVoice={onExitVoice}
-      />
+      {isLiveVoice ? (
+        <LiveVoiceBar
+          floor={liveVoice.floor}
+          fill={liveVoice.fill}
+          level={liveVoice.level}
+          onHold={liveVoice.hold}
+          onResume={liveVoice.resume}
+          onSkip={voice.skip}
+          onExit={onExitLiveVoice}
+          onPressStart={liveVoice.pressStart}
+          onPressEnd={liveVoice.pressEnd}
+          onTap={liveVoice.tap}
+        />
+      ) : (
+        <VoiceTransport
+          state={voice.transportState}
+          resumeOffer={resumeParagraphLabel ? { paragraphLabel: resumeParagraphLabel } : null}
+          providerSkips={voice.providerSkips}
+          autoReadOn={autoReadAloud}
+          voiceUnavailable={voiceUnavailable}
+          onPause={voice.pause}
+          onResume={voice.resumeAudio}
+          onSkip={voice.skip}
+          onRetry={voice.retry}
+          onResumePlayback={voice.resume}
+          onStartOver={voice.startOver}
+          onDismiss={voice.dismissPartial}
+          onExitVoice={onExitVoice}
+        />
+      )}
 
       {tocOpen ? (
         <TocSheet messages={messages} onClose={() => setTocOpen(false)} onJump={jumpToMessage} />
@@ -737,7 +803,7 @@ export function ChatPage(): JSX.Element {
       {/* MCP tool-call approval — explicit modal, not tap-to-dismiss; z-50 renders above the cockpit */}
       <McpApprovalPrompt />
 
-      {isInteractionMode && effectivePersona && offering ? (
+      {isInteractionMode && effectivePersona && offering && (!isLiveVoice || isPinned) ? (
         <InteractionMode
           persona={effectivePersona}
           chatId={chat?.id ?? activeChatId ?? ''}
@@ -763,6 +829,7 @@ export function ChatPage(): JSX.Element {
           autoReadAloud={autoReadAloud}
           onToggleAutoRead={onToggleAutoRead}
           voiceUnavailable={voiceUnavailable}
+          onEnterLiveVoice={onEnterLiveVoice}
         />
       ) : null}
     </div>

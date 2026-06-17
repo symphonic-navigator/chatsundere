@@ -18,6 +18,13 @@ const FADE_RATE = 0.05;
 interface Props {
   transportState: TransportState;
   getAnalyser: () => AnalyserNode | null;
+  /**
+   * True while live voice is on the persona's thinking floor — the reply is
+   * being generated and no audio plays yet (transport is idle). The analyser
+   * fills this silence with the same synthetic "waiting" wave, so the pause
+   * while the persona/TTS prepares reads as live presence, not a dead screen.
+   */
+  personaThinking?: boolean;
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -46,7 +53,7 @@ function brighten([r, g, b]: [number, number, number]): [number, number, number]
  * the voice transport state: equaliser bars from the live FFT while speaking,
  * synthetic noise while waiting, and a frozen breathing snapshot while paused.
  */
-export function SpectrumAnalyser({ transportState, getAnalyser }: Props) {
+export function SpectrumAnalyser({ transportState, getAnalyser, personaThinking = false }: Props) {
   const { data: settings } = useSettings();
   const spectrumEnabled = settings?.spectrumEnabled ?? SPECTRUM_DEFAULTS.spectrumEnabled;
   const animationsEnabled = settings?.animationsEnabled ?? true;
@@ -153,14 +160,18 @@ export function SpectrumAnalyser({ transportState, getAnalyser }: Props) {
       // Not paused — clear any stale snapshot.
       frozenBinsRef.current = null;
 
-      const visible = transportState === 'speaking' || transportState === 'waiting';
+      // The synthetic "waiting" wave covers both the TTS audio-fetch (transport
+      // 'waiting') and the live-voice thinking floor (reply still generating,
+      // transport idle) — so the silent pause before audio reads as presence.
+      const waitingWave = transportState === 'waiting' || personaThinking;
+      const visible = transportState === 'speaking' || waitingWave;
       activeRef.current += ((visible ? 1 : 0) - activeRef.current) * FADE_RATE;
 
       if (activeRef.current > 0.005) {
         let bins: Float32Array | null = null;
         if (transportState === 'speaking') {
           bins = accessors.getBins();
-        } else if (transportState === 'waiting') {
+        } else if (waitingWave) {
           fillNoiseBins(noiseBufferRef.current, performance.now() / 1000);
           bins = noiseBufferRef.current;
         }
@@ -206,6 +217,7 @@ export function SpectrumAnalyser({ transportState, getAnalyser }: Props) {
     barCount,
     accentHex,
     transportState,
+    personaThinking,
     accessors,
     chatview,
     textColumn,

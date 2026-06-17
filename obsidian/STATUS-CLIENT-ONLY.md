@@ -16,7 +16,39 @@
 
 > **Roadmap to beta locked (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1-5 → v0.1.0/v0.2.0**. Block 1 (chat core) is ~80% shipped; **memory** (chatsune port) is the notable gap. Block-1/Block-2 design notes: [[insights/2026-05-31-roadmap-lock-block1-block2-design-notes]].
 
-**Last updated:** 2026-06-14 — **AUDIO TOOLBAR LANDED** (squash `19b9223` on
+**Last updated:** 2026-06-17 — **LIVE VOICE LANDED** (squashed on master, **NOT
+pushed**, **device-confirmed by Chris** — "funktioniert! ganz wunderbar!", after
+extended testing). Spec 3 realised: continuous-VAD turn-taking voice mode built on
+the audio-toolbar slot frame, no infrastructure rebuild. The `liveVoiceMachine`
+floor chart (`idle → listening → userSpeaking → transcribing → personaThinking →
+personaSpeaking`, plus `held`/`sttFailed`) owns the mic lifecycle and the floor;
+`useLiveVoice` wires capture/STT/playback; `LiveVoiceBar` is the big-button
+surface. **This session's work on top of the built base:** (1) **fixed the
+stale-read bug** — the persona floor is now driven by the *streaming* reply (the
+auto-read driver, unlocked for live voice via `forceStreamingRead`), so
+`personaThinking` awaits the first audio and `personaSpeaking` reads it as it
+streams; previously it read the *previous* turn's reply on re-entry. Barge during
+thinking now aborts the in-flight generation (`abortPreserve`), Exit lets it
+finish (spec §4). (2) **transcribing indicator** → three animated rising dots (was
+a text label). (3) **spectrum wave during the thinking pause** — the synthetic
+`waiting` wave now also covers `personaThinking` (transport idle), so the
+generation gap reads as presence. (4) **toolbar layout-stability** — the two left
+slots (Hold/Resume + Skip) always render, `disabled`-not-hidden (§11), so the bar
+no longer jumps on `transcribing`. **Laura: no hard defects** (pre-squash pass);
+four soft notes surfaced to Chris (Skip-while-held §4 divergence, thinking/speaking
+visual sameness → design-language, pinned-auto-Hold cause unstated, speech-pause→
+transcribing grace to verify on device). Not a Larissa path (client-only). Gates:
+`pnpm typecheck --force` **14/14**; live-voice-machine **22/22** + LiveVoiceBar
+**7/7**; full user-client vitest baseline unchanged (8 Node-localStorage). Also
+this session: **GLM 5.2 curation** merged from its worktree (two preserved commits,
+`packages/llm-unified` only, no Dexie; llm-unified **380 pass**), and two dev
+cleanups (ui-shared resolved from source in Vite to stop the `dist/index.js`
+load-error during builds; mindspace `animation`-shorthand React warning fixed).
+Spec/plan: [[../superpowers/specs/2026-06-14-live-voice-design]],
+[[../superpowers/plans/2026-06-14-live-voice]]. **Next:** Chris pushes the master
+backlog on his word; live-voice soft-note decisions (esp. Skip-while-held) pending.
+
+**Earlier (2026-06-14) — AUDIO TOOLBAR LANDED** (squash `19b9223` on
 master, **NOT pushed**, **device-confirmed by Chris on multiple sizes** — "richtig
 toll von der Bedienung her", "wunderschön"). The realisation of Chris's
 control-bar concept and the foundation for Spec 3's cockpitless live-voice mode —

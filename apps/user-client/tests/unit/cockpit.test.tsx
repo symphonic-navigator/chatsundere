@@ -96,11 +96,18 @@ describe('Cockpit', () => {
     expect(btn.title).toMatch(/add attachment/i);
   });
 
-  it('Live is disabled with tooltip', () => {
-    const { container } = renderCockpit();
+  it('Live is enabled when a voice provider is configured', () => {
+    const { container } = renderCockpit({ voiceUnavailable: null, onEnterLiveVoice: vi.fn() });
+    const btn = container.querySelector('[data-control="live"]') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    expect(btn.title).toMatch(/live voice/i);
+  });
+
+  it('Live is disabled when no voice provider is available', () => {
+    const { container } = renderCockpit({ voiceUnavailable: 'no-provider' });
     const btn = container.querySelector('[data-control="live"]') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    expect(btn.title).toMatch(/voice|block 4/i);
+    expect(btn.title).toMatch(/voice|settings/i);
   });
 
   it('Pin toggles isPinned in the store', () => {

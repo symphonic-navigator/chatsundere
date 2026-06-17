@@ -7,6 +7,7 @@
 
 import { MicVAD } from '@ricky0123/vad-web';
 import { createRecorder, pickRecordingMimeType } from './audio-recording.js';
+import { RedemptionTracker } from './redemption-tracker.js';
 import { VAD_PRESETS, type VadSensitivity } from './vad-presets.js';
 import { float32ToWavBlob } from './wav-encoder.js';
 
@@ -39,6 +40,13 @@ export interface AudioCaptureCallbacks {
    * "user-speaking" on speech-start need this to revert their state.
    */
   onMisfire?: () => void;
+  /**
+   * Continuous/VAD mode only: the redemption countdown as a 0→1 fraction,
+   * emitted per VAD frame once speech has been seen. Drives the live-voice
+   * "fill from the left" indicator. 0 means "no countdown" (pre-speech or
+   * speech resumed); 1 means "about to auto-submit".
+   */
+  onRedemptionProgress?: (fraction: number) => void;
 }
 
 export interface StartContinuousOptions {
@@ -98,6 +106,7 @@ class AudioCaptureImpl {
   // 'stop' event is async, so the utterance is in flight but no longer
   // visible via vadRecorder during that window.
   private vadDeliveryPending = false;
+  private redemptionTracker: RedemptionTracker | null = null;
 
   /**
    * Push-to-talk: record raw audio from mic. No VAD needed.
@@ -304,6 +313,13 @@ class AudioCaptureImpl {
     const preset = VAD_PRESETS[options.sensitivity];
     const MS_PER_FRAME = 96;
 
+    this.redemptionTracker = new RedemptionTracker({
+      positiveSpeechThreshold: preset.positiveSpeechThreshold,
+      negativeSpeechThreshold: preset.negativeSpeechThreshold,
+      redemptionMs: options.redemptionMs,
+      frameMs: MS_PER_FRAME,
+    });
+
     const vad = await MicVAD.new({
       getStream,
       onnxWASMBasePath: ORT_CDN,
@@ -312,6 +328,10 @@ class AudioCaptureImpl {
       negativeSpeechThreshold: preset.negativeSpeechThreshold,
       minSpeechMs: preset.minSpeechFrames * MS_PER_FRAME,
       redemptionMs: options.redemptionMs,
+      onFrameProcessed: (probabilities: { isSpeech: number; notSpeech: number }) => {
+        const fraction = this.redemptionTracker?.frame(probabilities.isSpeech) ?? 0;
+        this.callbacks?.onRedemptionProgress?.(fraction);
+      },
       onSpeechStart: () => {
         this.handleVadSpeechStart();
       },
@@ -391,6 +411,8 @@ class AudioCaptureImpl {
   }
 
   private handleVadSpeechEnd(pcm: Float32Array): void {
+    this.redemptionTracker?.reset();
+    this.callbacks?.onRedemptionProgress?.(0);
     const cb = this.callbacks;
     const durationMs = Math.max(0, performance.now() - this.vadSegmentStartedAt);
     this.vadDeliveryPending = true;
@@ -483,9 +505,11 @@ class AudioCaptureImpl {
     const mime = this.vadRecorderMime;
     const chunks = this.vadRecorderChunks;
     this.vad = null;
+    this.redemptionTracker = null;
     this.vadRecorder = null;
     this.vadRecorderMime = null;
     this.vadRecorderChunks = [];
+    this.vadDeliveryPending = false;
     this.vadStream = null;
     this.vadContext = null;
     this.analyser = null;
