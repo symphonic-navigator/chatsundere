@@ -160,6 +160,15 @@ export default defineConfig({
       '@chatsundere/llm-unified': fileURLToPath(
         new URL('../../packages/llm-unified/src/index.ts', import.meta.url),
       ),
+      // Same reasoning for @chatsundere/ui-shared: resolve to TypeScript source
+      // rather than dist/. The package's `exports` points at dist/index.js, but
+      // a `pnpm build`/`typecheck` runs ui-shared's `rm -rf dist && tsc`, which
+      // briefly deletes that file out from under a running dev server (Vite then
+      // logs "Failed to load url …/ui-shared/dist/index.js"). Consuming the
+      // source removes the dist dependency and gives live HMR on shared edits.
+      '@chatsundere/ui-shared': fileURLToPath(
+        new URL('../../packages/ui-shared/src/index.ts', import.meta.url),
+      ),
     },
   },
   // `@huggingface/transformers` must NOT be pre-bundled: the dep optimiser

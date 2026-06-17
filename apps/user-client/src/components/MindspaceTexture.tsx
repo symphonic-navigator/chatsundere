@@ -46,8 +46,10 @@ export function MindspaceTexture({
       width: '80%',
       height: '60%',
       background: `radial-gradient(ellipse, rgba(${rgb}, 0.08) 0%, transparent 70%)`,
-      animation: 'mindspace-float1 30s ease-in-out infinite',
-      animationDelay: delay,
+      // Delay folded into the shorthand (4th token = delay): mixing the
+      // `animation` shorthand with a separate `animationDelay` longhand makes
+      // React warn that a rerender could clobber one with the other.
+      animation: `mindspace-float1 30s ease-in-out ${delay} infinite`,
     };
     const b: CSSProperties = {
       position: 'absolute',
@@ -56,8 +58,7 @@ export function MindspaceTexture({
       width: '70%',
       height: '50%',
       background: `radial-gradient(ellipse, rgba(${rgb}, 0.05) 0%, transparent 65%)`,
-      animation: 'mindspace-float2 40s ease-in-out infinite',
-      animationDelay: delay,
+      animation: `mindspace-float2 40s ease-in-out ${delay} infinite`,
     };
     return (
       <div className="mindspace-texture" data-texture="cloudy" style={wrapStyle}>
@@ -73,8 +74,7 @@ export function MindspaceTexture({
       inset: '-20%',
       background: `radial-gradient(ellipse at ${30 + i * 25}% ${20 + i * 30}%,
         rgba(${rgb}, ${0.07 - i * 0.015}) 0%, transparent 60%)`,
-      animation: `mindspace-aurora${i + 1} ${50 + i * 10}s ease-in-out infinite`,
-      animationDelay: delay,
+      animation: `mindspace-aurora${i + 1} ${50 + i * 10}s ease-in-out ${delay} infinite`,
       mixBlendMode: 'screen',
     });
     return (
