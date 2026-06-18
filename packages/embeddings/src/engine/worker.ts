@@ -35,7 +35,7 @@ async function loadPipeline(
   skipModes: Exclude<ExecutionMode, 'auto'>[] = [],
 ): Promise<ResolvedBackend> {
   resetPipeline();
-  const { extractor, backend } = await createFeatureExtractor('int8', pipelineExecutionMode, {
+  const { extractor, backend } = await createFeatureExtractor(pipelineExecutionMode, {
     progress_callback,
     skipModes,
   });

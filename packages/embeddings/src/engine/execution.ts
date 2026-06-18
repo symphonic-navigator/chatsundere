@@ -21,14 +21,21 @@ env.localModelPath = '/model/';
 const WEBGPU_PROBE_MS = 4_000;
 const PIPELINE_INIT_TIMEOUT_MS = 180_000;
 
+/** ONNX weight format. int8 is the WASM-optimal choice; q4f16 is the WebGPU
+ *  choice (4-bit weights + fp16 compute — needs the `shader-f16` feature).
+ *  int8 on the WebGPU EP falls quantized ops back to the CPU and is far slower
+ *  than WASM, so the device→dtype mapping below never pairs them. */
+export type EmbedDtype = 'int8' | 'q4f16' | 'fp16' | 'fp32';
+
 const FALLBACK_CHAIN: {
   mode: Exclude<ExecutionMode, 'auto'>;
   device: 'webgpu' | 'wasm';
   singleThread: boolean;
+  dtype: EmbedDtype;
 }[] = [
-  { mode: 'webgpu', device: 'webgpu', singleThread: false },
-  { mode: 'wasm-multi', device: 'wasm', singleThread: false },
-  { mode: 'wasm-single', device: 'wasm', singleThread: true },
+  { mode: 'webgpu', device: 'webgpu', singleThread: false, dtype: 'q4f16' },
+  { mode: 'wasm-multi', device: 'wasm', singleThread: false, dtype: 'int8' },
+  { mode: 'wasm-single', device: 'wasm', singleThread: true, dtype: 'int8' },
 ];
 
 export interface CreateExtractorOptions {
@@ -83,37 +90,85 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 // Minimal WebGPU shape — the standard DOM lib does not ship WebGPU types, and we
-// only need requestAdapter() for the probe. Avoids a @webgpu/types dependency.
+// only need requestAdapter() + adapter info/features for the probe. Avoids a
+// @webgpu/types dependency.
+interface MinimalAdapterInfo {
+  vendor?: string;
+  architecture?: string;
+  description?: string;
+}
+interface MinimalAdapter {
+  info?: MinimalAdapterInfo;
+  requestAdapterInfo?(): Promise<MinimalAdapterInfo>;
+  features?: { has(name: string): boolean };
+}
 interface MinimalGpu {
-  requestAdapter(): Promise<unknown>;
+  requestAdapter(): Promise<MinimalAdapter | null>;
 }
 
 function getGpu(): MinimalGpu | undefined {
   return (navigator as unknown as { gpu?: MinimalGpu }).gpu;
 }
 
-/** Chromium exposes navigator.gpu before WebGPU is actually usable (Linux/Vivaldi without flags). */
+/** CPU software renderers expose a WebGPU adapter but run on the CPU, slower than
+ *  WASM for this workload — detect and reject them. */
+function isSoftwareAdapter(info: MinimalAdapterInfo | undefined): boolean {
+  const s =
+    `${info?.vendor ?? ''} ${info?.architecture ?? ''} ${info?.description ?? ''}`.toLowerCase();
+  return /swiftshader|llvmpipe|lavapipe|basic render|microsoft basic|software/.test(s);
+}
+
+async function getAdapterInfo(adapter: MinimalAdapter): Promise<MinimalAdapterInfo | undefined> {
+  if (adapter.info) return adapter.info;
+  if (adapter.requestAdapterInfo) {
+    try {
+      return await adapter.requestAdapterInfo();
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Decide whether WebGPU is the right backend. Chromium exposes navigator.gpu
+ * before WebGPU is usable (Linux/Vivaldi without flags → null adapter), and on
+ * Linux it often falls back to the SwiftShader software renderer — which is
+ * slower than WASM. We also require `shader-f16`, because the WebGPU dtype is
+ * q4f16; without f16 the GPU path cannot run, so WASM (int8) is the better choice.
+ */
 export async function probeWebGpu(): Promise<{ ok: boolean; reason: string }> {
   const gpu = getGpu();
   if (!gpu) {
     return { ok: false, reason: 'navigator.gpu not present' };
   }
+  let adapter: MinimalAdapter | null;
   try {
-    const adapter = await withTimeout(
-      gpu.requestAdapter(),
-      WEBGPU_PROBE_MS,
-      'WebGPU requestAdapter',
-    );
-    if (!adapter) {
-      return {
-        ok: false,
-        reason: 'requestAdapter() → null (typical without --enable-unsafe-webgpu)',
-      };
-    }
-    return { ok: true, reason: 'adapter OK' };
+    adapter = await withTimeout(gpu.requestAdapter(), WEBGPU_PROBE_MS, 'WebGPU requestAdapter');
   } catch (err) {
     return { ok: false, reason: formatError(err) };
   }
+  if (!adapter) {
+    return {
+      ok: false,
+      reason: 'requestAdapter() → null (typical without --enable-unsafe-webgpu)',
+    };
+  }
+  const info = await getAdapterInfo(adapter);
+  if (isSoftwareAdapter(info)) {
+    const what = info?.architecture || info?.description || 'software renderer';
+    return {
+      ok: false,
+      reason: `software adapter (${what}) — slower than WASM, using WASM instead`,
+    };
+  }
+  if (!adapter.features?.has?.('shader-f16')) {
+    return {
+      ok: false,
+      reason: 'no shader-f16 (q4f16 GPU path unavailable) — using WASM instead',
+    };
+  }
+  return { ok: true, reason: 'hardware adapter with shader-f16' };
 }
 
 async function smokeTestInference(extractor: FeatureExtractionPipeline): Promise<void> {
@@ -136,7 +191,6 @@ export function buildAttemptList(
 }
 
 export async function createFeatureExtractor(
-  dtype: 'int8' | 'fp32',
   executionMode: ExecutionMode,
   options: CreateExtractorOptions = {},
 ): Promise<{ extractor: FeatureExtractionPipeline; backend: ResolvedBackend }> {
@@ -168,7 +222,7 @@ export async function createFeatureExtractor(
 
       const extractor = await withTimeout(
         pipeline('feature-extraction', MODEL_ID, {
-          dtype,
+          dtype: attempt.dtype,
           device: attempt.device,
           progress_callback,
         }),
@@ -190,7 +244,7 @@ export async function createFeatureExtractor(
         backend: {
           executionMode: attempt.mode,
           device: sessionDevice,
-          dtype,
+          dtype: attempt.dtype,
           wasmThreadsConfigured: wasmThreads,
           webgpuAvailable: 'gpu' in navigator,
           crossOriginIsolated: globalThis.crossOriginIsolated === true,

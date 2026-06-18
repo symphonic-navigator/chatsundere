@@ -74,8 +74,50 @@ describe('probeWebGpu', () => {
     expect(r.reason).toContain('null');
   });
 
-  it('reports ok when an adapter is returned', async () => {
-    vi.stubGlobal('navigator', { gpu: { requestAdapter: () => Promise.resolve({}) } });
+  it('rejects a software adapter (SwiftShader) — slower than WASM', async () => {
+    vi.stubGlobal('navigator', {
+      gpu: {
+        requestAdapter: () =>
+          Promise.resolve({
+            info: {
+              vendor: 'google',
+              architecture: 'swiftshader',
+              description: 'SwiftShader Device',
+            },
+            features: { has: () => true },
+          }),
+      },
+    });
+    const r = await probeWebGpu();
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/software/i);
+  });
+
+  it('rejects a hardware adapter that lacks shader-f16 (q4f16 GPU path needs it)', async () => {
+    vi.stubGlobal('navigator', {
+      gpu: {
+        requestAdapter: () =>
+          Promise.resolve({
+            info: { vendor: 'nvidia', architecture: 'turing' },
+            features: { has: (f: string) => f !== 'shader-f16' },
+          }),
+      },
+    });
+    const r = await probeWebGpu();
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/shader-f16/i);
+  });
+
+  it('reports ok for a hardware adapter with shader-f16', async () => {
+    vi.stubGlobal('navigator', {
+      gpu: {
+        requestAdapter: () =>
+          Promise.resolve({
+            info: { vendor: 'nvidia', architecture: 'turing' },
+            features: { has: () => true },
+          }),
+      },
+    });
     const r = await probeWebGpu();
     expect(r.ok).toBe(true);
   });

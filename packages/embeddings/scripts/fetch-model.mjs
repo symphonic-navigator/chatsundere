@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-// Downloads the self-hosted arctic-embed-m-v2.0 int8 assets and verifies SHA256.
+// Downloads the self-hosted arctic-embed-m-v2.0 weights and verifies SHA256.
+// int8 is the WASM backend's weight format; q4f16 is the WebGPU backend's
+// (4-bit + fp16, needs the shader-f16 device feature). Both are fetched so the
+// runtime can pick per device; a client only downloads the one its device uses.
 // Usage: node scripts/fetch-model.mjs
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -12,13 +15,14 @@ const BASE = `https://huggingface.co/${REPO}/resolve/${REVISION}`;
 
 // transformers.js expects this on-disk layout under localModelPath ('/model/'):
 //   <root>/<REPO>/{config,tokenizer,tokenizer_config,special_tokens_map}.json
-//   <root>/<REPO>/onnx/model_int8.onnx
+//   <root>/<REPO>/onnx/{model_int8,model_q4f16}.onnx
 const FILES = [
   'config.json',
   'tokenizer.json',
   'tokenizer_config.json',
   'special_tokens_map.json',
   'onnx/model_int8.onnx',
+  'onnx/model_q4f16.onnx',
 ];
 
 // Filled in after the first run prints the computed hashes.
