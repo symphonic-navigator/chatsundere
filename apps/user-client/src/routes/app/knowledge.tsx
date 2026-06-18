@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChatsuneLibraryImport } from '../../components/knowledge/ChatsuneLibraryImport.js';
 import { LibrarySheet } from '../../components/knowledge/NewLibrarySheet.js';
 import { useCreateLibrary, useDocumentCounts, useFilteredLibraries } from '../../data/knowledge.js';
 
@@ -17,9 +18,12 @@ export function KnowledgeList(): JSX.Element {
     <section className="flex min-h-[80dvh] flex-col gap-4 px-4 pb-12 pt-6">
       <header className="flex items-center justify-between">
         <h1 className="font-display text-2xl">My Knowledge</h1>
-        <button type="button" className="knowledge-new-btn" onClick={() => setSheetOpen(true)}>
-          New library
-        </button>
+        <div className="flex items-center gap-2">
+          <ChatsuneLibraryImport />
+          <button type="button" className="knowledge-new-btn" onClick={() => setSheetOpen(true)}>
+            New library
+          </button>
+        </div>
       </header>
 
       {rows.length === 0 ? (

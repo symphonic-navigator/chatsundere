@@ -193,6 +193,12 @@ export interface ChatRow {
    *  Never set retroactively — flipping the persona switch later must not
    *  retrofit openers onto existing chats. */
   openerPending?: boolean;
+  /** chatsune session `original_id` when this chat was imported from a Chatsune
+   *  persona export; absent for natively-created chats. Non-indexed (schemaless,
+   *  like `bookmarkLabel`/`kind`) — dedup loads a persona's chats via the
+   *  `personaId` index and builds the seen-set in memory, so no Dexie version
+   *  bump is needed. */
+  importedFrom?: string | null;
 }
 
 export type ContentBlock =

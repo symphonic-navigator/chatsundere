@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { type Offering, getOffering, listOfferings } from '@chatsundere/llm-unified';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -19,11 +20,16 @@ import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { MindspacePicker } from '../../components/MindspacePicker.js';
 import { ModelPickerField } from '../../components/ModelPickerField.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
+import {
+  type AppliedPersonaImport,
+  ChatsuneImportControl,
+} from '../../components/persona-editor/ChatsuneImportControl.js';
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { McpOverrideSection } from '../../components/persona-editor/McpOverrideSection.js';
 import { TtsModerationNotice } from '../../components/voice/TtsModerationNotice.js';
 import { VoicePicker } from '../../components/voice/VoicePicker.js';
 import { useChats } from '../../data/chats.js';
+import { importChatsuneSessions } from '../../data/chatsune-import.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useRemovePersonaAvatar, useSetPersonaAvatar } from '../../data/persona-avatars.js';
@@ -34,9 +40,11 @@ import {
   useUpdatePersona,
 } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
+import { QK } from '../../data/queryKeys.js';
 import { useSettings } from '../../data/settings.js';
 import { cropToBackground } from '../../lib/avatar-crop.js';
 import { normaliseAvatar } from '../../lib/avatar-normalise.js';
+import { resolveImportedNsfw } from '../../lib/chatsune-import/nsfw.js';
 import {
   CONTEXT_STEP,
   contextAdjustable,
@@ -215,6 +223,7 @@ export function PersonaEditor(): JSX.Element {
   const create = useCreatePersona();
   const update = useUpdatePersona();
   const del = useDeletePersona();
+  const qc = useQueryClient();
 
   const seedDraft = useMemo(
     () => defaultDraft(settings.data, mindspaces.data, providers.data),
@@ -270,6 +279,51 @@ export function PersonaEditor(): JSX.Element {
   const setAvatarMut = useSetPersonaAvatar();
   const removeAvatarMut = useRemovePersonaAvatar();
   const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar>(null);
+
+  // Sessions parsed from a Chatsune import, written after the persona (and its
+  // id) exist — on Save. Cleared once written.
+  const [importedSessions, setImportedSessions] = useState<AppliedPersonaImport['sessions']>([]);
+  // Tracks how many new chats are staged; shown as a save-prompt cue until Save clears it.
+  const [stagedChatCount, setStagedChatCount] = useState(0);
+
+  async function applyImportedAvatar(avatar: NonNullable<AppliedPersonaImport['avatar']>) {
+    // Re-normalise the chatsune avatar bytes through our pipeline (→ WebP <=512);
+    // the crop is already converted to our fractional model.
+    const file = new File([avatar.bytes as BlobPart], 'avatar', { type: avatar.mime });
+    const n = await normaliseAvatar(file);
+    setPendingAvatar({
+      blob: n.blob,
+      mime: n.mime,
+      width: n.width,
+      height: n.height,
+      crop: avatar.crop,
+    });
+  }
+
+  function onApplyImport(a: AppliedPersonaImport) {
+    setIsDirty(true);
+    // NSFW only ever upgrades, independent of the overwrite choice (spec §5.3).
+    patch({ adultPersona: resolveImportedNsfw(draft.adultPersona, a.persona.nsfw) });
+    if (a.overwriteConfig) {
+      patch({
+        name: a.persona.name,
+        tagline: a.persona.tagline,
+        instructions: a.persona.instructions,
+      });
+    }
+    if (a.avatar) {
+      void applyImportedAvatar(a.avatar).catch((e) => {
+        toastStore.show({
+          message: `Could not import the avatar — use Change avatar to set one. (${(e as Error).message})`,
+          tone: 'warn',
+          durationMs: 3500,
+        });
+      });
+    }
+    setImportedSessions(a.sessions);
+    setStagedChatCount(a.newChatCount);
+  }
+
   const [cropState, setCropState] = useState<{
     url: string;
     width: number;
@@ -342,6 +396,22 @@ export function PersonaEditor(): JSX.Element {
         await setAvatarMut.mutateAsync({ personaId: pid, ...pendingAvatar });
       }
       setPendingAvatar(null);
+    }
+    if (pid && importedSessions.length > 0) {
+      const res = await importChatsuneSessions(pid, importedSessions);
+      setImportedSessions([]);
+      setStagedChatCount(0);
+      toastStore.show({
+        message:
+          res.imported > 0
+            ? `Imported ${res.imported} ${res.imported === 1 ? 'chat' : 'chats'}${
+                res.skipped > 0 ? ` (${res.skipped} already imported)` : ''
+              }.`
+            : 'No new chats to import.',
+        tone: 'info',
+        durationMs: 3500,
+      });
+      await qc.invalidateQueries({ queryKey: QK.chats });
     }
     setIsDirty(false);
   }
@@ -459,9 +529,24 @@ export function PersonaEditor(): JSX.Element {
       </EditorSticky>
 
       {/* Identity — always visible, outside the accordion.
-          Order top→bottom: avatar, name, tagline, model. */}
+          Order top→bottom: import, avatar, name, tagline, model. */}
       <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">
         <header className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Identity</header>
+        <p className="mb-2 text-[11px] text-paper-soft">
+          Coming from Chatsune? Import a persona and its chats.
+        </p>
+        <ChatsuneImportControl
+          mode={isCreate ? 'create' : 'edit'}
+          personaId={isCreate ? null : (id ?? null)}
+          onApply={onApplyImport}
+          existingNsfw={draft.adultPersona}
+        />
+        {stagedChatCount > 0 ? (
+          <p className="mb-2 text-[11px] text-paper-soft">
+            {stagedChatCount} {stagedChatCount === 1 ? 'chat' : 'chats'} ready — Save to bring them
+            in.
+          </p>
+        ) : null}
         <div className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Avatar</div>
         <AvatarField
           personaId={isCreate ? null : (id ?? null)}
