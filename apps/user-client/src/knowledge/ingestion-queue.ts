@@ -35,7 +35,12 @@ export function createIngestionQueue(deps: IngestionDeps): IngestionQueue {
         if (await deps.getDocument(id)) await deps.setReady(id, 0);
         return;
       }
+      const t0 = performance.now();
       const vectors = await deps.embed(chunks.map((c) => c.text));
+      const ms = Math.round(performance.now() - t0);
+      console.info(
+        `[embedding] "${doc.title}" — ${chunks.length} ${chunks.length === 1 ? 'chunk' : 'chunks'} embedded in ${ms} ms (${(ms / chunks.length).toFixed(1)} ms/chunk)`,
+      );
       const still = await deps.getDocument(id);
       if (!still) return; // deleted mid-flight → discard
       await deps.writeChunks(still, chunks, vectors);
