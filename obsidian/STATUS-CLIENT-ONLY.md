@@ -9,8 +9,8 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 ## Current
 
 **Last updated:** 2026-06-18 — **CHATSUNE IMPORT LANDED** (single squash
-`81cf6f1` on master, **NOT pushed**, **device-test pending** — Chris tests
-after). Lets users migrate from chatsune. A persona-export importer in the
+`81cf6f1` on master + follow-up fixes (see Post-landing), **NOT pushed**,
+**device-confirmed by Chris**). Lets users migrate from chatsune. A persona-export importer in the
 persona editor (new persona *and* merge-into-existing) maps
 name/tagline/system_prompt/nsfw and converts the avatar crop, then merges chats
 **additively** with **per-persona idempotency** — dedup by chatsune `original_id`
@@ -35,9 +35,24 @@ wording). Not a Larissa path (client-only). Gates: `pnpm typecheck --force`
 **14/14**; full user-client vitest at the **8 Node-localStorage baseline** (all new
 lib/data/component tests green). **Dexie unchanged (v26).** Specs/plans:
 [[../superpowers/specs/2026-06-18-chatsune-import-design]],
-[[../superpowers/plans/2026-06-18-chatsune-import]]. **Next:** Chris device-tests
-the import (spec §13: real chatsune export → import → continue chatting), then
-pushes the master backlog on his word.
+[[../superpowers/plans/2026-06-18-chatsune-import]].
+
+**Post-landing (2026-06-18, device-confirmed) — import works; embedding-speed
+saga fixed across five commits:** (1) `f63be23` count dropped **images from the
+`events` timeline** (newer chatsune docs store images there, not `image_refs` —
+tool-calls already worked via the legacy field); (2) `f7d70ef` + `4ec58ae`
+per-document **embedding-duration log** + resolved-**backend log** (model load
+moved out of the per-doc timer via a queue `prepare` hook); (3) `d6e60fc`
+**per-device dtype + reject software/no-f16 WebGPU** — the device was resolving
+to **SwiftShader** (CPU software renderer) running int8 (~7.3 s/chunk!); now real
+WebGPU→**q4f16**, software/no-f16→WASM int8 (`fetch-model.mjs` pulls q4f16 too);
+(4) `a1fdd8a` **Stufe A** — COOP `same-origin` + COEP `credentialless` in
+`vite.config` dev/preview → `crossOriginIsolated` → **4-thread WASM** (~870 ms/chunk
+on Chris's SwiftShader box; **~8.4× total** vs the start). **Stufe B (prod
+cross-origin isolation) PARKED** — low ROI (fallback-path only; real-GPU users get
+q4f16; alpha not deployed), logged in [[insights/follow-ups-index]] for the
+alpha-deploy milestone. **Next session:** Chris pushes the master backlog; pick up
+another roadmap topic.
 
 **Earlier (2026-06-17) — TTS AUDIO + INNER MONOLOGUE LANDED** (single
 squash `a875cf9` on master, **NOT pushed**, **device-confirmed by Chris** — "ich
