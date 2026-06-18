@@ -53,6 +53,7 @@ export function getEmbeddingEngine(): Promise<EmbeddingEngine> {
   if (!enginePromise) {
     const progress = useModelProgressStore.getState();
     progress.setLoading(true);
+    const t0 = performance.now();
     enginePromise = createEmbeddingEngine({
       onProgress: (data: unknown) => {
         const d = data as { progress?: number };
@@ -60,6 +61,18 @@ export function getEmbeddingEngine(): Promise<EmbeddingEngine> {
       },
     }).then((engine) => {
       useModelProgressStore.getState().setReady();
+      // One-time diagnostic: which backend actually resolved, and how long the
+      // model took to load. The slowness lever is almost always device=wasm with
+      // wasmThreads=1 (no WebGPU + not crossOriginIsolated).
+      const b = engine.backend;
+      console.info(
+        `[embedding-backend] device=${b.device} mode=${b.executionMode} dtype=${b.dtype} ` +
+          `wasmThreads=${b.wasmThreadsConfigured} crossOriginIsolated=${b.crossOriginIsolated} ` +
+          `webgpuAvailable=${b.webgpuAvailable} — model ready in ${Math.round(performance.now() - t0)} ms`,
+      );
+      if (b.fallbackTrail.length > 0) {
+        console.info(`[embedding-backend] fallback trail:\n${b.fallbackTrail.join('\n')}`);
+      }
       return engine;
     });
   }

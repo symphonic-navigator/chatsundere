@@ -9,6 +9,10 @@ export interface IngestionDeps {
   setReady(id: string, chunkCount: number): Promise<void>;
   embed(texts: string[]): Promise<Float32Array[]>;
   writeChunks(doc: DocumentRow, chunks: Chunk[], vectors: Float32Array[]): Promise<void>;
+  /** Optional: make heavy resources (the embedding model) ready BEFORE the
+   *  per-document timer starts, so the logged duration is inference only and
+   *  the one-time model load is not charged to the first document. */
+  prepare?(): Promise<void>;
 }
 
 export interface IngestionQueue {
@@ -35,6 +39,7 @@ export function createIngestionQueue(deps: IngestionDeps): IngestionQueue {
         if (await deps.getDocument(id)) await deps.setReady(id, 0);
         return;
       }
+      await deps.prepare?.();
       const t0 = performance.now();
       const vectors = await deps.embed(chunks.map((c) => c.text));
       const ms = Math.round(performance.now() - t0);

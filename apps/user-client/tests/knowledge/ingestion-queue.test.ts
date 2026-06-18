@@ -80,6 +80,34 @@ describe('ingestion queue', () => {
     expect(maxInFlight).toBe(1);
   });
 
+  it('awaits prepare before embedding (model load excluded from the timer)', async () => {
+    const order: string[] = [];
+    const deps = makeDeps({
+      prepare: vi.fn(async () => {
+        order.push('prepare');
+      }),
+      embed: vi.fn(async (texts: string[]) => {
+        order.push('embed');
+        return texts.map(() => new Float32Array(768).fill(0.1));
+      }),
+    });
+    const q = createIngestionQueue(deps);
+    await q.process('d1');
+    expect(deps.prepare).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['prepare', 'embed']);
+  });
+
+  it('does not call prepare for a document with no chunkable content', async () => {
+    const deps = makeDeps({
+      prepare: vi.fn(async () => {}),
+      getDocument: vi.fn(async (id: string) => makeDoc(id, '   ')),
+    });
+    const q = createIngestionQueue(deps);
+    await q.process('d1');
+    expect(deps.prepare).not.toHaveBeenCalled();
+    expect(deps.embed).not.toHaveBeenCalled();
+  });
+
   it('skips embedding for a document with no chunkable content', async () => {
     const deps = makeDeps({ getDocument: vi.fn(async (id: string) => makeDoc(id, '   ')) });
     const q = createIngestionQueue(deps);

@@ -35,6 +35,11 @@ function realQueue(): IngestionQueue {
         updatedAt: Date.now(),
       });
     },
+    // Warm (and on first call, load + log) the model outside the per-document
+    // embedding timer, so the timer measures inference only.
+    prepare: async () => {
+      await getEmbeddingEngine();
+    },
     embed: async (texts) => {
       const engine = await getEmbeddingEngine();
       return engine.embed(texts, { kind: 'document' });
