@@ -367,12 +367,14 @@ obligation **before** starting.
 ## 9. Data Model Changes
 
 - **`ChatRow.importedFrom?: string | null`** — chatsune `original_id` for imported
-  chats; `null`/absent for natively-created chats. **Indexed** (dedup lookup scoped
-  with `personaId`).
-- **Dexie version bump** to add the `importedFrom` index. Current version is **26**;
-  this feature takes the **next free version (tentatively 27)** — verify at
-  implementation time that no parallel feature has claimed it (per the
-  parallel-feature Dexie-version-ownership rule).
+  chats; `null`/absent for natively-created chats. **Non-indexed** (schemaless),
+  mirroring `bookmarkLabel` / `kind` / `triggerOnCompanion`.
+- **No Dexie version bump.** *(Refined during planning, 2026-06-18.)* Dedup does
+  **not** query `importedFrom` directly: it loads a persona's chats via the existing
+  `personaId` index and builds the seen-set in memory. A non-indexed optional field
+  that is absent on existing rows and read defensively needs no schema migration —
+  same precedent as the fields above. This also removes the parallel-feature
+  version-ownership concern entirely.
 
 No other schema changes: avatars, libraries, documents reuse existing tables.
 
