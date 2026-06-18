@@ -138,6 +138,20 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
+    // Cross-origin isolation (Stufe A — dev). COOP+COEP make the page
+    // crossOriginIsolated, which exposes SharedArrayBuffer → the embedding
+    // engine's WASM backend can run multi-threaded (otherwise it is pinned to a
+    // single thread). Only matters on setups without real WebGPU (software GPU /
+    // no shader-f16), which fall back to WASM. `credentialless` is used instead
+    // of `require-corp` so cross-origin no-cors subresources (e.g. the VAD CDN
+    // assets on jsdelivr) keep loading without needing CORP headers; the
+    // embedding ORT WASM is same-origin (resolved via import.meta.url), so it is
+    // unaffected either way. Production isolation (GitHub Pages, Safari) is
+    // Stufe B via the service worker.
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
     // Dev-only same-origin shim: forward /admin/* to the admin-client dev
     // server so the shared-IndexedDB design (spec §6.1.1) works without a
     // reverse proxy in development. In production Traefik does this; here
@@ -148,6 +162,14 @@ export default defineConfig({
         changeOrigin: false,
         ws: true,
       },
+    },
+  },
+  // `vite preview` (serving the production build locally) gets the same isolation
+  // headers so the multi-threaded WASM path can be tested against a real build.
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
   resolve: {
