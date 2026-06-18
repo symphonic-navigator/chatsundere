@@ -47,6 +47,11 @@ export interface ChatsuneMessage {
   image_refs?: unknown[] | null;
   knowledge_context?: unknown[] | null;
   artefact_refs?: unknown[] | null;
+  /** New-shape chronological timeline. Newer chatsune docs carry images,
+   *  tool calls, knowledge lookups, attachments and artefacts here as
+   *  `{ kind, ... }` entries — sometimes instead of, sometimes in parallel
+   *  with, the legacy top-level fields above. */
+  events?: unknown[] | null;
 }
 
 export interface ChatsuneSessionExport {

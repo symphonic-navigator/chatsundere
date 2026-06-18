@@ -10,18 +10,69 @@ export interface DroppedCounts {
   knowledgeLookups: number;
 }
 
-function len(arr: unknown[] | null | undefined): number {
-  return Array.isArray(arr) ? arr.length : 0;
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
 }
 
-/** Count the Tier-A-dropped content on a chatsune message. */
+function asArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
+}
+
+/** A stable de-dup key for a dropped item: a present id field, else its JSON
+ *  shape. Lets the same item counted once when it appears in both the legacy
+ *  top-level field and the new `events` timeline. */
+function itemKey(item: unknown, idKeys: readonly string[]): string {
+  if (isRecord(item)) {
+    for (const k of idKeys) {
+      const v = item[k];
+      if (typeof v === 'string' && v.length > 0) return `${k}=${v}`;
+    }
+  }
+  return JSON.stringify(item) ?? 'null';
+}
+
+/** The item objects carried by one timeline event entry: images/attachments
+ *  use `refs[]`, knowledge uses `items[]`, artefact uses a single `ref{}`,
+ *  and a tool_call entry is itself the item. */
+function eventEntryItems(entry: Record<string, unknown>): unknown[] {
+  if (Array.isArray(entry.refs)) return entry.refs;
+  if (Array.isArray(entry.items)) return entry.items;
+  if (isRecord(entry.ref)) return [entry.ref];
+  return [entry];
+}
+
+/** Unique count of one dropped category across the legacy top-level field and
+ *  the new `events` timeline, de-duplicated by id — mirrors chatsune's own
+ *  reader, which unions both sources because newer docs may write either or
+ *  both (`chat/__init__.py` image/tool-call collection). */
+function countCategory(
+  m: ChatsuneMessage,
+  topLevel: unknown,
+  eventKind: string,
+  idKeys: readonly string[],
+): number {
+  const seen = new Set<string>();
+  for (const item of asArray(topLevel)) seen.add(itemKey(item, idKeys));
+  for (const entry of asArray(m.events)) {
+    if (!isRecord(entry) || entry.kind !== eventKind) continue;
+    for (const item of eventEntryItems(entry)) seen.add(itemKey(item, idKeys));
+  }
+  return seen.size;
+}
+
+/** Count the Tier-A-dropped content on a chatsune message (both the legacy
+ *  top-level fields and the new `events` timeline). */
 export function countDropped(m: ChatsuneMessage): DroppedCounts {
   return {
-    images: len(m.image_refs),
-    toolCalls: len(m.tool_calls),
-    attachments: len(m.attachments),
-    artefacts: len(m.artefact_refs),
-    knowledgeLookups: len(m.knowledge_context),
+    images: countCategory(m, m.image_refs, 'image', ['id']),
+    toolCalls: countCategory(m, m.tool_calls, 'tool_call', ['tool_call_id', 'id']),
+    attachments: countCategory(m, m.attachments, 'attachment', ['file_id', 'id']),
+    artefacts: countCategory(m, m.artefact_refs, 'artefact', ['artefact_id', 'id']),
+    knowledgeLookups: countCategory(m, m.knowledge_context, 'knowledge_search', [
+      'document_id',
+      'documentId',
+      'id',
+    ]),
   };
 }
 

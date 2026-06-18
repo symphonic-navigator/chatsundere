@@ -31,7 +31,12 @@ describe('mapChatsuneMessage', () => {
 
   it('appends a dropped-content hint as a final text block', () => {
     const out = mapChatsuneMessage(
-      { role: 'assistant', content: 'see image', image_refs: [{}, {}], tool_calls: [{}] },
+      {
+        role: 'assistant',
+        content: 'see image',
+        image_refs: [{ id: 'i1' }, { id: 'i2' }],
+        tool_calls: [{ tool_call_id: 't1' }],
+      },
       BASE,
     );
     expect(out?.contentBlocks).toEqual([
