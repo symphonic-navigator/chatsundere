@@ -6,6 +6,31 @@
 
 ## Session log
 
+**Earlier (2026-06-17) — LIVE VOICE LANDED** (squashed on master, **NOT
+pushed**, **device-confirmed by Chris** — "funktioniert! ganz wunderbar!", after
+extended testing). Spec 3 realised: continuous-VAD turn-taking voice mode built on
+the audio-toolbar slot frame, no infrastructure rebuild. The `liveVoiceMachine`
+floor chart (`idle → listening → userSpeaking → transcribing → personaThinking →
+personaSpeaking`, plus `held`/`sttFailed`) owns the mic lifecycle and the floor;
+`useLiveVoice` wires capture/STT/playback; `LiveVoiceBar` is the big-button
+surface. Fixed the stale-read bug — the persona floor is driven by the *streaming*
+reply (auto-read driver unlocked via `forceStreamingRead`); barge during thinking
+aborts the in-flight generation (`abortPreserve`), Exit lets it finish (spec §4).
+Transcribing indicator → three animated rising dots; spectrum `waiting` wave now
+also covers `personaThinking` so the generation gap reads as presence; toolbar
+layout-stability (Hold/Resume + Skip always render, `disabled`-not-hidden, §11).
+**Laura: no hard defects** (pre-squash); four soft notes surfaced (Skip-while-held
+§4 divergence, thinking/speaking visual sameness → design-language, pinned-auto-Hold
+cause unstated, speech-pause→transcribing grace to verify on device). Not a Larissa
+path. Gates: `pnpm typecheck --force` **14/14**; live-voice-machine **22/22** +
+LiveVoiceBar **7/7**; full user-client vitest baseline unchanged (8
+Node-localStorage). Also that session: **GLM 5.2 curation** merged from its worktree
+(`packages/llm-unified` only, no Dexie; llm-unified **380 pass**), and two dev
+cleanups (ui-shared resolved from source in Vite to stop the `dist/index.js`
+load-error during builds; mindspace `animation`-shorthand React warning fixed).
+Spec/plan: [[../../../superpowers/specs/2026-06-14-live-voice-design]],
+[[../../../superpowers/plans/2026-06-14-live-voice]].
+
 **Earlier (2026-06-14) — AUDIO TOOLBAR LANDED** (squash `19b9223` on
 master, **NOT pushed**, **device-confirmed by Chris on multiple sizes** — "richtig
 toll von der Bedienung her", "wunderschön"). The realisation of Chris's

@@ -8,7 +8,38 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-17 — **TTS AUDIO + INNER MONOLOGUE LANDED** (single
+**Last updated:** 2026-06-18 — **CHATSUNE IMPORT LANDED** (single squash
+`81cf6f1` on master, **NOT pushed**, **device-test pending** — Chris tests
+after). Lets users migrate from chatsune. A persona-export importer in the
+persona editor (new persona *and* merge-into-existing) maps
+name/tagline/system_prompt/nsfw and converts the avatar crop, then merges chats
+**additively** with **per-persona idempotency** — dedup by chatsune `original_id`
+via the new non-indexed `ChatRow.importedFrom` (no Dexie bump). Chats are **Tier
+A**: user/persona text + CoT reasoning only; dropped content (tool-calls, images,
+attachments, artefacts, KB injections) becomes a per-message text hint. NSFW
+upgrades **monotonically** (false→true only, independent of the overwrite choice).
+A separate Libraries-view importer always creates a **new** library (the export
+carries no stable ids) and re-embeds documents locally. **Memory import is
+deferred** behind a three-anchor reminder: a `memoryCount` tripwire + `FUTURE:`
+comment in the parser, a user-facing "keep this file, re-import once memory lands"
+note, and the new [[insights/future-feature-couplings]] register (+ this file's
+memory-gap cross-link). Reuses the chatsune export *format*, not its code
+(Python/Mongo vs TS/Dexie). Built spec→plan→**subagent-driven** (13 tasks,
+per-task review). **Final whole-branch review (opus):** one Important (chat-list
+invalidation after import) + two Minor, all fixed. **Laura** pre-squash: **no hard
+defects**; **all six soft findings folded in** (import control moved above the
+Avatar sub-heading with a "Coming from Chatsune?" framing; an Apply→Save "N chats
+ready — Save to bring them in" cue; avatar-failure recovery hint; "Import library
+from Chatsune" label; NSFW upgrade foretold in the preview; concrete memory-note
+wording). Not a Larissa path (client-only). Gates: `pnpm typecheck --force`
+**14/14**; full user-client vitest at the **8 Node-localStorage baseline** (all new
+lib/data/component tests green). **Dexie unchanged (v26).** Specs/plans:
+[[../superpowers/specs/2026-06-18-chatsune-import-design]],
+[[../superpowers/plans/2026-06-18-chatsune-import]]. **Next:** Chris device-tests
+the import (spec §13: real chatsune export → import → continue chatting), then
+pushes the master backlog on his word.
+
+**Earlier (2026-06-17) — TTS AUDIO + INNER MONOLOGUE LANDED** (single
 squash `a875cf9` on master, **NOT pushed**, **device-confirmed by Chris** — "ich
 bin super glücklich!"; reverb device-tuned with him to 1.6 s / 60-40 dry-wet,
 280 Hz high-pass). One cohesive audio unit in three movements: (1) a user-selectable
@@ -43,38 +74,6 @@ Specs/plans: [[../superpowers/specs/2026-06-17-tts-highpass-and-inner-monologue-
 plans). **Next:** Chris pushes the master backlog on his word; deferred per-spec —
 optional shimmer/detune on the monologue, a presence/voice-band boost (needs field
 data).
-
-**Earlier (2026-06-17) — LIVE VOICE LANDED** (squashed on master, **NOT
-pushed**, **device-confirmed by Chris** — "funktioniert! ganz wunderbar!", after
-extended testing). Spec 3 realised: continuous-VAD turn-taking voice mode built on
-the audio-toolbar slot frame, no infrastructure rebuild. The `liveVoiceMachine`
-floor chart (`idle → listening → userSpeaking → transcribing → personaThinking →
-personaSpeaking`, plus `held`/`sttFailed`) owns the mic lifecycle and the floor;
-`useLiveVoice` wires capture/STT/playback; `LiveVoiceBar` is the big-button
-surface. **This session's work on top of the built base:** (1) **fixed the
-stale-read bug** — the persona floor is now driven by the *streaming* reply (the
-auto-read driver, unlocked for live voice via `forceStreamingRead`), so
-`personaThinking` awaits the first audio and `personaSpeaking` reads it as it
-streams; previously it read the *previous* turn's reply on re-entry. Barge during
-thinking now aborts the in-flight generation (`abortPreserve`), Exit lets it
-finish (spec §4). (2) **transcribing indicator** → three animated rising dots (was
-a text label). (3) **spectrum wave during the thinking pause** — the synthetic
-`waiting` wave now also covers `personaThinking` (transport idle), so the
-generation gap reads as presence. (4) **toolbar layout-stability** — the two left
-slots (Hold/Resume + Skip) always render, `disabled`-not-hidden (§11), so the bar
-no longer jumps on `transcribing`. **Laura: no hard defects** (pre-squash pass);
-four soft notes surfaced to Chris (Skip-while-held §4 divergence, thinking/speaking
-visual sameness → design-language, pinned-auto-Hold cause unstated, speech-pause→
-transcribing grace to verify on device). Not a Larissa path (client-only). Gates:
-`pnpm typecheck --force` **14/14**; live-voice-machine **22/22** + LiveVoiceBar
-**7/7**; full user-client vitest baseline unchanged (8 Node-localStorage). Also
-this session: **GLM 5.2 curation** merged from its worktree (two preserved commits,
-`packages/llm-unified` only, no Dexie; llm-unified **380 pass**), and two dev
-cleanups (ui-shared resolved from source in Vite to stop the `dist/index.js`
-load-error during builds; mindspace `animation`-shorthand React warning fixed).
-Spec/plan: [[../superpowers/specs/2026-06-14-live-voice-design]],
-[[../superpowers/plans/2026-06-14-live-voice]]. **Next:** Chris pushes the master
-backlog on his word; live-voice soft-note decisions (esp. Skip-while-held) pending.
 
 ## Changelog — by block
 
