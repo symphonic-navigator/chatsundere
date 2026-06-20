@@ -1,6 +1,6 @@
 # Chatsundere Status — Client-only
 
-> **Roadmap to beta (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1–5 → v0.1.0/v0.2.0**. Block 1 (chat core) ~80% shipped; **memory** (chatsune port) is the notable gap. When memory lands, it must also extend the Chatsune importer to bring memories across — see [[insights/future-feature-couplings]].
+> **Roadmap to beta (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1–5 → v0.1.0/v0.2.0**. Block 1 (chat core) ~80% shipped; **memory** (chatsune port) is now **in flight** — the **engine (Plan 1) is built + reviewed on branch `feature/memory-engine`, NOT merged**; Plan 2 (UI) + Plan 3 (chatsune-memory import) build on the same branch before a single unified squash to master. The memory→importer coupling ([[insights/future-feature-couplings]]) is closed by Plan 3.
 >
 > **Artefact system (Block 2):** Kern + Treasury + attachments + Save-as-artefact shipped. Decision log & remaining chunks: [[ARTEFACTS-FEATURE-STATUS]] — read before touching artefact work.
 
@@ -8,7 +8,30 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-18 — **CHATSUNE IMPORT LANDED** (single squash
+**Last updated:** 2026-06-20 — **MEMORY ENGINE (Plan 1 of 3) BUILT + REVIEWED on
+branch `feature/memory-engine`, NOT merged, NOT device-smoked yet.** Client-side
+volume-triggered long-term memory — a faithful TS/Dexie port of chatsune's
+`extraction → uncommitted → committed → dreaming → body` pipeline, all run in the
+**background after each send** (no server cron), guarded by a per-persona mutex,
+reusing the persona's **own** offering via `runOneShotCompletion` (no utility
+model — [[project_conversation_model_for_user_memory]]). Whole-block prose
+retrieval into the existing `memoryContext` slot of `buildPrompt`. **Dexie v27**
+(`memoryJournal` + `memoryBody` tables; optional persona/chat memory fields).
+Built spec→plan→**subagent-driven** (11 TDD tasks, fresh implementer + spec/quality
+reviewer per task; final **opus** whole-branch review: *merge-ready, no
+Critical/Important*). Gates: `pnpm typecheck --force` **14/14**; full user-client
+vitest **1812 pass / 8 Node-localStorage baseline**. Deferred Minors (device-tuning:
+dedup/stripper precision per spec §9; cosmetic: `getCurrentBody` index/`.at(0)`).
+**Memory is default-ON and fires sightlessly until the UI lands** — hence the
+deliberate hold on master: **Plan 2 (UI: Cockpit badge+overlay, persona Memory
+section — spec §6, Laura-passed) and Plan 3 (chatsune-memory import) build on the
+same branch, then ONE squash to master** (engine+UI+import = one feature unit, lands
+with visibility). Specs/plans: [[../superpowers/specs/2026-06-20-memory-design]],
+[[../superpowers/plans/2026-06-20-memory-engine]] (Plans 2/3 TBW). **Next:** write +
+execute Plan 2 (UI), then Plan 3, then unified squash; Chris device-smokes before/at
+that squash.
+
+**Earlier (2026-06-18) — CHATSUNE IMPORT LANDED** (single squash
 `81cf6f1` on master + follow-up fixes (see Post-landing), **NOT pushed**,
 **device-confirmed by Chris**). Lets users migrate from chatsune. A persona-export importer in the
 persona editor (new persona *and* merge-into-existing) maps
