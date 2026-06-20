@@ -8,28 +8,36 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-20 — **MEMORY ENGINE (Plan 1 of 3) BUILT + REVIEWED on
-branch `feature/memory-engine`, NOT merged, NOT device-smoked yet.** Client-side
-volume-triggered long-term memory — a faithful TS/Dexie port of chatsune's
-`extraction → uncommitted → committed → dreaming → body` pipeline, all run in the
-**background after each send** (no server cron), guarded by a per-persona mutex,
-reusing the persona's **own** offering via `runOneShotCompletion` (no utility
-model — [[project_conversation_model_for_user_memory]]). Whole-block prose
-retrieval into the existing `memoryContext` slot of `buildPrompt`. **Dexie v27**
-(`memoryJournal` + `memoryBody` tables; optional persona/chat memory fields).
-Built spec→plan→**subagent-driven** (11 TDD tasks, fresh implementer + spec/quality
-reviewer per task; final **opus** whole-branch review: *merge-ready, no
-Critical/Important*). Gates: `pnpm typecheck --force` **14/14**; full user-client
-vitest **1812 pass / 8 Node-localStorage baseline**. Deferred Minors (device-tuning:
-dedup/stripper precision per spec §9; cosmetic: `getCurrentBody` index/`.at(0)`).
-**Memory is default-ON and fires sightlessly until the UI lands** — hence the
-deliberate hold on master: **Plan 2 (UI: Cockpit badge+overlay, persona Memory
-section — spec §6, Laura-passed) and Plan 3 (chatsune-memory import) build on the
-same branch, then ONE squash to master** (engine+UI+import = one feature unit, lands
-with visibility). Specs/plans: [[../superpowers/specs/2026-06-20-memory-design]],
-[[../superpowers/plans/2026-06-20-memory-engine]] (Plans 2/3 TBW). **Next:** write +
-execute Plan 2 (UI), then Plan 3, then unified squash; Chris device-smokes before/at
-that squash.
+**Last updated:** 2026-06-20 — **MEMORY ENGINE + UI (Plans 1 & 2 of 3) BUILT +
+REVIEWED on branch `feature/memory-engine`, NOT merged, NOT device-verified yet.**
+Client-side volume-triggered long-term memory — a faithful TS/Dexie port of
+chatsune's `extraction → uncommitted → committed → dreaming → body` pipeline, all
+run in the **background after each send** (no server cron), guarded by a per-persona
+mutex, reusing the persona's **own** offering via `runOneShotCompletion` (no utility
+model — [[project_conversation_model_for_user_memory]]). Whole-block prose retrieval
+into `buildPrompt`'s `memoryContext` slot. **Dexie v27** (`memoryJournal` +
+`memoryBody`). **UI (Plan 2):** a Cockpit memory button (always-rendered; badge =
+uncommitted count; active-state when body version > `lastViewedMemoryBodyVersion` —
+Laura HARD 1), a review overlay (`MemorySheet`: commit / reject-with-undo-toast /
+edit; "learn now"/"consolidate now" disabled-with-reason + named-cause+Retry — Laura
+HARD 2/3; one-shot first-run note), and a persona-editor Memory section (toggle,
+instructions, editable body + version rollback, committed view). Background writes
+refresh the UI via explicit `invalidateQueries` (no `useLiveQuery` in this project).
+Built spec→plan→**subagent-driven** (Plan 1: 11 tasks; Plan 2: 8 tasks; fresh
+implementer + spec/quality reviewer per task; **opus** whole-branch review per plan —
+both *merge-ready, no Critical/Important*). Gates: `pnpm typecheck --force` **14/14**;
+full user-client vitest **1822 pass / 8 Node-localStorage baseline**, pristine.
+Deferred Minors (device-tuning: dedup/stripper precision per spec §9; cosmetic:
+`getCurrentBody` index/`.at(0)`; first-run double-toast race accepted-with-comment).
+**Memory is default-ON.** Remaining before the **single unified squash to master**
+(engine+UI+import = one feature unit): **Plan 3 (chatsune-memory import** — extend
+`persona-parse.ts` + `importChatsuneMemory`, closes [[insights/future-feature-couplings]]),
+then a **Laura pre-squash pass** on the built flow, then squash. Specs/plans:
+[[../superpowers/specs/2026-06-20-memory-design]],
+[[../superpowers/plans/2026-06-20-memory-engine]],
+[[../superpowers/plans/2026-06-20-memory-ui]] (Plan 3 TBW). **Next:** Chris
+device-verifies the UI (spec §9 + Plan-2 manual verification); then Plan 3 → Laura →
+unified squash. Branch + ledger (`.git/sdd/progress.md`) carry the per-task state.
 
 **Earlier (2026-06-18) — CHATSUNE IMPORT LANDED** (single squash
 `81cf6f1` on master + follow-up fixes (see Post-landing), **NOT pushed**,
