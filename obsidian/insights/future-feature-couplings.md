@@ -8,7 +8,19 @@
 
 ## Open couplings
 
-(none)
+### Edit chat messages ⇔ Edit compaction checkpoint — OPEN 2026-06-21
+
+Compact-and-continue ships the compaction summary as **read-only** (transparent
+drawer). The data model is already edit-ready (a Markdown field on the
+checkpoint row). Editability is deferred until real demand.
+
+**When "edit chat messages later" is built, you (almost) get "edit compaction
+checkpoint" for free, and vice-versa** — they are the same agency primitive
+(let the user correct what the model carries forward). Build them together. An
+edited checkpoint must survive re-compaction (it folds into the next
+"Previous Story"). Reference point for where message-edit was genuinely useful:
+Spicy-Writer (story generation). Both are post-alpha, demand-driven (feature-
+inclusion filter). Spec: `superpowers/specs/2026-06-21-compact-and-continue-design.md` §10.
 
 ## Closed couplings
 
