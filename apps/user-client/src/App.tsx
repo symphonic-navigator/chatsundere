@@ -16,6 +16,7 @@ import { PersonaEditor } from './routes/app/persona-editor.js';
 import { PersonaMemory } from './routes/app/persona-memory.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { Treasury } from './routes/app/treasury.js';
+import { UiShowcase } from './routes/app/ui-showcase.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
 import { Login } from './routes/login/index.js';
@@ -90,6 +91,8 @@ export function App() {
                 <Route path="/onboarding/local" element={<LocalCreateAccount />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/recovery" element={<Recovery />} />
+                {/* Internal dev showcase of UI primitives — no session required (presentational only) */}
+                <Route path="/app/ui-showcase" element={<UiShowcase />} />
                 {/* Session-required */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/app" element={<EntranceHall />} />

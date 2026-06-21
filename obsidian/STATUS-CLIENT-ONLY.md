@@ -8,7 +8,44 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-21 — **COMPACT-AND-CONTINUE SQUASHED TO MASTER
+**Last updated:** 2026-06-21 — **DESIGN-LANGUAGE FOUNDATIONS BUILT ON BRANCH
+`makeover/design-language-foundations` (13 commits, NOT merged, NOT pushed) —
+awaiting Chris device-verify at `/app/ui-showcase`.**
+First slice of the **UI/UX makeover** (the big block). Establishes the reusable
+foundation every later surface inherits: (1) **three colour planes** (navigation /
+action / persona) + **gold = priority overlay** (1 per screen, now a load-bearing
+`--color-gold` token via `color-mix`) + **red reserved** for destructive; nav palette
+pink/green/blue/purple in a fixed **root→crown ascension** order. (2) the
+**"Unified Experience" motion language** — origin-aware zoom (enter ~0.30s savours /
+exit ~0.17s vanishes), tile-only gold blink, CSS-only with `@media
+(prefers-reduced-motion)` fallback (Chris decision: CSS-media is the mechanism for
+CSS-only motion; the JS `respectsReducedMotion()` helper stays for JS-driven motion).
+(3) **seven primitives** in a new `apps/user-client/src/components/ui/` library:
+**Button** (3 tones + gold overlay, "gold protects never invites" — destructive never
+gold), **Badge** (read-only: tells), **Pill** (interactive: acts), **OverflowMenu**
+(⋯; disabled items stay focusable via `aria-disabled` + announced reason — closes the
+2026-06-12 a11y deferral class), **ListRow** (Leading/Body/Trailing slots), **ListScaffold**
+(fixed back control + only-list-scrolls + fixed footer + empty-state contract),
+**ConfirmDialog** (uniform layout A, gold-protects role-swap, origin zoom). Plus an
+internal **showcase route `/app/ui-showcase`** (live successor to the prototype HTML)
+and a `ui/index.ts` barrel. Built spec→plan→**subagent-driven** (11 tasks, per-task
+spec+quality review; review loop caught a Critical Pill ×-as-nested-button, an Important
+OverflowMenu accessible-name pollution, a count-span/test mismatch, and a `.click()`→
+`fireEvent` test bug — all fixed). **Laura spec-pass** folded in (2 HARD: back-control
+contract §3.4 + overflow a11y; 4 SOFT). **opus whole-branch review:** merge-ready after
+2 Chris decisions (both now applied) + the fix-before-merge ButtonProps JSDoc (restored).
+Not a Larissa path (client-only); no Laura pre-squash needed (the showcase is internal,
+no user-reachable flow wired yet). Gates: `pnpm typecheck --force` **14/14**; Biome clean;
+full user-client vitest **1914 pass / 8 Node-localStorage baseline** (+~28 new ui tests).
+Specs/plans: [[../superpowers/specs/2026-06-21-design-language-foundations-design]],
+[[../superpowers/plans/2026-06-21-design-language-foundations]]. **Deferred minors**
+(logged in the SDD ledger; non-blocking): `.cs-btn` still needs `:hover`/`:focus-visible`
+(**must land before the first real surface consumes Button** — a11y); transform-origin
+untested in JSDOM (device-verify spec §11). **Next:** Chris device-verifies the showcase →
+squash branch to master + migrate this entry to the changelog → then the **main-menu
+rebuild** (next plan) consumes these primitives.
+
+**Earlier (2026-06-21) — COMPACT-AND-CONTINUE SQUASHED TO MASTER
 (`5b49125`), device-verified by Chris ("ganz wunderbar"). NOT pushed.**
 Upgrades context-overflow handling from *silent message-dropping* to a
 user-controlled conversation summary that keeps the last N messages verbatim —

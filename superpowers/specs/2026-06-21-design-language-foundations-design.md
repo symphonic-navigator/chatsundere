@@ -162,7 +162,7 @@ The project standard so we never again ask "what function lives in a list?". Eve
 - **Tokens:** extend the Tailwind v4 `@theme` block in `apps/user-client/src/index.css` with the navigation-plane hues, gold, and the destructive token; keep the existing Aurora + semantic tokens.
 - **State pattern:** follow the existing convention — variants via `data-*` attributes + Tailwind/CSS, **no CVA/Radix** (the codebase is intentionally lean).
 - **Motion:** **CSS-only** (the project has no framer-motion and should keep it that way for this scope). The origin-aware zoom needs the trigger's position → compute `transform-origin` from the trigger's rect at fire time.
-- **Reduced motion:** reuse `motion.respectsReducedMotion()` from `packages/ui-shared`.
+- **Reduced motion:** for this CSS-only motion scope, gate via the CSS `@media (prefers-reduced-motion: reduce)` query (the more robust mechanism — no JS, cannot desync from the OS setting, and consistent with the codebase's existing ~25 such blocks). The JS helper `motion.respectsReducedMotion()` from `packages/ui-shared` remains the mechanism for *JS-driven* motion (e.g. `BreathingOrb`). (Chris decision, 2026-06-21, reconciling the original spec line after the final review.)
 - **Showcase route:** add an internal route that renders every primitive side-by-side — the live successor to `chatsundere-prototype.html`, so "what exists" is always answerable. *(Build location/visibility TBD with the first primitives.)*
 - **British English** for all identifiers, copy, comments (project hard rule).
 

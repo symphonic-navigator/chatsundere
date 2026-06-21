@@ -38,6 +38,25 @@
   --color-success: #7be0b8;
   --color-warning: #ffd06b;
   --color-danger: #ff7a8a;
+  /* Navigation-plane room identities (makeover design language) */
+  --color-nav-pink: #ff6db0;
+  --color-nav-pink-icon: #ff8ec4;
+  --color-nav-green: #4fd38a;
+  --color-nav-green-icon: #7fe0a8;
+  --color-nav-blue: #5b9dff;
+  --color-nav-blue-icon: #9cc0ff;
+  --color-nav-purple: #a98bff;
+  --color-nav-purple-dark: #7457c4;
+  /* Gold = priority overlay (exactly one element per screen) */
+  --color-gold: #e8c061;
+  --color-gold-hi: #f0d488;
+  --color-gold-lo: #d9b455;
+  /* Destructive — action plane only */
+  --color-destructive: #ff5a5a;
+  --color-destructive-text: #ff8a8a;
+  /* Single token for the tile-badge tone. Parked design exploration:
+     flip to a room-tinted value later in one line (spec §6, §10). */
+  --badge-tile-tone: var(--color-paper-soft);
   --font-display: "Lora", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
@@ -4556,4 +4575,446 @@ h1 {
     animation: none;
     opacity: 0.7;
   }
+}
+
+/* ── Unified-Experience motion language (makeover) ───────────────────────
+   Every appearing/disappearing surface shares this gesture. Enter savours
+   (~0.30s), exit vanishes (~0.17s). transform-origin is set inline by the
+   caller from the trigger's position (see lib/origin-zoom.ts). */
+@keyframes cs-zoom-in {
+  from {
+    transform: scale(0.32);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes cs-zoom-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+@keyframes cs-tile-blink {
+  0% {
+    box-shadow: 0 0 0 0 transparent;
+    filter: brightness(1);
+  }
+  22% {
+    box-shadow: 0 0 20px 2px color-mix(in srgb, var(--color-gold) 95%, transparent);
+    filter: brightness(1.5);
+  }
+  44% {
+    box-shadow: 0 0 0 0 transparent;
+    filter: brightness(1);
+  }
+  68% {
+    box-shadow: 0 0 20px 2px color-mix(in srgb, var(--color-gold) 95%, transparent);
+    filter: brightness(1.5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    filter: brightness(1);
+  }
+}
+@keyframes cs-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cs-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.cs-zoom-in {
+  animation: cs-zoom-in 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.cs-zoom-out {
+  animation: cs-zoom-out 0.17s ease-in both;
+}
+.cs-tile-blink {
+  animation: cs-tile-blink 0.26s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-zoom-in {
+    animation: cs-fade-in 0.15s ease both;
+  }
+  .cs-zoom-out {
+    animation: cs-fade-out 0.12s ease both;
+  }
+  .cs-tile-blink {
+    animation: none;
+  }
+}
+
+/* ── Button primitive (action plane) ─────────────────────────────────── */
+.cs-btn {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-paper);
+  cursor: pointer;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+.cs-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cs-btn[data-tone="primary"] {
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--color-aurora-500) 60%, transparent);
+  background: linear-gradient(180deg, var(--color-aurora-500), var(--color-aurora-700));
+  color: var(--color-paper);
+}
+.cs-btn[data-tone="destructive"] {
+  font-weight: 600;
+  border-color: rgba(255, 90, 90, 0.55);
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--color-destructive-text);
+}
+.cs-btn[data-priority="true"] {
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--color-gold) 70%, transparent);
+  background: linear-gradient(180deg, var(--color-gold-hi), var(--color-gold-lo));
+  color: #1a1206;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--color-gold) 30%, transparent);
+}
+
+/* ── Badge primitive (read-only) ─────────────────────────────────────── */
+.cs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-paper-soft);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.cs-badge[data-on-tile="true"] {
+  color: var(--badge-tile-tone);
+}
+.cs-badge[data-tone="success"] {
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+}
+.cs-badge[data-tone="warning"] {
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+}
+.cs-badge[data-tone="danger"] {
+  color: var(--color-destructive-text);
+  border-color: rgba(255, 90, 90, 0.35);
+  background: rgba(255, 90, 90, 0.12);
+}
+.cs-badge[data-tone="new"] {
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: #1a1206;
+  border: none;
+  background: linear-gradient(180deg, var(--color-gold-hi), var(--color-gold-lo));
+}
+.cs-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  background: var(--color-destructive);
+  color: #fff;
+}
+
+/* ── Pill primitive (interactive chip) ───────────────────────────────── */
+.cs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-paper-soft);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+}
+.cs-pill[data-active="true"] {
+  color: #f0dca0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-gold) 22%, transparent),
+    color-mix(in srgb, var(--color-gold) 8%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--color-gold) 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-gold) 18%, transparent);
+}
+.cs-pill[data-variant="tag"] {
+  color: var(--color-nav-purple);
+  background: color-mix(in srgb, var(--color-nav-purple) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-nav-purple) 40%, transparent);
+}
+.cs-pill[data-variant="add"] {
+  border-style: dashed;
+  background: transparent;
+}
+.cs-pill-x {
+  background: none;
+  border: none;
+  padding: 0;
+  opacity: 0.7;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+}
+.cs-pill-x:hover {
+  opacity: 1;
+}
+
+/* ── OverflowMenu primitive (⋯ context menu) ─────────────────────────── */
+.cs-overflow {
+  position: relative;
+  display: inline-flex;
+}
+.cs-overflow-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-paper-soft);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.cs-overflow-trigger:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.cs-overflow-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 14px;
+  background: radial-gradient(120% 90% at 80% -10%, #21123f, #0a0518);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.cs-overflow-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: transparent;
+  border: none;
+  color: var(--color-paper);
+  cursor: pointer;
+}
+.cs-overflow-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.cs-overflow-item[data-tone="destructive"] {
+  color: var(--color-destructive-text);
+}
+.cs-overflow-item[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cs-overflow-reason {
+  display: block;
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+/* ── ListRow primitive (unified row anatomy) ─────────────────────────── */
+.cs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 13px;
+  padding-right: 6px;
+}
+.cs-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.cs-row-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.cs-row-leading {
+  flex: none;
+  display: inline-flex;
+}
+.cs-row-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cs-row-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-paper);
+}
+.cs-row-subtitle {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--color-paper-soft);
+  opacity: 0.7;
+}
+.cs-row-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* ── ListScaffold primitive (fixed header/footer; only list scrolls) ──── */
+.cs-scaffold {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.cs-scaffold-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex: none;
+}
+.cs-scaffold-back,
+.cs-scaffold-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-paper-soft);
+  cursor: pointer;
+}
+.cs-scaffold-help-spacer {
+  width: 40px;
+  height: 40px;
+}
+.cs-scaffold-title {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-paper);
+}
+.cs-scaffold-count {
+  color: var(--color-paper-soft);
+}
+.cs-scaffold-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+.cs-scaffold-footer {
+  flex: none;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── ConfirmDialog primitive (uniform confirmation) ──────────────────── */
+.cs-dialog-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.cs-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 2, 16, 0.6);
+  animation: cs-fade-in 0.2s ease both;
+}
+.cs-dialog-card {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  border-radius: 16px;
+  padding: 16px;
+  background: radial-gradient(120% 90% at 50% -10%, #21123f, #0a0518);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cs-dialog-card:has(.cs-dialog-title[data-destructive="true"]) {
+  border-color: rgba(255, 90, 90, 0.2);
+}
+.cs-dialog-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-paper);
+  margin-bottom: 4px;
+}
+.cs-dialog-title[data-destructive="true"] {
+  color: var(--color-destructive-text);
+}
+.cs-dialog-body {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-paper-soft);
+  opacity: 0.8;
+  margin-bottom: 14px;
+}
+.cs-dialog-actions {
+  display: flex;
+  gap: 10px;
+}
+.cs-dialog-actions > .cs-btn {
+  flex: 1;
+  padding: 10px;
 }
