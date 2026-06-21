@@ -8,9 +8,9 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-21 — **DESIGN-LANGUAGE FOUNDATIONS BUILT ON BRANCH
-`makeover/design-language-foundations` (13 commits, NOT merged, NOT pushed) —
-awaiting Chris device-verify at `/app/ui-showcase`.**
+**Last updated:** 2026-06-21 — **DESIGN-LANGUAGE FOUNDATIONS SQUASHED TO MASTER
+(`982ea9f5`), device-verified by Chris ("das ist wirklich schön! das wird den
+Leuten gefallen"). NOT pushed.**
 First slice of the **UI/UX makeover** (the big block). Establishes the reusable
 foundation every later surface inherits: (1) **three colour planes** (navigation /
 action / persona) + **gold = priority overlay** (1 per screen, now a load-bearing
@@ -41,9 +41,11 @@ Specs/plans: [[../superpowers/specs/2026-06-21-design-language-foundations-desig
 [[../superpowers/plans/2026-06-21-design-language-foundations]]. **Deferred minors**
 (logged in the SDD ledger; non-blocking): `.cs-btn` still needs `:hover`/`:focus-visible`
 (**must land before the first real surface consumes Button** — a11y); transform-origin
-untested in JSDOM (device-verify spec §11). **Next:** Chris device-verifies the showcase →
-squash branch to master + migrate this entry to the changelog → then the **main-menu
-rebuild** (next plan) consumes these primitives.
+untested in JSDOM (device-verify spec §11). The showcase route was moved **out of
+`ProtectedRoute`** (no session needed — presentational only) so it is reachable directly
+at `/app/ui-showcase` throughout the makeover. **Next:** the **main-menu rebuild** (next
+plan) consumes these primitives — Chris brief-leads; before the first real surface ships,
+add `.cs-btn` `:hover`/`:focus-visible` states (the one tracked a11y follow-on).
 
 **Earlier (2026-06-21) — COMPACT-AND-CONTINUE SQUASHED TO MASTER
 (`5b49125`), device-verified by Chris ("ganz wunderbar"). NOT pushed.**
