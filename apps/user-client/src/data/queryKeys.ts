@@ -27,4 +27,13 @@ export const QK = {
   document: (id: string) => ['documents', 'item', id] as const,
   documentCounts: ['documents', 'counts'] as const,
   mcpServers: ['mcp-servers'] as const,
+  memory: (personaId: string) => ['memory', personaId] as const,
+  memoryJournal: (personaId: string, state: 'uncommitted' | 'committed' | 'archived') =>
+    ['memory', personaId, 'journal', state] as const,
+  memoryUncommittedCount: (personaId: string) =>
+    ['memory', personaId, 'journal', 'uncommitted', 'count'] as const,
+  memoryCommitted: (personaId: string) => ['memory', personaId, 'journal', 'committed'] as const,
+  memoryBody: (personaId: string) => ['memory', personaId, 'body'] as const,
+  memoryBodyVersions: (personaId: string) => ['memory', personaId, 'body', 'versions'] as const,
+  unextractedCount: (chatId: string) => ['memory', 'unextracted', chatId] as const,
 };

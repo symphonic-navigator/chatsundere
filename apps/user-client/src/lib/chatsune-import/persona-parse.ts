@@ -4,6 +4,7 @@ import type { AvatarCrop } from '../../boot/client-data-db.js';
 import type { ChatsuneArchive } from './archive-reader.js';
 import { convertChatsuneCrop } from './crop-convert.js';
 import type {
+  ChatsuneMemoryExport,
   ChatsunePersonaJson,
   ChatsuneSessionExport,
   ChatsuneSessionsBundle,
@@ -22,10 +23,10 @@ export interface ParsedPersonaExport {
   persona: { name: string; tagline: string; instructions: string; nsfw: boolean };
   avatar: ParsedAvatar | null;
   sessions: ChatsuneSessionExport[];
-  /** Count of chatsune memories present in the export. FUTURE: when Chatsundere
-   *  gains a memory system, import these (memory.json: journal_entries +
-   *  memory_bodies). See obsidian/insights/future-feature-couplings.md. */
+  /** Count of chatsune memories in the export (journal entries + body versions). */
   memoryCount: number;
+  /** The parsed chatsune memory, or null when the export carries none. */
+  memory: ChatsuneMemoryExport | null;
 }
 
 const AVATAR_MIME: Record<string, string> = {
@@ -67,11 +68,14 @@ export function parsePersonaExport(archive: ChatsuneArchive): ParsedPersonaExpor
   const sessionsBundle = decodeJson<ChatsuneSessionsBundle>(archive.files, 'sessions.json');
   const sessions = sessionsBundle?.sessions ?? [];
 
-  const memory = decodeJson<{ journal_entries?: unknown[]; memory_bodies?: unknown[] }>(
-    archive.files,
-    'memory.json',
-  );
-  const memoryCount = (memory?.journal_entries?.length ?? 0) + (memory?.memory_bodies?.length ?? 0);
+  const memoryRaw = decodeJson<ChatsuneMemoryExport>(archive.files, 'memory.json');
+  const memory: ChatsuneMemoryExport | null = memoryRaw
+    ? {
+        journal_entries: Array.isArray(memoryRaw.journal_entries) ? memoryRaw.journal_entries : [],
+        memory_bodies: Array.isArray(memoryRaw.memory_bodies) ? memoryRaw.memory_bodies : [],
+      }
+    : null;
+  const memoryCount = (memory?.journal_entries.length ?? 0) + (memory?.memory_bodies.length ?? 0);
 
   let avatar: ParsedAvatar | null = null;
   if (personaJson.has_avatar !== false) {
@@ -94,5 +98,6 @@ export function parsePersonaExport(archive: ChatsuneArchive): ParsedPersonaExpor
     avatar,
     sessions,
     memoryCount,
+    memory,
   };
 }

@@ -27,6 +27,7 @@ import {
   listMessageAttachments,
   snapshotPendingDocumentReferences,
 } from '../data/attachments.js';
+import { QK } from '../data/queryKeys.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildWebTools } from '../integrations/web/build-web-tools.js';
@@ -36,6 +37,8 @@ import { queryClient } from '../lib/queryClient.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
+import { runMemoryPipeline } from '../memory/pipeline.js';
+import { loadMemoryContext } from '../memory/repo.js';
 import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
 import {
   dispatch as dispatchTool,
@@ -139,6 +142,48 @@ interface StreamManagerStore {
   abortAllForPersonaPreserve: (personaId: string) => Promise<void>;
   has: (chatId: string) => boolean;
   getDraftMessage: (chatId: string) => { id: string; contentBlocks: ContentBlock[] } | null;
+}
+
+function fireMemoryPipeline(args: StartArgs): void {
+  const personaId = args.persona.id;
+  void runMemoryPipeline({
+    persona: args.persona,
+    chat: args.chat,
+    provider: args.provider,
+    providerConfig: args.providerConfig,
+    apiKey: args.apiKey,
+    corsProxyUrl: args.corsProxyUrl,
+    corsProxyKey: args.corsProxyKey,
+    offering: args.offering,
+  })
+    .then(async () => {
+      // Refresh the badge/overlay after background writes (no useLiveQuery in this project).
+      void queryClient.invalidateQueries({ queryKey: QK.memory(personaId) });
+      // The "Learn from this chat" disabled-state is keyed by chatId (not personaId),
+      // so it is not covered by the QK.memory prefix above — refresh it explicitly.
+      void queryClient.invalidateQueries({ queryKey: QK.unextractedCount(args.chat.id) });
+      // First-run note: the first time memory produces anything, invite the user once.
+      // Benign race: two pipelines resolving in the same window can both pass the
+      // !memoryIntroShown check before either writes it → at most one duplicate toast,
+      // once in a persona's lifetime. Not worth a transaction.
+      const db = getClientDataDb();
+      const persona = await db.personas.get(personaId);
+      if (persona && !(persona.memoryIntroShown ?? false)) {
+        const produced = (await db.memoryJournal.where('personaId').equals(personaId).count()) > 0;
+        if (produced) {
+          toastStore.show({
+            message: `${persona.name} is starting to remember you — manage this in the persona's Memory section.`,
+            tone: 'info',
+            durationMs: 9000,
+          });
+          await db.personas.update(personaId, { memoryIntroShown: true });
+          void queryClient.invalidateQueries({ queryKey: QK.persona(personaId) });
+        }
+      }
+    })
+    .catch(() => {
+      // runMemoryPipeline logs its own errors; never disturb the send path.
+    });
 }
 
 async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[]): Promise<void> {
@@ -607,6 +652,8 @@ async function runIntoDraft(
   const toolsInstruction = systemPromptSegment(activeTools) ?? '';
   const knowledgeLibrariesContext =
     toolsActive && knowledge ? renderKnowledgeAwareness(knowledge.libraries) : '';
+  const memoryContext =
+    (args.persona.useMemory ?? true) ? await loadMemoryContext(args.persona.id) : '';
 
   const onChunk = (chunk: StreamChunk): void => {
     // Mirror tokens and reasoning deltas into the handle so ChatStream
@@ -643,6 +690,7 @@ async function runIntoDraft(
         userMessageText,
         toolsInstruction,
         knowledgeLibrariesContext,
+        memoryContext,
         loreContext: args.loreContext ?? '',
         tools,
         toolExchange,
@@ -726,6 +774,10 @@ async function runIntoDraft(
           void fireTitleGen(args, result.finalContentBlocks);
         }
       }
+
+      // Memory pipeline (best-effort, no await). Self-gates on useMemory,
+      // volume thresholds, and the per-persona mutex.
+      fireMemoryPipeline(args);
 
       // Same reasoning as the finalising transition above — rotate so
       // subscribers re-render and the auto-follow scroll lands at the

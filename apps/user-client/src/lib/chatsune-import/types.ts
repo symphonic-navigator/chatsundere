@@ -84,3 +84,27 @@ export interface ChatsuneDocumentJson {
   trigger_phrases?: string[];
   refresh?: string | null;
 }
+
+export interface ChatsuneJournalEntry {
+  content: string;
+  category?: string | null;
+  state?: string;
+  is_correction?: boolean;
+  created_at?: string;
+  committed_at?: string | null;
+  auto_committed?: boolean;
+  archived_by_dream_id?: string | null;
+}
+
+export interface ChatsuneMemoryBody {
+  content: string;
+  token_count?: number;
+  version?: number;
+  entries_processed?: number;
+  created_at?: string;
+}
+
+export interface ChatsuneMemoryExport {
+  journal_entries: ChatsuneJournalEntry[];
+  memory_bodies: ChatsuneMemoryBody[];
+}

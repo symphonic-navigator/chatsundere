@@ -16,6 +16,8 @@ import {
 } from '../../data/attachments.js';
 import { useChat, useSetChatLibraries } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
+import { useCurrentBody, useMarkMemoryViewed, useUncommittedCount } from '../../data/memory.js';
+import { usePersona } from '../../data/personas.js';
 import { QK } from '../../data/queryKeys.js';
 import { useSettings } from '../../data/settings.js';
 import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.js';
@@ -31,6 +33,7 @@ import { AttachmentStrip } from './AttachmentStrip.js';
 import { CockpitMenu } from './CockpitMenu.js';
 import { DualActionBtn } from './DualActionBtn.js';
 import { KnowledgeSheet } from './KnowledgeSheet.js';
+import { MemorySheet } from './MemorySheet.js';
 
 interface Props {
   chatId: string;
@@ -110,6 +113,7 @@ export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [voiceNote, setVoiceNote] = useState(false);
   const navigate = useNavigate();
   const isPinned = useCurrentChatStore((s) => s.isPinned);
@@ -215,6 +219,24 @@ export function Cockpit(p: Props): JSX.Element {
     if (willUnpin && p.draftValue.trim().length === 0) {
       setInteractionMode(false);
     }
+  };
+
+  // Memory binding: track uncommitted journal entries and body version staleness so
+  // the button can badge and highlight without opening the sheet.
+  const { data: freshPersona } = usePersona(p.persona.id);
+  const { data: uncommittedCount = 0 } = useUncommittedCount(p.persona.id);
+  const { data: currentBody } = useCurrentBody(p.persona.id);
+  const markViewed = useMarkMemoryViewed(p.persona.id);
+  const bodyVersion = currentBody?.version ?? 0;
+  const lastViewed =
+    freshPersona?.lastViewedMemoryBodyVersion ?? p.persona.lastViewedMemoryBodyVersion ?? 0;
+  const memoryActive = bodyVersion > lastViewed;
+  const openMemory = (): void => {
+    setMemoryOpen((v) => {
+      const next = !v;
+      if (next && bodyVersion > lastViewed) markViewed.mutate(bodyVersion);
+      return next;
+    });
   };
 
   // Knowledge binding: the persona contributes a fixed library set; the chat
@@ -489,6 +511,23 @@ export function Cockpit(p: Props): JSX.Element {
         ) : null}
         <button
           type="button"
+          className={`cockpit-icon-btn${uncommittedCount > 0 || memoryActive ? ' active' : ''}`}
+          data-control="memory"
+          aria-label="Chat memory"
+          aria-expanded={memoryOpen}
+          onClick={openMemory}
+        >
+          <span className="cockpit-glyph" aria-hidden="true">
+            ◌
+          </span>
+          {uncommittedCount > 0 ? (
+            <span className="cockpit-control-count" aria-hidden="true">
+              {uncommittedCount}
+            </span>
+          ) : null}
+        </button>
+        <button
+          type="button"
           className={`cockpit-icon-btn${effectiveCount > 0 ? ' active' : ''}`}
           data-control="knowledge"
           aria-label="Knowledge for this chat"
@@ -595,6 +634,9 @@ export function Cockpit(p: Props): JSX.Element {
         <div className="cockpit-reject" role="alert" onAnimationEnd={() => setReject(null)}>
           {reject}
         </div>
+      )}
+      {memoryOpen && (
+        <MemorySheet persona={p.persona} chatId={p.chatId} onClose={() => setMemoryOpen(false)} />
       )}
       {knowledgeOpen && (
         <KnowledgeSheet

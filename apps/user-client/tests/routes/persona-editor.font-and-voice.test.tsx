@@ -82,6 +82,7 @@ describe('PersonaEditor — Font and Voice section', () => {
       'Mindspace — Override',
       'About Me — Override',
       'Knowledge',
+      'Memory',
       'MCP Servers',
     ]);
   });

@@ -26,10 +26,11 @@ import {
 } from '../../components/persona-editor/ChatsuneImportControl.js';
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { McpOverrideSection } from '../../components/persona-editor/McpOverrideSection.js';
+import { MemorySection } from '../../components/persona-editor/MemorySection.js';
 import { TtsModerationNotice } from '../../components/voice/TtsModerationNotice.js';
 import { VoicePicker } from '../../components/voice/VoicePicker.js';
 import { useChats } from '../../data/chats.js';
-import { importChatsuneSessions } from '../../data/chatsune-import.js';
+import { importChatsuneMemory, importChatsuneSessions } from '../../data/chatsune-import.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useRemovePersonaAvatar, useSetPersonaAvatar } from '../../data/persona-avatars.js';
@@ -95,6 +96,8 @@ function defaultDraft(
     greetingInstructions: '',
     voice: null,
     narratorVoice: null,
+    useMemory: true,
+    memoryInstructions: '',
   };
 }
 
@@ -239,7 +242,13 @@ export function PersonaEditor(): JSX.Element {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = persona.data;
       // Older persona rows predate libraryIds; default to an empty selection so
       // the Knowledge section binds to an array rather than undefined.
-      setDraft({ ...rest, libraryIds: rest.libraryIds ?? [] });
+      // Older rows also predate useMemory / memoryInstructions; default to safe values.
+      setDraft({
+        ...rest,
+        libraryIds: rest.libraryIds ?? [],
+        useMemory: rest.useMemory ?? true,
+        memoryInstructions: rest.memoryInstructions ?? '',
+      });
     } else if (isCreate && !userModifiedRef.current) {
       // Keep updating from seed until the user makes their first edit. This
       // lets later-loaded data (e.g. the default mindspace accent colour)
@@ -283,6 +292,8 @@ export function PersonaEditor(): JSX.Element {
   // Sessions parsed from a Chatsune import, written after the persona (and its
   // id) exist — on Save. Cleared once written.
   const [importedSessions, setImportedSessions] = useState<AppliedPersonaImport['sessions']>([]);
+  // Memory parsed from a Chatsune import, written on Save after sessions. Cleared once written.
+  const [importedMemory, setImportedMemory] = useState<AppliedPersonaImport['memory']>(null);
   // Tracks how many new chats are staged; shown as a save-prompt cue until Save clears it.
   const [stagedChatCount, setStagedChatCount] = useState(0);
 
@@ -321,6 +332,7 @@ export function PersonaEditor(): JSX.Element {
       });
     }
     setImportedSessions(a.sessions);
+    setImportedMemory(a.memory);
     setStagedChatCount(a.newChatCount);
   }
 
@@ -412,6 +424,20 @@ export function PersonaEditor(): JSX.Element {
         durationMs: 3500,
       });
       await qc.invalidateQueries({ queryKey: QK.chats });
+    }
+    if (pid && importedMemory) {
+      const m = await importChatsuneMemory(pid, importedMemory);
+      setImportedMemory(null);
+      if (m.importedEntries > 0 || m.importedBodies > 0) {
+        toastStore.show({
+          message: `Imported ${m.importedEntries} ${m.importedEntries === 1 ? 'memory' : 'memories'}${
+            m.importedBodies > 0 ? ' and the consolidated memory' : ''
+          }.`,
+          tone: 'info',
+          durationMs: 3500,
+        });
+      }
+      await qc.invalidateQueries({ queryKey: QK.memory(pid) });
     }
     setIsDirty(false);
   }
@@ -986,7 +1012,17 @@ export function PersonaEditor(): JSX.Element {
         />
       </AccordionCard>
 
-      {/* ❼ MCP Servers */}
+      {/* ❼ Memory */}
+      <AccordionCard icon="◌" label="Memory" meta={draft.useMemory ? 'Remembering' : 'Off'}>
+        <MemorySection
+          personaId={isCreate ? null : (id ?? null)}
+          useMemory={draft.useMemory ?? true}
+          memoryInstructions={draft.memoryInstructions ?? ''}
+          onChange={(patch_) => patch(patch_)}
+        />
+      </AccordionCard>
+
+      {/* ❽ MCP Servers */}
       <AccordionCard icon="⧉" label="MCP Servers" meta="Per-persona tool access">
         <McpOverrideSection
           servers={mcpServers.data ?? []}

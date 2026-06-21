@@ -12,6 +12,8 @@ export interface AppliedPersonaImport {
   persona: ParsedPersonaExport['persona'];
   avatar: ParsedPersonaExport['avatar'];
   sessions: ParsedPersonaExport['sessions'];
+  /** The parsed chatsune memory to import on Save, or null when none. */
+  memory: ParsedPersonaExport['memory'];
   /** Whether to overwrite name/tagline/instructions. Always true in create mode. */
   overwriteConfig: boolean;
   /** Number of net-new sessions that will be written on Save. */
@@ -67,6 +69,7 @@ export function ChatsuneImportControl({
       persona: preview.parsed.persona,
       avatar: preview.parsed.avatar,
       sessions: preview.parsed.sessions,
+      memory: preview.parsed.memory,
       overwriteConfig: mode === 'create' ? true : overwrite,
       newChatCount: preview.newCount,
     });
@@ -111,8 +114,10 @@ export function ChatsuneImportControl({
           {preview.parsed.memoryCount > 0 ? (
             <p className="mt-1">
               This export contains {preview.parsed.memoryCount}{' '}
-              {preview.parsed.memoryCount === 1 ? 'memory' : 'memories'}. Keep this file safe and
-              re-import it once memory support lands to bring them across.
+              {preview.parsed.memoryCount === 1 ? 'memory' : 'memories'}
+              {mode === 'edit' && (preview.parsed.memory?.memory_bodies.length ?? 0) > 0
+                ? '. Importing makes the exported memory this companion’s current one — anything it has learned so far is kept as a previous version you can restore in the Memory section.'
+                : ' — they will be imported when you Save.'}
             </p>
           ) : null}
           {mode === 'edit' ? (

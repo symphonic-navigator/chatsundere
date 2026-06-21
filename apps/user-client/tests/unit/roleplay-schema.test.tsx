@@ -83,7 +83,7 @@ describe('Dexie v20 — roleplay & greeting schema', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(26);
+    expect(db.verno).toBe(27);
 
     const row = await db.personas.get('p-legacy');
     expect(row?.roleplay).toBe(false);

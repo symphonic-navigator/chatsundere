@@ -173,6 +173,14 @@ export interface PersonaRow {
   voice: string | null;
   /** TTS voice id for asterisk narration lines. null = use voice, or TTS not configured. */
   narratorVoice: string | null;
+  /** Long-term memory enabled for this persona. Absent ⇒ true (resolve with `?? true`). */
+  useMemory?: boolean;
+  /** User-authored guidance on what to remember. Absent ⇒ '' . */
+  memoryInstructions?: string;
+  /** Highest memory-body version the user has viewed; drives the Cockpit active-state (Plan 2). Absent ⇒ 0. */
+  lastViewedMemoryBodyVersion?: number;
+  /** One-shot "starting to remember you" note already shown. Absent ⇒ false. */
+  memoryIntroShown?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -199,6 +207,10 @@ export interface ChatRow {
    *  `personaId` index and builds the seen-set in memory, so no Dexie version
    *  bump is needed. */
   importedFrom?: string | null;
+  /** Extraction cursor: id of the newest user message already fed to memory
+   *  extraction. uuidv7 ids are time-ordered, so "newer than the cursor" is an
+   *  id comparison. Absent ⇒ null (nothing extracted yet). Non-indexed. */
+  lastExtractedMessageId?: string | null;
 }
 
 export type ContentBlock =
@@ -375,6 +387,40 @@ export interface DocumentRow {
   updatedAt: number;
 }
 
+export type MemoryCategory = 'preference' | 'fact' | 'correction' | 'goal' | 'context';
+export type MemoryJournalState = 'uncommitted' | 'committed' | 'archived';
+
+/** One extracted memory fact. Lifecycle: uncommitted → committed → archived
+ *  (the latter once a dream has folded it into a `memoryBody` version). */
+export interface MemoryJournalRow {
+  id: string;
+  personaId: string;
+  content: string;
+  category: MemoryCategory | null;
+  state: MemoryJournalState;
+  isCorrection: boolean;
+  createdAt: number;
+  committedAt: number | null;
+  autoCommitted: boolean;
+  archivedByDreamId: string | null;
+  /** Chatsune origin marker (memory import idempotency, Plan 3). Absent for natives. */
+  importedFrom?: string;
+}
+
+export type MemoryBodySource = 'dream' | 'manual' | 'import';
+
+/** A consolidated, free-prose memory body version for one persona. Max 5 kept. */
+export interface MemoryBodyRow {
+  id: string;
+  personaId: string;
+  content: string;
+  tokenCount: number;
+  version: number;
+  entriesProcessed: number;
+  createdAt: number;
+  source: MemoryBodySource;
+}
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -392,6 +438,8 @@ class ClientDataDb extends Dexie {
   documents!: Table<DocumentRow, string>;
   mcpServers!: Table<McpServerRow, string>;
   voiceAudio!: Table<VoiceAudioRow, string>;
+  memoryJournal!: Table<MemoryJournalRow, string>;
+  memoryBody!: Table<MemoryBodyRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -856,6 +904,33 @@ class ClientDataDb extends Dexie {
             s.ttsHighpass = 'auto';
         });
     });
+
+    // Version 27 — long-term memory. Adds two object stores (memoryJournal,
+    // memoryBody) and backfills the optional per-persona / per-chat memory
+    // fields on existing rows for tidiness (reads still default via `?? `).
+    this.version(27)
+      .stores({
+        memoryJournal: 'id, personaId, [personaId+state], [personaId+createdAt]',
+        memoryBody: 'id, personaId, [personaId+version]',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            if (typeof p.useMemory !== 'boolean') p.useMemory = true;
+            if (typeof p.memoryInstructions !== 'string') p.memoryInstructions = '';
+            if (typeof p.lastViewedMemoryBodyVersion !== 'number')
+              p.lastViewedMemoryBodyVersion = 0;
+            if (typeof p.memoryIntroShown !== 'boolean') p.memoryIntroShown = false;
+          });
+        await tx
+          .table('chats')
+          .toCollection()
+          .modify((c: Record<string, unknown>) => {
+            if (c.lastExtractedMessageId === undefined) c.lastExtractedMessageId = null;
+          });
+      });
   }
 }
 

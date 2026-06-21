@@ -47,6 +47,8 @@ export interface StartStreamArgs {
   loreContext?: string;
   /** Band-2 knowledge-libraries awareness text (chat only); '' when none. */
   knowledgeLibrariesContext?: string;
+  /** Pre-assembled <usermemory> block, or '' when memory is off/empty. */
+  memoryContext?: string;
   /** Canonical tool definitions to offer the model (empty = none). */
   tools?: ToolDef[];
   /** Accumulated assistant(tool_calls) / tool messages from prior loop rounds,
@@ -82,7 +84,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       personaInstructions: args.persona.instructions,
       aboutMe,
       projectInstructions: '',
-      memoryContext: '',
+      memoryContext: args.memoryContext ?? '',
       loreContext: args.loreContext ?? '',
       knowledgeLibrariesContext: args.knowledgeLibrariesContext ?? '',
       toolsInstruction: args.toolsInstruction ?? '',

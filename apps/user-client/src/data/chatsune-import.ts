@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { uuidv7 } from 'uuidv7';
-import { type DocumentRow, getClientDataDb } from '../boot/client-data-db.js';
+import {
+  type DocumentRow,
+  type MemoryCategory,
+  type MemoryJournalRow,
+  type MemoryJournalState,
+  getClientDataDb,
+} from '../boot/client-data-db.js';
 import { enqueueDocument } from '../knowledge/start-ingestion.js';
 import type { ParsedKnowledgeExport } from '../lib/chatsune-import/knowledge-parse.js';
 import { mapChatsuneMessage } from '../lib/chatsune-import/message-map.js';
-import type { ChatsuneSessionExport } from '../lib/chatsune-import/types.js';
+import type { ChatsuneMemoryExport, ChatsuneSessionExport } from '../lib/chatsune-import/types.js';
 import { normalisePhrases } from '../lib/treasury-filter.js';
+import { normaliseForDedup } from '../memory/dedup.js';
+import { getCurrentBody, listBodyVersions, listJournal, saveBody } from '../memory/repo.js';
 import { createLibrary } from './knowledge.js';
 
 function isoToMs(s: string | undefined, fallback: number): number {
@@ -140,4 +148,105 @@ export async function importChatsuneLibrary(parsed: ParsedKnowledgeExport): Prom
     for (const row of rows) enqueueDocument(row.id);
   }
   return library.id;
+}
+
+// Guard sets for runtime-narrowing chatsune wire strings into our union types.
+const VALID_CATEGORIES: readonly string[] = ['preference', 'fact', 'correction', 'goal', 'context'];
+const VALID_STATES: readonly string[] = ['uncommitted', 'committed', 'archived'];
+
+function asCategory(v: string | null | undefined): MemoryCategory | null {
+  return typeof v === 'string' && VALID_CATEGORIES.includes(v) ? (v as MemoryCategory) : null;
+}
+
+function asState(v: string | undefined): MemoryJournalState {
+  return typeof v === 'string' && VALID_STATES.includes(v)
+    ? (v as MemoryJournalState)
+    : 'uncommitted';
+}
+
+/**
+ * Import a chatsune persona's memory into the Chatsundere memory tables.
+ * Bodies are written first (ascending version order) so the latest becomes the
+ * current body. Non-archived journal entries follow. Both are content-deduped
+ * against existing data for full idempotency.
+ */
+export async function importChatsuneMemory(
+  personaId: string,
+  memory: ChatsuneMemoryExport,
+): Promise<{
+  importedEntries: number;
+  skippedEntries: number;
+  importedBodies: number;
+  skippedBodies: number;
+}> {
+  const db = getClientDataDb();
+  let importedBodies = 0;
+  let skippedBodies = 0;
+
+  // --- Bodies: dedup by normalised content, insert in ascending version order ---
+  // Each body is appended as a new version via saveBody, so the latest imported
+  // body becomes the persona's current memory. When merging into a persona that
+  // already has native memory, this intentionally supersedes the native current
+  // body ("migrate my memory" semantics); the native body survives as a rollback
+  // target until saveBody's prune-to-5 drops it.
+  const existingBodies = await listBodyVersions(personaId);
+  const seenBodyNorms = new Set(existingBodies.map((b) => normaliseForDedup(b.content)));
+  // Keep at most the latest 5 by version — genuine chatsune exports already prune
+  // to 5, so this only guards a malformed export and keeps idempotency independent
+  // of the upstream cap.
+  const incomingBodies = [...memory.memory_bodies]
+    .filter((b) => typeof b.content === 'string' && b.content.trim() !== '')
+    .sort((a, b) => (a.version ?? 0) - (b.version ?? 0))
+    .slice(-5);
+
+  for (const cb of incomingBodies) {
+    const norm = normaliseForDedup(cb.content);
+    if (seenBodyNorms.has(norm)) {
+      skippedBodies++;
+      continue;
+    }
+    seenBodyNorms.add(norm);
+    await saveBody(personaId, cb.content, cb.entries_processed ?? 0, 'import');
+    importedBodies++;
+  }
+
+  // --- Journal entries: skip archived; dedup against existing journal entries and body prose ---
+  const existingJournal = await listJournal(personaId);
+  const seenEntryNorms = new Set(existingJournal.map((e) => normaliseForDedup(e.content)));
+
+  // Compute after the bodies loop so getCurrentBody reflects the just-imported body.
+  const currentBody = await getCurrentBody(personaId);
+  const bodyNorm = normaliseForDedup(currentBody?.content ?? '');
+
+  const now = Date.now();
+  const rows: MemoryJournalRow[] = [];
+  let skippedEntries = 0;
+
+  for (const je of memory.journal_entries) {
+    if (typeof je.content !== 'string' || je.content.trim() === '') continue;
+    if (asState(je.state) === 'archived') continue; // inert — already folded into bodies
+    const norm = normaliseForDedup(je.content);
+    if (!norm || seenEntryNorms.has(norm) || (bodyNorm !== '' && bodyNorm.includes(norm))) {
+      skippedEntries++;
+      continue;
+    }
+    seenEntryNorms.add(norm);
+    const createdAt = isoToMs(je.created_at, now);
+    rows.push({
+      id: uuidv7(),
+      personaId,
+      content: je.content,
+      category: asCategory(je.category),
+      state: asState(je.state),
+      isCorrection: je.is_correction === true,
+      createdAt,
+      committedAt: je.committed_at ? isoToMs(je.committed_at, createdAt) : null,
+      autoCommitted: je.auto_committed === true,
+      archivedByDreamId: null,
+      importedFrom: 'chatsune',
+    });
+  }
+  if (rows.length) await db.memoryJournal.bulkAdd(rows);
+
+  return { importedEntries: rows.length, skippedEntries, importedBodies, skippedBodies };
 }

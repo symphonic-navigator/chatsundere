@@ -8,7 +8,17 @@
 
 ## Open couplings
 
-### Memory system ⇒ extend the Chatsune importer with memory import
+(none)
+
+## Closed couplings
+
+### Memory system ⇒ Chatsune importer memory import — CLOSED 2026-06-20
+
+Resolved: `importChatsuneMemory` (`src/data/chatsune-import.ts`) imports
+`memory.json` (`journal_entries` non-archived + `memory_bodies`) on persona-import
+Save, content-deduped for idempotency. Plan: `superpowers/plans/2026-06-20-memory-import.md`.
+
+[original block text retained below for the record]
 
 The Chatsune persona importer (`apps/user-client/src/lib/chatsune-import/`) lands
 chats + persona core but **defers memories** — Chatsundere has no memory system

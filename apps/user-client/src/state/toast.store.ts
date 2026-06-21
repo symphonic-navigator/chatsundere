@@ -3,16 +3,27 @@ import { create } from 'zustand';
 
 export type ToastTone = 'info' | 'warn' | 'success';
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastEntry {
   id: number;
   message: string;
   tone: ToastTone;
   durationMs: number;
+  action?: ToastAction;
 }
 
 interface ToastStoreState {
   toasts: ToastEntry[];
-  show: (entry: { message: string; tone: ToastTone; durationMs: number }) => void;
+  show: (entry: {
+    message: string;
+    tone: ToastTone;
+    durationMs: number;
+    action?: ToastAction;
+  }) => void;
   dismiss: (id: number) => void;
   clear: () => void;
 }
@@ -34,7 +45,12 @@ export const useToastStore = useToastStoreInternal;
 
 /** Imperative façade for non-React callers (mutations, effects, etc.). */
 export const toastStore = {
-  show: (entry: { message: string; tone: ToastTone; durationMs: number }): void => {
+  show: (entry: {
+    message: string;
+    tone: ToastTone;
+    durationMs: number;
+    action?: ToastAction;
+  }): void => {
     useToastStoreInternal.getState().show(entry);
   },
   dismiss: (id: number): void => useToastStoreInternal.getState().dismiss(id),
