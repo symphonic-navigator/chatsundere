@@ -5,11 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
+import { markCompactionToastShown } from '../../../compaction/repo.js';
+import { isCompactable, shouldShowToast } from '../../../compaction/trigger.js';
 import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
 import { ArtefactSheet } from '../../../components/chat/ArtefactSheet.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
+import { CompactConfirmCard } from '../../../components/chat/CompactConfirmCard.js';
+import { CompactingOverlay } from '../../../components/chat/CompactingOverlay.js';
 import { DimOverlay } from '../../../components/chat/DimOverlay.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { LiveVoiceBar } from '../../../components/chat/LiveVoiceBar.js';
@@ -31,6 +35,7 @@ import {
 } from '../../../data/artefacts.js';
 import { useBranchChat, useChat, useCreateChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
+import { QK } from '../../../data/queryKeys.js';
 import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
 import { useDisplayName, useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
@@ -38,7 +43,7 @@ import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
-import { estimateTokens } from '../../../lib/token-estimator.js';
+import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
@@ -48,6 +53,7 @@ import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
+import { toastStore } from '../../../state/toast.store.js';
 
 const DRAFT_DEBOUNCE_MS = 250;
 
@@ -95,6 +101,8 @@ export function ChatPage(): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [documentPickerOpen, setDocumentPickerOpen] = useState(false);
   const [branchPointId, setBranchPointId] = useState<string | null>(null);
+  const [showCompactConfirm, setShowCompactConfirm] = useState(false);
+  const [isCompacting, setIsCompacting] = useState(false);
 
   const jumpToMessage = (messageId: string): void => {
     setInteractionMode(false);
@@ -302,6 +310,8 @@ export function ChatPage(): JSX.Element {
   const streamHandle = useStreamManagerStore((s) =>
     activeChatId ? (s.streams.get(activeChatId) ?? null) : null,
   );
+  const compactNow = useStreamManagerStore((s) => s.compactNow);
+  const compactingState = useStreamManagerStore((s) => s.compactingState);
   const isStreamLive = !!streamHandle;
 
   // Clear stale opener error state when the active chat changes. Without this,
@@ -380,6 +390,29 @@ export function ChatPage(): JSX.Element {
     [offering, effectivePersona],
   );
 
+  // Compaction precondition: message count + token floor both met.
+  const messageCount = (chatQuery.data?.messages ?? []).filter(isContextMessage).length;
+  const compactable = isCompactable(messageCount, usedTokens);
+
+  // 80 % actionable toast — once per chat, never during live voice.
+  // Uses chatQuery.data?.chat directly (not the `chat` alias below) because
+  // this effect is placed before that alias is declared.
+  const activeChat = chatQuery.data?.chat ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: qc and setShowCompactConfirm are stable references; activeChat covers compactionToastShown
+  useEffect(() => {
+    if (!activeChatId || !activeChat || !contextBudget || isLiveVoice) return;
+    const fillPct = contextUtilisation(usedTokens, contextBudget);
+    if (!shouldShowToast(fillPct, activeChat.compactionToastShown ?? false, compactable)) return;
+    void markCompactionToastShown(activeChatId);
+    void qc.invalidateQueries({ queryKey: QK.chat(activeChatId) });
+    toastStore.show({
+      message: 'This conversation is getting long. Compact it to keep it sharp?',
+      tone: 'info',
+      durationMs: 9000,
+      action: { label: 'Compact', onClick: () => setShowCompactConfirm(true) },
+    });
+  }, [usedTokens, activeChat, contextBudget, activeChatId, compactable, isLiveVoice]);
+
   // Reading-mode Enter hotkey: a bare Enter (no modifiers) opens the cockpit
   // and re-anchors to the latest message — symmetrical to Enter-to-send once
   // you're composing. Ignored while already in interaction mode, while any
@@ -402,6 +435,26 @@ export function ChatPage(): JSX.Element {
   const onRegenerate = (): void => {
     if (!activeChatId) return;
     void regenerate.mutateAsync({ chatId: activeChatId, reasoning });
+  };
+
+  const onConfirmCompact = async (): Promise<void> => {
+    if (!activeChatId) return;
+    setIsCompacting(true);
+    try {
+      await compactNow(activeChatId);
+      await qc.invalidateQueries({ queryKey: QK.chat(activeChatId) });
+      await qc.invalidateQueries({ queryKey: QK.compaction(activeChatId) });
+      setShowCompactConfirm(false);
+      toastStore.show({ message: 'Conversation compacted.', tone: 'success', durationMs: 5000 });
+    } catch {
+      toastStore.show({
+        message: "Couldn't compact just now — please try again.",
+        tone: 'warn',
+        durationMs: 7000,
+      });
+    } finally {
+      setIsCompacting(false);
+    }
   };
 
   const onConfirmBranch = async (title: string): Promise<void> => {
@@ -873,8 +926,20 @@ export function ChatPage(): JSX.Element {
           onToggleAutoRead={onToggleAutoRead}
           voiceUnavailable={voiceUnavailable}
           onEnterLiveVoice={onEnterLiveVoice}
+          compactable={compactable}
+          onCompact={() => setShowCompactConfirm(true)}
         />
       ) : null}
+
+      {showCompactConfirm ? (
+        <CompactConfirmCard
+          busy={isCompacting}
+          onConfirm={() => void onConfirmCompact()}
+          onCancel={() => setShowCompactConfirm(false)}
+        />
+      ) : null}
+
+      {compactingState === 'blocking' ? <CompactingOverlay /> : null}
     </div>
   );
 }

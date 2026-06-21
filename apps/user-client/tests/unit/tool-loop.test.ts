@@ -16,7 +16,12 @@ function toolCallPill(id: string, name: string, argumentsJson: string): PillRow 
 }
 
 function textResult(text: string): StreamEngineResult {
-  return { finalContentBlocks: [{ type: 'text', text }], pillRows: [], finishReason: 'stop' };
+  return {
+    finalContentBlocks: [{ type: 'text', text }],
+    pillRows: [],
+    finishReason: 'stop',
+    usedTokens: 0,
+  };
 }
 
 describe('runToolLoop', () => {
@@ -50,6 +55,7 @@ describe('runToolLoop', () => {
             finalContentBlocks: [{ type: 'pill', pillId: 'p1' }],
             pillRows: [toolCallPill('p1', 'calculate_js', '{"code":"2+2"}')],
             finishReason: 'tool_calls',
+            usedTokens: 0,
           };
         }
         return textResult('The answer is 4.');
@@ -82,6 +88,7 @@ describe('runToolLoop', () => {
               finalContentBlocks: [{ type: 'pill', pillId: 'p1' }],
               pillRows: [toolCallPill('p1', 'calculate_js', 'not json')],
               finishReason: 'tool_calls',
+              usedTokens: 0,
             }
           : textResult('Recovered.'),
       dispatch: async () => ({
@@ -106,6 +113,7 @@ describe('runToolLoop', () => {
           finalContentBlocks: [{ type: 'pill', pillId: `p${toolsSeen.length}` }],
           pillRows: [toolCallPill(`p${toolsSeen.length}`, 'calculate_js', '{"code":"1"}')],
           finishReason: 'tool_calls',
+          usedTokens: 0,
         };
       },
       dispatch: async () => ({ ok: true, output: '1', error: null }),
@@ -135,6 +143,7 @@ describe('runToolLoop', () => {
               toolCallPill('p2', 'calculate_js', '{"code":"2+2"}'),
             ],
             finishReason: 'tool_calls',
+            usedTokens: 0,
           };
         }
         return textResult('done');
@@ -163,6 +172,7 @@ describe('runToolLoop', () => {
             finalContentBlocks: [{ type: 'pill', pillId: 'p1' }],
             pillRows: [toolCallPill('p1', 'calculate_js', '{"code":"boom"}')],
             finishReason: 'tool_calls',
+            usedTokens: 0,
           };
         }
         secondRoundExchange = toolExchange as typeof secondRoundExchange;

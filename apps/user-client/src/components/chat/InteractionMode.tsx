@@ -37,6 +37,10 @@ interface Props {
   voiceUnavailable: 'no-provider' | 'no-voice' | null;
   /** Opens live voice mode — forwarded to the cockpit's live button. */
   onEnterLiveVoice?: () => void;
+  /** Whether the conversation meets compaction preconditions. */
+  compactable?: boolean;
+  /** Called when the user taps the context gauge to request compaction. */
+  onCompact?: () => void;
 }
 
 /**
@@ -162,6 +166,8 @@ export function InteractionMode(p: Props): JSX.Element {
         onExit={p.onExit}
         onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}
+        compactable={p.compactable}
+        onCompact={p.onCompact}
       />
       {/* Capture focus/blur on the textarea to drive DimOverlay activation
           (the overlay itself renders at chat-page level). display: contents so

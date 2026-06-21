@@ -117,6 +117,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'Hi' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
     const store = useStreamManagerStore.getState();
     await store.start(baseStartArgs(chatId, persona, model) as never);
@@ -151,6 +152,7 @@ describe('stream-manager.store', () => {
         },
       ],
       finishReason: 'stop',
+      usedTokens: 0,
     });
     const store = useStreamManagerStore.getState();
     await store.start(baseStartArgs(chatId, persona, model) as never);
@@ -373,6 +375,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'Hi there' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
     const store = useStreamManagerStore.getState();
     await store.start(baseStartArgs(chatId, persona, model) as never);
@@ -406,6 +409,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'second' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
     const store = useStreamManagerStore.getState();
     await store.start(baseStartArgs(chatId, persona, model) as never);
@@ -435,6 +439,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'first real reply' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
     const store = useStreamManagerStore.getState();
     await store.start(baseStartArgs(chatId, persona, model) as never);
@@ -453,6 +458,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'whatever' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
     const store = useStreamManagerStore.getState();
     await store.start(baseStartArgs(chatId, persona, model) as never);
@@ -494,6 +500,7 @@ describe('stream-manager.store', () => {
         finalContentBlocks: [{ type: 'text', text: 'new answer' }],
         pillRows: [],
         finishReason: 'stop',
+        usedTokens: 0,
       };
     }) as never);
 
@@ -1043,6 +1050,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'Answer' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
 
     const store = useStreamManagerStore.getState();
@@ -1226,6 +1234,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'Nice photo!' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
 
     const store = useStreamManagerStore.getState();
@@ -1379,6 +1388,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'new answer' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
 
     const activeModel = {
@@ -1466,6 +1476,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [{ type: 'text', text: 'Hello there!' }],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
 
     const store = useStreamManagerStore.getState();
@@ -1503,6 +1514,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
 
     const store = useStreamManagerStore.getState();
@@ -1523,6 +1535,7 @@ describe('stream-manager.store', () => {
       finalContentBlocks: [],
       pillRows: [],
       finishReason: 'stop',
+      usedTokens: 0,
     });
 
     const store = useStreamManagerStore.getState();

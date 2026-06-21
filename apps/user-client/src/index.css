@@ -2038,9 +2038,17 @@ h1 {
   opacity: 0.7;
   transition: opacity 120ms ease;
 }
-.reasoning-pill-monologue:hover:not(:disabled) { opacity: 1; }
-.reasoning-pill-monologue:disabled { opacity: 0.3; cursor: not-allowed; }
-.reasoning-pill-monologue[data-playing='true'] { opacity: 1; color: var(--color-paper, currentColor); }
+.reasoning-pill-monologue:hover:not(:disabled) {
+  opacity: 1;
+}
+.reasoning-pill-monologue:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.reasoning-pill-monologue[data-playing="true"] {
+  opacity: 1;
+  color: var(--color-paper, currentColor);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .reasoning-pill[data-live="true"] .reasoning-pill-dots .dot {
@@ -4493,4 +4501,59 @@ h1 {
   align-self: flex-start;
   opacity: 0.85;
   text-decoration: underline;
+}
+
+/* ── Block-and-compact blocking overlay ─────────────────────────────────────
+   Shown while the Layer-3 synchronous compaction path holds the send lock.
+   The breathing pulse is the no-freeze guarantee (spec §3 Layer 3, §8). */
+
+@keyframes compacting-breathe {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.compacting-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.35);
+  z-index: 200;
+}
+
+.compacting-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  background: var(--color-surface, #1e1e2e);
+  border: 1px solid var(--color-border, #45475a);
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text, #cdd6f4);
+}
+
+.compacting-overlay-pulse {
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--color-accent, #cba6f7);
+  animation: compacting-breathe 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compacting-overlay-pulse {
+    animation: none;
+    opacity: 0.7;
+  }
 }

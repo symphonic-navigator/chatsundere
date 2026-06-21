@@ -27,11 +27,17 @@ test('progress updates merge into the pill payload; meta merges on completion', 
     streamOnce: async (): Promise<StreamEngineResult> => {
       round += 1;
       return round === 1
-        ? { finalContentBlocks: [], pillRows: [toolCallPill('p1')], finishReason: 'tool_calls' }
+        ? {
+            finalContentBlocks: [],
+            pillRows: [toolCallPill('p1')],
+            finishReason: 'tool_calls',
+            usedTokens: 0,
+          }
         : {
             finalContentBlocks: [{ type: 'text', text: 'done' }],
             pillRows: [],
             finishReason: 'stop',
+            usedTokens: 0,
           };
     },
     dispatch: async (_name, _args, _signal, onProgress) => {

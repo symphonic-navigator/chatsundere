@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import type { MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { listCheckpoints } from '../../compaction/repo.js';
 import { useToggleBookmark } from '../../data/chats.js';
+import { QK } from '../../data/queryKeys.js';
 import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { outOfWindowCount } from '../../lib/context-window.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
@@ -12,6 +15,7 @@ import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
 import { toastStore } from '../../state/toast.store.js';
+import { CompactionMarker } from './CompactionMarker.js';
 import { ContextMemoryMarker } from './ContextMemoryMarker.js';
 import type { MonologueController } from './ReasoningPill.js';
 
@@ -106,6 +110,17 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   // it on first render after mindspaces load.
   const resolvedMindspace = useMindspaceStore((s) => s.resolved);
   const toggleBookmark = useToggleBookmark();
+
+  // Load checkpoints so we can render a CompactionMarker before each boundary message.
+  const checkpointsQuery = useQuery({
+    queryKey: QK.compaction(p.chatId),
+    queryFn: () => listCheckpoints(p.chatId),
+  });
+  // Index by tailStartMessageId for O(1) lookup in the render loop.
+  const checkpointByTail = useMemo(() => {
+    const map = new Map((checkpointsQuery.data ?? []).map((cp) => [cp.tailStartMessageId, cp]));
+    return map;
+  }, [checkpointsQuery.data]);
 
   const sorted = [...p.messages].sort((a, b) => a.createdAt - b.createdAt);
   const pillMap = new Map(p.pills.map((x) => [x.id, x]));
@@ -223,8 +238,16 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
         const renderMessage: MessageRow =
           isDraft && p.streamHandle ? { ...m, contentBlocks: p.streamHandle.contentBuffer } : m;
 
+        const boundaryCheckpoint = checkpointByTail.get(m.id);
+
         return (
           <div key={m.id}>
+            {boundaryCheckpoint !== undefined ? (
+              <CompactionMarker
+                key={`cp-${boundaryCheckpoint.id}`}
+                checkpoint={boundaryCheckpoint}
+              />
+            ) : null}
             {i === outCount && outCount > 0 ? <ContextMemoryMarker /> : null}
             {sep}
             <div data-msg-id={m.id}>

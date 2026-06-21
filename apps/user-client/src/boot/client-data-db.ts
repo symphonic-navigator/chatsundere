@@ -214,6 +214,10 @@ export interface ChatRow {
    *  extraction. uuidv7 ids are time-ordered, so "newer than the cursor" is an
    *  id comparison. Absent ⇒ null (nothing extracted yet). Non-indexed. */
   lastExtractedMessageId?: string | null;
+  /** Active compaction checkpoint id (its summary is injected; history slices to its tail). */
+  activeCompactionId?: string | null;
+  /** Once-per-chat flag: the 80 % "compact?" toast has been shown. */
+  compactionToastShown?: boolean;
 }
 
 export type ContentBlock =
@@ -424,6 +428,38 @@ export interface MemoryBodyRow {
   source: MemoryBodySource;
 }
 
+export type CompactionTrigger = 'auto' | 'manual' | 'overflow';
+
+/** A saved snapshot of what was known before a context compaction. Stored so the
+ *  summary can be re-injected on every subsequent turn, and so the tail slice can
+ *  be reconstructed without re-loading dropped messages. */
+export interface CompactionCheckpointRow {
+  /** Stable uuidv7 primary key. */
+  id: string;
+  /** Owner chat — cascade-deleted with the chat. Indexed for fast per-chat lookup. */
+  chatId: string;
+  /** Unix-ms creation timestamp. Indexed for time-ordered queries. */
+  createdAt: number;
+  /** The model that produced the summary (provenance / audit trail). */
+  modelId: string;
+  /** Free-prose Markdown summary of the compacted portion. */
+  summaryMarkdown: string;
+  /** Id of the newest message included in the compacted portion. */
+  lastMessageIdBefore: string;
+  /** Id of the first message retained in the live tail. */
+  tailStartMessageId: string;
+  /** Estimated token count of the compacted portion (pre-compaction). */
+  tokensBefore: number;
+  /** Estimated token count of the summary (post-compaction). */
+  tokensAfter: number;
+  /** Estimated token count of the live tail at compaction time. */
+  tailTokenCount: number;
+  /** Id of the preceding checkpoint, or null when this is the first. */
+  prevCheckpointId: string | null;
+  /** What triggered the compaction. */
+  trigger: CompactionTrigger;
+}
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -443,6 +479,7 @@ class ClientDataDb extends Dexie {
   voiceAudio!: Table<VoiceAudioRow, string>;
   memoryJournal!: Table<MemoryJournalRow, string>;
   memoryBody!: Table<MemoryBodyRow, string>;
+  compactionCheckpoints!: Table<CompactionCheckpointRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -956,6 +993,22 @@ class ClientDataDb extends Dexie {
             lastInteractionAt: maxChat > 0 ? maxChat : persona.createdAt,
           });
         }
+      });
+
+    // Version 29 — compact and continue. Adds the compactionCheckpoints store and
+    // backfills the optional per-chat pointer/flag for tidiness (reads default via `??`).
+    this.version(29)
+      .stores({
+        compactionCheckpoints: 'id, chatId, createdAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('chats')
+          .toCollection()
+          .modify((c: Record<string, unknown>) => {
+            if (c.activeCompactionId === undefined) c.activeCompactionId = null;
+            if (typeof c.compactionToastShown !== 'boolean') c.compactionToastShown = false;
+          });
       });
   }
 }

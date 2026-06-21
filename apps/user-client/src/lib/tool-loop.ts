@@ -58,6 +58,7 @@ export async function runToolLoop(deps: ToolLoopDeps): Promise<StreamEngineResul
   const allPills: PillRow[] = [];
   const toolExchange: WireMessage[] = [];
   let finishReason: StreamEngineResult['finishReason'] = 'unknown';
+  let lastUsedTokens = 0;
 
   for (let round = 0; ; round++) {
     const forceAnswer = round >= deps.maxRounds;
@@ -66,6 +67,7 @@ export async function runToolLoop(deps: ToolLoopDeps): Promise<StreamEngineResul
     allBlocks.push(...result.finalContentBlocks);
     allPills.push(...result.pillRows);
     finishReason = result.finishReason;
+    lastUsedTokens = result.usedTokens;
 
     const toolPills = result.pillRows.filter((p) => p.kind === 'tool-call');
     if (toolPills.length === 0 || forceAnswer) break;
@@ -119,5 +121,10 @@ export async function runToolLoop(deps: ToolLoopDeps): Promise<StreamEngineResul
     toolExchange.push(...toolMessages);
   }
 
-  return { finalContentBlocks: allBlocks, pillRows: allPills, finishReason };
+  return {
+    finalContentBlocks: allBlocks,
+    pillRows: allPills,
+    finishReason,
+    usedTokens: lastUsedTokens,
+  };
 }

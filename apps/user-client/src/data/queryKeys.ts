@@ -36,4 +36,5 @@ export const QK = {
   memoryBody: (personaId: string) => ['memory', personaId, 'body'] as const,
   memoryBodyVersions: (personaId: string) => ['memory', personaId, 'body', 'versions'] as const,
   unextractedCount: (chatId: string) => ['memory', 'unextracted', chatId] as const,
+  compaction: (chatId: string) => ['compaction', chatId] as const,
 };

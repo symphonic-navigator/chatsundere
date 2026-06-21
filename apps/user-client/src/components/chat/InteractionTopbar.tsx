@@ -19,6 +19,13 @@ interface Props {
    *  reserving the space (in the persona's accent + display font) for when the
    *  feature lands. */
   projectName?: string | null;
+  /** Whether the conversation currently meets the compaction preconditions
+   *  (message count + token floor). When false the gauge is disabled with a
+   *  tooltip explaining why. */
+  compactable?: boolean;
+  /** Called when the user taps the gauge to request manual compaction. Only
+   *  invoked when `compactable` is true. */
+  onCompact?: () => void;
 }
 
 export function InteractionTopbar(p: Props): JSX.Element {
@@ -140,12 +147,25 @@ export function InteractionTopbar(p: Props): JSX.Element {
             <span className="journal-dot" />
             <span>0</span>
           </div>
-          <div className="context-gauge" title="Context window">
+          <button
+            type="button"
+            className="context-gauge"
+            aria-label={
+              p.compactable ? 'Compact conversation' : 'Compact conversation (unavailable)'
+            }
+            title={
+              p.compactable
+                ? 'Compact the conversation'
+                : 'Nothing to compact yet — the conversation is still short'
+            }
+            disabled={!p.compactable}
+            onClick={p.compactable ? p.onCompact : undefined}
+          >
             <div className="context-gauge-bar">
               <div className="context-gauge-fill" style={{ width: `${pct}%` }} />
             </div>
             <div className="context-gauge-text">{pct}%</div>
-          </div>
+          </button>
         </div>
       </div>
     </div>

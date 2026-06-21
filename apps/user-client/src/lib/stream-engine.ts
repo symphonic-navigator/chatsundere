@@ -22,7 +22,7 @@ import type {
   PillRow,
 } from '../boot/client-data-db.js';
 import { flattenAnswerText, isContextMessage } from './content-blocks.js';
-import { resolveContextWindow, truncateToWindow } from './context-window.js';
+import { resolveContextWindow, truncateToWindow, wireTokens } from './context-window.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
 
 export interface StartStreamArgs {
@@ -65,6 +65,7 @@ export interface StreamEngineResult {
   finalContentBlocks: ContentBlock[];
   pillRows: PillRow[];
   finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown';
+  usedTokens: number;
 }
 
 /** The opener's plaintext for the system-prompt echo. Empty unless this is a
@@ -118,6 +119,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
 
   const budget = resolveContextWindow(args.persona, args.offering);
   const { messages: sentMessages } = truncateToWindow(wireMessages, budget);
+  const usedTokens = sentMessages.reduce((s, m) => s + wireTokens(m), 0);
 
   const extras: Record<string, unknown> = {
     ...resolveReasoningBodyExtras(args.offering.profile.reasoning, args.reasoning),
@@ -174,7 +176,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     }
   }
 
-  return { finalContentBlocks: contentBuffer, pillRows, finishReason };
+  return { finalContentBlocks: contentBuffer, pillRows, finishReason, usedTokens };
 }
 
 /** Append text to the tail of the content buffer, coalescing adjacent text blocks. */

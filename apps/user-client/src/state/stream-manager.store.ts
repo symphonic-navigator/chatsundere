@@ -6,6 +6,7 @@ import {
   type WireContentPart,
   getCanonical,
   getOffering,
+  getProvider,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
@@ -22,6 +23,11 @@ import {
   type PillRow,
   getClientDataDb,
 } from '../boot/client-data-db.js';
+import { applyActiveCompaction } from '../compaction/apply.js';
+import { releaseCompactionLock, tryAcquireCompactionLock } from '../compaction/mutex.js';
+import { wouldOverflow } from '../compaction/overflow.js';
+import { type CompactionArgs, runCompaction } from '../compaction/runner.js';
+import { shouldFireValve } from '../compaction/trigger.js';
 import {
   attachPendingToMessage,
   listMessageAttachments,
@@ -32,10 +38,14 @@ import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildWebTools } from '../integrations/web/build-web-tools.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
+import { flattenAnswerText } from '../lib/content-blocks.js';
+import { resolveContextWindow } from '../lib/context-window.js';
 import { buildOpenerInstruction } from '../lib/opener.js';
 import { queryClient } from '../lib/queryClient.js';
+import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
+import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
 import { loadMemoryContext } from '../memory/repo.js';
@@ -132,6 +142,9 @@ export type RegenerateOpenerArgs = OpenerArgs & {
 
 interface StreamManagerStore {
   streams: Map<string, StreamHandle>;
+  /** Set to 'blocking' while a synchronous pre-send compaction is in progress
+   *  (Layer 3 overflow failsafe). Null at all other times. */
+  compactingState: 'blocking' | null;
   start: (args: StartArgs) => Promise<void>;
   regenerate: (args: RegenerateStreamArgs) => Promise<void>;
   startOpener: (args: OpenerArgs) => Promise<void>;
@@ -142,6 +155,47 @@ interface StreamManagerStore {
   abortAllForPersonaPreserve: (personaId: string) => Promise<void>;
   has: (chatId: string) => boolean;
   getDraftMessage: (chatId: string) => { id: string; contentBlocks: ContentBlock[] } | null;
+  /**
+   * Resolve provider credentials from Dexie + session and run a manual
+   * compaction. Throws when credentials are unavailable or the model call
+   * fails. Returns null when there is nothing new to compact (already
+   * up-to-date).
+   */
+  compactNow: (
+    chatId: string,
+  ) => Promise<import('../boot/client-data-db.js').CompactionCheckpointRow | null>;
+}
+
+/** Extract the provider/chat fields shared by every `runCompaction` call site. */
+function compactionArgsFrom(args: StartArgs): Omit<CompactionArgs, 'trigger'> {
+  return {
+    chat: args.chat,
+    persona: args.persona,
+    provider: args.provider,
+    providerConfig: args.providerConfig,
+    apiKey: args.apiKey,
+    corsProxyUrl: args.corsProxyUrl,
+    corsProxyKey: args.corsProxyKey,
+    offering: args.offering,
+  };
+}
+
+function fireCompactionValve(args: StartArgs, usedTokens: number): void {
+  const window = resolveContextWindow(args.persona, args.offering);
+  const fillPct = contextUtilisation(usedTokens, window);
+  if (!shouldFireValve(fillPct)) return;
+  if (!tryAcquireCompactionLock(args.chat.id)) return;
+  void runCompaction({ ...compactionArgsFrom(args), trigger: 'auto' })
+    .then((cp) => {
+      if (cp) {
+        void queryClient.invalidateQueries({ queryKey: QK.chat(args.chat.id) });
+        void queryClient.invalidateQueries({ queryKey: QK.compaction(args.chat.id) });
+      }
+    })
+    .catch(() => {
+      // runCompaction logs nothing user-facing; the valve is best-effort.
+    })
+    .finally(() => releaseCompactionLock(args.chat.id));
 }
 
 function fireMemoryPipeline(args: StartArgs): void {
@@ -213,6 +267,7 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
 
 export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   streams: new Map(),
+  compactingState: null,
 
   has: (chatId) => get().streams.has(chatId),
 
@@ -221,10 +276,112 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     return h ? { id: h.draftMessageId, contentBlocks: h.contentBuffer } : null;
   },
 
+  compactNow: async (chatId) => {
+    const db = getClientDataDb();
+    const mk = useSessionStore.getState().mk;
+    if (!mk) throw new Error('compactNow: master key unavailable — re-authenticate');
+
+    const chat = await db.chats.get(chatId);
+    if (!chat) throw new Error('compactNow: chat not found');
+
+    const persona = await db.personas.get(chat.personaId);
+    if (!persona) throw new Error('compactNow: persona not found');
+
+    const provider = await db.providers.get(persona.providerId);
+    if (!provider) throw new Error('compactNow: provider not found');
+
+    const settings = await db.settings.get(1);
+    if (!settings) throw new Error('compactNow: settings row missing');
+
+    const providerDef = getProvider(provider.templateId);
+    if (!providerDef)
+      throw new Error(`compactNow: unknown provider template "${provider.templateId}"`);
+
+    const offering = getOffering(provider.templateId, persona.modelId);
+    if (!offering) throw new Error(`compactNow: no offering for "${persona.modelId}"`);
+
+    const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
+    const corsProxyUrl = settings.corsProxy?.url ?? null;
+    const corsProxyKey = settings.corsProxy
+      ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
+      : null;
+
+    const providerConfig: import('@chatsundere/llm-unified').ProviderConfig = {
+      baseUrl: providerDef.baseUrl,
+      routing:
+        providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+    };
+
+    const compactionArgs: CompactionArgs = {
+      chat,
+      persona,
+      provider: providerDef,
+      providerConfig,
+      apiKey,
+      corsProxyUrl,
+      corsProxyKey,
+      offering,
+      trigger: 'manual',
+    };
+
+    if (!tryAcquireCompactionLock(chatId)) {
+      throw new Error('Compaction already in progress for this chat');
+    }
+    try {
+      return await runCompaction(compactionArgs);
+    } finally {
+      releaseCompactionLock(chatId);
+    }
+  },
+
   start: async (args) => {
     if (get().streams.has(args.chatId)) {
       throw new Error('stream-manager.start: a stream is already live for this chat');
     }
+
+    // Layer 3 overflow failsafe: estimate the would-be context size for this
+    // send (history + incoming user turn). This runs BEFORE the user message is
+    // inserted and BEFORE draftInput is cleared, so that returning early on a
+    // failed block-compact leaves the composer intact.
+    const contextWindow = resolveContextWindow(args.persona, args.offering);
+    // Estimate the realistic sent size: if a checkpoint is active, only the tail
+    // (+ the injected summary) is sent, not the full history.
+    const projected = await applyActiveCompaction(args.chat, args.priorMessages, '');
+    const projectedUsed =
+      projected.priorMessages.reduce(
+        (sum, m) => sum + estimateTokens(flattenAnswerText(m.contentBlocks)),
+        0,
+      ) +
+      estimateTokens(projected.memoryContext) +
+      estimateTokens(args.userText);
+    if (wouldOverflow(projectedUsed, contextWindow)) {
+      // Only block-compact if the background valve isn't already compacting this
+      // chat. If it is, let it finish — truncateToWindow remains the hard backstop
+      // for this one send, and the valve's checkpoint applies on the next send.
+      if (tryAcquireCompactionLock(args.chat.id)) {
+        set({ compactingState: 'blocking' });
+        let compactionFailed = false;
+        try {
+          await runCompaction({ ...compactionArgsFrom(args), trigger: 'overflow' });
+          void queryClient.invalidateQueries({ queryKey: QK.compaction(args.chat.id) });
+        } catch {
+          compactionFailed = true;
+        } finally {
+          set({ compactingState: null });
+          releaseCompactionLock(args.chat.id);
+        }
+        if (compactionFailed) {
+          toastStore.show({
+            message: "Couldn't compact just now — your message is kept.",
+            tone: 'warn',
+            durationMs: 8000,
+            action: { label: 'Retry', onClick: () => void get().start(args) },
+          });
+          return; // typed/pasted message is preserved in the composer; do not send.
+        }
+      }
+    }
+
     const db = getClientDataDb();
     const now = Date.now();
     const userMessageId = uuidv7();
@@ -677,6 +834,7 @@ async function runIntoDraft(
     toolsActive && knowledge ? renderKnowledgeAwareness(knowledge.libraries) : '';
   const memoryContext =
     (args.persona.useMemory ?? true) ? await loadMemoryContext(args.persona.id) : '';
+  const compacted = await applyActiveCompaction(args.chat, args.priorMessages, memoryContext);
 
   const onChunk = (chunk: StreamChunk): void => {
     // Mirror tokens and reasoning deltas into the handle so ChatStream
@@ -710,10 +868,11 @@ async function runIntoDraft(
     streamOnce: (toolExchange, tools) =>
       runStreamEngine({
         ...args,
+        priorMessages: compacted.priorMessages,
         userMessageText,
         toolsInstruction,
         knowledgeLibrariesContext,
-        memoryContext,
+        memoryContext: compacted.memoryContext,
         loreContext: args.loreContext ?? '',
         tools,
         toolExchange,
@@ -801,6 +960,9 @@ async function runIntoDraft(
       // Memory pipeline (best-effort, no await). Self-gates on useMemory,
       // volume thresholds, and the per-persona mutex.
       fireMemoryPipeline(args);
+      // Compaction valve (best-effort, no await). Fires when context fill
+      // exceeds the 90 % threshold and no compaction is already in flight.
+      fireCompactionValve(args, result.usedTokens);
 
       // Same reasoning as the finalising transition above — rotate so
       // subscribers re-render and the auto-follow scroll lands at the

@@ -26,7 +26,7 @@ export function resolveContextWindow(persona: PersonaRow, offering: Offering): n
   return Math.min(offering.context.max, Math.max(effectiveFloor(offering), target));
 }
 
-function wireTokens(m: WireMessage): number {
+export function wireTokens(m: WireMessage): number {
   return estimateTokens(typeof m.content === 'string' ? m.content : '');
 }
 
