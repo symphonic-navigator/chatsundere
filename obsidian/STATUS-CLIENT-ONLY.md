@@ -8,7 +8,37 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-21 — **MEMORY IMPROVEMENTS SQUASHED TO MASTER (`c16be11c`).
+**Last updated:** 2026-06-21 — **COMPACT-AND-CONTINUE SQUASHED TO MASTER
+(`5b49125`), device-verified by Chris ("ganz wunderbar"). NOT pushed.**
+Upgrades context-overflow handling from *silent message-dropping* to a
+user-controlled conversation summary that keeps the last N messages verbatim —
+the *dere* fix for the three long-chat pains (context fills / model dumbs down /
+cost). Three trigger layers share one mechanism: a **tappable context-fill gauge
++ once-per-chat 80% toast** (manual), a **90% background safety valve**, and a
+synchronous **block-and-compact failsafe** with message-preserving recovery and a
+live-motion overlay. Raw messages are **never deleted** (Reading Mode stays whole;
+memory extraction undisturbed); compaction only changes the *sent* context — the
+six-section summary (ported 1:1 from chatsune) is injected into the
+`memoryContext` slot as `<conversation_compact>` and history is sliced to the
+tail. Checkpoints live in a new **Dexie v29** table; timeline markers open a
+read-only briefing drawer. Built spec→plan→**subagent-driven** (12 tasks, per-task
+spec+quality review). The review loop caught real bugs before device: a plan-bug in
+the tail tests (corrected to chatsune semantics), a **CRITICAL** tool-loop
+`usedTokens` double-count (valve would have fired at ~45%), three per-chat-lock
+gaps across the trigger paths, and Laura's **HARD** (the block-compact overlay was
+set in the store but rendered nowhere → fixed). **opus** whole-branch review
+*merge-ready*; **Laura** pre-squash 1 HARD (fixed) + 2 SOFT deferred
+([[insights/ux-deferrals]]: no "Send anyway" on block failure; marker inline-expand
+kept per Chris's inline-over-hidden preference). Not a Larissa path (client-only).
+Gates: `pnpm typecheck --force` **14/14**; full user-client vitest at the **8
+Node-localStorage baseline** (1882 pass; + new compaction suite). Specs/plans:
+[[../superpowers/specs/2026-06-21-compact-and-continue-design]],
+[[../superpowers/plans/2026-06-21-compact-and-continue]]. **Next:** UI/UX makeover
+(Chris has the concept ready) — see Next session. Projects feature is REMOVED from
+the alpha scope (deferred to after the backend — needs Chris's project-oriented-memory
+mental model + new IA). Live voice is DONE.
+
+**Earlier (2026-06-21) — MEMORY IMPROVEMENTS SQUASHED TO MASTER (`c16be11c`).
 `write_memory_entry` "Remembered" pill (with the remembered text) and the
 greeting-in-system-prompt echo are DEVICE-CONFIRMED by Chris ("GENIAL" — the
 combination gives RP/ERP users a "forever continuation" feeling). The other three
@@ -286,6 +316,24 @@ something that delights and doesn't annoy).
 ---
 
 ## Next session
+
+**→ UI/UX makeover (the big block).** Compact-and-continue was the last
+functionality domino before the design pass; it has landed. Chris has the makeover
+concept ready (worked it out while Liz built compaction) — "relatively exact" in
+his head. Agreed approach from the 2026-06-21 brainstorm: start with the **main
+menu** as a vertical slice (small, low-stakes, where we learn the Chatsundere
+design language), the chat (densest surface) comes last. Analytical first pass:
+which design elements/widgets to unify; what "language" we speak (more sub-pages?
+deeper navigation kept first-class); tooling (raster heroes via ChatGPT Image vs
+native SVG/Lucide for UI vectors — *not* auto-tracing; route-graph diagrams via
+the Mermaid tool; the existing `chatsundere-prototype.html` + screenshot map).
+Plan for 2–3 weeks. **Start fresh after Chris's `/clear`.**
+
+*Out of alpha scope:* **Projects feature REMOVED** (deferred to after the backend
+— needs Chris's project-oriented-memory mental model + new IA; it is a navigation
+primitive that would be built on the about-to-change IA). **Live voice: DONE.**
+
+**Older pre-roadmap items (likely stale — verify before acting):**
 
 1. **Retry observability** — the only concrete pre-roadmap
    implementation item. Wire an `onRetry`/logging seam into

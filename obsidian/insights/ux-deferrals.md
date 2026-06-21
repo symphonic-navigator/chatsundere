@@ -221,3 +221,49 @@ release-cut trail.
 - **Chris sign-off:** ✅ Chris, 2026-06-17 ("ja, deferral") — explicitly invoking
   the mobile-usability-over-goldplating filter; this is precisely the class of
   "functionally easy but UX-tight" feature deferred until requested.
+
+## 2026-06-21 — Compact-and-continue: two soft notes (Laura pre-squash)
+
+Both raised at Laura's pre-squash pass of the compact-and-continue unit (squashed
+to master `5b49125`). Soft-tier — the pass found one HARD defect (the block-compact
+"Compacting…" overlay was unbuilt), which was **fixed before squash**, not deferred;
+these two are the remaining advisory notes.
+
+1. **Block-and-compact failure offers "Retry" but not "Send anyway".**
+   - Surface: the Layer-3 synchronous failsafe failure toast
+     (`apps/user-client/src/state/stream-manager.store.ts`, the block-compact catch).
+   - Finding: spec §3 Layer 3 promised BOTH *Retry* and *Send anyway* (the latter
+     falling back to the silent-truncation maths once, with a note). The build ships
+     only Retry. The user's typed message is always preserved, so it is not a hard
+     dead-end, but on a *persistent* summariser failure (bad key, provider down) the
+     always-works escape (send-anyway via `truncateToWindow`) is absent.
+   - Mode: pre-squash.
+   - Criterion: constructive error handling / "no wall without a next move".
+   - Rationale for deferral: edge of an edge — the block path itself is the rare
+     single-oversized-send case, and a *persistent* failure within it is rarer
+     still; Retry covers transient failures and the message is never lost. Adding
+     "Send anyway" needs a deliberate truncation-fallback send path. Passes the
+     feature-inclusion filter (not needed for alpha, costs build, no gamechanger).
+   - Follow-up commitment: build "Send anyway" if alpha testers hit a persistent
+     block-compact failure; otherwise revisit at the v0.1.0 release cut.
+   - Chris sign-off: ✅ Chris, 2026-06-21 — accepted Liz's recommendation to defer
+     when approving the squash.
+
+2. **Marker pill inline-expands the drawer rather than opening a distinct surface.**
+   - Surface: `apps/user-client/src/components/chat/CompactionMarker.tsx` (the
+     `{open ? <CompactionDrawer/> : null}` inline render).
+   - Finding: spec §8 said the marker should "open a drawer rather than expanding
+     inline … to avoid astonishing users trained by inline-expand pills". The build
+     inline-expands (with a chevron + `aria-expanded`, so it is honest, not
+     misdirection — hence soft).
+   - Mode: pre-squash.
+   - Criterion: least astonishment; spec §8.
+   - Rationale for deferral: **conscious deviation, kept on purpose.** The spec's
+     "distinct drawer" was Liz's spec-time call; it conflicts with Chris's
+     documented inline-over-hidden / expand-in-place preference
+     (`feedback_inline_over_hidden_navigation`), which Laura herself flagged. The
+     inline-expand is the more house-aligned choice; the spec line is the outlier.
+   - Follow-up commitment: re-confirm at the design-language pass; keep inline-expand
+     unless a distinct surface reads clearly better in context then.
+   - Chris sign-off: ✅ Chris, 2026-06-21 — accepted Liz's recommendation to keep
+     inline-expand when approving the squash.
