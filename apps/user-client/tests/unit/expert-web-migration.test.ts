@@ -12,6 +12,6 @@ describe('Dexie v17 expertWeb', () => {
     const db = await openClientDataDb();
     const s = await db.settings.get(1);
     expect(s?.expertWeb).toEqual({ search: null, fetch: null, searchTierId: null });
-    expect(db.verno).toBe(27);
+    expect(db.verno).toBe(28);
   });
 });

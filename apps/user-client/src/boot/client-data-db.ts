@@ -181,6 +181,9 @@ export interface PersonaRow {
   lastViewedMemoryBodyVersion?: number;
   /** One-shot "starting to remember you" note already shown. Absent ⇒ false. */
   memoryIntroShown?: boolean;
+  /** Last time the user actually sent a message to this persona (any chat).
+   *  Drives Circle ordering. The auto-opener does NOT update it. */
+  lastInteractionAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -930,6 +933,29 @@ class ClientDataDb extends Dexie {
           .modify((c: Record<string, unknown>) => {
             if (c.lastExtractedMessageId === undefined) c.lastExtractedMessageId = null;
           });
+      });
+
+    // Version 28 — Circle LRU sort. Backfills `lastInteractionAt` on existing
+    // personas: set to the max `lastMessageAt` across the persona's chats, or
+    // fall back to `createdAt` when the persona has no chats.
+    // `lastInteractionAt` is NOT indexed — no schema change is needed.
+    this.version(28)
+      .stores({
+        memoryJournal: 'id, personaId, [personaId+state], [personaId+createdAt]',
+        memoryBody: 'id, personaId, [personaId+version]',
+      })
+      .upgrade(async (tx) => {
+        const personas = await tx.table('personas').toArray();
+        for (const persona of personas) {
+          const chats = await tx.table('chats').where('personaId').equals(persona.id).toArray();
+          const maxChat = chats.reduce(
+            (max: number, c: { lastMessageAt?: number }) => Math.max(max, c.lastMessageAt ?? 0),
+            0,
+          );
+          await tx.table('personas').update(persona.id, {
+            lastInteractionAt: maxChat > 0 ? maxChat : persona.createdAt,
+          });
+        }
       });
   }
 }

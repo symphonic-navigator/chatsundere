@@ -98,6 +98,7 @@ export async function runExtraction(
     memoryBody: body?.content ?? null,
     journalEntries: existing.map((e) => e.content),
     messages: cleaned,
+    userGuidance: args.persona.memoryInstructions ?? '',
   });
   const raw = await callModel(args, system, 'Extract now and return only the JSON array.', 1024);
   const fresh = dropDuplicates(

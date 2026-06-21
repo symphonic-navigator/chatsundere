@@ -109,6 +109,12 @@ export function useDeletePersona() {
   });
 }
 
+/** Descending order for the Circle: most-recently-interacted persona first.
+ *  Falls back to createdAt for personas never messaged. */
+export function compareByLastInteraction(a: PersonaRow, b: PersonaRow): number {
+  return (b.lastInteractionAt ?? b.createdAt) - (a.lastInteractionAt ?? a.createdAt);
+}
+
 /**
  * Personas filtered by the current adult-mode setting. **All UI surfaces
  * that list personas, count personas, or look up a recent persona for

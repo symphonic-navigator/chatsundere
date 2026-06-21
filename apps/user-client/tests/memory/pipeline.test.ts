@@ -16,6 +16,7 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { DREAM_THRESHOLD } from '../../src/memory/config.js';
 import { _resetMemoryLocksForTests, tryAcquireMemoryLock } from '../../src/memory/mutex.js';
 import { runMemoryPipeline } from '../../src/memory/pipeline.js';
 import { countJournal, getCurrentBody } from '../../src/memory/repo.js';
@@ -89,9 +90,9 @@ describe('runMemoryPipeline', () => {
   });
 
   it('auto-commits then dreams once committed entries cross the threshold', async () => {
-    // 20 committed entries already present → dreaming fires; mock returns a body.
+    // DREAM_THRESHOLD committed entries already present → dreaming fires; mock returns a body.
     const db = getClientDataDb();
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < DREAM_THRESHOLD; i++) {
       await db.memoryJournal.add({
         id: `j${i}`,
         personaId: 'p1',
@@ -109,7 +110,7 @@ describe('runMemoryPipeline', () => {
     runOneShotCompletion.mockResolvedValue('Consolidated body prose.');
     await runMemoryPipeline(args());
     expect((await getCurrentBody('p1'))?.content).toBe('Consolidated body prose.');
-    expect(await countJournal('p1', 'archived')).toBe(20);
+    expect(await countJournal('p1', 'archived')).toBe(DREAM_THRESHOLD);
     expect(await countJournal('p1', 'committed')).toBe(0);
   });
 });

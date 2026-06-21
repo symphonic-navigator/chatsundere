@@ -47,7 +47,7 @@ describe('client-data-db v27 (memory tables + persona/chat fields)', () => {
   it('opens at verno 27 on a fresh install with the two memory tables', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(27);
+    expect(db.verno).toBe(28);
     await expect(db.memoryJournal.count()).resolves.toBe(0);
     await expect(db.memoryBody.count()).resolves.toBe(0);
   });
@@ -57,7 +57,7 @@ describe('client-data-db v27 (memory tables + persona/chat fields)', () => {
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(27);
+    expect(db.verno).toBe(28);
     const persona = await db.personas.get('p1');
     expect(persona?.useMemory).toBe(true);
     expect(persona?.memoryInstructions).toBe('');

@@ -26,6 +26,49 @@ function kbPill(payloadOverrides: Partial<KbPayload> = {}): PillRow {
   };
 }
 
+function toolCallPill(name: string, argumentsJson: string): PillRow {
+  return {
+    id: 'p2',
+    messageId: 'm2',
+    kind: 'tool-call',
+    positionHint: 'inline',
+    status: 'completed',
+    payload: { name, argumentsJson },
+    createdAt: 2,
+  };
+}
+
+describe('Pill — write_memory_entry tool-call', () => {
+  it('labels the pill "Remembered" and does not show the raw tool name', () => {
+    render(
+      <Pill
+        row={toolCallPill(
+          'write_memory_entry',
+          JSON.stringify({ content: 'User has a cat named Mochi.' }),
+        )}
+      />,
+    );
+    const btn = screen.getByRole('button');
+    expect(btn).toHaveTextContent('Remembered');
+    expect(btn).not.toHaveTextContent('write_memory_entry');
+  });
+
+  it('is expandable and reveals the remembered text on click', () => {
+    render(
+      <Pill
+        row={toolCallPill(
+          'write_memory_entry',
+          JSON.stringify({ content: 'User has a cat named Mochi.' }),
+        )}
+      />,
+    );
+    const btn = screen.getByRole('button');
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(btn);
+    expect(screen.getByText('User has a cat named Mochi.')).toBeInTheDocument();
+  });
+});
+
 describe('Pill — kb-injection', () => {
   it('labels with the entry count and expands to show provenance + content', () => {
     render(<Pill row={kbPill()} />);

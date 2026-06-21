@@ -67,6 +67,18 @@ export interface StreamEngineResult {
   finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown';
 }
 
+/** The opener's plaintext for the system-prompt echo. Empty unless this is a
+ *  chat job and a kind:'opener' message exists in history (it is never in the
+ *  wire history, so the echo is the model's only continuity with it). */
+export function resolveOpenerContext(
+  priorMessages: MessageRow[],
+  job: 'chat' | 'greeting',
+): string {
+  if (job !== 'chat') return '';
+  const found = priorMessages.find((m) => m.kind === 'opener');
+  return found ? flattenAnswerText(found.contentBlocks) : '';
+}
+
 /**
  * Orchestrate a single chat-turn against the upstream. Pure (apart from the
  * onChunk callback) — does NOT touch Dexie. Caller (stream-manager) is
@@ -92,6 +104,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       roleplayEnabled: args.persona.roleplay,
       narration: args.persona.narration,
       personaName: args.persona.name,
+      openerContext: resolveOpenerContext(args.priorMessages, args.job ?? 'chat'),
     },
     args.job ?? 'chat',
   );

@@ -8,6 +8,7 @@ import { type ExpertBase, type ExpertWeb, createAskExpertTool } from './ask-expe
 import { calculateJs } from './calculate-js.js';
 import { type ImageToolContext, contributeImageTool } from './generate-image.js';
 import type { Tool } from './types.js';
+import { type MemoryToolContext, contributeMemoryTool } from './write-memory.js';
 
 /** Always-on tools (omakase — no per-tool toggle). */
 const STATIC_TOOLS: readonly Tool[] = [calculateJs];
@@ -25,14 +26,16 @@ export interface ExpertToolContext {
 /** The active tool set for this send: static tools, every integration-contributed
  *  tool, the local context tools (knowledgebase) when a context is present,
  *  the ask_expert tool when an expert context is given, the MCP server tools
- *  when an mcp context is given, and the generate_image tool when an images
- *  context is given (always-offered design — present even when unconfigured). */
+ *  when an mcp context is given, the generate_image tool when an images
+ *  context is given (always-offered design — present even when unconfigured),
+ *  and the write_memory_entry tool when a memory context is given. */
 export function resolveActiveTools(
   ctx: IntegrationContext,
   knowledge: KnowledgeContext | null = null,
   expert: ExpertToolContext | null = null,
   mcp: McpToolContext | null = null,
   images: ImageToolContext | null = null,
+  memory: MemoryToolContext | null = null,
 ): Tool[] {
   return [
     ...STATIC_TOOLS,
@@ -52,6 +55,7 @@ export function resolveActiveTools(
       : []),
     ...(mcp ? contributeMcpTools(mcp) : []),
     ...(images ? contributeImageTool(images) : []),
+    ...(memory ? contributeMemoryTool(memory) : []),
   ];
 }
 

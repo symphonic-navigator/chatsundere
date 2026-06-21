@@ -320,6 +320,32 @@ describe('teal segment', () => {
   });
 });
 
+describe('openerEcho segment', () => {
+  it('echoes the opener in Band 2 on a chat job when openerContext is set', () => {
+    const out = buildPrompt(
+      { ...baseInputs, openerContext: 'Hello, traveller. I am glad you came.' },
+      'chat',
+    );
+    expect(out).toContain('You opened this conversation by greeting the user');
+    expect(out).toContain('Hello, traveller. I am glad you came.');
+  });
+
+  it('omits the opener echo on greeting and title jobs', () => {
+    expect(buildPrompt({ ...baseInputs, openerContext: 'Hi.' }, 'greeting')).not.toContain(
+      'You opened this conversation',
+    );
+    expect(buildPrompt({ ...baseInputs, openerContext: 'Hi.' }, 'title')).not.toContain(
+      'You opened this conversation',
+    );
+  });
+
+  it('omits the opener echo when openerContext is empty', () => {
+    expect(buildPrompt({ ...baseInputs, openerContext: '' }, 'chat')).not.toContain(
+      'You opened this conversation',
+    );
+  });
+});
+
 describe('modelInstructions segment', () => {
   it('is present in chat and greeting when provided', () => {
     for (const job of ['chat', 'greeting'] as const) {

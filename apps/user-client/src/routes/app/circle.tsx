@@ -6,7 +6,7 @@ import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { PersonaCard } from '../../components/PersonaCard.js';
 import { useChats } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
-import { useFilteredPersonas } from '../../data/personas.js';
+import { compareByLastInteraction, useFilteredPersonas } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
 import { resolveMindspace } from '../../state/mindspace-resolver.js';
@@ -59,6 +59,11 @@ export function Circle(): JSX.Element {
     if (!lastChatByPersona.has(c.personaId)) lastChatByPersona.set(c.personaId, c.id);
   }
 
+  // Sort a copy by last interaction (most-recently-messaged first) for the Circle
+  // display. The shared useFilteredPersonas ordering (createdAt asc) is preserved
+  // for every other surface (Treasury, History, Entrance-Hall, Artefact-Picker).
+  const sortedPersonas = (personas.data ?? []).slice().sort(compareByLastInteraction);
+
   return (
     <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-24 pt-4">
       <EditorTopbar
@@ -79,7 +84,7 @@ export function Circle(): JSX.Element {
       ) : null}
 
       <ul className="flex flex-col gap-2">
-        {(personas.data ?? []).map((p) => {
+        {sortedPersonas.map((p) => {
           const ms = resolveMindspace({
             persona: { mindspaceId: p.mindspaceId, textureOverride: p.textureOverride },
             defaultMindspaceId,

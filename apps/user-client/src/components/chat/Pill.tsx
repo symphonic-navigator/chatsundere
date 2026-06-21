@@ -33,6 +33,7 @@ interface PillPayloadShape {
 
 function labelFor(row: PillRow): string {
   const p = row.payload as PillPayloadShape | undefined;
+  if (row.kind === 'tool-call' && p?.name === 'write_memory_entry') return 'Remembered';
   if (row.kind === 'tool-call') return p?.name ?? 'tool';
   if (row.kind === 'kb-injection') return `Lore · ${p?.entries?.length ?? 0}`;
   if (row.kind === 'image-result') return 'image';
@@ -41,15 +42,21 @@ function labelFor(row: PillRow): string {
 
 /**
  * Pull the primary argument out of the stored arguments JSON for display.
- * `calculate_js` exposes `code`, `query_knowledgebase` exposes `query`; any other
- * tool falls back to the raw JSON so its input is still inspectable.
+ * `calculate_js` exposes `code`, `query_knowledgebase` exposes `query`,
+ * `write_memory_entry` exposes `content`; any other tool falls back to the
+ * raw JSON so its input is still inspectable.
  */
 function codeOf(p: PillPayloadShape | undefined): string | null {
   if (!p?.argumentsJson) return null;
   try {
-    const parsed = JSON.parse(p.argumentsJson) as { code?: unknown; query?: unknown };
+    const parsed = JSON.parse(p.argumentsJson) as {
+      code?: unknown;
+      query?: unknown;
+      content?: unknown;
+    };
     if (typeof parsed.code === 'string') return parsed.code;
     if (typeof parsed.query === 'string') return parsed.query;
+    if (typeof parsed.content === 'string') return parsed.content;
     return p.argumentsJson;
   } catch {
     return p.argumentsJson;

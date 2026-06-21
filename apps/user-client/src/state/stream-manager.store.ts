@@ -230,49 +230,57 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const userMessageId = uuidv7();
     const draftMessageId = uuidv7();
 
-    await db.transaction('rw', db.messages, db.chats, db.attachments, db.documents, async () => {
-      await db.messages.add({
-        id: userMessageId,
-        chatId: args.chatId,
-        role: 'user',
-        contentBlocks: [{ type: 'text', text: args.userText }],
-        createdAt: now,
-        bookmarked: false,
-        streamingState: 'complete',
-      });
-      await db.messages.add({
-        id: draftMessageId,
-        chatId: args.chatId,
-        role: 'persona',
-        contentBlocks: [],
-        createdAt: now + 1,
-        bookmarked: false,
-        streamingState: 'incomplete',
-      });
-      // Lazy-mode re-home: at compose time a brand-new chat had no row, so the
-      // Cockpit keyed its pending attachments under chatId = '' (see chat-page.tsx,
-      // InteractionMode `chatId={chat?.id ?? activeChatId ?? ''}`). By send time the
-      // real chat exists (created in useSendMessage) — adopt those orphaned rows
-      // onto this chat before binding them to the user message, so they are not lost.
-      if (args.chatId !== '') {
-        const orphans = await db.attachments
-          .where('chatId')
-          .equals('')
-          .filter((a) => a.messageId === null)
-          .toArray();
-        await Promise.all(orphans.map((a) => db.attachments.update(a.id, { chatId: args.chatId })));
-      }
-      // Snapshot-on-send: freeze any still-referenced knowledge documents so the sent
-      // message is decoupled from later edits/deletes of the source (WYSIWYG).
-      await snapshotPendingDocumentReferences(args.chatId);
-      // Bind all pending attachments for this chat to the new user message atomically.
-      await attachPendingToMessage(args.chatId, userMessageId);
-      await db.chats.update(args.chatId, {
-        lastMessageAt: now + 1,
-        draftInput: '',
-        openerPending: false,
-      });
-    });
+    await db.transaction(
+      'rw',
+      [db.messages, db.chats, db.attachments, db.documents, db.personas],
+      async () => {
+        await db.messages.add({
+          id: userMessageId,
+          chatId: args.chatId,
+          role: 'user',
+          contentBlocks: [{ type: 'text', text: args.userText }],
+          createdAt: now,
+          bookmarked: false,
+          streamingState: 'complete',
+        });
+        await db.messages.add({
+          id: draftMessageId,
+          chatId: args.chatId,
+          role: 'persona',
+          contentBlocks: [],
+          createdAt: now + 1,
+          bookmarked: false,
+          streamingState: 'incomplete',
+        });
+        // Lazy-mode re-home: at compose time a brand-new chat had no row, so the
+        // Cockpit keyed its pending attachments under chatId = '' (see chat-page.tsx,
+        // InteractionMode `chatId={chat?.id ?? activeChatId ?? ''}`). By send time the
+        // real chat exists (created in useSendMessage) — adopt those orphaned rows
+        // onto this chat before binding them to the user message, so they are not lost.
+        if (args.chatId !== '') {
+          const orphans = await db.attachments
+            .where('chatId')
+            .equals('')
+            .filter((a) => a.messageId === null)
+            .toArray();
+          await Promise.all(
+            orphans.map((a) => db.attachments.update(a.id, { chatId: args.chatId })),
+          );
+        }
+        // Snapshot-on-send: freeze any still-referenced knowledge documents so the sent
+        // message is decoupled from later edits/deletes of the source (WYSIWYG).
+        await snapshotPendingDocumentReferences(args.chatId);
+        // Bind all pending attachments for this chat to the new user message atomically.
+        await attachPendingToMessage(args.chatId, userMessageId);
+        await db.chats.update(args.chatId, {
+          lastMessageAt: now + 1,
+          draftInput: '',
+          openerPending: false,
+        });
+        await db.personas.update(args.persona.id, { lastInteractionAt: now + 1 });
+      },
+    );
+    void queryClient.invalidateQueries({ queryKey: QK.personas });
 
     // The persona response goes live immediately; runIntoDraft resolves the user
     // turn's attachments (running substitute-vision describes as live pills)
@@ -645,8 +653,23 @@ async function runIntoDraft(
           : undefined,
       }
     : null;
+  const memoryCtx =
+    (args.persona.useMemory ?? true)
+      ? {
+          personaId: args.persona.id,
+          onWritten: () =>
+            void queryClient.invalidateQueries({ queryKey: QK.memory(args.persona.id) }),
+        }
+      : null;
   const activeTools = toolsActive
-    ? resolveActiveTools(integrationCtx, knowledge, expert, args.mcp ?? null, args.images ?? null)
+    ? resolveActiveTools(
+        integrationCtx,
+        knowledge,
+        expert,
+        args.mcp ?? null,
+        args.images ?? null,
+        memoryCtx,
+      )
     : [];
   const activeToolDefs = toolDefs(activeTools);
   const toolsInstruction = systemPromptSegment(activeTools) ?? '';

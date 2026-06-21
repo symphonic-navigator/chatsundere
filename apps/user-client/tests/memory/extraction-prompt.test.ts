@@ -44,4 +44,35 @@ describe('buildExtractionPrompt', () => {
     expect(p).toContain('(No existing memory');
     expect(p).toContain('(None)');
   });
+
+  it('renders a User Guidance section before the messages when guidance is given', () => {
+    const out = buildExtractionPrompt({
+      memoryBody: null,
+      journalEntries: [],
+      messages: ['I love sci-fi novels.'],
+      userGuidance: 'my reading tastes',
+    });
+    expect(out).toContain('## User Guidance');
+    expect(out).toContain('The user has asked you to focus on: my reading tastes');
+    expect(out.indexOf('## User Guidance')).toBeLessThan(
+      out.indexOf('## User Messages to Process'),
+    );
+  });
+
+  it('omits the User Guidance section when guidance is empty or absent', () => {
+    const withEmpty = buildExtractionPrompt({
+      memoryBody: null,
+      journalEntries: [],
+      messages: ['x'],
+      userGuidance: '   ',
+    });
+    const without = buildExtractionPrompt({
+      memoryBody: null,
+      journalEntries: [],
+      messages: ['x'],
+    });
+    expect(withEmpty).not.toContain('## User Guidance');
+    expect(without).not.toContain('## User Guidance');
+    expect(withEmpty).toBe(without);
+  });
 });

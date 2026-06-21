@@ -47,6 +47,7 @@ export function buildExtractionPrompt(input: {
   memoryBody: string | null;
   journalEntries: string[];
   messages: string[];
+  userGuidance?: string;
 }): string {
   const parts: string[] = [EXTRACTION_INSTRUCTIONS, ''];
 
@@ -63,6 +64,12 @@ export function buildExtractionPrompt(input: {
     parts.push('(None)');
   }
   parts.push('');
+
+  if (input.userGuidance?.trim()) {
+    parts.push('## User Guidance');
+    parts.push(`The user has asked you to focus on: ${input.userGuidance.trim()}.`);
+    parts.push('');
+  }
 
   parts.push('## User Messages to Process');
   input.messages.forEach((msg, i) => parts.push(`[${i + 1}] ${msg}`));
