@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-21
 - **Author:** Liz (with Chris)
-- **Status:** Draft — awaiting Chris review, then Laura spec-pass
+- **Status:** Chris-approved; Laura spec-pass complete (2 HARD + 4 SOFT folded in) — ready for implementation plan
 - **Scope:** The foundation of the UI/UX makeover — the colour model, the motion language, and the first three reusable primitives. This is the durable design language every later surface inherits. The chat surface is deliberately the *last* thing reworked and is out of scope here.
 
 ---
@@ -98,6 +98,10 @@ Confirmation/query/message cards use the **same** origin-aware zoom from their t
 
 Under `prefers-reduced-motion: reduce`: **a plain cross-fade, no zoom, no blink.** (The codebase already gates every animation this way — we honour it as first-class, not an afterthought.)
 
+### 3.4 The back / exit control (Laura HARD-1)
+
+The reverse-zoom is the *transition*; the **control** is separate and must always exist. Every drilled-into surface (a room screen, a Settings sub-screen) carries a **fixed, always-visible back control in a constant position** — header-left, a standard touch target — so no surface is ever reachable-but-not-leavable (no dead-ends). Dialogs dismiss via their own back/close control **and** via backdrop-tap; **backdrop-tap maps to the safe/neutral choice, never the destructive one** (consistent with §5). Triggering any of these plays the §3.1 reverse-zoom. The control's position never changes between screens — learned once.
+
 ---
 
 ## 4. Primitive — Button (action plane)
@@ -121,6 +125,7 @@ A single, uniform layout used for **every** confirmation in the app — learned 
 - **Layout A — side-by-side** (space-economical; matches desktop habit). **Secondary on the left, the gold action on the right** (thumb zone).
 - **One layout everywhere.** Destructive dialogs use the *same* layout; only the **colour roles swap**.
 - **The safety principle — "Gold protects, never invites":** in a destructive confirmation, **gold moves to the safe choice** (e.g. *Keep*) and the destructive action stays **red and restrained**. We never pull the finger toward destruction. This creates two attention tiers: *the safest is the most prominent, while destruction is also visible (warning colour) but secondary.*
+- **Reading the destructive dialog at a glance (Laura SOFT-1):** the gold action sits in the same thumb-zone position as in a save dialog but now means *Keep* — so the destructive dialog carries a **clear red title and/or warning icon** to make the user *re-read* rather than thumb-reflex the familiar position. The colour inversion protects; the red header ensures the inversion is *noticed*. Calibration is Chris's to arbitrate on device.
 - The dialog appears/dismisses via the §3 Unified-Experience zoom from its trigger.
 
 ---
@@ -143,6 +148,9 @@ The project standard so we never again ask "what function lives in a list?". Eve
 - **Row slots:** **① Leading** (avatar / icon / symbol, optional) · **② Body** (primary title + secondary subtext) · **③ Trailing** (badge / primary action / chevron).
 - **Row interaction:** tapping the row = the **primary action** (open).
 - **Secondary actions:** a trailing **⋯ overflow menu** (a reusable context-menu primitive). Crucially, the **menu is where "disabled over hidden" is honoured** — it shows *every* capability, greying out unavailable ones with a reason. The row stays calm; completeness lives in the menu. (Chosen decisively over inline buttons, which crowd a 380px row and cost space + calm.)
+- **Overflow-menu accessibility (Laura HARD-2):** menu items — **including disabled ones** — are focusable and announce their disabled reason (a real `<button disabled>` with an accessible `aria-describedby`, **never** a non-focusable `<div>`), so "disabled over hidden" holds for keyboard and screen-reader users, not only sighted-pointer users. This closes, at the source for every new list, the regression class logged in `obsidian/insights/ux-deferrals.md` (2026-06-12, OfferingSlotPicker: disabled entries as non-focusable divs).
+- **Overflow-menu motion (Laura SOFT-2):** the menu obeys the §3 Unified-Experience language (origin-aware appear/dismiss, §3.3 reduced-motion fallback, §3.4 backdrop-dismiss-maps-to-safe). Its full *presentation* form (bottom sheet vs origin-zoom popover) is detailed next round (§9); this motion + accessibility contract holds regardless.
+- **Empty list contract (Laura SOFT-3):** a zero-row list keeps its fixed footer primary action (always a next step — never a dead-end) and shows a single **constructive line** in the row region (e.g. "No personas yet — create your first"). The full empty-state *visual* design is deferred (§9); the *contract* is fixed here.
 - **Scrolling:** the **header and footer stay fixed; only the list region scrolls** — a hard project principle.
 - **Primary list action:** a fixed footer button wearing **gold** (e.g. "+ New persona").
 - **No drag-and-drop** (project rule) — ordering is automatic or via menu actions.
@@ -193,6 +201,10 @@ Surfaced during design; the list paradigm makes them nearly free later (they com
 2. Tapping a tile: only that tile blinks gold (2×), the page zooms from it (~0.30s); back collapses it fast (~0.17s) to where it came from.
 3. A confirmation dialog zooms in from its trigger with a backdrop; Save/Cancel side-by-side, gold on the right.
 4. A delete confirmation: gold sits on *Keep*, red on *Delete*; same layout as save.
-5. A list (My Circle): header + footer fixed, only rows scroll; ⋯ opens a menu listing all actions incl. greyed-with-reason; no inline action buttons cluttering rows.
+5. A list (My Circle): header + footer fixed, only rows scroll; ⋯ opens a menu listing all actions incl. greyed-with-reason (presentation form per §9); no inline action buttons cluttering rows.
 6. `prefers-reduced-motion` on: all of the above degrade to plain cross-fades, no zoom, no blink.
 7. Navigation-green vs success-green do not visually confuse (§2.6).
+8. Every drilled surface and dialog has a fixed, always-visible back/close control in a constant position (§3.4); backdrop-tap dismisses to the safe choice.
+9. Keyboard / screen-reader: every overflow-menu item is reachable, and disabled items announce their reason (not skipped).
+10. A destructive dialog is read as different at a glance (red title/icon) despite the gold action sharing the save-dialog position (§5).
+11. The 0.17s exit reads as a calm departure, not a glitch ("did it break?"); if it does, go a hair slower or add a faint origin-echo (Laura SOFT-4).
