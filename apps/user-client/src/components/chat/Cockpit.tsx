@@ -16,7 +16,7 @@ import {
 } from '../../data/attachments.js';
 import { useChat, useSetChatLibraries } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
-import { useCurrentBody, useMarkMemoryViewed, useUncommittedCount } from '../../data/memory.js';
+import { useCurrentBody, useUncommittedCount } from '../../data/memory.js';
 import { usePersona } from '../../data/personas.js';
 import { QK } from '../../data/queryKeys.js';
 import { useSettings } from '../../data/settings.js';
@@ -33,7 +33,6 @@ import { AttachmentStrip } from './AttachmentStrip.js';
 import { CockpitMenu } from './CockpitMenu.js';
 import { DualActionBtn } from './DualActionBtn.js';
 import { KnowledgeSheet } from './KnowledgeSheet.js';
-import { MemorySheet } from './MemorySheet.js';
 
 interface Props {
   chatId: string;
@@ -113,7 +112,6 @@ export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
-  const [memoryOpen, setMemoryOpen] = useState(false);
   const [voiceNote, setVoiceNote] = useState(false);
   const navigate = useNavigate();
   const isPinned = useCurrentChatStore((s) => s.isPinned);
@@ -226,18 +224,10 @@ export function Cockpit(p: Props): JSX.Element {
   const { data: freshPersona } = usePersona(p.persona.id);
   const { data: uncommittedCount = 0 } = useUncommittedCount(p.persona.id);
   const { data: currentBody } = useCurrentBody(p.persona.id);
-  const markViewed = useMarkMemoryViewed(p.persona.id);
   const bodyVersion = currentBody?.version ?? 0;
   const lastViewed =
     freshPersona?.lastViewedMemoryBodyVersion ?? p.persona.lastViewedMemoryBodyVersion ?? 0;
   const memoryActive = bodyVersion > lastViewed;
-  const openMemory = (): void => {
-    setMemoryOpen((v) => {
-      const next = !v;
-      if (next && bodyVersion > lastViewed) markViewed.mutate(bodyVersion);
-      return next;
-    });
-  };
 
   // Knowledge binding: the persona contributes a fixed library set; the chat
   // adds an ad-hoc set on top. The button shows a count of the effective
@@ -514,8 +504,7 @@ export function Cockpit(p: Props): JSX.Element {
           className={`cockpit-icon-btn${uncommittedCount > 0 || memoryActive ? ' active' : ''}`}
           data-control="memory"
           aria-label="Chat memory"
-          aria-expanded={memoryOpen}
-          onClick={openMemory}
+          onClick={() => navigate(`/app/persona/${p.persona.id}/memory?chat=${p.chatId}`)}
         >
           <span className="cockpit-glyph" aria-hidden="true">
             ◌
@@ -634,9 +623,6 @@ export function Cockpit(p: Props): JSX.Element {
         <div className="cockpit-reject" role="alert" onAnimationEnd={() => setReject(null)}>
           {reject}
         </div>
-      )}
-      {memoryOpen && (
-        <MemorySheet persona={p.persona} chatId={p.chatId} onClose={() => setMemoryOpen(false)} />
       )}
       {knowledgeOpen && (
         <KnowledgeSheet

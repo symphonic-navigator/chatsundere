@@ -13,6 +13,7 @@ import { Integrations } from './routes/app/integrations.js';
 import { KnowledgeLibrary } from './routes/app/knowledge-library.js';
 import { KnowledgeList } from './routes/app/knowledge.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
+import { PersonaMemory } from './routes/app/persona-memory.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { Treasury } from './routes/app/treasury.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
@@ -95,6 +96,7 @@ export function App() {
                   <Route path="/app/circle" element={<Circle />} />
                   <Route path="/app/persona/new" element={<PersonaEditor />} />
                   <Route path="/app/persona/:id" element={<PersonaEditor />} />
+                  <Route path="/app/persona/:id/memory" element={<PersonaMemory />} />
                   <Route path="/app/chat/new" element={<ChatPage />} />
                   <Route path="/app/chat/:chatId" element={<ChatPage />} />
                   <Route path="/app/history" element={<HistoryPage />} />
