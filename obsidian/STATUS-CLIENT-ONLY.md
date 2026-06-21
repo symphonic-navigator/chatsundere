@@ -1,6 +1,6 @@
 # Chatsundere Status — Client-only
 
-> **Roadmap to beta (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1–5 → v0.1.0/v0.2.0**. Block 1 (chat core) ~80% shipped; **memory** (chatsune port) is now **in flight** — the **engine (Plan 1) is built + reviewed on branch `feature/memory-engine`, NOT merged**; Plan 2 (UI) + Plan 3 (chatsune-memory import) build on the same branch before a single unified squash to master. The memory→importer coupling ([[insights/future-feature-couplings]]) is closed by Plan 3.
+> **Roadmap to beta (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1–5 → v0.1.0/v0.2.0**. Block 1 (chat core) ~80% shipped; **memory** (chatsune port) is **SHIPPED to master and device-verified** — engine + UI + chatsune-import (squash `2eebfd24`) plus a dedicated **memory page** (squash `e3a19c73`). The memory→importer coupling ([[insights/future-feature-couplings]]) is closed.
 >
 > **Artefact system (Block 2):** Kern + Treasury + attachments + Save-as-artefact shipped. Decision log & remaining chunks: [[ARTEFACTS-FEATURE-STATUS]] — read before touching artefact work.
 
@@ -8,8 +8,41 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-20 — **MEMORY ENGINE + UI (Plans 1 & 2 of 3) BUILT +
-REVIEWED on branch `feature/memory-engine`, NOT merged, NOT device-verified yet.**
+**Last updated:** 2026-06-21 — **MEMORY SHIPPED TO MASTER + DEVICE-VERIFIED ("we
+have memory!"). Engine+UI+import squash `2eebfd24`; dedicated MEMORY PAGE squash
+`e3a19c73`. NOT pushed (master 6 ahead of origin).**
+Chris device-verified end-to-end: a real consolidated body was produced (identity /
+projects / values), and per-persona isolation confirmed (a fresh persona starts
+clean). The memory **page** (`/app/persona/:id/memory`) replaced the clipped,
+unstyled cockpit `MemorySheet` overlay — one functional surface reached by pure
+navigation from the ◌ button (`?chat=`) and a persona-editor "Manage memory" link;
+pending/committed entry triage (commit/edit/delete-with-undo) + body view/edit +
+versions/restore; Learn/Consolidate gated to the chat path. Built spec→plan→
+**subagent-driven** (7 tasks), opus whole-branch review *merge-ready*, **Laura
+spec-pass + pre-squash both cleared** (1 HARD back-affordance fixed; 2 SOFT deferred
+to the design-language pass: toast "Set aside" vs "Delete" button copy; header
+"<persona> · Memory" ordering). Minimal functional CSS only — **design-language pass
+deferred ~1–2 weeks, informed by real use** (Chris: this UI/UX is "exactly what we
+need for this phase"). Specs/plans: [[../superpowers/specs/2026-06-21-memory-page-design]],
+[[../superpowers/plans/2026-06-21-memory-page]].
+
+**Pre-push audit (2026-06-21, ultrathink) — all four cross-checks PASSED**, two
+follow-up TUNING items queued for the next (new-context) session, both authored by
+Chris in his ghostwriter:
+1. **Lower the auto-consolidation thresholds** — `DREAM_THRESHOLD=20` committed (and
+   `AUTO_COMMIT_THRESHOLD=15`) is too high for real felt behaviour; auto-dreaming
+   effectively never fires in normal sessions (manual "Consolidate now" works).
+   `config.ts`, marked "Tunable after device testing".
+2. **Feed `persona.memoryInstructions` to EXTRACTION too** — currently the user's
+   "what to remember" guidance shapes only consolidation (`buildConsolidationPrompt`),
+   not extraction (`buildExtractionPrompt`, `pipeline.ts:97-101`).
+   (Confirmed sound: system-prompt sent as `system` role via adapter path for both
+   stages; injection capped `MEMORY_INJECTION_MAX_TOKENS=6000` + body `=3000`;
+   committed **and** pending journal entries injected as `<journal>` like chatsune.)
+Then: small UI tweaks Chris noted, → fast track to first alpha.
+
+**Superseded (2026-06-20 framing) — memory was "built on branch, not merged":** that
+is now done; the unified squash + the page both landed on master.
 Client-side volume-triggered long-term memory — a faithful TS/Dexie port of
 chatsune's `extraction → uncommitted → committed → dreaming → body` pipeline, all
 run in the **background after each send** (no server cron), guarded by a per-persona
@@ -29,15 +62,13 @@ both *merge-ready, no Critical/Important*). Gates: `pnpm typecheck --force` **14
 full user-client vitest **1822 pass / 8 Node-localStorage baseline**, pristine.
 Deferred Minors (device-tuning: dedup/stripper precision per spec §9; cosmetic:
 `getCurrentBody` index/`.at(0)`; first-run double-toast race accepted-with-comment).
-**Memory is default-ON.** Remaining before the **single unified squash to master**
-(engine+UI+import = one feature unit): **Plan 3 (chatsune-memory import** — extend
-`persona-parse.ts` + `importChatsuneMemory`, closes [[insights/future-feature-couplings]]),
-then a **Laura pre-squash pass** on the built flow, then squash. Specs/plans:
+**Memory is default-ON.** Engine+UI+import all landed (unified squash `2eebfd24`) and
+the dedicated page followed (`e3a19c73`). Specs/plans:
 [[../superpowers/specs/2026-06-20-memory-design]],
 [[../superpowers/plans/2026-06-20-memory-engine]],
-[[../superpowers/plans/2026-06-20-memory-ui]] (Plan 3 TBW). **Next:** Chris
-device-verifies the UI (spec §9 + Plan-2 manual verification); then Plan 3 → Laura →
-unified squash. Branch + ledger (`.git/sdd/progress.md`) carry the per-task state.
+[[../superpowers/plans/2026-06-20-memory-ui]],
+[[../superpowers/specs/2026-06-21-memory-page-design]]. **Next session (new context):**
+the two tuning follow-ups above + small UI tweaks Chris noted → first alpha.
 
 **Earlier (2026-06-18) — CHATSUNE IMPORT LANDED** (single squash
 `81cf6f1` on master + follow-up fixes (see Post-landing), **NOT pushed**,
