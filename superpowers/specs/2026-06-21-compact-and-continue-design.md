@@ -55,24 +55,19 @@ The central decision: compaction is **lossy and visible**, so the deliberate cut
 
 ### Layer 1 — Manual (the normal path)
 
-A progressive ✨ button, chatsune-true, whose visibility escalates with fill ratio (`contextUtilisation`):
+There is **no separate ✨ button** (a deliberate departure from chatsune's progressive-button ladder — chatsundere has no chat header, and the cockpit controls row is already nine icons at 380 px). Instead the manual path has two surfaces that *already* fit the architecture:
 
-| Fill | Button state |
-|---|---|
-| < 30 % | Hidden (only reachable in an overflow/settings affordance) |
-| 30–60 % | Visible, subtle |
-| 60 % (crossing) | One-shot suggest-toast (non-blocking; suppressed during live voice) |
-| 60–75 % | Visible, subtle |
-| 75–90 % | Visible, pulsing |
-| ≥ 90 % | Visible, orange warning tint |
+**(1) The context-fill gauge *is* the trigger.** The cockpit already shows a fill indicator (`InteractionTopbar`, the `{pct}%` gauge). We make that gauge **tappable** → confirm card → compact. Co-locating the action with the signal the user already reads is the least-astonishing home ("don't make me think"). The gauge is always present when the cockpit is visible, so the capability is **never hidden** (honours CLAUDE.md §11). Below the precondition (**> 12 messages AND > 4000 tokens**, mirrors chatsune — tiny chats can't usefully compact), tapping the gauge is **disabled-with-tooltip** ("Nothing to compact yet — the conversation is still short"), exactly as the cockpit already greys ≈/🔈 with a reason.
 
-Precondition (always checked first, mirrors chatsune): the button is entirely hidden below **> 12 messages AND > 4000 tokens** — tiny chats never offer it.
+**(2) An actionable toast at the warning threshold.** When fill crosses **≈ 80 %** *after a response completes*, a toast appears with a **"Compact" action button** — the active nudge. **Once per chat**, auto-dismissing, non-blocking, suppressed during live voice. The toast is **mode-independent** (it shows over Reading or Interaction Mode), which is what resolves "the gauge only exists when the cockpit is visible" — the nudge reaches the user wherever they are.
 
-Clicking opens a small confirm card, then runs compaction (foreground, with progress — see §3.4).
+The 80 % toast threshold lives in `compaction/config.ts` and is tunable.
+
+**Confirm card.** Either surface opens a small confirm card before compacting. It carries a **calming reassurance line** — "Your full conversation stays in Reading Mode" — so the confirm *reassures* rather than merely gates (the action is non-destructive: raw messages are never deleted, §5). Then compaction runs in the foreground with a visible progress state (§3.4).
 
 ### Layer 2 — Background safety valve
 
-When fill reaches **≥ 90 %** (the orange "you really should now" zone) and the user has *not* manually compacted, compaction runs **in the background after the send completes** — fire-and-forget, per-chat mutex, exactly like `fireMemoryPipeline`. No blocking, no latency: the *next* turn is already compacted. The visual escalation 75 % pulse → 90 % orange → "I'll do it myself" is a seamless arc.
+When fill reaches **≥ 90 %** and the user has *not* manually compacted (e.g. dismissed or ignored the 80 % toast), compaction runs **in the background after the send completes** — fire-and-forget, per-chat mutex, exactly like `fireMemoryPipeline`. No blocking, no latency: the *next* turn is already compacted. The arc is: 80 % actionable toast (you *can*) → 90 % "I'll do it myself" (the net). The only visible result is the new marker pill appearing in the timeline (§8) — which gets a one-time gentle settle so the user notices the "it tidied itself" moment once, without nagging.
 
 The 90 % threshold lives in `compaction/config.ts` and is **tunable after device testing** (like the memory thresholds), in case felt behaviour ≠ the number.
 
@@ -81,6 +76,11 @@ The 90 % threshold lives in `compaction/config.ts` and is **tunable after device
 `truncateToWindow` remains as a purely mathematical safety belt, but in practice it **never fires**, because Layer 2 pre-empts it. The only residual case: a *single huge* message (a large paste) jumps from < 90 % over the real limit in one step, before the background ever ran.
 
 For that case we **block-and-compact, visibly** (decision (A), not silent truncation): show a brief "Compacting the conversation…" state, compact synchronously, *then* send. A one-off small wait in the rare extreme — but the promise **"context is never lost without comment" stays absolute**. `truncateToWindow` is reduced to maths that, in practice, never engages. This mirrors Claude web / Claude Code's own block-and-compact UX, which Chris confirms relieves rather than annoys: control through transparency.
+
+**No-freeze + failure recovery (required).** Because this is the one *blocking* path, two guarantees are mandatory so it never becomes a dead-end:
+
+- The "Compacting the conversation…" state has **live motion** (a breathing/progress indicator, not a frozen label) so it never reads as a hang.
+- If the blocking summary call **fails** (after the one retry, §4.4), the user's **typed/pasted message is preserved** and a constructive next step is offered — "Couldn't compact just now" with **Retry** and **Send anyway** (the latter falls back to the silent-truncation maths *this once*, with a note). Per the constructive-error-handling tenet, no wall without a next move.
 
 ### 3.4 Foreground vs background
 
@@ -232,9 +232,14 @@ interface CompactionCheckpointRow {
 }
 ```
 
-Plus a slim pointer on `ChatRow`: `activeCompactionId: string | null`. The send path reads only this one value → loads the active checkpoint → injects + slices. The timeline marker pills come from querying all checkpoints for a chat.
+Plus two slim fields on `ChatRow`:
 
-**Dexie schema index string:** `compactionCheckpoints: 'id, chatId, createdAt'` (query checkpoints by chat ordered by time). `activeCompactionId` is a non-indexed field on `ChatRow`.
+- `activeCompactionId: string | null` — the send path reads only this → loads the active checkpoint → injects + slices.
+- `compactionToastShown?: boolean` — persists the once-per-chat 80 % toast flag (§3.1). It must survive reload, so it lives on the row, not in memory — otherwise the toast would re-nag on every app open of a ≥ 80 % chat (an ND-unfriendly failure).
+
+The timeline marker pills come from querying all checkpoints for a chat.
+
+**Dexie schema index string:** `compactionCheckpoints: 'id, chatId, createdAt'` (query checkpoints by chat ordered by time). `activeCompactionId` and `compactionToastShown` are non-indexed fields on `ChatRow`.
 
 ### 7.1 Dexie version bump — v28 → v29
 
@@ -244,13 +249,14 @@ Required (new table). This triggers the known pain: ~24 hard-coded `expect(db.ve
 
 ## 8. UI (minimal-functional now; design-language pass later)
 
-Following the memory-page precedent: **minimal functional CSS only**; the beauty arrives in the forthcoming UI/UX block. Three surfaces:
+Following the memory-page precedent: **minimal functional CSS only**; the beauty arrives in the forthcoming UI/UX block. Surfaces — all on real, already-existing chat architecture (no phantom "header"):
 
-- **Progressive ✨ button** — placed functionally in the chat header for now; Laura's spec-pass verifies reachability. Opens a confirm card.
-- **Compaction marker pill** — inline in the message timeline at each checkpoint boundary, e.g. `✨ Compacted · 14:23 · 87k → 4k tokens`. Clicking opens the drawer.
-- **Snapshot drawer** — **read-only**, renders `summaryMarkdown` through the existing Markdown renderer. This is the transparency guarantee: the user can always read exactly what the persona now carries of the thread. **Not editable** (decision (1)); editing is deferred (decision (3) — see §10).
+- **Trigger = the context-fill gauge** (`InteractionTopbar` `{pct}%`), made tappable → confirm card. Disabled-with-tooltip below the precondition (§3.1). No standalone button.
+- **Actionable 80 % toast** — mode-independent, once per chat, with a "Compact" action (§3.1).
+- **Compaction marker pill** — inline in the message timeline at each checkpoint boundary, e.g. `✨ Compacted · 14:23 · 87k → 4k tokens`. **Rendered through (or visually matching) the existing `Pill` component** (`components/chat/Pill.tsx` — a real `<button>` with `aria-expanded`, the affordance users already know from tool-call/Lore pills) so tappability is inherited. It **opens a drawer** rather than expanding inline, so it carries a distinct cue (chevron / "tap to read") to avoid astonishing users trained by inline-expand pills. An auto-valve-inserted pill gets a one-time gentle settle/fade (the "it tidied itself" moment, §3.2).
+- **Snapshot drawer** — **read-only**, renders `summaryMarkdown` through the existing Markdown renderer. The transparency guarantee: the user can always read exactly what the persona now carries of the thread. **Not editable** (decision (1)); editing is deferred (decision (3) — see §10). It carries one calm line naming the real escape from a wrong summary: **"This briefing is generated from the conversation. To refresh it, compact again."** — turning a silent wall into a signposted path.
 
-"Compacting…" foreground state for manual + block-and-compact (Layer 1 / Layer 3). Background valve (Layer 2) is silent until done, then refreshes via `invalidateQueries`.
+"Compacting…" foreground state (with **live motion**, never a frozen label) for manual + block-and-compact (Layer 1 / Layer 3). Background valve (Layer 2) is silent until done, then refreshes via `invalidateQueries` (the memory pattern). A per-chat mutex prevents a manual tap and the background valve from racing.
 
 ---
 
@@ -278,7 +284,7 @@ A new `apps/user-client/src/compaction/` directory, parallel to `src/memory/`:
 - **Pure functions** (unit, Vitest): tail-boundary selection (the three-rule priority), transcript builder (tool-result stripping, attachment-reference surfacing, "Previous Story" folding), six-section validation (accept/reject + retry-reminder), token accounting for the pill.
 - **Repo / Dexie**: checkpoint write + `activeCompactionId` update; re-compact chain; v29 migration.
 - **Injection / slicing**: given an active checkpoint, the wire history slices from `tailStartMessageId` and the summary is injected as `<conversation_compact>`; co-existence with `<usermemory>`.
-- **Trigger layers**: button visibility by fill ratio + precondition; 90 % background valve fires once post-send; block-and-compact path on a single oversized turn.
+- **Trigger layers**: gauge enabled/disabled-with-tooltip by precondition; 80 % toast fires once per chat (persisted flag survives reload); 90 % background valve fires once post-send; block-and-compact path on a single oversized turn + its failure recovery (typed message preserved, Retry / Send-anyway).
 - Suite baseline: full user-client vitest at the **8 Node-localStorage baseline**; `pnpm typecheck --force` green (the verno sweep must keep typecheck + suite green).
 
 Per CLAUDE.md, the model-call behaviour is **device-verified**, never asserted only via mock — the multi-turn "summary actually used on the next turn" loop is a manual-verification item, not a single-turn mock.
@@ -287,8 +293,8 @@ Per CLAUDE.md, the model-call behaviour is **device-verified**, never asserted o
 
 ## 12. Manual verification (Chris, on device)
 
-1. Hold a long conversation; watch the ✨ button escalate (subtle → pulse at 75 % → orange at 90 %); the 60 % suggest-toast appears once.
-2. Click it: confirm card → "Compacting…" → a marker pill appears; the conversation continues smoothly, tone and recent detail intact.
+1. Hold a long conversation; at ≈ 80 % an actionable "Compact" toast appears once (and not again on reload of the same chat).
+2. Tap the context-fill gauge (or the toast action) → confirm card (with the "stays in Reading Mode" reassurance) → "Compacting…" (visibly moving) → a marker pill appears; the conversation continues smoothly, tone and recent detail intact. On a tiny chat, the gauge is disabled-with-tooltip.
 3. Open the pill → read the six-section briefing in the drawer (read-only).
 4. Keep going past 90 % *without* clicking → the background valve compacts after a send; the next turn is already compacted (no blocking).
 5. Paste a huge message into a near-full chat → visible block-and-compact ("Compacting the conversation…"), then the send proceeds; nothing lost silently.
@@ -300,15 +306,17 @@ Per CLAUDE.md, the model-call behaviour is **device-verified**, never asserted o
 
 ## 13. Audit gates
 
-- **Laura** — spec-pass on this document (new user-reachable flow: button + marker + drawer), then a pre-squash pass. Authority per CLAUDE.md §9.2.
+- **Laura** — spec-pass **done (2026-06-21)**: 2 HARD defects + 6 soft, all folded into this revision (HARD: phantom "chat header" → gauge-as-trigger + mode-independent toast; "hidden below 30 %" → disabled-with-tooltip per §11. Soft: drawer refresh-line, block-and-compact no-freeze + failure recovery, marker via `Pill`, toast once-per-chat persisted, auto-valve settle, calming confirm card). **No hard defects remain.** A pre-squash pass follows after build. Authority per CLAUDE.md §9.2.
 - **Larissa** — **not required**; client-only, no auth/sync/proxy/crypto path.
 
 ---
 
 ## 14. Open items
 
-None. All design decisions resolved in the 2026-06-21 brainstorm with Chris:
-hybrid trigger (3 layers); orthogonal to memory; all six summary sections;
-read-only transparent drawer (edit deferred); block-and-compact (A) for the
-extreme edge; separate Dexie table + `ChatRow` pointer; v29 bump with verno
-sweep folded in.
+None. All design decisions resolved in the 2026-06-21 brainstorm with Chris,
+plus Laura's spec-pass folded in: hybrid trigger (gauge-as-trigger + 80 %
+mode-independent toast + 90 % background valve + block-and-compact failsafe with
+recovery); orthogonal to memory; all six summary sections; read-only transparent
+drawer with a refresh-line (edit deferred); separate Dexie table + two `ChatRow`
+fields; v29 bump with verno sweep folded in. No standalone ✨ button (the gauge
+is the trigger); nothing hidden (disabled-with-tooltip per §11).
