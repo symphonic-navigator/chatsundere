@@ -8,8 +8,12 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-21 — **MEMORY IMPROVEMENTS SQUASHED TO MASTER (`c16be11c`,
-NOT pushed; master now 9 ahead of origin). NOT yet device-verified.**
+**Last updated:** 2026-06-21 — **MEMORY IMPROVEMENTS SQUASHED TO MASTER (`c16be11c`).
+`write_memory_entry` "Remembered" pill (with the remembered text) and the
+greeting-in-system-prompt echo are DEVICE-CONFIRMED by Chris ("GENIAL" — the
+combination gives RP/ERP users a "forever continuation" feeling). The other three
+(thresholds firing sooner, extraction-guidance skew, Circle-LRU excluding openers)
+are behaviour you only see over multiple sessions — still to confirm in use.**
 Five changes from Chris's ghostwriter, built spec→plan→**subagent-driven** (6 tasks,
 per-task spec+quality review; **opus** whole-branch review *merge-ready*; **Laura**
 pre-squash **no hard defects**, her one pressed soft finding — the friendly
