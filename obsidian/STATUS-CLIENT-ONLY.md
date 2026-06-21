@@ -8,9 +8,34 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-21 — **MEMORY SHIPPED TO MASTER + DEVICE-VERIFIED ("we
+**Last updated:** 2026-06-21 — **MEMORY IMPROVEMENTS SQUASHED TO MASTER (`c16be11c`,
+NOT pushed; master now 9 ahead of origin). NOT yet device-verified.**
+Five changes from Chris's ghostwriter, built spec→plan→**subagent-driven** (6 tasks,
+per-task spec+quality review; **opus** whole-branch review *merge-ready*; **Laura**
+pre-squash **no hard defects**, her one pressed soft finding — the friendly
+`Remembered` pill label — **built**): (1) the two pre-push TUNING follow-ups are now
+**DONE** — auto-commit `15→10` / dream `20→12` thresholds, and `memoryInstructions`
+now steers extraction as well as consolidation; (2) **`write_memory_entry` tool** —
+a persona can actively save a durable fact mid-chat; lands **uncommitted** (normal
+Memory-Page triage), exact-duplicate-guarded, offered only when `useMemory` is on,
+shown in-stream as a `Remembered` pill (content in the expandable detail); (3) **My
+Circle sorted by last interaction** (real send), never by last-opened — new
+`PersonaRow.lastInteractionAt` via **Dexie v28** + backfill, the auto-opener never
+bumps it, sort scoped to the Circle only; (4) **opener echoed into the chat system
+prompt** (Band-2 `openerEcho` segment + `resolveOpenerContext`) so the model has
+continuity with the greeting it spoke, while openers stay out of wire history.
+Gates: `pnpm typecheck --force` **14/14**; full user-client vitest at the **8
+Node-localStorage baseline** (1853 pass; +new tool/circle/opener/pill/extraction
+tests). Specs/plans: [[../superpowers/specs/2026-06-21-memory-improvements-design]],
+[[../superpowers/plans/2026-06-21-memory-improvements]]. **Device-verification
+checklist** lives in the spec §Manual verification (thresholds fire sooner;
+extraction-guidance skews; active-recall pill → pending entry → commit/delete;
+memory-off offers no tool; Circle LRU excludes openers; greeting continuity).
+**Next:** Chris device-verifies, then pushes the master backlog → first alpha.
+
+**Earlier (2026-06-21) — MEMORY SHIPPED TO MASTER + DEVICE-VERIFIED ("we
 have memory!"). Engine+UI+import squash `2eebfd24`; dedicated MEMORY PAGE squash
-`e3a19c73`. NOT pushed (master 6 ahead of origin).**
+`e3a19c73`. NOT pushed.**
 Chris device-verified end-to-end: a real consolidated body was produced (identity /
 projects / values), and per-persona isolation confirmed (a fresh persona starts
 clean). The memory **page** (`/app/persona/:id/memory`) replaced the clipped,
@@ -27,8 +52,8 @@ need for this phase"). Specs/plans: [[../superpowers/specs/2026-06-21-memory-pag
 [[../superpowers/plans/2026-06-21-memory-page]].
 
 **Pre-push audit (2026-06-21, ultrathink) — all four cross-checks PASSED**, two
-follow-up TUNING items queued for the next (new-context) session, both authored by
-Chris in his ghostwriter:
+follow-up TUNING items **(both now DONE in `c16be11c`, see Current above)**, both
+authored by Chris in his ghostwriter:
 1. **Lower the auto-consolidation thresholds** — `DREAM_THRESHOLD=20` committed (and
    `AUTO_COMMIT_THRESHOLD=15`) is too high for real felt behaviour; auto-dreaming
    effectively never fires in normal sessions (manual "Consolidate now" works).
