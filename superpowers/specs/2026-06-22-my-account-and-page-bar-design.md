@@ -306,8 +306,8 @@ Authored as part of this slice:
 2. **AGPL-3.0 full text** — bundled as a markdown/text asset for the License
    overlay (works offline; aligns with local-first values).
 3. **Privacy notice** — expand the current three-paragraph copy
-   (`copy.settings.about.privacy`) into a proper notice. *Wording is
-   Chris/SCAI-reviewable; Liz drafts.*
+   (`copy.settings.about.privacy`) into a proper notice, **staying close to the
+   existing wording** (Chris, 2026-06-22). *Chris/SCAI-reviewable; Liz drafts.*
 4. **Third-party libraries** — **generated** from the existing
    `src/lib/third-party-licences.ts` (single source of truth) into markdown at
    render time; no parallel hand-authored list.
