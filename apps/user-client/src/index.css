@@ -5081,6 +5081,157 @@ h1 {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* ── PageBar / PageScaffold (shared page chrome, spec §2) ───────────── */
+.cs-pagebar {
+  position: sticky;
+  top: 3.25rem; /* 52px — brand-bar height, matches EditorSticky top-13 */
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -1rem -1.5rem 0; /* cancel <main> px-6 / pt-4 so the bar is full-bleed */
+  padding: 0.75rem 1.5rem;
+  background: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-paper-soft) 15%, transparent);
+}
+@media (min-width: 1024px) {
+  .cs-pagebar {
+    top: 3.75rem;
+  } /* 60px — matches EditorSticky lg:top-15 */
+}
+.cs-pagebar-back,
+.cs-pagebar-help {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-paper-soft);
+  font-size: 20px;
+  cursor: pointer;
+}
+.cs-pagebar-back:hover,
+.cs-pagebar-help:hover {
+  color: var(--color-paper);
+}
+.cs-pagebar-help-spacer {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+.cs-pagebar-crumbs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cs-pagebar-crumb {
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  color: var(--color-paper-soft);
+  font-size: 14px;
+  cursor: pointer;
+  flex: none;
+}
+.cs-pagebar-crumb:hover {
+  color: var(--color-paper);
+}
+.cs-pagebar-sep {
+  color: var(--color-paper-soft);
+  opacity: 0.5;
+  flex: none;
+}
+.cs-pagebar-current {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--color-paper);
+  overflow: hidden;
+  text-overflow: ellipsis; /* the current crumb truncates first at 375px */
+}
+.cs-page-body {
+  padding-top: 1rem;
+}
+
+/* ── ReadingOverlay (Markdown reader, spec §5) ─────────────────────── */
+.cs-reader-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+.cs-reader-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.cs-reader-panel {
+  position: absolute;
+  inset: 5vh 4vw; /* margin all around — never full-bleed */
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--color-gold) 28%, transparent);
+  background: radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--color-nav-purple) 16%, transparent),
+      transparent
+    ), color-mix(in srgb, var(--color-ink) 92%, black);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.cs-reader-titlebar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-gold) 18%, transparent);
+}
+.cs-reader-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--color-gold-hi);
+}
+.cs-reader-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--color-paper);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cs-reader-close:hover {
+  color: var(--color-gold-hi);
+}
+.cs-reader-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+  color: color-mix(in srgb, var(--color-paper) 96%, white);
+}
+.cs-reader-scroll :is(h1, h2, h3) {
+  color: var(--color-gold-hi);
+}
+
 /* ── ConfirmDialog primitive (uniform confirmation) ──────────────────── */
 .cs-dialog-root {
   position: fixed;

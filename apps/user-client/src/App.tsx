@@ -5,6 +5,12 @@ import { ErrorScreen } from './components/ErrorScreen.js';
 import { MindspaceLayer } from './components/MindspaceLayer.js';
 import { queryClient } from './lib/queryClient.js';
 import { AccountPage } from './routes/app/account.js';
+import { AboutPage } from './routes/app/account/about.js';
+import { BiometricPage } from './routes/app/account/biometric.js';
+import { DevToolsPage } from './routes/app/account/devtools.js';
+import { LogoutPage } from './routes/app/account/logout.js';
+import { RecoveryKeyPage } from './routes/app/account/recovery.js';
+import { ServerLinkingPage } from './routes/app/account/server-linking.js';
 import { ChatPage } from './routes/app/chat/chat-page.js';
 import { Circle } from './routes/app/circle.js';
 import { EntranceHall } from './routes/app/entrance-hall.js';
@@ -109,6 +115,14 @@ export function App() {
                   <Route path="/app/integrations" element={<Integrations />} />
                   <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/app/account" element={<AccountPage />} />
+                  <Route path="/app/account/biometric" element={<BiometricPage />} />
+                  <Route path="/app/account/recovery" element={<RecoveryKeyPage />} />
+                  <Route path="/app/account/server-linking" element={<ServerLinkingPage />} />
+                  <Route path="/app/account/about" element={<AboutPage />} />
+                  {import.meta.env.DEV && (
+                    <Route path="/app/account/about/devtools" element={<DevToolsPage />} />
+                  )}
+                  <Route path="/app/account/logout" element={<LogoutPage />} />
                   <Route path="/change-passphrase" element={<ChangePassphrase />} />
                 </Route>
               </Route>

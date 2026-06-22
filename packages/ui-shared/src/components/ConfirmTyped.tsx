@@ -15,6 +15,12 @@ export interface ConfirmTypedProps {
   onCancel(): void;
   onConfirm(): void;
   busy?: boolean;
+  /**
+   * When true, the cancel button wears the gold priority treatment ("gold protects, never invites").
+   * The destructive button stays red regardless.
+   * Default false — existing callers unchanged.
+   */
+  protectCancel?: boolean;
 }
 
 /**
@@ -35,6 +41,7 @@ export function ConfirmTyped({
   onCancel,
   onConfirm,
   busy = false,
+  protectCancel = false,
 }: ConfirmTypedProps) {
   const [typed, setTyped] = useState('');
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -104,7 +111,18 @@ export function ConfirmTyped({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="flex-1 rounded-[var(--radius-card)] bg-ink px-4 py-2.5 text-sm font-medium text-paper-soft ring-1 ring-inset ring-aurora-700/30 transition-opacity hover:opacity-80 disabled:opacity-40"
+          data-priority={protectCancel ? 'true' : undefined}
+          className={`flex-1 rounded-[var(--radius-card)] px-4 py-2.5 text-sm font-medium transition-opacity disabled:opacity-40${protectCancel ? ' hover:opacity-90 ring-0' : ' bg-ink text-paper-soft ring-1 ring-inset ring-aurora-700/30 hover:opacity-80'}`}
+          style={
+            protectCancel
+              ? {
+                  backgroundImage:
+                    'linear-gradient(180deg, var(--color-gold-hi), var(--color-gold-lo))',
+                  color: '#1a1407',
+                  borderColor: 'color-mix(in srgb, var(--color-gold) 70%, transparent)',
+                }
+              : undefined
+          }
         >
           {cancelCta}
         </button>

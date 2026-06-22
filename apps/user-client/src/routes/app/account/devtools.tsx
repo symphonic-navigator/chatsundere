@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
+import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { toastStore } from '../../../state/toast.store.js';
 
 /**
- * Developer tools accordion body — only mounted when
- * `import.meta.env.DEV` is true (production builds strip the accordion
- * itself from account.tsx via the same gate).
+ * Developer tools page — only reachable when `import.meta.env.DEV` is true.
+ * The About page's tile is gated by the same flag, so production builds
+ * never render a route to here.
  *
- * Currently hosts the IndexedDB dump action: collects every Dexie table
- * into one JSON blob and POSTs it to Vite's `/__dump-db` middleware
- * (registered in vite.config.ts), which writes the payload to
- * `<repo-root>/dumps/db-<timestamp>.json` for off-app inspection.
+ * Hosts the IndexedDB → /dumps dump action.
  */
-export function DevToolsSection(): JSX.Element {
+export function DevToolsPage(): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   const dump = async (): Promise<void> => {
@@ -60,19 +58,28 @@ export function DevToolsSection(): JSX.Element {
   };
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-paper-soft">
-        Visible in development builds only. These actions write to disk under{' '}
-        <code className="font-mono text-paper">/dumps</code> and are intended for debugging.
-      </p>
-      <button
-        type="button"
-        onClick={() => void dump()}
-        disabled={busy}
-        className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper hover:border-paper hover:bg-white/[0.05] disabled:opacity-40"
-      >
-        {busy ? 'Dumping…' : 'Dump IndexedDB → /dumps'}
-      </button>
-    </div>
+    <PageScaffold
+      back="/app/account/about"
+      crumbs={[
+        { label: 'My Account', to: '/app/account' },
+        { label: 'About', to: '/app/account/about' },
+        { label: 'Developer tools' },
+      ]}
+    >
+      <div className="space-y-3">
+        <p className="text-xs text-paper-soft">
+          Visible in development builds only. These actions write to disk under{' '}
+          <code className="font-mono text-paper">/dumps</code> and are intended for debugging.
+        </p>
+        <button
+          type="button"
+          onClick={() => void dump()}
+          disabled={busy}
+          className="rounded-md border border-paper-soft/30 bg-white/[0.02] px-3 py-2 text-xs uppercase tracking-wider text-paper hover:border-paper hover:bg-white/[0.05] disabled:opacity-40"
+        >
+          {busy ? 'Dumping…' : 'Dump IndexedDB → /dumps'}
+        </button>
+      </div>
+    </PageScaffold>
   );
 }

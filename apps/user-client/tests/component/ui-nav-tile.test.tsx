@@ -72,4 +72,42 @@ describe('NavTile', () => {
     renderTile({ children: <span>Continue body</span>, label: 'unused' });
     expect(screen.getByText('Continue body')).toBeInTheDocument();
   });
+
+  it('onActivate tile: interactive, fires the callback with the element, does not navigate', () => {
+    const onActivate = vi.fn();
+    renderTile({ to: undefined, onActivate });
+    const tile = screen.getByRole('button', { name: /My Circle/ });
+    fireEvent.click(tile);
+    expect(onActivate).toHaveBeenCalledOnce();
+    expect(onActivate.mock.calls[0]?.[0]).toBeInstanceOf(HTMLElement);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('onActivate tile (motion ON): blink added immediately, callback deferred by NAV_BLINK_MS', async () => {
+    // Override reduced-motion mock to return false for this test only.
+    const { motion: motionMock } = vi.mocked(await import('@chatsundere/ui-shared'));
+    vi.spyOn(motionMock, 'respectsReducedMotion').mockReturnValueOnce(false);
+    vi.useFakeTimers();
+
+    const onActivate = vi.fn();
+    renderTile({ to: undefined, onActivate });
+    const tile = screen.getByRole('button', { name: /My Circle/ });
+
+    fireEvent.click(tile);
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(tile.classList.contains('cs-tile-blink')).toBe(true);
+
+    vi.advanceTimersByTime(260);
+    expect(onActivate).toHaveBeenCalledOnce();
+    expect(onActivate.mock.calls[0]?.[0]).toBeInstanceOf(HTMLElement);
+
+    vi.useRealTimers();
+  });
+
+  it('disabled wins over onActivate', () => {
+    const onActivate = vi.fn();
+    renderTile({ to: undefined, onActivate, disabled: true, disabledReason: 'nope' });
+    fireEvent.click(screen.getByRole('button', { name: /My Circle/ }));
+    expect(onActivate).not.toHaveBeenCalled();
+  });
 });

@@ -1,89 +1,215 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  CryptoError,
+  changeUsername,
+  getLocalAccount,
+  listPasskeyCredentials,
+} from '@chatsundere/crypto';
+import { useSessionStore } from '@chatsundere/ui-shared';
+import { Fingerprint, Info, KeyRound, Link2, Lock, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AccordionCard } from '../../components/AccordionCard.js';
-import { EditorSticky } from '../../components/EditorSticky.js';
-import { EditorTopbar } from '../../components/EditorTopbar.js';
+import { getDb } from '../../boot/open-db.js';
+import { Badge } from '../../components/ui/Badge.js';
+import { NavTile } from '../../components/ui/NavTile.js';
+import { PageScaffold } from '../../components/ui/PageScaffold.js';
+import { useHelp } from '../../content/help/use-help.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
-import { AboutSection } from './account-sections/about-section.js';
-import { AccountSection } from './account-sections/account-section.js';
-import { AuthMethodsSection } from './account-sections/auth-methods-section.js';
-import { DevToolsSection } from './account-sections/dev-tools-section.js';
-import { ServerLinkingSection } from './account-sections/server-linking-section.js';
+import { copy } from '../../lib/copy.js';
+import { APP_VERSION } from '../../lib/version.js';
+import { InlineEditRow } from './account/InlineEditRow.js';
+
+type AccountLoadState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; username: string }
+  | { kind: 'error'; message: string };
+
+type BiometricLoadState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; count: number }
+  | { kind: 'error' };
 
 /**
- * My Account — the identity / auth / server-linking surface.
+ * My Account — the dashboard surface (spec §2.1).
  *
- * Display Name is a draft field that persists on Save & Back, matching
- * the Save & Back pattern used by Persona Editor and My Settings.
- * Username / passkeys / recovery keep their own transactional flows
- * (each section persists its own atomic actions independently).
+ * Inline-edit fields for username and display name (always-save model, spec
+ * §2.3), read-only badges for biometrics / server / version, and the 2×3
+ * navigation matrix for the account sub-tree.
  */
 export function AccountPage(): JSX.Element {
   const navigate = useNavigate();
+  const { onHelp, helpOverlay } = useHelp('my-account');
+
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
 
-  const [draftDisplayName, setDraftDisplayName] = useState('');
-  const [displayNameLoaded, setDisplayNameLoaded] = useState(false);
+  // Session store gives us a reactive username after login; we also load from
+  // IndexedDB (same pattern as account-section.tsx) to stay correct if the
+  // session is closed/refreshed.
+  const sessionUsername = useSessionStore((s) => s.session?.username ?? '');
+
+  const [accountState, setAccountState] = useState<AccountLoadState>({ kind: 'loading' });
+  const [biometricState, setBiometricState] = useState<BiometricLoadState>({ kind: 'loading' });
+
+  // Load the authoritative username + passkey count from IndexedDB on mount.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await getLocalAccount(getDb());
+        if (cancelled) return;
+        if (!row) {
+          navigate('/onboarding', { replace: true });
+          return;
+        }
+        setAccountState({ kind: 'ready', username: row.username });
+      } catch {
+        if (!cancelled) setAccountState({ kind: 'error', message: 'Could not load account.' });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   useEffect(() => {
-    if (!displayNameLoaded && settings.data) {
-      setDraftDisplayName(settings.data.displayName ?? '');
-      setDisplayNameLoaded(true);
-    }
-  }, [settings.data, displayNameLoaded]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listPasskeyCredentials(getDb());
+        if (cancelled) return;
+        setBiometricState({ kind: 'ready', count: rows.length });
+      } catch {
+        if (!cancelled) setBiometricState({ kind: 'error' });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const isDirty =
-    displayNameLoaded && draftDisplayName.trim() !== (settings.data?.displayName ?? '');
+  // Prefer the IndexedDB-loaded username; fall back to session while loading.
+  const username = accountState.kind === 'ready' ? accountState.username : (sessionUsername ?? '');
 
-  async function onSaveAndBack() {
-    if (isDirty) {
-      await updateSettings.mutateAsync({ displayName: draftDisplayName.trim() });
+  const rawDisplayName = settings.data?.displayName ?? '';
+  // Effective name: what others see — falls back to username when display name is empty.
+  const effectiveName = rawDisplayName.trim() || username;
+
+  async function handleSaveUsername(next: string): Promise<void> {
+    try {
+      await changeUsername({ db: getDb(), newUsername: next });
+      setAccountState({ kind: 'ready', username: next });
+    } catch (e) {
+      if (e instanceof CryptoError && e.code === 'invalid_input') {
+        throw new Error(copy.errors.usernameInvalid);
+      }
+      throw e;
     }
-    navigate('/app');
+  }
+
+  async function handleSaveDisplayName(next: string): Promise<void> {
+    await updateSettings.mutateAsync({ displayName: next.trim() });
   }
 
   return (
-    <section className="flex flex-col gap-3 px-4 pb-8 pt-4">
-      <EditorSticky>
-        <EditorTopbar
-          title="My Account"
-          isDirty={isDirty}
-          onBack={() => navigate('/app')}
-          onSaveAndBack={() => {
-            void onSaveAndBack();
-          }}
-          saveDisabled={!isDirty}
+    <PageScaffold crumbs={[{ label: 'My Account' }]} back="/app" onHelp={onHelp}>
+      {helpOverlay}
+
+      {/* ── Dashboard ─────────────────────────────────────────────────────── */}
+      <div className="space-y-6 px-4 pb-4 pt-2">
+        {/* Effective name header — what others see */}
+        <div className="space-y-0.5">
+          <p className="font-display text-lg text-paper">{effectiveName}</p>
+          <p className="text-xs text-paper-soft">How you appear to your companions</p>
+        </div>
+
+        {/* Inline edit fields */}
+        <div className="space-y-4">
+          <InlineEditRow
+            label="Username"
+            value={username}
+            validate={(v) => {
+              if (!v.trim()) return 'Username cannot be empty.';
+              return null;
+            }}
+            onSave={handleSaveUsername}
+          />
+
+          <InlineEditRow
+            label="Display name"
+            value={rawDisplayName}
+            placeholder={username}
+            onSave={handleSaveDisplayName}
+          />
+        </div>
+
+        {/* Read-only badges */}
+        <div className="flex flex-wrap gap-2 text-xs text-paper-soft">
+          {/* Biometrics */}
+          {biometricState.kind === 'ready' ? (
+            biometricState.count >= 1 ? (
+              <Badge tone="success">Configured ({biometricState.count})</Badge>
+            ) : (
+              <Badge tone="neutral">Biometrics not set up</Badge>
+            )
+          ) : null}
+
+          {/* Server link — Block 1: always local-only */}
+          <Badge tone="neutral">Local-only mode</Badge>
+
+          {/* Version */}
+          <span className="font-mono text-xs text-paper-soft">
+            v{APP_VERSION.version} · sha {APP_VERSION.sha}
+          </span>
+        </div>
+      </div>
+
+      {/* ── 2×3 Navigation matrix ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 px-4 pb-8">
+        <NavTile
+          colour="pink"
+          icon={Fingerprint}
+          label="Biometric"
+          to="/app/account/biometric"
+          meta="unlock on this device"
         />
-      </EditorSticky>
-
-      <AccordionCard icon="◉" label="Account" meta="Display name · username · sign-out · delete">
-        <AccountSection
-          draftDisplayName={draftDisplayName}
-          setDraftDisplayName={setDraftDisplayName}
-          displayNameLoaded={displayNameLoaded}
+        <NavTile
+          colour="pink"
+          icon={KeyRound}
+          label="Recovery Key"
+          to="/app/account/recovery"
+          meta="your backup code"
         />
-      </AccordionCard>
-
-      <AccordionCard icon="⚿" label="Auth Methods" meta="Passphrase · biometrics · recovery key">
-        <AuthMethodsSection />
-      </AccordionCard>
-
-      <AccordionCard icon="⇄" label="Server Linking" meta="Link this device to a server">
-        <ServerLinkingSection serverUrl={null} />
-      </AccordionCard>
-
-      <AccordionCard icon="ⓘ" label="About" meta="Version · licence · docs">
-        <AboutSection />
-      </AccordionCard>
-
-      {import.meta.env.DEV ? (
-        <AccordionCard icon="⌥" label="Developer tools" meta="Dev-only · debug actions">
-          <DevToolsSection />
-        </AccordionCard>
-      ) : null}
-    </section>
+        <NavTile
+          colour="blue"
+          icon={Link2}
+          label="Server linking"
+          to="/app/account/server-linking"
+          meta="sync across devices"
+        />
+        <NavTile
+          colour="blue"
+          icon={Info}
+          label="About"
+          to="/app/account/about"
+          meta="version, licence, privacy"
+        />
+        <NavTile
+          colour="purple"
+          icon={Lock}
+          label="Change passphrase"
+          to="/change-passphrase"
+          meta="set a new passphrase"
+        />
+        <NavTile
+          colour="purple"
+          icon={LogOut}
+          label="Logout"
+          to="/app/account/logout"
+          meta="sign out · delete data"
+        />
+      </div>
+    </PageScaffold>
   );
 }

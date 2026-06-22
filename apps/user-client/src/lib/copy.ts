@@ -100,7 +100,7 @@ export const copy = {
       addBiometricGenericError: 'Could not add biometric. Please try again.',
       regenerateRecoveryCta: 'Generate a new recovery key',
       regenerateRecoveryDisabledHint:
-        'Sign out and sign back in with your passphrase to regenerate the recovery key. Biometric sessions cannot rotate it.',
+        'Available after you sign in with your passphrase or recovery key.',
       renameCta: 'Rename',
       removeCta: 'Remove',
       renameSaveCta: 'Save',

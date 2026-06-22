@@ -7,3 +7,6 @@ export { ListRow, type ListRowProps } from './ListRow.js';
 export { ListScaffold, type ListScaffoldProps } from './ListScaffold.js';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog.js';
 export { NavTile, type NavTileProps, type NavTileColour } from './NavTile.js';
+export { PageBar, type PageBarProps, type Crumb } from './PageBar.js';
+export { PageScaffold, type PageScaffoldProps } from './PageScaffold.js';
+export { ReadingOverlay, type ReadingOverlayProps } from './ReadingOverlay.js';

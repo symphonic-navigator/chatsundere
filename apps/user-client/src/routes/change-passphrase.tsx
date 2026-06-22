@@ -16,11 +16,13 @@ import {
   toBase64Url,
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as v from 'valibot';
 import { getDb } from '../boot/open-db.js';
 import { PassphraseField } from '../components/PassphraseField.js';
+import { PageScaffold } from '../components/ui/PageScaffold.js';
+import { useHelp } from '../content/help/use-help.js';
 import { copy } from '../lib/copy.js';
 import { HttpError } from '../lib/fetch.js';
 import { httpServerClient } from '../lib/server-client.js';
@@ -72,6 +74,7 @@ function mapError(err: unknown, newPassphrase: string, confirmPassphrase: string
 export function ChangePassphrase() {
   const navigate = useNavigate();
   const connectivity = useConnectivityStore((s) => s.state);
+  const { onHelp, helpOverlay } = useHelp('change-passphrase');
 
   const [screen, setScreen] = useState<Screen>({ kind: 'form', busy: false, error: null });
   const [newPassphrase, setNewPassphrase] = useState('');
@@ -245,10 +248,13 @@ export function ChangePassphrase() {
     }
   }
 
-  // ── Offline-blocked surface ───────────────────────────────────────────────
+  // ── Branch content ────────────────────────────────────────────────────────
+
+  let content: ReactNode;
 
   if (screen.kind === 'offline-blocked') {
-    return (
+    // ── Offline-blocked surface ─────────────────────────────────────────────
+    content = (
       <section className="space-y-6 pt-8">
         <h1 className="font-display text-3xl italic tracking-tight text-paper lg:text-4xl">
           {c.offlineTitle}
@@ -262,12 +268,9 @@ export function ChangePassphrase() {
         </Link>
       </section>
     );
-  }
-
-  // ── Success surface ───────────────────────────────────────────────────────
-
-  if (screen.kind === 'success') {
-    return (
+  } else if (screen.kind === 'success') {
+    // ── Success surface ─────────────────────────────────────────────────────
+    content = (
       <section className="space-y-6 pt-8">
         <h1 className="font-display text-3xl italic tracking-tight text-paper lg:text-4xl">
           {c.successTitle}
@@ -281,52 +284,61 @@ export function ChangePassphrase() {
         </Link>
       </section>
     );
+  } else {
+    // ── Form surface ────────────────────────────────────────────────────────
+    const { busy, error } = screen;
+    content = (
+      <section className="space-y-6 pt-8">
+        <div className="space-y-2">
+          <h1 className="font-display text-3xl italic tracking-tight text-paper lg:text-4xl">
+            {c.title}
+          </h1>
+          <p className="text-sm leading-relaxed text-paper-soft">{c.body}</p>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
+          <PassphraseField
+            id="new-passphrase"
+            label={c.newLabel}
+            value={newPassphrase}
+            onChange={setNewPassphrase}
+            meter
+            autoComplete="new-password"
+          />
+          <PassphraseField
+            id="confirm-passphrase"
+            label={c.confirmLabel}
+            value={confirmPassphrase}
+            onChange={setConfirmPassphrase}
+            autoComplete="new-password"
+          />
+
+          {error !== null && (
+            <p role="alert" className="text-sm text-danger" aria-live="polite">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy ? c.workingCta : c.submitCta}
+          </button>
+        </form>
+      </section>
+    );
   }
 
-  // ── Form surface ──────────────────────────────────────────────────────────
-
-  const { busy, error } = screen;
-
   return (
-    <section className="space-y-6 pt-8">
-      <div className="space-y-2">
-        <h1 className="font-display text-3xl italic tracking-tight text-paper lg:text-4xl">
-          {c.title}
-        </h1>
-        <p className="text-sm leading-relaxed text-paper-soft">{c.body}</p>
-      </div>
-
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
-        <PassphraseField
-          id="new-passphrase"
-          label={c.newLabel}
-          value={newPassphrase}
-          onChange={setNewPassphrase}
-          meter
-          autoComplete="new-password"
-        />
-        <PassphraseField
-          id="confirm-passphrase"
-          label={c.confirmLabel}
-          value={confirmPassphrase}
-          onChange={setConfirmPassphrase}
-          autoComplete="new-password"
-        />
-
-        {error !== null && (
-          <p role="alert" className="text-sm text-danger" aria-live="polite">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? c.workingCta : c.submitCta}
-        </button>
-      </form>
-    </section>
+    <PageScaffold
+      back="/app/account"
+      crumbs={[{ label: 'My Account', to: '/app/account' }, { label: 'Change passphrase' }]}
+      onHelp={onHelp}
+    >
+      {helpOverlay}
+      {content}
+    </PageScaffold>
   );
 }

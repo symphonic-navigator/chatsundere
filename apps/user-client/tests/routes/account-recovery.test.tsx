@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { describe, expect, it, vi } from 'vitest';
+
+// ─── Module mocks ─────────────────────────────────────────────────────────────
+// Must come before the dynamic import of the component below.
+
+vi.mock('@chatsundere/crypto', () => ({
+  regenerateRecoveryKey: vi.fn(async () => ({ recoveryKeyString: 'AAAA-BBBB' })),
+  CryptoError: class CryptoError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'CryptoError';
+    }
+  },
+}));
+
+vi.mock('../../src/boot/open-db.js', () => ({ getDb: () => ({}) }));
+
+vi.mock('../../src/content/help/use-help.js', () => ({
+  useHelp: vi.fn(() => ({ onHelp: vi.fn(), helpOverlay: null })),
+}));
+
+// ConfirmTyped from ui-shared — render a simple controlled stub.
+vi.mock('@chatsundere/ui-shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@chatsundere/ui-shared')>();
+  return {
+    ...actual,
+    ConfirmTyped: ({
+      open,
+      onConfirm,
+      onCancel,
+      confirmToken,
+    }: {
+      open: boolean;
+      onConfirm: () => void;
+      onCancel: () => void;
+      confirmToken: string;
+    }) =>
+      open ? (
+        <div data-testid="confirm-typed">
+          <span>{confirmToken}</span>
+          <button type="button" onClick={onConfirm}>
+            Confirm
+          </button>
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      ) : null,
+  };
+});
+
+import { useSessionStore } from '@chatsundere/ui-shared';
+import { RecoveryKeyPage } from '../../src/routes/app/account/recovery.js';
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <RecoveryKeyPage />
+    </MemoryRouter>,
+  );
+}
+
+describe('RecoveryKeyPage', () => {
+  it('renders the breadcrumb crumbs', async () => {
+    useSessionStore.setState({ mk: { key: 'fake-key' } as never });
+    renderPage();
+    expect(await screen.findByText('My Account')).toBeInTheDocument();
+    expect(await screen.findByText('Recovery Key')).toBeInTheDocument();
+  });
+
+  it('mk present → button enabled; confirming shows RecoveryKeyReveal with the key', async () => {
+    useSessionStore.setState({ mk: { key: 'fake-mk' } as never });
+    const user = userEvent.setup();
+    renderPage();
+
+    // The regenerate button must be present and enabled.
+    const btn = await screen.findByRole('button', { name: /generate a new recovery key/i });
+    expect(btn).not.toBeDisabled();
+
+    // Click opens the ConfirmTyped dialog.
+    await user.click(btn);
+    expect(await screen.findByTestId('confirm-typed')).toBeInTheDocument();
+    expect(screen.getByText('regenerate')).toBeInTheDocument();
+
+    // Confirming triggers the mock and shows the key.
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByLabelText('Recovery key')).toBeInTheDocument();
+    expect(screen.getByLabelText('Recovery key')).toHaveTextContent('AAAA-BBBB');
+  });
+
+  it('mk null → button disabled with reason text', async () => {
+    useSessionStore.setState({ mk: null });
+    renderPage();
+
+    const btn = await screen.findByRole('button', { name: /generate a new recovery key/i });
+    expect(btn).toBeDisabled();
+
+    // The disabled reason text must be visible on screen.
+    expect(
+      await screen.findByText(/available after you sign in with your passphrase or recovery key/i),
+    ).toBeInTheDocument();
+  });
+});

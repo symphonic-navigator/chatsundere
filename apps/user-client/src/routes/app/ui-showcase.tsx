@@ -7,19 +7,48 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog.js';
 import { ListRow } from '../../components/ui/ListRow.js';
 import { ListScaffold } from '../../components/ui/ListScaffold.js';
 import { NavTile } from '../../components/ui/NavTile.js';
+import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { Pill } from '../../components/ui/Pill.js';
+import { ReadingOverlay } from '../../components/ui/ReadingOverlay.js';
 
 /**
  * Internal showcase of every design-language primitive — the live successor to
  * chatsundere-prototype.html. Reached at /app/ui-showcase. Not user-facing; the
  * device-test surface for the makeover foundation.
  */
+const SAMPLE_MARKDOWN = `
+# Privacy & Data Handling
+
+Chatsundere is designed to be **zero-knowledge**: the server stores only ciphertext
+and never sees your messages, passphrase, or keys.
+
+## What we collect
+
+- A randomly generated username (never your real name or email)
+- Encrypted conversation blobs — unreadable without your master key
+
+## What we never collect
+
+- Your passphrase (OPAQUE means it never crosses the wire)
+- Any plaintext message content
+- IP-derived identity
+
+## Your rights
+
+You may delete your account at any time. Deletion is permanent and irreversible —
+we cannot recover data we cannot read.
+
+[Read the full licence →](https://github.com/chatsundere)
+`;
+
 export function UiShowcase(): JSX.Element {
   const [saveOpen, setSaveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [readerOpen, setReaderOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const saveTrigger = useRef<HTMLButtonElement>(null);
   const deleteTrigger = useRef<HTMLButtonElement>(null);
+  const readerTrigger = useRef<HTMLButtonElement>(null);
 
   return (
     <main className="mx-auto max-w-[420px] p-4">
@@ -162,6 +191,24 @@ export function UiShowcase(): JSX.Element {
         </div>
       </section>
 
+      <section className="mb-6">
+        <h3 className="mb-2">PageBar / PageScaffold</h3>
+        <PageScaffold
+          back="/app/ui-showcase"
+          crumbs={[{ label: 'My Account', to: '/app/ui-showcase' }, { label: 'Biometric' }]}
+          onHelp={(_el) => alert('help opens the reading overlay (Plan 2)')}
+        >
+          <p className="text-paper-soft">Page content scrolls; the bar above stays put.</p>
+        </PageScaffold>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="mb-2">ReadingOverlay</h3>
+        <Button ref={readerTrigger} tone="neutral" onClick={() => setReaderOpen(true)}>
+          Open privacy reader
+        </Button>
+      </section>
+
       <ConfirmDialog
         open={saveOpen}
         title="Save changes?"
@@ -181,6 +228,13 @@ export function UiShowcase(): JSX.Element {
         onConfirm={() => setDeleteOpen(false)}
         onCancel={() => setDeleteOpen(false)}
         triggerRef={deleteTrigger}
+      />
+      <ReadingOverlay
+        open={readerOpen}
+        title="Privacy & Data Handling"
+        markdown={SAMPLE_MARKDOWN}
+        onClose={() => setReaderOpen(false)}
+        triggerRef={readerTrigger}
       />
     </main>
   );

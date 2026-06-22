@@ -6,7 +6,7 @@ import { useNavTransitionStore } from '../state/nav-transition.store.js';
 
 /** Blink duration before navigation, so the gold trigger-blink is seen
  *  (matches the `cs-tile-blink` CSS at 0.26s). Tunable on device. */
-const NAV_BLINK_MS = 260;
+export const NAV_BLINK_MS = 260;
 
 /**
  * Returns an `activate(el, to)` that performs the Unified-Experience tile
