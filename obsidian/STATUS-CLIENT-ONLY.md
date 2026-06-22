@@ -8,7 +8,44 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-21 — **DESIGN-LANGUAGE FOUNDATIONS SQUASHED TO MASTER
+**Last updated:** 2026-06-22 — **MAIN MENU REBUILD SQUASHED TO MASTER
+(`7bb552f7`), device-verified by Chris ("voll geil … das hat so schön
+cineastisch, ich mag das echt"). NOT pushed.**
+The first real surface of the UI/UX makeover — the Entrance Hall (`/app`) rebuilt
+in the design language. (1) the **`NavTile`** navigation-plane primitive (the 8th
+in `components/ui/`) — thin `data-*` component, styling in `index.css`, reuses the
+canonical `--color-nav-*` tokens; icon optional. (2) the Entrance Hall in the fixed
+**ascension** order (Crown → 🩷Relate → 🟢Treasure → 🔵Nourish → 🟣Root), gold
+**Continue** card (with ✦ sparkle), eight Lucide-iconed room tiles, **My Projects
+visible-but-disabled** ("coming after the alpha"), calm empty-metas. (3) **first-run
+Setup-Hints** — two hard blockers (provider + persona; the Global Unlocker is
+deliberately NOT a step), the gold Setup card takes the Crown over Continue, lists
+only the missing steps as real focusable buttons. (4) the **bidirectional
+Unified-Experience zoom**: a tapped tile plays the gold 2× blink (navigation delayed
+`NAV_BLINK_MS=260` so it is seen; reduced-motion = instant), the destination grows
+out of the tile, and **back collapses it into the same tile**. Mechanism is **central
+& origin-path-based** (`NavTransitionOutlet` + `nav-transition` store + `useNavZoom`
+hook): it tracks each tile's origin path, so "raus" works whether back is a PUSH
+(`navigate('/app')`) or a POP, and every later destination inherits it — the **shared
+topbar and the destination room screens are untouched** (scope-fenced). Built
+spec→plan→**subagent-driven** (4 tasks, per-task spec+quality review). Review loop +
+**opus whole-branch review** caught and fixed: a transform-origin on the wrong
+element, a duplicate `--nav-*` token set, a NavTile tab-order gap, and a **CRITICAL-ish
+I1** (the exit-overlay re-mounting *any* leaving screen app-wide → scoped to genuine
+tile origins). **Chris device-test then found two more** (no exit-zoom on back =
+PUSH-not-POP; blink never visible = navigate unmounted the tile first) — both fixed
+via the origin-path rework. **Laura** pre-squash: **no hard defects**; 2 soft folded in
+(Setup steps now zoom; Continue ✦), 1 soft (SetupCard hover-glow) closed as a
+non-issue (the rule already suppresses it; removing would *introduce* it — Laura
+mis-read the cascade). Not a Larissa path (client-only). Gates: `pnpm typecheck
+--force` **14/14**; full user-client vitest **1932 pass / 8 Node-localStorage
+baseline** (+ new nav-tile/outlet/store/hook/setup/entrance suites). Specs/plans:
+[[../superpowers/specs/2026-06-22-main-menu-design]],
+[[../superpowers/plans/2026-06-22-main-menu]]. **Next:** **My Account** as the next
+makeover slice (small surface, "practising" the next step) — fresh context after
+Chris's `/clear`.
+
+**Earlier (2026-06-21) — DESIGN-LANGUAGE FOUNDATIONS SQUASHED TO MASTER
 (`982ea9f5`), device-verified by Chris ("das ist wirklich schön! das wird den
 Leuten gefallen"). NOT pushed.**
 First slice of the **UI/UX makeover** (the big block). Establishes the reusable
@@ -356,17 +393,20 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block).** Compact-and-continue was the last
-functionality domino before the design pass; it has landed. Chris has the makeover
-concept ready (worked it out while Liz built compaction) — "relatively exact" in
-his head. Agreed approach from the 2026-06-21 brainstorm: start with the **main
-menu** as a vertical slice (small, low-stakes, where we learn the Chatsundere
-design language), the chat (densest surface) comes last. Analytical first pass:
-which design elements/widgets to unify; what "language" we speak (more sub-pages?
-deeper navigation kept first-class); tooling (raster heroes via ChatGPT Image vs
-native SVG/Lucide for UI vectors — *not* auto-tracing; route-graph diagrams via
-the Mermaid tool; the existing `chatsundere-prototype.html` + screenshot map).
-Plan for 2–3 weeks. **Start fresh after Chris's `/clear`.**
+**→ UI/UX makeover (the big block) — next slice: My Account.** The design
+language + the **main menu** have both landed (foundations `982ea9f5`, main menu
+`7bb552f7`). Next agreed slice is **My Account** (`/app/account`) — a deliberately
+small surface to "practise" the next step before bigger rooms. It consumes the
+landed primitives (`NavTile`, Button/Badge/Pill/OverflowMenu/ListRow/ListScaffold/
+ConfirmDialog) and the bidirectional zoom for free. The chat (densest surface)
+comes last. Reusable assets in hand: the `useNavZoom` hook + origin-path transition
+(every drilled surface inherits "raus"); the `--color-nav-*` planes; Lucide for UI
+vectors (*not* auto-tracing); the Mermaid tool for route-graph diagrams; the
+existing `chatsundere-prototype.html` + screenshot map. **Start fresh after Chris's
+`/clear`.** Open follow-on (non-blocking): the deferred Laura minor — NavTile tap
+test asserts `lastOrigin` not `originRect` (store unit test covers it); and the
+`.cs-btn` `:hover`/`:focus-visible` a11y states still owed before the first
+*action-plane-heavy* surface (My Settings/Account use Buttons).
 
 *Out of alpha scope:* **Projects feature REMOVED** (deferred to after the backend
 — needs Chris's project-oriented-memory mental model + new IA; it is a navigation
