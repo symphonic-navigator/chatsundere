@@ -267,3 +267,34 @@ these two are the remaining advisory notes.
      unless a distinct surface reads clearly better in context then.
    - Chris sign-off: ✅ Chris, 2026-06-21 — accepted Liz's recommendation to keep
      inline-expand when approving the squash.
+
+## 2026-06-22 — My Account: Sign out moves one navigation deeper (Logout sub-page)
+
+Raised at Laura's spec-pass of the My Account & Page Bar slice
+([[../../superpowers/specs/2026-06-22-my-account-and-page-bar-design]]). Laura ruled
+it **HARD** only in the sense that it must be a *conscious, logged* decision — not a
+structural block. Decision: accept the depth.
+
+- **Affected flow / surface:** My Account → Logout sub-page (`/app/account/logout`),
+  the Sign-out action. Today Sign out lives in the first accordion of `/app/account`;
+  the rebuild moves it one navigation deeper, co-located with Delete-local-data.
+- **Finding (Laura's summary):** Click-depth for a frequent, benign action: Sign out
+  goes from `Entrance Hall → My Account` to `Entrance Hall → My Account → Logout
+  sub-page`. Co-locates a repeatable benign action with a rare catastrophic one
+  (Delete). Acceptable IF the tile meta + `?` help carry discoverability — but it
+  cannot pass silently.
+- **Mode:** spec-pass.
+- **Criterion:** excessive click-depth for a frequent function; tenet "everything at
+  the user's fingertips".
+- **Rationale for deferral:** Chris's call — on a single-user, local-first companion
+  device, Sign out is a *very* rarely used function (the whole point is persistent
+  local encrypted data; signing out means re-authenticating next launch). It belongs
+  thematically with the other "leaving" action and has an almost-destructive
+  character; burying it slightly so the user does not *accidentally stumble over it*
+  is a feature, not a cost. The Logout tile meta states what the page holds, so the
+  action is discoverable, not hidden.
+- **Follow-up commitment:** Re-evaluate at the v0.1.0 release cut if alpha testers
+  report friction reaching Sign out; otherwise the depth stands.
+- **Chris sign-off:** ✅ Chris, 2026-06-22 ("Tiefe akzeptieren — sehr, sehr selten
+  verwendete Funktion, die thematisch am besten dort hinpasst, hat fast was
+  Destruktives; passt, solange der User nicht zufällig drüberstolpert").

@@ -59,9 +59,13 @@ scroll region.
 
 - **Breadcrumb trail** (left, takes remaining width): the path as tappable
   crumbs. The **current** crumb is bold/emphasised and non-interactive; every
-  **ancestor** crumb is a button that navigates there. A leading `‹` chevron
-  marks the bar as "you can go back". The leftmost ancestor crumb *is* the Back
-  target.
+  **ancestor** crumb is a real, obviously-tappable button that navigates there.
+  The leading `‹` chevron + the leftmost ancestor crumb form a **single back
+  control with a ≥44×44 hit area** — matching the `ListScaffold` fixed-back
+  contract Laura already vetted at foundations. It is a control, not decoration:
+  on an installed PWA / iOS standalone (no hardware Back), this in-page control is
+  the user's exit and must be visibly hittable, never a mere label. (Laura
+  HARD-1.)
 - **`?` help affordance** (right, fixed 44×44 hit area): opens the page's help
   document in the Reading Overlay (§8). Present on every page in the tree.
 
@@ -95,6 +99,13 @@ The primitive supports N crumbs with **middle-collapse** (`‹ … / Parent /
 - **Selections / actions** (toggles, taps): persist immediately on change.
 - **Cancelling** an edit = navigate Back (breadcrumb) or just blur an unchanged
   field. There is nothing to "discard" because nothing was staged.
+
+Until the other editor surfaces (Settings, Persona Editor) migrate to the Page
+Bar, this tree is an **inconsistency island** — it drops Save & Back while they
+keep it. That is **temporary by design** (§1 non-goals). The mitigation is a
+prompt, legible `Saved ✓` on the first edit so the user learns the model by
+doing; we add **no** persistent "auto-saves" banner (that would nag). The My
+Account `?` help opens by stating "changes save as you go". (Laura SOFT.)
 
 ### 2.4 The primitive
 
@@ -148,8 +159,10 @@ Six `NavTile`s, paired by meaning, coloured from the **navigation palette**
 | Row 2 (**blue** / Nourish) | **Server linking** → `/app/account/server-linking` | **About** → `/app/account/about` |
 | Row 3 (**purple** / Root) | **Change passphrase** → `/change-passphrase` | **Logout** → `/app/account/logout` |
 
-Each tile carries a Lucide icon and a calm one-line meta. Tiles navigate; the
-zoom (§9) is inherited for free from the `to=` prop.
+Each tile carries a Lucide icon and a calm one-line meta that **says what the
+sub-page is for** (the meta is the first-line affordance; `?` help is the safety
+net, not a prerequisite — Laura SOFT). Tiles navigate; the zoom (§9) is inherited
+for free from the `to=` prop.
 
 ---
 
@@ -173,9 +186,9 @@ always `‹ My Account / **<page>**`.
 
 - One action: **Regenerate recovery key**. Destructive-styled `Button`
   (`tone="destructive"`), opens the existing typed confirm (`ConfirmTyped`, token
-  "regenerate") warning that the old key is invalidated immediately. (Whether the
-  typed token is still warranted here — regeneration is repeatable, unlike Delete
-  — is a design-pass call; current behaviour is preserved by default.)
+  "regenerate") warning that the old key is invalidated immediately. The typed
+  token is **kept** (Chris, 2026-06-22) — the heavy friction is wanted despite
+  regeneration being repeatable.
 - **mk-gated**: only enabled when the master key is in the session (passphrase or
   recovery-key login). Biometric-only sessions show the disabled state with the
   reason ("You can only regenerate after logging in with your passphrase or
@@ -205,10 +218,13 @@ The richest sub-page — itself a dashboard + matrix.
   | Row 2 (**green**) | **Privacy** → Reading Overlay (privacy notice) | **Third-party libraries** → Reading Overlay (generated from `third-party-licences.ts`) |
   | Row 3 (**purple**) | *(empty)* | **Developer tools** → sub-page, **DEV builds only** |
 
-  In production the bottom row is empty (Dev Tools renders only under
-  `import.meta.env.DEV`), so About is effectively a clean 2×2 there. "Source
-  Code" is the only tile that leaves the app (external link); the three overlay
-  tiles open the Reading Overlay in place.
+  In production the third row **collapses entirely** (Dev Tools renders only
+  under `import.meta.env.DEV`) — About is a clean **2×2**, never a 2×3 with a
+  blank/ghost quadrant (Laura SOFT). If a third pair is wanted later, the dropped
+  "Documentation" link (§13/§14) is the natural occupant of that reserved cell, so
+  the asymmetry reads as "reserved", not "forgotten". "Source Code" is the only
+  tile that leaves the app (external link); the three overlay tiles open the
+  Reading Overlay in place.
 
 - **Developer tools** (`/app/account/about/devtools`, DEV only): the existing
   "Dump IndexedDB → /dumps" action and any future dev affordances.
@@ -221,7 +237,13 @@ this slice — only the chrome.
 
 ### 4.6 Logout (`/app/account/logout`)
 
-Hosts the two "leaving" actions, deliberately one level in:
+Hosts the two "leaving" actions, deliberately one level in. **Sign out's extra
+depth is a consciously accepted, logged decision** (Chris, 2026-06-22 — a very
+rarely used action on a single-user local-first device, thematically at home with
+the other "leaving" action, with an almost-destructive character; burying it
+slightly so the user does not accidentally stumble over it is a feature). Logged
+in [`ux-deferrals.md`](../../obsidian/insights/ux-deferrals.md). The Logout tile's
+meta names what the page holds, so the action stays discoverable. (Laura HARD-2.)
 
 - **Sign out** — `Button` (neutral); `closeAndForget()` → `/login`.
   Non-destructive (encrypted data stays on device). Framed as such.
@@ -364,7 +386,10 @@ codebase for Settings/Persona-Editor until those surfaces are migrated).
 - Disabled affordances stay focusable with an announced reason (the established
   pattern), e.g. Recovery-Key when mk is absent, Add-biometric when WebAuthn is
   unavailable.
-- `Saved ✓` confirmations use a polite live region.
+- `Saved ✓` confirmations use a polite live region. Blur and Enter **de-dupe to a
+  single persist + single announcement** per change, so a fast Enter-then-blur
+  never double-announces (or races a `Saved ✓` against an error) — important for
+  the ND audience (Laura SOFT). Pre-squash device check on VoiceOver.
 
 ---
 
@@ -376,7 +401,7 @@ Every capability of the current account surface has a home:
 |---|---|
 | Display name edit (empty ⇒ username) | Dashboard (semantics sharpened) |
 | Username inline rename + validation | Dashboard |
-| Account created date | *Dropped* unless wanted — low value; flag at review |
+| Account created date | **Dropped for alpha** (Laura + Liz: inert never-actioned metadata; "nothing lost" means no *capability* lost, not no inert string). Re-add on request. |
 | Sign out | Logout sub-page |
 | Delete local data (type username) | Logout sub-page (danger zone) |
 | Passphrase "never displayed" row | Implicit; Change-passphrase tile |
@@ -396,8 +421,7 @@ Every capability of the current account surface has a home:
 | About: Documentation link | *Dropped for alpha* (re-add on request) |
 | Dev tools: IndexedDB dump | About → Developer tools (DEV only) |
 
-**Open at review:** keep the "Account created" date somewhere (e.g. About
-dashboard), or drop it?
+(The "Account created" date is dropped for the alpha — see the row above.)
 
 ---
 
@@ -437,6 +461,8 @@ dashboard), or drop it?
 
 ## 16. Open questions
 
-- "Account created" date: keep (where?) or drop? (§13)
+All Laura findings resolved (HARD-1 fixed in §2.1; HARD-2 accepted + logged, §4.6;
+softs folded in or arbitrated). Remaining:
+
 - Privacy-notice wording owner: Liz drafts; Chris/SCAI sign-off before alpha.
 ```
