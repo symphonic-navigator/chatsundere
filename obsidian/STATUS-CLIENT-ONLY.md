@@ -8,7 +8,51 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-22 — **MAIN MENU REBUILD SQUASHED TO MASTER
+**Last updated:** 2026-06-22 — **MY ACCOUNT & PAGE BAR SQUASHED TO MASTER
+(`355f9bfa`), device-verified by Chris ("großartig, alles da!"). NOT pushed
+(Chris pushes).**
+The second makeover surface after the Entrance Hall. Introduces the reusable
+**Page Bar** (`PageBar`/`PageScaffold`): a sticky breadcrumb + `?`-help chrome
+row beneath the brand bar that **never scrolls**, with the **always-save model**
+replacing Save & Back (blur/Enter persists via `InlineEditRow`, `Saved ✓` live
+region, a validation guard for the username). Plus two more primitives: the
+**`ReadingOverlay`** (zoom-in Markdown reader — used for help, the bundled
+AGPL-3.0 text, the privacy notice, and the generated third-party list; zooms from
+its trigger incl. the `?` button) and a **`NavTile` `onActivate`** path for
+overlay/external-link tiles. **My Account** (`/app/account`) is rebuilt as a
+dashboard (inline-edit username & display-name — empty display-name shows the
+username — + read-only biometrics/server/version badges) and a **2×3 nav-palette
+matrix** leading to six sub-pages: **Biometric** (add/list/rename/remove +
+last-one lockout), **Recovery Key** (mk-gated regenerate, typed "regenerate"
+confirm), **Server linking**, **About** (matrix opening reading overlays for
+Licence/Privacy/Third-party, external Source Code, **DEV-only** Developer tools),
+**Change passphrase** (reskinned), and **Logout** (sign out + type-username
+delete with a **gold-protected** "No" via a new `ConfirmTyped.protectCancel`).
+Per-page help docs ship (the My Account one explains the sub-pages); the obsolete
+`account-sections/*` accordion modules are deleted. Built spec→2 plans
+(primitives + page tree)→**subagent-driven** (11 tasks, per-task spec+quality
+review). The **opus whole-branch review** caught **two** cross-cutting bugs no
+per-task review saw — a **display-name data-loss path** (the field rendered empty
+for existing users and a blur wiped the saved name; async `useSettings` +
+once-seeded `useState` — fixed with a focus-guarded re-sync + regression test)
+and a **broken gold token** on the delete "No" (non-existent `--gold` →
+fixed to the real `--color-gold-*` gradient). **Laura** pre-squash: **no hard
+defects**; all 3 softs folded (`?` zoom-from-button, DEV-only devtools *route*,
+softer recovery disabled-copy). Not a Larissa path (client-only). Gates:
+`pnpm typecheck --force` **14/14** (verified on master post-squash); full
+user-client vitest **1975 pass / 8 Node-localStorage baseline**; ui-shared 39.
+Specs/plans: [[../superpowers/specs/2026-06-22-my-account-and-page-bar-design]],
+[[../superpowers/plans/2026-06-22-my-account-page-bar-primitives]],
+[[../superpowers/plans/2026-06-22-my-account-tree]]. **Deferred (non-blocking,
+for the a11y/design pass):** PageBar crumb tap-target <44px + no `:focus-visible`
+ring (system a11y baseline); ReadingOverlay/ConfirmDialog no focus-trap
+(`ConfirmTyped` *does* trap natively — the delete flow is fine); biometrics badge
+hidden-while-loading + "Configured (N)" label; biometric lockout-dialog-body
+untested; About copyright test couples to live copy. **Next:** **My Settings** as
+the next makeover slice (tomorrow, fresh context). Branch `feat/my-account-page-bar`
+kept until Chris pushes.
+
+**Earlier (2026-06-22) — MAIN MENU REBUILD SQUASHED TO MASTER
 (`7bb552f7`), device-verified by Chris ("voll geil … das hat so schön
 cineastisch, ich mag das echt"). NOT pushed.**
 The first real surface of the UI/UX makeover — the Entrance Hall (`/app`) rebuilt
@@ -393,20 +437,21 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block) — next slice: My Account.** The design
-language + the **main menu** have both landed (foundations `982ea9f5`, main menu
-`7bb552f7`). Next agreed slice is **My Account** (`/app/account`) — a deliberately
-small surface to "practise" the next step before bigger rooms. It consumes the
-landed primitives (`NavTile`, Button/Badge/Pill/OverflowMenu/ListRow/ListScaffold/
-ConfirmDialog) and the bidirectional zoom for free. The chat (densest surface)
-comes last. Reusable assets in hand: the `useNavZoom` hook + origin-path transition
-(every drilled surface inherits "raus"); the `--color-nav-*` planes; Lucide for UI
-vectors (*not* auto-tracing); the Mermaid tool for route-graph diagrams; the
-existing `chatsundere-prototype.html` + screenshot map. **Start fresh after Chris's
-`/clear`.** Open follow-on (non-blocking): the deferred Laura minor — NavTile tap
-test asserts `lastOrigin` not `originRect` (store unit test covers it); and the
-`.cs-btn` `:hover`/`:focus-visible` a11y states still owed before the first
-*action-plane-heavy* surface (My Settings/Account use Buttons).
+**→ UI/UX makeover (the big block) — next slice: My Settings.** The design
+language, the **main menu**, and **My Account** have all landed (foundations
+`982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`). Next agreed slice is
+**My Settings** (`/app/settings`) — tomorrow, fresh context. It now inherits a
+*much* richer toolkit than My Account did: besides `NavTile` + the bidirectional
+zoom, it has the **Page Bar** (`PageScaffold` with breadcrumbs + `?`-help +
+always-save), the **`ReadingOverlay`** (Markdown reader), the per-page **`useHelp`**
+hook, `NavTile.onActivate`, and `ConfirmTyped.protectCancel`. Settings is a
+denser, more knob-heavy surface than My Account — expect the
+content/behaviour-axis model ([[project_content_behaviour_axis]]) and the
+economical-with-space stance to matter. The chat (densest surface) still comes
+last. **Pending makeover-wide follow-ons** (fold in when a relevant surface is
+touched): PageBar crumb tap-target <44px + `:focus-visible` rings; a shared
+focus-trap for ReadingOverlay/ConfirmDialog (spec §12); the `.cs-btn`
+`:hover`/`:focus-visible` a11y states. **Start fresh after Chris's `/clear`.**
 
 *Out of alpha scope:* **Projects feature REMOVED** (deferred to after the backend
 — needs Chris's project-oriented-memory mental model + new IA; it is a navigation
