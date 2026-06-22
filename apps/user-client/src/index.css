@@ -4662,6 +4662,120 @@ h1 {
   }
 }
 
+.cs-transition-stage {
+  position: relative;
+}
+.cs-exit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* ── NavTile primitive (navigation plane) ───────────────────────────── */
+.cs-navtile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--cs-navtile-hue) 42%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cs-navtile-hue) 10%, transparent),
+    color-mix(in srgb, var(--cs-navtile-hue) 2%, transparent)
+  );
+  box-shadow: 0 0 18px color-mix(in srgb, var(--cs-navtile-hue) 12%, transparent);
+  color: var(--color-paper);
+  cursor: pointer;
+  text-align: left;
+  transition: filter 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.cs-navtile[data-colour="pink"] {
+  --cs-navtile-hue: var(--color-nav-pink);
+}
+.cs-navtile[data-colour="green"] {
+  --cs-navtile-hue: var(--color-nav-green);
+}
+.cs-navtile[data-colour="blue"] {
+  --cs-navtile-hue: var(--color-nav-blue);
+}
+.cs-navtile[data-colour="purple"] {
+  --cs-navtile-hue: var(--color-nav-purple);
+}
+.cs-navtile[data-colour="pink"] .cs-navtile-icon {
+  color: var(--color-nav-pink-icon);
+}
+.cs-navtile[data-colour="green"] .cs-navtile-icon {
+  color: var(--color-nav-green-icon);
+}
+.cs-navtile[data-colour="blue"] .cs-navtile-icon {
+  color: var(--color-nav-blue-icon);
+}
+/* Purple has no -icon token (spec §2.3 gives it light/dark, not accent/icon); the light accent doubles as the icon tint. */
+.cs-navtile[data-colour="purple"] .cs-navtile-icon {
+  color: var(--color-nav-purple);
+}
+.cs-navtile:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--cs-navtile-hue) 20%, transparent);
+}
+.cs-navtile[data-gold="true"] {
+  --cs-navtile-hue: var(--color-gold);
+  border-color: color-mix(in srgb, var(--color-gold) 55%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-gold) 22%, transparent);
+}
+.cs-navtile[data-gold="true"] .cs-navtile-icon {
+  color: var(--color-gold-hi);
+}
+.cs-navtile[data-wide="true"] {
+  grid-column: 1 / -1;
+}
+.cs-navtile[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cs-navtile[aria-disabled="true"]:hover {
+  filter: none;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--cs-navtile-hue) 12%, transparent);
+}
+.cs-navtile-label {
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+.cs-navtile-meta {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-paper-soft);
+}
+/* Static shell — used by SetupCard, whose actions live on inner buttons, not
+   on the container itself (so the container neither invites a tap nor hovers). */
+.cs-navtile[data-static="true"] {
+  cursor: default;
+}
+.cs-navtile[data-static="true"]:hover {
+  filter: none;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-gold) 22%, transparent);
+}
+.cs-setup-step {
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-paper);
+  background: none;
+  border: none;
+  padding: 4px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.cs-setup-step:hover,
+.cs-setup-step:focus-visible {
+  color: var(--color-gold-hi);
+}
+
 /* ── Button primitive (action plane) ─────────────────────────────────── */
 .cs-btn {
   font-family: var(--font-sans);

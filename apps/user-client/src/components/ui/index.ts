@@ -6,3 +6,4 @@ export { OverflowMenu, type OverflowMenuProps, type OverflowItem } from './Overf
 export { ListRow, type ListRowProps } from './ListRow.js';
 export { ListScaffold, type ListScaffoldProps } from './ListScaffold.js';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog.js';
+export { NavTile, type NavTileProps, type NavTileColour } from './NavTile.js';

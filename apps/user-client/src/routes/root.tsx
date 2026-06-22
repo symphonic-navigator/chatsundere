@@ -1,10 +1,11 @@
 import { useSessionStore } from '@chatsundere/ui-shared';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';
 import { BackgroundStreamBadge } from '../components/BackgroundStreamBadge.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
+import NavTransitionOutlet from '../components/NavTransitionOutlet.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
 import { Toast } from '../components/Toast.js';
@@ -167,7 +168,7 @@ export function Root() {
           </div>
         )}
         <main className="mx-auto w-full max-w-[420px] px-6 pb-12 lg:max-w-[640px]">
-          <Outlet />
+          <NavTransitionOutlet />
         </main>
         <SplashOverlay />
         <Toast />

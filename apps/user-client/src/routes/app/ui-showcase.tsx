@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { FolderKanban, Gem, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Badge } from '../../components/ui/Badge.js';
 import { Button } from '../../components/ui/Button.js';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog.js';
 import { ListRow } from '../../components/ui/ListRow.js';
 import { ListScaffold } from '../../components/ui/ListScaffold.js';
+import { NavTile } from '../../components/ui/NavTile.js';
 import { Pill } from '../../components/ui/Pill.js';
 
 /**
@@ -72,6 +74,34 @@ export function UiShowcase(): JSX.Element {
           <Button ref={deleteTrigger} tone="destructive" onClick={() => setDeleteOpen(true)}>
             Open delete dialog
           </Button>
+        </div>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="mb-2">Navigation tiles</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <NavTile
+            colour="pink"
+            icon={Users}
+            label="My Circle"
+            meta="7 personas"
+            to="/app/circle"
+          />
+          <NavTile
+            colour="green"
+            icon={FolderKanban}
+            label="Projects"
+            meta="3 active"
+            to="/app/projects"
+          />
+          <NavTile colour="pink" icon={Gem} label="Continue" gold wide to="/app/chat" />
+          <NavTile
+            colour="purple"
+            icon={Users}
+            label="Archive"
+            disabled
+            disabledReason="Coming after the alpha"
+          />
         </div>
       </section>
 

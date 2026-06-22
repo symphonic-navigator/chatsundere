@@ -1,7 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  BookOpen,
+  Clock,
+  FolderKanban,
+  Gem,
+  Plug,
+  SlidersHorizontal,
+  Sparkles,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { SetupCard, type SetupStep } from '../../components/SetupCard.js';
+import { NavTile } from '../../components/ui/NavTile.js';
 import { useAllArtefactCount } from '../../data/artefacts.js';
 import { useChats } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
@@ -12,50 +24,8 @@ import { useDisplayName, useSettings } from '../../data/settings.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
-interface RoomTileProps {
-  label: string;
-  icon: string;
-  meta: string;
-  to?: string;
-  disabled?: boolean;
-  tooltip?: string;
-}
-
-function RoomTile({ label, icon, meta, to, disabled, tooltip }: RoomTileProps) {
-  const navigate = useNavigate();
-  const interactive = !disabled && Boolean(to);
-  // Non-null assertion suppressed: `to` is guaranteed non-undefined when `interactive` is true.
-  // biome-ignore lint/style/noNonNullAssertion: to is defined whenever interactive is true
-  const handleActivate = interactive ? () => navigate(to!) : undefined;
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: spec requires div+role for disabled-stub tap targets — native disabled buttons are not tappable
-    <div
-      role="button"
-      aria-disabled={disabled ? 'true' : undefined}
-      tabIndex={interactive ? 0 : undefined}
-      title={tooltip}
-      onClick={handleActivate}
-      onKeyDown={
-        handleActivate
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') handleActivate();
-            }
-          : undefined
-      }
-      className={`flex flex-col gap-1 rounded-lg border border-white/5 bg-white/[0.02] p-4 ${
-        interactive ? 'cursor-pointer hover:bg-white/[0.04]' : 'opacity-40'
-      }`}
-    >
-      <div className="text-lg text-paper-soft">{icon}</div>
-      <div className="font-display text-sm text-paper">{label}</div>
-      <div className="text-[11px] uppercase tracking-widest text-paper-soft">{meta}</div>
-    </div>
-  );
-}
-
-/** Landing surface for /app — greeting, optional continue-card, and eight room tiles. */
+/** Landing surface for /app — greeting, optional continue-card, and eight room tiles in the fixed ascension order. */
 export function EntranceHall(): JSX.Element {
-  const navigate = useNavigate();
   const displayName = useDisplayName();
   const settings = useSettings();
   const personas = useFilteredPersonas();
@@ -81,8 +51,15 @@ export function EntranceHall(): JSX.Element {
     : undefined;
   const personaCount = personas.data?.length ?? 0;
   const providerCount = (providers.data ?? []).filter((p) => p.enabled).length;
+
+  const setupSteps: SetupStep[] = [];
+  if (providerCount === 0) setupSteps.push({ label: 'Connect a provider', to: '/app/settings' });
+  if (personaCount === 0)
+    setupSteps.push({ label: 'Create your first companion', to: '/app/persona/new' });
+  const needsSetup = setupSteps.length > 0;
   const artefactCount = useAllArtefactCount().data ?? 0;
   const libraryCount = useFilteredLibraries().data?.length ?? 0;
+
   return (
     <section className="flex min-h-[80dvh] flex-col gap-6 px-4 pb-12 pt-6">
       <div className="text-center">
@@ -95,54 +72,85 @@ export function EntranceHall(): JSX.Element {
         </div>
       </div>
 
-      {recentChat && recentPersona ? (
-        <button
-          type="button"
-          className="rounded-2xl border border-paper-soft/30 bg-white/[0.04] p-4 text-left"
-          onClick={() => navigate(`/app/chat/${recentChat.id}`)}
-        >
-          <div className="text-[10px] uppercase tracking-widest text-paper-soft">Continue chat</div>
-          <div className="mt-1 font-display text-lg" style={{ color: recentPersona.colour }}>
-            {recentChat.title ?? recentPersona.name}
-          </div>
-        </button>
-      ) : null}
-
       <div className="grid grid-cols-2 gap-3">
-        <RoomTile label="My Circle" icon="✦" meta={`${personaCount} personas`} to="/app/circle" />
-        <RoomTile
-          label="My Projects"
-          icon="◇"
-          meta="Coming with Block 2+"
-          disabled
-          tooltip="Coming with Block 2+"
+        {/* Crown — Setup card wins over Continue (spec §3.2) */}
+        {needsSetup ? (
+          <SetupCard steps={setupSteps} />
+        ) : recentChat && recentPersona ? (
+          <NavTile colour="pink" gold wide to={`/app/chat/${recentChat.id}`} label="Continue">
+            <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-paper-soft">
+              <Sparkles size={11} aria-hidden="true" /> Continue
+            </span>
+            <span className="cs-navtile-label" style={{ color: recentPersona.colour }}>
+              {recentChat.title ?? recentPersona.name}
+            </span>
+          </NavTile>
+        ) : null}
+
+        {/* 🩷 Relate */}
+        <NavTile
+          colour="pink"
+          icon={Users}
+          label="My Circle"
+          to="/app/circle"
+          meta={personaCount === 0 ? 'no companions yet' : `${personaCount} personas`}
         />
-        <RoomTile
+        <NavTile
+          colour="pink"
+          icon={Clock}
           label="My History"
-          icon="◯"
-          meta={`${chats.data?.length ?? 0} chats`}
           to="/app/history"
+          meta={(chats.data?.length ?? 0) === 0 ? 'no chats yet' : `${chats.data?.length} chats`}
         />
-        <RoomTile
+
+        {/* 🟢 Treasure */}
+        <NavTile
+          colour="green"
+          icon={Gem}
           label="My Treasury"
-          icon="⬡"
-          meta={artefactCount === 0 ? 'empty' : `${artefactCount} artefacts`}
           to="/app/treasury"
+          meta={artefactCount === 0 ? 'empty' : `${artefactCount} artefacts`}
         />
-        <RoomTile
+        <NavTile
+          colour="green"
+          icon={FolderKanban}
+          label="My Projects"
+          disabled
+          disabledReason="Coming after the alpha"
+          meta="coming after the alpha"
+        />
+
+        {/* 🔵 Nourish */}
+        <NavTile
+          colour="blue"
+          icon={BookOpen}
           label="My Knowledge"
-          icon="❖"
-          meta={libraryCount === 0 ? 'empty' : `${libraryCount} libraries`}
           to="/app/knowledge"
+          meta={libraryCount === 0 ? 'empty' : `${libraryCount} libraries`}
         />
-        <RoomTile label="My Integrations" icon="⊞" meta="MCP servers" to="/app/integrations" />
-        <RoomTile
+        <NavTile
+          colour="blue"
+          icon={Plug}
+          label="My Integrations"
+          to="/app/integrations"
+          meta="MCP servers"
+        />
+
+        {/* 🟣 Root */}
+        <NavTile
+          colour="purple"
+          icon={SlidersHorizontal}
           label="My Settings"
-          icon="⚙"
-          meta={`${providerCount} providers connected`}
           to="/app/settings"
+          meta={providerCount === 0 ? 'no providers yet' : `${providerCount} providers connected`}
         />
-        <RoomTile label="My Account" icon="⌬" meta="Identity & auth" to="/app/account" />
+        <NavTile
+          colour="purple"
+          icon={UserRound}
+          label="My Account"
+          to="/app/account"
+          meta="identity & auth"
+        />
       </div>
 
       <footer className="mt-auto pt-6 text-center text-[10px] uppercase tracking-widest text-paper-soft/40">

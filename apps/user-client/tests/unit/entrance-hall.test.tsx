@@ -102,6 +102,22 @@ describe('EntranceHall', () => {
     const db = getClientDataDb();
     const now = Date.now();
     const aurum = await db.mindspaces.where('displayName').equals('Aurum').first();
+    // A provider must exist so the Setup card does not win the Crown slot.
+    await db.providers.add({
+      id: 'pv',
+      templateId: 'test-provider',
+      displayName: 'Test Provider',
+      baseUrl: 'https://example.com',
+      apiKey: {
+        version: 1,
+        ciphertext: new Uint8Array(),
+        nonce: new Uint8Array(),
+      } as unknown as import('../../src/lib/secrets.js').EncryptedBlob,
+      routing: { kind: 'direct' },
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
     await db.personas.add({
       id: 'p1',
       name: 'Aurum',
@@ -144,7 +160,8 @@ describe('EntranceHall', () => {
     });
     wrap('/app');
     await waitFor(() => {
-      expect(screen.getByText(/continue chat/i)).toBeInTheDocument();
+      // The Crown card renders a "Continue" span and the chat title beneath it.
+      expect(screen.getByText(/^continue$/i)).toBeInTheDocument();
     });
   });
 
