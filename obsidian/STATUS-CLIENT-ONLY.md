@@ -8,7 +8,38 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-25 — **MY SETTINGS (+ PICKER COMPONENTS) SQUASHED TO
+**Last updated:** 2026-06-25 — **MCP LOCAL-NETWORK ROUTING SQUASHED TO MASTER
+(`5441b95f`). NOT pushed (Chris pushes); awaiting Chris's device-verify.**
+A per-server, opt-in **"Local network (must support CORS)"** toggle (off by
+default) lets the client connect to a self-hosted LAN MCP server **directly**
+instead of via the global CORS proxy. The transport already supported `direct`
+vs `proxy`; this adds the deliberate, safe-default user control. A new
+`allowDirect` **intent** field on `McpServerRow` is kept separate from the
+test-**outcome** `routing` field; `buildCandidates` gates the probe order on
+intent (**off → proxy-only**, empty when no proxy; **on → direct-first then
+proxy**). The **send-time path** (`resolve-active`/`build-mcp-context`/
+`mcp-tools`/`mcp-client`) is untouched — it consumes only the resolved
+`routing`, so intent never leaks past probe time (opus review verified this
+separation is load-bearing: a server can't route direct unless a test under
+`allowDirect=true` set it). **Dexie v30** migration backfills `allowDirect` from
+`routing === 'direct'` (existing direct-resolved servers keep working); the
+backfill is covered by a plant-v29-rows upgrade test. The sheet toggle **resets
+the server to untested** on flip with a calm "Routing changed — re-test"
+cue; a **constructive error** names both ways forward when proxy-less +
+direct-off, and the list status reads **"Needs proxy or Local network"** rather
+than a bare "Not tested". Built spec→plan→**subagent-driven** (3 tasks +
+backfill-test, per-task spec+quality review). **Laura** pre-squash: **no hard
+defects**; all **4 UX softs folded** (unified Connected-phrasing, re-test cue,
+list two-paths status, plain-English CORS tooltip). Client-only (**not a Larissa
+path**). Gates: `pnpm typecheck --force` **14/14** (0 cached) on master
+post-squash; full user-client vitest **2007 pass / 8 Node-localStorage
+baseline**. Specs/plans:
+[[../superpowers/specs/2026-06-25-mcp-local-network-routing-design]],
+[[../superpowers/plans/2026-06-25-mcp-local-network-routing]]. **Next:** Chris
+device-verifies the toggle (LAN-direct + proxy fallback + migration), then the
+next makeover sub-pages.
+
+**Earlier (2026-06-25) — MY SETTINGS (+ PICKER COMPONENTS) SQUASHED TO
 MASTER (`ad873413`), device-verified by Chris ("funktioniert SUPER!!"). NOT
 pushed (Chris pushes).**
 The fourth makeover surface. One squash bundling the reusable **picker family**
