@@ -299,14 +299,18 @@ structural block. Decision: accept the depth.
   verwendete Funktion, die thematisch am besten dort hinpasst, hat fast was
   Destruktives; passt, solange der User nicht zufällig drüberstolpert").
 
-## 2026-06-25 — My Integrations: two soft notes (Laura spec-pass)
+## 2026-06-25 — My Integrations: SOFT-2 deferred (SOFT-3 promoted to in-scope)
 
 Raised at Laura's spec-pass of the My Integrations makeover slice
 ([[../../superpowers/specs/2026-06-25-my-integrations-makeover-design]]). The pass
-found **no hard defects**; SOFT-1 (name the badge axis) and SOFT-4 (author the help
-body) were folded into the spec, not deferred. These two are the remaining notes —
-both soft-tier; Laura flagged SOFT-2 as "considered hard, defaulting to soft" and
-explicitly asked for a conscious logged line rather than a silent absorb.
+found **no hard defects**. SOFT-1 (name the badge axis) and SOFT-4 (author the help
+body) were folded into the spec, not deferred. **SOFT-3 (silently discarded unsaved
+changes) is NOT deferred** — Chris promoted it to in-scope (2026-06-25): built as the
+shared `PageScaffold`/`PageBar` dirty-guard (passive `● Unsaved` indicator +
+discard-confirm on leave), applied to the Integrations detail page and retrofitted to
+the AI Providers detail page (spec §4.5). Only **SOFT-2** remains deferred; Laura
+flagged it as "considered hard, defaulting to soft" and asked for a conscious logged
+line rather than a silent absorb.
 
 1. **"On by default" moves from one inline tap to enter→toggle→Save→back.**
    - Surface: the MCP server list row (`/app/integrations`) — today's inline
@@ -326,25 +330,5 @@ explicitly asked for a conscious logged line rather than a silent absorb.
      cost lands on an infrequent action.
    - Follow-up commitment: re-evaluate at the v0.1.0 release cut if alpha testers
      report friction setting per-server defaults; otherwise the depth stands.
-   - Chris sign-off: pending his spec review (2026-06-25); listed for the
-     release-cut trail.
-
-2. **A toggled default is silently discarded if the user leaves the detail page
-   without Save.**
-   - Surface: `IntegrationServerPage` (`/app/integrations/:serverId`) — `onByDefault`
-     is local state until the explicit Save; leaving via breadcrumb/back loses an
-     unsaved flip, and the list badge keeps the old value.
-   - Finding: a control that *used* to auto-save now does not — sharper astonishment
-     than elsewhere, though the provider detail page already discards a typed key on
-     back the same way.
-   - Mode: spec-pass.
-   - Criterion: least astonishment / constructive-error (preserve input).
-   - Rationale for deferral: this is the established makeover **detail-page**
-     property, not a regression unique to this slice. Whether the makeover adopts a
-     shared dirty-on-back cue for detail pages (the picker overlays already guard) is
-     a makeover-wide, Chris-arbitrated pattern question — out of this slice's scope;
-     adding it here alone would create inconsistency.
-   - Follow-up commitment: fold into the makeover-wide dirty-guard decision if Chris
-     wants one; otherwise revisit at the design-language pass.
-   - Chris sign-off: pending (makeover-wide arbitration); listed for the release-cut
-     trail.
+   - Chris sign-off: ✅ Chris, 2026-06-25 — accepted the deferral at spec review
+     (set-once default seed; live lever is the per-persona override section).
