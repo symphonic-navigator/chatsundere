@@ -260,7 +260,7 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
 
   return (
     <PageScaffold
-      crumbs={[CRUMB_ROOT, { label: existing ? existing.name : 'Add server' }]}
+      crumbs={[CRUMB_ROOT, { label: existing ? existing.name : 'Add MCP server' }]}
       back="/app/integrations"
       onHelp={onHelp}
       dirty={dirty}
