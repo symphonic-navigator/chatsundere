@@ -21,6 +21,13 @@ import { KnowledgeList } from './routes/app/knowledge.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
 import { PersonaMemory } from './routes/app/persona-memory.js';
 import { Settings as MySettings } from './routes/app/settings.js';
+import { SettingsExpertPage } from './routes/app/settings/expert.js';
+import { SettingsImagesPage } from './routes/app/settings/images.js';
+import { SettingsProviderPage } from './routes/app/settings/provider.js';
+import { SettingsProvidersPage } from './routes/app/settings/providers.js';
+import { SettingsVoicePage } from './routes/app/settings/voice.js';
+import { SettingsWebPage } from './routes/app/settings/web.js';
+import { SettingsYouPage } from './routes/app/settings/you.js';
 import { Treasury } from './routes/app/treasury.js';
 import { UiShowcase } from './routes/app/ui-showcase.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
@@ -114,6 +121,16 @@ export function App() {
                   <Route path="/app/knowledge/:libraryId" element={<KnowledgeLibrary />} />
                   <Route path="/app/integrations" element={<Integrations />} />
                   <Route path="/app/settings" element={<MySettings />} />
+                  <Route path="/app/settings/you" element={<SettingsYouPage />} />
+                  <Route path="/app/settings/providers" element={<SettingsProvidersPage />} />
+                  <Route
+                    path="/app/settings/providers/:templateId"
+                    element={<SettingsProviderPage />}
+                  />
+                  <Route path="/app/settings/web" element={<SettingsWebPage />} />
+                  <Route path="/app/settings/voice" element={<SettingsVoicePage />} />
+                  <Route path="/app/settings/images" element={<SettingsImagesPage />} />
+                  <Route path="/app/settings/expert" element={<SettingsExpertPage />} />
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/app/account/biometric" element={<BiometricPage />} />
                   <Route path="/app/account/recovery" element={<RecoveryKeyPage />} />

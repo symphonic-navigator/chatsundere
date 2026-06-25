@@ -2504,6 +2504,11 @@ h1 {
   text-transform: uppercase;
   color: var(--color-aurora-200);
 }
+.web-stale-note {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-danger, #ff8a8a);
+}
 
 /* ===== Lightbox overlay ===== */
 
@@ -5232,6 +5237,71 @@ h1 {
   color: var(--color-gold-hi);
 }
 
+/* ── PickerOverlay shell primitive (spec §2) ────────────────────────── */
+.cs-picker-root {
+  position: fixed;
+  inset: 0;
+  /* The nested ConfirmDialog (.cs-dialog-root, z-index 60) renders INSIDE this
+   * element and therefore inherits its stacking context — do not "fix" the
+   * z-index values or the confirm will incorrectly layer behind the panel. */
+  z-index: 100;
+}
+.cs-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.cs-picker-panel {
+  position: absolute;
+  inset: 5vh 4vw; /* margin all around — never full-bleed */
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--color-gold) 28%, transparent);
+  background: radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--color-nav-purple) 16%, transparent),
+      transparent
+    ), color-mix(in srgb, var(--color-ink) 92%, black);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.cs-picker-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+  color: color-mix(in srgb, var(--color-paper) 96%, white);
+}
+.cs-picker-titlebar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+.cs-picker-back {
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--color-paper-soft, #b9b4c7);
+  padding: 0.25rem 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  text-align: left;
+}
+.cs-picker-title {
+  text-align: center;
+  font-family: var(--font-display, serif);
+  font-size: 0.95rem;
+  color: var(--color-paper, #efeaf7);
+}
+.cs-picker-save-spacer {
+  display: inline-block;
+  min-width: 44px;
+}
+
 /* ── ConfirmDialog primitive (uniform confirmation) ──────────────────── */
 .cs-dialog-root {
   position: fixed;
@@ -5282,4 +5352,45 @@ h1 {
 .cs-dialog-actions > .cs-btn {
   flex: 1;
   padding: 10px;
+}
+
+/* ── PickerField primitive (generic labelled trigger row) ─────────────── */
+.cs-picker-field {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(255 255 255 / 0.02);
+}
+.cs-picker-field:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.04);
+}
+.cs-picker-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cs-picker-field[data-stale="true"] {
+  border-color: rgb(255 90 90 / 0.3);
+  background: rgb(255 90 90 / 0.04);
+}
+.cs-picker-field-label {
+  font-family: var(--font-display, serif);
+  font-size: 0.85rem;
+  color: var(--color-paper-soft, #b9b4c7);
+}
+.cs-picker-field-value {
+  font-size: 0.85rem;
+  color: var(--color-paper, #efeaf7);
+  text-align: right;
+}
+.cs-picker-field-stale {
+  color: var(--color-danger, #ff8a8a);
+}
+.cs-picker-field-chevron {
+  color: var(--color-paper-soft, #b9b4c7);
 }

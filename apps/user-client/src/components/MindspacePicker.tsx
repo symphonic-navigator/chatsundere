@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import type { MindspaceRow, MindspaceTexture } from '../boot/client-data-db.js';
 import { MindspaceTexture as MindspaceTextureComponent } from './MindspaceTexture.js';
 
-type Font = 'sans' | 'serif' | 'cursive';
+export type Font = 'sans' | 'serif' | 'cursive';
 
 interface Props {
   mindspaces: ReadonlyArray<MindspaceRow>;
