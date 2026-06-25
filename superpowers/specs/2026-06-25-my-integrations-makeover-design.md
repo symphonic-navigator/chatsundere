@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-25
 - **Author:** Liz (with Chris)
-- **Status:** Chris-approved (brainstorm); **Laura spec-pass complete — no hard defects.** SOFT-1 (name the badge axis) and SOFT-4 (author the help body) folded in (§3); the Test disable-over-error nit folded (§4.2). **SOFT-3 promoted by Chris to in-scope** — a shared dirty-guard (passive `● Unsaved` indicator + discard-confirm) in `PageScaffold`/`PageBar`, applied here and retrofitted to the AI Providers detail page (§4.5). SOFT-2 (one-tap→drill-in for the default) consciously deferred with Chris sign-off (§8.1, `ux-deferrals.md`). → user review → implementation plan
+- **Status:** Chris-approved (brainstorm); **Laura spec-pass complete — no hard defects.** SOFT-1 (name the badge axis) and SOFT-4 (author the help body) folded in (§3); the Test disable-over-error nit folded (§4.2). **SOFT-3 promoted by Chris to in-scope** — a shared dirty-guard (passive `● Unsaved` indicator + discard-confirm) in `PageScaffold`/`PageBar`, applied here and retrofitted to the AI Providers detail page (§4.5). SOFT-2 (one-tap→drill-in for the default) consciously deferred with Chris sign-off (§8.1, `ux-deferrals.md`). **IMPLEMENTED & squashed to master `c10f4785` (2026-06-25); Laura pre-squash clean; opus whole-branch merge-ready. NOT pushed (Chris pushes).**
 - **Scope:** Rebuild `/app/integrations` (MCP servers) in the design language as a two-tier **list → detail** surface, mirroring the AI Providers tree. Replaces the pre-makeover `EditorSticky`/`AccordionCard` list and the bottom-sheet `McpServerSheet` overlay. The MCP **logic** (probe, key-sealing, local-network routing, tool curation) is ported **verbatim**; only the chrome and the add/edit/delete IA change. This is the **My Integrations** slice of the UI/UX makeover, after the Main Menu, My Account, and My Settings slices.
 
 ---
@@ -114,7 +114,7 @@ Today a detail page (provider, and now this one) discards unsaved input silently
 **Two complementary cues (Chris: "beides"):**
 
 1. **Passive "Unsaved" indicator** — a calm read-only marker (a `Badge`, e.g. `● Unsaved`) shown next to the Save button on the detail page whenever the form is dirty. A *tell*, never a control. Lives in the detail page (next to Save), driven by the page's `dirty` boolean.
-2. **Discard-confirm on leave** — when the form is dirty and the user activates the PageBar `‹` back or an ancestor crumb, a `ConfirmDialog` intercepts: title *"Discard unsaved changes?"*, body *"Your edits to this server haven't been saved."*, `Discard` (destructive) / `Keep editing`. Discard navigates to the intended target; Keep editing dismisses and stays. This is the established discard-guard idiom (the old `EditorTopbar`, the `PickerOverlay`).
+2. **Discard-confirm on leave** — when the form is dirty and the user activates the PageBar `‹` back or an ancestor crumb, a `ConfirmDialog` intercepts: title *"Discard unsaved changes?"*, body *"Your changes haven't been saved yet."* (a **generic** body — the dialog lives in shared `PageScaffold` chrome serving both detail pages, so it cannot carry server-specific copy), `Discard` (destructive) / `Keep editing`. Discard navigates to the intended target; Keep editing dismisses and stays. This is the established discard-guard idiom (the old `EditorTopbar`, the `PickerOverlay`).
 
 **Mechanism (shared, backward-compatible):**
 

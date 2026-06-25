@@ -8,7 +8,46 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-25 — **MCP LOCAL-NETWORK ROUTING SQUASHED TO MASTER
+**Last updated:** 2026-06-25 — **MY INTEGRATIONS REBUILT IN THE DESIGN
+LANGUAGE, SQUASHED TO MASTER (`c10f4785`). NOT pushed (Chris pushes);
+awaiting Chris's device-verify.**
+The fifth makeover surface. `/app/integrations` (MCP servers) goes from the
+pre-makeover `EditorSticky`+`AccordionCard` list + bottom-sheet `McpServerSheet`
+overlay to the makeover **list → detail page tree**, mirroring AI Providers. The
+MCP logic (probe, local-network `allowDirect` routing, key-sealing, tool
+curation) is **ported verbatim**; only chrome + the add/edit/delete IA change.
+**List** (`PageScaffold`): egress note kept 1:1, **pure-navigation rows** with a
+read-only **`Default: On/Off`** badge (the per-row inline toggle moved into the
+detail page — Chris's call for a quieter list), empty state, `+ Add` → `/new`.
+**Detail** (`IntegrationServerPage`, `/new` + `/:serverId`): an **outer shell**
+loads the row + guards the unknown-id case, an **inner form** seeds its fields
+from the loaded row — a deliberate split that **closes the My-Account async-seed
+blank-form class**. Explicit **Test + Save** (the makeover's sealed-key/probe
+exception), delete via `ConfirmDialog`, calm unknown-`serverId` notice. **New
+shared opt-in dirty-guard** on `PageScaffold`/`PageBar` (passive **`● Unsaved`**
+badge + **discard-confirm** when leaving via back/crumbs with unsaved changes),
+**adopted here and retrofitted to the AI Providers detail page**;
+backward-compatible (every page without `dirty` is byte-identical). Authored the
+`integrations` `?`-help; retired `McpServerSheet` + `McpServersSection`. **No
+Dexie/schema change.** Built spec→plan→**subagent-driven** (6 tasks, per-task
+spec+quality review). **Laura** spec-pass **and** pre-squash: **no hard
+defects** (SOFT-1 named-badge-axis + SOFT-4 authored-help folded; **SOFT-3
+promoted to the dirty-guard feature**; SOFT-2 deferred w/ Chris sign-off). Two
+pre-squash softs are **Chris-arbitrated copy calls** still open: the generic
+discard-body wording (correct for shared chrome) + the add-crumb "Add server"
+vs the "Add MCP server" button label. **opus** whole-branch review:
+**merge-ready** (4 advisory Minors, all intentional/pre-existing — incl. a
+cosmetic double-`useHelp` in the detail outer/inner). Not a Larissa path
+(client-only; crypto consumed via verbatim port, no `packages/crypto` change).
+Gates: `pnpm typecheck --force` **14/14** (0 cached) on master post-squash; full
+user-client vitest **2022 pass / 8 Node-localStorage baseline**; production
+build clean. Specs/plans:
+[[../superpowers/specs/2026-06-25-my-integrations-makeover-design]],
+[[../superpowers/plans/2026-06-25-my-integrations]]. Branch
+`feat/my-integrations` kept until Chris pushes. **Next:** Chris device-verifies,
+then the next makeover sub-pages (the chat is the densest surface — comes last).
+
+**Earlier (2026-06-25) — MCP LOCAL-NETWORK ROUTING SQUASHED TO MASTER
 (`5441b95f`). NOT pushed (Chris pushes); awaiting Chris's device-verify.**
 A per-server, opt-in **"Local network (must support CORS)"** toggle (off by
 default) lets the client connect to a self-hosted LAN MCP server **directly**
