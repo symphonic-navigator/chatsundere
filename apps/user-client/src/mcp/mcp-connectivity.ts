@@ -8,11 +8,25 @@ import type {
   McpRouting,
 } from './types.js';
 
-/** Build the ordered probe candidates: direct (bare, +/mcp) then proxy (bare, +/mcp). */
-export function buildCandidates(url: string, hasProxy: boolean): McpCandidate[] {
+/**
+ * Build the ordered probe candidates. `allowDirect` is the user's intent:
+ * when false, only proxy candidates are produced (the client never probes the
+ * network directly); when true, direct is tried first, then proxy as fallback.
+ */
+export function buildCandidates(
+  url: string,
+  hasProxy: boolean,
+  allowDirect: boolean,
+): McpCandidate[] {
   const trimmed = url.replace(/\/+$/, '');
   const variants = trimmed.endsWith('/mcp') ? [trimmed] : [trimmed, `${trimmed}/mcp`];
-  const routings: McpRouting[] = hasProxy ? ['direct', 'proxy'] : ['direct'];
+  const routings: McpRouting[] = allowDirect
+    ? hasProxy
+      ? ['direct', 'proxy']
+      : ['direct']
+    : hasProxy
+      ? ['proxy']
+      : [];
   return routings.flatMap((routing) => variants.map((u) => ({ routing, url: u })));
 }
 
@@ -63,11 +77,12 @@ export function liveProbe(
 export async function testMcpConnection(input: {
   url: string;
   hasProxy: boolean;
+  allowDirect: boolean;
   corsProxy: { url: string; key: string } | null;
   auth: McpAuthResolved | null;
 }): Promise<McpConnectionResult> {
   return resolveConnection(
-    buildCandidates(input.url, input.hasProxy),
+    buildCandidates(input.url, input.hasProxy, input.allowDirect),
     liveProbe(input.corsProxy, input.auth),
   );
 }

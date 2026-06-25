@@ -9,7 +9,11 @@ import { McpServerSheet } from './McpServerSheet.js';
 /** Row status string, mirroring the provider-row status convention. */
 function statusOf(row: McpServerRow, hasProxy: boolean): string {
   if (!row.enabled) return '✗ Disabled';
-  if (row.routing === null) return '✗ Not tested';
+  if (row.routing === null) {
+    // Proxy-only intent with no proxy configured: name both ways forward, not a dead end.
+    if (!row.allowDirect && !hasProxy) return '✗ Needs proxy or Local network';
+    return '✗ Not tested';
+  }
   if (row.routing === 'proxy' && !hasProxy) return '✗ Needs proxy';
   if (row.lastError) return `✗ ${row.lastError}`;
   return row.routing === 'proxy' ? '● Connected (via proxy)' : '● Connected (direct)';

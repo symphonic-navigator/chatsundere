@@ -5,7 +5,7 @@ import type { McpCandidate, McpProbeResult } from '../../src/mcp/types.js';
 
 describe('buildCandidates', () => {
   it('direct first (bare then +/mcp), then proxy variants when a proxy exists', () => {
-    expect(buildCandidates('https://x.io/api', true)).toEqual([
+    expect(buildCandidates('https://x.io/api', true, true)).toEqual([
       { routing: 'direct', url: 'https://x.io/api' },
       { routing: 'direct', url: 'https://x.io/api/mcp' },
       { routing: 'proxy', url: 'https://x.io/api' },
@@ -13,15 +13,38 @@ describe('buildCandidates', () => {
     ]);
   });
   it('omits proxy candidates without a proxy', () => {
-    expect(buildCandidates('https://x.io/api', false)).toEqual([
+    expect(buildCandidates('https://x.io/api', false, true)).toEqual([
       { routing: 'direct', url: 'https://x.io/api' },
       { routing: 'direct', url: 'https://x.io/api/mcp' },
     ]);
   });
   it('does not double-append /mcp when the URL already ends in /mcp', () => {
-    const c = buildCandidates('https://x.io/mcp', false);
+    const c = buildCandidates('https://x.io/mcp', false, true);
     expect(c).toHaveLength(1);
     expect(c[0]).toEqual({ routing: 'direct', url: 'https://x.io/mcp' });
+  });
+});
+
+describe('buildCandidates — allowDirect gating', () => {
+  it('proxy-only when allowDirect is false (proxy configured)', () => {
+    const c = buildCandidates('http://192.168.1.50:9000', true, false);
+    expect(c.every((x) => x.routing === 'proxy')).toBe(true);
+    expect(c.some((x) => x.routing === 'direct')).toBe(false);
+  });
+
+  it('empty when allowDirect is false and no proxy', () => {
+    expect(buildCandidates('http://192.168.1.50:9000', false, false)).toEqual([]);
+  });
+
+  it('direct-first then proxy when allowDirect is true (proxy configured)', () => {
+    const c = buildCandidates('http://192.168.1.50:9000', true, true);
+    expect(c[0]?.routing).toBe('direct');
+    expect(c.some((x) => x.routing === 'proxy')).toBe(true);
+  });
+
+  it('direct-only when allowDirect is true and no proxy', () => {
+    const c = buildCandidates('http://192.168.1.50:9000', false, true);
+    expect(c.every((x) => x.routing === 'direct')).toBe(true);
   });
 });
 

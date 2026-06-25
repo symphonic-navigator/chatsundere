@@ -96,6 +96,8 @@ export interface McpServerRow {
   onByDefault: boolean;
   autoRun: boolean;
   enabled: boolean;
+  /** User intent: may this server be reached directly (CORS required)? Off → proxy-only. */
+  allowDirect: boolean;
   routing: 'direct' | 'proxy' | null;
   resolvedEndpoint: string | null;
   tools: McpToolDefinition[];
@@ -1010,6 +1012,18 @@ class ClientDataDb extends Dexie {
             if (typeof c.compactionToastShown !== 'boolean') c.compactionToastShown = false;
           });
       });
+
+    // Version 30 — MCP local-network routing. mcpServers gain `allowDirect`
+    // (user intent; off → proxy-only). Backfilled from the row's resolved
+    // `routing`: a server already resolved to direct keeps working.
+    this.version(30).upgrade(async (tx) => {
+      await tx
+        .table('mcpServers')
+        .toCollection()
+        .modify((s: Record<string, unknown>) => {
+          if (typeof s.allowDirect !== 'boolean') s.allowDirect = s.routing === 'direct';
+        });
+    });
   }
 }
 

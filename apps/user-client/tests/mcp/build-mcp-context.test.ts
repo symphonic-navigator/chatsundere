@@ -14,6 +14,7 @@ const server = (over: Partial<McpServerRow>): McpServerRow => ({
   },
   onByDefault: true,
   autoRun: false,
+  allowDirect: true,
   enabled: true,
   routing: 'direct',
   resolvedEndpoint: 'https://s/mcp',

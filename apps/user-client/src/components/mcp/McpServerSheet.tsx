@@ -43,6 +43,7 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
   const [keyInput, setKeyInput] = useState('');
   const [onByDefault, setOnByDefault] = useState(existing?.onByDefault ?? false);
   const [autoRun, setAutoRun] = useState(existing?.autoRun ?? false);
+  const [allowDirect, setAllowDirect] = useState(existing?.allowDirect ?? false);
 
   // Test-result state, seeded from the existing row so re-opening shows prior results.
   const [routing, setRouting] = useState<McpServerRow['routing']>(existing?.routing ?? null);
@@ -53,6 +54,8 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
   const [hiddenTools, setHiddenTools] = useState<string[]>(existing?.hiddenTools ?? []);
   const [lastError, setLastError] = useState<string | null>(existing?.lastError ?? null);
   const [lastTestedAt, setLastTestedAt] = useState<number | null>(existing?.lastTestedAt ?? null);
+  // True after a Local-network flip discarded a prior route — prompts a calm re-test cue.
+  const [routingChangedHint, setRoutingChangedHint] = useState(false);
 
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
   const [saving, setSaving] = useState(false);
@@ -90,12 +93,20 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
       return;
     }
     setError(null);
+    setRoutingChangedHint(false);
     setTest({ kind: 'testing' });
     try {
       const sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
       // hasProxy reflects whether the proxy is configured at all, not whether the
       // sealed key is present — matches the status logic in McpServersSection.
       const hasProxy = settings.data?.corsProxy != null;
+      if (!allowDirect && !hasProxy) {
+        setLastError(
+          'No CORS proxy configured. Turn on Local network to connect directly, or add a proxy in AI provider settings.',
+        );
+        setTest({ kind: 'done' });
+        return;
+      }
       const proxyUrl = settings.data?.corsProxy?.url ?? null;
       const decryptedKey =
         hasProxy && sealedShared
@@ -115,7 +126,7 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
               : null;
       const auth = buildAuth(plaintextKey);
 
-      const result = await testMcpConnection({ url, hasProxy, corsProxy, auth });
+      const result = await testMcpConnection({ url, hasProxy, allowDirect, corsProxy, auth });
 
       setRouting(result.routing);
       setResolvedEndpoint(result.resolvedEndpoint);
@@ -127,6 +138,19 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
       setLastError(e instanceof Error ? e.message : String(e));
       setTest({ kind: 'done' });
     }
+  }
+
+  function onToggleAllowDirect() {
+    setAllowDirect((v) => !v);
+    // The resolved route is no longer trustworthy once intent changes — force a re-test.
+    // Surface a calm cue only when an actual prior route is being discarded.
+    setRoutingChangedHint(routing !== null || resolvedEndpoint !== null);
+    setRouting(null);
+    setResolvedEndpoint(null);
+    setTools([]);
+    setLastError(null);
+    setLastTestedAt(null);
+    setTest({ kind: 'idle' });
   }
 
   function toggleHidden(toolName: string) {
@@ -176,6 +200,7 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
         auth,
         onByDefault,
         autoRun,
+        allowDirect,
         enabled: true,
         routing,
         resolvedEndpoint,
@@ -378,6 +403,19 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
             Trusted — run tools without approval
           </label>
 
+          <label
+            className="flex items-center gap-2 text-xs text-paper-soft"
+            title="Your browser connects straight to the server, which must allow direct browser access (CORS)."
+          >
+            <input
+              type="checkbox"
+              checked={allowDirect}
+              onChange={onToggleAllowDirect}
+              aria-label="Local network — connect directly (must support CORS)"
+            />
+            Local network <span className="text-paper-soft/60">(must support CORS)</span>
+          </label>
+
           <button
             type="button"
             onClick={() => void onTest()}
@@ -396,7 +434,13 @@ export function McpServerSheet({ existing, onClose }: Props): JSX.Element {
 
           {test.kind === 'done' && !lastError && routing ? (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-              ● Connected via {routing} · {resolvedEndpoint}
+              ● Connected ({routing === 'proxy' ? 'via proxy' : 'direct'}) · {resolvedEndpoint}
+            </div>
+          ) : null}
+
+          {routingChangedHint && test.kind === 'idle' ? (
+            <div className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] px-3 py-2 text-xs text-paper-soft">
+              Routing changed — re-test the connection.
             </div>
           ) : null}
 
