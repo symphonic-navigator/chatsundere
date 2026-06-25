@@ -8,7 +8,52 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-22 — **MY ACCOUNT & PAGE BAR SQUASHED TO MASTER
+**Last updated:** 2026-06-25 — **MY SETTINGS (+ PICKER COMPONENTS) SQUASHED TO
+MASTER (`ad873413`), device-verified by Chris ("funktioniert SUPER!!"). NOT
+pushed (Chris pushes).**
+The fourth makeover surface. One squash bundling the reusable **picker family**
+(built showcase-first) and the **My Settings** rebuild that consumes it.
+**Picker primitives** (`components/ui/`): `PickerOverlay` (zoom-from-trigger
+shell with focus-trap + dirty discard-guard), `PickerField` (generic value-
+preview trigger), and three content pickers rehoused into the shell —
+`MindspacePickerOverlay` (staged Save), `ModelPickerOverlay` (two-step
+model→provider, no-Save auto-close, call-site-locked `vision` filter),
+`WebPickerOverlay` (search/fetch + expert depth, first-class "Off"). Plus
+`ModelSlotPicker` (PickerField + ModelPickerOverlay + optional clear, resolves
+the friendly model name) and `InlineEditTextarea` (always-save multi-line).
+**My Settings** (`/app/settings`): the old 9-card accordion + SaveBar replaced
+by a `PageScaffold` **3×2 nav-matrix** — 🩷 You · AI Providers, 🔵 Web Access ·
+Voice, 🟣 Images · "Ask an Expert" — over six sub-pages plus a **per-provider
+page** that retires the `ProviderSheet` overlay (its seal/probe/remove logic
+ported **verbatim**, byte-confirmed, with the regression tests carried over).
+**Always-save** throughout (blur persists; the provider key-probe is the lone
+explicit-action exception); **disabled-over-hidden** flips the old hidden Web
+sections into a disabled-with-reason tile naming AI Providers. Labels are
+Chris-tuned ("AI Providers" not "Upstream"; quoted **"Ask an Expert"**; "Web
+Access"; "Reading/Creating images"). Picker fields show the **real current
+selection** (web summary incl. both-off → "Off"; resolved model names). Removed
+the now-dead `WebInterfacingSection` + `ExpertWebSection`. **No Dexie/schema
+change.** Built spec→2 plans→**subagent-driven** (5 picker + 12 settings tasks,
+per-task spec+quality review). The **opus whole-branch review** caught one
+**Important** (the per-provider page dropped the `ProviderSheet` seal/probe
+regression net → ported 4 behavioural tests pinning `probeProvider`'s proxy
+args). **Laura** spec-pass (folded SOFT-1 identity-seam, SOFT-4 blur-flush,
+SOFT-6 name-the-destination) **and** pre-squash pass (no hard defects; the two
+folded softs — duplicate Mindspace label, constructive unknown-provider notice
+— landed). Not a Larissa path (client-only; crypto consumed via verbatim port,
+no `packages/crypto` change). Gates: `pnpm typecheck --force` **14/14** on
+master post-squash; full user-client vitest **2000 pass / 8 Node-localStorage
+baseline**; production build clean. Specs/plans:
+[[../superpowers/specs/2026-06-23-picker-components-design]],
+[[../superpowers/specs/2026-06-25-my-settings-design]],
+[[../superpowers/plans/2026-06-23-picker-components]],
+[[../superpowers/plans/2026-06-25-my-settings]]. **Deferred (design-language
+pass):** picker static-vs-live Save asymmetry (SOFT-5) + Mindspace live-preview;
+PageBar/`.cs-btn`/overlay a11y follow-ons (spec §15). Branch
+`feat/picker-components` kept until Chris pushes. **Next:** a tiny function
+(fresh context), then the next "small" sub-pages of the makeover.
+
+**Earlier (2026-06-22) — MY ACCOUNT & PAGE BAR SQUASHED TO MASTER
 (`355f9bfa`), device-verified by Chris ("großartig, alles da!"). NOT pushed
 (Chris pushes).**
 The second makeover surface after the Entrance Hall. Introduces the reusable
@@ -437,21 +482,27 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block) — next slice: My Settings.** The design
-language, the **main menu**, and **My Account** have all landed (foundations
-`982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`). Next agreed slice is
-**My Settings** (`/app/settings`) — tomorrow, fresh context. It now inherits a
-*much* richer toolkit than My Account did: besides `NavTile` + the bidirectional
-zoom, it has the **Page Bar** (`PageScaffold` with breadcrumbs + `?`-help +
-always-save), the **`ReadingOverlay`** (Markdown reader), the per-page **`useHelp`**
-hook, `NavTile.onActivate`, and `ConfirmTyped.protectCancel`. Settings is a
-denser, more knob-heavy surface than My Account — expect the
-content/behaviour-axis model ([[project_content_behaviour_axis]]) and the
-economical-with-space stance to matter. The chat (densest surface) still comes
-last. **Pending makeover-wide follow-ons** (fold in when a relevant surface is
-touched): PageBar crumb tap-target <44px + `:focus-visible` rings; a shared
-focus-trap for ReadingOverlay/ConfirmDialog (spec §12); the `.cs-btn`
-`:hover`/`:focus-visible` a11y states. **Start fresh after Chris's `/clear`.**
+**→ UI/UX makeover (the big block).** The design language, **main menu**, **My
+Account**, and now **My Settings (+ picker components)** have all landed
+(foundations `982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My
+Settings `ad873413`). **Two things agreed next, in order:**
+
+1. **A tiny function first** (fresh context) — Chris has "something really
+   small" to slot in before the next makeover slices. Do that first.
+2. **The next "small" sub-pages** of the makeover. The settings sub-page
+   pattern is now proven and reusable: `PageScaffold` + `NavTile` matrix +
+   the **picker family** (`PickerOverlay`/`PickerField`/`ModelSlotPicker` +
+   the three content overlays) + always-save + `useHelp` per page. The chat
+   (densest surface) still comes last.
+
+**Pending makeover-wide follow-ons** (fold in when a relevant surface is
+touched): the **design-language pass** deferrals — picker static-vs-live-Save
+row-affordance grammar (SOFT-5) + Mindspace live-preview; PageBar crumb
+tap-target <44px + `:focus-visible` rings; a shared focus-trap adoption for
+ReadingOverlay/ConfirmDialog (the picker focus-trap is the extractable helper);
+the `.cs-btn` `:hover`/`:focus-visible` a11y states. **Cleanup unblocked:** the
+old web-select-codec consolidation is now moot (the duplicating sections were
+removed). **Start fresh after Chris's `/clear`.**
 
 *Out of alpha scope:* **Projects feature REMOVED** (deferred to after the backend
 — needs Chris's project-oriented-memory mental model + new IA; it is a navigation
