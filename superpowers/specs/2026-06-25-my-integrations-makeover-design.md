@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-25
 - **Author:** Liz (with Chris)
-- **Status:** Chris-approved (brainstorm) → Laura spec-pass → user review → implementation plan
+- **Status:** Chris-approved (brainstorm); **Laura spec-pass complete — no hard defects.** SOFT-1 (name the badge axis) and SOFT-4 (author the help body) folded in (§3); the Test disable-over-error nit folded (§4.2). SOFT-2 (one-tap→drill-in for the default) and SOFT-3 (dirty form silently discardable on back — a makeover-wide pattern question) consciously deferred (§8.1, `ux-deferrals.md`). → user review → implementation plan
 - **Scope:** Rebuild `/app/integrations` (MCP servers) in the design language as a two-tier **list → detail** surface, mirroring the AI Providers tree. Replaces the pre-makeover `EditorSticky`/`AccordionCard` list and the bottom-sheet `McpServerSheet` overlay. The MCP **logic** (probe, key-sealing, local-network routing, tool curation) is ported **verbatim**; only the chrome and the add/edit/delete IA change. This is the **My Integrations** slice of the UI/UX makeover, after the Main Menu, My Account, and My Settings slices.
 
 ---
@@ -54,6 +54,8 @@ The obsolete `components/mcp/McpServersSection.tsx` and `components/mcp/McpServe
 
 A `PageScaffold` (crumb `My Integrations`, `back="/app"`, `onHelp` via a new `useHelp('integrations')`) over a single scrolling column. `integrations.tsx` is rewritten in place; `McpServersSection` is dissolved into it.
 
+> **The `'integrations'` help body must be authored in this slice** (Laura SOFT-4). A `?` that opens nothing is a dead affordance — the inverse of disable-over-hidden. The same key is shared by all three routes (list + both detail modes), as AI Providers shares `'settings-providers'`. Manual-verification step 7 is the gate: the `?` opens real Integrations help, not an empty overlay.
+
 **Content, top to bottom:**
 
 1. **Egress safety note** — the existing aurora-tinted paragraph, kept **1:1**: *"MCP tools run on external servers. Each call sends its arguments — which may include parts of your conversation — to that server. Tools wait for your approval unless you mark a server as trusted."* This is the *dere*/transparency surface ([[project_constructive_error_handling]]); it stays at the top of the list, not buried in the detail page.
@@ -61,7 +63,7 @@ A `PageScaffold` (crumb `My Integrations`, `back="/app"`, `onHelp` via a new `us
 2. **Server rows** — **pure navigation** (Chris's call: quieter list, consistent with AI Providers). Each row is a single `<button>` navigating to `/app/integrations/:serverId`, styled like the provider rows (`flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-3 … hover:bg-white/[0.04]`):
    - Leading: a `⧉` monogram tile (existing convention).
    - Body: server `name` (display font) + the **status string** from `statusOf(row, hasProxy)`, ported **verbatim** (it encodes the local-network routing states: `✗ Disabled` / `✗ Not tested` / `✗ Needs proxy or Local network` / `✗ Needs proxy` / `✗ <error>` / `● Connected (via proxy|direct)`).
-   - Trailing: a **read-only `On` / `Off` badge** derived from `onByDefault`, then the `▸` chevron. The badge replaces the inline toggle that moved to the detail page — so a glance still tells you which servers arm their tools in new chats. It is a *tell, not an act* (read-only `Badge`, never a control), honouring disabled-over-hidden's *show the state* discipline without re-introducing an inline control.
+   - Trailing: a **read-only badge naming the axis — `Default: On` / `Default: Off`** — derived from `onByDefault`, then the `▸` chevron. The badge replaces the inline toggle that moved to the detail page. **The axis must be named, not bare** (Laura SOFT-1): a row can read `● Connected (via proxy)` **and** `Default: Off` at once — two independent axes (reachability vs. armed-in-new-chats), and a naked `Off` would read as "server is off", contradicting `Connected`. `onByDefault` is only the **global default seed**; the live per-persona lever lives in the persona editor's `McpOverrideSection` (`draft.mcpOverrides`), so this badge is a *tell, not an act* (read-only `Badge`, never a control) — it shows the default without re-introducing an inline control.
 
 3. **Empty state** — kept: *"No MCP servers yet — add one to give your Circle external tools."* (bordered, calm).
 
@@ -89,7 +91,7 @@ A `PageScaffold` with crumbs `[{ label: 'My Integrations', to: '/app/integration
 
 The makeover's default is always-save, but the **per-provider page is the documented exception** (sealed key + network probe), and MCP inherits it for the same reasons — **plus** the test reveals the tool list the user then curates before saving, so test and save *cannot* collapse into one button. Therefore:
 
-- **`Test connection`** — explicit button (disabled without `mk` or `url`; `Testing…` in flight). Runs `testMcpConnection` through the existing proxy-vs-direct resolution and `allowDirect` gating; renders the error box, the green `● Connected (via proxy|direct) · <endpoint>` box, the `Routing changed — re-test` cue, and the **tool list** with per-tool show/hide checkboxes (`hiddenTools`). All ported verbatim.
+- **`Test connection`** — explicit button (`Testing…` in flight). **Deliberate small deviation from the verbatim port** (Laura nit): the sheet disables Test only on `!mk` and reports a missing URL as an inline error in `onTest`; this page **disables on `!mk` *or* empty `url`** (disable-over-error is the calmer makeover behaviour). The ported test must expect the new disabled condition. Runs `testMcpConnection` through the existing proxy-vs-direct resolution and `allowDirect` gating; renders the error box, the green `● Connected (via proxy|direct) · <endpoint>` box, the `Routing changed — re-test` cue, and the **tool list** with per-tool show/hide checkboxes (`hiddenTools`). All ported verbatim.
 - **`Save`** — explicit button (`Button` primary, gold not used — gold protects, never invites). Seals a freshly-typed key via `sealMcpKey` (else preserves the existing sealed blob), upserts the `McpServerRow` with `enabled: true`, then `back()` to the list. Validation: Name + URL required; `mk` required.
 
 (The `enabled` field stays always-true as today; no new "enabled" toggle is introduced — YAGNI. The `statusOf` `✗ Disabled` branch remains as defensive code.)
@@ -142,7 +144,12 @@ Raw inputs (text/select/password) stay as plain styled elements, matching the pr
 ## 8. Audit gates
 
 - **Larissa:** **not** a security path — this is `apps/user-client` only; the crypto (`sealMcpKey`/`openMcpKey`) is consumed via a verbatim port with no change to `packages/crypto` or any `apps/*-service`. No Larissa summon.
-- **Laura:** **spec-pass before the plan** (this surface adds a new user-reachable IA — list→detail→delete flow structure), then a **pre-squash pass** on the built diff. The list/detail/delete reachability and the read-only On/Off badge are the UX-load-bearing decisions to check.
+- **Laura:** **spec-pass complete — no hard defects.** SOFT-1 + SOFT-4 + the Test-disable nit folded above; SOFT-2 + SOFT-3 deferred (§8.1). A **pre-squash pass** on the built diff still follows: verify the named badge axis, the authored help body, and the list/detail/delete reachability survive implementation.
+
+### 8.1 Conscious deferrals (→ `obsidian/insights/ux-deferrals.md`)
+
+- **SOFT-2 — "On by default" goes from one inline tap to enter→toggle→Save→back.** Accepted: it is a Chris-decided trade for surface consistency with AI Providers (*fewer surface types beats fewer clicks* — [[feedback_simplify_unify_single_surface]]), and `onByDefault` is a **set-once default seed**, not a live switch — the live per-persona arming lever is `McpOverrideSection` in the persona editor. The depth cost lands on an infrequent action.
+- **SOFT-3 — a toggled default is silently discarded if the user leaves the detail page without Save.** This is the established makeover detail-page property (the provider page discards a typed key on back the same way), not a regression unique to this slice. Whether the makeover adopts a shared dirty-on-back cue for **detail pages** (the picker overlays already guard) is a **makeover-wide, Chris-arbitrated** pattern question — out of this slice's scope; folding it here alone would create an inconsistency.
 
 ---
 
