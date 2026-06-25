@@ -192,4 +192,18 @@ describe('SettingsProviderPage', () => {
     expect(arg.corsProxyUrl).toBe('https://proxy.test');
     expect(arg.corsProxyKey).toBe('decrypted-secret');
   });
+
+  it('shows a passive Unsaved badge once an API key is typed', async () => {
+    wrapAt('/app/settings/providers/chutes');
+    fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
+    expect(screen.getByText(/unsaved/i)).toBeInTheDocument();
+  });
+
+  it('guards Back with a discard confirm when an API key is unsaved', async () => {
+    wrapAt('/app/settings/providers/chutes');
+    fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByText(/discard unsaved changes/i)).toBeInTheDocument();
+    expect(screen.queryByText('providers list')).not.toBeInTheDocument();
+  });
 });

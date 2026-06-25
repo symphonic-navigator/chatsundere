@@ -4,6 +4,7 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
+import { Badge } from '../../../components/ui/Badge.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
@@ -162,6 +163,7 @@ export function SettingsProviderPage(): JSX.Element {
       ]}
       back="/app/settings/providers"
       onHelp={onHelp}
+      dirty={apiKey !== ''}
     >
       {helpOverlay}
       <div className="flex flex-col gap-4 px-4 pb-8 pt-2">
@@ -224,14 +226,17 @@ export function SettingsProviderPage(): JSX.Element {
           </div>
         ) : null}
 
-        <button
-          type="button"
-          onClick={() => void onSave()}
-          disabled={saving}
-          className="rounded-md bg-paper px-3 py-2 text-xs uppercase tracking-wider text-ink hover:bg-paper-soft disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Test & Save'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void onSave()}
+            disabled={saving}
+            className="rounded-md bg-paper px-3 py-2 text-xs uppercase tracking-wider text-ink hover:bg-paper-soft disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Test & Save'}
+          </button>
+          {apiKey !== '' ? <Badge tone="warning">● Unsaved</Badge> : null}
+        </div>
 
         {existing ? (
           <button

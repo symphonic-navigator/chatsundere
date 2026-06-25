@@ -16,6 +16,10 @@ export interface PageBarProps {
   /** When given, renders the `?` help affordance; opens the page's help reader.
    *  The button element itself is passed so the overlay can zoom out of it. */
   onHelp?: (el: HTMLElement) => void;
+  /** Optional navigation interceptor. When given, the back control and ancestor
+   *  crumbs call this instead of navigating directly, so a parent can guard
+   *  unsaved changes. The `?` help affordance is unaffected. */
+  onNavigate?: (to: string) => void;
 }
 
 /**
@@ -26,16 +30,12 @@ export interface PageBarProps {
  * the tree saves as you go (Plan 2). Back-navigation inherits the origin-zoom
  * collapse for free via the central NavTransitionOutlet.
  */
-export function PageBar({ crumbs, back, onHelp }: PageBarProps): JSX.Element {
+export function PageBar({ crumbs, back, onHelp, onNavigate }: PageBarProps): JSX.Element {
   const navigate = useNavigate();
+  const go = onNavigate ?? navigate;
   return (
     <div data-page-bar="" className="cs-pagebar">
-      <button
-        type="button"
-        aria-label="Back"
-        className="cs-pagebar-back"
-        onClick={() => navigate(back)}
-      >
+      <button type="button" aria-label="Back" className="cs-pagebar-back" onClick={() => go(back)}>
         ‹
       </button>
       <nav aria-label="Breadcrumb" className="cs-pagebar-crumbs">
@@ -56,7 +56,7 @@ export function PageBar({ crumbs, back, onHelp }: PageBarProps): JSX.Element {
                 <button
                   type="button"
                   className="cs-pagebar-crumb"
-                  onClick={() => navigate(c.to as string)}
+                  onClick={() => go(c.to as string)}
                 >
                   {c.label}
                 </button>

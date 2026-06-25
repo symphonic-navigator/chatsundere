@@ -4,6 +4,7 @@ import privacy from '../about/privacy.md?raw';
 import about from './about.md?raw';
 import biometric from './biometric.md?raw';
 import changePassphrase from './change-passphrase.md?raw';
+import integrations from './integrations.md?raw';
 import logout from './logout.md?raw';
 import myAccount from './my-account.md?raw';
 import recovery from './recovery.md?raw';
@@ -24,6 +25,7 @@ export type HelpKey =
   | 'about'
   | 'change-passphrase'
   | 'logout'
+  | 'integrations'
   | 'settings'
   | 'settings-you'
   | 'settings-providers'
@@ -40,6 +42,7 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   about: { title: 'About — help', markdown: about },
   'change-passphrase': { title: 'Change passphrase — help', markdown: changePassphrase },
   logout: { title: 'Logout — help', markdown: logout },
+  integrations: { title: 'My Integrations — help', markdown: integrations },
   settings: { title: 'My Settings — help', markdown: settings },
   'settings-you': { title: 'You — help', markdown: settingsYou },
   'settings-providers': { title: 'AI Providers — help', markdown: settingsProviders },
