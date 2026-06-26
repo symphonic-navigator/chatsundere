@@ -8,7 +8,58 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-25 — **MY INTEGRATIONS REBUILT IN THE DESIGN
+**Last updated:** 2026-06-26 — **MY KNOWLEDGE REBUILT IN THE DESIGN
+LANGUAGE, SQUASHED TO MASTER (`13b867ad`). NOT pushed (Chris pushes);
+awaiting Chris's device-verify.**
+The sixth makeover surface. The knowledge-base room (`/app/knowledge`) goes
+from the pre-makeover sheet/accordion chrome to the makeover **three-level page
+tree**: library **list → library detail → document detail** (+ create mode) —
+the My Integrations list→detail pattern extended one level deeper. All
+knowledge-base logic (chunking, the embedding queue, status tracking, lore
+trigger-phrases, NSFW filtering, the Chatsune import) is **ported verbatim**;
+only chrome + the add/edit/delete IA change. **No Dexie/schema change.**
+**List** (`PageScaffold`): pure-navigation rows, trailing **NSFW badge** (kept
+deliberately — safety cue in NSFW mode) + **doc-count badge**, single `+ Add`,
+**Import-from-Chatsune in the ⋯**. **Library detail**: **always-save** inline
+metadata (name/description/NSFW) — **no dirty-guard here**; the **NSFW toggle is
+disabled-with-reason in SFW mode** (the vanish guard — flipping it on in SFW
+mode would `useFilteredLibraries`-hide the row, reading as deleted); an **`Add ▾`
+menu** (Upload files / New document) with **constructive upload-failure feedback**
+(names the offending file), `ModelDownloadBanner`, **delete in the ⋯ →
+ConfirmDialog**. **Document detail** (3rd level, `/:libraryId/:documentId` +
+`/new`): **one explicit Save + one dirty-guard** for the whole page (Chris's
+"one mental model, no astonishment"), **re-embed only when content actually
+changes** (content diffed into the patch), `TagEditor` trigger-phrases,
+**companion toggle disabled-with-reason without phrases**, **failed-embedding
+cause + Retry on the detail page** (not the list row), delete in the ⋯. New
+shared **`lib/knowledge-status`** maps; **`OverflowMenu` gained a
+backward-compatible `variant="labelled"`** for the visible `Add ▾` (default
+icon-⋯ callers byte-identical). Retired the old sheets/badge/menu components
+(`LibrarySheet`/`DocumentEditor`/`AddDocumentMenu`/`DocumentStatusBadge`/
+`ChatsuneLibraryImport`) + their dead CSS + the old `knowledge-library` route.
+**Out of scope (deferred):** the chat `DocumentPicker` (with the chat surface)
+and the persona-editor `KnowledgeSection` (with the persona editor); NSFW
+deep-link gating of the detail route (existing follow-up). Built
+spec→plan→**subagent-driven** (6 tasks, per-task spec+quality review). **Laura**
+spec-pass (2 HARD folded: companion-toggle reason + the NSFW-vanish guard;
+5 softs incl. the `Add ▾` caret) **and** pre-squash (**1 HARD** the code reviews
+missed — `OverflowMenu.triggerLabel` was aria-only, so `Add ▾` rendered as a
+bare ⋯ indistinguishable from the delete ⋯ → fixed via the labelled variant;
+5 softs folded: dirty-gated Save, save-failure notice, paste→"write a new one"
+copy, breadcrumb `…` fallback, companion help). **opus** whole-branch review:
+**merge-ready with fixes** (1 Important breadcrumb-name + minors — all folded;
+a Task-5 `normalisePhrases` data-layer re-export was reverted, restoring the
+verbatim port). Not a Larissa path (client-only; crypto untouched). Gates:
+`pnpm typecheck --force` **14/14** (0 cached) on master post-squash; full
+user-client vitest **2029 pass / 8 Node-localStorage baseline** (+1 known
+stream-manager parallel-load flake, passes 36/36 isolated). Specs/plans:
+[[../superpowers/specs/2026-06-26-my-knowledge-makeover-design]],
+[[../superpowers/plans/2026-06-26-my-knowledge]]. Branch `feat/my-knowledge`
+kept until Chris pushes. **Next:** Chris device-verifies, then the **chat**
+(densest surface — comes last) and the deferred chat/persona-editor knowledge
+sub-surfaces.
+
+**Earlier (2026-06-25) — MY INTEGRATIONS REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`c10f4785`). NOT pushed (Chris pushes);
 awaiting Chris's device-verify.**
 The fifth makeover surface. `/app/integrations` (MCP servers) goes from the
