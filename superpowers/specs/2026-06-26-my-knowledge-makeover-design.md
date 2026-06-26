@@ -59,7 +59,9 @@ The room mirrors the My Integrations list→detail pattern, extended one level d
 /app/knowledge/:libraryId/:documentId   Level 3 — document detail, edit mode
 ```
 
-- `PageBar` breadcrumbs read *My Knowledge › ‹Library name› › ‹Document title›*.
+- `PageBar` breadcrumbs read *My Knowledge › ‹Library name› › ‹Document title›*. In
+  create mode the trailing crumb reads **"New library"** / **"New document"** (no
+  empty or stale segment).
 - The Unified-Experience zoom is origin-path-based and already handles arbitrary
   depth; no special wiring beyond the standard `NavTile`/`PageScaffold` adoption.
 - Each level authors its own `?`-help document, consistent with My Account / My
@@ -124,7 +126,16 @@ existing primitives.
 **Top — metadata, always-save inline** (cheap, no embedding):
 - Name → `InlineEditRow`
 - Description → `InlineEditTextarea`
-- NSFW → a toggle row (always-save)
+- NSFW → a toggle row (always-save). **In SFW mode this toggle is
+  disabled-with-reason** ("Switch to NSFW mode to mark this adult"), screen-reader
+  announced. Rationale: flipping NSFW on while in SFW mode would persist instantly
+  and then `useFilteredLibraries` would remove the library from the list — the user
+  navigates back to a vanished library that reads as deleted/broken (a
+  least-astonishment defect; Laura HARD). Disabling the toggle in SFW mode means a
+  library can never silently vanish, and the adult flag is managed from NSFW mode
+  (consistent with how adult content is handled app-wide). In NSFW mode the toggle is
+  live and flipping it on does **not** vanish the row (NSFW mode shows adult
+  libraries).
 
 Because every field here persists on blur, the page carries **no dirty-guard**. (The
 dirty-guard lives only on the document detail, §6.)
@@ -133,17 +144,28 @@ dirty-guard lives only on the document detail, §6.)
 - Quiet **pure-navigation rows** → document detail (Level 3). Body = document title;
   trailing = a read-only **status badge** (`pending` / `embedding…` / `ready` /
   `failed`). No inline trash, no inline retry (see §7).
-- A **`+ Add`** affordance opening an `OverflowMenu`:
+- An **"Add ▾"** affordance opening an `OverflowMenu`. The downward caret telegraphs
+  that this control opens a menu, deliberately distinguishing it from the Level-1
+  `+ Add` which goes straight to a create path (Laura SOFT — the same label must not
+  teach "direct action" on one level and "opens a menu" on the next):
   - **Upload files** → native multi-file picker (`.md` / `.markdown` / `.txt`),
     creating N documents directly. They appear in the list with `pending` /
-    `embedding…` status; no navigation occurs.
+    `embedding…` status; no navigation occurs. **A file that cannot be read or
+    turned into a document fails constructively, not silently:** an inline notice
+    names the cause and the offending filename (parity with the §4 import path's
+    error feedback). The constructive-error machinery of §6/§7 only covers
+    *embedding* failure, which has a row to land on; a *pre-creation* upload failure
+    has no row, so it must surface here.
   - **New document** → navigates to the document detail in **create mode**
     (`/app/knowledge/:libraryId/new`).
 - Constructive empty state — "No documents yet — add one by upload or paste."
 
 **`ModelDownloadBanner`:** kept as a quiet inline notice (the precedent is the My
 Integrations egress note), visible only while the on-device embedding model is
-loading; it hides once ready.
+loading; it hides once ready. The same quiet notice also surfaces on the document
+detail (§6) while the model loads, so a user who saves a new document on a fresh
+device understands why the status sits at `pending`/`embedding…` rather than feeling
+the app is stuck (Laura SOFT).
 
 **Delete library:** in the `PageBar` `OverflowMenu` (⋯) → `ConfirmDialog`. Quiet,
 protected, consistent with My Integrations; deletion is rare.
@@ -152,8 +174,17 @@ protected, consistent with My Integrations; deletion is rare.
 
 Fields: **Title**, **Content** (textarea), **Trigger phrases** (`TagEditor`,
 reused, with suggestions drawn from sibling documents), **Companion toggle** ("Let
-the companion trigger this too", disabled when there are no phrases), plus **status**
-and **delete**.
+the companion trigger this too"), plus **status** and **delete**.
+
+The companion toggle is **disabled-with-reason** when there are no trigger phrases:
+it carries its reason inline (e.g. subtext/tooltip "Add a trigger phrase first") and
+is screen-reader announced, matching the `OverflowMenu` disabled-item convention — a
+bare grey control with no explanation is the think-gap the rubric forbids (Laura
+HARD).
+
+While the on-device embedding model is loading, the quiet `ModelDownloadBanner`
+notice (§5) also surfaces on this page, so a freshly-saved document's
+`pending`/`embedding…` status has a visible explanation.
 
 **Save model — the whole page is one explicit Save with one dirty-guard.**
 - The user edits title / content / phrases / toggle, presses **Save** once, and all
@@ -193,6 +224,11 @@ This keeps the list uniform and gives the failure proper context. Embedding fail
 are rare in practice (it runs locally in the browser), so the extra tap on the rare
 failure path is an acceptable trade for a quiet, consistent list. Iteration remains
 open if real use shows otherwise.
+
+The failed badge stays a **plain read-only `Badge`** (not phrased "tap to fix"): the
+row is already tappable and the `failed` state is visually distinct, so the
+established navigate-to-detail pattern carries the remedy without giving a read-only
+tell an action-like voice (Laura SOFT, kept plain by Chris's taste call).
 
 ## 8. Data flow & behaviour
 
@@ -245,9 +281,13 @@ a 9th failure is real). `pnpm typecheck --force` 14/14. Production build clean.
 
 ## 11. Audit gates
 
-- **Laura:** spec-pass on this document (main lever), then a pre-squash pass to
-  verify the built flows honour the approved UX intent. Hard defects block the
-  squash.
+- **Laura:** spec-pass **done** (2026-06-26) — 2 hard defects + 5 softs. Both hards
+  folded in: the companion toggle's disabled-reason (§6) and the NSFW-vanish guard
+  (§5, resolved by disabling the toggle in SFW mode per Chris). Softs folded: "Add ▾"
+  caret (§5), upload-failure feedback (§5), model-loading notice on Level 3 (§5/§6),
+  create-mode breadcrumb labels (§3); the failed-badge "tap to fix" soft was kept
+  plain by Chris's taste call (§7). A pre-squash pass still verifies the built flows
+  honour the approved UX intent; hard defects block the squash.
 - **Larissa:** not a security path — client-only, crypto only consumed via the
   verbatim KB port, no `packages/crypto` change.
 
