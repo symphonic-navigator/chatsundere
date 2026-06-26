@@ -10,6 +10,7 @@ import {
   openClientDataDb,
 } from '../../../src/boot/client-data-db.js';
 import { KnowledgeList } from '../../../src/routes/app/knowledge.js';
+import { KnowledgeLibraryPage } from '../../../src/routes/app/knowledge/library.js';
 
 beforeEach(async () => {
   await openClientDataDb();
@@ -26,6 +27,8 @@ function wrap() {
       <MemoryRouter initialEntries={['/app/knowledge']}>
         <Routes>
           <Route path="/app/knowledge" element={<KnowledgeList />} />
+          <Route path="/app/knowledge/new" element={<KnowledgeLibraryPage />} />
+          <Route path="/app/knowledge/:libraryId" element={<KnowledgeLibraryPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -38,11 +41,11 @@ describe('KnowledgeList', () => {
     expect(await screen.findByText(/no libraries yet/i)).toBeTruthy();
   });
 
-  it('creates a library through the new-library sheet', async () => {
+  it('creates a library through the new-library page', async () => {
     wrap();
-    fireEvent.click(await screen.findByRole('button', { name: /new library/i }));
-    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'World Lore' } });
-    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /\+ add/i }));
+    fireEvent.change(await screen.findByLabelText(/name/i), { target: { value: 'World Lore' } });
+    fireEvent.click(screen.getByRole('button', { name: /create library/i }));
     expect(await screen.findByText('World Lore')).toBeTruthy();
   });
 

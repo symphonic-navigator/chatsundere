@@ -17,8 +17,9 @@ import { EntranceHall } from './routes/app/entrance-hall.js';
 import { HistoryPage } from './routes/app/history.js';
 import { Integrations } from './routes/app/integrations.js';
 import { IntegrationServerPage } from './routes/app/integrations/server.js';
-import { KnowledgeLibrary } from './routes/app/knowledge-library.js';
 import { KnowledgeList } from './routes/app/knowledge.js';
+import { KnowledgeDocumentPage } from './routes/app/knowledge/document.js';
+import { KnowledgeLibraryPage } from './routes/app/knowledge/library.js';
 import { PersonaEditor } from './routes/app/persona-editor.js';
 import { PersonaMemory } from './routes/app/persona-memory.js';
 import { Settings as MySettings } from './routes/app/settings.js';
@@ -119,7 +120,13 @@ export function App() {
                   <Route path="/app/history" element={<HistoryPage />} />
                   <Route path="/app/treasury" element={<Treasury />} />
                   <Route path="/app/knowledge" element={<KnowledgeList />} />
-                  <Route path="/app/knowledge/:libraryId" element={<KnowledgeLibrary />} />
+                  <Route path="/app/knowledge/new" element={<KnowledgeLibraryPage />} />
+                  <Route path="/app/knowledge/:libraryId" element={<KnowledgeLibraryPage />} />
+                  <Route path="/app/knowledge/:libraryId/new" element={<KnowledgeDocumentPage />} />
+                  <Route
+                    path="/app/knowledge/:libraryId/:documentId"
+                    element={<KnowledgeDocumentPage />}
+                  />
                   <Route path="/app/integrations" element={<Integrations />} />
                   <Route path="/app/integrations/new" element={<IntegrationServerPage />} />
                   <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />

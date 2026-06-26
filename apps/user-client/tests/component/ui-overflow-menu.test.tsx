@@ -13,6 +13,28 @@ describe('OverflowMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
   });
 
+  it('icon variant (default) renders the ⋯ glyph and uses cs-overflow-trigger', () => {
+    render(<OverflowMenu items={[{ label: 'Rename' }]} />);
+    const trigger = screen.getByRole('button', { name: /more actions/i });
+    expect(trigger.textContent).toBe('⋯');
+    expect(trigger).toHaveClass('cs-overflow-trigger');
+    expect(trigger).not.toHaveClass('cs-overflow-trigger-labelled');
+  });
+
+  it('labelled variant renders triggerLabel as visible text and uses cs-overflow-trigger-labelled', () => {
+    render(
+      <OverflowMenu
+        items={[{ label: 'Upload files' }, { label: 'New document' }]}
+        triggerLabel="Add ▾"
+        variant="labelled"
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: /add/i });
+    expect(trigger.textContent).toBe('Add ▾');
+    expect(trigger).toHaveClass('cs-overflow-trigger-labelled');
+    expect(trigger).not.toHaveClass('cs-overflow-trigger');
+  });
+
   it('fires onSelect for an enabled item and closes', () => {
     const onSelect = vi.fn();
     render(<OverflowMenu items={[{ label: 'Rename', onSelect }]} />);

@@ -13,19 +13,28 @@ export interface OverflowItem {
 
 export interface OverflowMenuProps {
   items: OverflowItem[];
-  /** Accessible name for the ⋯ trigger. Defaults to "More actions". */
+  /** Accessible name for the trigger. Defaults to "More actions". */
   triggerLabel?: string;
+  /**
+   * Controls how the trigger is rendered.
+   * - `'icon'` (default) — the classic ⋯ glyph in a 32 × 32 circle; `triggerLabel` is
+   *   aria-only. Use for secondary/destructive actions that should stay visually quiet.
+   * - `'labelled'` — renders `triggerLabel` as visible button text; use where the primary
+   *   action must be self-explanatory (e.g. the Documents "Add ▾" control).
+   */
+  variant?: 'icon' | 'labelled';
 }
 
 /**
- * The ⋯ context-menu primitive. Secondary actions live here so list rows stay
- * calm; the menu is where "disabled over hidden" holds — disabled items remain
- * focusable (aria-disabled, not native disabled) and announce their reason
+ * Context-menu primitive used in two visual modes (see `variant`). Secondary actions live
+ * here so list rows stay calm; the menu is where "disabled over hidden" holds — disabled
+ * items remain focusable (aria-disabled, not native disabled) and announce their reason
  * (spec §7). Appears via the origin-aware zoom (spec §3).
  */
 export function OverflowMenu({
   items,
   triggerLabel = 'More actions',
+  variant = 'icon',
 }: OverflowMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -77,10 +86,10 @@ export function OverflowMenu({
         aria-label={triggerLabel}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="cs-overflow-trigger"
+        className={variant === 'labelled' ? 'cs-overflow-trigger-labelled' : 'cs-overflow-trigger'}
         onClick={() => setOpen((o) => !o)}
       >
-        ⋯
+        {variant === 'labelled' ? triggerLabel : '⋯'}
       </button>
       {open ? (
         <div ref={menuRef} role="menu" className="cs-overflow-menu cs-zoom-in">

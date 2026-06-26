@@ -5,6 +5,9 @@ import about from './about.md?raw';
 import biometric from './biometric.md?raw';
 import changePassphrase from './change-passphrase.md?raw';
 import integrations from './integrations.md?raw';
+import knowledgeDocument from './knowledge-document.md?raw';
+import knowledgeLibrary from './knowledge-library.md?raw';
+import knowledge from './knowledge.md?raw';
 import logout from './logout.md?raw';
 import myAccount from './my-account.md?raw';
 import recovery from './recovery.md?raw';
@@ -26,6 +29,9 @@ export type HelpKey =
   | 'change-passphrase'
   | 'logout'
   | 'integrations'
+  | 'knowledge'
+  | 'knowledge-library'
+  | 'knowledge-document'
   | 'settings'
   | 'settings-you'
   | 'settings-providers'
@@ -43,6 +49,9 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'change-passphrase': { title: 'Change passphrase — help', markdown: changePassphrase },
   logout: { title: 'Logout — help', markdown: logout },
   integrations: { title: 'My Integrations — help', markdown: integrations },
+  knowledge: { title: 'My Knowledge — help', markdown: knowledge },
+  'knowledge-library': { title: 'Knowledge Library — help', markdown: knowledgeLibrary },
+  'knowledge-document': { title: 'Knowledge Document — help', markdown: knowledgeDocument },
   settings: { title: 'My Settings — help', markdown: settings },
   'settings-you': { title: 'You — help', markdown: settingsYou },
   'settings-providers': { title: 'AI Providers — help', markdown: settingsProviders },
