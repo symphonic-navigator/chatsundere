@@ -12,29 +12,46 @@ export interface PageScaffoldProps {
    *  prompts a discard-changes confirm. Omit (or false) for the plain
    *  pass-through used by every always-save page. */
   dirty?: boolean;
-  /** The scrolling page content; the PageBar above it stays put. */
+  /** A fixed sub-header (tabs / search / filters / count) rendered inside the
+   *  sticky chrome block, directly beneath the PageBar. When given, the chrome
+   *  block (PageBar + this header) stays put and only `children` scrolls — the
+   *  "only the list scrolls" contract for list surfaces. Omit for the plain
+   *  page where the whole body scrolls under the PageBar. */
+  stickyHeader?: ReactNode;
+  /** The scrolling page content; the PageBar (and any `stickyHeader`) stay put. */
   children: ReactNode;
 }
 
 /**
  * Standard page layout (spec §2.4): a sticky PageBar plus a scrolling content
  * region. When `dirty` is set, the bar's back/crumb navigation is intercepted by
- * a discard-changes confirm so unsaved input is never lost silently.
+ * a discard-changes confirm so unsaved input is never lost silently. When
+ * `stickyHeader` is given, the PageBar and that header stick together as one
+ * chrome block and only the body below scrolls (list surfaces).
  */
 export function PageScaffold({
   crumbs,
   back,
   onHelp,
   dirty,
+  stickyHeader,
   children,
 }: PageScaffoldProps): JSX.Element {
   const navigate = useNavigate();
   const [pending, setPending] = useState<string | null>(null);
   const onNavigate = dirty ? (to: string) => setPending(to) : undefined;
+  const bar = <PageBar crumbs={crumbs} back={back} onHelp={onHelp} onNavigate={onNavigate} />;
 
   return (
     <div className="cs-page">
-      <PageBar crumbs={crumbs} back={back} onHelp={onHelp} onNavigate={onNavigate} />
+      {stickyHeader !== undefined ? (
+        <div className="cs-page-chrome">
+          {bar}
+          <div className="cs-page-stickyhead">{stickyHeader}</div>
+        </div>
+      ) : (
+        bar
+      )}
       <div className="cs-page-body">{children}</div>
       <ConfirmDialog
         open={pending !== null}

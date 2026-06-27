@@ -5121,6 +5121,41 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis; /* the current crumb truncates first at 375px */
 }
+/* List-surface chrome: the PageBar + a fixed sub-header (PageScaffold's
+   `stickyHeader`) stick together as one block so only the page body scrolls
+   beneath them — the "only the list scrolls" contract. The block owns the sticky
+   position + frosted full-bleed backdrop; the nested PageBar drops its own so the
+   two read as one bar. */
+.cs-page-chrome {
+  position: sticky;
+  top: 3.25rem; /* brand-bar height — matches .cs-pagebar */
+  z-index: 10;
+  margin: -1rem -1.5rem 0; /* full-bleed: cancel <main> px-6 + cs-page pt */
+  background: color-mix(in srgb, var(--color-ink) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-paper-soft) 15%, transparent);
+}
+@media (min-width: 1024px) {
+  .cs-page-chrome {
+    top: 3.75rem;
+  }
+}
+.cs-page-chrome .cs-pagebar {
+  position: static;
+  margin: 0;
+  background: none;
+  backdrop-filter: none;
+  border-bottom: none;
+}
+.cs-page-stickyhead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  /* 2.5rem = <main> px-6 (1.5rem) + the list's px-4 (1rem) so the controls line
+     up with the rows that scroll beneath them; no horizontal shift vs before. */
+  padding: 0.5rem 2.5rem 0.625rem;
+}
+
 .cs-page-body {
   padding-top: 1rem;
 }

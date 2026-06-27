@@ -131,89 +131,98 @@ export function Treasury(): JSX.Element {
   const activeFilterCount = (personaId ? 1 : 0) + (favourite ? 1 : 0) + tags.length;
 
   return (
-    <PageScaffold crumbs={[{ label: 'My Treasury' }]} back="/app" onHelp={onHelp}>
-      {helpOverlay}
-      <div className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-24 pt-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-widest text-paper-soft">
-            {treasuryCountLabel(visibleRows.length, filtered.length)}
-          </span>
-          <button
-            type="button"
-            className="rounded-md border border-aurora-700 bg-white/[0.02] px-3 py-1 text-xs text-aurora-200"
-            aria-pressed={selectMode}
-            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-          >
-            {selectMode ? 'Cancel' : 'Select'}
-          </button>
-        </div>
-
-        <TypeTabs
-          value={type}
-          onChange={(t) => {
-            setType(t);
-            mirrorUrl({ type: t });
-          }}
-        />
-
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <HistorySearchBar
-              value={query}
-              onChange={(v) => {
-                setQuery(v);
-                mirrorUrl({ query: v });
-              }}
-              placeholder="Search by name…"
-            />
+    <PageScaffold
+      crumbs={[{ label: 'My Treasury' }]}
+      back="/app"
+      onHelp={onHelp}
+      stickyHeader={
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-widest text-paper-soft">
+              {treasuryCountLabel(visibleRows.length, filtered.length)}
+            </span>
+            <button
+              type="button"
+              className="rounded-md border border-aurora-700 bg-white/[0.02] px-3 py-1 text-xs text-aurora-200"
+              aria-pressed={selectMode}
+              onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            >
+              {selectMode ? 'Cancel' : 'Select'}
+            </button>
           </div>
-          <button
-            type="button"
-            className="relative shrink-0 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-paper-soft"
-            aria-label={activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'}
-            onClick={() => setFilterOpen(true)}
-          >
-            ⚙
-            {activeFilterCount > 0 ? (
-              <span className="ml-1 rounded-full bg-aurora-700 px-1.5 text-[10px] text-paper">
-                {activeFilterCount}
-              </span>
-            ) : null}
-          </button>
-        </div>
 
-        {activeFilterCount > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {personaId ? (
-              <button
-                type="button"
-                className="tag-chip"
-                onClick={() => {
-                  setPersonaId(null);
-                  mirrorUrl({ personaId: null });
+          <TypeTabs
+            value={type}
+            onChange={(t) => {
+              setType(t);
+              mirrorUrl({ type: t });
+            }}
+          />
+
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <HistorySearchBar
+                value={query}
+                onChange={(v) => {
+                  setQuery(v);
+                  mirrorUrl({ query: v });
                 }}
-              >
-                {personaById.get(personaId)?.name ?? 'Persona'} ✕
-              </button>
-            ) : null}
-            {favourite ? (
-              <button type="button" className="tag-chip" onClick={() => setFavourite(false)}>
-                ★ Favourites ✕
-              </button>
-            ) : null}
-            {tags.map((t) => (
-              <button
-                key={t}
-                type="button"
-                className="tag-chip"
-                onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
-              >
-                #{t} ✕
-              </button>
-            ))}
+                placeholder="Search by name…"
+              />
+            </div>
+            <button
+              type="button"
+              className="relative shrink-0 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-paper-soft"
+              aria-label={
+                activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'
+              }
+              onClick={() => setFilterOpen(true)}
+            >
+              ⚙
+              {activeFilterCount > 0 ? (
+                <span className="ml-1 rounded-full bg-aurora-700 px-1.5 text-[10px] text-paper">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </button>
           </div>
-        ) : null}
 
+          {activeFilterCount > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {personaId ? (
+                <button
+                  type="button"
+                  className="tag-chip"
+                  onClick={() => {
+                    setPersonaId(null);
+                    mirrorUrl({ personaId: null });
+                  }}
+                >
+                  {personaById.get(personaId)?.name ?? 'Persona'} ✕
+                </button>
+              ) : null}
+              {favourite ? (
+                <button type="button" className="tag-chip" onClick={() => setFavourite(false)}>
+                  ★ Favourites ✕
+                </button>
+              ) : null}
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className="tag-chip"
+                  onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                >
+                  #{t} ✕
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </>
+      }
+    >
+      {helpOverlay}
+      <div className="flex min-h-[60dvh] flex-col gap-2 px-4 pb-24 pt-3">
         {filtered.length === 0 ? (
           <div className="mt-8 grid place-items-center text-center text-paper-soft">
             <p className="font-display text-lg italic text-paper">

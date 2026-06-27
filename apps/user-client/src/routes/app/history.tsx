@@ -118,75 +118,80 @@ export function HistoryPage(): JSX.Element {
   }
 
   return (
-    <PageScaffold crumbs={[{ label: 'My History' }]} back="/app" onHelp={onHelp}>
-      {helpOverlay}
-      <div className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-12 pt-4">
-        <div className="cs-segmented" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'chats'}
-            className="cs-seg"
-            data-active={tab === 'chats' || undefined}
-            onClick={() => setTab('chats')}
-          >
-            Chats
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'bookmarks'}
-            className="cs-seg"
-            data-active={tab === 'bookmarks' || undefined}
-            onClick={() => setTab('bookmarks')}
-          >
-            Bookmarks
-          </button>
-        </div>
+    <PageScaffold
+      crumbs={[{ label: 'My History' }]}
+      back="/app"
+      onHelp={onHelp}
+      stickyHeader={
+        <>
+          <div className="cs-segmented" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'chats'}
+              className="cs-seg"
+              data-active={tab === 'chats' || undefined}
+              onClick={() => setTab('chats')}
+            >
+              Chats
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'bookmarks'}
+              className="cs-seg"
+              data-active={tab === 'bookmarks' || undefined}
+              onClick={() => setTab('bookmarks')}
+            >
+              Bookmarks
+            </button>
+          </div>
 
-        <HistorySearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder={tab === 'chats' ? 'Search chats by title…' : 'Search bookmarks by title…'}
-        />
-        <PersonaFilterDropdown
-          personas={personas.data ?? []}
-          selectedId={filterPersonaId}
-          onChange={setFilterPersonaId}
-        />
-
-        {tab === 'chats' ? (
-          <>
+          <HistorySearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={tab === 'chats' ? 'Search chats by title…' : 'Search bookmarks by title…'}
+          />
+          <PersonaFilterDropdown
+            personas={personas.data ?? []}
+            selectedId={filterPersonaId}
+            onChange={setFilterPersonaId}
+          />
+          {tab === 'chats' ? (
             <span className="text-[11px] uppercase tracking-widest text-paper-soft">
               {historyCountLabel(gatedChats.length, visibleChats.length)}
             </span>
-            {visibleChats.length === 0 ? (
-              <ChatsEmptyState
-                filterPersonaId={filterPersonaId}
-                filterPersonaName={filterPersonaName}
-                searchActive={searchQuery.trim() !== ''}
-                onClearFilter={clearFilter}
-              />
-            ) : (
-              <div className="flex flex-col gap-2">
-                {visibleChats.map((c) => {
-                  const p = personaById.get(c.personaId);
-                  if (!p) return null;
-                  return (
-                    <HistoryRow
-                      key={c.id}
-                      chat={c}
-                      persona={p}
-                      onRename={(next) =>
-                        void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
-                      }
-                      onDelete={() => void deleteChat.mutateAsync(c.id)}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </>
+          ) : null}
+        </>
+      }
+    >
+      {helpOverlay}
+      <div className="flex min-h-[60dvh] flex-col gap-2 px-4 pb-12 pt-3">
+        {tab === 'chats' ? (
+          visibleChats.length === 0 ? (
+            <ChatsEmptyState
+              filterPersonaId={filterPersonaId}
+              filterPersonaName={filterPersonaName}
+              searchActive={searchQuery.trim() !== ''}
+              onClearFilter={clearFilter}
+            />
+          ) : (
+            visibleChats.map((c) => {
+              const p = personaById.get(c.personaId);
+              if (!p) return null;
+              return (
+                <HistoryRow
+                  key={c.id}
+                  chat={c}
+                  persona={p}
+                  onRename={(next) =>
+                    void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
+                  }
+                  onDelete={() => void deleteChat.mutateAsync(c.id)}
+                />
+              );
+            })
+          )
         ) : visibleBookmarkGroups.length === 0 ? (
           <div className="mt-8 grid place-items-center text-center text-paper-soft">
             <p className="font-display text-lg italic text-paper">
