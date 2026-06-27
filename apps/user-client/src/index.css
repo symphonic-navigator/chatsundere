@@ -2278,39 +2278,6 @@ h1 {
   }
 }
 
-/* History segmented tabs + bookmark groups */
-.history-tabs {
-  display: flex;
-  gap: 0.25rem;
-}
-.history-tab {
-  padding: 0.35rem 0.75rem;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.55;
-}
-.history-tab[data-active] {
-  opacity: 1;
-  border-bottom: 2px solid var(--color-accent, #c9a227);
-}
-.bookmark-group-title {
-  font-family: var(--font-display);
-  font-size: 1rem;
-}
-.bookmark-entry {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.bookmark-row {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  padding: 0.35rem 0;
-  color: var(--color-paper, #e6e6e6);
-}
-
 /* ===== Persona filter dropdown (custom — native <select> option lists are
  *  OS-rendered and cannot be themed to match the dark surface) ===== */
 .persona-dropdown {
@@ -2320,19 +2287,19 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
   width: 100%;
-  border-radius: 0.375rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.3);
-  padding: 0.5rem 0.75rem;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.875rem;
-  color: var(--color-paper, #e6e6e6);
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
 }
-.persona-dropdown-trigger:focus-visible {
-  outline: none;
-  border-color: var(--color-paper-soft, rgba(255, 255, 255, 0.4));
+.persona-dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 .persona-dropdown-value {
   display: inline-flex;
@@ -2360,38 +2327,39 @@ h1 {
 .persona-dropdown-list {
   position: absolute;
   z-index: 20;
-  top: calc(100% + 0.3rem);
   left: 0;
   right: 0;
   max-height: 16rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.3rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: var(--color-ink, #161616);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  margin-top: 6px;
+  padding: 4px;
+  border-radius: 13px;
+  background: var(--color-ink, #14101c);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
 }
 .persona-dropdown-option {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
   width: 100%;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-paper-soft);
   text-align: left;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  color: var(--color-paper, #e6e6e6);
-  transition: background 120ms ease;
+  cursor: pointer;
 }
 .persona-dropdown-option:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-paper);
 }
 .persona-dropdown-option[data-selected] {
-  background: color-mix(in srgb, var(--color-accent, #c9a227) 18%, transparent);
-  color: var(--color-accent, #c9a227);
+  background: rgba(141, 109, 255, 0.12);
+  color: var(--color-paper);
 }
 
 /* ===== Expandable tool-call pill ===== */
@@ -4951,6 +4919,11 @@ h1 {
   cursor: pointer;
   color: inherit;
 }
+/* Static (non-navigating) variant — the rename row is not a tappable link, so it
+   keeps the default cursor rather than the row's pointer affordance. */
+.cs-row-main[data-static] {
+  cursor: default;
+}
 .cs-row-leading {
   flex: none;
   display: inline-flex;
@@ -4965,6 +4938,20 @@ h1 {
   font-weight: 600;
   font-size: 13px;
   color: var(--color-paper);
+}
+/* My History chat title sits 1px under the row default (spec §3). */
+.cs-row-title[data-compact] {
+  font-size: 12px;
+}
+/* Persona avatar wrapper in a history row — anchors the live-stream orb to the
+   avatar's top-right corner instead of the row's. */
+.history-avatar {
+  position: relative;
+  display: inline-flex;
+}
+.history-avatar .streaming-orb {
+  top: -2px;
+  right: -2px;
 }
 .cs-row-subtitle {
   font-family: var(--font-sans);

@@ -4,6 +4,7 @@ import privacy from '../about/privacy.md?raw';
 import about from './about.md?raw';
 import biometric from './biometric.md?raw';
 import changePassphrase from './change-passphrase.md?raw';
+import history from './history.md?raw';
 import integrations from './integrations.md?raw';
 import knowledgeDocument from './knowledge-document.md?raw';
 import knowledgeLibrary from './knowledge-library.md?raw';
@@ -28,6 +29,7 @@ export type HelpKey =
   | 'server-linking'
   | 'about'
   | 'change-passphrase'
+  | 'history'
   | 'logout'
   | 'integrations'
   | 'knowledge'
@@ -49,6 +51,7 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'server-linking': { title: 'Server linking — help', markdown: serverLinking },
   about: { title: 'About — help', markdown: about },
   'change-passphrase': { title: 'Change passphrase — help', markdown: changePassphrase },
+  history: { title: 'My History — help', markdown: history },
   logout: { title: 'Logout — help', markdown: logout },
   integrations: { title: 'My Integrations — help', markdown: integrations },
   knowledge: { title: 'My Knowledge — help', markdown: knowledge },

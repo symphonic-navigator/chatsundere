@@ -39,6 +39,7 @@ export function PersonaAvatar({
     return (
       <div
         data-persona-avatar
+        role="img"
         aria-label={`${name} avatar`}
         className="shrink-0 overflow-hidden rounded-md bg-cover bg-center"
         style={{
@@ -56,6 +57,8 @@ export function PersonaAvatar({
   return (
     <div
       data-persona-avatar
+      role="img"
+      aria-label={`${name} avatar`}
       className="grid shrink-0 place-items-center rounded-md font-display"
       style={{
         width: size,

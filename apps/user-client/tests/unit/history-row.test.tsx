@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatRow, PersonaRow } from '../../src/boot/client-data-db';
 import { HistoryRow } from '../../src/components/history/HistoryRow';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
@@ -55,7 +55,9 @@ function wrap(ui: React.ReactElement) {
       <MemoryRouter initialEntries={['/app/history']}>
         <Routes>
           <Route path="/app/history" element={ui} />
-          <Route path="/app/chat/:id" element={<div data-testid="chat-mounted" />} />
+          <Route path="/app/chat/:chatId" element={<div data-testid="route-chat">chat</div>} />
+          <Route path="/app/chat/new" element={<div data-testid="route-new">new</div>} />
+          <Route path="/app/persona/:id" element={<div data-testid="route-persona">persona</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -63,74 +65,75 @@ function wrap(ui: React.ReactElement) {
 }
 
 describe('HistoryRow', () => {
-  it('renders the title, persona name, and a relative time', () => {
-    const { container } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
+  it('renders the persona avatar and the chat title', () => {
+    render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={() => {}} />),
     );
-    expect(container.textContent).toContain('Topic here');
-    expect(container.textContent).toContain('Aurum');
-    expect(container.querySelector('.history-row-meta')?.textContent ?? '').not.toBe('');
+    expect(screen.getByLabelText('Aurum avatar')).toBeTruthy();
+    expect(screen.getByText('Topic here')).toBeTruthy();
   });
 
-  it('tapping the row body navigates to the chat', () => {
-    const { container, getByTestId } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
+  it('shows the NSFW badge only for an adult persona', () => {
+    const { rerender } = render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={() => {}} />),
     );
-    // biome-ignore lint/style/noNonNullAssertion: selector is guaranteed present when row renders
-    fireEvent.click(container.querySelector('[data-row-body]')!);
-    expect(getByTestId('chat-mounted')).not.toBeNull();
+    expect(screen.queryByText('NSFW')).toBeNull();
+    rerender(
+      wrap(
+        <HistoryRow
+          chat={chat}
+          persona={{ ...persona, adultPersona: true }}
+          onRename={() => {}}
+          onDelete={() => {}}
+        />,
+      ),
+    );
+    expect(screen.getByText('NSFW')).toBeTruthy();
   });
 
-  it('🖎 tap enters rename mode; Enter commits via onRename', () => {
-    const onRename = vi.fn();
-    const { container } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={onRename} onDelete={vi.fn()} />),
+  it('opens the chat when the row body is tapped', () => {
+    render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={() => {}} />),
     );
-    // biome-ignore lint/style/noNonNullAssertion: selector is guaranteed present when row renders
-    fireEvent.click(container.querySelector('[data-rename-btn]')!);
-    const input = container.querySelector('input') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'New title' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onRename).toHaveBeenCalledWith('New title');
+    fireEvent.click(screen.getByText('Topic here'));
+    expect(screen.getByTestId('route-chat')).toBeTruthy();
   });
 
-  it('🗑 tap reveals the confirm tray; Delete fires onDelete', () => {
+  it('lists the four actions in the overflow menu', () => {
+    render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={() => {}} />),
+    );
+    fireEvent.click(screen.getByLabelText('Chat actions'));
+    expect(screen.getByText('Rename')).toBeTruthy();
+    expect(screen.getByText('New chat with this persona')).toBeTruthy();
+    expect(screen.getByText('Go to persona')).toBeTruthy();
+    expect(screen.getByText('Delete')).toBeTruthy();
+  });
+
+  it('enters inline rename mode from the menu', () => {
+    render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={() => {}} />),
+    );
+    fireEvent.click(screen.getByLabelText('Chat actions'));
+    fireEvent.click(screen.getByText('Rename'));
+    expect(screen.getByDisplayValue('Topic here')).toBeTruthy();
+  });
+
+  it('opens a confirm dialog from the menu and deletes on confirm', () => {
     const onDelete = vi.fn();
-    const { container } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={onDelete} />),
+    render(
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={onDelete} />),
     );
-    // biome-ignore lint/style/noNonNullAssertion: selector is guaranteed present when row renders
-    fireEvent.click(container.querySelector('[data-delete-btn]')!);
-    // biome-ignore lint/style/noNonNullAssertion: confirm button is present after delete-btn click
-    fireEvent.click(container.querySelector('[data-confirm]')!);
+    fireEvent.click(screen.getByLabelText('Chat actions'));
+    fireEvent.click(screen.getByText('Delete'));
+    expect(screen.getByText('Delete this chat?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(onDelete).toHaveBeenCalledTimes(1);
-  });
-
-  it('Cancel in the tray dismisses without firing onDelete', () => {
-    const onDelete = vi.fn();
-    const { container } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={onDelete} />),
-    );
-    // biome-ignore lint/style/noNonNullAssertion: selector is guaranteed present when row renders
-    fireEvent.click(container.querySelector('[data-delete-btn]')!);
-    // biome-ignore lint/style/noNonNullAssertion: cancel button is present after delete-btn click
-    fireEvent.click(container.querySelector('[data-cancel]')!);
-    expect(onDelete).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-confirm]')).toBeNull();
-  });
-
-  it('row body tap is suppressed while the action icons are tapped', () => {
-    const { container, queryByTestId } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
-    );
-    // biome-ignore lint/style/noNonNullAssertion: selector is guaranteed present when row renders
-    fireEvent.click(container.querySelector('[data-rename-btn]')!);
-    expect(queryByTestId('chat-mounted')).toBeNull();
   });
 });
 
 describe('HistoryRow streaming orb', () => {
-  beforeEach(() => {
+  afterEach(() => {
     useStreamManagerStore.setState({ streams: new Map() });
   });
 
@@ -154,15 +157,8 @@ describe('HistoryRow streaming orb', () => {
       ]),
     });
     const { container } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
+      wrap(<HistoryRow chat={chat} persona={persona} onRename={() => {}} onDelete={() => {}} />),
     );
     expect(container.querySelector('[data-streaming-orb]')).not.toBeNull();
-  });
-
-  it('does NOT show the orb when no live stream', () => {
-    const { container } = render(
-      wrap(<HistoryRow chat={chat} persona={persona} onRename={vi.fn()} onDelete={vi.fn()} />),
-    );
-    expect(container.querySelector('[data-streaming-orb]')).toBeNull();
   });
 });

@@ -5,8 +5,11 @@ import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { useChatArtefactCount } from '../../data/artefacts.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { relativeTimeLabel } from '../../lib/relative-time.js';
+import { PersonaAvatar } from '../PersonaAvatar.js';
 import { StreamingOrb } from '../StreamingOrb.js';
-import { HistoryRowConfirmTray } from './HistoryRowConfirmTray.js';
+import { Badge } from '../ui/Badge.js';
+import { ConfirmDialog } from '../ui/ConfirmDialog.js';
+import { OverflowMenu } from '../ui/OverflowMenu.js';
 import { HistoryRowRenameInput } from './HistoryRowRenameInput.js';
 
 interface Props {
@@ -16,97 +19,118 @@ interface Props {
   onDelete: () => void;
 }
 
+/**
+ * One chat in My History, in the shared `cs-row` grammar: persona avatar leading
+ * (with the live-stream orb pinned to its corner), the chat title (1px under the
+ * row default) over `persona · age`, then an NSFW badge (adult personas only) +
+ * a `⋯` menu trailing. Every secondary action — rename, new chat, go to persona,
+ * delete — lives in the menu so the row body stays a single tap into the chat.
+ */
 export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.Element {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'idle' | 'rename' | 'confirm-delete'>('idle');
-  // Only fetch the artefact count when the confirm-delete tray is visible — avoids loading
-  // full artefact content for every history row just to render a warning count.
-  const artefactCountQuery = useChatArtefactCount(chat.id, mode === 'confirm-delete');
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Only fetch the artefact count while the delete dialog is open — avoids
+  // loading artefact content for every row just to render a warning count.
+  const artefactCountQuery = useChatArtefactCount(chat.id, confirmDelete);
   const artefactCount = artefactCountQuery.data ?? 0;
 
-  if (mode === 'confirm-delete') {
-    return (
-      <li className="history-row relative rounded-lg">
-        <StreamingOrb personaId={persona.id} colour={persona.colour} />
-        <HistoryRowConfirmTray
-          onCancel={() => setMode('idle')}
-          onDelete={() => {
-            setMode('idle');
-            onDelete();
-          }}
-          artefactCount={artefactCount}
+  const leading = (
+    <span className="cs-row-leading">
+      <span className="history-avatar">
+        <PersonaAvatar
+          personaId={persona.id}
+          name={persona.name}
+          colour={persona.colour}
+          size={40}
         />
-      </li>
-    );
-  }
+        <StreamingOrb personaId={persona.id} colour={persona.colour} />
+      </span>
+    </span>
+  );
+  const subtitle = (
+    <span className="cs-row-subtitle">
+      <span style={{ color: persona.colour, opacity: 0.8 }}>{persona.name}</span>
+      {' · '}
+      {relativeTimeLabel(chat.lastMessageAt)}
+    </span>
+  );
 
   return (
-    <li className="history-row relative rounded-lg border border-white/5 bg-white/[0.02]">
-      <StreamingOrb personaId={persona.id} colour={persona.colour} />
-      <div className="flex items-stretch">
-        {/* Row body — navigates to chat in idle mode; shows rename input in rename mode */}
-        {mode === 'rename' ? (
-          <div className="min-w-0 flex-1 px-3 py-2">
+    <div className="cs-row" data-history-row={chat.id}>
+      {renaming ? (
+        <div className="cs-row-main" data-static>
+          {leading}
+          <span className="cs-row-body">
             <HistoryRowRenameInput
               initialValue={chat.title ?? ''}
               onCommit={(next) => {
-                setMode('idle');
+                setRenaming(false);
                 onRename(next);
               }}
-              onCancel={() => setMode('idle')}
+              onCancel={() => setRenaming(false)}
             />
-            <div className="history-row-meta text-xs text-paper-soft">
-              <span style={{ color: persona.colour, opacity: 0.7 }}>{persona.name}</span>
-              <span> · </span>
-              <span>{relativeTimeLabel(chat.lastMessageAt)}</span>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            data-row-body
-            onClick={() => navigate(`/app/chat/${chat.id}`)}
-            className="min-w-0 flex-1 px-3 py-2 text-left"
-          >
-            <div className="truncate font-display text-base" style={{ color: persona.colour }}>
-              {displayTitle(chat)}
-            </div>
-            <div className="history-row-meta text-xs text-paper-soft">
-              <span style={{ color: persona.colour, opacity: 0.7 }}>{persona.name}</span>
-              <span> · </span>
-              <span>{relativeTimeLabel(chat.lastMessageAt)}</span>
-            </div>
-          </button>
-        )}
-
-        {/* Action icons — stopPropagation prevents row-body click bubbling */}
-        <div className="flex shrink-0 items-center gap-1 pr-2">
-          <button
-            type="button"
-            data-rename-btn
-            aria-label="Rename chat"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMode('rename');
-            }}
-            className="grid h-8 w-8 place-items-center rounded-md text-paper-soft hover:text-paper"
-          >
-            🖎
-          </button>
-          <button
-            type="button"
-            data-delete-btn
-            aria-label="Delete chat"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMode('confirm-delete');
-            }}
-            className="grid h-8 w-8 place-items-center rounded-md text-paper-soft hover:text-danger"
-          >
-            🗑
-          </button>
+            {subtitle}
+          </span>
         </div>
-      </div>
-    </li>
+      ) : (
+        <button
+          type="button"
+          data-row-body
+          className="cs-row-main"
+          onClick={() => navigate(`/app/chat/${chat.id}`)}
+        >
+          {leading}
+          <span className="cs-row-body">
+            <span className="cs-row-title" data-compact style={{ color: persona.colour }}>
+              {displayTitle(chat)}
+            </span>
+            {subtitle}
+          </span>
+        </button>
+      )}
+
+      <span className="cs-row-trailing">
+        {persona.adultPersona ? <Badge tone="danger">NSFW</Badge> : null}
+        <OverflowMenu
+          triggerLabel="Chat actions"
+          items={[
+            { label: 'Rename', onSelect: () => setRenaming(true) },
+            {
+              label: 'New chat with this persona',
+              onSelect: () => navigate(`/app/chat/new?personaId=${persona.id}`),
+            },
+            {
+              label: 'Go to persona',
+              onSelect: () =>
+                navigate(
+                  `/app/persona/${persona.id}?return=${encodeURIComponent(
+                    `/app/history?personaId=${persona.id}`,
+                  )}`,
+                ),
+            },
+            { label: 'Delete', tone: 'destructive', onSelect: () => setConfirmDelete(true) },
+          ]}
+        />
+      </span>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this chat?"
+        body={
+          artefactCount > 0
+            ? `This will also delete ${artefactCount} artefact${artefactCount === 1 ? '' : 's'}. This cannot be undone.`
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete();
+        }}
+      />
+    </div>
   );
 }

@@ -144,8 +144,10 @@ structure (bookmarks grouped by chat, most-recently-active first).
   replaces the bare `.bookmark-group-title` heading.
 - **Bookmark entry:** a light `cs-row` (or `cs-row`-styled `<li>`):
   - **Body:** the bookmark `label` as the title; **tap jumps** to
-    `/app/chat/{chatId}?focus={messageId}` (via the existing `onJump`). The
-    `data-role` (user/assistant) accent is preserved.
+    `/app/chat/{chatId}?focus={messageId}` (via the existing `onJump`). (There is
+    no user/assistant visual accent — the old `.bookmark-row` carried a
+    `data-role` attribute with no matching CSS, so it was inert; the rebuild drops
+    it.)
   - **Trailing:** a **visible filled star** (`★`, `data-active`) that **removes
     the bookmark** (un-stars via `useToggleBookmark`) — kept visible per Chris's
     call — plus a **`⋯`** carrying a single **Rename** action that enters the

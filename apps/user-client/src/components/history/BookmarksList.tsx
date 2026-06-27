@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { type BookmarkGroup, useSetBookmarkLabel } from '../../data/bookmarks.js';
 import { useToggleBookmark } from '../../data/chats.js';
 import { displayTitle } from '../../lib/chat-title.js';
+import { PersonaAvatar } from '../PersonaAvatar.js';
+import { OverflowMenu } from '../ui/OverflowMenu.js';
+import { HistoryRowRenameInput } from './HistoryRowRenameInput.js';
 
 interface Props {
   groups: BookmarkGroup[];
@@ -10,100 +13,85 @@ interface Props {
   onJump: (chatId: string, messageId: string) => void;
 }
 
-/** Global bookmarks, grouped by chat (most-recently-active first). Each entry
- *  can be renamed inline or removed (un-starred) in place. */
+/** Global bookmarks, grouped by chat (most-recently-active first), in the
+ *  design language: an avatar-led group header per chat, then `cs-row` entries
+ *  with a visible remove-star and a `⋯`-housed rename. */
 export function BookmarksList(p: Props): JSX.Element {
   const setLabel = useSetBookmarkLabel();
   const toggleBookmark = useToggleBookmark();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  // Escape sets this so the unmount-triggered blur does not re-commit.
-  const [discarding, setDiscarding] = useState(false);
 
-  function startRename(messageId: string, label: string): void {
-    setDiscarding(false);
-    setDraft(label);
-    setEditingId(messageId);
-  }
-  function commitRename(messageId: string): void {
-    if (discarding) {
-      setEditingId(null);
-      return;
-    }
-    const next = draft.trim();
-    void setLabel.mutateAsync({ messageId, label: next === '' ? null : next });
-    setEditingId(null);
-  }
-
-  if (p.groups.length === 0) {
-    return (
-      <div className="mt-8 grid place-items-center text-center text-paper-soft">
-        <p className="font-display text-lg italic text-paper">No bookmarks yet.</p>
-        <p className="mt-2 max-w-xs text-sm">Star a message in any chat to find it here.</p>
-      </div>
-    );
-  }
   return (
-    <ul className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {p.groups.map((g) => (
-        <li key={g.chat.id} className="bookmark-group">
-          <h3
-            className="bookmark-group-title"
-            style={g.persona?.colour ? { color: g.persona.colour } : undefined}
-          >
-            {displayTitle(g.chat)}
-          </h3>
-          <ul className="bookmark-group-list">
-            {g.bookmarks.map((b) => (
-              <li key={b.message.id} className="bookmark-entry">
-                {editingId === b.message.id ? (
-                  <input
-                    className="toc-entry-input"
-                    // biome-ignore lint/a11y/noAutofocus: inline rename — focus is the intent
-                    autoFocus
-                    value={draft}
-                    maxLength={80}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename(b.message.id);
-                      else if (e.key === 'Escape') setDiscarding(true);
-                    }}
-                    onBlur={() => commitRename(b.message.id)}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="bookmark-row"
-                    data-role={b.message.role}
-                    onClick={() => p.onJump(g.chat.id, b.message.id)}
-                  >
-                    {b.label}
-                  </button>
-                )}
-                <div className="toc-entry-actions">
-                  <button
-                    type="button"
-                    className="toc-entry-rename"
-                    aria-label="Rename bookmark"
-                    onClick={() => startRename(b.message.id, b.label)}
-                  >
-                    <span aria-hidden>🖎</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="toc-entry-star"
-                    data-active
-                    aria-label="Remove bookmark"
-                    onClick={() => void toggleBookmark.mutateAsync(b.message.id)}
-                  >
-                    <span aria-hidden>★</span>
-                  </button>
+        <section key={g.chat.id} className="flex flex-col gap-1.5">
+          <header className="flex items-center gap-2 px-1">
+            {g.persona ? (
+              <PersonaAvatar
+                personaId={g.persona.id}
+                name={g.persona.name}
+                colour={g.persona.colour}
+                size={28}
+              />
+            ) : null}
+            <h3
+              className="truncate font-display text-sm"
+              style={g.persona?.colour ? { color: g.persona.colour } : undefined}
+            >
+              {displayTitle(g.chat)}
+            </h3>
+          </header>
+
+          {g.bookmarks.map((b) => (
+            <div className="cs-row" key={b.message.id}>
+              {editingId === b.message.id ? (
+                <div className="cs-row-main" data-static>
+                  <span className="cs-row-body">
+                    <HistoryRowRenameInput
+                      initialValue={b.label}
+                      maxLength={80}
+                      sanitise={false}
+                      onCommit={(next) => {
+                        setEditingId(null);
+                        void setLabel.mutateAsync({ messageId: b.message.id, label: next });
+                      }}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  </span>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </li>
+              ) : (
+                <button
+                  type="button"
+                  className="cs-row-main"
+                  onClick={() => p.onJump(g.chat.id, b.message.id)}
+                >
+                  <span className="cs-row-body">
+                    <span className="cs-row-title" data-compact>
+                      {b.label}
+                    </span>
+                  </span>
+                </button>
+              )}
+
+              <span className="cs-row-trailing">
+                <button
+                  type="button"
+                  className="treasury-row-star"
+                  data-active
+                  aria-label="Remove bookmark"
+                  onClick={() => void toggleBookmark.mutateAsync(b.message.id)}
+                >
+                  <span aria-hidden>★</span>
+                </button>
+                <OverflowMenu
+                  triggerLabel="Bookmark actions"
+                  items={[{ label: 'Rename', onSelect: () => setEditingId(b.message.id) }]}
+                />
+              </span>
+            </div>
+          ))}
+        </section>
       ))}
-    </ul>
+    </div>
   );
 }

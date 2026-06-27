@@ -145,7 +145,7 @@ describe('HistoryPage', () => {
     renderHistory();
     // findByText properly awaits the element appearing in the DOM
     await screen.findByText('private chat');
-    const rows = document.querySelectorAll('.history-row');
+    const rows = document.querySelectorAll('[data-history-row]');
     expect(rows[0]?.textContent).toContain('private chat');
     expect(rows[1]?.textContent).toContain('about books');
   });
@@ -156,8 +156,8 @@ describe('HistoryPage', () => {
     await screen.findByText('private chat');
     const input = document.querySelector('input[type="search"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'BOOK' } });
-    await waitFor(() => expect(document.querySelectorAll('.history-row').length).toBe(1));
-    expect(document.querySelector('.history-row')?.textContent).toContain('about books');
+    await waitFor(() => expect(document.querySelectorAll('[data-history-row]').length).toBe(1));
+    expect(document.querySelector('[data-history-row]')?.textContent).toContain('about books');
   });
 
   it('persona filter narrows to one persona', async () => {
@@ -166,8 +166,8 @@ describe('HistoryPage', () => {
     await screen.findByText('private chat');
     fireEvent.click(screen.getByRole('button', { name: 'Filter by persona' }));
     fireEvent.click(screen.getByRole('button', { name: 'Sage' }));
-    await waitFor(() => expect(document.querySelectorAll('.history-row').length).toBe(1));
-    expect(document.querySelector('.history-row')?.textContent).toContain('about books');
+    await waitFor(() => expect(document.querySelectorAll('[data-history-row]').length).toBe(1));
+    expect(document.querySelector('[data-history-row]')?.textContent).toContain('about books');
   });
 
   it('NSFW persona option + NSFW chat hidden in SFW mode', async () => {
@@ -201,7 +201,7 @@ describe('HistoryPage', () => {
     renderHistory(`/app/history?personaId=${sfwId}`);
     await screen.findByText('about books');
     expect(screen.getByRole('button', { name: 'Filter by persona' }).textContent).toContain('Sage');
-    expect(document.querySelectorAll('.history-row').length).toBe(1);
+    expect(document.querySelectorAll('[data-history-row]').length).toBe(1);
   });
 
   it('bookmarks tab: persona filter and label search narrow the list', async () => {
@@ -296,7 +296,7 @@ describe('HistoryPage', () => {
     expect(link?.getAttribute('href')).toBe(`/app/chat/new?personaId=${personaId}`);
   });
 
-  it('empty state — search has no matches — no action link', async () => {
+  it('empty state — search has no matches — offers Clear filter', async () => {
     await seed();
     renderHistory();
     await screen.findByText('private chat');
@@ -304,5 +304,100 @@ describe('HistoryPage', () => {
       target: { value: 'zzzzzz' },
     });
     await screen.findByText(/no chats match your search/i);
+
+    // The search-empty state offers a Clear filter button; clicking it restores
+    // the previously-hidden chats.
+    const clearBtn = screen.getByRole('button', { name: /clear filter/i });
+    fireEvent.click(clearBtn);
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-history-row]').length).toBeGreaterThan(0),
+    );
+  });
+
+  it('empty state — persona filter has no chats — offers Clear filter', async () => {
+    const db = await openClientDataDb();
+    const personaId = uuidv7();
+    await db.personas.add({
+      id: personaId,
+      name: 'Echo',
+      tagline: '',
+      colour: '#aaa',
+      font: 'serif',
+      instructions: '',
+      canonicalId: null,
+      providerId: '',
+      modelId: '',
+      mindspaceId: null,
+      aboutMeOverride: null,
+      textureOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
+      libraryIds: [],
+      askExpertDefault: false,
+      mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    // Seed a chat for a different persona so clearing the filter reveals a row.
+    const otherId = uuidv7();
+    await db.personas.add({
+      id: otherId,
+      name: 'Sage',
+      tagline: '',
+      colour: '#aaa',
+      font: 'serif',
+      instructions: '',
+      canonicalId: null,
+      providerId: '',
+      modelId: '',
+      mindspaceId: null,
+      aboutMeOverride: null,
+      textureOverride: null,
+      temperature: 0.85,
+      adultPersona: false,
+      chatsundereTonality: true,
+      contextWindow: null,
+      libraryIds: [],
+      askExpertDefault: false,
+      mcpOverrides: {},
+      roleplay: false,
+      narration: 'first',
+      greetingEnabled: false,
+      greetingInstructions: '',
+      voice: null,
+      narratorVoice: null,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    const mindspaces = await db.mindspaces.toArray();
+    const ms = mindspaces[0];
+    if (!ms) throw new Error('seed: no mindspace seeded — openClientDataDb should have run');
+    await db.chats.add({
+      id: uuidv7(),
+      personaId: otherId,
+      title: 'about books',
+      resolvedMindspaceId: ms.id,
+      createdAt: 0,
+      lastMessageAt: 100,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    renderHistory(`/app/history?personaId=${personaId}`);
+    await screen.findByText(/no chats with .* yet/i);
+
+    const clearBtn = screen.getByRole('button', { name: /clear filter/i });
+    fireEvent.click(clearBtn);
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-history-row]').length).toBeGreaterThan(0),
+    );
   });
 });

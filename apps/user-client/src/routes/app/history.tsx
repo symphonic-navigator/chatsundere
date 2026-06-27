@@ -2,25 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { EditorTopbar } from '../../components/EditorTopbar.js';
 import { BookmarksList } from '../../components/history/BookmarksList.js';
 import { HistoryRow } from '../../components/history/HistoryRow.js';
 import { HistorySearchBar } from '../../components/history/HistorySearchBar.js';
 import { PersonaFilterDropdown } from '../../components/history/PersonaFilterDropdown.js';
+import { PageScaffold } from '../../components/ui/PageScaffold.js';
+import { useHelp } from '../../content/help/use-help.js';
 import { useBookmarks } from '../../data/bookmarks.js';
 import { useChats, useDeleteChat, useUpdateChat } from '../../data/chats.js';
 import { useMindspaces } from '../../data/mindspaces.js';
 import { useFilteredPersonas } from '../../data/personas.js';
-import { useAdultMode, useSettings } from '../../data/settings.js';
+import { useSettings } from '../../data/settings.js';
 import { displayTitle } from '../../lib/chat-title.js';
+import { historyCountLabel } from '../../lib/history-count.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 export function HistoryPage(): JSX.Element {
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
+  const { onHelp, helpOverlay } = useHelp('history');
   const chats = useChats();
   const personas = useFilteredPersonas();
-  const { mode } = useAdultMode();
   const settings = useSettings();
   const mindspaces = useMindspaces();
   const setMindspace = useMindspaceStore((s) => s.update);
@@ -45,7 +47,9 @@ export function HistoryPage(): JSX.Element {
   }, [settings.data, mindspaces.data, setMindspace]);
 
   // Auto-reset persona filter to All when the selected persona stops being
-  // visible (e.g. NSFW → SFW flip while an NSFW persona was selected).
+  // visible (e.g. NSFW → SFW flip while an NSFW persona was selected). When
+  // `mode` flips, `personas.data` changes (via useFilteredPersonas), which
+  // already re-triggers this effect.
   useEffect(() => {
     if (!filterPersonaId || !personas.data) return;
     const stillVisible = personas.data.some((p) => p.id === filterPersonaId);
@@ -55,8 +59,6 @@ export function HistoryPage(): JSX.Element {
       next.delete('personaId');
       setSearch(next, { replace: true });
     }
-    // `mode` is intentionally omitted — when mode flips, `personas.data` changes
-    // (via useFilteredPersonas), which already re-triggers this effect.
   }, [filterPersonaId, personas.data, search, setSearch]);
 
   // Mirror filterPersonaId state into the URL.
@@ -73,21 +75,23 @@ export function HistoryPage(): JSX.Element {
     () => new Set((personas.data ?? []).map((p) => p.id)),
     [personas.data],
   );
-
-  const visibleChats = useMemo(() => {
-    const all = chats.data ?? [];
-    const q = searchQuery.trim().toLowerCase();
-    return all
-      .filter((c) => visiblePersonaIds.has(c.personaId))
-      .filter((c) => filterPersonaId === null || c.personaId === filterPersonaId)
-      .filter((c) => q === '' || displayTitle(c).toLowerCase().includes(q));
-  }, [chats.data, visiblePersonaIds, filterPersonaId, searchQuery]);
-
   const personaById = useMemo(() => {
     const m = new Map<string, NonNullable<typeof personas.data>[number]>();
     for (const p of personas.data ?? []) m.set(p.id, p);
     return m;
   }, [personas.data]);
+
+  // Chats visible after NSFW gating — the count's denominator.
+  const gatedChats = useMemo(
+    () => (chats.data ?? []).filter((c) => visiblePersonaIds.has(c.personaId)),
+    [chats.data, visiblePersonaIds],
+  );
+  const visibleChats = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return gatedChats
+      .filter((c) => filterPersonaId === null || c.personaId === filterPersonaId)
+      .filter((c) => q === '' || displayTitle(c).toLowerCase().includes(q));
+  }, [gatedChats, filterPersonaId, searchQuery]);
 
   const filterPersonaName = filterPersonaId ? personaById.get(filterPersonaId)?.name : undefined;
 
@@ -108,111 +112,125 @@ export function HistoryPage(): JSX.Element {
       .filter((g) => g.bookmarks.length > 0);
   }, [bookmarks.data, visiblePersonaIds, filterPersonaId, searchQuery]);
 
+  function clearFilter(): void {
+    setFilterPersonaId(null);
+    setSearchQuery('');
+  }
+
   return (
-    <section className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-12 pt-4">
-      <EditorTopbar
-        title="My History"
-        isDirty={false}
-        onBack={() => navigate('/app')}
-        onSaveAndBack={() => {}}
-        hideSaveAndBack
-      />
-      <div className="history-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'chats'}
-          className="history-tab"
-          data-active={tab === 'chats' || undefined}
-          onClick={() => setTab('chats')}
-        >
-          Chats
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'bookmarks'}
-          className="history-tab"
-          data-active={tab === 'bookmarks' || undefined}
-          onClick={() => setTab('bookmarks')}
-        >
-          Bookmarks
-        </button>
-      </div>
-
-      <HistorySearchBar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder={tab === 'chats' ? 'Search chats by title…' : 'Search bookmarks by title…'}
-      />
-      <PersonaFilterDropdown
-        personas={personas.data ?? []}
-        selectedId={filterPersonaId}
-        onChange={setFilterPersonaId}
-      />
-
-      {tab === 'chats' ? (
-        visibleChats.length === 0 ? (
-          <EmptyState
-            totalChats={(chats.data ?? []).length}
-            filterPersonaId={filterPersonaId}
-            filterPersonaName={filterPersonaName}
-            searchActive={searchQuery.trim() !== ''}
-          />
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {visibleChats.map((c) => {
-              const p = personaById.get(c.personaId);
-              if (!p) return null;
-              return (
-                <HistoryRow
-                  key={c.id}
-                  chat={c}
-                  persona={p}
-                  onRename={(next) =>
-                    void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
-                  }
-                  onDelete={() => void deleteChat.mutateAsync(c.id)}
-                />
-              );
-            })}
-          </ul>
-        )
-      ) : visibleBookmarkGroups.length === 0 ? (
-        <div className="mt-8 grid place-items-center text-center text-paper-soft">
-          <p className="font-display text-lg italic text-paper">
-            {(bookmarks.data ?? []).length === 0
-              ? 'No bookmarks yet.'
-              : 'No bookmarks match your filter.'}
-          </p>
-          {(bookmarks.data ?? []).length === 0 ? (
-            <p className="mt-2 max-w-xs text-sm">Star a message in any chat to find it here.</p>
-          ) : null}
+    <PageScaffold crumbs={[{ label: 'My History' }]} back="/app" onHelp={onHelp}>
+      {helpOverlay}
+      <div className="flex min-h-[80dvh] flex-col gap-3 px-4 pb-12 pt-4">
+        <div className="cs-segmented" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'chats'}
+            className="cs-seg"
+            data-active={tab === 'chats' || undefined}
+            onClick={() => setTab('chats')}
+          >
+            Chats
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'bookmarks'}
+            className="cs-seg"
+            data-active={tab === 'bookmarks' || undefined}
+            onClick={() => setTab('bookmarks')}
+          >
+            Bookmarks
+          </button>
         </div>
-      ) : (
-        <BookmarksList
-          groups={visibleBookmarkGroups}
-          onJump={(chatId, messageId) => navigate(`/app/chat/${chatId}?focus=${messageId}`)}
+
+        <HistorySearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={tab === 'chats' ? 'Search chats by title…' : 'Search bookmarks by title…'}
         />
-      )}
-    </section>
+        <PersonaFilterDropdown
+          personas={personas.data ?? []}
+          selectedId={filterPersonaId}
+          onChange={setFilterPersonaId}
+        />
+
+        {tab === 'chats' ? (
+          <>
+            <span className="text-[11px] uppercase tracking-widest text-paper-soft">
+              {historyCountLabel(gatedChats.length, visibleChats.length)}
+            </span>
+            {visibleChats.length === 0 ? (
+              <ChatsEmptyState
+                filterPersonaId={filterPersonaId}
+                filterPersonaName={filterPersonaName}
+                searchActive={searchQuery.trim() !== ''}
+                onClearFilter={clearFilter}
+              />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {visibleChats.map((c) => {
+                  const p = personaById.get(c.personaId);
+                  if (!p) return null;
+                  return (
+                    <HistoryRow
+                      key={c.id}
+                      chat={c}
+                      persona={p}
+                      onRename={(next) =>
+                        void updateChat.mutateAsync({ id: c.id, patch: { title: next } })
+                      }
+                      onDelete={() => void deleteChat.mutateAsync(c.id)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : visibleBookmarkGroups.length === 0 ? (
+          <div className="mt-8 grid place-items-center text-center text-paper-soft">
+            <p className="font-display text-lg italic text-paper">
+              {(bookmarks.data ?? []).length === 0
+                ? 'No bookmarks yet.'
+                : 'No bookmarks match your filter.'}
+            </p>
+            {(bookmarks.data ?? []).length === 0 ? (
+              <p className="mt-2 max-w-xs text-sm">Star a message in any chat to find it here.</p>
+            ) : (
+              <button type="button" className="cs-btn mt-3" onClick={clearFilter}>
+                Clear filter
+              </button>
+            )}
+          </div>
+        ) : (
+          <BookmarksList
+            groups={visibleBookmarkGroups}
+            onJump={(chatId, messageId) => navigate(`/app/chat/${chatId}?focus=${messageId}`)}
+          />
+        )}
+      </div>
+    </PageScaffold>
   );
 }
 
-function EmptyState({
+function ChatsEmptyState({
   filterPersonaId,
   filterPersonaName,
   searchActive,
+  onClearFilter,
 }: {
-  totalChats: number;
   filterPersonaId: string | null;
   filterPersonaName?: string;
   searchActive: boolean;
+  onClearFilter: () => void;
 }): JSX.Element {
   if (searchActive) {
     return (
       <div className="mt-8 grid place-items-center text-center text-paper-soft">
         <p className="font-display text-lg italic text-paper">No chats match your search.</p>
+        <button type="button" className="cs-btn mt-3" onClick={onClearFilter}>
+          Clear filter
+        </button>
       </div>
     );
   }
@@ -222,12 +240,14 @@ function EmptyState({
         <p className="font-display text-lg italic text-paper">
           No chats with {filterPersonaName} yet.
         </p>
-        <Link
-          to={`/app/chat/new?personaId=${filterPersonaId}`}
-          className="mt-2 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper"
-        >
-          Start a new one
-        </Link>
+        <div className="mt-3 flex gap-2">
+          <Link to={`/app/chat/new?personaId=${filterPersonaId}`} className="cs-btn">
+            Start a new one
+          </Link>
+          <button type="button" className="cs-btn" onClick={onClearFilter}>
+            Clear filter
+          </button>
+        </div>
       </div>
     );
   }
@@ -235,10 +255,7 @@ function EmptyState({
     <div className="mt-8 grid place-items-center text-center text-paper-soft">
       <p className="font-display text-lg italic text-paper">No chats yet.</p>
       <p className="mt-2 max-w-xs text-sm">Pick a persona and</p>
-      <Link
-        to="/app/circle"
-        className="mt-2 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper"
-      >
+      <Link to="/app/circle" className="cs-btn mt-2">
         Start a conversation
       </Link>
     </div>

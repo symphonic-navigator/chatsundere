@@ -54,21 +54,24 @@ describe('BookmarksList', () => {
     expect(onJump).toHaveBeenCalledWith('c1', 'u2');
   });
 
-  it('exposes rename and remove affordances per bookmark', () => {
+  it('keeps the remove-star visible and houses rename in the overflow menu', () => {
     wrap(<BookmarksList groups={groups} onJump={() => {}} />);
-    expect(screen.getByRole('button', { name: /rename bookmark/i })).toBeTruthy();
+    // The remove affordance (the star) stays visible; rename lives in the ⋯ menu.
     expect(screen.getByRole('button', { name: /remove bookmark/i })).toBeTruthy();
+    const menu = screen.getByRole('button', { name: /bookmark actions/i });
+    expect(menu).toBeTruthy();
+    fireEvent.click(menu);
+    expect(screen.getByText('Rename')).toBeTruthy();
   });
 
-  it('opens an inline rename field when the rename affordance is tapped', () => {
+  it('opens an inline rename field when Rename is chosen from the overflow menu', () => {
     wrap(<BookmarksList groups={groups} onJump={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /rename bookmark/i }));
-    const input = screen.getByDisplayValue('starred q');
-    expect(input).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /bookmark actions/i }));
+    fireEvent.click(screen.getByText('Rename'));
+    expect(screen.getByDisplayValue('starred q')).toBeTruthy();
   });
 
-  it('renders a constructive empty state for no bookmarks', () => {
-    wrap(<BookmarksList groups={[]} onJump={() => {}} />);
-    expect(screen.getByText(/star a message/i)).toBeTruthy();
-  });
+  // The empty state is owned by the My History route (it distinguishes
+  // "no bookmarks yet" from "no bookmarks match your filter"), so the list
+  // component assumes a non-empty `groups` and renders no empty state of its own.
 });
