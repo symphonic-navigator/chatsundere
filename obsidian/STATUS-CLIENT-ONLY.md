@@ -9,10 +9,12 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 ## Current
 
 **Last updated:** 2026-06-27 — **MY CIRCLE + THE PERSONA EDITOR REBUILT IN
-THE DESIGN LANGUAGE on `feat/my-circle-persona`. Reviewed merge-ready (opus
-whole-branch + Laura pre-squash, no hard defects). NOT yet squashed / pushed
-— the branch also carries Chris's parallel v0.1.0 release-plan commits, so
-the landing is his call.**
+THE DESIGN LANGUAGE, SQUASHED TO MASTER (`c9a1250`). NOT pushed (Chris
+pushes); awaiting Chris's device-verify.** Reviewed merge-ready (opus
+whole-branch + Laura pre-squash, no hard defects). Per Chris's call the
+squash bundled the parallel v0.1.0 early-alpha release-plan doc; the
+`feat/my-circle-persona` checkpoint branch is fully contained in the squash
+and safe to delete.
 The ninth & tenth makeover surfaces — the pre-chat pair. **My Circle**
 (`/app/circle`) goes from the `PersonaCard` grid + FAB to the makeover
 **`PageScaffold` + `cs-row` list**: each persona a row (PersonaAvatar +
