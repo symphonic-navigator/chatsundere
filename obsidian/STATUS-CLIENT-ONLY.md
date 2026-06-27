@@ -8,7 +8,51 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-27 — **MY CIRCLE + THE PERSONA EDITOR REBUILT IN
+**Last updated:** 2026-06-27 — **V0.1.0 EARLY-ALPHA RELEASE PIPELINE SQUASHED
+TO MASTER (`7aa46eb`). NOT pushed (Chris pushes / tags / deploys).**
+The first public early alpha ships as a self-contained **frontend Docker image**
+to Chris's VPS via Traefik + a scoped Watchtower — superseding the GitHub Pages
+`/alpha/` path (`pages.yml` left as-is for the teaser; its `/alpha/` deploy is
+now obsolete — a later cleanup). Three pieces. **(A) `apps/user-client/Dockerfile`
++ `nginx.conf` + root `.dockerignore`** — multi-stage, monorepo-aware (build
+context = repo root), `pnpm install --ignore-scripts` (the root `prepare` →
+`lefthook install` needs git, absent in alpine), build `packages/*`→`dist/`, then
+**bake the embedding weights (int8 + q4f16) as a stable cached layer**; nginx
+serves **COOP=same-origin + COEP=credentialless natively** → `crossOriginIsolated`
+→ **multi-threaded ORT-WASM** with no service-worker hack. Model `REVISION`
+pinned to HF commit `95c27414…` + `EXPECTED_SHA256` filled for all six files
+(reproducible, integrity-checked). **(B) `.github/workflows/docker.yml` +
+`version.txt`→0.1.0 + `infra/compose.alpha.yml`** — GHCR frontend job;
+**`:latest` is tag-gated** (`enable=startsWith(ref,'refs/tags/v')`), so a master
+push builds a `sha-…`-tagged image but does **not** move `:latest` → **Watchtower
+deploys only on a conscious `v*.*.*` tag**, not every merge (deliberate deviation
+from chatsune's branch-gated `:latest`). `compose.alpha.yml` is a dedicated,
+secret-free, **committed** frontend + watchtower stack (Watchtower
+**`scope=chatsundere`**, coexists with Chris's already-scoped secondcircuit
+Watchtower); the secret-bearing backend `compose.prod.yml.example` is untouched,
+and the new name sidesteps the `.gitignore` rule on `compose.prod.yml`. **(C)
+CORS proxy hard-wired** (`CorsProxyBlock.tsx`, new `lib/cors-proxy.ts`,
+`settings.ts` load-time coercion) — the URL is fixed to `cors-proxy.tidesson.net`
+(overridable via `VITE_PROXY_URL`) and shown read-only; **users supply only the
+access key** (Chris's Discord plan: share the proxy, one field not two).
+`sealSecret`/MK consumed **verbatim → not a Larissa path**; **no Laura** (pure
+simplification of a transitional advanced block, Chris-signed-off). **Verified:**
+local `docker build` → run → curl confirms the isolation headers on `/`, SPA
+routes, `/model/`, `/assets/`; `index.html` no-store; `application/wasm` on the
+**threaded** ORT chunk; model + `/VERSION` served; `docker compose config` valid.
+Gates: `pnpm typecheck` **14/14**; `pnpm build` **9/9**; full user-client vitest
+**2082 pass / 0 fail**; Biome clean on changed files (pre-existing embeddings
+`tokenizer.json` >1 MiB baseline unchanged, gitignored). Plan:
+[[../superpowers/plans/2026-06-27-early-alpha-release-v0.1.0]]. **Next — Chris's
+hands:** `git push` master (CI builds, **no** deploy) → set the GHCR
+`chatsundere-frontend` package **public** (new package = private by default) →
+`git tag v0.1.0 && git push origin v0.1.0` (moves `:latest`) → on the VPS ensure
+the `traefik` network exists, then `docker compose -f infra/compose.alpha.yml up
+-d` → device-smoke `app.chatsundere.me` (crossOriginIsolated, persona→chat,
+KB-doc→embedding, PWA installable). Then the **chat makeover** (last + densest
+surface) + the deferred attach-picker Quick-Sheet.
+
+**Earlier (2026-06-27) — MY CIRCLE + THE PERSONA EDITOR REBUILT IN
 THE DESIGN LANGUAGE, SQUASHED TO MASTER (`c9a1250`). NOT pushed (Chris
 pushes); awaiting Chris's device-verify.** Reviewed merge-ready (opus
 whole-branch + Laura pre-squash, no hard defects). Per Chris's call the
