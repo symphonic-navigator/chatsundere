@@ -8,8 +8,9 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-27 — **V0.1.0 EARLY-ALPHA RELEASE PIPELINE SQUASHED
-TO MASTER (`7aa46eb`). NOT pushed (Chris pushes / tags / deploys).**
+**Last updated:** 2026-06-27 — **V0.1.0 EARLY-ALPHA SHIPPED & LIVE at
+`app.chatsundere.me` 🎉 (squash `7aa46eb`; tag `v0.1.0` on the feature commit;
+STATUS `0638076`). Pushed, tagged, deployed, device-confirmed by Chris.**
 The first public early alpha ships as a self-contained **frontend Docker image**
 to Chris's VPS via Traefik + a scoped Watchtower — superseding the GitHub Pages
 `/alpha/` path (`pages.yml` left as-is for the teaser; its `/alpha/` deploy is
@@ -43,14 +44,18 @@ routes, `/model/`, `/assets/`; `index.html` no-store; `application/wasm` on the
 Gates: `pnpm typecheck` **14/14**; `pnpm build` **9/9**; full user-client vitest
 **2082 pass / 0 fail**; Biome clean on changed files (pre-existing embeddings
 `tokenizer.json` >1 MiB baseline unchanged, gitignored). Plan:
-[[../superpowers/plans/2026-06-27-early-alpha-release-v0.1.0]]. **Next — Chris's
-hands:** `git push` master (CI builds, **no** deploy) → set the GHCR
-`chatsundere-frontend` package **public** (new package = private by default) →
-`git tag v0.1.0 && git push origin v0.1.0` (moves `:latest`) → on the VPS ensure
-the `traefik` network exists, then `docker compose -f infra/compose.alpha.yml up
--d` → device-smoke `app.chatsundere.me` (crossOriginIsolated, persona→chat,
-KB-doc→embedding, PWA installable). Then the **chat makeover** (last + densest
-surface) + the deferred attach-picker Quick-Sheet.
+[[../superpowers/plans/2026-06-27-early-alpha-release-v0.1.0]]. **Shipped:** GHCR
+package public, `v0.1.0` tagged + pushed, Watchtower pulled, live behind Traefik;
+device-confirmed — the embedding model is served from `app.chatsundere.me/model/`
+(not HuggingFace; `allowRemoteModels=false`) as a one-time browser-cached load,
+embedding runs, the proxy block is key-only. **Process gotcha that bit us
+(captured in memory `skip-ci-release-push-gotcha`):** the push ended on the
+`[skip ci]` STATUS commit `0638076`, which skipped the whole push's CI — so the
+tag was placed on the **feature** commit `7aa46eb` (no `[skip ci]`) to make
+`docker.yml` run. For the next release, tag the feature commit, not the master
+tip. **Next session:** the **chat makeover** (last + densest surface) + the
+deferred attach-picker Quick-Sheet; Discord alpha-tester rollout (Chris shares
+the proxy key).
 
 **Earlier (2026-06-27) — MY CIRCLE + THE PERSONA EDITOR REBUILT IN
 THE DESIGN LANGUAGE, SQUASHED TO MASTER (`c9a1250`). NOT pushed (Chris
