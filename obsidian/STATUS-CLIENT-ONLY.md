@@ -8,7 +8,47 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-26 — **MY KNOWLEDGE REBUILT IN THE DESIGN
+**Last updated:** 2026-06-27 — **MY TREASURY REBUILT IN THE DESIGN
+LANGUAGE, SQUASHED TO MASTER (`7f0ea7a`). NOT pushed (Chris pushes);
+awaiting Chris's device-verify.**
+The seventh makeover surface. The Treasury room (`/app/treasury`, the global
+view over all chat-owned artefacts) goes from the pre-makeover `EditorTopbar` +
+bespoke `.treasury-*` chrome to the makeover **`PageScaffold`/`PageBar`** + the
+**`cs-row`** list. All artefact logic (filtering, NSFW gating, URL mirroring, the
+multi-select state machine, the lightbox) is **preserved verbatim**; only chrome
++ the type-filter affordance change. **Type filter stayed a segmented control**
+(Laura's spec-pass argument, Chris's call — a fixed five-item axis, *not* a
+dropdown, reversing his original ask), restyled to `cs-segmented`, `Img`→
+`Images`. **Header count** via a new pure `treasuryCountLabel` → `empty` /
+`N artefacts` / **`N of M`** when a filter narrows the set (the empty-state
+discriminant now keys on the NSFW-visible set too). **Rows** = `cs-row` (leading
+glyph/check · title · persona·FORMAT·size·age · **inline favourite star** kept
+out of the ⋯); `data-treasury-row` preserved (lightbox zoom origin). Restyled
+the **⚙ filter sheet + bulk action bar**; authored a new **treasury `?`-help**.
+Retired the orphaned `.treasury-row*`/`.treasury-list` CSS. **No Dexie/schema
+change. Lightbox out of scope** (acceptable as-is). Built spec→plan→
+**subagent-driven** (7 tasks, per-task spec+quality review; folded review
+findings: a transient `<ul>`-wrapping-`<div>` + trailing `stopPropagation` on the
+row, a dead `useNavigate` import + the empty-state `rows`→`visibleRows`
+discriminant on the route, an ink-fallback token + `cs-seg` cursor). **Laura**
+spec-pass (**no hard defects**; the **segmented-control** kept over the
+originally-asked dropdown + `Images` + `N of M` folded; 5 softs) **and**
+pre-squash (**no hard defects**; her **§14.6 fixed-overlay watch cleared** — she
+walked the at-rest ancestor chain: `cs-page-body` carries no transform, the
+nav-zoom transform is stripped `onAnimationEnd`, overlays resolve to the viewport
+at 380 px, the lightbox portals to `<body>`). **opus** whole-branch review:
+**merge-ready** (3 Minors, all intentional/improvements — incl. the enlarged
+leading tap-target). Not a Larissa path (client-only; no `packages/crypto`,
+auth/sync/proxy change). Gates: `pnpm typecheck --force` **14/14** on master
+post-squash; full user-client vitest **2043 pass** (clean run, no baseline
+flakes this run); production build **9/9**. Specs/plans:
+[[../superpowers/specs/2026-06-27-my-treasury-makeover-design]],
+[[../superpowers/plans/2026-06-27-my-treasury]]. Branch `feat/my-treasury` kept
+until Chris pushes. **Next:** Chris device-verifies, then the **chat** (densest
+surface — comes last) and the deferred sub-surfaces (chat `DocumentPicker`,
+persona-editor `KnowledgeSection`, the attach-picker Quick-Sheet).
+
+**Earlier (2026-06-26) — MY KNOWLEDGE REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`13b867ad`). NOT pushed (Chris pushes);
 awaiting Chris's device-verify.**
 The sixth makeover surface. The knowledge-base room (`/app/knowledge`) goes
@@ -603,18 +643,21 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block).** The design language, **main menu**, **My
-Account**, and now **My Settings (+ picker components)** have all landed
-(foundations `982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My
-Settings `ad873413`). **Two things agreed next, in order:**
+**→ UI/UX makeover (the big block).** Seven surfaces have now landed: the
+design language, **main menu**, **My Account**, **My Settings (+ pickers)**, **My
+Integrations**, **My Knowledge**, and now **My Treasury** (foundations
+`982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My Settings `ad873413`,
+My Integrations `c10f4785`, My Knowledge `13b867ad`, My Treasury `7f0ea7a`).
+**The chat is the only big surface left — the densest, so it comes last.**
 
-1. **A tiny function first** (fresh context) — Chris has "something really
-   small" to slot in before the next makeover slices. Do that first.
-2. **The next "small" sub-pages** of the makeover. The settings sub-page
-   pattern is now proven and reusable: `PageScaffold` + `NavTile` matrix +
-   the **picker family** (`PickerOverlay`/`PickerField`/`ModelSlotPicker` +
-   the three content overlays) + always-save + `useHelp` per page. The chat
-   (densest surface) still comes last.
+The reusable surface pattern is now proven across seven rooms: `PageScaffold` +
+`NavTile` matrix / `cs-row` list + the **picker family**
+(`PickerOverlay`/`PickerField`/`ModelSlotPicker` + the content overlays) +
+always-save + `useHelp` per page + the segmented-control for fixed-axis filters.
+**Next, in order:** (1) Chris device-verifies My Treasury; (2) the **chat**
+makeover; (3) the deferred sub-surfaces (chat `DocumentPicker`, persona-editor
+`KnowledgeSection`, the artefact attach-picker Quick-Sheet) — fold each in with
+its parent surface.
 
 **Pending makeover-wide follow-ons** (fold in when a relevant surface is
 touched): the **design-language pass** deferrals — picker static-vs-live-Save
