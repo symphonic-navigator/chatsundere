@@ -81,13 +81,22 @@ regardless.)
    - `REGISTRY: ghcr.io`, `FRONTEND_IMAGE: ghcr.io/symphonic-navigator/chatsundere-frontend`.
    - triggers: push `master`, tags `v*.*.*`, PRs (PR builds don't push).
    - `docker/metadata-action` tags: branch, pr, `semver {{version}}/{{major}}.{{minor}}`,
-     `sha`, **`raw latest enable={{is_default_branch}}`**, raw version.txt value.
+     `sha`, raw version.txt value, and **`raw latest` gated on a tag push** —
+     `enable=${{ startsWith(github.ref, 'refs/tags/v') }}` (NOT `is_default_branch`).
+     **Deliberate deviation from chatsune:** `:latest` must move only on a `v*.*.*` tag,
+     never on a plain master push, so Watchtower deploys only when we consciously cut a
+     release. A master push still builds + pushes `sha-…`/branch-tagged images (keeps the
+     build green) but leaves `:latest` — and therefore the live alpha — untouched.
    - `docker/build-push-action` with `context: .`, `file: apps/user-client/Dockerfile`,
      gha cache, `build-args` VERSION/GIT_SHA/BUILT_AT (version computed from `version.txt`
      like chatsune). cosign signing optional (nice-to-have, can defer).
 2. **`version.txt`** `0.0.1` → `0.1.0`. Tag `v0.1.0` → image tagged `0.1.0` + `0.1.0`/`0.1`
    + `latest`.
-3. **`infra/compose.prod.yml`** (promote/extend the existing `.example`):
+3. **`infra/compose.alpha.yml`** (a NEW, dedicated frontend stack — NOT an
+   extension of `compose.prod.yml.example`, which is the secret-bearing Block-6
+   backend stack and stays untouched. The name also sidesteps the
+   `.gitignore` rule on `compose.prod.yml`; this file carries no secrets and is
+   committed as infra-as-code):
    - `frontend` service: `image: ghcr.io/symphonic-navigator/chatsundere-frontend:latest`,
      `restart: unless-stopped`, Traefik labels (`Host(\`app.chatsundere.me\`)`,
      `websecure` + letsencrypt, `loadbalancer.server.port=80`), on the external `traefik`
@@ -100,8 +109,13 @@ regardless.)
    at the VPS. Remaining prerequisite: Traefik + letsencrypt resolver up on the host
    (per chatsune `HOWTO-DEPLOY.md`).
 
-**Flow:** push to `master` → `docker.yml` builds + pushes `:latest` → Watchtower on the
-VPS pulls + recreates `frontend` → live. Tag `v0.1.0` for the pinned release image.
+**Flow:** push to `master` → `docker.yml` builds + pushes a `sha-…`/branch-tagged image,
+`:latest` unmoved → **no deploy**. When ready, `git tag v0.1.x && git push --tags` →
+`docker.yml` builds + moves `:latest` (+ `0.1.x`/`0.1`) → Watchtower on the VPS pulls +
+recreates `frontend` → live. Deploying = consciously cutting a tag.
+
+**First deploy:** tag `v0.1.0` first so `:latest` exists, then on the VPS
+`docker compose -f infra/compose.alpha.yml up -d` (pulls the freshly-built `:latest`).
 
 ---
 
@@ -143,7 +157,7 @@ consumer sites keep reading `settings.corsProxy.url` (now always the constant);
    - **Fonts/VAD** still load under COEP credentialless (no console CORP errors).
 3. **CI:** push `master` → `docker.yml` pushes `…/chatsundere-frontend:latest`. Tag
    `v0.1.0` → semver tags present in GHCR.
-4. **VPS:** `docker compose -f infra/compose.prod.yml up -d` → Traefik serves the host
+4. **VPS:** `docker compose -f infra/compose.alpha.yml up -d` → Traefik serves the host
    over TLS; Watchtower pulls on the next `:latest`. Smoke on a real device: persona →
    chat → memory consolidation; PWA installable.
 

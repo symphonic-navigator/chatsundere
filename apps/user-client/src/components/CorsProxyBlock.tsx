@@ -5,13 +5,14 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useProviders } from '../data/providers.js';
 import { useSettings, useUpdateSettings } from '../data/settings.js';
+import { CORS_PROXY_URL } from '../lib/cors-proxy.js';
 import { sealSecret } from '../lib/secrets.js';
 
 /**
  * Global CORS-proxy configuration. Transitional alpha scaffolding — at beta the
- * authenticated proxy moves server-side and this block is removed. It gives the
- * single global proxy (today only set as a side-effect inside ProviderSheet) a
- * real home at the top of the Upstream-Providers section.
+ * authenticated proxy moves server-side and this block is removed. The proxy
+ * endpoint is fixed ({@link CORS_PROXY_URL}); the user supplies only the access
+ * key, which is sealed to the master key before it is stored.
  */
 export function CorsProxyBlock(): JSX.Element {
   const settings = useSettings();
@@ -21,17 +22,17 @@ export function CorsProxyBlock(): JSX.Element {
 
   const current = settings.data?.corsProxy ?? null;
   const [editing, setEditing] = useState(false);
-  const [url, setUrl] = useState(current?.url ?? '');
   const [shared, setShared] = useState('');
 
   async function onSave() {
-    if (!mk || !url) return;
-    // Seal a freshly-typed shared key; otherwise keep the existing sealed blob.
+    // A freshly-typed key is required the first time; when editing an existing
+    // proxy a blank field keeps the current sealed key.
+    if (!mk) return;
     const sharedKey = shared
       ? await sealSecret(shared, mk, 'cors-proxy/shared-key')
       : current?.sharedKey;
     if (!sharedKey) return;
-    await update.mutateAsync({ corsProxy: { url, sharedKey } });
+    await update.mutateAsync({ corsProxy: { url: CORS_PROXY_URL, sharedKey } });
     setShared('');
     setEditing(false);
   }
@@ -47,7 +48,7 @@ export function CorsProxyBlock(): JSX.Element {
       if (!ok) return;
     }
     void update.mutateAsync({ corsProxy: null });
-    setUrl('');
+    setShared('');
     setEditing(false);
   }
 
@@ -58,29 +59,24 @@ export function CorsProxyBlock(): JSX.Element {
           CORS Proxy · advanced
         </span>
         {current ? (
-          <span className="text-[10px] text-success">● Set</span>
+          <span className="text-[10px] text-success">● Key set</span>
         ) : (
-          <span className="text-[10px] text-paper-soft">No proxy set</span>
+          <span className="text-[10px] text-paper-soft">No key set</span>
         )}
+      </div>
+
+      <div className="mb-2 flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-paper-soft/80">
+          {CORS_PROXY_URL}
+        </span>
       </div>
 
       {editing ? (
         <div className="space-y-2">
           <input
-            aria-label="Proxy URL"
-            type="text"
-            placeholder="https://example.com"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            autoComplete="off"
-            data-1p-ignore
-            name=""
-            className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none"
-          />
-          <input
-            aria-label="Shared key"
+            aria-label="Access key"
             type="password"
-            placeholder={current ? 'leave blank to keep current' : 'shared secret'}
+            placeholder={current ? 'leave blank to keep current key' : 'access key'}
             value={shared}
             onChange={(e) => setShared(e.target.value)}
             autoComplete="off"
@@ -91,7 +87,10 @@ export function CorsProxyBlock(): JSX.Element {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                setShared('');
+                setEditing(false);
+              }}
               className="flex-1 rounded-md border border-paper-soft/30 px-3 py-1.5 text-xs uppercase tracking-wider text-paper-soft"
             >
               Cancel
@@ -101,24 +100,18 @@ export function CorsProxyBlock(): JSX.Element {
               onClick={() => void onSave()}
               className="flex-1 rounded-md bg-paper px-3 py-1.5 text-xs uppercase tracking-wider text-ink"
             >
-              Save proxy
+              Save key
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 truncate font-mono text-xs text-paper-soft">
-            {current?.url ?? '—'}
-          </span>
+        <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={() => {
-              setUrl(current?.url ?? '');
-              setEditing(true);
-            }}
+            onClick={() => setEditing(true)}
             className="rounded-md border border-paper-soft/30 px-2 py-1 text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper"
           >
-            {current ? 'Edit' : 'Set'}
+            {current ? 'Change key' : 'Set key'}
           </button>
           {current ? (
             <button

@@ -10,7 +10,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'Snowflake/snowflake-arctic-embed-m-v2.0';
-const REVISION = 'main'; // PIN to a commit SHA once known.
+// Pinned to a commit SHA for reproducible Docker image layers (the model is
+// baked into the frontend image at build time). Bump deliberately when the
+// upstream weights change.
+const REVISION = '95c2741480856aa9666782eb4afe11959938017f';
 const BASE = `https://huggingface.co/${REPO}/resolve/${REVISION}`;
 
 // transformers.js expects this on-disk layout under localModelPath ('/model/'):
@@ -25,9 +28,15 @@ const FILES = [
   'onnx/model_q4f16.onnx',
 ];
 
-// Filled in after the first run prints the computed hashes.
+// Pinned against the REVISION above. Any mismatch aborts the download — guards
+// the baked-in image layer against corrupted or substituted upstream bytes.
 const EXPECTED_SHA256 = {
-  // 'onnx/model_int8.onnx': '…',
+  'config.json': '2e0b386e7a826903b06c301f8d4dde2ac6279f7ccd3ea11f3911019a1ee0bc05',
+  'tokenizer.json': 'f1cc44ad7faaeec47241864835473fd5403f2da94673f3f764a77ebcb0a803ec',
+  'tokenizer_config.json': '6f00514620aff01ba8b7291b2394e98daca5be264cb743805232d9ae27494b2a',
+  'special_tokens_map.json': '8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835',
+  'onnx/model_int8.onnx': '03d923bb1850ebdccb068e2f3abd8aa43fe81c50d07d037ef103fe3d0fb78e3b',
+  'onnx/model_q4f16.onnx': '3cabedcefa1a1c1a8f8c6bb46bad75219f23ef73892580bcf59e96b03b941e5c',
 };
 
 const here = dirname(fileURLToPath(import.meta.url));

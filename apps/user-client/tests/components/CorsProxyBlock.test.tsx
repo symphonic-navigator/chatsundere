@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { CORS_PROXY_URL } from '../../src/lib/cors-proxy.js';
 
 const updateMock = vi.fn(async () => {});
 let proxyState: { url: string; sharedKey: unknown } | null = null;
@@ -42,11 +43,37 @@ describe('CorsProxyBlock', () => {
     expect(screen.getByText(/server connection at beta/i)).toBeInTheDocument();
   });
 
-  it('shows "no proxy set" when none configured', () => {
+  it('shows "no key set" when none configured', () => {
     proxyState = null;
     providerRows = [];
     render(<CorsProxyBlock />);
-    expect(screen.getByText(/no proxy set/i)).toBeInTheDocument();
+    expect(screen.getByText(/no key set/i)).toBeInTheDocument();
+  });
+
+  it('shows the fixed proxy endpoint read-only (no URL input)', () => {
+    proxyState = null;
+    providerRows = [];
+    render(<CorsProxyBlock />);
+    expect(screen.getByText(CORS_PROXY_URL)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/proxy url/i)).not.toBeInTheDocument();
+  });
+
+  it('saves the key against the fixed proxy URL', async () => {
+    proxyState = null;
+    providerRows = [];
+    updateMock.mockClear();
+    render(<CorsProxyBlock />);
+    fireEvent.click(screen.getByRole('button', { name: /set key/i }));
+    fireEvent.change(screen.getByLabelText(/access key/i), { target: { value: 'secret-key' } });
+    fireEvent.click(screen.getByRole('button', { name: /save key/i }));
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith({
+        corsProxy: {
+          url: CORS_PROXY_URL,
+          sharedKey: { version: 1, ciphertext: new Uint8Array([1]), nonce: new Uint8Array([2]) },
+        },
+      }),
+    );
   });
 
   it('clears without confirm when no proxy-provider is active', () => {

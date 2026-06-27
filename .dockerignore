@@ -1,0 +1,39 @@
+# Build-context trimming for the frontend image (context = repo root).
+# Keep: every package.json, all src/, tsconfig*, vite.config, index.html,
+# public/, biome.json, turbo.json, pnpm-*.yaml. Drop everything heavy or
+# irrelevant to a production client build.
+
+# Dependencies + build output (reinstalled / rebuilt inside the image)
+**/node_modules
+**/dist
+**/.turbo
+
+# VCS + CI
+.git
+.github
+.gitignore
+
+# Docs, vault, working tools — never needed by the build
+obsidian
+superpowers
+docs
+analysis
+screenshots
+dumps
+*.md
+
+# Local infra / env / editor cruft
+infra
+.envrc
+.mise.toml
+.editorconfig
+**/.DS_Store
+**/*.log
+
+# Tests are not part of a production build
+**/tests
+**/*.test.ts
+**/*.test.tsx
+
+# The model tree is fetched inside the image, never copied from host
+apps/user-client/public/model

@@ -1,0 +1,55 @@
+# Production stack for the Chatsundere early-alpha (v0.1.0) — FRONTEND ONLY.
+#
+# The client is local-first and standalone; no backend/auth/sync runs yet (that
+# is Block 6). The backend infra stack lives separately in
+# `compose.prod.yml.example`. The CORS proxy runs externally
+# (https://cors-proxy.tidesson.net) and is not managed here.
+#
+# Assumes Traefik is already running on the host and exposes an external Docker
+# network named `traefik`, with a TLS cert resolver named `letsencrypt`. Adjust
+# both names below if the host differs.
+#
+# Usage on the VPS:
+#   docker compose -f infra/compose.alpha.yml up -d
+#   # deploys happen automatically when a v*.*.* tag moves :latest (Watchtower).
+
+name: chatsundere-alpha
+
+services:
+  frontend:
+    image: ghcr.io/symphonic-navigator/chatsundere-frontend:latest
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.chatsundere-frontend.rule=Host(`app.chatsundere.me`)"
+      - "traefik.http.routers.chatsundere-frontend.entrypoints=websecure"
+      - "traefik.http.routers.chatsundere-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.chatsundere-frontend.loadbalancer.server.port=80"
+      # Watchtower opt-in (scoped, so it never touches non-Chatsundere containers).
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.scope=chatsundere"
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only manage containers carrying the matching scope + enable label, so
+      # this coexists with any other Watchtower already on the host.
+      WATCHTOWER_SCOPE: chatsundere
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "120"
+    labels:
+      - "com.centurylinklabs.watchtower.scope=chatsundere"
+
+networks:
+  # Shared network with Traefik. Must already exist on the host
+  # (`docker network create traefik` if it does not).
+  traefik:
+    external: true
+    name: traefik
