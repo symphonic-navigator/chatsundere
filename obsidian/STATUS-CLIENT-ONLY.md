@@ -53,10 +53,20 @@ cross-surface call, not a My-History fix). Not a Larissa path (client-only).
 Gates: `pnpm typecheck --force` **14/14** on master post-squash; full user-client
 vitest **2046 pass** (clean run); production build **9/9**; Biome clean.
 Specs/plans: [[../superpowers/specs/2026-06-27-my-history-makeover-design]],
-[[../superpowers/plans/2026-06-27-my-history]]. Branch `feat/my-history` kept until
-Chris pushes. **Next:** Chris device-verifies, then the **chat** (the last and
-densest surface) + the deferred sub-surfaces (chat `DocumentPicker`,
-persona-editor `KnowledgeSection`, the attach-picker Quick-Sheet).
+[[../superpowers/plans/2026-06-27-my-history]].
+**Follow-up landed (`00fe551`):** list-surface chrome now **pins** — a new opt-in
+**`stickyHeader`** slot on `PageScaffold` keeps the PageBar + tabs/search/filter/
+count fixed as one frosted `.cs-page-chrome` block so **only the list scrolls**
+(applied to My History *and* My Treasury; document-scroll preserved for mobile
+URL-bar collapse; backward-compatible — every page without `stickyHeader` is
+byte-identical). It is a **reusable list-surface primitive** the chat makeover and
+future list rooms should adopt. The merged `feat/my-history` + `feat/my-treasury`
+checkpoint branches were removed during cleanup (their squashes `d5721cb` /
+`7f0ea7a` are on master). **Next:** Chris device-verifies My History + My Treasury
+(incl. the only-the-list-scrolls feel), then **My Circle + the persona page**
+(the pre-chat pair, next context window), then the **chat** (last + densest) +
+the deferred sub-surfaces (chat `DocumentPicker`, persona-editor
+`KnowledgeSection`, the attach-picker Quick-Sheet).
 
 **Earlier (2026-06-27) — MY TREASURY REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`7f0ea7a`). NOT pushed (Chris pushes);
@@ -699,16 +709,21 @@ Integrations**, **My Knowledge**, **My Treasury**, and now **My History**
 (foundations `982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My Settings
 `ad873413`, My Integrations `c10f4785`, My Knowledge `13b867ad`, My Treasury
 `7f0ea7a`, My History `d5721cb`).
-**The chat is the only big surface left — the densest, so it comes last.**
+**Two surfaces remain before the chat — `My Circle` + the persona page — and the
+chat is last (the densest).**
 
 The reusable surface pattern is now proven across eight rooms: `PageScaffold` +
 `NavTile` matrix / `cs-row` list + the **picker family**
 (`PickerOverlay`/`PickerField`/`ModelSlotPicker` + the content overlays) +
-always-save + `useHelp` per page + the segmented-control for fixed-axis filters.
-**Next, in order:** (1) Chris device-verifies My Treasury + My History; (2) the
-**chat** makeover; (3) the deferred sub-surfaces (chat `DocumentPicker`,
-persona-editor `KnowledgeSection`, the artefact attach-picker Quick-Sheet) — fold
-each in with its parent surface.
+always-save + `useHelp` per page + the segmented-control for fixed-axis filters +
+the new **`stickyHeader`** slot (pins the chrome so only the list scrolls — for
+list rooms).
+**Next, in order:** (1) Chris device-verifies My Treasury + My History; (2) **My
+Circle**; (3) the **persona page** (persona editor) — this pair is the agreed
+pre-chat work (Chris's call, next context window after `/clear`); (4) the **chat**
+makeover; (5) the deferred sub-surfaces (chat `DocumentPicker`, persona-editor
+`KnowledgeSection`, the artefact attach-picker Quick-Sheet) — fold each in with its
+parent surface.
 
 **Pending makeover-wide follow-ons** (fold in when a relevant surface is
 touched): the **design-language pass** deferrals — picker static-vs-live-Save
