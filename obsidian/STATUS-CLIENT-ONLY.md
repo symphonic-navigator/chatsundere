@@ -8,7 +8,57 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-27 — **MY TREASURY REBUILT IN THE DESIGN
+**Last updated:** 2026-06-27 — **MY HISTORY REBUILT IN THE DESIGN
+LANGUAGE, SQUASHED TO MASTER (`d5721cb`). NOT pushed (Chris pushes);
+awaiting Chris's device-verify.**
+The eighth makeover surface. `/app/history` goes from the pre-makeover
+`EditorTopbar` + bespoke `.history-*`/`.bookmark-*` chrome to the makeover
+**`PageScaffold`/`PageBar`** + **`cs-segmented`** tabs + the **`cs-row`** list,
+across **both tabs** (Chats and Bookmarks). **Chat rows**: `PersonaAvatar`
+leading (the `StreamingOrb` pinned to its corner), a **1px-smaller title**
+(`cs-row-title[data-compact]`) in the persona colour over `persona · age`, an
+**NSFW `Badge`** gated on **`persona.adultPersona`** (renders in adult mode only —
+SFW filters adult personas out upstream), and an **`OverflowMenu`** carrying the
+four actions Chris asked for behind `⋯`: **Rename** (inline), **New chat with this
+persona**, **Go to persona** (via `?return=` URL-encoded back to the *filtered*
+History — Laura SOFT-1), **Delete** (destructive → `ConfirmDialog` with the lazy
+`useChatArtefactCount` warning, replacing the old inline tray). Row-body tap still
+opens the chat. **Bookmarks**: avatar-led group headers, a **visible remove-star**
++ rename housed in a per-entry `⋯` (Chris's call: star visible, rename in the
+menu); the **empty state moved to the route** (distinguishing *no bookmarks yet*
+from *no bookmarks match your filter*). Restyled the **persona filter dropdown** to
+the `cs-*` tokens; new pure **`historyCountLabel`** (empty / `N chats` / `N of M`)
+mirroring Treasury; **Clear-filter** CTAs on the filtered-empty states (Laura
+SOFT-5). **`HistoryRowRenameInput`** gained an opt-out **`sanitise`** flag (default
+true keeps chat-rename byte-equivalent; bookmarks opt out to preserve full
+80-char labels — a regression the quality review caught) + optional `maxLength`.
+**`PersonaAvatar`** gained `role="img"` + an `aria-label` on its monogram branch.
+Retired `HistoryRowConfirmTray` + the dead `.history-*`/`.bookmark-*` CSS;
+**`.toc-entry-*` kept** (owned by the chat ToC `TocSheet`). **No Dexie/schema
+change.** Built spec→**Laura spec-pass** (no hard defects; SOFT-1 `?return=` +
+SOFT-5 Clear-filter folded as build mandates; SOFT-3 380px crowding a build
+watch)→plan→**subagent-driven** (7 tasks, per-task spec+quality review; folded:
+restored a streaming-orb test + class-ified the rename cursor, the bookmark
+label-sanitise opt-out, Clear-filter test coverage; **a Task-7 over-fix that
+reverted the bookmark `⋯` design to satisfy a *pre-existing* stale component test
+was caught and reverted** — the approved star+`⋯` design restored, the stale test
+updated). **opus** whole-branch review: **merge-ready** (2 advisory minors folded:
+`role="img"`, dead `data-role` dropped). **Laura** pre-squash: **no hard defects**
+— her SOFT-3 cleared (the title *wraps*, never truncates; the NSFW Badge is
+non-interactive so no `⋯` collision); 4 softs deferred, two of them
+**Chris-arbitrated ship-as-is** (the generic "Clear filter" copy; the "All"→
+persona narrowing on Go-to-persona return), two folded into the **design-language
+tap-target sweep** (the shared 32px `⋯` trigger + adjacent star/`⋯` targets — a
+cross-surface call, not a My-History fix). Not a Larissa path (client-only).
+Gates: `pnpm typecheck --force` **14/14** on master post-squash; full user-client
+vitest **2046 pass** (clean run); production build **9/9**; Biome clean.
+Specs/plans: [[../superpowers/specs/2026-06-27-my-history-makeover-design]],
+[[../superpowers/plans/2026-06-27-my-history]]. Branch `feat/my-history` kept until
+Chris pushes. **Next:** Chris device-verifies, then the **chat** (the last and
+densest surface) + the deferred sub-surfaces (chat `DocumentPicker`,
+persona-editor `KnowledgeSection`, the attach-picker Quick-Sheet).
+
+**Earlier (2026-06-27) — MY TREASURY REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`7f0ea7a`). NOT pushed (Chris pushes);
 awaiting Chris's device-verify.**
 The seventh makeover surface. The Treasury room (`/app/treasury`, the global
@@ -643,28 +693,32 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block).** Seven surfaces have now landed: the
+**→ UI/UX makeover (the big block).** Eight surfaces have now landed: the
 design language, **main menu**, **My Account**, **My Settings (+ pickers)**, **My
-Integrations**, **My Knowledge**, and now **My Treasury** (foundations
-`982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My Settings `ad873413`,
-My Integrations `c10f4785`, My Knowledge `13b867ad`, My Treasury `7f0ea7a`).
+Integrations**, **My Knowledge**, **My Treasury**, and now **My History**
+(foundations `982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My Settings
+`ad873413`, My Integrations `c10f4785`, My Knowledge `13b867ad`, My Treasury
+`7f0ea7a`, My History `d5721cb`).
 **The chat is the only big surface left — the densest, so it comes last.**
 
-The reusable surface pattern is now proven across seven rooms: `PageScaffold` +
+The reusable surface pattern is now proven across eight rooms: `PageScaffold` +
 `NavTile` matrix / `cs-row` list + the **picker family**
 (`PickerOverlay`/`PickerField`/`ModelSlotPicker` + the content overlays) +
 always-save + `useHelp` per page + the segmented-control for fixed-axis filters.
-**Next, in order:** (1) Chris device-verifies My Treasury; (2) the **chat**
-makeover; (3) the deferred sub-surfaces (chat `DocumentPicker`, persona-editor
-`KnowledgeSection`, the artefact attach-picker Quick-Sheet) — fold each in with
-its parent surface.
+**Next, in order:** (1) Chris device-verifies My Treasury + My History; (2) the
+**chat** makeover; (3) the deferred sub-surfaces (chat `DocumentPicker`,
+persona-editor `KnowledgeSection`, the artefact attach-picker Quick-Sheet) — fold
+each in with its parent surface.
 
 **Pending makeover-wide follow-ons** (fold in when a relevant surface is
 touched): the **design-language pass** deferrals — picker static-vs-live-Save
 row-affordance grammar (SOFT-5) + Mindspace live-preview; PageBar crumb
 tap-target <44px + `:focus-visible` rings; a shared focus-trap adoption for
 ReadingOverlay/ConfirmDialog (the picker focus-trap is the extractable helper);
-the `.cs-btn` `:hover`/`:focus-visible` a11y states. **Cleanup unblocked:** the
+the `.cs-btn` `:hover`/`:focus-visible` a11y states; a **tap-target sweep** —
+bump the shared `.cs-overflow-trigger` (`⋯`) from 32px to a 40–44px hit area and
+space adjacent small glyph targets (e.g. the bookmark star + `⋯`) — flagged by
+Laura at the My History pre-squash as a cross-surface call. **Cleanup unblocked:** the
 old web-select-codec consolidation is now moot (the duplicating sections were
 removed). **Start fresh after Chris's `/clear`.**
 
