@@ -20,8 +20,16 @@ import { IntegrationServerPage } from './routes/app/integrations/server.js';
 import { KnowledgeList } from './routes/app/knowledge.js';
 import { KnowledgeDocumentPage } from './routes/app/knowledge/document.js';
 import { KnowledgeLibraryPage } from './routes/app/knowledge/library.js';
-import { PersonaEditor } from './routes/app/persona-editor.js';
 import { PersonaMemory } from './routes/app/persona-memory.js';
+import { PersonaCreate } from './routes/app/persona/create.js';
+import { PersonaFontVoice } from './routes/app/persona/font-voice.js';
+import { PersonaHub } from './routes/app/persona/hub.js';
+import { PersonaInstructions } from './routes/app/persona/instructions.js';
+import { PersonaIntegrations } from './routes/app/persona/integrations.js';
+import { PersonaKnowledge } from './routes/app/persona/knowledge.js';
+import { PersonaMindspace } from './routes/app/persona/mindspace.js';
+import { PersonaModelBehaviour } from './routes/app/persona/model-behaviour.js';
+import { PersonaRoleplay } from './routes/app/persona/roleplay.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { SettingsExpertPage } from './routes/app/settings/expert.js';
 import { SettingsImagesPage } from './routes/app/settings/images.js';
@@ -112,8 +120,15 @@ export function App() {
                 <Route element={<ProtectedRoute />}>
                   <Route path="/app" element={<EntranceHall />} />
                   <Route path="/app/circle" element={<Circle />} />
-                  <Route path="/app/persona/new" element={<PersonaEditor />} />
-                  <Route path="/app/persona/:id" element={<PersonaEditor />} />
+                  <Route path="/app/persona/new" element={<PersonaCreate />} />
+                  <Route path="/app/persona/:id" element={<PersonaHub />} />
+                  <Route path="/app/persona/:id/font-voice" element={<PersonaFontVoice />} />
+                  <Route path="/app/persona/:id/instructions" element={<PersonaInstructions />} />
+                  <Route path="/app/persona/:id/integrations" element={<PersonaIntegrations />} />
+                  <Route path="/app/persona/:id/knowledge" element={<PersonaKnowledge />} />
+                  <Route path="/app/persona/:id/mindspace" element={<PersonaMindspace />} />
+                  <Route path="/app/persona/:id/model" element={<PersonaModelBehaviour />} />
+                  <Route path="/app/persona/:id/roleplay" element={<PersonaRoleplay />} />
                   <Route path="/app/persona/:id/memory" element={<PersonaMemory />} />
                   <Route path="/app/chat/new" element={<ChatPage />} />
                   <Route path="/app/chat/:chatId" element={<ChatPage />} />

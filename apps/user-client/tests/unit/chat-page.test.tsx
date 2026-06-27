@@ -329,9 +329,10 @@ describe('ChatPage eager opener-chat creation', () => {
     delete (globalThis as { localStorage?: unknown }).localStorage;
   });
 
-  it('creates exactly one opener-pending chat for a greeting-enabled persona and navigates to it', async () => {
+  it('creates exactly one opener-pending chat when both roleplay and greeting are enabled', async () => {
     const { db, personaId } = await seedPersonaWithMindspace();
-    await db.personas.update(personaId, { greetingEnabled: true });
+    // Both roleplay AND greetingEnabled must be true for the opener to fire.
+    await db.personas.update(personaId, { roleplay: true, greetingEnabled: true });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const Wrapper = makeWrapper(qc, `/app/chat/new?personaId=${personaId}`);
@@ -352,6 +353,24 @@ describe('ChatPage eager opener-chat creation', () => {
     const chats = await db.chats.where('personaId').equals(personaId).toArray();
     expect(chats).toHaveLength(1);
     expect(chats[0]?.openerPending).toBe(true);
+  });
+
+  it('does NOT create an opener-pending chat when greeting is enabled but roleplay is off', async () => {
+    // TDD gate: the opener must require BOTH roleplay AND greetingEnabled.
+    // A persona with greetingEnabled: true but roleplay: false must not trigger the eager create.
+    const { db, personaId } = await seedPersonaWithMindspace();
+    await db.personas.update(personaId, { roleplay: false, greetingEnabled: true });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<ChatPage />, {
+      wrapper: makeWrapper(qc, `/app/chat/new?personaId=${personaId}`),
+    });
+
+    await waitFor(() => expect(container.querySelector('.persona-greeting')).not.toBeNull());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(await db.chats.where('personaId').equals(personaId).count()).toBe(0);
   });
 
   it('does NOT create a chat for a persona without greeting (lazy behaviour preserved)', async () => {

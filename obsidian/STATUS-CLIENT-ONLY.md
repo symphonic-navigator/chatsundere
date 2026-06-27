@@ -8,7 +8,57 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-27 — **MY HISTORY REBUILT IN THE DESIGN
+**Last updated:** 2026-06-27 — **MY CIRCLE + THE PERSONA EDITOR REBUILT IN
+THE DESIGN LANGUAGE on `feat/my-circle-persona`. Reviewed merge-ready (opus
+whole-branch + Laura pre-squash, no hard defects). NOT yet squashed / pushed
+— the branch also carries Chris's parallel v0.1.0 release-plan commits, so
+the landing is his call.**
+The ninth & tenth makeover surfaces — the pre-chat pair. **My Circle**
+(`/app/circle`) goes from the `PersonaCard` grid + FAB to the makeover
+**`PageScaffold` + `cs-row` list**: each persona a row (PersonaAvatar +
+StreamingOrb leading, persona-colour/font name over tagline, NSFW `Badge` in
+adult mode, and — uniquely for this list — a **visible Continue/New-Chat
+button kept on every row** as the fast path to chat), the provider-missing
+cue now **routing to Settings → AI Providers**, and a **divided
+`OverflowMenu`** (New chat · New incognito [disabled] · Continue — separator —
+Go to persona · Delete→`ConfirmDialog`). **Delete moved here, off the
+editor.** The **persona editor** is split from one long accordion into: a
+focused **create step** (`/app/persona/new`, name-only to create) → a
+**Persona Hub** (`/app/persona/:id`: action row with **affirmative-only
+gold**, always-save identity [avatar/name/tagline/model], an **8-tile
+colour-clustered `NavTile` matrix** — pink Instructions/Roleplay · blue
+Model-behaviour/Integrations · green Knowledge/Memory · purple
+Font&Voice/Mindspace — Chatsune import-merge + disabled Export at the bottom,
+**no delete**) → **eight always-save sub-pages** + the **reskinned memory
+page** (PageScaffold chrome + the per-persona Remembering toggle folded in,
+labelled **persona-global**). New primitive: **`OverflowMenu` separators**.
+**Behaviour fix (Laura HARD): the greeting opener now fires only when
+`roleplay && greetingEnabled`** — greeting is a roleplay sub-feature; runtime
+gate in `chat-page.tsx`, `greetingInstructions` preserved, **no Dexie
+migration** (Chris-signed-off). New pure **`lib/persona-hub.ts`** (validity +
+tile-meta helpers). Retired `persona-editor.tsx` + `EditorTopbar` /
+`EditorSticky` / `AccordionCard` / `PersonaCard` / `MemorySection` +
+`.persona-card*` CSS (AvatarField / ContextWindowControl / defaultDraft
+extracted to shared files first). **No Dexie/schema change.** Built spec→
+**Laura spec-pass** (1 HARD greeting-orphan fixed via the runtime gate;
+softs folded: affirmative-only gold + calm incomplete sentence,
+persona-global memory label, provider-missing routing, concrete incognito
+reason)→plan→**subagent-driven (15 tasks, per-task spec+quality review)**.
+**opus** whole-branch: **merge-ready** (0 Critical/Important; 4 Minors logged
+as follow-ups: `?return=` not threaded through sub-pages, import-toast dedup,
+create cold-deep-link colour, no-op remove-avatar). **Laura** pre-squash:
+**no hard defects** (all 7 spec-pass intents held; 3 softs, the `?return=`
+papercut logged in [[insights/follow-ups-index]]). Not a Larissa path
+(client-only). Gates: `pnpm typecheck --force` **14/14**; full user-client
+vitest **2080 pass / 0 fail**; production build green; Biome clean (bar the
+pre-existing embeddings `tokenizer.json`). Specs/plans:
+[[../superpowers/specs/2026-06-27-my-circle-and-persona-editor-makeover-design]],
+[[../superpowers/plans/2026-06-27-my-circle-and-persona-editor]]. **Next:**
+land the branch (Chris's call re: the interleaved release-plan commits),
+device-verify, then the **chat** makeover (the last + densest surface) + the
+deferred attach-picker Quick-Sheet.
+
+**Earlier (2026-06-27) — MY HISTORY REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`d5721cb`). NOT pushed (Chris pushes);
 awaiting Chris's device-verify.**
 The eighth makeover surface. `/app/history` goes from the pre-makeover
@@ -703,27 +753,26 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block).** Eight surfaces have now landed: the
+**→ UI/UX makeover (the big block).** Eight surfaces have now squashed to master:
 design language, **main menu**, **My Account**, **My Settings (+ pickers)**, **My
-Integrations**, **My Knowledge**, **My Treasury**, and now **My History**
-(foundations `982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My Settings
-`ad873413`, My Integrations `c10f4785`, My Knowledge `13b867ad`, My Treasury
-`7f0ea7a`, My History `d5721cb`).
-**Two surfaces remain before the chat — `My Circle` + the persona page — and the
-chat is last (the densest).**
+Integrations**, **My Knowledge**, **My Treasury**, **My History**
+(squashes `982ea9f5`→`d5721cb`). In flight on `feat/my-circle-persona`:
+**PersonaHub** (Task 5, `3d031ea`).
+**Still ahead: My Circle + remaining persona sub-pages, then the chat (last + densest).**
 
-The reusable surface pattern is now proven across eight rooms: `PageScaffold` +
-`NavTile` matrix / `cs-row` list + the **picker family**
-(`PickerOverlay`/`PickerField`/`ModelSlotPicker` + the content overlays) +
-always-save + `useHelp` per page + the segmented-control for fixed-axis filters +
-the new **`stickyHeader`** slot (pins the chrome so only the list scrolls — for
-list rooms).
-**Next, in order:** (1) Chris device-verifies My Treasury + My History; (2) **My
-Circle**; (3) the **persona page** (persona editor) — this pair is the agreed
-pre-chat work (Chris's call, next context window after `/clear`); (4) the **chat**
-makeover; (5) the deferred sub-surfaces (chat `DocumentPicker`, persona-editor
-`KnowledgeSection`, the artefact attach-picker Quick-Sheet) — fold each in with its
-parent surface.
+The reusable surface pattern is proven across eight rooms. **On the
+`feat/my-circle-persona` branch, next tasks:**
+- My Circle (`/app/circle`) — rebuild as `PageScaffold` + persona cards
+- PersonaHub sub-pages: each of the 8 NavTile targets
+  (Instructions, Roleplay, Model behaviour, Integrations, Knowledge, Memory,
+  Font & Voice, Mindspace) needs its own route + always-save form
+- Pre-squash: Laura spec-pass (spec first) + Laura pre-squash; not a Larissa
+  path (client-only)
+**After the circle/persona surface:** (4) **chat** makeover; (5) deferred
+sub-surfaces (chat `DocumentPicker`, persona-editor `KnowledgeSection`, attach
+Quick-Sheet) — fold each in with its parent.
+
+**Start:** read the spec for My Circle before writing anything.
 
 **Pending makeover-wide follow-ons** (fold in when a relevant surface is
 touched): the **design-language pass** deferrals — picker static-vs-live-Save

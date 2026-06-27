@@ -4,6 +4,7 @@ import privacy from '../about/privacy.md?raw';
 import about from './about.md?raw';
 import biometric from './biometric.md?raw';
 import changePassphrase from './change-passphrase.md?raw';
+import circle from './circle.md?raw';
 import history from './history.md?raw';
 import integrations from './integrations.md?raw';
 import knowledgeDocument from './knowledge-document.md?raw';
@@ -11,6 +12,15 @@ import knowledgeLibrary from './knowledge-library.md?raw';
 import knowledge from './knowledge.md?raw';
 import logout from './logout.md?raw';
 import myAccount from './my-account.md?raw';
+import personaFontVoice from './persona-font-voice.md?raw';
+import personaInstructions from './persona-instructions.md?raw';
+import personaIntegrations from './persona-integrations.md?raw';
+import personaKnowledge from './persona-knowledge.md?raw';
+import personaMemory from './persona-memory.md?raw';
+import personaMindspace from './persona-mindspace.md?raw';
+import personaModel from './persona-model.md?raw';
+import personaRoleplay from './persona-roleplay.md?raw';
+import persona from './persona.md?raw';
 import recovery from './recovery.md?raw';
 import serverLinking from './server-linking.md?raw';
 import settingsExpert from './settings-expert.md?raw';
@@ -35,6 +45,15 @@ export type HelpKey =
   | 'knowledge'
   | 'knowledge-library'
   | 'knowledge-document'
+  | 'persona'
+  | 'persona-font-voice'
+  | 'persona-instructions'
+  | 'persona-memory'
+  | 'persona-integrations'
+  | 'persona-mindspace'
+  | 'persona-knowledge'
+  | 'persona-model'
+  | 'persona-roleplay'
   | 'settings'
   | 'settings-you'
   | 'settings-providers'
@@ -42,7 +61,8 @@ export type HelpKey =
   | 'settings-voice'
   | 'settings-images'
   | 'settings-expert'
-  | 'treasury';
+  | 'treasury'
+  | 'circle';
 
 export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'my-account': { title: 'My Account — help', markdown: myAccount },
@@ -57,6 +77,15 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   knowledge: { title: 'My Knowledge — help', markdown: knowledge },
   'knowledge-library': { title: 'Knowledge Library — help', markdown: knowledgeLibrary },
   'knowledge-document': { title: 'Knowledge Document — help', markdown: knowledgeDocument },
+  persona: { title: 'Persona — help', markdown: persona },
+  'persona-font-voice': { title: 'Font & Voice — help', markdown: personaFontVoice },
+  'persona-instructions': { title: 'Instructions — help', markdown: personaInstructions },
+  'persona-memory': { title: 'Memory — help', markdown: personaMemory },
+  'persona-integrations': { title: 'Integrations — help', markdown: personaIntegrations },
+  'persona-mindspace': { title: 'Mindspace — help', markdown: personaMindspace },
+  'persona-knowledge': { title: 'Knowledge — help', markdown: personaKnowledge },
+  'persona-model': { title: 'Model behaviour — help', markdown: personaModel },
+  'persona-roleplay': { title: 'Roleplay — help', markdown: personaRoleplay },
   settings: { title: 'My Settings — help', markdown: settings },
   'settings-you': { title: 'You — help', markdown: settingsYou },
   'settings-providers': { title: 'AI Providers — help', markdown: settingsProviders },
@@ -65,6 +94,7 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'settings-images': { title: 'Images — help', markdown: settingsImages },
   'settings-expert': { title: '"Ask an Expert" — help', markdown: settingsExpert },
   treasury: { title: 'My Treasury — help', markdown: treasury },
+  circle: { title: 'My Circle — help', markdown: circle },
 };
 
 export const PRIVACY_MD: string = privacy;

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { PageScaffold } from '../../components/ui/PageScaffold.js';
+import { useHelp } from '../../content/help/use-help.js';
 import {
   useBodyVersions,
   useCommitEntry,
@@ -15,21 +17,24 @@ import {
   useUnextractedCount,
   useUpdateEntry,
 } from '../../data/memory.js';
-import { usePersona } from '../../data/personas.js';
 import { useMemoryActions } from '../../lib/use-memory-actions.js';
 import { toastStore } from '../../state/toast.store.js';
+import { usePersonaEditing } from './persona/use-persona-editing.js';
 
 /** The single home for a persona's memory: review/triage journal entries and
  *  view/edit the consolidated body. Reached from the chat cockpit (with ?chat=)
- *  and from the persona editor's "Manage memory" link. */
-export function PersonaMemory(): JSX.Element | null {
+ *  and from the persona hub's Memory tile. */
+export function PersonaMemory(): JSX.Element {
   const { id } = useParams<{ id?: string }>();
   const [search] = useSearchParams();
   const chatId = search.get('chat') ?? '';
-  const navigate = useNavigate();
 
   const personaId = id ?? '';
-  const { data: persona } = usePersona(personaId || null);
+  const backPath = chatId ? `/app/chat/${chatId}` : `/app/persona/${personaId}`;
+
+  const { onHelp, helpOverlay } = useHelp('persona-memory');
+  const { persona, patch } = usePersonaEditing(personaId || null);
+
   const { data: currentBody } = useCurrentBody(personaId);
   const markViewed = useMarkMemoryViewed(personaId);
   const bodyVersion = currentBody?.version ?? 0;
@@ -47,6 +52,12 @@ export function PersonaMemory(): JSX.Element | null {
   const { data: unextracted = 0 } = useUnextractedCount(chatId);
   const { learnState, consolidateState, learnNow, consolidateNow } = useMemoryActions(chatId);
 
+  // Local draft for memoryInstructions — held locally, persisted on blur.
+  const [memInstructions, setMemInstructions] = useState('');
+  useEffect(() => {
+    setMemInstructions(persona?.memoryInstructions ?? '');
+  }, [persona?.memoryInstructions]);
+
   const [bodyDraft, setBodyDraft] = useState(currentBody?.content ?? '');
   useEffect(() => {
     setBodyDraft(currentBody?.content ?? '');
@@ -61,18 +72,18 @@ export function PersonaMemory(): JSX.Element | null {
   const [pendingDelete, setPendingDelete] = useState<Set<string>>(new Set());
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const deleteWithUndo = (id: string): void => {
-    setPendingDelete((s) => new Set(s).add(id));
+  const deleteWithUndo = (entryId: string): void => {
+    setPendingDelete((s) => new Set(s).add(entryId));
     const t = setTimeout(() => {
-      reject.mutate(id);
-      timers.current.delete(id);
+      reject.mutate(entryId);
+      timers.current.delete(entryId);
       setPendingDelete((s) => {
         const n = new Set(s);
-        n.delete(id);
+        n.delete(entryId);
         return n;
       });
     }, UNDO_MS);
-    timers.current.set(id, t);
+    timers.current.set(entryId, t);
     toastStore.show({
       message: 'Set aside for now',
       tone: 'info',
@@ -80,12 +91,12 @@ export function PersonaMemory(): JSX.Element | null {
       action: {
         label: 'Undo',
         onClick: () => {
-          const handle = timers.current.get(id);
+          const handle = timers.current.get(entryId);
           if (handle) clearTimeout(handle);
-          timers.current.delete(id);
+          timers.current.delete(entryId);
           setPendingDelete((s) => {
             const n = new Set(s);
-            n.delete(id);
+            n.delete(entryId);
             return n;
           });
         },
@@ -103,9 +114,38 @@ export function PersonaMemory(): JSX.Element | null {
     if (personaId && bodyVersion > 0) markViewed.mutate(bodyVersion);
   }, [personaId, bodyVersion]);
 
-  if (!persona) return null;
+  // ── Guard: still loading ──────────────────────────────────────────────────
+  if (persona === undefined) {
+    return (
+      <PageScaffold
+        crumbs={[
+          { label: 'My Circle', to: '/app/circle' },
+          { label: 'Persona', to: `/app/persona/${personaId}` },
+          { label: 'Memory' },
+        ]}
+        back={backPath}
+      >
+        <div data-testid="persona-memory" className="px-4 pt-4" />
+      </PageScaffold>
+    );
+  }
 
-  const back = (): void => navigate(chatId ? `/app/chat/${chatId}` : `/app/persona/${personaId}`);
+  // ── Guard: unknown persona ────────────────────────────────────────────────
+  if (persona === null) {
+    return (
+      <PageScaffold
+        crumbs={[{ label: 'My Circle', to: '/app/circle' }]}
+        back={`/app/persona/${personaId}`}
+      >
+        <div
+          data-testid="persona-memory"
+          className="flex flex-col items-center gap-4 px-4 pt-16 text-center"
+        >
+          <p className="text-paper-soft">Persona not found.</p>
+        </div>
+      </PageScaffold>
+    );
+  }
 
   const renderRow = (e: { id: string; content: string }, canCommit: boolean): JSX.Element => (
     <li key={e.id} className="memory-page-entry">
@@ -153,122 +193,177 @@ export function PersonaMemory(): JSX.Element | null {
     </li>
   );
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <section className="memory-page">
-      <header className="memory-page-header">
-        <button
-          type="button"
-          className="memory-page-back"
-          onClick={back}
-          aria-label={chatId ? 'Back to chat' : `Back to ${persona.name}`}
-        >
-          {chatId ? '← Back to chat' : `← ${persona.name}`}
-        </button>
-        <h1 className="memory-page-title">Memory</h1>
-        <span className="memory-page-persona">{persona.name}</span>
-      </header>
+    <PageScaffold
+      crumbs={[
+        { label: 'My Circle', to: '/app/circle' },
+        { label: persona.name || 'Persona', to: `/app/persona/${personaId}` },
+        { label: 'Memory' },
+      ]}
+      back={backPath}
+      onHelp={onHelp}
+    >
+      {helpOverlay}
+      <div data-testid="persona-memory" className="flex flex-col gap-6 px-4 pb-8 pt-4">
+        <h1 className="text-lg font-medium text-paper">Memory</h1>
 
-      {chatId ? (
-        <div className="memory-page-actions">
-          <button
-            type="button"
-            disabled={unextracted < 1 || learnState.status === 'pending'}
-            title={unextracted < 1 ? 'Nothing new to learn yet — keep chatting.' : undefined}
-            onClick={() => void learnNow()}
-          >
-            {learnState.status === 'pending' ? 'Learning…' : 'Learn from this chat'}
-          </button>
-          <button
-            type="button"
-            disabled={committed.length < 1 || consolidateState.status === 'pending'}
-            title={committed.length < 1 ? 'No committed memories to consolidate yet.' : undefined}
-            onClick={() => void consolidateNow()}
-          >
-            {consolidateState.status === 'pending' ? 'Consolidating…' : 'Consolidate now'}
-          </button>
-          {learnState.status === 'error' || consolidateState.status === 'error' ? (
-            <div className="memory-page-action-error" role="alert">
-              <span>
-                {learnState.error === 'no-credentials' ||
-                consolidateState.error === 'no-credentials'
-                  ? 'Credentials unavailable — re-authenticate, then retry.'
-                  : "That didn't work."}
-              </span>
-              <button
-                type="button"
-                onClick={() => void (learnState.status === 'error' ? learnNow() : consolidateNow())}
-              >
-                Retry
-              </button>
+        {/* ── Per-persona settings (persona-wide, not per-chat) ──────────── */}
+        <section className="flex flex-col gap-4">
+          {/* Remembering toggle */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm text-paper">Remembering</div>
+              <p className="text-[11px] text-paper-soft">
+                Applies to all chats with {persona.name}. When on, this persona builds a memory of
+                you and your conversations.
+              </p>
             </div>
-          ) : null}
-        </div>
-      ) : (
-        <p className="memory-page-orient">
-          Open a chat with {persona.name} to learn new memories or consolidate.
-        </p>
-      )}
-
-      <div className="memory-page-section">
-        <h2 className="memory-page-subhead">Pending</h2>
-        {visiblePending.length === 0 ? (
-          <p className="memory-page-empty">
-            {chatId
-              ? `No pending memories. Keep chatting and ${persona.name} will start to remember you.`
-              : 'No pending memories yet.'}
-          </p>
-        ) : (
-          <ul className="memory-page-list">{visiblePending.map((e) => renderRow(e, true))}</ul>
-        )}
-      </div>
-
-      {visibleCommitted.length > 0 ? (
-        <div className="memory-page-section">
-          <h2 className="memory-page-subhead">Committed, awaiting consolidation</h2>
-          <ul className="memory-page-list">{visibleCommitted.map((e) => renderRow(e, false))}</ul>
-        </div>
-      ) : null}
-
-      <div className="memory-page-section">
-        <h2 className="memory-page-subhead">The memory itself</h2>
-        {versions.length === 0 ? (
-          <p className="memory-page-empty">Nothing remembered yet.</p>
-        ) : (
-          <>
-            <AutoSizeTextarea
-              aria-label="Memory body"
-              minRows={4}
-              maxRows={30}
-              value={bodyDraft}
-              onChange={setBodyDraft}
-            />
             <button
               type="button"
-              className="memory-page-save-body"
-              disabled={bodyDraft.trim() === '' || bodyDraft === (currentBody?.content ?? '')}
-              onClick={() => saveBodyManual.mutate(bodyDraft)}
+              aria-label="Remembering"
+              aria-pressed={persona.useMemory}
+              onClick={() => void patch({ useMemory: !persona.useMemory })}
+              className={`h-6 w-12 shrink-0 rounded-full border ${
+                persona.useMemory ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
+              }`}
             >
-              Save memory
+              <span
+                className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                  persona.useMemory ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
             </button>
-            <ul className="memory-page-version-list">
-              {versions.map((v) => (
-                <li key={v.id}>
-                  <span>
-                    v{v.version} · {v.source}
-                  </span>
-                  {v.version !== (currentBody?.version ?? 0) ? (
-                    <button type="button" onClick={() => rollback.mutate(v.version)}>
-                      Restore
-                    </button>
-                  ) : (
-                    <span className="memory-page-version-current">current</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </>
+          </div>
+
+          {/* Memory instructions (blur-save) */}
+          <div>
+            <div className="mb-1 text-xs uppercase tracking-wider text-paper-soft">
+              Memory Instructions
+            </div>
+            <AutoSizeTextarea
+              aria-label="Memory instructions"
+              placeholder="e.g. remember my projects, my tone preferences, the people I mention"
+              minRows={2}
+              maxRows={10}
+              value={memInstructions}
+              onChange={setMemInstructions}
+              onBlur={(v) => void patch({ memoryInstructions: v })}
+            />
+            <p className="mt-1 text-[11px] text-paper-soft">
+              Guide what {persona.name} pays attention to when building your memory.
+            </p>
+          </div>
+        </section>
+
+        {/* ── Chat actions (gated to ?chat= path) ───────────────────────── */}
+        {chatId ? (
+          <div className="memory-page-actions">
+            <button
+              type="button"
+              disabled={unextracted < 1 || learnState.status === 'pending'}
+              title={unextracted < 1 ? 'Nothing new to learn yet — keep chatting.' : undefined}
+              onClick={() => void learnNow()}
+            >
+              {learnState.status === 'pending' ? 'Learning…' : 'Learn from this chat'}
+            </button>
+            <button
+              type="button"
+              disabled={committed.length < 1 || consolidateState.status === 'pending'}
+              title={committed.length < 1 ? 'No committed memories to consolidate yet.' : undefined}
+              onClick={() => void consolidateNow()}
+            >
+              {consolidateState.status === 'pending' ? 'Consolidating…' : 'Consolidate now'}
+            </button>
+            {learnState.status === 'error' || consolidateState.status === 'error' ? (
+              <div className="memory-page-action-error" role="alert">
+                <span>
+                  {learnState.error === 'no-credentials' ||
+                  consolidateState.error === 'no-credentials'
+                    ? 'Credentials unavailable — re-authenticate, then retry.'
+                    : "That didn't work."}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void (learnState.status === 'error' ? learnNow() : consolidateNow())
+                  }
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="memory-page-orient">
+            Open a chat with {persona.name} to learn new memories or consolidate.
+          </p>
         )}
+
+        {/* ── Pending journal entries ────────────────────────────────────── */}
+        <div className="memory-page-section">
+          <h2 className="memory-page-subhead">Pending</h2>
+          {visiblePending.length === 0 ? (
+            <p className="memory-page-empty">
+              {chatId
+                ? `No pending memories. Keep chatting and ${persona.name} will start to remember you.`
+                : 'No pending memories yet.'}
+            </p>
+          ) : (
+            <ul className="memory-page-list">{visiblePending.map((e) => renderRow(e, true))}</ul>
+          )}
+        </div>
+
+        {/* ── Committed entries awaiting consolidation ───────────────────── */}
+        {visibleCommitted.length > 0 ? (
+          <div className="memory-page-section">
+            <h2 className="memory-page-subhead">Committed, awaiting consolidation</h2>
+            <ul className="memory-page-list">{visibleCommitted.map((e) => renderRow(e, false))}</ul>
+          </div>
+        ) : null}
+
+        {/* ── The memory body + version history ─────────────────────────── */}
+        <div className="memory-page-section">
+          <h2 className="memory-page-subhead">The memory itself</h2>
+          {versions.length === 0 ? (
+            <p className="memory-page-empty">Nothing remembered yet.</p>
+          ) : (
+            <>
+              <AutoSizeTextarea
+                aria-label="Memory body"
+                minRows={4}
+                maxRows={30}
+                value={bodyDraft}
+                onChange={setBodyDraft}
+              />
+              <button
+                type="button"
+                className="memory-page-save-body"
+                disabled={bodyDraft.trim() === '' || bodyDraft === (currentBody?.content ?? '')}
+                onClick={() => saveBodyManual.mutate(bodyDraft)}
+              >
+                Save memory
+              </button>
+              <ul className="memory-page-version-list">
+                {versions.map((v) => (
+                  <li key={v.id}>
+                    <span>
+                      v{v.version} · {v.source}
+                    </span>
+                    {v.version !== (currentBody?.version ?? 0) ? (
+                      <button type="button" onClick={() => rollback.mutate(v.version)}>
+                        Restore
+                      </button>
+                    ) : (
+                      <span className="memory-page-version-current">current</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
-    </section>
+    </PageScaffold>
   );
 }

@@ -2,7 +2,7 @@
 import type { Offering } from '@chatsundere/llm-unified';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ContextWindowControl } from '../../../src/routes/app/persona-editor.js';
+import { ContextWindowControl } from '../../../src/components/persona-editor/ContextWindowControl.js';
 
 const offering = { context: { recommended: 200_000, max: 1_000_000 } } as unknown as Offering;
 

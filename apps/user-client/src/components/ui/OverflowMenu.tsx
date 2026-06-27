@@ -11,8 +11,20 @@ export interface OverflowItem {
   tone?: 'default' | 'destructive';
 }
 
+/** A visual divider between groups of items in the overflow menu. */
+export interface OverflowSeparator {
+  separator: true;
+}
+
+/** Union of a real menu item and a non-interactive group divider. */
+export type OverflowEntry = OverflowItem | OverflowSeparator;
+
+export function isSeparator(e: OverflowEntry): e is OverflowSeparator {
+  return 'separator' in e && e.separator === true;
+}
+
 export interface OverflowMenuProps {
-  items: OverflowItem[];
+  items: OverflowEntry[];
   /** Accessible name for the trigger. Defaults to "More actions". */
   triggerLabel?: string;
   /**
@@ -30,6 +42,8 @@ export interface OverflowMenuProps {
  * here so list rows stay calm; the menu is where "disabled over hidden" holds — disabled
  * items remain focusable (aria-disabled, not native disabled) and announce their reason
  * (spec §7). Appears via the origin-aware zoom (spec §3).
+ *
+ * Separator entries (`{ separator: true }`) render a visual divider between logical groups.
  */
 export function OverflowMenu({
   items,
@@ -94,6 +108,18 @@ export function OverflowMenu({
       {open ? (
         <div ref={menuRef} role="menu" className="cs-overflow-menu cs-zoom-in">
           {items.map((item, i) => {
+            if (isSeparator(item)) {
+              return (
+                // biome-ignore lint/a11y/useFocusableInteractive: a separator is a non-interactive structural role and must not be focusable
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: caller-ordered list
+                  key={i}
+                  className="cs-overflow-sep"
+                  data-testid="cs-overflow-sep"
+                  role="separator"
+                />
+              );
+            }
             const reasonId =
               item.disabled && item.disabledReason ? `${reasonBase}-${i}` : undefined;
             return (

@@ -184,6 +184,6 @@ describe('Circle filter (adult mode)', () => {
     await waitFor(() => expect(screen.getByText(/no personas yet/i)).toBeInTheDocument());
     expect(screen.queryByText('OnlyNsfw')).toBeNull();
     // Same empty-state copy as the fresh-install / never-created scenario.
-    expect(screen.getByText(/tap the/i)).toBeInTheDocument();
+    expect(screen.getByText(/create your first companion/i)).toBeInTheDocument();
   });
 });

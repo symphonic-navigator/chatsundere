@@ -191,7 +191,7 @@ export function ChatPage(): JSX.Element {
   const eagerCreateFiredRef = useRef(false);
   useEffect(() => {
     if (!isLazy || !personaIdFromQuery || !effectivePersona) return;
-    if (!effectivePersona.greetingEnabled) return;
+    if (!(effectivePersona.roleplay && effectivePersona.greetingEnabled)) return;
     if (eagerCreateFiredRef.current) return;
     eagerCreateFiredRef.current = true;
     void createChat

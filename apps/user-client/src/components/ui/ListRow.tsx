@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReactNode } from 'react';
-import { type OverflowItem, OverflowMenu } from './OverflowMenu.js';
+import { type OverflowEntry, OverflowMenu } from './OverflowMenu.js';
 
 export interface ListRowProps {
   /** ① Leading slot — avatar / icon / symbol. */
@@ -14,7 +14,7 @@ export interface ListRowProps {
   /** Tapping the row performs the primary action (open). */
   onOpen?: () => void;
   /** Secondary actions; when present a ⋯ menu renders in the trailing slot. */
-  overflow?: OverflowItem[];
+  overflow?: OverflowEntry[];
 }
 
 /**

@@ -37,7 +37,7 @@ beforeEach(async () => {
   await _resetClientDataDbForTests();
   await openClientDataDb();
   // Minimal persona row — only fields the page reads must be present.
-  await getClientDataDb().personas.add({ id: 'p1', name: 'Fable' } as never);
+  await getClientDataDb().personas.add({ id: 'p1', name: 'Fable', useMemory: false } as never);
 });
 afterEach(async () => {
   await _resetClientDataDbForTests();
@@ -52,14 +52,41 @@ describe('PersonaMemory — shell', () => {
 
   it('back goes to the chat when ?chat= is present', async () => {
     setup('/app/persona/p1/memory?chat=c1');
-    fireEvent.click(await screen.findByRole('button', { name: /back to chat/i }));
+    // PageBar renders the back control as aria-label="Back"
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
     expect(screen.getByTestId('chat-sentinel')).toBeInTheDocument();
   });
 
-  it('back goes to the persona editor when no ?chat= is present', async () => {
+  it('back goes to the persona hub when no ?chat= is present', async () => {
     setup('/app/persona/p1/memory');
-    fireEvent.click(await screen.findByRole('button', { name: /back to fable/i }));
+    await screen.findByRole('heading', { level: 1, name: /memory/i });
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
     await waitFor(() => expect(screen.getByTestId('editor-sentinel')).toBeInTheDocument());
+  });
+});
+
+describe('PersonaMemory — persona-global settings', () => {
+  it('renders the Remembering toggle with the persona-scope label', async () => {
+    setup('/app/persona/p1/memory');
+    // Scope label must be unmistakable — user must not mistake this for a per-chat switch.
+    expect(await screen.findByText(/applies to all chats with fable/i)).toBeInTheDocument();
+    // Toggle itself is present and reflects the current state.
+    const toggle = screen.getByRole('button', { name: /^remembering$/i });
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('flipping the Remembering toggle writes useMemory to the persona', async () => {
+    setup('/app/persona/p1/memory');
+    await screen.findByText(/applies to all chats with fable/i);
+
+    const toggle = screen.getByRole('button', { name: /^remembering$/i });
+    await userEvent.click(toggle);
+
+    await waitFor(async () => {
+      const updated = await getClientDataDb().personas.get('p1');
+      expect(updated?.useMemory).toBe(true);
+    });
   });
 });
 
@@ -150,7 +177,7 @@ describe('PersonaMemory — actions gating', () => {
     expect(screen.getByRole('button', { name: /consolidate now/i })).toBeInTheDocument();
   });
 
-  it('omits the actions block and shows an orientation line on the editor path', async () => {
+  it('omits the actions block and shows an orientation line on the hub path', async () => {
     setup('/app/persona/p1/memory');
     await screen.findByRole('heading', { level: 1, name: /memory/i });
     expect(screen.queryByRole('button', { name: /learn from this chat/i })).not.toBeInTheDocument();
