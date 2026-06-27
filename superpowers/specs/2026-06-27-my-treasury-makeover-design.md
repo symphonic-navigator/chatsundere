@@ -29,7 +29,9 @@ Everything on the Treasury route (`/app/treasury`):
 
 - The page chrome (topbar → `PageScaffold`/`PageBar`).
 - The artefact list rows (`TreasuryRow` → `ListRow` semantics).
-- The **type filter** (segmented `TypeTabs` → a themed dropdown; "All" the default).
+- The **type filter** (segmented `TypeTabs` kept as a segmented control, restyled
+  into the design language; the `Img` label spelled out to `Images`; "All" the
+  default).
 - The `⚙` filter sheet (persona / tags / favourites / projects-reserved) — restyled
   into the design language, behaviour unchanged.
 - The active-filter chips row — restyled, behaviour unchanged.
@@ -75,8 +77,11 @@ Replace the `EditorTopbar` + `flex min-h-[80dvh]` section with `PageScaffold`:
 - `crumbs={[{ label: 'My Treasury' }]}`, `back="/app"`, `onHelp` from
   `useHelp('treasury')`.
 - No `+ Add` button — artefacts are produced in chat, never created here.
-- A body header row carries the **count label** on the left (`N artefacts` / `empty`,
-  preserving today's copy) and the **Select** button on the right.
+- A body header row carries the **count label** on the left and the **Select** button
+  on the right. The label reads `empty` when there are no artefacts, `N artefacts`
+  when nothing is filtered, and **`N of M`** when any filter (type / persona / tags /
+  favourites / search) narrows the set — fixing today's "42 artefacts over 3 rows"
+  astonishment (Laura soft, folded).
 - The page retires the bespoke `treasury`-section wrapper; padding/scroll follow the
   `PageScaffold` contract used by My Knowledge / My Integrations.
 
@@ -107,32 +112,40 @@ the shared *visual grammar*, not prop purity. (Decided during implementation; fl
 so the reviewer expects either a clean `ListRow` adoption or a faithful `cs-row`
 composition.)
 
-## 6. Type filter — segmented tabs → themed dropdown
+## 6. Type filter — segmented control, restyled (not a dropdown)
 
-Replace `TypeTabs` with a new **`TreasuryTypeDropdown`** modelled on
-`PersonaFilterDropdown`:
+Chris's original ask was a dropdown; Laura's spec-pass argued — and Chris agreed —
+that the type axis is a **fixed five-item set with short labels**, exactly what a
+segmented control is for, whereas the `PersonaFilterDropdown` pattern earns itself on
+*unbounded* count (its own JSDoc rationale). Hiding five legible categories behind a
+trigger (1 tap → 2) would trade the browse surface's legibility for visual uniformity
+on a justification that does not apply here. **Decision: keep the segmented control.**
 
-- A hand-built dark popover (not a native `<select>`, which cannot be themed against
-  the opulent surface), with a trigger button showing the current type and a chevron,
-  and an outside-click / Escape close.
-- Options: **All** (default) · Apps · Docs · Code · Img — the same `TreasuryType`
-  union and labels as the retired tabs.
+- `TypeTabs` is **kept**, not retired — restyled into the design language (it
+  currently borrows the shared `history-tabs`/`history-tab` styling; the rebuild
+  brings it into the makeover's segmented-control aesthetic, consistent with the rest
+  of the Treasury chrome).
+- Segments: **All** (default) · Apps · Docs · Code · **Images** — the same
+  `TreasuryType` union; the clipped `Img` label is spelled out to `Images` (Laura
+  soft, folded — the segmented row has the room, and it now matches the whole-word
+  siblings).
 - "All" is the default and the resting state; selecting it clears the `type` URL
   param (today's mirror semantics preserved exactly).
 - URL mirroring of `type` via `mirrorUrl` is unchanged.
 
 ## 7. The `⚙` filter sheet + active-filter chips (restyled, behaviour kept)
 
-Chris's decision: minimal eingriff — only the type axis moves to the dropdown; the
-remaining filters stay in the `⚙` sheet.
+Chris's decision: minimal eingriff — the type axis stays a segmented control (§6);
+the remaining filters stay in the `⚙` sheet.
 
 - The `⚙` sheet keeps its four groups: **Persona** (`PersonaFilterDropdown`),
   **Tags** (`TagEditor` in `pick` mode), **Favourites only**, **Projects** (reserved,
   "Coming soon", disabled). Behaviour and contents unchanged; only the bespoke
   `.treasury-sheet*` / `.treasury-filter-*` chrome is restyled into the design
   language (shared overlay aesthetic where a primitive fits; otherwise restyled CSS).
-- The toolbar row is **Type-dropdown · Search · ⚙**, with the active-filter count
-  badge on the `⚙` button as today.
+- The toolbar keeps today's two-row layout: the **type segmented control** as its own
+  row, then a **Search · ⚙** row, with the active-filter count badge on the `⚙`
+  button as today.
 - The **active-filter chips** row (persona / favourites / each tag, each removable)
   stays, restyled to the design language.
 - The search field (`HistorySearchBar`, fuzzy name search) stays.
@@ -173,7 +186,6 @@ finding for Laura rather than silently changed; Chris arbitrates if she presses 
 
 ## 10. Retire
 
-- `TypeTabs` (replaced by `TreasuryTypeDropdown`).
 - The bespoke `.treasury-row` CSS (replaced by `cs-row`/`ListRow` styling).
 - The `EditorTopbar` usage here (replaced by `PageScaffold`/`PageBar`).
 - Bespoke `.treasury-sheet*` / `.treasury-filter-*` / `.treasury-actionbar` CSS only
@@ -184,25 +196,32 @@ finding for Laura rather than silently changed; Chris arbitrates if she presses 
 
 Author `treasury` help following the established `useHelp` pattern (the same shape
 as My Knowledge / My Integrations). It explains: artefacts collect here from chats;
-filter by type (dropdown) and by persona/tags/favourites (⚙); tap a row to open it
+filter by type (the segmented control) and by persona/tags/favourites (⚙); tap a row
+to open it
 in the lightbox; star to favourite; Select to tag or delete several at once.
 
 ## 12. Testing
 
-- The existing Treasury tests are updated to the new chrome/affordances: the type
-  filter is now a dropdown (open → pick), the rows are `cs-row`, the topbar is the
-  `PageBar`. Filtering, NSFW gating, multi-select, and lightbox-open assertions are
-  preserved (the *behaviour* is unchanged, so the assertions on outcomes carry over).
-- New: a `TreasuryTypeDropdown` unit test (default "All", pick narrows, "All" clears
-  the param) mirroring the `PersonaFilterDropdown` coverage.
+- The existing Treasury tests are updated to the new chrome: the rows are `cs-row`,
+  the topbar is the `PageBar`, the `Img` label is now `Images`. The type filter stays
+  a segmented control (its interaction is unchanged), so its assertions carry over;
+  filtering, NSFW gating, multi-select, and lightbox-open assertions are preserved
+  (the *behaviour* is unchanged).
+- New: a test that the count label reads `N of M` when a filter is active and
+  `N artefacts` when none is.
 - Full user-client vitest at the gate (expect the **8 Node-localStorage baseline**; a
   9th failure is real). `pnpm typecheck --force` 14/14. Production build clean.
 
 ## 13. Audit gates
 
-- **Laura:** spec-pass (main lever) required on this document, then a pre-squash pass
-  verifying the built flow honours the approved UX intent. Hard defects block the
-  squash. The §8 inline-confirm divergence is pre-logged as a soft.
+- **Laura:** spec-pass **done** (2026-06-27) — **no hard defects**, five softs. Two
+  folded by Chris's call: the type filter stays a **segmented control** (not a
+  dropdown — §6) and `Img`→`Images`; plus the count label now reads `N of M` when
+  filtered (§4). Pre-logged/kept as softs: the §8 inline-confirm divergence (Chris
+  keeps the behaviour, arbitrated); a pre-squash watch that the floating action bar
+  and both sheets stay fully visible at 380 px inside `PageScaffold` (§14.6). A
+  pre-squash pass still verifies the built flow honours the approved UX intent; hard
+  defects block the squash.
 - **Larissa:** not a security path — client-only; no `packages/crypto`,
   auth/sync/proxy change; the persisted-execution surface (HtmlPreview sandbox) is
   unchanged (lightbox out of scope).
@@ -211,15 +230,17 @@ in the lightbox; star to favourite; Select to tag or delete several at once.
 
 1. The Treasury opens from its Entrance-Hall tile with the Unified-Experience zoom;
    the `PageBar` shows *My Treasury*, back returns with the collapse zoom.
-2. The type dropdown defaults to **All**, lists All/Apps/Docs/Code/Img, narrows the
-   list when picked, and the choice survives a reload (URL mirror); picking All clears
-   the param.
+2. The type segmented control shows all five categories at rest
+   (All/Apps/Docs/Code/Images), defaults to **All**, narrows the list when a segment
+   is tapped, and the choice survives a reload (URL mirror); tapping All clears the
+   param.
 3. Rows show glyph · title · `persona · FORMAT · size · age`; the persona is tinted;
-   the favourite star toggles on a single tap.
+   the favourite star toggles on a single tap. With a filter active, the header count
+   reads `N of M`.
 4. The `⚙` sheet filters by persona / tags / favourites; the active-filter chips
    appear and each removes its filter; "Clear filters" resets.
-5. Search by name narrows the list; combined with the type dropdown and the sheet
-   filters they compose correctly.
+5. Search by name narrows the list; combined with the type segmented control and the
+   sheet filters they compose correctly.
 6. Select → tick several → 🏷 Tag applies tags; 🗑 Delete → inline confirm → removes
    them; Cancel exits cleanly.
 7. Tapping a row opens the lightbox at the right item; paging, edit, rename, tag, and
