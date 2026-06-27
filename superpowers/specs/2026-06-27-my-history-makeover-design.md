@@ -101,11 +101,12 @@ The existing **URL mirroring** of `personaId`, the **persona-vanish auto-reset**
     name in persona colour at 0.8 opacity (mirroring Treasury's subtitle), time
     via `relativeTimeLabel(chat.lastMessageAt)`.
 - **Trailing (`cs-row-trailing`):**
-  - **NSFW badge:** `persona.nsfw ? <Badge tone="danger">NSFW</Badge> : null` —
-    identical to My Knowledge's library badge. (In SFW mode NSFW personas are
-    already filtered out upstream by `useFilteredPersonas`, so this only ever
-    renders in adult mode — the intended safety cue, consistent with My
-    Knowledge.)
+  - **NSFW badge:** `persona.adultPersona ? <Badge tone="danger">NSFW</Badge> : null`
+    — the same `Badge tone="danger"` as My Knowledge's library badge. (The persona
+    NSFW flag is `adultPersona`, not `nsfw` — `nsfw` is the *libraries* field. In
+    SFW mode adult personas are already filtered out upstream by
+    `useFilteredPersonas` via `!p.adultPersona`, so this badge only ever renders in
+    adult mode — the intended safety cue, consistent with My Knowledge.)
   - **`OverflowMenu` (`⋯`, default icon variant)** with items in this order:
     1. **Rename** → enters inline-rename mode: the row body swaps to the
        preserved `HistoryRowRenameInput`; the rest of the row dims. On
@@ -208,7 +209,8 @@ verbatim:
 - `useFilteredPersonas` (NSFW gating), `useMindspaces`, `useSettings`,
   `useMindspaceStore` (neutral-surface reset).
 
-The NSFW badge keys purely on `persona.nsfw` — no new field, no new query.
+The NSFW badge keys purely on `persona.adultPersona` — no new field, no new
+query.
 
 ---
 
