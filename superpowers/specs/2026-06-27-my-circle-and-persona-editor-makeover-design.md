@@ -68,7 +68,9 @@ Decision 4 of the original Circle).
      personas out upstream, so it only ever shows in adult mode).
   2. The **visible chat button**: label `Continue` when the persona has a chat,
      else `New Chat`. Disabled when the persona's provider is missing, with the
-     existing `Provider missing` cue beside it (behaviour ported 1:1).
+     existing `Provider missing` cue beside it. **Close the loop (Laura SOFT):**
+     the cue is no longer a dead label — it routes to Settings → AI Providers (or
+     opens the hub's Model field) so the user can act without hunting.
   3. The **`⋯` `OverflowMenu`** (see §2.1).
 - **Row-body tap → the Persona Hub** (`/app/persona/:id`).
 
@@ -79,7 +81,7 @@ manage group:
 
 ```
 New chat                         → /app/chat/new?personaId=:id
-New incognito chat   (disabled)  reason: "Coming soon"
+New incognito chat   (disabled)  reason: "Coming soon — a chat that leaves nothing in memory"
 Continue             (disabled if no chat)  → most-recent chat
 ────────────────────────────────  ← divider
 Go to persona                    → /app/persona/:id  (the hub)
@@ -145,16 +147,20 @@ A four-item grid (reusing today's quick-actions layout, restyled with `.cs-btn`)
 |---|---|
 | **Continue** | Resume the most-recent chat. **Gold** when available (the screen's one priority). Disabled-with-reason when no chat exists or the persona is incomplete. |
 | **New Chat** | `/app/chat/new?personaId=:id`. Disabled-with-reason when incomplete. Gold *instead of* Continue when the persona is valid but has no chat yet. |
-| **New Incognito** | Disabled-with-reason ("Coming soon") — disabled-over-hidden. |
+| **New Incognito** | Disabled-with-reason ("Coming soon — a chat that leaves nothing in memory") — disabled-over-hidden. One quiet disabled entry per surface (the hub action row; the Circle row `⋯` is the other surface). |
 | **History** | `/app/history?personaId=:id`. Disabled when no chats exist. |
 
-**Gold logic (at most one per screen):**
+**Gold logic (at most one per screen — gold always means the affirmative happy
+path, never "fix this"; Laura SOFT):**
 - Valid persona **with** a chat → gold on **Continue**.
 - Valid persona **without** a chat → gold on **New Chat**.
-- **Incomplete** persona (no model or empty instructions) → no gold chat action;
-  instead the unmet requirement is flagged (Model field and/or the Instructions
-  tile show a "Needs setup" cue). The gold marker highlights the first missing
-  step (Model field if model missing, else the Instructions tile) to guide setup.
+- **Incomplete** persona (no model or empty instructions) → **no gold** (zero is
+  within the at-most-one rule). The unmet requirement is shown calmly: the Model
+  field and/or the Instructions tile carry a **"Needs setup"** cue, and the hub
+  carries **one calm guidance sentence** framing the disabled row as a next step,
+  not a locked door — e.g. *"Add an instruction and pick a model, then <name> can
+  chat."* (Laura SOFT — a freshly created persona must read as an invitation, not
+  a wall of grey.)
 
 ### 4.2 Identity
 Avatar (always-save: pick/crop → `useSetPersonaAvatar`; remove →
@@ -187,6 +193,8 @@ was — Chris's call):
   overwrite + additive session/memory import + monotonic NSFW upgrade), reusing
   the current `onApplyImport` logic adapted to write-now rather than stage.
 - **Export** — visible but **disabled-with-reason ("Coming soon")**. Slot only.
+  Kept quiet and low-weight at the bottom so a permanently-disabled affordance
+  reads as a reserved capability, not a standing nag (Laura SOFT).
 
 There is **no delete control on the hub** (moved to My Circle's `⋯`).
 
@@ -215,6 +223,18 @@ doc, and **always-save** fields (every `patch` persists immediately via
      greeting-rules textarea (the validation rule stands: greeting on + empty
      rules is flagged). When roleplay is off, greeting is unavailable
      (disabled-with-reason), since the greeting belongs to roleplay framing.
+   - **Behaviour change (Chris-signed-off, Laura HARD):** coupling greeting to
+     roleplay is a deliberate product decision. Greeting is independent of
+     roleplay in the codebase today (`PersonaRow.greetingEnabled` is read
+     unconditionally by the opener path), so existing personas may have a
+     greeting without roleplay and would keep firing an opener while the control
+     is hidden — an orphaned active state. **Fix: a runtime gate** — the opener
+     fires only when `roleplay && greetingEnabled`. Greeting-only personas
+     quietly stop greeting until roleplay is enabled; their `greetingInstructions`
+     are **preserved** (re-appear when roleplay is turned on). **No Dexie
+     migration** (runtime gate only — Chris's call between the gate and a one-time
+     data cleanup). A test pins "opener does not fire when roleplay is off even if
+     greetingEnabled is true".
 
 3. **Model behaviour** (`…/model`)
    - **Temperature** slider (default 0.85, 0–2 step 0.05).
@@ -241,6 +261,10 @@ doc, and **always-save** fields (every `patch` persists immediately via
      versions surface. One Memory surface, reachable from both the hub tile and
      the chat cockpit (`?chat=` deep-link preserved). Functionally complete
      today — this is reskin + host + fold-in, not a rebuild.
+   - **Scope label (Laura SOFT):** because this page is reached from a *chat*
+     cockpit, the folded-in toggle must be explicitly labelled persona-global —
+     e.g. *"Applies to all chats with <name>"* — so a user arriving from one chat
+     cannot mistake "Remembering off" for a per-chat switch.
 
 7. **Font & Voice** (`…/font-voice`)
    - **Font** selector (`cs-segmented`: Sans / Serif / Cursive, each shown in its
@@ -324,8 +348,11 @@ New `useHelp` keys + Markdown docs: `circle`, `persona` (hub + create),
   confirm), the `OverflowMenu` separator, the create step (name-required, import
   staging on create), always-save persistence per sub-page (a representative
   field each), gold-priority resolution on the hub, `?return=` round-trip.
-- **Laura spec-pass** before the plan (her main lever — this adds/relocates many
-  user-reachable flows). Pre-squash Laura pass on the built diff.
+- **Laura spec-pass: done** (1 HARD — greeting/roleplay orphan — fixed via the
+  runtime gate in §5.2 with Chris's sign-off; soft findings folded: affirmative-
+  only gold + calm incomplete-state sentence, persona-global memory-toggle label,
+  provider-missing routes to Settings, concrete incognito reason, quiet Export).
+  Pre-squash Laura pass on the built diff still required.
 - **opus** whole-branch review before squash.
 - Client-only — **no Larissa pass** (no `apps/auth-service`, `sync`, `proxy`, or
   `packages/crypto` change).
