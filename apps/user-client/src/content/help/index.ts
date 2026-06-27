@@ -19,6 +19,7 @@ import settingsVoice from './settings-voice.md?raw';
 import settingsWeb from './settings-web.md?raw';
 import settingsYou from './settings-you.md?raw';
 import settings from './settings.md?raw';
+import treasury from './treasury.md?raw';
 
 export type HelpKey =
   | 'my-account'
@@ -38,7 +39,8 @@ export type HelpKey =
   | 'settings-web'
   | 'settings-voice'
   | 'settings-images'
-  | 'settings-expert';
+  | 'settings-expert'
+  | 'treasury';
 
 export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'my-account': { title: 'My Account — help', markdown: myAccount },
@@ -59,6 +61,7 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'settings-voice': { title: 'Voice — help', markdown: settingsVoice },
   'settings-images': { title: 'Images — help', markdown: settingsImages },
   'settings-expert': { title: '"Ask an Expert" — help', markdown: settingsExpert },
+  treasury: { title: 'My Treasury — help', markdown: treasury },
 };
 
 export const PRIVACY_MD: string = privacy;

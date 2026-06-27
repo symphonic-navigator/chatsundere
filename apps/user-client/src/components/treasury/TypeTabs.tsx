@@ -11,20 +11,20 @@ const TABS: { value: TreasuryType; label: string }[] = [
   { value: 'app', label: 'Apps' },
   { value: 'doc', label: 'Docs' },
   { value: 'code', label: 'Code' },
-  { value: 'image', label: 'Img' },
+  { value: 'image', label: 'Images' },
 ];
 
-/** Segmented type filter for the Treasury — mirrors the History Chats|Bookmarks tabs. */
+/** Segmented type filter for the Treasury (and the attach picker). */
 export function TypeTabs({ value, onChange }: Props): JSX.Element {
   return (
-    <div className="history-tabs" role="tablist">
+    <div className="cs-segmented" role="tablist">
       {TABS.map((t) => (
         <button
           key={t.value}
           type="button"
           role="tab"
           aria-selected={value === t.value}
-          className="history-tab"
+          className="cs-seg"
           data-active={value === t.value || undefined}
           onClick={() => onChange(t.value)}
         >
