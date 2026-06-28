@@ -3,6 +3,7 @@
 import { registerAdapter } from '../adapter-registry.js';
 import { claudeAdapter, claudeEffortAdapter } from '../adapters/anthropic-claude.js';
 import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
+import { openRouterAdapter } from '../adapters/openrouter-openai.js';
 import type {
   Offering,
   ReasoningControl,
@@ -47,6 +48,16 @@ const MISTRAL_NONE: ReasoningControl = { mode: 'none' };
 // slugs are inconsistent — the dated Haiku/Sonnet 4.5 use a `-thinking` suffix,
 // the rest `:thinking` — so each offering carries its explicit thinking slug.
 const CLAUDE_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
+
+// Grok 4.3 on nano-gpt steers reasoning via the OpenAI-style `reasoning` OBJECT
+// (`{enabled:false}` is a genuine off — probed live 2026-06-28), NOT a slug swap
+// and NOT `reasoning_effort` (`reasoning_effort:none` does NOT disable it). The
+// thinking text streams on the `reasoning` channel, so the offering reuses the
+// shared unified-reasoning-object adapter (openRouterAdapter) rather than the
+// slug-swap one. Default-on, matching xAI's own default. Grok 4.20 is NOT
+// offered here: nano-gpt serves only its non-reasoning variant (the reasoning
+// sibling slug 404s), so it cannot meet the canonical's reasoning capability.
+const GROK_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
 interface ClaudeSpec {
   canonicalRef: string;
@@ -376,6 +387,27 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'llm',
   },
+  // Grok 4.3 via nano-gpt (the anonymising-router path). Reasoning is a clean
+  // toggle on the unified `reasoning` object; tool calls arrive single-block.
+  // nano-gpt routes to the xAI upstream → no ZDR/TEE, US jurisdiction.
+  {
+    canonicalRef: 'grok-4.3',
+    providerId: 'nano-gpt',
+    upstreamSlug: 'x-ai/grok-4.3',
+    adapter: { kind: 'catalogue', adapterId: 'nano-gpt:x-ai/grok-4.3' },
+    profile: {
+      reasoning: GROK_TOGGLE,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_000_000 },
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  },
   ...webOfferings,
   ...ttiOfferings,
   // Grok TTS via nano-gpt's xAI wrapper — text-to-speech; bypasses the chat
@@ -459,6 +491,16 @@ export function registerNanoGpt(): void {
           vision: o.profile.vision,
           reasoning: o.profile.reasoning,
           thinkingSlug: claudeThinkingByBase[o.upstreamSlug] ?? `${o.upstreamSlug}:thinking`,
+        }),
+      );
+    } else if (o.canonicalRef === 'grok-4.3') {
+      // Grok on nano-gpt honours the unified `reasoning` object (not slug-swap),
+      // so it reuses the shared unified-reasoning-object adapter. No ZDR here.
+      registerAdapter(
+        o.adapter.adapterId,
+        openRouterAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
         }),
       );
     } else {

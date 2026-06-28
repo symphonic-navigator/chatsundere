@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { registerAdapter } from '../adapter-registry.js';
-import { xaiAdapter } from '../adapters/xai-openai.js';
+import { xaiAdapter, xaiSlugSwapAdapter } from '../adapters/xai-openai.js';
 import type {
   Offering,
   SttOfferingMeta,
@@ -62,6 +62,32 @@ const offerings: Offering[] = [
     freedomOrientedDeployment: true, // Chris: xAI/Grok refuses near-nothing
     source: 'curated',
     confidence: 'verified', // run-xai-suite.ts: core 44/44 + vision 4/4, 0 fail (2026-06-02)
+    serviceKind: 'llm',
+  },
+  // Grok 4.20 — distinct from 4.3: reasoning is a SLUG SWAP, not the
+  // `reasoning_effort` param (probed live 2026-06-28: both 4.20 slugs reject
+  // `reasoning_effort` with HTTP 400). Pinned dated snapshots (avoid the
+  // floating `grok-4.20` alias drifting): `-non-reasoning` = off, `-reasoning` =
+  // on. A binary toggle, no effort buckets. Bound to the slug-swap adapter.
+  {
+    canonicalRef: 'grok-4.20',
+    providerId: 'xai',
+    upstreamSlug: 'grok-4.20-0309-non-reasoning',
+    adapter: { kind: 'catalogue', adapterId: 'xai:grok-4.20-0309-non-reasoning' },
+    profile: {
+      reasoning: { mode: 'toggle', defaultOn: true },
+      toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    // 200k recommended sweet-spot (xAI doubles price above 200k); 2M ceiling.
+    context: { recommended: 200_000, max: 2_000_000 },
+    // US jurisdiction, no TEE/ZDR on the direct route. The ZDR path for Grok is
+    // OpenRouter (provider:{zdr:true}); xAI-direct offers none today.
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true, // Chris: xAI/Grok refuses near-nothing
+    source: 'curated',
+    confidence: 'verified',
     serviceKind: 'llm',
   },
   {
@@ -153,7 +179,16 @@ export const xai: ProviderDefinition = {
 export function registerXai(): void {
   registerProvider(xai);
   for (const o of offerings) {
-    if (o.adapter.kind === 'catalogue') {
+    if (o.adapter.kind !== 'catalogue') continue;
+    if (o.canonicalRef === 'grok-4.20') {
+      // Slug-swap reasoning: non-reasoning base ↔ reasoning sibling.
+      registerAdapter(
+        o.adapter.adapterId,
+        xaiSlugSwapAdapter(o.upstreamSlug, 'grok-4.20-0309-reasoning', {
+          vision: o.profile.vision,
+        }),
+      );
+    } else {
       registerAdapter(
         o.adapter.adapterId,
         xaiAdapter(o.upstreamSlug, { vision: o.profile.vision }),

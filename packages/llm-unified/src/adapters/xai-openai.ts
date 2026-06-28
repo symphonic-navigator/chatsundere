@@ -76,6 +76,57 @@ function normaliseUsage(u: XaiUsage): NormalisedUsage {
   return usage;
 }
 
+/**
+ * Shared SSE parser for every xAI Grok adapter. Reasoning streams on
+ * `delta.reasoning_content` as the human-readable summary (no opaque blob on the
+ * Chat Completions surface), tool calls arrive in (occasionally fragmented)
+ * deltas and are reassembled, and `usage` rides the final `choices: []` event.
+ * Identical across the `reasoning_effort` (Grok 4.3) and slug-swap (Grok 4.20)
+ * steering styles — only `buildRequest` differs between them.
+ */
+function xaiParseChunk(
+  raw: unknown,
+  state: ParseState,
+): { events: StreamChunk[]; state: ParseState } {
+  const events: StreamChunk[] = [];
+  const p = raw as XaiDelta;
+
+  if (p.usage) events.push({ type: 'usage', usage: normaliseUsage(p.usage) });
+
+  const choice = p.choices?.[0];
+  if (!choice) return { events, state };
+
+  if (choice.delta?.reasoning_content)
+    events.push({ type: 'reasoning', text: choice.delta.reasoning_content });
+  if (choice.delta?.content) events.push({ type: 'token', text: choice.delta.content });
+
+  const pending = getPending(state);
+  for (const tc of choice.delta?.tool_calls ?? []) {
+    const key = String(tc.index ?? 0);
+    const acc = pending[key] ?? { id: '', name: '', args: '' };
+    if (tc.id) acc.id = tc.id;
+    if (tc.function?.name) acc.name = tc.function.name;
+    if (typeof tc.function?.arguments === 'string') acc.args += tc.function.arguments;
+    pending[key] = acc;
+  }
+
+  if (choice.finish_reason) {
+    for (const acc of Object.values(pending)) {
+      if (acc.id && acc.name) {
+        events.push({
+          type: 'tool-call',
+          toolCallId: acc.id,
+          name: acc.name,
+          argumentsJson: acc.args,
+        });
+      }
+    }
+    state.toolCalls = {};
+    events.push({ type: 'finish', reason: normaliseFinish(choice.finish_reason) });
+  }
+  return { events, state };
+}
+
 export interface XaiAdapterOptions {
   vision: boolean;
 }
@@ -133,44 +184,62 @@ export function xaiAdapter(slug: string, opts: XaiAdapterOptions): ModelAdapter 
       return wire;
     },
 
-    parseChunk(raw: unknown, state: ParseState): { events: StreamChunk[]; state: ParseState } {
-      const events: StreamChunk[] = [];
-      const p = raw as XaiDelta;
+    parseChunk: xaiParseChunk,
+  };
+}
 
-      if (p.usage) events.push({ type: 'usage', usage: normaliseUsage(p.usage) });
+const SLUG_SWAP_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
-      const choice = p.choices?.[0];
-      if (!choice) return { events, state };
+export interface XaiSlugSwapAdapterOptions {
+  vision: boolean;
+}
 
-      if (choice.delta?.reasoning_content)
-        events.push({ type: 'reasoning', text: choice.delta.reasoning_content });
-      if (choice.delta?.content) events.push({ type: 'token', text: choice.delta.content });
+/**
+ * Grok 4.20 via xAI's OpenAI-compatible `/chat/completions`. Unlike Grok 4.3,
+ * Grok 4.20 steers reasoning by a MODEL-SLUG SWAP, not the `reasoning_effort`
+ * param (probed live 2026-06-28: `grok-4.20-0309-reasoning` and
+ * `-non-reasoning` both reject `reasoning_effort` with HTTP 400). The reasoning
+ * slug always reasons and the non-reasoning slug never does — a binary toggle
+ * with no effort buckets. Reasoning streams on `delta.reasoning_content` (the
+ * same human-readable summary as 4.3, so display-only, `replayReasoning: false`)
+ * and `usage` is the standard xAI shape. Conversation-affinity caching uses the
+ * `x-grok-conv-id` header, identical to {@link xaiAdapter}.
+ */
+export function xaiSlugSwapAdapter(
+  baseSlug: string,
+  thinkingSlug: string,
+  opts: XaiSlugSwapAdapterOptions,
+): ModelAdapter {
+  const profile: ModelProfile = {
+    reasoning: SLUG_SWAP_TOGGLE,
+    toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
+    vision: opts.vision,
+    replayReasoning: false,
+  };
 
-      const pending = getPending(state);
-      for (const tc of choice.delta?.tool_calls ?? []) {
-        const key = String(tc.index ?? 0);
-        const acc = pending[key] ?? { id: '', name: '', args: '' };
-        if (tc.id) acc.id = tc.id;
-        if (tc.function?.name) acc.name = tc.function.name;
-        if (typeof tc.function?.arguments === 'string') acc.args += tc.function.arguments;
-        pending[key] = acc;
+  return {
+    profile,
+
+    buildRequest(req: CanonicalRequest): WireRequest {
+      const model = req.reasoning.enabled ? thinkingSlug : baseSlug;
+      // No `reasoning_effort`: Grok 4.20 rejects it on either slug (HTTP 400).
+      const body: Record<string, unknown> = {
+        model,
+        messages: req.messages,
+        stream: true,
+        stream_options: { include_usage: true },
+      };
+      if (req.tools?.length) {
+        body.tools = req.tools.map((t) => ({
+          type: 'function',
+          function: { name: t.name, description: t.description, parameters: t.parameters },
+        }));
       }
-
-      if (choice.finish_reason) {
-        for (const acc of Object.values(pending)) {
-          if (acc.id && acc.name) {
-            events.push({
-              type: 'tool-call',
-              toolCallId: acc.id,
-              name: acc.name,
-              argumentsJson: acc.args,
-            });
-          }
-        }
-        state.toolCalls = {};
-        events.push({ type: 'finish', reason: normaliseFinish(choice.finish_reason) });
-      }
-      return { events, state };
+      const wire: WireRequest = { model, body };
+      if (req.cacheKey) wire.headers = { 'x-grok-conv-id': req.cacheKey };
+      return wire;
     },
+
+    parseChunk: xaiParseChunk,
   };
 }

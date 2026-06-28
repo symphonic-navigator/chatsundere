@@ -73,6 +73,23 @@ for this route. 4o variants resolved: pinned dated snapshots are genuine 4o, the
 floating `openai/gpt-4o` alias is the uncertain one; `azure-gpt-4o` is a bare
 Azure slug.
 
+## Grok (xAI upstream) — added 2026-06-28
+
+Grok 4.3 is offered on nano-gpt (`x-ai/grok-4.3`), routing to the xAI upstream
+(no TEE/ZDR, US jurisdiction). The reasoning quirk: nano-gpt steers Grok by the
+OpenAI-style **`reasoning` object** (`{enabled:false}` is a genuine off, probed
+live), **not** the slug-swap mechanism the GLM/DeepSeek families use, and **not**
+`reasoning_effort` (`reasoning_effort: none` does *not* disable it). So the Grok
+4.3 offering reuses the unified reasoning-object adapter (`openRouterAdapter`,
+no ZDR), not `nanoGptSlugSwapAdapter`. Tool calls arrive single-block. See
+[[../models/grok-4.3]].
+
+**Grok 4.20 is NOT offered on nano-gpt.** nano-gpt serves only the
+non-reasoning variant — the bare slug does not reason even with
+`reasoning:{enabled:true}`, and no reasoning sibling slug exists (`:thinking`
+and `-reasoning` both 404). Since the canonical requires reasoning, the offering
+would fail the capability gate. Well-evidenced negative; see [[../models/grok-4.20]].
+
 ## Image generation (TTI)
 
 Three TTI offerings ride the OpenAI-compatible `/images/generations` endpoint:

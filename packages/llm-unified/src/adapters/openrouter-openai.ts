@@ -99,6 +99,13 @@ export interface OpenRouterAdapterOptions {
   reasoning: ReasoningControl;
   /** Optional OpenRouter attribution headers (cosmetic, never functional). */
   attribution?: OpenRouterAttribution;
+  /** When true, emit `provider: { zdr: true }` so OpenRouter routes ONLY to
+   * Zero-Data-Retention endpoints (per-request enforcement;
+   * <https://openrouter.ai/docs/guides/features/zdr>). Probed live 2026-06-28
+   * for Grok: `provider:{zdr:true}` routes to xAI's ZDR endpoint (HTTP 200,
+   * `provider: "xAI"`). Driven by the offering's `trust.zdr` so a ZDR privacy
+   * claim is actually enforced on the wire, never merely asserted. */
+  zdr?: boolean;
 }
 
 const DEFAULT_ON_EFFORT = 'medium';
@@ -151,6 +158,11 @@ export function openRouterAdapter(slug: string, opts: OpenRouterAdapterOptions):
         stream: true,
         stream_options: { include_usage: true },
       };
+      // ZDR enforcement: restrict routing to Zero-Data-Retention endpoints. A
+      // per-request guarantee — the request fails rather than route to a
+      // retaining endpoint, so the privacy posture is honoured even under
+      // capacity pressure.
+      if (opts.zdr) body.provider = { zdr: true };
       // Reasoning steering via OpenRouter's unified `reasoning` object. Only
       // emitted for reasoning-capable offerings — a non-reasoning model gets no
       // param. `{ enabled: false }` is a genuine off across every curated target.

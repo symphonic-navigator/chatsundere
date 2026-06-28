@@ -1,7 +1,7 @@
 # Provider Curation Record — xAI
 
-**Onboarded:** 2026-06-02 (Liz, via `/curate` Mode 1) · **Status:** live-curated,
-one offering (Grok 4.3).
+**Onboarded:** 2026-06-02 (Liz, via `/curate` Mode 1) · **Status:** live-curated;
+two chat offerings (Grok 4.3, Grok 4.20) plus the image/voice offerings.
 
 xAI is Elon Musk's AI company. Grok is its flagship model. The headline
 characteristic is **freedom orientation** — xAI/Grok refuses near-nothing
@@ -29,11 +29,16 @@ fit for Chatsundere's anti-censorship stance.
 | ZDR | ❌ none **today** |
 | Jurisdiction | US |
 
-**Future note — NGO-negotiated ZDR:** as an NGO, Chatsundere may negotiate
-special zero-data-retention conditions with xAI. The venice.ai precedent is
-the template — venice routes everything ZDR via an xAI deal. If that lands:
-flip `trust.zdr` to `true` and emit a per-request ZDR header (the
-`Wafer-ZDR: required` pattern is the design template — see
+**ZDR today is via OpenRouter, not the direct API.** xAI now offers
+Zero-Data-Retention through OpenRouter (`provider:{zdr:true}` routes to xAI's ZDR
+endpoint — probed live 2026-06-28). So the **privacy route for Grok is the
+OpenRouter offering**, which carries `trust.zdr: true` and the 🔒 badge; the
+xAI-direct offerings stay `zdr: false`. See [[openrouter]].
+
+**Future note — NGO-negotiated direct ZDR:** as an NGO, Chatsundere may still
+negotiate ZDR on the *direct* xAI API. The venice.ai precedent is the template.
+If that lands: flip `trust.zdr` on the direct offerings and emit a per-request
+ZDR header (the `Wafer-ZDR: required` pattern is the design template — see
 [[wafer]]). No implementation required until the deal is confirmed.
 
 ## Conversation-affinity prompt caching
@@ -67,11 +72,25 @@ Chatsundere's anti-censorship stance.
 
 ## Offerings
 
-One curated offering: **Grok 4.3** (`canonicalRef: 'grok-4.3'`, `upstreamSlug:
-'grok-4.3'`, `adapterId: 'xai:grok-4.3'`). Grok 4.20 deliberately excluded —
-its multi-agent architecture requires orchestration machinery Chatsundere does
-not support; 4.3 is the smaller-but-smoother, more popular choice (Chris,
-2026-06-02).
+Two curated chat offerings:
+
+- **Grok 4.3** — `canonicalRef: 'grok-4.3'`, `upstreamSlug: 'grok-4.3'`,
+  `adapterId: 'xai:grok-4.3'`. Reasoning via the native `reasoning_effort` param
+  (`steps`). See [[../models/grok-4.3]].
+- **Grok 4.20** — `canonicalRef: 'grok-4.20'`, base `upstreamSlug:
+  'grok-4.20-0309-non-reasoning'`, `adapterId:
+  'xai:grok-4.20-0309-non-reasoning'`. Reasoning via a **slug swap**
+  (`-non-reasoning` ↔ `-reasoning`); Grok 4.20 rejects `reasoning_effort` (HTTP
+  400 on either slug, probed 2026-06-28), so it uses the new `xaiSlugSwapAdapter`,
+  a binary `toggle`. Added 2026-06-28. See [[../models/grok-4.20]].
+
+**Reversal note:** Grok 4.20 was first recorded (2026-06-02) as deliberately
+excluded for needing multi-agent orchestration. That was a misread — the plain
+Grok 4.20 is an ordinary reasoning model; only the separate `*-multi-agent` slug
+needs orchestration and remains uncurated. Reversed and curated 2026-06-28.
+
+The image (`grok-imagine-image`) and voice (`grok-tts`, `grok-stt`) offerings are
+unchanged.
 
 ## Documentation
 

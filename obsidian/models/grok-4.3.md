@@ -11,11 +11,12 @@
 - **🕊️ Freedom:** free — `freedomOriented: true`, `freedomOrientedDeployment: true`
   (Chris, 2026-06-02: xAI/Grok refuses near-nothing despite Californian HQ).
 
-The single first-class xAI model we curate. Grok 4.20 is deliberately excluded —
-its multi-agent value requires orchestration machinery Chatsundere does not support;
-4.3 is the smaller-but-smoother, more popular choice.
+Curated on **three deployments**: xAI-direct, nano-gpt, and OpenRouter. The
+OpenRouter route is the **ZDR** route (see below). Its sibling [[grok-4.20]] was
+added in the same 2026-06-28 round (the earlier "4.20 excluded" framing was a
+misread — see that record).
 
-## Offering — xAI
+## Offering — xAI (direct)
 
 - **slug:** `grok-4.3` · **adapterId:** `xai:grok-4.3`
 - **context:** recommended **200 000** / max **1 000 000**. Above 200k xAI roughly
@@ -32,6 +33,46 @@ its multi-agent value requires orchestration machinery Chatsundere does not supp
 - **Freedom:** `freedomOrientedDeployment: true`.
 - **confidence:** `verified` — `run-xai-suite.ts` passed live on 2026-06-02
   (core 44/44 + vision 4/4, 0 fail).
+
+## Offering — OpenRouter (🔒 ZDR)
+
+- **slug:** `x-ai/grok-4.3` · **adapterId:** `openrouter:x-ai/grok-4.3`
+- **context:** recommended **200 000** / max **1 000 000** (OpenRouter reports a
+  1M ceiling; recommended stays at our 200k sweet-spot — xAI roughly doubles the
+  price above 200k).
+- **reasoning control:** unified `reasoning` object — `{enabled:true,effort}` on,
+  `{enabled:false}` a **genuine off** (0 reasoning tokens, probed 2026-06-28).
+  Modelled as a `toggle` (defaultOn), consistent with the other OpenRouter
+  offerings — OpenRouter is the portable on/off surface, not Grok's native
+  effort steps.
+- **tool calls:** streamed **fragmented** (reassembled by the adapter), concurrent
+  with reasoning.
+- **vision:** ✅.
+- 🔒 **Privacy: ZDR.** `trust: { tee: false, zdr: true, jurisdiction: 'US' }`. The
+  adapter sends `provider: { zdr: true }` on every request, so OpenRouter routes
+  **only** to xAI's Zero-Data-Retention endpoint (probed 2026-06-28: HTTP 200,
+  `provider: "xAI"`). **This is the privacy route for Grok** — xAI-direct offers
+  no ZDR today. See [[../providers/openrouter]] for the ZDR mechanics and the
+  fail-closed evidence.
+- **Freedom:** `freedomOrientedDeployment: true`.
+- **confidence:** `verified` — `run-grok-suite.ts` 2026-06-28: core 22/22 +
+  vision 4/4, 0 fail (ZDR enforced on the wire).
+
+## Offering — nano-gpt
+
+- **slug:** `x-ai/grok-4.3` · **adapterId:** `nano-gpt:x-ai/grok-4.3`
+- **context:** recommended **200 000** / max **1 000 000**.
+- **reasoning control:** the OpenAI-style `reasoning` **object** —
+  `{enabled:false}` is a genuine off (probed 2026-06-28). Note the trap:
+  `reasoning_effort: none` does **not** disable it on nano-gpt (it keeps
+  reasoning), so the offering reuses the unified reasoning-object adapter, not the
+  slug-swap one. `toggle` (defaultOn).
+- **tool calls:** single-block (`streaming: false`), concurrent with reasoning.
+- **vision:** ✅.
+- 🔒 **Privacy:** no TEE / no ZDR (routes to the xAI upstream, US jurisdiction).
+- **Freedom:** `freedomOrientedDeployment: true` (nano-gpt adds no censorship).
+- **confidence:** `verified` — `run-grok-suite.ts` 2026-06-28: core 22/22 +
+  vision 4/4, 0 fail.
 
 ## Reasoning — empirical findings (probed 2026-06-02)
 

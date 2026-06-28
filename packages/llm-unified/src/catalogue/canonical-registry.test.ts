@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { afterAll, beforeAll, describe, expect, it, test } from 'bun:test';
+import { _resetAdapterRegistryForTests } from '../adapter-registry.js';
 import { registerBuiltinProviders } from '../providers/_register-builtins.js';
 import { _resetRegistryForTests, listOfferings } from '../registry.js';
 import {
@@ -11,20 +12,27 @@ import {
 } from './canonical-registry.js';
 import { MISTRAL_FORMATTING_INSTRUCTIONS } from './model-instructions.js';
 
-// registerBuiltinProviders also registers catalogue adapters, which have no
-// reset hook and throw on duplicate ids — so register once, like
-// registry.modality.test.ts.
+// registerBuiltinProviders also registers catalogue adapters, which throw on
+// duplicate ids — so clear BOTH registries before registering, else a prior
+// test file that registered builtins (the adapter registry is a shared
+// module-level singleton across files) makes this throw.
 beforeAll(() => {
   _resetRegistryForTests();
+  _resetAdapterRegistryForTests();
   registerBuiltinProviders();
 });
-afterAll(() => _resetRegistryForTests());
+afterAll(() => {
+  _resetRegistryForTests();
+  _resetAdapterRegistryForTests();
+});
 
 describe('canonical-registry', () => {
-  test('lists twenty-three canonicals with unique ids', () => {
+  test('lists twenty-four canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(23);
-    expect(new Set(ids).size).toBe(23);
+    expect(ids).toHaveLength(24);
+    expect(new Set(ids).size).toBe(24);
+    expect(ids).toContain('grok-4.3');
+    expect(ids).toContain('grok-4.20');
     expect(ids).toContain('glm-5.1');
     expect(ids).toContain('glm-5.2');
     expect(ids).toContain('deepseek-v3.2');

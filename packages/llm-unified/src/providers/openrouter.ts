@@ -22,6 +22,10 @@ interface OpenRouterOfferingArgs {
   recommended: number;
   /** Hard ceiling; defaults to `recommended` when the two coincide. */
   max?: number;
+  /** When true, the offering enforces ZDR (`provider:{zdr:true}` per request)
+   * and records `trust.zdr: true`. Default false — the honest OpenRouter
+   * baseline (no project-wide ZDR). */
+  zdr?: boolean;
 }
 
 function openRouterOffering(
@@ -44,9 +48,10 @@ function openRouterOffering(
     // OpenRouter is a US-based router/aggregator. It is NOT ZDR by default and
     // is NOT a TEE: data may transit OpenRouter's US infrastructure, and trust
     // is per-route (each underlying provider has its own policy). We record the
-    // honest baseline here — no 🔒 badge unless a specific route is shown to be
-    // ZDR/TEE. Jurisdiction US. See the Provider Curation Record.
-    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    // honest baseline here — no 🔒 badge unless a specific route enforces ZDR.
+    // Jurisdiction US. See the Provider Curation Record. ZDR-enforced offerings
+    // (e.g. Grok) flip `trust.zdr` and the adapter sends `provider:{zdr:true}`.
+    trust: { tee: false, zdr: args.zdr ?? false, jurisdiction: 'US' },
     // Freedom judgement (Chris, 2026-05-31): freedom-oriented. OpenRouter routes
     // verbatim and adds no censorship layer of its own.
     freedomOrientedDeployment: true,
@@ -114,6 +119,28 @@ const offerings: Offering[] = [
     reasoning: TOGGLE,
     recommended: 262_144,
   }),
+  // Grok via OpenRouter — the ZDR path (probed live 2026-06-28). With
+  // `provider:{zdr:true}` OpenRouter routes to xAI's Zero-Data-Retention
+  // endpoint (HTTP 200, `provider: "xAI"`); reasoning is a clean toggle on the
+  // unified `reasoning` object (`enabled:false` is a genuine off, 0 reasoning
+  // tokens), tool calls stream fragmented, vision ✅. `recommended` sits at our
+  // 200k sweet-spot (xAI roughly doubles price above 200k); `max` is the
+  // provider-reported ceiling (4.3: 1M, 4.20: 2M). xAI itself offers no ZDR
+  // today, so OpenRouter is the privacy route for Grok — the 🔒 badge lives here.
+  openRouterOffering('grok-4.3', 'x-ai/grok-4.3', {
+    vision: true,
+    reasoning: TOGGLE,
+    recommended: 200_000,
+    max: 1_000_000,
+    zdr: true,
+  }),
+  openRouterOffering('grok-4.20', 'x-ai/grok-4.20', {
+    vision: true,
+    reasoning: TOGGLE,
+    recommended: 200_000,
+    max: 2_000_000,
+    zdr: true,
+  }),
 ];
 
 export const openrouter: ProviderDefinition = {
@@ -150,6 +177,9 @@ export function registerOpenRouter(): void {
         openRouterAdapter(o.upstreamSlug, {
           vision: o.profile.vision,
           reasoning: o.profile.reasoning,
+          // Enforce ZDR on the wire for any offering that claims it, so the
+          // privacy posture is honoured rather than merely asserted.
+          zdr: o.trust.zdr,
         }),
       );
     }

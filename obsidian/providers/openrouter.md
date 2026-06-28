@@ -30,6 +30,38 @@ unified OpenAI-compatible API. This shapes every trust judgement:
   call** and is left `null` (not assessed) for now, so the 🕊️ badge resolves to
   *unknown* rather than asserting either way. 🕊️ **Freedom: pending Chris.**
 
+## Zero-Data-Retention (ZDR) — per-request (added 2026-06-28)
+
+OpenRouter supports **per-request ZDR enforcement**
+(<https://openrouter.ai/docs/guides/features/zdr>) via a **body** parameter
+nested under `provider` — *not* a top-level field and *not* a header:
+
+```json
+{ "model": "x-ai/grok-4.3", "messages": [...], "provider": { "zdr": true } }
+```
+
+With `provider:{zdr:true}` OpenRouter routes the request **only** to endpoints
+with a Zero-Data-Retention policy. Because it is a **body** field it survives the
+conversation-suite path cleanly (unlike a per-request header — and note the old
+"suite binding drops `wire.headers`" flag below is **stale**: `binding.ts` now
+forwards `extraHeaders: wire.headers`).
+
+**Probed live 2026-06-28 (Grok):** `x-ai/grok-4.3` and `x-ai/grok-4.20` both
+route ZDR cleanly — HTTP 200, `provider: "xAI"` (xAI now offers ZDR on
+OpenRouter). These two offerings therefore carry `trust.zdr: true` and the 🔒
+badge; the adapter (`openRouterAdapter`, `zdr` option) sends the flag on every
+request, driven by the offering's `trust.zdr` so the claim is **enforced on the
+wire, never merely asserted**.
+
+**Fail-closed (proven, not assumed).** When no compliant endpoint exists,
+OpenRouter returns **HTTP 404** ("No allowed providers are available for the
+selected model") — it does **not** silently fall back to a retaining endpoint.
+Forced live 2026-06-28 with `provider:{zdr:true, only:["azure"]}` on Grok (xAI is
+not on Azure) → 404, `available_providers:["xai"]`. So if xAI's ZDR endpoint were
+ever unavailable the request fails visibly (our adapter surfaces the non-2xx;
+`assertNoHttpError` would catch it), never leaking to a non-ZDR route. This is the
+honest posture for a privacy claim.
+
 ## Reasoning normalisation — the headline finding
 
 OpenRouter exposes a **unified `reasoning` request parameter** and, crucially,
@@ -120,25 +152,32 @@ adapters do **not** set them by default.
 > cosmetic), but it means the wafer ZDR header is silently dropped in suite runs
 > too. Out of scope to fix here (shared harness); flagged for Liz's judgement.
 
-## Curated offerings (8)
+## Curated offerings (10)
 
 All `confidence: 'verified'`, `source: 'curated'`, adapter
-`openrouter:<slug>`, reasoning `toggle` (defaultOn), trust
-`{ tee: false, zdr: false, jurisdiction: 'US' }`,
+`openrouter:<slug>`, reasoning `toggle` (defaultOn),
 `freedomOrientedDeployment: true` (Chris, 2026-05-31 — OpenRouter routes
 verbatim, no censorship layer). `recommended` follows our project sweet-spots
-where it differs from OpenRouter's reported `max`.
+where it differs from OpenRouter's reported `max`. Trust is
+`{ tee: false, zdr: false, jurisdiction: 'US' }` **except** the two Grok
+offerings, which are 🔒 **ZDR** (`zdr: true`; see the ZDR section above).
 
-| Canonical | OpenRouter slug | vision | recommended / max |
-|---|---|---|---|
-| `deepseek-v3.2` | `deepseek/deepseek-v3.2` | ❌ | 131 072 |
-| `deepseek-v4-flash` | `deepseek/deepseek-v4-flash` | ❌ | 200 000 / 1 048 576 |
-| `deepseek-v4-pro` | `deepseek/deepseek-v4-pro` | ❌ | 200 000 / 1 048 576 |
-| `glm-5` | `z-ai/glm-5` | ❌ | 202 752 |
-| `glm-5.1` | `z-ai/glm-5.1` | ❌ | 202 752 |
-| `kimi-k2.6` | `moonshotai/kimi-k2.6` | ✅ | 262 144 |
-| `gemma-4-31b` | `google/gemma-4-31b-it` | ✅ | 262 144 |
-| `qwen3.5-397b-a17b` | `qwen/qwen3.5-397b-a17b` | ✅ | 262 144 |
+| Canonical | OpenRouter slug | vision | recommended / max | trust |
+|---|---|---|---|---|
+| `deepseek-v3.2` | `deepseek/deepseek-v3.2` | ❌ | 131 072 | — |
+| `deepseek-v4-flash` | `deepseek/deepseek-v4-flash` | ❌ | 200 000 / 1 048 576 | — |
+| `deepseek-v4-pro` | `deepseek/deepseek-v4-pro` | ❌ | 200 000 / 1 048 576 | — |
+| `glm-5` | `z-ai/glm-5` | ❌ | 202 752 | — |
+| `glm-5.1` | `z-ai/glm-5.1` | ❌ | 202 752 | — |
+| `kimi-k2.6` | `moonshotai/kimi-k2.6` | ✅ | 262 144 | — |
+| `gemma-4-31b` | `google/gemma-4-31b-it` | ✅ | 262 144 | — |
+| `qwen3.5-397b-a17b` | `qwen/qwen3.5-397b-a17b` | ✅ | 262 144 | — |
+| `grok-4.3` | `x-ai/grok-4.3` | ✅ | 200 000 / 1 000 000 | 🔒 ZDR |
+| `grok-4.20` | `x-ai/grok-4.20` | ✅ | 200 000 / 2 000 000 | 🔒 ZDR |
+
+The two Grok offerings (added 2026-06-28) are the **ZDR route for Grok** — xAI
+itself offers no ZDR on its direct API today. See [[../models/grok-4.3]] and
+[[../models/grok-4.20]].
 
 `recommended ≠ max` for DeepSeek V4: OpenRouter reports a 1 048 576 ceiling, but
 recommended stays at our 200 000 DeepSeek-V4 sweet-spot (matching the wafer

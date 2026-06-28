@@ -37,8 +37,8 @@ describe('built-in providers', () => {
     if (p) {
       expect(p.corsHint).toBe('inofficial');
       // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
-      // + 8 Claude + 4 web + 3 tti + 2 Grok voice (tts + stt) = 27.
-      expect(p.offerings).toHaveLength(27);
+      // + 8 Claude + 1 Grok 4.3 (llm) + 4 web + 3 tti + 2 Grok voice (tts + stt) = 28.
+      expect(p.offerings).toHaveLength(28);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -53,12 +53,13 @@ describe('built-in providers', () => {
     }
   });
 
-  it('openrouter has direct CORS hint, eight offerings, and sortPriority 45', () => {
+  it('openrouter has direct CORS hint, ten offerings, and sortPriority 45', () => {
     const p = getProvider('openrouter');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(8);
+      // 8 original + 2 Grok (4.3, 4.20), both ZDR-enforced.
+      expect(p.offerings).toHaveLength(10);
       expect(p.sortPriority).toBe(45);
     }
   });
@@ -156,17 +157,22 @@ describe('built-in providers', () => {
     }
   });
 
-  it('registers xai with grok-4.3 (llm), grok-imagine-image (tti) and the two voice offerings', () => {
+  it('registers xai with grok-4.3 + grok-4.20 (llm), grok-imagine-image (tti) and the two voice offerings', () => {
     const p = getProvider('xai');
     expect(p?.corsHint).toBe('requires-proxy');
     expect(p?.capabilities).toContain('vision');
-    expect(p?.offerings).toHaveLength(4);
-    const llm = p?.offerings.find((o) => o.serviceKind === 'llm');
-    expect(llm?.canonicalRef).toBe('grok-4.3');
+    expect(p?.offerings).toHaveLength(5);
+    const llm = p?.offerings.find((o) => o.canonicalRef === 'grok-4.3');
+    expect(llm?.serviceKind).toBe('llm');
     expect(llm?.context).toEqual({ recommended: 200_000, max: 1_000_000 });
     expect(llm?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
     expect(llm?.freedomOrientedDeployment).toBe(true);
     expect(llm?.confidence).toBe('verified');
+    // Grok 4.20: slug-swap reasoning, distinct dated base slug, 2M ceiling.
+    const grok420 = p?.offerings.find((o) => o.canonicalRef === 'grok-4.20');
+    expect(grok420?.upstreamSlug).toBe('grok-4.20-0309-non-reasoning');
+    expect(grok420?.context).toEqual({ recommended: 200_000, max: 2_000_000 });
+    expect(grok420?.profile.reasoning).toEqual({ mode: 'toggle', defaultOn: true });
     const tti = p?.offerings.find((o) => o.serviceKind === 'tti');
     expect(tti?.upstreamSlug).toBe('grok-imagine-image');
     expect(tti?.tti?.groupId).toBe('xai-imagine');

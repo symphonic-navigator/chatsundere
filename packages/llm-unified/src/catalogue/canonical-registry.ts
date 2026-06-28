@@ -232,6 +232,18 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote:
       'xAI/Grok refuses near-nothing; freedom-oriented model and deployment (Chris, 2026-06-02).',
   },
+  {
+    id: 'grok-4.20',
+    displayName: 'Grok 4.20',
+    family: 'grok',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    // Earlier excluded as "multi-agent only" (2026-06-02) — that was a
+    // misread: the plain Grok 4.20 is an ordinary reasoning chat model, distinct
+    // from the separate `*-multi-agent` slug. Reversed and curated 2026-06-28.
+    freedomNote:
+      'xAI/Grok refuses near-nothing; freedom-oriented model and deployment (Chris, 2026-06-28).',
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */
