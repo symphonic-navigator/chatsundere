@@ -242,11 +242,14 @@ identically:
 
 - Sections: **★ Favourites** then **In this chat** (`buildArtefactSections` over
   `useChatArtefacts(chatId)`).
-- Per row: glyph, title, meta (`format · size · age`), inline favourite star, and
-  an **`OverflowMenu`** with **Rename** and **Delete** (delete →
-  `ConfirmDialog`). Reuse Treasury's rename/`useDeleteArtefacts` mutations.
+- Per row: the existing `TreasuryRow` (glyph, title, meta `format · size · age`,
+  inline favourite star). It is used with `selectMode={false}` here.
 - Tapping a row opens the artefact in the existing **Lightbox** (overlay over the
-  page). Empty state mirrors the sheet's "Artefacts you create appear here."
+  page). **Rename and delete already live in the Lightbox** (`onRename` /
+  `onEditText` / `onDelete`, chat-page:870–874) — exactly as the global Treasury
+  does its rename — so the page needs no per-row overflow; it ports the Lightbox
+  wiring from chat-page. This is the faithful "reich wie My Treasury" reading.
+- Empty state mirrors the sheet's "Artefacts you create appear here."
 - **Persona label (Laura soft):** the page is single-persona, so `TreasuryRow`'s
   per-row persona name/colour is redundant noise here. If cheap, add a prop to
   `TreasuryRow` to suppress the persona label on this chat-scoped surface;
