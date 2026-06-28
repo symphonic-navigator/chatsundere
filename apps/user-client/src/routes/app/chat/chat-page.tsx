@@ -7,6 +7,7 @@ import type { PersonaRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { markCompactionToastShown } from '../../../compaction/repo.js';
 import { isCompactable, shouldShowToast } from '../../../compaction/trigger.js';
+import { ModelDebugReport } from '../../../components/ModelDebugReport.js';
 import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
 import { ArtefactSheet } from '../../../components/chat/ArtefactSheet.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
@@ -25,6 +26,7 @@ import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js'
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
 import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
 import { McpApprovalPrompt } from '../../../components/mcp/McpApprovalPrompt.js';
+import { PickerOverlay } from '../../../components/ui/PickerOverlay.js';
 import { SpectrumAnalyser } from '../../../components/voice/SpectrumAnalyser.js';
 import {
   useChatArtefacts,
@@ -313,6 +315,14 @@ export function ChatPage(): JSX.Element {
   const compactNow = useStreamManagerStore((s) => s.compactNow);
   const compactingState = useStreamManagerStore((s) => s.compactingState);
   const isStreamLive = !!streamHandle;
+  const diagnosticsReport = useStreamManagerStore((s) =>
+    activeChatId ? (s.diagnostics.get(activeChatId) ?? null) : null,
+  );
+  const [diagOpen, setDiagOpen] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger — closing a stale diagnostics overlay when the chat changes
+  useEffect(() => {
+    setDiagOpen(false);
+  }, [activeChatId]);
 
   // Clear stale opener error state when the active chat changes. Without this,
   // navigating from chat A (where the opener failed) to chat B would carry over
@@ -691,6 +701,7 @@ export function ChatPage(): JSX.Element {
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
+            onShowDiagnostics={diagnosticsReport ? () => setDiagOpen(true) : undefined}
             onRetry={async () => {
               // activeChatId is non-null whenever messages exist (chat-mode only).
               if (!activeChatId) return;
@@ -940,6 +951,14 @@ export function ChatPage(): JSX.Element {
       ) : null}
 
       {compactingState === 'blocking' ? <CompactingOverlay /> : null}
+
+      {diagnosticsReport ? (
+        <PickerOverlay open={diagOpen} title="Diagnostics" onClose={() => setDiagOpen(false)}>
+          <div className="p-4">
+            <ModelDebugReport report={diagnosticsReport} />
+          </div>
+        </PickerOverlay>
+      ) : null}
     </div>
   );
 }

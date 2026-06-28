@@ -4,6 +4,8 @@ interface Props {
   onRetry: () => void;
   onDiscard: () => void;
   disabled?: boolean;
+  /** Present only when an in-memory diagnostic report exists for this message. */
+  onShowDiagnostics?: () => void;
 }
 
 /** Rendered below an incomplete persona-message to offer Retry / Discard recovery. */
@@ -34,6 +36,19 @@ export function StreamInterruptedFooter(p: Props): JSX.Element {
           ⌫ Discard
         </button>
       </div>
+      {p.onShowDiagnostics ? (
+        <div className="stream-interrupted-diag">
+          <button
+            type="button"
+            data-action="diagnostics"
+            onClick={p.onShowDiagnostics}
+            className="stream-interrupted-diag-link"
+          >
+            Show diagnostics
+          </button>
+          <span className="stream-interrupted-diag-hint">Copy this before reloading</span>
+        </div>
+      ) : null}
     </div>
   );
 }

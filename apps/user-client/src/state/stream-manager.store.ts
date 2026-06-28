@@ -40,6 +40,11 @@ import { buildWebTools } from '../integrations/web/build-web-tools.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
 import { flattenAnswerText } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
+import {
+  type DiagnosticReport,
+  buildEnvironmentSnapshot,
+  createDiagnosticsCollector,
+} from '../lib/model-debug.js';
 import { buildOpenerInstruction } from '../lib/opener.js';
 import { queryClient } from '../lib/queryClient.js';
 import { openSecret } from '../lib/secrets.js';
@@ -145,6 +150,9 @@ interface StreamManagerStore {
   /** Set to 'blocking' while a synchronous pre-send compaction is in progress
    *  (Layer 3 overflow failsafe). Null at all other times. */
   compactingState: 'blocking' | null;
+  /** Last failure report per chat (in-memory; perishable — lost on reload). */
+  diagnostics: Map<string, DiagnosticReport>;
+  clearDiagnostics: (chatId: string) => void;
   start: (args: StartArgs) => Promise<void>;
   regenerate: (args: RegenerateStreamArgs) => Promise<void>;
   startOpener: (args: OpenerArgs) => Promise<void>;
@@ -268,6 +276,14 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
 export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   streams: new Map(),
   compactingState: null,
+  diagnostics: new Map(),
+  clearDiagnostics: (chatId) =>
+    set((s) => {
+      if (!s.diagnostics.has(chatId)) return s;
+      const m = new Map(s.diagnostics);
+      m.delete(chatId);
+      return { diagnostics: m };
+    }),
 
   has: (chatId) => get().streams.has(chatId),
 
@@ -668,6 +684,14 @@ async function runIntoDraft(
   const db = getClientDataDb();
   const now = Date.now();
   const controller = new AbortController();
+  const diag = createDiagnosticsCollector();
+  // A fresh attempt clears any stale failure report for this chat.
+  set((s) => {
+    if (!s.diagnostics.has(args.chatId)) return s;
+    const m = new Map(s.diagnostics);
+    m.delete(args.chatId);
+    return { diagnostics: m };
+  });
   // Lore pill: deterministic, built up-front (unlike tool-call pills from the engine) and closed over by both the finalise and error paths below.
   const lorePill: PillRow | null =
     args.lore && args.lore.entries.length > 0
@@ -837,6 +861,7 @@ async function runIntoDraft(
   const compacted = await applyActiveCompaction(args.chat, args.priorMessages, memoryContext);
 
   const onChunk = (chunk: StreamChunk): void => {
+    diag.markChunk(chunk);
     // Mirror tokens and reasoning deltas into the handle so ChatStream
     // can render the draft as it grows. We *replace* the handle on
     // each chunk so a zustand selector that returns `streams.get(chatId)`
@@ -878,6 +903,7 @@ async function runIntoDraft(
         toolExchange,
         signal: controller.signal,
         onChunk,
+        onDiagnostics: diag.sink,
       }),
     onPillUpdate: (pill) => {
       set((s) => {
@@ -1009,6 +1035,48 @@ async function runIntoDraft(
         await db.pills.put({ ...vp, messageId: draftMessageId });
       }
       void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
+
+      // Build and store the diagnostic report. Strictly additive and last in the
+      // recovery sequence — the draft is already persisted as incomplete above, so
+      // even if report-building somehow threw it could not block recovery.
+      const errMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      diag.markError(errMsg);
+      const routing = args.providerConfig.routing.kind === 'cors-proxy' ? 'cors-proxy' : 'direct';
+      const report = diag.build({
+        kind: 'chat-failure',
+        provider: {
+          displayName: args.provider.displayName,
+          routing,
+          targetHost: (() => {
+            try {
+              return new URL(args.provider.baseUrl).host;
+            } catch {
+              return args.provider.baseUrl;
+            }
+          })(),
+          ...(routing === 'cors-proxy' && args.corsProxyUrl
+            ? {
+                proxyHost: (() => {
+                  try {
+                    return new URL(args.corsProxyUrl as string).host;
+                  } catch {
+                    return args.corsProxyUrl as string;
+                  }
+                })(),
+              }
+            : {}),
+        },
+        model: args.offering.upstreamSlug,
+        whenIso: new Date().toISOString(),
+        env: buildEnvironmentSnapshot(),
+        outcome: 'failed',
+        outcomeDetail: 'stream failed during chat',
+      });
+      set((s) => {
+        const m = new Map(s.diagnostics);
+        m.set(args.chatId, report);
+        return { diagnostics: m };
+      });
 
       // Free the slot so the Cockpit Send button re-enables for this
       // chat and the BackgroundStreamBadge stops counting this stream.

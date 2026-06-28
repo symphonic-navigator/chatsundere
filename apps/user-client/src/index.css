@@ -1891,6 +1891,26 @@ h1 {
   display: flex;
   gap: 0.4rem;
 }
+.stream-interrupted-diag {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.1rem;
+}
+.stream-interrupted-diag-link {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.78rem;
+  color: rgba(240, 180, 180, 0.75);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.stream-interrupted-diag-hint {
+  font-size: 0.72rem;
+  color: rgba(240, 180, 180, 0.5);
+}
 
 /* === Phase 4 — ReasoningPill === */
 

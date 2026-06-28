@@ -1,15 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { getProvider, probeProvider, providerServiceKinds } from '@chatsundere/llm-unified';
+import {
+  type Offering,
+  getProvider,
+  probeProvider,
+  providerServiceKinds,
+} from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
+import {
+  MODEL_DEBUG_TIMEOUT_MS,
+  ModelDebugOverlay,
+} from '../../../components/ModelDebugOverlay.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useDeleteProvider, useProviders, useUpsertProvider } from '../../../data/providers.js';
 import { useSettings } from '../../../data/settings.js';
+import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
 
 type Status =
@@ -33,11 +43,23 @@ export function SettingsProviderPage(): JSX.Element {
   const existing = providers.data?.find((p) => p.templateId === templateId);
   const requiresProxy = definition?.corsHint === 'requires-proxy';
 
+  // "Test a model" can only reach the transport when a key is saved and, for
+  // proxy-required providers, a CORS proxy is configured. Otherwise a precondition
+  // failure would masquerade as a model failure (spec §7).
+  const hasSavedKey = existing != null;
+  const proxyReady = !requiresProxy || settings.data?.corsProxy != null;
+  const testDisabledReason = !hasSavedKey
+    ? 'Save a key first'
+    : !proxyReady
+      ? 'Set a CORS proxy first'
+      : null;
+
   const [apiKey, setApiKey] = useState('');
   const [revealKey, setRevealKey] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   const back = () => navigate('/app/settings/providers');
 
@@ -130,6 +152,43 @@ export function SettingsProviderPage(): JSX.Element {
       setStatus({ kind: 'error', reason: e instanceof Error ? e.message : String(e) });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function runDebugTest(offering: Offering): Promise<DiagnosticReport> {
+    if (!definition || !existing || !mk) {
+      throw new Error('Model test: provider not fully configured');
+    }
+    if (requiresProxy && !settings.data?.corsProxy) {
+      throw new Error('CORS proxy removed — configure it again under My Settings');
+    }
+    const sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
+    const corsProxyKey =
+      requiresProxy && sealedShared
+        ? await openSecret(sealedShared, mk, 'cors-proxy/shared-key')
+        : null;
+    const corsProxyUrl = requiresProxy ? (settings.data?.corsProxy?.url ?? null) : null;
+    const apiKeyPlain = await openSecret(existing.apiKey, mk, `provider/${existing.id}/api-key`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MODEL_DEBUG_TIMEOUT_MS);
+    try {
+      return await runStreamingTest({
+        provider: definition,
+        providerConfig: {
+          baseUrl: definition.baseUrl,
+          routing: requiresProxy
+            ? ({ kind: 'cors-proxy' } as const)
+            : ({ kind: 'direct' } as const),
+        },
+        apiKey: apiKeyPlain,
+        corsProxyUrl,
+        corsProxyKey,
+        offering,
+        proxyHost: corsProxyUrl ? new URL(corsProxyUrl).host : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -238,6 +297,19 @@ export function SettingsProviderPage(): JSX.Element {
           {apiKey !== '' ? <Badge tone="warning">● Unsaved</Badge> : null}
         </div>
 
+        <button
+          type="button"
+          onClick={() => setDebugOpen(true)}
+          disabled={testDisabledReason != null}
+          title={testDisabledReason ?? undefined}
+          className="self-start rounded-md border border-paper-soft/30 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:bg-paper-soft/10 disabled:opacity-50"
+        >
+          Test a model
+        </button>
+        {testDisabledReason != null ? (
+          <p className="text-xs text-paper-soft/70">{testDisabledReason}</p>
+        ) : null}
+
         {existing ? (
           <button
             type="button"
@@ -265,6 +337,15 @@ export function SettingsProviderPage(): JSX.Element {
           if (existing) void del.mutateAsync(existing.id).then(back);
         }}
       />
+      {definition ? (
+        <ModelDebugOverlay
+          open={debugOpen}
+          providerDisplayName={definition.displayName}
+          offerings={definition.offerings}
+          onClose={() => setDebugOpen(false)}
+          runTest={runDebugTest}
+        />
+      ) : null}
     </PageScaffold>
   );
 }

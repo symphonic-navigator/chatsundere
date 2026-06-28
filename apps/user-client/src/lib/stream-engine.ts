@@ -3,6 +3,7 @@ import {
   type ProviderConfig,
   type ProviderDefinition,
   type StreamChunk,
+  type StreamDiagnosticsSink,
   type ToolDef,
   type WireContentPart,
   type WireMessage,
@@ -59,6 +60,8 @@ export interface StartStreamArgs {
   job?: 'chat' | 'greeting';
   signal: AbortSignal;
   onChunk: (chunk: StreamChunk) => void;
+  /** Optional diagnostic capture sink, forwarded to the streaming transport. */
+  onDiagnostics?: StreamDiagnosticsSink;
 }
 
 export interface StreamEngineResult {
@@ -143,6 +146,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     tools: args.tools,
     signal: args.signal,
     onRetry: (e) => console.warn(formatRetryEvent(e)),
+    onDiagnostics: args.onDiagnostics,
   })) {
     args.onChunk(chunk);
 

@@ -47,7 +47,7 @@ export {
   stripTeal,
 } from './teal/teal.js';
 
-export { buildRequest, type BuildRequestArgs } from './transport.js';
+export { buildRequest, type BuildRequestArgs, type StreamDiagnosticsSink } from './transport.js';
 
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';
 

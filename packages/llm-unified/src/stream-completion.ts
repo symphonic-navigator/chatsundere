@@ -6,7 +6,7 @@ import { parseWithAdapter, parseWithAdapterNdjson } from './adapter-stream.js';
 import type { CompletionTarget } from './catalogue/target.js';
 import { type OnRetry, withStreamingRetry } from './retry.js';
 import { parseOpenAiSseStream } from './streaming.js';
-import { buildRequest } from './transport.js';
+import { type StreamDiagnosticsSink, buildRequest, pickResponseHeaders } from './transport.js';
 import type {
   ProviderConfig,
   ProviderDefinition,
@@ -45,6 +45,8 @@ export interface StreamCompletionArgs {
   initialResponseTimeoutMs?: number;
   /** Optional sink for retry decisions. Caller (apps/) wires the console line. */
   onRetry?: OnRetry;
+  /** Optional sink for observing the resolved request and response for debugging purposes. */
+  onDiagnostics?: StreamDiagnosticsSink;
 }
 
 const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
@@ -87,11 +89,18 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
         method: 'POST',
         body,
         extraHeaders,
+        onDiagnostics: args.onDiagnostics,
       }),
     operation: 'stream-completion',
     initialResponseTimeoutMs: timeoutMs,
     signal: args.signal,
     onRetry: args.onRetry,
+  });
+
+  args.onDiagnostics?.onResponse({
+    status: response.status,
+    statusText: response.statusText,
+    headers: pickResponseHeaders(response.headers),
   });
 
   if (!response.ok) {

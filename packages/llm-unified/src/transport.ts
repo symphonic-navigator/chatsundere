@@ -1,6 +1,52 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProviderConfig } from './types.js';
 
+/** Callback interface for observing resolved request and response data without re-implementing transport. */
+export interface StreamDiagnosticsSink {
+  onRequest(info: { method: string; url: string; headers: Record<string, string> }): void;
+  onResponse(info: { status: number; statusText: string; headers: Record<string, string> }): void;
+}
+
+const SECRET_REQUEST_HEADERS = new Set([
+  'authorization',
+  'proxy-authorization',
+  'x-api-key',
+  'api-key',
+  'x-cors-proxy-api-key',
+]);
+
+/** Returns a plain object copy of `headers` with all secret-bearing headers removed. */
+export function redactRequestHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    if (SECRET_REQUEST_HEADERS.has(key.toLowerCase())) return;
+    out[key.toLowerCase()] = value;
+  });
+  return out;
+}
+
+const ALLOWED_RESPONSE_HEADERS = new Set([
+  'content-type',
+  'content-encoding',
+  'transfer-encoding',
+  'cache-control',
+  'server',
+  'via',
+  'cf-ray',
+  'x-request-id',
+  'retry-after',
+  'date',
+]);
+
+/** Returns a plain object containing only the allowlisted diagnostic response headers. */
+export function pickResponseHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    if (ALLOWED_RESPONSE_HEADERS.has(key.toLowerCase())) out[key.toLowerCase()] = value;
+  });
+  return out;
+}
+
 export interface BuildRequestArgs {
   provider: ProviderConfig;
   apiKey: string;
@@ -15,6 +61,8 @@ export interface BuildRequestArgs {
    * these — e.g. wafer's `Wafer-ZDR: required`.
    */
   extraHeaders?: Record<string, string>;
+  /** Optional sink for observing the resolved request and response for debugging purposes. */
+  onDiagnostics?: StreamDiagnosticsSink;
 }
 
 /**
@@ -52,11 +100,13 @@ export function buildRequest(args: BuildRequestArgs): Request {
     for (const [k, value] of Object.entries(extraHeaders)) headers.set(k, value);
   }
 
-  return new Request(url, {
+  const request = new Request(url, {
     method,
     headers,
     body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
+  args.onDiagnostics?.onRequest({ method, url, headers: redactRequestHeaders(headers) });
+  return request;
 }
 
 function joinUrl(base: string, path: string): string {

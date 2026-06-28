@@ -8,7 +8,58 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-27 — **V0.1.0 EARLY-ALPHA SHIPPED & LIVE at
+**Last updated:** 2026-06-28 — **MODEL DEBUGGER SQUASHED TO MASTER. NOT
+pushed (Chris pushes); awaiting Chris's device-verify.**
+A self-service diagnostic so non-technical users can capture a copyable, redacted
+report when a model stream misbehaves (the trigger: a US iPhone/Safari user whose
+Sonnet-4.6-via-nano-gpt stream breaks where Chris can't reproduce it). **Two
+surfaces, one shared core.** (A) **`packages/llm-unified`** gains an optional
+`StreamDiagnosticsSink` threaded through `streamCompletion`/`transport.ts` — fires
+`onRequest`/`onResponse` with secrets **redacted at source** (request-header
+**denylist**: `authorization`/`x-api-key`/`api-key`/`x-cors-proxy-api-key`/
+`proxy-authorization`; response-header **allowlist**: `content-type`/
+`content-encoding`/… so gzip-buffering & friends are visible). Optional → existing
+streaming path byte-unchanged when absent. (B) **`lib/model-debug.ts`** (pure):
+`createDiagnosticsCollector` (timeline from sink events + chunks, tool-call chunks
+logged by name only), `buildEnvironmentSnapshot` (UA/platform/COI/online/TZ),
+`formatReport` (sectioned plain text, title branched on kind), and
+`runStreamingTest` — runs the **real** streaming path against a fixed
+count-1-to-10 prompt with a 5 s stall watchdog (60 s timeout + Stop owned by the
+caller's AbortController). (C) **Provider-page surface**: a gated **"Test a model"**
+button (My Settings → AI Providers → ‹provider›) opens `ModelDebugOverlay`
+(provider-scoped LLM picker → Run → `ModelDebugReport`: warm line, screenshot-clean
+`<pre>`, "Copy report" + named clipboard fallback, "paste into your reply" line).
+**Laura HARD D6**: disabled-with-**visible**-reason ("Save a key first" / "Set a
+CORS proxy first") so a precondition never masquerades as a model failure. (D)
+**Chat-failure surface**: the live stream stores a `chat-failure` report
+**in-memory** (no Dexie) on failure — report-building runs **after** the
+draft-incomplete recovery persistence so it can never block Retry/Discard; aborts
+produce nothing. `StreamInterruptedFooter` gains a **quiet** "Show diagnostics"
+text-link + **"Copy this before reloading"** perishable nudge (Laura D7), shown
+**only when a report exists** (hidden-not-disabled, Laura's §8 ruling); the report's
+partial reply is **labelled** as the user's content (Laura D8). Built
+spec→Laura-spec-pass (1 HARD gating + softs folded)→plan→**subagent-driven (9
+tasks, per-task spec+quality review)**. **opus** whole-branch: **merge-ready** —
+traced every secret path, none reach `formatReport`/clipboard/localStorage; 5
+cosmetic minors. **Laura** pre-squash: **no hard defects** — all six intents held
+(D6 stronger than mandated via the visible reason), distressed-user path
+find→run→copy has no dead-end; the convergent "report mis-titled Model Test on a
+chat failure" + clipboard-fallback softs **folded**. Not a Larissa path (no
+auth/sync/proxy-service, no `packages/crypto`); the `transport.ts` redaction was
+flagged for and cleared in code review. Gates: `pnpm typecheck --force` **14/14**;
+`pnpm build` **9/9**; full user-client vitest **2095 pass / 0 fail** (clean run —
+the known stream-manager parallel-load flake passed this run); llm-unified
+`bun test` **390 pass**; Biome clean on changed files. **One regression the gate
+run caught & fixed**: `ModelDebugOverlay` computed `offerings.filter` on mount and
+crashed 7 existing `SettingsProviderPage` tests on a definition mock with no
+offerings → guarded `offerings ?? []`. Spec/plan:
+[[../superpowers/specs/2026-06-28-model-debugger-design]],
+[[../superpowers/plans/2026-06-28-model-debugger]]. **Next:** Chris device-verifies
+(test a model per provider; force a real chat failure → Show diagnostics → copy;
+confirm no key in the pasted report), then pushes. Then back to the **chat makeover**
+(the last big surface). Branch `feat/model-debugger` kept until Chris pushes.
+
+**Earlier (2026-06-27) — V0.1.0 EARLY-ALPHA SHIPPED & LIVE at
 `app.chatsundere.me` 🎉 (squash `7aa46eb`; tag `v0.1.0` on the feature commit;
 STATUS `0638076`). Pushed, tagged, deployed, device-confirmed by Chris.**
 The first public early alpha ships as a self-contained **frontend Docker image**
