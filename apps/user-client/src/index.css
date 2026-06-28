@@ -73,6 +73,11 @@
 html,
 body,
 #root {
+  /* 100vh fallback first, then 100dvh where supported. On iOS Safari 100dvh
+     tracks the visible area as the URL bar auto-hides and the soft keyboard
+     shows/hides — 100vh always measures the tallest layout, so content shifts to
+     compensate and the borders appear to wobble. dvh removes that wobble. */
+  min-height: 100vh;
   min-height: 100dvh;
 }
 
@@ -87,6 +92,24 @@ body {
   color: var(--color-paper);
   font-feature-settings: "ss01", "cv11";
   -webkit-tap-highlight-color: transparent;
+  /* Kill the rubber-band overscroll bounce in standalone PWA mode — without this
+     the whole page appears to wobble when a scroll runs past the chat's top or
+     bottom, rather than just the inner scroll container moving. */
+  overscroll-behavior: none;
+}
+
+/* iOS Safari auto-zooms whenever a focused form control has font-size < 16px.
+   Below the lg breakpoint (every phone, and tablets per our "tablets are phones"
+   rule) we pin every text-entry control to 16px so focusing never triggers a
+   zoom — the composer (15.2px) and Settings textareas were the worst offenders.
+   Pairs with maximum-scale=1 in the viewport meta as defence in depth; font-size
+   has no visual effect on checkbox/radio/range, so the broad selector is safe. */
+@media (max-width: 1023px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 /* Dimmed aurora variant — applied by Root.tsx on /app subroutes so the
@@ -1367,8 +1390,11 @@ h1 {
   justify-content: space-between;
   gap: 0.5rem;
   /* Slimmer than the original 0.5rem: the larger avatar now anchors the bar's
-   * height, so the surrounding padding is trimmed to keep it tight. */
-  padding: 0.25rem 0.75rem;
+   * height, so the surrounding padding is trimmed to keep it tight. The top
+   * inset is added on top so the bar clears the notch / Dynamic Island under
+   * viewport-fit=cover — handled here on the chrome rather than on body, so the
+   * full-bleed aurora gradient still runs edge to edge behind it. */
+  padding: calc(0.25rem + env(safe-area-inset-top, 0px)) 0.75rem 0.25rem;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   z-index: 5;
