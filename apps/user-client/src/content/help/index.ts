@@ -4,6 +4,9 @@ import privacy from '../about/privacy.md?raw';
 import about from './about.md?raw';
 import biometric from './biometric.md?raw';
 import changePassphrase from './change-passphrase.md?raw';
+import chatArtefacts from './chat-artefacts.md?raw';
+import chatBookmarks from './chat-bookmarks.md?raw';
+import chatKnowledge from './chat-knowledge.md?raw';
 import circle from './circle.md?raw';
 import history from './history.md?raw';
 import integrations from './integrations.md?raw';
@@ -62,7 +65,10 @@ export type HelpKey =
   | 'settings-images'
   | 'settings-expert'
   | 'treasury'
-  | 'circle';
+  | 'circle'
+  | 'chat-bookmarks'
+  | 'chat-artefacts'
+  | 'chat-knowledge';
 
 export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'my-account': { title: 'My Account — help', markdown: myAccount },
@@ -95,6 +101,9 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'settings-expert': { title: '"Ask an Expert" — help', markdown: settingsExpert },
   treasury: { title: 'My Treasury — help', markdown: treasury },
   circle: { title: 'My Circle — help', markdown: circle },
+  'chat-bookmarks': { title: 'Chat Bookmarks — help', markdown: chatBookmarks },
+  'chat-artefacts': { title: 'Chat Artefacts — help', markdown: chatArtefacts },
+  'chat-knowledge': { title: 'Chat Knowledge — help', markdown: chatKnowledge },
 };
 
 export const PRIVACY_MD: string = privacy;

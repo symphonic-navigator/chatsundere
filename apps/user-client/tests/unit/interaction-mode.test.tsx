@@ -150,18 +150,13 @@ describe('InteractionMode lifecycle', () => {
     root.remove();
   });
 
-  it('tap inside a sheet overlay (artefact sidebar / ToC / branch / attach picker) does not close the cockpit', () => {
+  it('tap inside a sheet overlay (branch / attach picker / document picker) does not close the cockpit', () => {
     // Sheet overlays render at chat-page level, outside the interaction
     // container. A tap inside one must NOT count as an outside-tap — otherwise
     // the first tap is swallowed (and the cockpit collapses) instead of reaching
-    // the control, so opening an artefact from the sidebar — or selecting one in
-    // the attach picker — over an unpinned cockpit would take two taps.
-    for (const cls of [
-      'artefact-sheet-root',
-      'toc-sheet-root',
-      'branch-sheet-root',
-      'artefact-picker-root',
-    ]) {
+    // the control, so e.g. selecting an artefact in the attach picker over an
+    // unpinned cockpit would take two taps.
+    for (const cls of ['branch-sheet-root', 'artefact-picker-root', 'document-picker-root']) {
       useCurrentChatStore.getState().reset();
       useCurrentChatStore.getState().setInteractionMode(true);
       const root = document.createElement('div');

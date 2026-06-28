@@ -175,24 +175,10 @@ describe('Cockpit', () => {
     expect(btn.disabled).toBe(true);
   });
 
-  it('hides the ToC + artefact buttons unless toolsAvailable with callbacks', () => {
+  it('always renders the ToC + artefact buttons (no gate)', () => {
     const { container } = renderCockpit();
-    expect(container.querySelector('[data-control="toc"]')).toBeNull();
-    expect(container.querySelector('[data-control="artefacts"]')).toBeNull();
-  });
-
-  it('shows the ToC + artefact buttons when toolsAvailable, and they fire their callbacks', () => {
-    const onOpenToc = vi.fn();
-    const onOpenArtefacts = vi.fn();
-    const { container } = renderCockpit({ toolsAvailable: true, onOpenToc, onOpenArtefacts });
-    const toc = container.querySelector('[data-control="toc"]') as HTMLButtonElement;
-    const art = container.querySelector('[data-control="artefacts"]') as HTMLButtonElement;
-    expect(toc).not.toBeNull();
-    expect(art).not.toBeNull();
-    fireEvent.click(toc);
-    fireEvent.click(art);
-    expect(onOpenToc).toHaveBeenCalledTimes(1);
-    expect(onOpenArtefacts).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-control="toc"]')).not.toBeNull();
+    expect(container.querySelector('[data-control="artefacts"]')).not.toBeNull();
   });
 
   it('renders data-pinned="true" when pinned, "false" when not', () => {

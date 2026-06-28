@@ -11,7 +11,10 @@ import { DevToolsPage } from './routes/app/account/devtools.js';
 import { LogoutPage } from './routes/app/account/logout.js';
 import { RecoveryKeyPage } from './routes/app/account/recovery.js';
 import { ServerLinkingPage } from './routes/app/account/server-linking.js';
+import { ArtefactsPage } from './routes/app/chat/artefacts-page.js';
+import { BookmarksPage } from './routes/app/chat/bookmarks-page.js';
 import { ChatPage } from './routes/app/chat/chat-page.js';
+import { KnowledgePage as ChatKnowledgePage } from './routes/app/chat/knowledge-page.js';
 import { Circle } from './routes/app/circle.js';
 import { EntranceHall } from './routes/app/entrance-hall.js';
 import { HistoryPage } from './routes/app/history.js';
@@ -132,6 +135,9 @@ export function App() {
                   <Route path="/app/persona/:id/memory" element={<PersonaMemory />} />
                   <Route path="/app/chat/new" element={<ChatPage />} />
                   <Route path="/app/chat/:chatId" element={<ChatPage />} />
+                  <Route path="/app/chat/:chatId/bookmarks" element={<BookmarksPage />} />
+                  <Route path="/app/chat/:chatId/artefacts" element={<ArtefactsPage />} />
+                  <Route path="/app/chat/:chatId/knowledge" element={<ChatKnowledgePage />} />
                   <Route path="/app/history" element={<HistoryPage />} />
                   <Route path="/app/treasury" element={<Treasury />} />
                   <Route path="/app/knowledge" element={<KnowledgeList />} />

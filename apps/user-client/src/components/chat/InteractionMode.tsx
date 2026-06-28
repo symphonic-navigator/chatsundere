@@ -23,11 +23,8 @@ interface Props {
   onExit: () => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
-  onOpenToc?: () => void;
-  onOpenArtefacts?: () => void;
   onAttachFromTreasury?: () => void;
   onAttachFromLibrary?: () => void;
-  toolsAvailable?: boolean;
   /** Dictation surface — connected in chat-page via useDictation (spec 2026-06-12 §3). */
   dictation: Dictation;
   /** Voice-mode (auto-read-aloud) on/off — global setting. */
@@ -109,9 +106,7 @@ export function InteractionMode(p: Props): JSX.Element {
       // in the attach picker — over an unpinned cockpit takes two taps.
       if (
         target instanceof Element &&
-        target.closest(
-          '.artefact-sheet-root, .toc-sheet-root, .branch-sheet-root, .artefact-picker-root, .knowledge-sheet-root, .document-picker-root',
-        )
+        target.closest('.branch-sheet-root, .artefact-picker-root, .document-picker-root')
       )
         return;
 
@@ -204,11 +199,8 @@ export function InteractionMode(p: Props): JSX.Element {
           onSend={handleSend}
           onStop={p.onStop}
           isStreamLive={p.isStreamLive}
-          onOpenToc={p.onOpenToc}
-          onOpenArtefacts={p.onOpenArtefacts}
           onAttachFromTreasury={p.onAttachFromTreasury}
           onAttachFromLibrary={p.onAttachFromLibrary}
-          toolsAvailable={p.toolsAvailable}
           dictation={p.dictation}
           autoReadAloud={p.autoReadAloud}
           onToggleAutoRead={p.onToggleAutoRead}

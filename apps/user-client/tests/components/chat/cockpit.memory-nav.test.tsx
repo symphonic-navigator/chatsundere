@@ -86,8 +86,6 @@ function renderCockpit() {
                 onSend={() => {}}
                 onStop={() => {}}
                 isStreamLive={false}
-                onOpenToc={() => {}}
-                onOpenArtefacts={() => {}}
                 autoReadAloud={false}
                 onToggleAutoRead={() => {}}
                 voiceUnavailable={null}

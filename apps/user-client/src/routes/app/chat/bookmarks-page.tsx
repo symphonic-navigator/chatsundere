@@ -1,38 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { Bookmark } from 'lucide-react';
 import { useState } from 'react';
-import type { MessageRow } from '../../boot/client-data-db.js';
-import { useSetBookmarkLabel } from '../../data/bookmarks.js';
-import { useToggleBookmark } from '../../data/chats.js';
-import { type TocEntry, buildToc } from '../../lib/toc.js';
+import { useNavigate, useParams } from 'react-router-dom';
+import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { useHelp } from '../../../content/help/use-help.js';
+import { useSetBookmarkLabel } from '../../../data/bookmarks.js';
+import { useChat, useToggleBookmark } from '../../../data/chats.js';
+import { type TocEntry, buildToc } from '../../../lib/toc.js';
 
-interface Props {
-  messages: MessageRow[];
-  onClose: () => void;
-  /** Jump to a message — caller closes the sheet, drops to Reading Mode, scrolls. */
-  onJump: (messageId: string) => void;
-}
+/** Full-page view of this chat's bookmarks and table of contents. */
+export function BookmarksPage(): JSX.Element {
+  const { chatId = '' } = useParams();
+  const { onHelp, helpOverlay } = useHelp('chat-bookmarks');
+  const navigate = useNavigate();
 
-/** Per-chat bookmarks & table-of-contents overlay. */
-export function TocSheet(p: Props): JSX.Element {
-  const toc = buildToc(p.messages);
+  const { data } = useChat(chatId !== '' ? chatId : null);
   const toggleBookmark = useToggleBookmark();
   const setLabel = useSetBookmarkLabel();
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+
+  const messages = data?.messages ?? [];
+  const toc = buildToc(messages);
 
   function startRename(entry: TocEntry): void {
     setDraft(entry.isDefaultLabel ? '' : entry.label);
     setEditingId(entry.messageId);
   }
+
   function commitRename(messageId: string): void {
     const next = draft.trim();
     void setLabel.mutateAsync({ messageId, label: next === '' ? null : next });
     setEditingId(null);
   }
 
+  /** Navigate to the chat view with the given message focused (PUSH). */
   function jump(messageId: string): void {
-    p.onJump(messageId);
-    p.onClose();
+    navigate(`/app/chat/${chatId}?focus=${messageId}`);
   }
 
   const renderEntry = (entry: TocEntry): JSX.Element => (
@@ -67,7 +72,7 @@ export function TocSheet(p: Props): JSX.Element {
           aria-label="Rename bookmark"
           onClick={() => startRename(entry)}
         >
-          <span aria-hidden>🖎</span>
+          <span aria-hidden>&#x1F58E;</span>
         </button>
         <button
           type="button"
@@ -83,16 +88,18 @@ export function TocSheet(p: Props): JSX.Element {
   );
 
   return (
-    <div className="toc-sheet-root">
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop is a dismiss surface; the × button is the keyboard path */}
-      <div className="toc-backdrop" data-testid="toc-backdrop" onClick={p.onClose} />
-      <aside className="toc-sheet" aria-label="Bookmarks and contents">
-        <header className="toc-sheet-header">
-          <span className="toc-sheet-title">Bookmarks &amp; contents</span>
-          <button type="button" className="toc-sheet-close" aria-label="Close" onClick={p.onClose}>
-            <span aria-hidden>×</span>
-          </button>
-        </header>
+    <PageScaffold
+      crumbs={[{ label: 'Chat', to: `/app/chat/${chatId}` }, { label: 'Bookmarks' }]}
+      back={`/app/chat/${chatId}`}
+      onHelp={onHelp}
+    >
+      {helpOverlay}
+
+      <div className="flex flex-col gap-6 px-4 pb-8 pt-4">
+        <h1 className="flex items-center gap-2 text-lg font-medium text-paper">
+          <Bookmark size={18} aria-hidden="true" />
+          Bookmarks
+        </h1>
 
         {toc.pinned.length > 0 ? (
           <section className="toc-section toc-pinned">
@@ -109,7 +116,7 @@ export function TocSheet(p: Props): JSX.Element {
             <p className="toc-empty">Your messages will appear here as you chat.</p>
           )}
         </section>
-      </aside>
-    </div>
+      </div>
+    </PageScaffold>
   );
 }

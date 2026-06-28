@@ -15,7 +15,7 @@ import {
   useRenameAttachment,
   useUpdateAttachmentText,
 } from '../../data/attachments.js';
-import { useChat, useSetChatLibraries } from '../../data/chats.js';
+import { useChat } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
 import { useCurrentBody, useUncommittedCount } from '../../data/memory.js';
 import { usePersona } from '../../data/personas.js';
@@ -33,7 +33,6 @@ import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { CockpitMenu } from './CockpitMenu.js';
 import { DualActionBtn } from './DualActionBtn.js';
-import { KnowledgeSheet } from './KnowledgeSheet.js';
 
 interface Props {
   chatId: string;
@@ -44,13 +43,6 @@ interface Props {
   onSend: (text: string) => void;
   onStop: () => void;
   isStreamLive: boolean;
-  /** Open the per-chat ToC / bookmarks sheet (omitted → button hidden). */
-  onOpenToc?: () => void;
-  /** Open the per-chat artefact sheet (omitted → button hidden). */
-  onOpenArtefacts?: () => void;
-  /** Whether the chat has content worth navigating — gates the ToC/artefact
-   *  buttons in the controls row (mirrors the reading-mode tool strip). */
-  toolsAvailable?: boolean;
   /** Open the Treasury attach picker (omitted → (+) opens the file dialog directly). */
   onAttachFromTreasury?: () => void;
   /** Open the knowledge document picker (omitted → no "Attach from knowledge" item). */
@@ -112,7 +104,6 @@ async function ingestFiles(
 export function Cockpit(p: Props): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
-  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [voiceNote, setVoiceNote] = useState(false);
   const navigate = useNavigate();
   const isPinned = useCurrentChatStore((s) => s.isPinned);
@@ -236,7 +227,6 @@ export function Cockpit(p: Props): JSX.Element {
   // any knowledge is in play for the next send.
   const { data: allLibraries = [] } = useFilteredLibraries();
   const { data: chatData } = useChat(p.chatId || null);
-  const setChatLibraries = useSetChatLibraries();
   // Legacy / partial persona rows may omit libraryIds (Chunk B added the field);
   // default to an empty set so the cockpit never crashes on iteration.
   const personaLibraryIds = p.persona.libraryIds ?? [];
@@ -247,14 +237,6 @@ export function Cockpit(p: Props): JSX.Element {
     allLibraries,
     p.persona.adultPersona,
   ).length;
-
-  const onToggleChatLibrary = (id: string): void => {
-    if (!p.chatId) return;
-    const next = chatLibraryIds.includes(id)
-      ? chatLibraryIds.filter((l) => l !== id)
-      : [...chatLibraryIds, id];
-    setChatLibraries.mutate({ chatId: p.chatId, libraryIds: next });
-  };
 
   // Live content for copy-on-write document references (preview before send), plus a
   // provenance label sourced from the (already NSFW-filtered) library list.
@@ -474,28 +456,30 @@ export function Cockpit(p: Props): JSX.Element {
           </span>
         </button>
         <div className="cockpit-controls-spacer" />
-        {p.toolsAvailable && p.onOpenToc && p.onOpenArtefacts ? (
-          <>
-            <button
-              type="button"
-              className="cockpit-icon-btn"
-              data-control="toc"
-              aria-label="Bookmarks and contents"
-              onClick={p.onOpenToc}
-            >
-              <Bookmark className="cockpit-glyph" size={20} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="cockpit-icon-btn"
-              data-control="artefacts"
-              aria-label="Artefacts"
-              onClick={p.onOpenArtefacts}
-            >
-              <Gem className="cockpit-glyph" size={20} aria-hidden="true" />
-            </button>
-          </>
-        ) : null}
+        <button
+          type="button"
+          className="cockpit-icon-btn"
+          data-control="toc"
+          aria-label="Bookmarks and contents"
+          disabled={!p.chatId}
+          aria-disabled={!p.chatId || undefined}
+          title={!p.chatId ? 'Send your first message to add to this chat.' : undefined}
+          onClick={() => navigate(`/app/chat/${p.chatId}/bookmarks`)}
+        >
+          <Bookmark className="cockpit-glyph" size={20} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="cockpit-icon-btn"
+          data-control="artefacts"
+          aria-label="Artefacts"
+          disabled={!p.chatId}
+          aria-disabled={!p.chatId || undefined}
+          title={!p.chatId ? 'Send your first message to add to this chat.' : undefined}
+          onClick={() => navigate(`/app/chat/${p.chatId}/artefacts`)}
+        >
+          <Gem className="cockpit-glyph" size={20} aria-hidden="true" />
+        </button>
         <button
           type="button"
           className={`cockpit-icon-btn${uncommittedCount > 0 || memoryActive ? ' active' : ''}`}
@@ -515,8 +499,10 @@ export function Cockpit(p: Props): JSX.Element {
           className={`cockpit-icon-btn${effectiveCount > 0 ? ' active' : ''}`}
           data-control="knowledge"
           aria-label="Knowledge for this chat"
-          aria-expanded={knowledgeOpen}
-          onClick={() => setKnowledgeOpen((v) => !v)}
+          disabled={!p.chatId}
+          aria-disabled={!p.chatId || undefined}
+          title={!p.chatId ? 'Send your first message to add to this chat.' : undefined}
+          onClick={() => navigate(`/app/chat/${p.chatId}/knowledge`)}
         >
           <BookOpen className="cockpit-glyph" size={20} aria-hidden="true" />
           {effectiveCount > 0 ? (
@@ -616,16 +602,6 @@ export function Cockpit(p: Props): JSX.Element {
         <div className="cockpit-reject" role="alert" onAnimationEnd={() => setReject(null)}>
           {reject}
         </div>
-      )}
-      {knowledgeOpen && (
-        <KnowledgeSheet
-          personaLibraryIds={personaLibraryIds}
-          chatLibraryIds={chatLibraryIds}
-          onToggleChat={onToggleChatLibrary}
-          adultPersona={p.persona.adultPersona}
-          canBindChat={!!p.chatId}
-          onClose={() => setKnowledgeOpen(false)}
-        />
       )}
       {lightboxIndex !== null && (
         <Lightbox

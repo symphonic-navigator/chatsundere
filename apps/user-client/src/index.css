@@ -2143,41 +2143,6 @@ h1 {
   border-color: var(--color-accent, #c9a227);
 }
 
-/* ToC overlay sheet */
-.toc-sheet-root {
-  /* Absolute, bound to .chat-page (which is itself position:fixed, so a clean
-   *  containing block) — viewport-fixed would be clipped by the mindspace
-   *  transform layers. Covers the chat column, which is the whole surface on
-   *  mobile. */
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-}
-.toc-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-}
-.toc-sheet {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(88vw, 22rem);
-  background: var(--color-ink, #1a1a1a);
-  border-left: 1px solid color-mix(in srgb, var(--color-paper, #e6e6e6) 12%, transparent);
-  padding: 1rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.toc-sheet-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 .toc-section-title {
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -2207,6 +2172,48 @@ h1 {
   display: flex;
   gap: 0.25rem;
   opacity: 0.7;
+}
+
+/* Section wrapper — stacks the title above its list (BookmarksPage). */
+.toc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Rename + star icon-buttons — match the lean icon-button look the sheet rows
+ *  used (and .artefact-row-star); transparent until hovered, gold when active. */
+.toc-entry-rename,
+.toc-entry-star {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-paper, #e6e6e6);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+.toc-entry-rename:hover,
+.toc-entry-star:hover {
+  opacity: 0.8;
+}
+.toc-entry-star[data-active] {
+  color: var(--color-warning, #e0a93b);
+  opacity: 1;
+}
+
+/* Empty-state note — mirrors .artefact-empty. */
+.toc-empty {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  padding: 0.25rem 0;
+  margin: 0;
+  font-style: italic;
 }
 
 /* Branch-this-chat bottom-sheet — mirrors .toc-sheet structure */
@@ -3480,75 +3487,6 @@ h1 {
   border: 1px solid color-mix(in srgb, var(--color-paper) 12%, transparent);
 }
 
-/* ===== Artefact sheet (mirrors .toc-sheet-root / .toc-sheet) ============== */
-
-.artefact-sheet-root {
-  /* Same containing-block rationale as .toc-sheet-root — absolute binds to
-   * .chat-page so the sheet covers the chat column without escaping into
-   * the mindspace transform layers. */
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-}
-
-.artefact-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-}
-
-.artefact-sheet {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(88vw, 22rem);
-  background: var(--color-ink);
-  border-left: 1px solid color-mix(in srgb, var(--color-paper) 12%, transparent);
-  padding: 1rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.artefact-sheet-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.artefact-sheet-title {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  flex: 1;
-}
-
-.artefact-sheet-count {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  padding: 0.05em 0.45em;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-aurora-500) 20%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-aurora-500) 35%, transparent);
-  color: var(--color-aurora-200);
-}
-
-.artefact-sheet-close {
-  display: grid;
-  place-items: center;
-  width: 1.8rem;
-  height: 1.8rem;
-  border-radius: 999px;
-  color: var(--color-paper);
-  opacity: 0.6;
-  transition: opacity 120ms ease;
-}
-.artefact-sheet-close:hover {
-  opacity: 1;
-}
-
 .artefact-section {
   display: flex;
   flex-direction: column;
@@ -3563,23 +3501,6 @@ h1 {
   /* Reset h3 default margins — the section flex gap handles spacing. */
   margin: 0;
   font-family: var(--font-mono);
-}
-
-.artefact-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-/* One compact line per artefact */
-.artefact-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
 }
 
 /* Format glyph chip — colour varies by format class */
@@ -3618,58 +3539,6 @@ h1 {
 .treasury-glyph.g-img {
   color: #e58fc8;
   background: rgba(229, 143, 200, 0.12);
-}
-
-.artefact-row-label {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  padding: 0.35rem 0;
-  color: var(--color-paper);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.88rem;
-}
-.artefact-row-label:hover {
-  color: var(--color-aurora-200);
-}
-
-/* Inline rename input — same pattern as .toc-entry-input */
-.artefact-row-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0.3rem 0.45rem;
-  border-radius: 0.375rem;
-  background: color-mix(in srgb, var(--color-paper) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-aurora-500) 55%, transparent);
-  color: var(--color-paper);
-  font: inherit;
-  font-size: 0.88rem;
-}
-.artefact-row-input:focus {
-  outline: none;
-  border-color: var(--color-aurora-500);
-}
-
-/* Star / favourite toggle */
-.artefact-row-star {
-  display: grid;
-  place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  flex-shrink: 0;
-  border-radius: 999px;
-  color: var(--color-paper);
-  opacity: 0.45;
-  transition: opacity 120ms ease;
-}
-.artefact-row-star:hover {
-  opacity: 0.8;
-}
-.artefact-row-star[data-active] {
-  color: var(--color-warning);
-  opacity: 1;
 }
 
 /* Empty-state note */
@@ -4109,12 +3978,6 @@ h1 {
   font-size: 0.85rem;
   background: color-mix(in srgb, var(--color-accent, #c9a227) 12%, var(--color-ink, #1a1a1a));
 }
-.knowledge-sheet-root .sheet-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
 /* ===== Knowledge document picker — accordion-tree bottom sheet ============ */
 /* Mirrors the artefact-picker sheet visually; keep the two in sync.         */
 

@@ -35,8 +35,6 @@ interface CurrentChatStore {
   askExpert: boolean;
   /** Artefact lightbox: the id of the artefact currently open, or null. */
   openArtefactId: string | null;
-  /** Whether the artefact sidebar sheet is open. */
-  isArtefactSheetOpen: boolean;
 
   /** Open a persisted chat by ID. Clears any pending lazy-open persona. */
   setChatId: (id: string | null) => void;
@@ -58,12 +56,10 @@ interface CurrentChatStore {
   setReasoning: (r: ReasoningState) => void;
   setWebSearchTierId: (id: string | null) => void;
   setAskExpert: (on: boolean) => void;
-  /** Open an artefact in the lightbox; closes the sidebar sheet. */
+  /** Open an artefact in the lightbox. */
   openArtefact: (id: string) => void;
   /** Close the artefact lightbox. */
   closeArtefact: () => void;
-  /** Open or close the artefact sidebar sheet. */
-  setArtefactSheetOpen: (open: boolean) => void;
   /** Reset all ephemeral state to initial defaults. */
   reset: () => void;
 }
@@ -86,7 +82,6 @@ type InitialState = Omit<
   | 'setAskExpert'
   | 'openArtefact'
   | 'closeArtefact'
-  | 'setArtefactSheetOpen'
   | 'reset'
 >;
 
@@ -105,7 +100,6 @@ const initial: InitialState = {
   webSearchTierId: null,
   askExpert: false,
   openArtefactId: null,
-  isArtefactSheetOpen: false,
 };
 
 export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
@@ -137,8 +131,7 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   setReasoning: (r) => set({ reasoning: r }),
   setWebSearchTierId: (id) => set({ webSearchTierId: id }),
   setAskExpert: (on) => set({ askExpert: on }),
-  openArtefact: (id) => set({ openArtefactId: id, isArtefactSheetOpen: false }),
+  openArtefact: (id) => set({ openArtefactId: id }),
   closeArtefact: () => set({ openArtefactId: null }),
-  setArtefactSheetOpen: (open) => set({ isArtefactSheetOpen: open }),
   reset: () => set({ ...initial }),
 }));

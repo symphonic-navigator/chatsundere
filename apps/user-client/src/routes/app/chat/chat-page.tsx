@@ -9,7 +9,6 @@ import { markCompactionToastShown } from '../../../compaction/repo.js';
 import { isCompactable, shouldShowToast } from '../../../compaction/trigger.js';
 import { ModelDebugReport } from '../../../components/ModelDebugReport.js';
 import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
-import { ArtefactSheet } from '../../../components/chat/ArtefactSheet.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
@@ -20,7 +19,6 @@ import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { LiveVoiceBar } from '../../../components/chat/LiveVoiceBar.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
-import { TocSheet } from '../../../components/chat/TocSheet.js';
 import { VoiceTransport } from '../../../components/chat/VoiceTransport.js';
 import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js';
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
@@ -94,13 +92,10 @@ export function ChatPage(): JSX.Element {
   const isLiveVoice = useCurrentChatStore((s) => s.isLiveVoice);
   const setLiveVoice = useCurrentChatStore((s) => s.setLiveVoice);
 
-  const isArtefactSheetOpen = useCurrentChatStore((s) => s.isArtefactSheetOpen);
-  const setArtefactSheetOpen = useCurrentChatStore((s) => s.setArtefactSheetOpen);
   const openArtefactId = useCurrentChatStore((s) => s.openArtefactId);
   const openArtefact = useCurrentChatStore((s) => s.openArtefact);
   const closeArtefact = useCurrentChatStore((s) => s.closeArtefact);
 
-  const [tocOpen, setTocOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [documentPickerOpen, setDocumentPickerOpen] = useState(false);
   const [branchPointId, setBranchPointId] = useState<string | null>(null);
@@ -848,18 +843,6 @@ export function ChatPage(): JSX.Element {
         />
       )}
 
-      {tocOpen ? (
-        <TocSheet messages={messages} onClose={() => setTocOpen(false)} onJump={jumpToMessage} />
-      ) : null}
-
-      {isArtefactSheetOpen ? (
-        <ArtefactSheet
-          chatId={activeChatId ?? ''}
-          onClose={() => setArtefactSheetOpen(false)}
-          onOpen={openArtefact}
-        />
-      ) : null}
-
       {pickerOpen ? (
         <ArtefactPicker
           chatId={chat?.id ?? activeChatId ?? ''}
@@ -945,11 +928,8 @@ export function ChatPage(): JSX.Element {
           onExit={onExitToEntranceHall}
           onRenameChat={onRenameChat}
           onOpenPersonaEditor={onOpenPersonaEditor}
-          onOpenToc={() => setTocOpen(true)}
-          onOpenArtefacts={() => setArtefactSheetOpen(true)}
           onAttachFromTreasury={() => setPickerOpen(true)}
           onAttachFromLibrary={() => setDocumentPickerOpen(true)}
-          toolsAvailable={hasMessages}
           dictation={dictation}
           autoReadAloud={autoReadAloud}
           onToggleAutoRead={onToggleAutoRead}
