@@ -73,6 +73,17 @@ timeline lets a remote reader separate these by eye.
 | D3 | Presentation | **Zoom overlay** (`PickerOverlay`) opened from a button at the bottom of the provider page. |
 | D4 | Export | **Copy button** + **screenshot-friendly** rendering. No file share. |
 | D5 | Chat failure footer | **Yes, now, in-memory** — third button in `StreamInterruptedFooter`, report held in the stream-manager store, no Dexie change. |
+| D6 | Precondition gating (Laura HARD) | The provider-page trigger is **disabled-with-reason** when no usable key is saved, or, for proxy-required providers, no CORS proxy is configured. Enabled only when a run could reach the transport. |
+| D7 | Reload-loss mitigation (Laura SOFT) | Keep in-memory (no Dexie). When a report exists, the footer **signals it is perishable** ("Copy this before reloading"), turning a silent loss into a prompt to act. |
+| D8 | Chat-report private text (Laura SOFT) | The chat-failure report **includes** the partial reply text but **clearly labelled** ("Partial reply your device received — included so we can spot corruption"). Corruption stays visible; the user consciously sees what she is sending. |
+
+**Copy labels** (Chris arbitrates design; defaults set here): provider-page button
+**"Test a model"** (singular — one model per run, not a sweep); run control
+**"Run streaming test"** / **"Stop"**; copy control **"Copy report"** → **"Copied ✓"**;
+footer link **"Show diagnostics"**. A **warm top line** opens the rendered report:
+*"Thanks for this — copy it and paste it into your reply to us; it tells us exactly
+what your device saw."* A **"what next" line** sits under the copy button:
+*"Paste this into your reply to us."* (channel-agnostic, per Chris).
 
 ## 5. Architecture
 
@@ -161,6 +172,17 @@ export interface StreamDiagnosticsSink {
 - **Reused resolution:** provider definition/config, decrypted key, and CORS
   proxy URL/key are resolved exactly as the existing "Test & Save" /chat paths
   do in `provider.tsx` — no parallel re-implementation.
+- **Precondition gating (D6, Laura HARD):** the **"Test a model"** button is
+  rendered **disabled-with-reason** until a run could actually reach the
+  transport. The provider page is reachable in the unconfigured state
+  (`provider.tsx:33,36` — `existing` may be undefined, `apiKey` starts `''`).
+  Reasons: no saved/usable key → *"Save a key first"*; proxy-required provider
+  with no CORS proxy configured → reuse the existing `provider.tsx:59` string
+  (*"Set a CORS proxy first"*). Without this, a user taps Test → picks a model →
+  hits a 401/CORS error that reads as a **model** failure — the tool built to
+  diagnose a real break would manufacture a fake one, indistinguishable to a
+  non-technical user. Disabled-over-hidden applies here (the user can act on the
+  reason), unlike the footer case (§8).
 
 ## 8. The chat-failure surface (in-memory)
 
@@ -179,6 +201,17 @@ sink and accumulates a timeline into the live `StreamHandle`.
   and is lost on a full reload. This fully covers the real incident flow: the
   footer appears the instant the stream breaks, the user taps "Show diagnostics"
   → copy → send to Chris, all same-session.
+- **Perishable nudge (D7, Laura SOFT):** the target user (§1, US iPhone/Safari)
+  will instinctively force-reload a hung page, destroying the in-memory report —
+  the very evidence Chris needs. We keep in-memory (no Dexie) but make the loss a
+  prompt to act: **when a report exists**, the footer shows a quiet perishable
+  cue (*"Copy this before reloading"*) near the diagnostics link. This converts a
+  silent loss into an honest, actionable signal without a migration.
+- **Footer intent hierarchy (Laura SOFT):** the footer's primary intent at the
+  moment of failure is recovery. Order and prominence: **Retry** (primary) →
+  **Discard** → **Show diagnostics** (least prominent — a quiet text link, not a
+  peer button), so the altruistic "help us debug" action never competes with the
+  user getting her answer back.
 - **Footer button gating:** `StreamInterruptedFooter` is also shown for
   *aborted* or *post-reload* incomplete messages, where **no report exists**.
   The third button is therefore rendered **only when the store holds a report
@@ -245,10 +278,24 @@ HTTP 200 OK · content-type: text/event-stream · content-encoding: gzip ⚠
 [Outcome] FAILED after 16.3s — stream stalled then errored
 ```
 
+The rendered block opens with a **warm top line** so it reads as the user
+*helping*, not as catastrophe at the worst moment (Laura SOFT, empowerment tenet):
+*"Thanks for this — copy it and paste it into your reply to us; it tells us
+exactly what your device saw."*
+
 Environment fields: `navigator.userAgent`, a parsed platform/OS/browser line,
 `crossOriginIsolated`, `navigator.onLine`, `Intl.DateTimeFormat().resolvedOptions().timeZone`.
-The returned model text **is** included (the test prompt is fixed and trivial,
-and the text reveals refusals/garbage/partials).
+
+**Returned model text (D8):**
+- **Test path:** the prompt is fixed and trivial, so the returned text is included
+  plainly — it reveals refusals/garbage/partials.
+- **Chat-failure path:** the partial reply is a slice of the user's **real**
+  conversation. It is **included but clearly labelled** — a dedicated section
+  headed *"Partial reply your device received — included so we can spot
+  corruption"* — so encoding corruption (mojibake etc.) stays diagnosable while
+  the user consciously sees what is on her clipboard. This honours the
+  zero-knowledge trust identity by making the content explicit rather than buried
+  in a timeline line.
 
 ## 11. Error handling
 
@@ -256,10 +303,15 @@ and the text reveals refusals/garbage/partials).
   any token; the report shows the response status (if any) and the error
   type/message — no timeline drama.
 - **Stream-then-stall:** the watchdog line plus inter-chunk gaps make it visible.
+- **Precondition not met (D6):** before any of the above, the **"Test a model"**
+  trigger is disabled-with-reason when no usable key / no required proxy exists
+  (§7) — so a precondition failure never masquerades as a model/transport failure.
 - **No model chosen:** the "Run streaming test" button is disabled with a reason
   (Don't-make-me-think).
 - **Clipboard unavailable:** the rendered block is the fallback — it is already
-  screenshot-clean, and "Copy log" degrades to a "select-all" hint.
+  screenshot-clean, and "Copy report" degrades to a "select-all" hint. A "what
+  next" line under the button (*"Paste this into your reply to us."*) closes the
+  loop so the copied report has an obvious destination.
 
 ## 12. Testing
 
@@ -278,22 +330,32 @@ and the text reveals refusals/garbage/partials).
 
 - **Larissa:** not required (no auth/sync/proxy-service, no `packages/crypto`).
   The redaction in `transport.ts` is flagged for code-review attention (§9).
-- **Laura:** required — two new user-reachable affordances. **Spec-pass** on this
-  document, then **pre-squash** on the built flow. The footer hidden-vs-disabled
-  question (§8) is explicitly hers.
+- **Laura:** required — two new user-reachable affordances. **Spec-pass: done**
+  (2026-06-28) — 1 HARD (precondition gating, now D6/§7) + softs folded
+  (D7 perishable nudge, D8 labelled private text, footer intent hierarchy, warm
+  top line, "what next" line, "Copy report" label). She ruled **with** me on the
+  footer hidden-vs-disabled question (§8): hidden for the aborted/reloaded case,
+  conditioned on the settings-side trigger staying the always-visible home.
+  **Pre-squash** on the built flow still pending.
 
 ## 14. Manual verification (Chris, on device)
 
-1. Settings → AI Providers → a provider → **Test models** → pick a model →
-   **Run streaming test** → a report with a populated timeline renders.
+0. On a provider with **no key saved** (or proxy-required with no proxy), the
+   **Test a model** button is disabled with the right reason; saving a key (and
+   proxy) enables it.
+1. Settings → AI Providers → a provider → **Test a model** → pick a model →
+   **Run streaming test** → a report with a populated timeline + warm top line
+   renders; **Copy report** copies; the "what next" line is present.
 2. **Copy log** copies the plain-text report; pasting it elsewhere shows no
    `Authorization`/key string anywhere.
 3. The report block is legible as a screenshot at 380 px (no truncation).
 4. Force a failure (e.g. a wrong key, or a model known to break) → the report
    shows the failure shape (status / error / stall).
-5. In a real chat, interrupt/break a stream → the interrupted footer shows
-   **Show diagnostics** → opens the report → copy works. Navigate away and back
-   within the session → still available. Full reload → gone (expected).
+5. In a real chat, interrupt/break a stream → the interrupted footer shows a
+   quiet **Show diagnostics** link (less prominent than Retry/Discard) plus the
+   **"Copy this before reloading"** perishable cue → opens the report (with the
+   labelled partial-reply section) → copy works. Navigate away and back within the
+   session → still available. Full reload → gone (expected).
 6. An aborted (Stop) or post-reload incomplete message shows **no** diagnostics
    button (per the §8 leaning, subject to Laura).
 
