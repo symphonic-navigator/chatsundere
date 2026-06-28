@@ -157,7 +157,16 @@ export function Root() {
                 type="button"
                 className="topbar-persona-link"
                 aria-label={`Go to ${chatHeader.name}`}
-                onClick={() => navigate(`/app/persona/${chatHeader.personaId}`)}
+                onClick={() =>
+                  // Thread the chat as the return path so the persona page's
+                  // back control comes straight back here (mirrors the chat's
+                  // own "open persona" nav — chat-page onOpenPersonaEditor).
+                  navigate(
+                    `/app/persona/${chatHeader.personaId}?return=${encodeURIComponent(
+                      `${location.pathname}${location.search}`,
+                    )}`,
+                  )
+                }
               >
                 <PersonaAvatar
                   personaId={chatHeader.personaId}

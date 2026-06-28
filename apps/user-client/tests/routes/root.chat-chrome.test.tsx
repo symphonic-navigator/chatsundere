@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import 'fake-indexeddb/auto';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { Root, isExactChatRoute } from '../../src/routes/root.js';
@@ -136,6 +136,39 @@ describe('Root read-only chat topbar (chatHeader set)', () => {
     useCurrentChatStore.getState().setInteractionMode(false);
     renderAt('/app/chat/c1');
     expect(screen.getByText('Evening at the harbour')).toBeInTheDocument();
+  });
+
+  it('tapping the persona avatar navigates to the persona with the chat as ?return', () => {
+    useCurrentChatStore.getState().setChatHeader({
+      personaId: 'p1',
+      name: 'Laura',
+      colour: '#c44e8e',
+      title: 'Evening at the harbour',
+    });
+    useCurrentChatStore.getState().setInteractionMode(false);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function LocationProbe(): JSX.Element {
+      const loc = useLocation();
+      return (
+        <div data-testid="loc">
+          {loc.pathname}
+          {loc.search}
+        </div>
+      );
+    }
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/app/chat/c1']}>
+          <Root />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByLabelText('Go to Laura'));
+    // The persona page's back control reads ?return, so this round-trips to the chat.
+    expect(screen.getByTestId('loc').textContent).toBe(
+      `/app/persona/p1?return=${encodeURIComponent('/app/chat/c1')}`,
+    );
   });
 });
 
