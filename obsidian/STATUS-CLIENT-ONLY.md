@@ -59,6 +59,11 @@ pushes. Then the chat's **visual fine-tuning** pass (the deliberately-deferred
 polish: toast top-offset vs PageBar, persona-label suppression, etc.) + the
 remaining deferred sub-surfaces (chat `DocumentPicker`, attach-picker Quick-Sheet).
 
+**Follow-up landed (`f527dc5`):** the read-only topbar's persona avatar now
+threads the chat as a `?return=` param, so the persona page's back control
+returns straight to the chat (not My Circle) — Chris's wish; `feat/persona-back-to-chat`
+kept until push.
+
 **Earlier (2026-06-28) — MODEL DEBUGGER SQUASHED TO MASTER. NOT
 pushed (Chris pushes); awaiting Chris's device-verify.**
 A self-service diagnostic so non-technical users can capture a copyable, redacted
