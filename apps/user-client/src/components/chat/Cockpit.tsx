@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Offering } from '@chatsundere/llm-unified';
 import { useQueryClient } from '@tanstack/react-query';
+import { BookOpen, Bookmark, Brain, Gem } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { classifyFile } from '../../attachments/file-classify.js';
@@ -482,9 +483,7 @@ export function Cockpit(p: Props): JSX.Element {
               aria-label="Bookmarks and contents"
               onClick={p.onOpenToc}
             >
-              <span className="cockpit-glyph" aria-hidden="true">
-                ◈
-              </span>
+              <Bookmark className="cockpit-glyph" size={20} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -493,9 +492,7 @@ export function Cockpit(p: Props): JSX.Element {
               aria-label="Artefacts"
               onClick={p.onOpenArtefacts}
             >
-              <span className="cockpit-glyph" aria-hidden="true">
-                ⬡
-              </span>
+              <Gem className="cockpit-glyph" size={20} aria-hidden="true" />
             </button>
           </>
         ) : null}
@@ -506,9 +503,7 @@ export function Cockpit(p: Props): JSX.Element {
           aria-label="Chat memory"
           onClick={() => navigate(`/app/persona/${p.persona.id}/memory?chat=${p.chatId}`)}
         >
-          <span className="cockpit-glyph" aria-hidden="true">
-            ◌
-          </span>
+          <Brain className="cockpit-glyph" size={20} aria-hidden="true" />
           {uncommittedCount > 0 ? (
             <span className="cockpit-control-count" aria-hidden="true">
               {uncommittedCount}
@@ -523,9 +518,7 @@ export function Cockpit(p: Props): JSX.Element {
           aria-expanded={knowledgeOpen}
           onClick={() => setKnowledgeOpen((v) => !v)}
         >
-          <span className="cockpit-glyph" aria-hidden="true">
-            ❖
-          </span>
+          <BookOpen className="cockpit-glyph" size={20} aria-hidden="true" />
           {effectiveCount > 0 ? (
             <span className="cockpit-control-count" aria-hidden="true">
               {effectiveCount}

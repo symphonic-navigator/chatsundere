@@ -86,6 +86,7 @@ export function ChatPage(): JSX.Element {
   const inputFocused = useCurrentChatStore((s) => s.inputFocused);
   const isPinned = useCurrentChatStore((s) => s.isPinned);
   const setChatPersonaIsAdult = useCurrentChatStore((s) => s.setChatPersonaIsAdult);
+  const setChatHeader = useCurrentChatStore((s) => s.setChatHeader);
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
@@ -215,6 +216,23 @@ export function ChatPage(): JSX.Element {
     setChatPersonaIsAdult(effectivePersona ? effectivePersona.adultPersona : null);
     return () => setChatPersonaIsAdult(null);
   }, [effectivePersona, setChatPersonaIsAdult]);
+
+  // Publish the active chat's persona + title so the brand bar can render the
+  // persona avatar and chat title in read-only form. `null` on unmount or when
+  // the persona / chat id are still resolving.
+  useEffect(() => {
+    if (effectivePersona && activeChatId) {
+      setChatHeader({
+        personaId: effectivePersona.id,
+        name: effectivePersona.name,
+        colour: effectivePersona.colour,
+        title: chatQuery.data?.chat?.title ?? '',
+      });
+    } else {
+      setChatHeader(null);
+    }
+    return () => setChatHeader(null);
+  }, [effectivePersona, activeChatId, chatQuery.data?.chat?.title, setChatHeader]);
 
   // Resolve Offering via provider lookup keyed to the effective persona.
   const modelQuery = useQuery({

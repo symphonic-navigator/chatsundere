@@ -3,6 +3,24 @@ import { useCurrentChatStore } from '../../src/state/current-chat.store.js';
 
 beforeEach(() => useCurrentChatStore.getState().reset());
 
+describe('chatHeader', () => {
+  it('defaults to null', () => {
+    expect(useCurrentChatStore.getState().chatHeader).toBeNull();
+  });
+
+  it('setChatHeader publishes persona + title and reset clears it', () => {
+    useCurrentChatStore.getState().setChatHeader({
+      personaId: 'p1',
+      name: 'Laura',
+      colour: '#c44e8e',
+      title: 'Evening at the harbour',
+    });
+    expect(useCurrentChatStore.getState().chatHeader?.name).toBe('Laura');
+    useCurrentChatStore.getState().reset();
+    expect(useCurrentChatStore.getState().chatHeader).toBeNull();
+  });
+});
+
 describe('web-search tier-id slice', () => {
   it('defaults to null', () => {
     expect(useCurrentChatStore.getState().webSearchTierId).toBeNull();

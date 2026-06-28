@@ -8,7 +8,7 @@ export function Toast(): JSX.Element {
     <output className="toast-stack" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} className="toast" data-tone={t.tone}>
-          {t.message}
+          <span className="toast-message">{t.message}</span>
           {t.action ? (
             <button
               type="button"

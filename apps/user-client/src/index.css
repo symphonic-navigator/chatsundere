@@ -240,6 +240,13 @@ h1 {
   }
 }
 
+.topbar-persona-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  line-height: 0;
+}
+
 /* ===== Splash overlay ===== */
 
 .splash-overlay {
@@ -1810,14 +1817,22 @@ h1 {
 /* ===== Toast ===== */
 .toast-stack {
   position: fixed;
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  top: calc(env(safe-area-inset-top) + 3.25rem); /* visual-pass: tune offset vs PageBar */
   left: 50%;
   transform: translateX(-50%);
+  width: 100%;
+  max-width: 420px;
+  padding: 0 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   z-index: 100;
   pointer-events: none;
+}
+@media (min-width: 1024px) {
+  .toast-stack {
+    max-width: 640px;
+  }
 }
 .toast {
   background: rgba(20, 20, 20, 0.95);
@@ -1827,9 +1842,20 @@ h1 {
   padding: 0.6rem 1rem;
   color: inherit;
   font-size: 0.85rem;
-  max-width: 24rem;
-  pointer-events: auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  pointer-events: none;
   animation: toast-in 250ms ease-out;
+}
+.toast-message {
+  min-width: 0;
+}
+.toast-action {
+  flex: 0 0 auto;
+  pointer-events: auto;
 }
 .toast[data-tone="warn"] {
   border-color: rgba(220, 80, 80, 0.4);
@@ -1842,7 +1868,7 @@ h1 {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(0.5rem);
+    transform: translateY(-0.5rem);
   }
   to {
     opacity: 1;
@@ -3192,7 +3218,30 @@ h1 {
   font-family: var(--font-mono);
   color: #ff9aa6;
   padding: 0.2rem 0.4rem;
-  animation: toast-in 3s forwards;
+  animation: cockpit-reject-in 3s forwards;
+}
+@keyframes cockpit-reject-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cockpit-reject-hold {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit-reject {
+    animation: cockpit-reject-hold 3s forwards;
+  }
 }
 
 /* ===== Cockpit dictation note (failed transcription / mic errors) ===== */

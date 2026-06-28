@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { Brain } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
@@ -206,7 +207,10 @@ export function PersonaMemory(): JSX.Element {
     >
       {helpOverlay}
       <div data-testid="persona-memory" className="flex flex-col gap-6 px-4 pb-8 pt-4">
-        <h1 className="text-lg font-medium text-paper">Memory</h1>
+        <h1 className="flex items-center gap-2 text-lg font-medium text-paper">
+          <Brain size={18} aria-hidden="true" />
+          Memory
+        </h1>
 
         {/* ── Per-persona settings (persona-wide, not per-chat) ──────────── */}
         <section className="flex flex-col gap-4">

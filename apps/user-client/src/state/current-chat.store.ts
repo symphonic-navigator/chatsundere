@@ -2,6 +2,13 @@
 import { create } from 'zustand';
 import type { ReasoningState } from '../lib/reasoning-resolver.js';
 
+export interface ChatHeader {
+  personaId: string;
+  name: string;
+  colour: string;
+  title: string;
+}
+
 interface CurrentChatStore {
   chatId: string | null;
   pendingPersonaId: string | null;
@@ -20,6 +27,9 @@ interface CurrentChatStore {
    *  AdultModeToggle. Shown otherwise (`null` outside chats, `true` for an
    *  adult persona where the mode indicator is still wanted). */
   chatPersonaIsAdult: boolean | null;
+  /** Persona + title of the active chat, published by chat-page for the
+   *  read-only brand bar. `null` when not in a chat. */
+  chatHeader: ChatHeader | null;
   reasoning: ReasoningState;
   webSearchTierId: string | null;
   askExpert: boolean;
@@ -43,6 +53,7 @@ interface CurrentChatStore {
   setLiveVoice: (on: boolean) => void;
   setInputFocused: (focused: boolean) => void;
   setChatPersonaIsAdult: (isAdult: boolean | null) => void;
+  setChatHeader: (header: ChatHeader | null) => void;
   togglePin: () => void;
   setReasoning: (r: ReasoningState) => void;
   setWebSearchTierId: (id: string | null) => void;
@@ -68,6 +79,7 @@ type InitialState = Omit<
   | 'setLiveVoice'
   | 'setInputFocused'
   | 'setChatPersonaIsAdult'
+  | 'setChatHeader'
   | 'togglePin'
   | 'setReasoning'
   | 'setWebSearchTierId'
@@ -88,6 +100,7 @@ const initial: InitialState = {
   isPinned: false,
   inputFocused: false,
   chatPersonaIsAdult: null,
+  chatHeader: null,
   reasoning: { kind: 'off' },
   webSearchTierId: null,
   askExpert: false,
@@ -119,6 +132,7 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   setLiveVoice: (on) => set({ isLiveVoice: on }),
   setInputFocused: (focused) => set({ inputFocused: focused }),
   setChatPersonaIsAdult: (isAdult) => set({ chatPersonaIsAdult: isAdult }),
+  setChatHeader: (header) => set({ chatHeader: header }),
   togglePin: () => set((s) => ({ isPinned: !s.isPinned })),
   setReasoning: (r) => set({ reasoning: r }),
   setWebSearchTierId: (id) => set({ webSearchTierId: id }),
