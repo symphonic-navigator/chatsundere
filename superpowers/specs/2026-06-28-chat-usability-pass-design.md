@@ -60,11 +60,14 @@ Left → right:
 
 1. **Exit button** — a back-arrow (Lucide `ArrowLeft`) + the small "Chatsundere"
    wordmark, together forming **one** affordance. Tapping it leaves the chat for
-   the **Entrance Hall** (the brand logo's existing destination — see
-   `InteractionMode.tsx` "deliberate navigation back to the Entrance Hall").
-   Goal: make "raus hier" instantly legible rather than something the user has to
-   decode. The arrow was chosen over a door/log-out glyph because `LogOut`
-   already means *sign out* elsewhere in the app (avoid the collision).
+   the **Entrance Hall** at **`/app`** (see `InteractionMode.tsx` "deliberate
+   navigation back to the Entrance Hall"). Note: today's reading-mode wordmark
+   links to `/` (`root.tsx:123`); pin **both** the reading-mode and
+   interaction-mode exits to the same destination (`/app`) so "raus hier" is one
+   consistent gesture (Laura soft). Goal: make it instantly legible rather than
+   something the user has to decode. The arrow was chosen over a door/log-out
+   glyph because `LogOut` already means *sign out* elsewhere in the app (avoid the
+   collision).
 2. **Persona avatar** — `PersonaAvatar`, placed in the **left cluster** (not
    centred — deliberately away from the device camera notch). Tappable →
    navigates to the **persona page** (`/app/persona/:id`), from where the user
@@ -72,8 +75,11 @@ Left → right:
 3. **Spacer.**
 4. **Chat title** — right-aligned, immediately left of the NSFW pill. Truncates
    with an ellipsis when long; the exit button always stays fully legible (title
-   yields width first). **No function for now** (display only — editing remains
-   in the interaction topbar).
+   yields width first). **No function for now** — rendered as **plain text, not a
+   button-like element**, so it never reads as interactive (the interaction-mode
+   title *is* tap-to-rename; same text/position in two modes must not invite a
+   tap that silently does nothing — Laura soft). Editing remains in the
+   interaction topbar.
 5. **NSFW pill** — the existing `AdultModeToggle`, unchanged, rightmost.
 
 ### Data
@@ -94,6 +100,12 @@ chat), set by `chat-page.tsx` alongside `setChatPersonaIsAdult`, consumed by
   `InteractionTopbar` (which already shows avatar + editable title + hamburger).
   This brings the reading bar to parity; it does not duplicate or replace the
   interaction topbar.
+- **Exact-route gating (Laura HARD — see §5.0):** the reading-bar exit/avatar/
+  title additions render **only on the chat itself**, never on the cockpit
+  sub-pages of §5. Today `isReadingChat`/`isChatRoute` derive from
+  `pathname.startsWith('/app/chat')` (`root.tsx:42`), which would also match the
+  new sub-routes. The chat chrome must key on the **exact** chat route so the
+  sub-pages fall back to standard page chrome (as the memory page does).
 
 ---
 
@@ -144,6 +156,12 @@ you*" note fired from `stream-manager.store.ts:236`.
 On mobile (380 px) the banner is effectively edge-to-edge; on desktop it is the
 width of the centred content column. Safe-area top inset respected.
 
+**Do not occlude the back control (Laura soft):** on the list/settings pages the
+`PageBar` back/crumbs sit directly under the brand bar. The transient banner must
+not cover the back affordance — anchor it below the full page chrome (brand bar +
+`PageBar` where present), or confirm the (brief, transient) overlap is acceptable
+during the later visual pass.
+
 ---
 
 ## 5. Area 4 — Cockpit pages (bookmarks · artefacts · knowledge)
@@ -166,6 +184,29 @@ name and a back affordance returning to the chat (interaction mode). Each carrie
 an authored `?`-help doc, like the other makeover pages. Navigation from the
 cockpit button uses the existing zoom-from-origin mechanism (as memory does).
 
+### 5.0 Routing & chrome (Laura HARD — must be settled here)
+
+The three sub-routes sit under the `/app/chat` prefix, which the brand bar uses
+to switch into chat chrome (`isChatRoute = pathname.startsWith('/app/chat')`,
+`root.tsx:42`). Left as-is, the sub-pages would render the chat-collapsed brand
+bar (and the Area 1 exit/avatar/title) **stacked over their own `PageBar`** — two
+competing exits and a misleading chat title on a list page.
+
+**Remedy:** narrow the chat-chrome predicate to the **exact** chat route — match
+`/app/chat/:chatId` but **not** its sub-paths (e.g. a trailing-segment check or
+matching the resolved route, not a bare `startsWith`). The three sub-pages then
+get the **standard non-chat page chrome** exactly like the memory page
+(`/app/persona/:id/memory`): a single `PageBar` back-to-chat, no second exit, no
+chat title overlay. All four cockpit destinations thereby share one chrome
+treatment. The reading-topbar additions (§2) explicitly never appear on these
+sub-pages.
+
+**Scope clarity (Laura soft):** because `Gem`/`BookOpen` are shared with the
+global Treasury/Knowledge rooms, each cockpit page's current crumb/title must make
+the **"this chat"** scope unmistakable (mirror the sheets' "In this chat"
+framing), so a user arriving via the shared glyph never mistakes it for the global
+room.
+
 ### 5.1 Bookmarks page
 
 Replaces `TocSheet`. **One page, two sections** (decision: "Eine Seite, beide
@@ -182,9 +223,16 @@ to that message**, via the chat-page's existing `focusId` mechanism (e.g.
 `/app/chat/:chatId?focus=<messageId>` → reading mode + scroll). Empty state for a
 chat with no entries yet.
 
+**Push, don't replace (Laura soft):** the row-tap navigates with a **push**, so
+the system/browser Back from the chat lands back on the bookmarks list with scroll
+position intact — this largely neutralises the scrubbing cost below for free. (The
+existing `focusId` effect already strips the `?focus` param with `{replace:true}`
+afterwards, `chat-page.tsx:639` — orthogonal and fine.)
+
 Trade-off consciously accepted: repeated "scrubbing" across many messages means
 re-opening the page per jump (a sheet could overlay-and-stay). Consistency with
-the memory pattern and a single button = single page won this call.
+the memory pattern and a single button = single page won this call; the push-nav
+Back path softens it.
 
 ### 5.2 Artefacts page
 
@@ -199,6 +247,10 @@ identically:
   `ConfirmDialog`). Reuse Treasury's rename/`useDeleteArtefacts` mutations.
 - Tapping a row opens the artefact in the existing **Lightbox** (overlay over the
   page). Empty state mirrors the sheet's "Artefacts you create appear here."
+- **Persona label (Laura soft):** the page is single-persona, so `TreasuryRow`'s
+  per-row persona name/colour is redundant noise here. If cheap, add a prop to
+  `TreasuryRow` to suppress the persona label on this chat-scoped surface;
+  otherwise accept as a minor and revisit in the visual pass.
 
 ### 5.3 Knowledge page
 
@@ -217,11 +269,22 @@ Zuordnungsseite") — a page, not a content browser:
   (as the sheet does today).
 - A link to **My Knowledge** to create/manage libraries (and the empty state).
 
+**Conscious disable-over-hide exception (Laura soft):** `useFilteredLibraries`
+*removes* NSFW libraries for an SFW persona rather than greying them. This is the
+app's established global NSFW gating model (not a capability that persona can
+have), so it is correct — logged here as a principled exception so it is not later
+mistaken for disable-over-hide drift.
+
 ### 5.4 Cockpit & cleanup
 
 - The bookmarks/artefacts/knowledge cockpit buttons change from "open sheet" to
   "navigate to page" (memory already does this) — all four buttons now behave
   identically.
+- **Always shown, never hidden (Laura soft):** today the ToC and artefacts
+  buttons render only when `toolsAvailable && …` (`Cockpit.tsx:476`), so they
+  vanish in a fresh/empty chat while memory/knowledge persist. Drop that gate so
+  **all four buttons always render** (disable-over-hide; "behave identically") —
+  each page already carries its own empty state to greet a chat with nothing yet.
 - Remove `TocSheet`, `ArtefactSheet`, `KnowledgeSheet` and their rendering in
   `chat-page.tsx`, plus their now-dead CSS, once the pages exist.
 - The artefact **lightbox** stays (it is opened by the artefacts page and
@@ -297,7 +360,20 @@ Larissa path** (no `auth/sync/proxy-service`, no `packages/crypto`).
 
 ## 10. Process note
 
-Per CLAUDE.md §9.2, **Laura runs a spec-pass on this document before the
-implementation plan is written** (her main lever). Findings are folded or
-consciously deferred (`obsidian/insights/ux-deferrals.md`) before `writing-plans`
-produces the two plans.
+Per CLAUDE.md §9.2, Laura ran a **spec-pass on this document before the
+implementation plan** (her main lever). Verdict: **1 HARD + 8 soft**, all folded
+into this revision:
+
+- **HARD — routing/chrome collision** (`/app/chat/:chatId/*` vs the
+  `startsWith('/app/chat')` chat-chrome switch). Folded → §5.0 + §2 exact-route
+  gating.
+- **Softs (folded):** all-four-cockpit-buttons-always-shown (§5.4); display-only
+  title as plain text (§2.4); bookmark jump = push-nav (§5.1); shared-icon scope
+  clarity in crumbs (§5.0); `TreasuryRow` persona-label suppression on the
+  single-persona artefacts page (§5.2); top-toast must not occlude the `PageBar`
+  back control (§4); both exits pinned to `/app` (§2.1); knowledge NSFW-hide
+  logged as a conscious disable-over-hide exception (§5.3).
+
+No findings deferred. Laura's **pre-squash** pass still runs per slice before each
+squash. Next: `writing-plans` produces the two plans (A Chrome, B Cockpit pages),
+then subagent-driven implementation.
