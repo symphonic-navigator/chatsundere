@@ -8,7 +8,42 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-28 — **MODEL DEBUGGER SQUASHED TO MASTER. NOT
+**Last updated:** 2026-06-28 — **CHAT USABILITY PASS — SLICE A (CHROME)
+SQUASHED TO MASTER (`b5c16ee`). NOT pushed (Chris pushes); Slice B (cockpit
+pages) in progress next.**
+The first of two slices of the **chat makeover** (the last + densest surface).
+Built spec→**Laura spec-pass** (1 HARD + 8 soft, all folded)→2 plans
+(A chrome, B cockpit pages)→**subagent-driven (6 tasks, per-task spec+quality
+review)**. Three chrome changes. **(1) Read-only chat topbar** (`routes/root.tsx`,
+reading-chat branch only): the thin logo strip becomes a clear **exit** (Lucide
+`ArrowLeft` + "Chatsundere" wordmark = one link → Entrance Hall `/app`,
+aria-label "Leave chat"), the **persona avatar** (left cluster, off-centre →
+`/app/persona/:id`), and a **plain-text chat title** (right, truncating,
+non-interactive — avoids the dead-tap trap), all fed by a new **`chatHeader`**
+field on `current-chat.store` published by `chat-page`. The chat-chrome predicate
+is narrowed to the **exact** chat route via new exported **`isExactChatRoute`**
+(Laura HARD §5.0) so Slice B's `/app/chat/:chatId/*` sub-pages keep standard
+chrome. Non-chat home-logo destination preserved (`to={isReadingChat ? '/app' :
+'/'}`). **(2) Cockpit icons** → Lucide **Bookmark / Gem / Brain / BookOpen**
+(Brain also on the memory page header). **(3) Toasts** → top **full-width banner**,
+global, that no longer covers the cockpit; banner body `pointer-events:none` so
+the PageBar back control behind it stays tappable (Laura soft). **opus
+whole-branch:** merge-ready-with-fixes — caught a real **reduced-motion regression**
+(the `.cockpit-reject { animation: none }` override killed its `onAnimationEnd`
+dismiss → stuck error line; fixed via a motion-free 3s `cockpit-reject-hold`
+keyframe). **Laura pre-squash:** no hard defects; 3 softs (toast/PageBar overlap
+mitigated via pointer-events; two pre-existing/out-of-scope deferred to the visual
+pass). Not a Larissa path (client-only). Gates: repo `pnpm typecheck --force`
+**14/14**; full user-client vitest **2105 pass / 0 fail**; `pnpm build` green;
+Biome clean on changed files. Spec/plans:
+[[../superpowers/specs/2026-06-28-chat-usability-pass-design]],
+[[../superpowers/plans/2026-06-28-chat-usability-A-chrome]],
+[[../superpowers/plans/2026-06-28-chat-usability-B-cockpit-pages]]. Branch
+`feat/chat-usability-chrome` kept until Chris pushes. **Next:** Slice B — the
+three chat-scoped cockpit **pages** (bookmarks / artefacts / knowledge) mirroring
+the memory page, replacing the overlay sheets.
+
+**Earlier (2026-06-28) — MODEL DEBUGGER SQUASHED TO MASTER. NOT
 pushed (Chris pushes); awaiting Chris's device-verify.**
 A self-service diagnostic so non-technical users can capture a copyable, redacted
 report when a model stream misbehaves (the trigger: a US iPhone/Safari user whose
