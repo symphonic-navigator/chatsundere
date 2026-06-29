@@ -8,7 +8,58 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-06-28 — **CHAT USABILITY PASS — BOTH SLICES SQUASHED
+**Last updated:** 2026-06-30 — **NATIVE CHATSUNDERE TRANSFER (export/import)
+COMPLETE, rebased onto master on top of the deployed v0.1.2 line (chat-usability
++ model-debugger). Import now lands in the new persona **hub**
+(`routes/app/persona/hub.tsx`, post-makeover); export is wired into the hub's
+`Export persona` action. Awaiting Chris's device-verify + push.**
+The native, **create-new-only** export/import of a persona (its chats +
+**memory**) and a knowledge **library**, in Chatsundere's own `.tar.gz` format —
+deliberately separate from the Chatsune *bridge* (which stays the Tier-A
+stop-gap). Two packs: `chatsundere/persona` (3 export switches — **Memory ON ·
+Artefacts ON · Images OFF**, honest-labelled; avatar always travels) and
+`chatsundere/knowledge` (library + documents + **adopted vectors**). Import is
+**100% deterministic, never merges** (Chris's call — a merge is a
+non-deterministic black box that leaves broken personas behind; sync comes with
+the backend): every id is freshly minted, every reference (incl. nested
+`contentBlocks.pillId` + pill-payload artefact refs + compaction/extraction
+cursors) remapped, name-collision is an **explanatory non-blocking** warning.
+**Live bindings degrade, never block** (provider→`modelRef`; MCP/library
+bindings dropped — cheap to re-add per Chris's "≤2 MCP servers" field data;
+mindspace→default). **Secrets never leave the device** (no `ProviderRow`/
+`apiKey`/`EncryptedBlob` in any archive — whole-archive scan test). **Library
+vectors**: exported (497 B/chunk, tiny) + a `codecVersion`/`modelId`/`dim` stamp
+→ **adopt instantly when compatible, auto-re-embed on a model/codec change**
+(pure `resolveVectorStrategy`). Import lands a persona in its **hub** (Laura
+HARD-1) with a calm **post-import note** (pick a model / bindings don't
+transfer). Export is a **transient overlay** off the hub's `Export persona`
+action, not a surface (a begin→end operation gets no room). New infra: a browser
+**tar writer** (counterpart to the existing `untar`). **No Dexie/schema change.**
+Built spec→**Laura spec-pass** (HARD-1 + softs folded)→plan→**subagent-driven**
+(12 tasks, per-task spec+quality review). The **opus whole-branch review caught a
+CRITICAL** every per-task review missed — `contentBlocks[].pillId` was not
+remapped, so **all pills would silently vanish** from imported messages (the
+round-trip test only used text+reasoning) — plus 2 Important (pill-payload
+artefact refs; image-artefact `thumbBlob` `{}`-poison); **all fixed + locked with
+a pill/artefact round-trip regression test**, re-reviewed **merge-ready**. Not a
+Larissa path (client-only; no `packages/crypto`/auth/sync/proxy change). Gates
+(post-rebase, on the v0.1.2 base): `pnpm typecheck --force` **14/14** (0 cached;
+needed a `llm-unified` rebuild — stale `dist/` masked the model-debugger
+exports); full user-client vitest at the **8 Node-localStorage/lazy baseline**
+(2134 pass). Specs/plans:
+[[../superpowers/specs/2026-06-29-chatsundere-transfer-design]],
+[[../superpowers/plans/2026-06-29-chatsundere-transfer]]. **Deferred follow-up
+minors** (non-blocking, for a later pass): double archive-read on file-pick +
+`untar`-all-for-manifest; source-name `unknown`-narrowing duplicated across the
+two import hosts; tar-writer comment "space-padded"→"zero-padded"; a couple of
+test-ergonomics nits. **Next:** Chris device-verifies (spec §9 + plan "Manual
+verification": export Fable images-off → import on fresh client → history +
+reasoning + memory + avatar present, model prompts, **pills/tool-calls survive**;
+library export → import **adopts instantly, no spinner**; collision warning
+non-blocking), then pushes. Then the **emoji shower** (Chris's parallel
+spec/worktree) + the deferred chat/persona-editor knowledge sub-surfaces.
+
+**Earlier (2026-06-28) — CHAT USABILITY PASS — BOTH SLICES SQUASHED
 TO MASTER (Slice A chrome `b5c16ee`, Slice B cockpit pages `cde9871`). NOT
 pushed (Chris pushes); awaiting Chris's device-verify.**
 The structural/bedienbarkeit pass on the **chat** (the last + densest makeover
@@ -315,55 +366,6 @@ flakes this run); production build **9/9**. Specs/plans:
 until Chris pushes. **Next:** Chris device-verifies, then the **chat** (densest
 surface — comes last) and the deferred sub-surfaces (chat `DocumentPicker`,
 persona-editor `KnowledgeSection`, the attach-picker Quick-Sheet).
-**Last updated:** 2026-06-30 — **NATIVE CHATSUNDERE TRANSFER (export/import)
-COMPLETE, rebased onto master on top of the v0.1.0 early-alpha release. Import
-now lands in the new persona **hub** (`routes/app/persona/hub.tsx`,
-post-makeover); export is wired into the hub's `Export persona` action.
-Awaiting Chris's device-verify + push.**
-The native, **create-new-only** export/import of a persona (its chats +
-**memory**) and a knowledge **library**, in Chatsundere's own `.tar.gz` format —
-deliberately separate from the Chatsune *bridge* (which stays the Tier-A
-stop-gap). Two packs: `chatsundere/persona` (3 export switches — **Memory ON ·
-Artefacts ON · Images OFF**, honest-labelled; avatar always travels) and
-`chatsundere/knowledge` (library + documents + **adopted vectors**). Import is
-**100% deterministic, never merges** (Chris's call — a merge is a
-non-deterministic black box that leaves broken personas behind; sync comes with
-the backend): every id is freshly minted, every reference (incl. nested
-`contentBlocks.pillId` + pill-payload artefact refs + compaction/extraction
-cursors) remapped, name-collision is an **explanatory non-blocking** warning.
-**Live bindings degrade, never block** (provider→`modelRef`; MCP/library
-bindings dropped — cheap to re-add per Chris's "≤2 MCP servers" field data;
-mindspace→default). **Secrets never leave the device** (no `ProviderRow`/
-`apiKey`/`EncryptedBlob` in any archive — whole-archive scan test). **Library
-vectors**: exported (497 B/chunk, tiny) + a `codecVersion`/`modelId`/`dim` stamp
-→ **adopt instantly when compatible, auto-re-embed on a model/codec change**
-(pure `resolveVectorStrategy`). Import lands a persona in its **editor** (Laura
-HARD-1) with a calm **post-import note** (pick a model / bindings don't
-transfer). Export is a **transient `⋯` overlay**, not a surface (a begin→end
-operation gets no room). New infra: a browser **tar writer** (counterpart to the
-existing `untar`). **No Dexie/schema change.** Built spec→**Laura spec-pass**
-(HARD-1 + softs folded)→plan→**subagent-driven** (12 tasks, per-task spec+quality
-review). The **opus whole-branch review caught a CRITICAL** every per-task review
-missed — `contentBlocks[].pillId` was not remapped, so **all pills would silently
-vanish** from imported messages (the round-trip test only used text+reasoning) —
-plus 2 Important (pill-payload artefact refs; image-artefact `thumbBlob`
-`{}`-poison); **all fixed + locked with a pill/artefact round-trip regression
-test**, re-reviewed **merge-ready**. Not a Larissa path (client-only; no
-`packages/crypto`/auth/sync/proxy change). Gates: `pnpm typecheck --force`
-**14/14** (0 cached, controller-verified); full user-client vitest at the **8
-Node-localStorage/lazy baseline** (+ new transfer suites). Specs/plans:
-[[../superpowers/specs/2026-06-29-chatsundere-transfer-design]],
-[[../superpowers/plans/2026-06-29-chatsundere-transfer]]. **Deferred follow-up
-minors** (non-blocking, for a later pass): double archive-read on file-pick +
-`untar`-all-for-manifest; source-name `unknown`-narrowing duplicated across the
-two import hosts; tar-writer comment "space-padded"→"zero-padded"; a couple of
-test-ergonomics nits. **Next:** squash `feat/chatsundere-transfer` → master once
-the main tree is free, Chris device-verifies (spec §9 + plan "Manual
-verification": export Fable images-off → import on fresh client → history +
-reasoning + memory + avatar present, model prompts, **pills/tool-calls survive**;
-library export → import **adopts instantly, no spinner**; collision warning
-non-blocking), then pushes. Then the **emoji shower** (Chris's parallel
-spec/worktree) + the deferred chat/persona-editor knowledge sub-surfaces.
 
 **Earlier (2026-06-26) — MY KNOWLEDGE REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`13b867ad`). NOT pushed (Chris pushes);
@@ -960,26 +962,26 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**→ UI/UX makeover (the big block).** Eight surfaces have now squashed to master:
-design language, **main menu**, **My Account**, **My Settings (+ pickers)**, **My
-Integrations**, **My Knowledge**, **My Treasury**, **My History**
-(squashes `982ea9f5`→`d5721cb`). In flight on `feat/my-circle-persona`:
-**PersonaHub** (Task 5, `3d031ea`).
-**Still ahead: My Circle + remaining persona sub-pages, then the chat (last + densest).**
+**⏰ FIRST THING — REMIND CHRIS (his explicit request): TEST the native transfer
+(import/export) end-to-end. "Großes Testen".** The feature is now rebased onto
+master on top of the deployed **v0.1.2** line, NOT pushed yet — Chris's push also
+brings `origin/master` up to the deploy tags (the branch ref had lagged 17
+commits behind `v0.1.2`). Run the device checklist (Current entry / spec §9):
+export Fable (images off) → import on a fresh client → history + reasoning +
+**memory + avatar present, pills/tool-calls survive**, model prompts, post-import
+note (import now lands in the persona **hub**); re-import → explanatory collision
+warning → "Create anyway" makes a second Fable; library export → import **adopts
+instantly, no embedding spinner**. The **emoji-shower** + **context-pre-seeding**
+specs/plans also rebased onto master (implementation still pending).
 
-The reusable surface pattern is proven across eight rooms. **On the
-`feat/my-circle-persona` branch, next tasks:**
-- My Circle (`/app/circle`) — rebuild as `PageScaffold` + persona cards
-- PersonaHub sub-pages: each of the 8 NavTile targets
-  (Instructions, Roleplay, Model behaviour, Integrations, Knowledge, Memory,
-  Font & Voice, Mindspace) needs its own route + always-save form
-- Pre-squash: Laura spec-pass (spec first) + Laura pre-squash; not a Larissa
-  path (client-only)
-**After the circle/persona surface:** (4) **chat** makeover; (5) deferred
-sub-surfaces (chat `DocumentPicker`, persona-editor `KnowledgeSection`, attach
-Quick-Sheet) — fold each in with its parent.
-
-**Start:** read the spec for My Circle before writing anything.
+**→ UI/UX makeover — essentially complete.** All surfaces have landed on master
+via the design-language pass and the deployed v0.1.x line: design language,
+**main menu**, **My Account**, **My Settings (+ pickers)**, **My Integrations**,
+**My Knowledge**, **My Treasury**, **My History**, **My Circle + the persona
+editor** (now a `hub` + per-NavTile sub-pages, `c9a12506`), and the **chat
+usability pass** (cockpit pages + topbar rebuild, `v0.1.2`). **Remaining makeover
+work:** the deferred sub-surfaces (chat `DocumentPicker`, persona-editor
+`KnowledgeSection`, the attach-picker Quick-Sheet) — fold each in with its parent.
 
 **Pending makeover-wide follow-ons** (fold in when a relevant surface is
 touched): the **design-language pass** deferrals — picker static-vs-live-Save
