@@ -653,6 +653,18 @@ something that delights and doesn't annoy).
 
 ## Next session
 
+**⏰ FIRST THING — REMIND CHRIS (his explicit request, 2026-06-29 late night):
+today we TEST the native transfer (import/export) end-to-end. "Großes Testen"
+is planned for this evening.** The feature is squashed to master (`e6b9f70f`),
+NOT pushed yet. Run the device checklist (Current entry / spec §9): export Fable
+(images off) → import on a fresh client → history + reasoning + **memory +
+avatar present, pills/tool-calls survive**, model prompts, post-import note;
+re-import → explanatory collision warning → "Create anyway" makes a second
+Fable; library export → import **adopts instantly, no embedding spinner**. While
+Chris was away, web-Claude was handed the **emoji-shower** + **context-
+pre-seeding** plans (both on master) to implement as separate commits → two PRs
+to review. Surface this the moment Chris returns.
+
 **→ UI/UX makeover (the big block).** The design language, **main menu**, **My
 Account**, and now **My Settings (+ picker components)** have all landed
 (foundations `982ea9f5`, main menu `7bb552f7`, My Account `355f9bfa`, My
