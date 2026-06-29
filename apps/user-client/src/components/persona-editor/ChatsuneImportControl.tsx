@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getClientDataDb } from '../../boot/client-data-db.js';
+import { importPersonaPack } from '../../data/chatsundere-import.js';
 import { previewChatsuneSessions } from '../../data/chatsune-import.js';
+import {
+  readManifestFormat,
+  readManifestJson,
+} from '../../lib/chatsundere-transfer/import-detect.js';
 import { readChatsuneArchive } from '../../lib/chatsune-import/archive-reader.js';
 import {
   type ParsedPersonaExport,
@@ -27,10 +34,10 @@ interface Preview {
 }
 
 /**
- * "Import from Chatsune" control for the persona editor. Parses a persona
- * export, previews the chat counts + memory note, and hands the result to the
- * editor via `onApply`. The editor owns avatar normalisation and the post-save
- * chat write (spec §5.1).
+ * Persona import control: auto-detects a Chatsune or Chatsundere export and
+ * imports accordingly. Parses a persona export, previews the chat counts +
+ * memory note, and hands the result to the editor via `onApply`. The editor
+ * owns avatar normalisation and the post-save chat write (spec §5.1).
  */
 export function ChatsuneImportControl({
   mode,
@@ -45,13 +52,74 @@ export function ChatsuneImportControl({
   existingNsfw?: boolean;
 }): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overwrite, setOverwrite] = useState(false);
+  /** Non-null when the target name collides with an existing persona name. */
+  const [personaCollision, setPersonaCollision] = useState<{
+    name: string;
+    doImport: () => Promise<void>;
+  } | null>(null);
+
+  async function doChatsunderePersonaImport(file: File, sourceName: string): Promise<void> {
+    const result = await importPersonaPack(file, sourceName);
+    navigate(`/app/persona/${result.personaId}`, {
+      state: {
+        justImported: { modelBound: result.modelBound, droppedBindings: result.droppedBindings },
+      },
+    });
+  }
 
   async function onPick(file: File): Promise<void> {
     setError(null);
     setPreview(null);
+    setPersonaCollision(null);
+
+    const format = await readManifestFormat(file);
+
+    if (format === 'chatsundere/persona') {
+      // Create a new persona from the pack and land in its editor.
+      // Always create-new — never merge into an existing persona.
+      try {
+        const manifest = await readManifestJson(file);
+        const sourceName =
+          typeof manifest === 'object' &&
+          manifest !== null &&
+          'source' in manifest &&
+          typeof (manifest as { source?: unknown }).source === 'object' &&
+          (manifest as { source?: { personaName?: unknown } }).source !== null
+            ? (((manifest as { source: { personaName?: unknown } }).source.personaName as
+                | string
+                | undefined) ?? 'Imported Persona')
+            : 'Imported Persona';
+
+        // Check whether a persona with this name already exists. If so, surface
+        // an explanatory warning before proceeding — the import is non-blocking
+        // and creates a second, separate persona.
+        const db = getClientDataDb();
+        const existing = await db.personas.filter((p) => p.name === sourceName).first();
+        if (existing) {
+          setPersonaCollision({
+            name: sourceName,
+            doImport: () => doChatsunderePersonaImport(file, sourceName),
+          });
+          return;
+        }
+
+        await doChatsunderePersonaImport(file, sourceName);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+      return;
+    }
+
+    if (!format.startsWith('chatsune/')) {
+      setError('Not a valid persona export.');
+      return;
+    }
+
+    // Existing Chatsune flow — unchanged.
     try {
       const archive = await readChatsuneArchive(file);
       const parsed = parsePersonaExport(archive);
@@ -94,10 +162,39 @@ export function ChatsuneImportControl({
         onClick={() => inputRef.current?.click()}
         className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
       >
-        Import from Chatsune
+        Import a persona
       </button>
 
       {error ? <p className="mt-2 text-[11px] text-amber-300/80">{error}</p> : null}
+
+      {personaCollision ? (
+        <div className="mt-2 rounded-md border border-paper-soft/20 bg-white/[0.02] p-3 text-[11px] text-paper-soft">
+          <p>
+            You already have a &ldquo;{personaCollision.name}&rdquo;. Importing creates a second,
+            separate one — nothing is merged or overwritten.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const collision = personaCollision;
+                setPersonaCollision(null);
+                collision.doImport().catch((e) => setError((e as Error).message));
+              }}
+              className="rounded-md border border-paper px-3 py-1 text-xs uppercase tracking-wider text-paper hover:bg-paper/10"
+            >
+              Create anyway
+            </button>
+            <button
+              type="button"
+              onClick={() => setPersonaCollision(null)}
+              className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {preview ? (
         <div className="mt-2 rounded-md border border-paper-soft/20 bg-white/[0.02] p-3 text-[11px] text-paper-soft">

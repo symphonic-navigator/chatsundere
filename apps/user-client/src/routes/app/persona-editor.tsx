@@ -4,7 +4,7 @@ import { type Offering, getOffering, listOfferings } from '@chatsundere/llm-unif
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
   AvatarCrop,
   MindspaceRow,
@@ -27,6 +27,9 @@ import {
 import { KnowledgeSection } from '../../components/persona-editor/KnowledgeSection.js';
 import { McpOverrideSection } from '../../components/persona-editor/McpOverrideSection.js';
 import { MemorySection } from '../../components/persona-editor/MemorySection.js';
+import { PostImportNote } from '../../components/persona-editor/PostImportNote.js';
+import { ExportOverlay } from '../../components/transfer/ExportOverlay.js';
+import { OverflowMenu } from '../../components/ui/OverflowMenu.js';
 import { TtsModerationNotice } from '../../components/voice/TtsModerationNotice.js';
 import { VoicePicker } from '../../components/voice/VoicePicker.js';
 import { useChats } from '../../data/chats.js';
@@ -209,8 +212,18 @@ export function AvatarField({
 export function PersonaEditor(): JSX.Element {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [search] = useSearchParams();
   const isCreate = !id || id === 'new';
+
+  // Present when navigating here from a Chatsundere persona pack import.
+  const justImported =
+    location.state !== null &&
+    typeof location.state === 'object' &&
+    'justImported' in (location.state as Record<string, unknown>)
+      ? (location.state as { justImported: { modelBound: boolean; droppedBindings: boolean } })
+          .justImported
+      : null;
 
   // Caller may pass ?return=<path> so back / Save & Back land somewhere
   // other than /app/circle (used by the Interaction-Topbar's persona-name
@@ -258,6 +271,7 @@ export function PersonaEditor(): JSX.Element {
   }, [isCreate, persona.data, seedDraft]);
 
   const [isDirty, setIsDirty] = useState(false);
+  const [showExportOverlay, setShowExportOverlay] = useState(false);
   const setMindspace = useMindspaceStore((s) => s.update);
 
   // One-time probe: resolve whether a TTS provider is configured. null = still probing (treated
@@ -554,12 +568,34 @@ export function PersonaEditor(): JSX.Element {
         ) : null}
       </EditorSticky>
 
+      {/* Actions menu — edit mode only (no export until the persona is saved). */}
+      {!isCreate && id ? (
+        <div className="flex justify-end">
+          <OverflowMenu
+            items={[
+              {
+                label: 'Export',
+                onSelect: () => setShowExportOverlay(true),
+              },
+            ]}
+          />
+        </div>
+      ) : null}
+
+      {/* Post-import note — rendered once when landing here from a Chatsundere pack import. */}
+      {justImported ? (
+        <PostImportNote
+          modelBound={justImported.modelBound}
+          droppedBindings={justImported.droppedBindings}
+        />
+      ) : null}
+
       {/* Identity — always visible, outside the accordion.
           Order top→bottom: import, avatar, name, tagline, model. */}
       <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">
         <header className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Identity</header>
         <p className="mb-2 text-[11px] text-paper-soft">
-          Coming from Chatsune? Import a persona and its chats.
+          Import a persona and its chats from a previous export.
         </p>
         <ChatsuneImportControl
           mode={isCreate ? 'create' : 'edit'}
@@ -1078,6 +1114,15 @@ export function PersonaEditor(): JSX.Element {
             URL.revokeObjectURL(cropState.url);
             setCropState(null);
           }}
+        />
+      ) : null}
+
+      {/* Export overlay — rendered inline so it overlays the whole editor. */}
+      {showExportOverlay && !isCreate && id ? (
+        <ExportOverlay
+          personaId={id}
+          personaName={draft.name || 'Persona'}
+          onClose={() => setShowExportOverlay(false)}
         />
       ) : null}
     </section>
