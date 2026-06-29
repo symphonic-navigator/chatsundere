@@ -107,11 +107,28 @@ estimate (kept simple).
 |---|---|---|---|
 | **Memory** | `memoryJournal` (all states) + `memoryBody` (all versions) | ON | section omitted |
 | **Artefacts** | text-kind artefacts (`html`/`markdown`/`code`/`svg`/`mermaid`) — a few kB | ON | those artefacts omitted |
-| **Images** | heavy PNG/JPEG blobs: image-kind artefacts **+** image-kind attachments (uploaded *and* generated) | OFF | per affected message a lightweight placeholder ("Image not included in this export"); the row's metadata is kept, the blob is dropped |
+| **Images** | heavy PNG/JPEG blobs: image-kind artefacts **+** image-kind attachments (uploaded *and* generated) | OFF | per affected message a lightweight placeholder ("Image not carried over in this transfer"); the row's metadata is kept, the blob is dropped |
 
 The **avatar always travels** (it is identity, and small) — it is *not* an image
 under the Images switch. The Images switch governs only in-chat/in-artefact
 heavy blobs.
+
+**Overlay legibility (Laura spec-pass).** Each switch carries an honest label so
+the consequence is legible *before* download (don't-make-me-think; the
+astonishment must not be deferred onto the importing user):
+
+- **Memory** subtitle: "Your private memories from chats with this persona."
+  This is the only signal for the share-vs-move tension (§1): the same button
+  moves a persona to your own device *and* sends it to a friend, and Memory ON
+  means the friend receives your extracted personal facts. Default stays ON
+  (Chris's call — the valuable thing travels; the visible, honestly-labelled
+  toggle is empowerment over nagging), but the label makes the consequence
+  legible. The placeholder wording ("not carried over in this transfer") is
+  written from the *importing* user's vantage, where it is actually read, so it
+  never reads as corruption.
+- **Images** subtitle: "Off: in-chat images become placeholders in the copy."
+- The placeholder text itself ("Image not carried over in this transfer") is
+  neutral and reads as a deliberate omission, not data loss.
 
 ### 4.3 `persona.json` — what is kept vs degraded
 
@@ -160,8 +177,14 @@ with them the chat is genuinely 1:1, including its sent-context state.
 ### 4.6 Import — persona
 
 `chatsundere/persona` → **always a new persona**. Pre-import the user may edit
-the target name; a **non-blocking warning** shows if the name already exists
-(the user may knowingly duplicate). On apply:
+the target name; a **non-blocking, explanatory warning** shows if the name
+already exists. The copy teaches the create-new model rather than implying an
+error (Laura SOFT-2 — a bare "already exists" reads as a problem and sets a
+merge expectation the product deliberately does not meet): e.g. *"You already
+have a 'Fable'. Importing creates a second, separate one — nothing is merged or
+overwritten."* (final wording Chris-arbitrated.)
+
+On apply:
 
 1. Mint a fresh `personaId` (UUIDv7). Write `persona.json` (degraded per §4.3),
    write the avatar via the existing `normaliseAvatar` + `useSetPersonaAvatar`
@@ -174,6 +197,30 @@ the target name; a **non-blocking warning** shows if the name already exists
    and the new `personaId`.
 
 All remapping is a single deterministic pass over an old→new id map.
+
+### 4.6a Landing — where the user ends up (Laura HARD-1)
+
+After writing the rows, **navigate the user into the persona-editor of the new
+persona** — the same place the Chatsune import lands. This unifies the two
+import experiences behind the one generalised "Import a persona" affordance (a
+silent direct-write-then-list path would make the same button behave two
+different ways — astonishment) and, crucially, dissolves the model-unset
+dead-end: the editor's existing **"Choose a model" picker**
+(`persona-editor.tsx:670`) and the **disabled-with-reason chat actions**
+(`persona-editor.tsx:497–529`) are already in the user's face, so "pick a model
+to start chatting" is self-evident, not discovered by trial.
+
+On that landing, show **one calm, non-modal post-import note** that names what
+did *not* travel (Laura SOFT-1) — grouping the model cue with the silently-
+degraded live bindings (§4.3) so a carefully-bound persona doesn't quietly
+behave differently with no explanation:
+
+> *"Imported. Pick a model to start chatting. Library links and MCP settings
+> don't transfer between devices — re-add them in this persona's settings."*
+
+(Drop the model clause when a provider match *was* found and the model bound
+automatically; drop the bindings clause when the source persona had none. Final
+wording Chris-arbitrated.)
 
 ## 5. ID remapping (the determinism core)
 
@@ -246,23 +293,34 @@ ises the model/codec-drift risk we cannot currently test against.
 ### 6.3 Import — library
 
 `chatsundere/knowledge` → **always a new library**. Name editable pre-import,
-non-blocking name-collision warning. Fresh `libraryId`; each document gets a
-fresh `documentId`; vectors adopted or re-embedded per §6.2.
+non-blocking **explanatory** name-collision warning (same create-new framing as
+§4.6 — "creates a second, separate one; nothing is merged"). Fresh `libraryId`;
+each document gets a fresh `documentId`; vectors adopted or re-embedded per
+§6.2. On completion, a toast confirms the import.
 
 ## 7. UI / entry points
 
 ### 7.1 Export — transient `⋯` overlay
 
 - **Persona**: a "Export" item in the persona's `⋯` menu opens a small transient
-  overlay: the three switches (Memory / Artefacts / Images) + an "Export"
-  button. On confirm: build the archive, trigger a browser download, close.
-- **Library**: an "Export" item in the library-detail `⋯` menu. No switches →
-  the overlay is a one-line confirm ("Export this library?") + Export, or
-  exports directly (Laura spec-pass to settle the exact micro-flow).
+  overlay: the three honestly-labelled switches (Memory / Artefacts / Images,
+  §4.2) + an "Export" button. On confirm: build the archive, trigger a browser
+  download, close, and show a completion toast ("Persona exported").
+- **Library**: an "Export" item in the library-detail `⋯` menu **triggers the
+  download immediately** + a completion toast ("Library exported") — **no
+  confirm overlay** (Laura SOFT-5). A dialog whose only choice is "yes" is pure
+  friction; a confirm step earns its keep only when there is a choice or a
+  destructive consequence, and an export is neither. The asymmetry with the
+  persona overlay is justified and unsurprising: the overlay exists *because*
+  the persona export has three choices; the library export has none.
+
+Both export paths end in a **completion toast** — a file silently appearing in
+Downloads with no acknowledgement is its own small astonishment.
 
 Reuse the makeover primitives: `OverflowMenu` for the trigger, a lightweight
-overlay (`ConfirmDialog`/`ReadingOverlay`-style transient shell) for the body,
-`Button` tones. No `PageScaffold` — export is not a surface.
+overlay (`ConfirmDialog`/`ReadingOverlay`-style transient shell) for the persona
+body, `Button` tones, the existing toast mechanism. No `PageScaffold` — export
+is not a surface.
 
 ### 7.2 Import — auto-detect at existing entries
 
@@ -317,7 +375,14 @@ Backend-free, all in the user-client Vitest suite.
 - **Degradation:** import with no matching provider → model unset, import
   succeeds; `resolvedMindspaceId` absent on target → default; dropped
   mcpOverrides/libraryIds.
-- **Name-collision warning:** surfaced, non-blocking.
+- **Name-collision warning:** surfaced, non-blocking, and explanatory (create-
+  new framing, not an error).
+- **Post-import landing (Laura HARD-1):** a Chatsundere persona import navigates
+  into the new persona's editor; the post-import note's model clause appears
+  only when the model is unset and the bindings clause only when the source had
+  mcpOverrides/libraryIds.
+- **Completion toasts:** persona and library export each emit a completion
+  toast; library import emits one.
 
 Manual verification (device, Chris): export Fable (images off) → import on a
 fresh-state client → chat history, reasoning, memory, avatar all present; model
@@ -334,7 +399,9 @@ prompts for selection; library export with vectors → import adopts instantly
 
 ## 11. Open questions
 
-- Library export micro-flow: silent one-tap export vs a one-line confirm
-  overlay — defer to Laura spec-pass (§7.1).
-- Exact generalised labels for the unified import affordances — Chris-arbitrated
-  copy, settle at build.
+- **Resolved (Laura spec-pass):** library export micro-flow → immediate download
+  + toast, no confirm overlay (§7.1). Persona-import landing → into the
+  persona-editor of the new persona (§4.6a).
+- **Chris-arbitrated copy** (settle at build, not blocking): the generalised
+  import-affordance labels; the exact name-collision warning wording (§4.6); the
+  post-import note wording (§4.6a); the toggle subtitles (§4.2).
