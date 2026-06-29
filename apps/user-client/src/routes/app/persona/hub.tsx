@@ -12,7 +12,7 @@ import {
   Type,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AvatarCropModal } from '../../../components/AvatarCropModal.js';
 import { ModelSlotPicker } from '../../../components/ModelSlotPicker.js';
 import { AvatarField, type PendingAvatar } from '../../../components/persona-editor/AvatarField.js';
@@ -20,6 +20,8 @@ import {
   type AppliedPersonaImport,
   ChatsuneImportControl,
 } from '../../../components/persona-editor/ChatsuneImportControl.js';
+import { PostImportNote } from '../../../components/persona-editor/PostImportNote.js';
+import { ExportOverlay } from '../../../components/transfer/ExportOverlay.js';
 import { Button } from '../../../components/ui/Button.js';
 import { NavTile } from '../../../components/ui/NavTile.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
@@ -62,9 +64,21 @@ import { usePersonaEditing } from './use-persona-editing.js';
 export function PersonaHub(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [search] = useSearchParams();
   const returnPath = search.get('return') ?? '/app/circle';
   const { onHelp, helpOverlay } = useHelp('persona');
+
+  // Present when navigating here from a Chatsundere persona pack import — drives
+  // the one-time PostImportNote (ported from persona-editor.tsx).
+  const justImported =
+    location.state !== null &&
+    typeof location.state === 'object' &&
+    'justImported' in (location.state as Record<string, unknown>)
+      ? (location.state as { justImported: { modelBound: boolean; droppedBindings: boolean } })
+          .justImported
+      : null;
+  const [showExportOverlay, setShowExportOverlay] = useState(false);
 
   const { persona, patch } = usePersonaEditing(id ?? null);
   const chats = useChats();
@@ -294,6 +308,14 @@ export function PersonaHub(): JSX.Element {
     >
       {helpOverlay}
       <div data-testid="persona-hub" className="flex flex-col gap-4 px-4 pb-8 pt-4">
+        {/* Post-import note — rendered once when landing here from a Chatsundere pack import. */}
+        {justImported ? (
+          <PostImportNote
+            modelBound={justImported.modelBound}
+            droppedBindings={justImported.droppedBindings}
+          />
+        ) : null}
+
         {/* A. Action row ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -484,9 +506,7 @@ export function PersonaHub(): JSX.Element {
           />
         </section>
 
-        <Button disabled title="Coming soon" className="opacity-40">
-          Export persona
-        </Button>
+        <Button onClick={() => setShowExportOverlay(true)}>Export persona</Button>
       </div>
 
       {cropState ? (
@@ -500,6 +520,15 @@ export function PersonaHub(): JSX.Element {
             setCropState(null);
           }}
           onConfirm={(crop) => void confirmCrop(crop)}
+        />
+      ) : null}
+
+      {/* Export overlay — rendered inline so it overlays the whole hub. */}
+      {showExportOverlay && id ? (
+        <ExportOverlay
+          personaId={id}
+          personaName={persona.name || 'Persona'}
+          onClose={() => setShowExportOverlay(false)}
         />
       ) : null}
     </PageScaffold>

@@ -315,6 +315,55 @@ flakes this run); production build **9/9**. Specs/plans:
 until Chris pushes. **Next:** Chris device-verifies, then the **chat** (densest
 surface — comes last) and the deferred sub-surfaces (chat `DocumentPicker`,
 persona-editor `KnowledgeSection`, the attach-picker Quick-Sheet).
+**Last updated:** 2026-06-30 — **NATIVE CHATSUNDERE TRANSFER (export/import)
+COMPLETE, rebased onto master on top of the v0.1.0 early-alpha release. Import
+now lands in the new persona **hub** (`routes/app/persona/hub.tsx`,
+post-makeover); export is wired into the hub's `Export persona` action.
+Awaiting Chris's device-verify + push.**
+The native, **create-new-only** export/import of a persona (its chats +
+**memory**) and a knowledge **library**, in Chatsundere's own `.tar.gz` format —
+deliberately separate from the Chatsune *bridge* (which stays the Tier-A
+stop-gap). Two packs: `chatsundere/persona` (3 export switches — **Memory ON ·
+Artefacts ON · Images OFF**, honest-labelled; avatar always travels) and
+`chatsundere/knowledge` (library + documents + **adopted vectors**). Import is
+**100% deterministic, never merges** (Chris's call — a merge is a
+non-deterministic black box that leaves broken personas behind; sync comes with
+the backend): every id is freshly minted, every reference (incl. nested
+`contentBlocks.pillId` + pill-payload artefact refs + compaction/extraction
+cursors) remapped, name-collision is an **explanatory non-blocking** warning.
+**Live bindings degrade, never block** (provider→`modelRef`; MCP/library
+bindings dropped — cheap to re-add per Chris's "≤2 MCP servers" field data;
+mindspace→default). **Secrets never leave the device** (no `ProviderRow`/
+`apiKey`/`EncryptedBlob` in any archive — whole-archive scan test). **Library
+vectors**: exported (497 B/chunk, tiny) + a `codecVersion`/`modelId`/`dim` stamp
+→ **adopt instantly when compatible, auto-re-embed on a model/codec change**
+(pure `resolveVectorStrategy`). Import lands a persona in its **editor** (Laura
+HARD-1) with a calm **post-import note** (pick a model / bindings don't
+transfer). Export is a **transient `⋯` overlay**, not a surface (a begin→end
+operation gets no room). New infra: a browser **tar writer** (counterpart to the
+existing `untar`). **No Dexie/schema change.** Built spec→**Laura spec-pass**
+(HARD-1 + softs folded)→plan→**subagent-driven** (12 tasks, per-task spec+quality
+review). The **opus whole-branch review caught a CRITICAL** every per-task review
+missed — `contentBlocks[].pillId` was not remapped, so **all pills would silently
+vanish** from imported messages (the round-trip test only used text+reasoning) —
+plus 2 Important (pill-payload artefact refs; image-artefact `thumbBlob`
+`{}`-poison); **all fixed + locked with a pill/artefact round-trip regression
+test**, re-reviewed **merge-ready**. Not a Larissa path (client-only; no
+`packages/crypto`/auth/sync/proxy change). Gates: `pnpm typecheck --force`
+**14/14** (0 cached, controller-verified); full user-client vitest at the **8
+Node-localStorage/lazy baseline** (+ new transfer suites). Specs/plans:
+[[../superpowers/specs/2026-06-29-chatsundere-transfer-design]],
+[[../superpowers/plans/2026-06-29-chatsundere-transfer]]. **Deferred follow-up
+minors** (non-blocking, for a later pass): double archive-read on file-pick +
+`untar`-all-for-manifest; source-name `unknown`-narrowing duplicated across the
+two import hosts; tar-writer comment "space-padded"→"zero-padded"; a couple of
+test-ergonomics nits. **Next:** squash `feat/chatsundere-transfer` → master once
+the main tree is free, Chris device-verifies (spec §9 + plan "Manual
+verification": export Fable images-off → import on fresh client → history +
+reasoning + memory + avatar present, model prompts, **pills/tool-calls survive**;
+library export → import **adopts instantly, no spinner**; collision warning
+non-blocking), then pushes. Then the **emoji shower** (Chris's parallel
+spec/worktree) + the deferred chat/persona-editor knowledge sub-surfaces.
 
 **Earlier (2026-06-26) — MY KNOWLEDGE REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`13b867ad`). NOT pushed (Chris pushes);

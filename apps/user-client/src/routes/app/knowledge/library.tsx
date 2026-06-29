@@ -11,6 +11,7 @@ import { ListRow } from '../../../components/ui/ListRow.js';
 import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
+import { exportLibrary } from '../../../data/chatsundere-export.js';
 import {
   useAddDocuments,
   useCreateLibrary,
@@ -20,7 +21,9 @@ import {
   useUpdateLibrary,
 } from '../../../data/knowledge.js';
 import { useAdultMode } from '../../../data/settings.js';
+import { slug, triggerDownload } from '../../../lib/download.js';
 import { STATUS_LABEL, STATUS_TONE } from '../../../lib/knowledge-status.js';
+import { toastStore } from '../../../state/toast.store.js';
 import { InlineEditRow } from '../account/InlineEditRow.js';
 import { InlineEditTextarea } from '../settings/InlineEditTextarea.js';
 
@@ -175,6 +178,21 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
     }
   }
 
+  async function onExportLibrary(): Promise<void> {
+    if (!existing) return;
+    try {
+      const blob = await exportLibrary(existing.id);
+      triggerDownload(blob, `${slug(existing.name)}-chatsundere.tar.gz`);
+      toastStore.show({ message: 'Library exported', tone: 'success', durationMs: 3000 });
+    } catch (e) {
+      toastStore.show({
+        message: e instanceof Error ? e.message : 'Export failed',
+        tone: 'warn',
+        durationMs: 3500,
+      });
+    }
+  }
+
   if (libraries.isLoading) {
     return (
       <PageScaffold
@@ -209,6 +227,12 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
         <div className="flex justify-end">
           <OverflowMenu
             items={[
+              {
+                label: 'Export',
+                onSelect: () => {
+                  void onExportLibrary();
+                },
+              },
               {
                 label: 'Delete library',
                 tone: 'destructive',
