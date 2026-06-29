@@ -653,10 +653,30 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**⏰ FIRST THING — REMIND CHRIS (his explicit request, 2026-06-29 late night):
-today we TEST the native transfer (import/export) end-to-end. "Großes Testen"
-is planned for this evening.** The feature is squashed to master (`e6b9f70f`),
-NOT pushed yet. Run the device checklist (Current entry / spec §9): export Fable
+**🛑 BEFORE ANYTHING ELSE — REBASE LOCAL master ONTO origin/master (Chris's
+request, 2026-06-29 late night).** Chris forgot the post-weekend `git pull`, so
+this clone was stale at `756cbbf9` (My Knowledge, 26.06.) while origin/master had
+advanced **19 commits** (My Treasury, My History, scroll-pin, **My Circle +
+persona-editor makeover** `c9a12506`, **v0.1.0 early-alpha Docker release
+pipeline**). I built today's 7 commits (transfer + emoji/context plans + docs) on
+the STALE base. **Nothing is lost** — the 7 local commits are also backed up on
+origin at branch **`wip/2026-06-29-native-transfer`**. To reconcile:
+`git fetch origin` then `git rebase origin/master`. Exactly **two** conflicts:
+(1) **`persona-editor.tsx` — REAL**: origin's persona-editor makeover restructured
+the file; re-apply the transfer's additions onto the new structure — the export
+`⋯` menu + the `navigate(..., { state:{ justImported }})` on a `chatsundere/persona`
+import + the `<PostImportNote>` render + the persona name-collision card. (2)
+**`STATUS-CLIENT-ONLY.md` — mechanical**: drop the transfer Current entry into the
+*current* (origin) STATUS, which now leads with My Circle/Treasury/History/release.
+All other transfer files (new files + knowledge.tsx/library.tsx/ChatsuneImportControl/
+CLAUDE.md) apply cleanly (origin didn't touch them). After the rebase: `pnpm
+typecheck --force` + full user-client vitest (8 baseline) + re-run the transfer
+suites, THEN it's push-ready. (Lesson now in CLAUDE.md §8: worktree-per-feature;
+also worth: sync local master to origin at session start before building.)
+
+**⏰ THEN — TEST the native transfer (import/export) end-to-end. "Großes Testen"
+planned for this evening.** Run the device checklist (Current entry / spec §9):
+export Fable
 (images off) → import on a fresh client → history + reasoning + **memory +
 avatar present, pills/tool-calls survive**, model prompts, post-import note;
 re-import → explanatory collision warning → "Create anyway" makes a second
