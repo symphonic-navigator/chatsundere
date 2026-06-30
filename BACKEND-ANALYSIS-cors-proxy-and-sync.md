@@ -291,21 +291,33 @@ HMAC, so:
 All parent/child pointers (`chatId` on a message, `personaId` on a chat) live
 **inside** the ciphertext, so the server never reconstructs the graph.
 
-### 2.3 What the server can still infer (the leakage budget)
+### 2.3 What the server can still infer — and the v1 policy (decided 2026-06-30)
 Be honest in the brief. With the above the server still learns:
 - that an account exists and roughly **how many** records and of what
   **collection** it has (volume per type), and their **sizes**,
 - the **server-receipt order** (`rev`) — *not* the user's content timestamps,
 - which records were **deleted**.
 
-Mitigations, all deferrable hardening (note, don't necessarily build for v1):
-- **Blind the `collection` too** (HMAC it) if per-type volume is sensitive —
-  costs a server-side "I don't know what these are" model, slightly more client
-  bookkeeping.
-- **Size padding** (pad blobs to buckets) to blunt the 2-message-vs-200-message
-  chat inference. Per-record granularity already helps (each message ≈ its own
-  similar-sized blob).
-- Record-count cover traffic — almost certainly not worth it.
+**Policy (Chris's call): pragmatic by default, hard where there is a real
+sidechannel.** Once names, titles and timestamps are inside the ciphertext there
+is no meaningful sidechannel for most collections, so:
+- **Default:** keep the `collection` tag cleartext, **no padding**. Simple, and
+  it already satisfies the core plausible-deniability ask.
+- **Exception — persona records and memory (`personas`, `memoryBody`,
+  `memoryJournal`) are size-padded** to buckets. Rationale: blob *size* on these
+  leaks "this user has elaborate custom instructions and a lot of memory" — i.e.
+  an intensively-used (often NSFW) companion — even though the content is
+  encrypted. Padding blunts that specific inference. This is the one place the
+  size sidechannel is genuinely privacy-relevant.
+- **Hard requirement everywhere — no privacy flag is ever a server-visible
+  column.** In particular the **NSFW/adult flag** (`personas.adultPersona`,
+  `libraries.nsfw`, etc.) lives **inside the ciphertext only**; it must never
+  become a cleartext sync field. (Per-record full-row encryption already gives
+  this for free — but call it out so no future "index by nsfw on the server"
+  shortcut creeps in.)
+
+Deferred / not for v1: blinding the `collection` tag wholesale; padding other
+collections; record-count cover traffic.
 
 ### 2.4 The two write classes — the core simplification
 This is the spine of the design and it maps exactly onto what Chris described.
@@ -511,8 +523,21 @@ accepted data loss for an audience of two". The graceful path now exists for
 free: **the native transfer feature** (export `chatsundere/persona` +
 `chatsundere/knowledge` packs, just shipped) is the bridge — *export A locally →
 join the account → import A as fresh entities under the account MK*. New uuids,
-no MK conflict, ADR 0025 keeps both. Recommend wiring uplevelling to offer
-export-first when it detects pre-existing local data under a foreign MK.
+no MK conflict, ADR 0025 keeps both.
+
+**Decided (2026-06-30): export-then-import is the accepted v1 path, BUT joining a
+foreign-MK account replaces local data, so the user must be warned in the
+strongest terms.** When uplevelling detects pre-existing local data under a
+foreign MK, show a **red, irreversible-action warning** — wording to the effect
+of *"This will replace the data already on this device and **cannot be undone**.
+Export your personas and libraries first if you want to keep them."* — with the
+export action offered right there before the user can proceed. This mirrors the
+existing destructive-confirm pattern (typed/gold-protected "No") and the
+"no-recovery is a feature" honesty: we never silently destroy local data, but we
+also don't hide that the foreign-MK join is destructive.
+
+(The clean case §4.1 — a local-only user creating *their own* account — carries
+**no** data loss and needs **no** such warning: same MK, full sync-up.)
 
 ### 4.3 Still to confirm with Chris
 - Meaning **confirmed** (local-only → linked promotion, §4 above).
@@ -559,15 +584,44 @@ v0.3.0 (ADR 0031).
 
 6. **Re-audit + v0.3.0.**
 
-### Open questions to settle in the briefs (consolidated)
-- **Proxy:** `aud` strategy (1.1); MCP arbitrary-egress acceptance (1.4);
-  shared-key sunset timing (1.7); `jti`-revocation now or later (1.6).
-- **Sync:** blind the `collection` tag or not (2.3); size-padding for v1 or defer
-  (2.3); per-collection delete-vs-edit precedence (2.6); vectors **synced** vs
-  **re-embedded per device** (2.10); live-update "poke" in scope or deferred
-  (2.5).
-- **Lifecycle:** confirm "uplevelling" meaning + the export-on-join path (§4);
-  scope of the device-management surface (§3.1).
+### Decisions settled with Chris (2026-06-30)
+**Proxy**
+- `aud`: **variant (a)** — proxy accepts any valid auth-domain access token
+  (verify `iss` + signature + `exp`, ignore `aud`). (1.1)
+- MCP egress: **authenticated egress + private-range block + per-user rate
+  limits** (no per-account allowlist). (1.4)
+- Shared-key mode: **kept alongside** account tokens, sunset later once the
+  account cohort dominates. (1.7)
+- `jti`-revocation: **deferred**; token TTL is short. Add it together with the
+  device-management surface. (1.6)
+
+**Sync**
+- `collection` tag: **cleartext** (not blinded) in v1. (2.3)
+- Size-padding: **persona records + memory only** (`personas`, `memoryBody`,
+  `memoryJournal`) — the one real size sidechannel ("elaborate/NSFW companion").
+  No padding elsewhere in v1. (2.3)
+- NSFW/adult flag: **inside ciphertext only, never a server column** — hard
+  requirement. (2.3)
+- Vectors: **hybrid** — sync, with automatic re-embed on a model/codec mismatch
+  (the transfer feature's `resolveVectorStrategy` precedent). (2.10)
+- Live-update "poke": **deferred** — v1 is polling + pull-on-foreground. (2.5)
+
+**Lifecycle**
+- "Uplevelling" = **local-only → linked promotion** (confirmed). Clean case
+  reuses the local MK (no data loss); foreign-MK case uses **export-then-import**
+  with a **red, irreversible-action warning + inline export** before any
+  destructive replace. (§4)
+- Device-management surface: **in scope for §E** — server-side session/passkey
+  revocation (cuts sync + proxy). Co-operative self-wipe-on-reconnect is an
+  optional add-on; **MK rotation for forward security is explicitly deferred
+  post-beta**. (§3.1)
+
+### Still open — details for the sync brief
+- Per-collection **delete-vs-edit precedence** in conflict resolution (2.6).
+- The exact **foreign-MK detection** mechanic at join time (how the client knows
+  local data is under a different MK before it replaces anything) (§4.2).
+- Whether **compactionCheckpoints** sync as-is or are re-derived per device
+  (leaning sync, since the summary is conversation-derived) (2.10).
 
 ---
 
