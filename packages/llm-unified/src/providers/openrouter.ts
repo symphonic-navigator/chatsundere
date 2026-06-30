@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { registerAdapter } from '../adapter-registry.js';
+import { claudeOpenRouterAdapter } from '../adapters/claude-openrouter.js';
 import { openRouterAdapter } from '../adapters/openrouter-openai.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
@@ -14,6 +15,19 @@ import { apiKeyField } from './_helpers.js';
 // because OpenRouter's unified param is honoured per route. Effort is modelled
 // as a plain on/off toggle (effort buckets are not shown to modulate the trace).
 const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
+
+// Sonnet 5 is the exception to the plain toggle: probed live 2026-06-30, effort
+// genuinely modulates the trace (low ≈ 17 reasoning tokens, high ≈ 270), so it
+// is a `steps` control. We mirror the Fable-family shape (off/low/medium/high,
+// default medium) rather than exposing the full OpenRouter effort surface
+// (xhigh/max) — keeping the cockpit calm and consistent across the Claude family
+// (Chris, 2026-06-30).
+const SONNET5_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
 
 interface OpenRouterOfferingArgs {
   vision: boolean;
@@ -141,6 +155,19 @@ const offerings: Offering[] = [
     max: 2_000_000,
     zdr: true,
   }),
+  // Claude Sonnet 5 — the one Claude offering NOT on nano-gpt (Chris, 2026-06-30).
+  // OpenRouter reports a 1M context ceiling; recommended stays at our 200k Claude
+  // sweet-spot (matches the nano-gpt Claude offerings). Vision ✅, reasoning is a
+  // `steps` control (effort modulates — probed live), NOT the family toggle. No
+  // ZDR: the honest US-router posture (the user owns the upstream route on their
+  // key). The caching-aware adapter (cache_control injection) is bound in
+  // `registerOpenRouter` below. Censored at source → CENSORED badge.
+  openRouterOffering('claude-sonnet-5', 'anthropic/claude-sonnet-5', {
+    vision: true,
+    reasoning: SONNET5_STEPS,
+    recommended: 200_000,
+    max: 1_000_000,
+  }),
 ];
 
 export const openrouter: ProviderDefinition = {
@@ -171,17 +198,22 @@ export const openrouter: ProviderDefinition = {
 export function registerOpenRouter(): void {
   registerProvider(openrouter);
   for (const o of offerings) {
-    if (o.adapter.kind === 'catalogue') {
-      registerAdapter(
-        o.adapter.adapterId,
-        openRouterAdapter(o.upstreamSlug, {
+    if (o.adapter.kind !== 'catalogue') continue;
+    // Claude offerings get the caching-aware adapter (injects Anthropic
+    // cache_control); every other offering gets the generic OpenRouter adapter.
+    // Branched by canonicalRef, mirroring the nano-gpt registration loop.
+    const adapter = o.canonicalRef?.startsWith('claude-')
+      ? claudeOpenRouterAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
+        })
+      : openRouterAdapter(o.upstreamSlug, {
           vision: o.profile.vision,
           reasoning: o.profile.reasoning,
           // Enforce ZDR on the wire for any offering that claims it, so the
           // privacy posture is honoured rather than merely asserted.
           zdr: o.trust.zdr,
-        }),
-      );
-    }
+        });
+    registerAdapter(o.adapter.adapterId, adapter);
   }
 }

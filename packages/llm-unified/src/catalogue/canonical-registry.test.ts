@@ -27,10 +27,11 @@ afterAll(() => {
 });
 
 describe('canonical-registry', () => {
-  test('lists twenty-four canonicals with unique ids', () => {
+  test('lists twenty-five canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(24);
-    expect(new Set(ids).size).toBe(24);
+    expect(ids).toHaveLength(25);
+    expect(new Set(ids).size).toBe(25);
+    expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('grok-4.3');
     expect(ids).toContain('grok-4.20');
     expect(ids).toContain('glm-5.1');

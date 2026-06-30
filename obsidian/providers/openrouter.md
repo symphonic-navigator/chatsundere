@@ -152,7 +152,7 @@ adapters do **not** set them by default.
 > cosmetic), but it means the wafer ZDR header is silently dropped in suite runs
 > too. Out of scope to fix here (shared harness); flagged for Liz's judgement.
 
-## Curated offerings (10)
+## Curated offerings (11)
 
 All `confidence: 'verified'`, `source: 'curated'`, adapter
 `openrouter:<slug>`, reasoning `toggle` (defaultOn),
@@ -161,6 +161,10 @@ verbatim, no censorship layer). `recommended` follows our project sweet-spots
 where it differs from OpenRouter's reported `max`. Trust is
 `{ tee: false, zdr: false, jurisdiction: 'US' }` **except** the two Grok
 offerings, which are 🔒 **ZDR** (`zdr: true`; see the ZDR section above).
+
+**Two exceptions to the uniform shape:** the two Grok offerings are 🔒 ZDR, and
+**Claude Sonnet 5** (added 2026-06-30) uses a dedicated caching-aware adapter and
+a `steps` reasoning control — see the Claude Sonnet 5 section below.
 
 | Canonical | OpenRouter slug | vision | recommended / max | trust |
 |---|---|---|---|---|
@@ -174,6 +178,7 @@ offerings, which are 🔒 **ZDR** (`zdr: true`; see the ZDR section above).
 | `qwen3.5-397b-a17b` | `qwen/qwen3.5-397b-a17b` | ✅ | 262 144 | — |
 | `grok-4.3` | `x-ai/grok-4.3` | ✅ | 200 000 / 1 000 000 | 🔒 ZDR |
 | `grok-4.20` | `x-ai/grok-4.20` | ✅ | 200 000 / 2 000 000 | 🔒 ZDR |
+| `claude-sonnet-5` | `anthropic/claude-sonnet-5` | ✅ | 200 000 / 1 000 000 | — 🚫 |
 
 The two Grok offerings (added 2026-06-28) are the **ZDR route for Grok** — xAI
 itself offers no ZDR on its direct API today. See [[../models/grok-4.3]] and
@@ -182,6 +187,41 @@ itself offers no ZDR on its direct API today. See [[../models/grok-4.3]] and
 `recommended ≠ max` for DeepSeek V4: OpenRouter reports a 1 048 576 ceiling, but
 recommended stays at our 200 000 DeepSeek-V4 sweet-spot (matching the wafer
 offerings — where the model stays smart).
+
+## Claude Sonnet 5 — the first Claude on OpenRouter (added 2026-06-30)
+
+Sonnet 5 is the one Claude offering **not** on nano-gpt (Chris's call — it went
+live on OpenRouter and the user owns the upstream route there). It carries the
+loud 🚫 **CENSORED** badge (`canonical.freedomOriented: false`) and **no ZDR**
+(the honest US-router posture; unlike Grok we do not send `provider:{zdr:true}`).
+Full per-model detail in [[../models/claude-5]]. Three OpenRouter-specific
+findings, all probed live 2026-06-30 (key routed to Google Vertex):
+
+- **Reasoning is a `steps` control, not the uniform toggle.** Effort genuinely
+  modulates Sonnet 5's trace (`low` ≈ 17 reasoning tokens, `high` ≈ 270), so the
+  offering is `steps` `['off','low','medium','high']` (default `medium`),
+  mirroring the Fable family. We do **not** expose OpenRouter's full effort
+  surface (`xhigh`/`max`) — calm cockpit, family consistency. This is the only
+  OpenRouter offering whose reasoning is not a plain toggle.
+
+- **Strict system-message ordering.** OpenRouter rejects a `system` message that
+  sits after an assistant turn for Anthropic models: **HTTP 400** — `messages.5:
+  role 'system' must precede an 'assistant' message or end the array`. The other
+  targets (DeepSeek/GLM) tolerate a mid-conversation system message; Anthropic
+  does not, and OpenRouter does not hoist it (nano-gpt does, implicitly). The
+  `claudeOpenRouterAdapter` therefore **merges all `system` messages into one
+  leading message** before caching — a no-op for the common shape. Production is
+  unaffected regardless (memory lives in the leading system message); the hoist
+  keeps the offering robust and the conversation-suite green.
+
+- **Caching engages, read-back is route-dependent.** `cache_control` is accepted
+  (no 400) and triggers a cache write (`cache_write_tokens` > 0), but a read-back
+  was not observed on an immediate repeat — the aggregator load-balances across
+  regional endpoints with no shared cache. The saving lands only where routing is
+  sticky (e.g. an Anthropic-direct route on the user's key); the injection is
+  harmless elsewhere, so it is always emitted. This is exactly the
+  *guaranteed*-caching gap ADR 0032 cites for keeping the Claude family on
+  nano-gpt — Sonnet 5 is the deliberate, user-route-owned exception.
 
 ## MiMo exclusion (explicit)
 

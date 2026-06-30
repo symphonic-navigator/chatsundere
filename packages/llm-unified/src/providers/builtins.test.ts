@@ -53,13 +53,13 @@ describe('built-in providers', () => {
     }
   });
 
-  it('openrouter has direct CORS hint, ten offerings, and sortPriority 45', () => {
+  it('openrouter has direct CORS hint, eleven offerings, and sortPriority 45', () => {
     const p = getProvider('openrouter');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      // 8 original + 2 Grok (4.3, 4.20), both ZDR-enforced.
-      expect(p.offerings).toHaveLength(10);
+      // 8 original + 2 Grok (4.3, 4.20, both ZDR-enforced) + Claude Sonnet 5.
+      expect(p.offerings).toHaveLength(11);
       expect(p.sortPriority).toBe(45);
     }
   });

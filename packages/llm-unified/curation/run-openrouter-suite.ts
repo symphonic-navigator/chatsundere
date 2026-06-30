@@ -10,8 +10,8 @@
 //   bun run curation/run-openrouter-suite.ts glm         (substring-filter offerings)
 import { readFileSync } from 'node:fs';
 import type { ToolDef } from '../src/adapter-contract.js';
-import { openRouterAdapter } from '../src/adapters/openrouter-openai.js';
-import { openrouter } from '../src/providers/openrouter.js';
+import { getAdapter } from '../src/adapter-registry.js';
+import { openrouter, registerOpenRouter } from '../src/providers/openrouter.js';
 import type { ProviderConfig } from '../src/types.js';
 import {
   type ReasoningPermutation,
@@ -56,11 +56,14 @@ const targets = slugFilter
     )
   : openrouter.offerings;
 
+// Resolve the production-registered adapter per offering (so the Claude offering
+// is exercised with its caching-aware adapter, not the generic one).
+registerOpenRouter();
+
 for (const o of targets) {
-  const adapter = openRouterAdapter(o.upstreamSlug, {
-    vision: o.profile.vision,
-    reasoning: o.profile.reasoning,
-  });
+  if (o.adapter.kind !== 'catalogue') continue;
+  const adapter = getAdapter(o.adapter.adapterId);
+  if (!adapter) throw new Error(`No registered adapter for ${o.adapter.adapterId}`);
   const binding = makeLiveBinding({
     offeringRef: `openrouter:${o.upstreamSlug}`,
     providerConfig,

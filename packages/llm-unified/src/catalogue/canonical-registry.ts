@@ -149,8 +149,10 @@ export const CANONICALS: CanonicalModel[] = [
       'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
     modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
   },
-  // --- Claude (Anthropic) — via OpenRouter only; censored at source → not
-  // freedom-oriented; surfaced with the CENSORED badge. See ADR 0032. ---
+  // --- Claude (Anthropic) — censored at source → not freedom-oriented;
+  // surfaced with the CENSORED badge. Delivered via nano-gpt (the anonymising
+  // router) per ADR 0032, except Sonnet 5 which is curated on OpenRouter (the
+  // user owns the upstream route there). ---
   {
     id: 'claude-haiku-4.5',
     displayName: 'Claude Haiku 4.5',
@@ -177,6 +179,15 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: false,
     freedomNote:
       'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-sonnet-5',
+    displayName: 'Claude Sonnet 5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source → not freedom-oriented. Curated on OpenRouter, a US router/aggregator: the user owns the upstream route and any key-level guardrails, and OpenRouter adds no filter of its own. effectiveFreedom is "restricted" → CENSORED badge.',
   },
   {
     id: 'claude-opus-4.5',
