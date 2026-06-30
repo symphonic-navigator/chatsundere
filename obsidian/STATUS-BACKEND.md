@@ -1,13 +1,23 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-05-23 — Status tracking split off: this file now
-covers server-coupled work (auth, sync, proxy, admin, plus the server-
-gated parts of the user-client). Client-only / standalone-mode work has
-moved to [[STATUS-CLIENT-ONLY]]. Prior entry: 2026-05-22 — Squash β
-(cross-device-identity endpoints) landed at commit `7a01697`; ADR 0023
-amended + ADR 0028 added; Larissa β-approved after H1+M1+L1 fixes
-(per-IP rate limits, kind_mismatch pre-consume, kind_mismatch message
-scrub).
+**Last updated:** 2026-06-30 — **Block 6 kick-off analysis landed**:
+`BACKEND-ANALYSIS-cors-proxy-and-sync.md` (repo root) designs the two
+server-coupled workstreams — authenticated CORS proxy and zero-knowledge
+client sync — from a brainstorm with Chris. Verified ground truth
+(auth-service EdDSA + JWKS **done**; proxy/sync-service still Phase-0
+skeletons; full client crypto + uuidv7 data model in place). Key
+decisions settled: **proxy first** (resource-server JWT via JWKS, not
+zero-knowledge-critical); sync as a **blind-indexed per-account oplog**
+(HMAC server keys hide the uuidv7 creation-timestamp → plausible
+deniability); **only appends offline, everything else write-through**;
+padding for persona+memory blobs, NSFW flag ciphertext-only; uplevelling
+= local→linked (export-then-import + red irreversible warning on the
+foreign-MK path); a **device/session-revocation surface** is the main
+gap for the "lost device" story (MK rotation deferred post-beta). Next:
+write the two real briefs (proxy, then sync). Prior entry: 2026-05-23 —
+Status tracking split off: this file covers server-coupled work (auth,
+sync, proxy, admin, plus the server-gated parts of the user-client);
+client-only / standalone-mode work moved to [[STATUS-CLIENT-ONLY]].
 
 This file tracks server-coupled work — anything that needs auth-service,
 sync-service, proxy-service, or admin-client to exist, plus the user-
@@ -137,13 +147,20 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Doing now
 
-*(between sessions)*
+- **Block 6 analysis complete** — `BACKEND-ANALYSIS-cors-proxy-and-sync.md`
+  at repo root (branch `claude/backend-cors-client-sync-32323e`, PR open).
+  All open design questions settled with Chris (§5 of the doc). Feeds the
+  two real briefs to be written next.
 
 ---
 
 ## Next session
 
-1. **Client-side cross-device identity** — user-client onboarding
+1. **Write the two Block-6 briefs** from the analysis doc — proxy brief
+   first (smaller, proves the JWT resource-server integration), then the
+   sync brief (blind-indexed oplog, two write-classes, conflict
+   resolution). Likely Lyra-led; the analysis doc is the input.
+2. **Client-side cross-device identity** — user-client onboarding
    overhaul (three paths: QR / manual / local) targeting the new
    `/api/v1/join/{start,finish}` surface. Replaces the now-broken
    `linkOpaqueStart`/`linkOpaqueFinish` wiring in
@@ -151,13 +168,10 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
    admin-client invitation-form fields for `suggested_username`
    and `note`. Inline execution preferred per
    [[insights/2026-05-22-subagent-vs-inline-trade-off]].
-2. **Client-side step-up** — `<StepUpModal />` + 401 interceptor in
+3. **Client-side step-up** — `<StepUpModal />` + 401 interceptor in
    user-client that catches `step_up_required` /
    `webauthn_uv_required` and runs the unified step-up flow.
    Admin-client wire-up for Tier 4 admin-invitations POST.
-3. **First end-to-end test** — Chris's first full-system test once
-   the user-client onboarding lands. Backend surface should be
-   ready; auth-service Larissa-approved across three squashes.
 
 ---
 
