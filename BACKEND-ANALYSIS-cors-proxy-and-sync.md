@@ -604,24 +604,116 @@ v0.3.0 (ADR 0031).
   requirement. (2.3)
 - Vectors: **hybrid** — sync, with automatic re-embed on a model/codec mismatch
   (the transfer feature's `resolveVectorStrategy` precedent). (2.10)
-- Live-update "poke": **deferred** — v1 is polling + pull-on-foreground. (2.5)
+- Live-update "poke": **SUPERSEDED 2026-06-30 (deep-dive, §D below)** — a
+  doorbell WebSocket poke **is now in v1**. Originally deferred to polling +
+  pull-on-foreground only. (2.5)
 
 **Lifecycle**
 - "Uplevelling" = **local-only → linked promotion** (confirmed). Clean case
-  reuses the local MK (no data loss); foreign-MK case uses **export-then-import**
-  with a **red, irreversible-action warning + inline export** before any
-  destructive replace. (§4)
+  reuses the local MK (no data loss). Foreign-MK case: **SUPERSEDED 2026-06-30
+  (deep-dive, §B below)** — now an **in-place merge** (union the local data up
+  under the account MK), *not* destructive export-then-import. Export-then-import
+  is demoted to a manual fallback for exotic cases. (§4)
 - Device-management surface: **in scope for §E** — server-side session/passkey
   revocation (cuts sync + proxy). Co-operative self-wipe-on-reconnect is an
   optional add-on; **MK rotation for forward security is explicitly deferred
   post-beta**. (§3.1)
 
-### Still open — details for the sync brief
-- Per-collection **delete-vs-edit precedence** in conflict resolution (2.6).
-- The exact **foreign-MK detection** mechanic at join time (how the client knows
-  local data is under a different MK before it replaces anything) (§4.2).
-- Whether **compactionCheckpoints** sync as-is or are re-derived per device
-  (leaning sync, since the summary is conversation-derived) (2.10).
+### Deep-dive session 2026-06-30 — open questions resolved
+
+A focused design session with Chris closed every "Still open" item below and
+revised two earlier decisions. Chris's guiding value throughout: **the
+experience must be identical on every device ("transparent"), done cleanly but
+never gold-plated.** These resolutions are the input the real sync brief is
+written from.
+
+**A — Delete-vs-edit precedence (was open, §2.6): delete *always* wins, global.**
+A tombstone is terminal for its uuid; a racing edit to the same entity is
+discarded. Pure edit-vs-edit (no delete) still uses LWW on the content
+`updatedAt`. Rationale: deleting is a deliberate act and may be a *shame* delete
+("I'm ashamed of what I wrote") — a racing edit must never resurrect it; that
+would be a dignity failure for a companion app. The downside is bounded because
+edits are Class-2 (online-only), so the conflict window is small. A tombstone
+binds one uuid only — re-creating the entity later (new uuid) is never
+suppressed. No per-collection matrix (rejected as over-engineering).
+
+**B — Foreign-MK handling (was "export-then-import", now in-place merge).**
+Decisive finding from the code: **local Dexie data is plaintext at rest** —
+`EncryptedBlob` wraps only secrets (`corsProxy.sharedKey`, provider `apiKey`,
+MCP auth `key`); personas/chats/messages/libraries/memory are plaintext. So
+adopting a device's local data into an account needs **no foreign-ciphertext
+decryption**: read the plaintext rows, join the account, push them up under the
+account MK as their own (non-colliding) uuids via the sync engine. This *is*
+"the sum of all clients" (the union) applied at join time. Decisions:
+- **In-place merge on join** is the path. Personas/chats/libraries/memory →
+  union, duplicates accepted (two "Fable"s = two companions with separate
+  memories; the user is gently told they can tidy up). Memory duplicates are
+  more emotional than setting duplicates — name that in the UX copy.
+- **Secrets are re-sealed**, not dropped: at join the device transiently holds
+  *both* MKs (local `MK_B` unlocked + `MK_Konto` from the server), so we
+  re-encrypt the device-local secrets under the new MK. This is the *deredere*
+  choice — never make the user re-enter keys we can carry over.
+- **Detection mechanic** (was open, §4.2): the existing `getLocalAccount` guard
+  ("local data present?") is the trigger to offer the merge; MK-sameness is
+  checked *after* join by trial-decrypting one sealed secret with a DEK derived
+  from `MK_Konto` (decides only whether a re-seal is needed).
+- This is a **sync-era feature** (it needs the push path). In the proxy-only
+  interim, the foreign-MK case keeps the existing "refuse + warn" behaviour.
+- Export-then-import remains a **manual fallback**, no longer the primary path.
+
+**C — Compaction checkpoints (was open, §2.10): sync as-is, never re-derive.**
+A `CompactionCheckpointRow` is immutable once created → **Class-1 append**,
+set-union, conflict-free. Re-deriving per device would produce *different*
+summaries (different model run/choice) → the live conversation context, and
+thus the next model reply, would diverge per device — visibly, mid-chat. That
+breaks device equivalence exactly where it hurts. The summary is tiny (cheap to
+sync) and conversation-derived (privacy-critical → encrypted anyway).
+Distinction from memory-body (which *is* re-dreamed): the body is a *background*
+projection that converges invisibly; a checkpoint sits in the *live read path*.
+Detail for the brief: confirm "refresh" creates a *new* checkpoint (append) vs.
+mutates in place (rare Class-2 edit).
+
+**D — Backend→device trigger (poke upgraded from deferred to in-v1).**
+The pull (watermark `since=rev`) is the foundation and the *only* data path; the
+question is only what *triggers* it. v1 triggers: **timer + pull-on-foreground +
+push-piggyback** (a push response returns the caller's unseen changes, tightening
+the loop whenever anyone is active). **Plus a doorbell WebSocket poke**: the
+server `PUBLISH`es to a Redis channel `sync:<account_id>` on every push; the
+socket forwards **only a `rev` number — never any content** — and the client's
+sole reaction is "pull now". This keeps the WSS surface tiny (a contentless
+doorbell, small Larissa surface; even a mis-routed poke leaks nothing) and
+isolated (the pull engine works with or without the socket). The one real cost
+bought is **socket lifecycle**: reconnect/backoff, and re-auth when the short
+access token expires on a long-lived socket. Fancy real-time (presence,
+typing, streaming-over-socket) stays out.
+*Durability note:* Chris's ChatGPT data-loss horror (park-bench messages lost on
+both devices) is a *durability* bug, not a real-time one. Our **append + outbox
++ set-union** model prevents it independent of WSS: B's appends persist locally
+in the same Dexie transaction and push reliably; A's pull never clobbers them.
+WSS only changes *immediacy*.
+
+**E — Settings singleton merge rule.** The only global singleton is
+`settings` (`id: 1`); everything else is a union-able collection.
+`memoryBody`/`personaAvatars` are per-persona singletons that ride along with
+their persona (no conflict). Merge rule: **server wins, whole row, no
+field-level merge** — accepted that a merging device's authored
+`globalInstructions`/`globalAboutMe`/`displayName` are not carried over (a
+once-per-device, then-we-sync-anyway edge; field-level merge is gold-plating).
+`adultMode`/`corsProxy` never sync (device-local). An honest one-line note
+tells the user the account's settings apply.
+
+**F — Proxy onboarding (invitation pointer).** A local-only user sees the
+capabilities they're missing (extra upstreams, nano-gpt web search / Exa neural
+search — a user-reported gamechanger) with a constructive way to request access,
+not a nag ("disabled over hidden"). The path is a **configurable pointer**,
+build-time env var `VITE_INVITE_REQUEST_URL` (chatsune.me → the Second Circuit
+Discord; other operators set their own). **No vetting tooling is built** — the
+questionnaire / background-check / `#say-hello` intro is out-of-band, manual,
+operator-specific policy the software knows nothing about; codes are issued
+sparingly and deliberately. The software only (1) shows the pointer and (2)
+redeems the finished code/QR via the existing admin-issuance flow. Unset env var
+→ a neutral "this instance is invite-only — contact the operator" line, never a
+dead button.
 
 ---
 

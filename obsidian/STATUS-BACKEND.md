@@ -1,6 +1,26 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-06-30 — **Block 6 kick-off analysis landed**:
+**Last updated:** 2026-06-30 (deep-dive) — **Block 6 design decisions now
+complete.** A focused brainstorm with Chris closed every open sync question and
+revised two earlier calls; all captured in the
+`BACKEND-ANALYSIS-cors-proxy-and-sync.md` "Deep-dive session 2026-06-30" section.
+Resolutions: delete **always** wins over a racing edit (shame-delete dignity;
+tombstone terminal per uuid); foreign-MK uplevelling is an **in-place merge**
+(local Dexie is plaintext at rest → read + push up under the account MK; union
+with duplicates; secrets re-sealed in the dual-MK join window) — this
+**supersedes** the earlier export-then-import call (now a manual fallback);
+compaction checkpoints **sync as-is** (Class-1 append, never re-derived — would
+break live device equivalence); backend→device is **pull-based** (timer +
+pull-on-foreground + push-piggyback) **plus a doorbell WebSocket poke** (carries
+only a `rev`, no content; best-effort accelerator; isolated unit) — this
+**supersedes** the earlier "poke deferred" call; `settings` is the **only global
+singleton** (server-wins, whole row, no field-level merge); proxy onboarding gets
+a configurable `VITE_INVITE_REQUEST_URL` invitation pointer (no vetting tooling —
+manual, operator-specific). Durability against the ChatGPT cross-device
+data-loss scenario comes from append + outbox + set-union, not from WSS. **Next:
+write the two real briefs (proxy first, then sync) from these decisions.**
+No code written; Chris deliberately chose depth over hardening plans tonight.
+Prior entry: 2026-06-30 — **Block 6 kick-off analysis landed**:
 `BACKEND-ANALYSIS-cors-proxy-and-sync.md` (repo root) designs the two
 server-coupled workstreams — authenticated CORS proxy and zero-knowledge
 client sync — from a brainstorm with Chris. Verified ground truth
@@ -147,19 +167,27 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Doing now
 
-- **Block 6 analysis complete** — `BACKEND-ANALYSIS-cors-proxy-and-sync.md`
-  at repo root (branch `claude/backend-cors-client-sync-32323e`, PR open).
-  All open design questions settled with Chris (§5 of the doc). Feeds the
-  two real briefs to be written next.
+- **Block 6 is the active workstream (2026-06-30).** The client side is
+  feature-complete and live at `v0.1.3` (only **projects** deferred), so the
+  backend is no longer "dormant until v0.3.0" — it is what we build next.
+- **Block 6 analysis + deep-dive decisions complete** —
+  `BACKEND-ANALYSIS-cors-proxy-and-sync.md` at repo root (PR #4 merged; deep-dive
+  decisions folded into the "Deep-dive session 2026-06-30" section). **Every open
+  design question is now resolved.** Feeds the two real briefs to be written
+  next: **proxy first**, then sync.
 
 ---
 
 ## Next session
 
-1. **Write the two Block-6 briefs** from the analysis doc — proxy brief
-   first (smaller, proves the JWT resource-server integration), then the
-   sync brief (blind-indexed oplog, two write-classes, conflict
-   resolution). Likely Lyra-led; the analysis doc is the input.
+1. **Write the two Block-6 briefs** from the analysis doc (now incl. the
+   deep-dive decisions) — proxy brief first (smaller, proves the JWT
+   resource-server integration), then the sync brief (blind-indexed oplog, two
+   write-classes, delete-wins conflict resolution, in-place merge uplevelling,
+   doorbell-WSS poke). Every design question is settled; this is consolidation,
+   not fresh design. Likely Lyra-led; the analysis doc is the input. Overnight
+   remote-execution branches will be numbered **`feat/backend-NN-<slug>`** so
+   Chris merges the PRs in order.
 2. **Client-side cross-device identity** — user-client onboarding
    overhaul (three paths: QR / manual / local) targeting the new
    `/api/v1/join/{start,finish}` surface. Replaces the now-broken
@@ -177,7 +205,7 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Pointers
 
-- **Roadmap to beta (locked 2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). This backend block is **Block 6 → v0.3.0**; deliberately dormant until then.
+- **Roadmap to beta (locked 2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). This backend block is **Block 6 → v0.3.0**; **now active** — Blocks 1–5 are complete and live at `v0.1.3`.
 - Client-only / standalone-mode work: [[STATUS-CLIENT-ONLY]]
 - All open todos: [[insights/follow-ups-index]]
 - Decisions: `decisions/0001–0028`

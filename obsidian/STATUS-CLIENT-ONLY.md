@@ -1,6 +1,6 @@
 # Chatsundere Status — Client-only
 
-> **Roadmap to beta (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1–5 → v0.1.0/v0.2.0**. Block 1 (chat core) ~80% shipped; **memory** (chatsune port) is **SHIPPED to master and device-verified** — engine + UI + chatsune-import (squash `2eebfd24`) plus a dedicated **memory page** (squash `e3a19c73`). The memory→importer coupling ([[insights/future-feature-couplings]]) is closed.
+> **Roadmap to beta (2026-05-31):** [[ROADMAP]] / [ADR 0031](decisions/0031-eight-block-roadmap-to-beta.md). Client-only work is **Blocks 1–5 → v0.1.0/v0.2.0**. **As of 2026-06-30 the client side is feature-complete and live in the field at `v0.1.3`** — chat core, memory, artefacts, knowledge base, transfer, screen effects and context pre-seeding all **shipped and pushed** (no withheld deliverables). The single deliberately-deferred client feature is **projects** (post-backend). The project now stands at the **Block 5 → Block 6 boundary: the backend is the active workstream** (proxy + sync, → v0.3.0), tracked in [[STATUS-BACKEND]]. The memory→importer coupling ([[insights/future-feature-couplings]]) is closed.
 >
 > **Artefact system (Block 2):** Kern + Treasury + attachments + Save-as-artefact shipped. Decision log & remaining chunks: [[ARTEFACTS-FEATURE-STATUS]] — read before touching artefact work.
 
@@ -8,11 +8,19 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+> **Status correction (2026-06-30):** every "NOT pushed / awaiting Chris's
+> device-verify" note in the entries below is **superseded** — all of this work
+> is **device-verified, pushed, and live at `v0.1.3`**. The client side is
+> feature-complete (only **projects** deliberately deferred). The active
+> workstream is now the **backend** — see [[STATUS-BACKEND]] and
+> `BACKEND-ANALYSIS-cors-proxy-and-sync.md`. The detailed entries below are
+> retained as accurate landing history pending migration to the changelog.
+
 **Last updated:** 2026-06-30 — **NATIVE CHATSUNDERE TRANSFER (export/import)
 COMPLETE, rebased onto master on top of the deployed v0.1.2 line (chat-usability
 + model-debugger). Import now lands in the new persona **hub**
 (`routes/app/persona/hub.tsx`, post-makeover); export is wired into the hub's
-`Export persona` action. Awaiting Chris's device-verify + push.**
+`Export persona` action. Device-verified, pushed, live at `v0.1.3`.**
 The native, **create-new-only** export/import of a persona (its chats +
 **memory**) and a knowledge **library**, in Chatsundere's own `.tar.gz` format —
 deliberately separate from the Chatsune *bridge* (which stays the Tier-A
