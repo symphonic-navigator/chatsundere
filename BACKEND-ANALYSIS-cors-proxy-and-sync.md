@@ -436,7 +436,7 @@ is the honest matrix.
 | **Lost device, passphrase forgotten, has recovery key** | Recovery flow (ADR 0007) → unwrap MK via recovery AMK → sync-down | Auth **done**; needs sync engine |
 | **Lost device, passphrase AND recovery key lost** | Nothing — **by design** (ADR 0007, "no-recovery is a feature"). Server is zero-knowledge; it *cannot* help. | Correct & intended; document plainly |
 
-### 3.1 The genuine gap this surfaces: **revoking a lost device**
+### 3.1 The genuine gap this surfaces: **revoking a lost device** (Chris confirmed: solve it)
 Logging in elsewhere restores your data, but it does **not** stop the *lost*
 device from continuing to sync/decrypt, because:
 - the lost device still holds a locally-wrapped MK it can unlock with its own
@@ -444,31 +444,55 @@ device from continuing to sync/decrypt, because:
 - there is today **no "Devices / active sessions" surface** to revoke a specific
   device's refresh token or remove its passkey from another device.
 
-What we can and cannot do (be honest):
-- **Can:** revoke the lost device's **refresh token** (it already lives in
-  Postgres, hashed, with a `familyId`; logout cascade exists) → it loses *server*
-  access, so it stops pulling new data and can't push. And remove its passkey
-  credential server-side.
-- **Cannot:** remote-wipe a PWA. Data already on the lost device stays there.
-  MK never rotates, so we can't cryptographically orphan it from already-synced
-  blobs it has cached. This is an inherent local-first limitation — state it.
+**The good news: the practical, important part is solvable on infrastructure
+that already exists.** Refresh tokens already live in Postgres (hashed, with a
+`familyId`, `userAgent`, `expiresAt`) and a logout cascade is already built. So
+we can, with confidence:
+- **Revoke the lost device's refresh-token family** → within one (short)
+  access-token TTL it loses **all** server access: it cannot pull, cannot push,
+  and **cannot use the authenticated proxy** (this is the same `jti`-revocation
+  hook as §1.6). The device is out of the living system.
+- **Remove its passkey credential server-side** → it cannot re-authenticate.
 
-**Recommendation:** add a **device/session management surface** (list active
-sessions/refresh-token families with last-seen + user-agent, "sign out this
-device", gated at step-up Tier 3). This is *new* work not in any current brief
-and it's the main thing missing for a complete "lost device" story. It also
-pairs naturally with the proxy's `jti`-revocation (§1.6).
+**What we cannot do — and must say plainly (CLAUDE.md §13, no wish-driven
+promises):**
+- **No remote wipe of a PWA.** Whatever the lost device already pulled and
+  decrypted stays in its IndexedDB. Whoever holds the *unlocked* device (or knows
+  its passphrase/biometric) keeps reading the locally cached chats.
+- **MK never rotates**, so we cannot cryptographically orphan the device from
+  data it has already synced. This is an inherent local-first boundary, not a
+  convenience gap.
+
+So revocation cuts the thief off the **server**; it does not reach back into the
+device's local cache. That is the honest contract.
+
+**Two optional escalations, if we want more than server-cut-off:**
+1. **Co-operative self-wipe on next connect** (cheap, defence-in-depth): on boot
+   the client asks "am I still authorised?"; if revoked, it clears its local
+   vault. Helps *only* if the device comes back online and the client hasn't been
+   tampered with — no guarantee, but cheap insurance.
+2. **True forward security = MK rotation** (expensive, later): mint MK', re-wrap
+   under every remaining auth method, re-encrypt the vault by key-epoch → the
+   revoked device cannot read *future* data. Still does not touch data already on
+   it. A large piece of its own; flag as a conscious post-beta decision, not part
+   of v1.
+
+**Recommendation:** build the **device/session management surface** in §E (list
+active sessions with last-seen + user-agent, "sign out this device", step-up
+Tier 3). Escalation 1 is a cheap add-on; escalation 2 is explicitly deferred.
+This is *new* work not in any current brief and it's the main thing missing for a
+complete "lost device" story.
 
 ---
 
 ## 4. The open topic: "uplevelling"
 
-The term isn't in the vault, so I'm naming what I believe Chris means and
-flagging it for confirmation. **My reading: "uplevelling" = promoting an existing
-local-only (standalone) account into a server-linked, synced account — carrying
-all the data it already has up into the encrypted backend.** This is the natural
-seam now that the backend arrives *after* a whole population of local-only alpha
-users already exist.
+The term isn't in the vault, so I named what I believed Chris meant — **now
+confirmed (2026-06-30): "uplevelling" = promoting an existing local-only
+(standalone) account into a server-linked, synced account — carrying all the data
+it already has up into the encrypted backend.** This is the natural seam now that
+the backend arrives *after* a whole population of local-only alpha users already
+exist.
 
 Two cases, very different difficulty:
 
@@ -490,8 +514,8 @@ join the account → import A as fresh entities under the account MK*. New uuids
 no MK conflict, ADR 0025 keeps both. Recommend wiring uplevelling to offer
 export-first when it detects pre-existing local data under a foreign MK.
 
-### 4.3 Confirm with Chris
-- Is my reading of "uplevelling" right (local-only → linked promotion)?
+### 4.3 Still to confirm with Chris
+- Meaning **confirmed** (local-only → linked promotion, §4 above).
 - For 4.2, is "export-then-import on join" the intended graceful path, or do you
   want a deeper automatic adoption (much harder; needs dual-MK decrypt + re-seal)?
 
