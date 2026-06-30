@@ -243,10 +243,39 @@ export interface MessageRow {
    *  it needs no version bump. */
   bookmarkLabel?: string | null;
   /** 'opener' = generated greeting: shown in the UI and stored in history, but
-   *  excluded from every model context (wire, title-gen, lore scan). Absent on
-   *  normal messages. Non-indexed — no version bump needed for this field. */
-  kind?: 'opener';
+   *  excluded from every model context (wire, title-gen, lore scan). 'seed' =
+   *  a materialised context-pre-seeding turn (see SeedTemplateRow): body turns
+   *  go on the wire as real user/assistant turns, the greeting is wire-excluded
+   *  and echoed like an opener. Absent on normal messages. Non-indexed — no
+   *  version bump needed for these fields. */
+  kind?: 'opener' | 'seed';
+  /** For `kind:'seed'` messages: 'greeting' = the optional leading persona
+   *  greeting (wire-excluded, echoed to the system prompt); 'body' = an
+   *  alternating user/persona turn that goes on the wire. */
+  seedRole?: 'greeting' | 'body';
   streamingState: 'complete' | 'incomplete';
+}
+
+/** One turn of a seed-template body: strictly alternating, user-first. */
+export interface SeedTurn {
+  role: 'user' | 'persona';
+  text: string;
+}
+
+/** A saved, simulated conversation a user can prime a fresh chat with before
+ *  sending their first real message (context pre-seeding). An optional greeting
+ *  plus a strictly-alternating, user-first body. */
+export interface SeedTemplateRow {
+  id: string;
+  name: string;
+  description: string;
+  nsfw: boolean;
+  /** Optional leading persona greeting; null when the template is body-only. */
+  greeting: string | null;
+  /** Alternating user-first turns (non-indexed JSON column, like contentBlocks). */
+  body: SeedTurn[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface PillRow {
@@ -486,6 +515,7 @@ class ClientDataDb extends Dexie {
   memoryJournal!: Table<MemoryJournalRow, string>;
   memoryBody!: Table<MemoryBodyRow, string>;
   compactionCheckpoints!: Table<CompactionCheckpointRow, string>;
+  seedTemplates!: Table<SeedTemplateRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -1040,6 +1070,12 @@ class ClientDataDb extends Dexie {
           if (typeof row.screenEffectsEnabled !== 'boolean') row.screenEffectsEnabled = true;
         });
     });
+
+    // Version 32 — context pre-seeding. A new global `seedTemplates` store
+    // (saved primer conversations). New empty table → no upgrade callback. The
+    // MessageRow.kind 'seed' / seedRole additions are non-indexed JSON fields,
+    // so they need no migration.
+    this.version(32).stores({ seedTemplates: 'id, createdAt, nsfw' });
   }
 }
 

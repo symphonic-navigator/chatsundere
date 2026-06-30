@@ -3,7 +3,7 @@ import { buildPrompt, getOffering, resolveModelInstructions } from '@chatsundere
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { PersonaRow } from '../../../boot/client-data-db.js';
+import type { PersonaRow, SeedTemplateRow } from '../../../boot/client-data-db.js';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { markCompactionToastShown } from '../../../compaction/repo.js';
 import { isCompactable, shouldShowToast } from '../../../compaction/trigger.js';
@@ -18,6 +18,7 @@ import { DimOverlay } from '../../../components/chat/DimOverlay.js';
 import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { LiveVoiceBar } from '../../../components/chat/LiveVoiceBar.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
+import { SeedTemplatePicker } from '../../../components/chat/SeedTemplatePicker.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { VoiceTransport } from '../../../components/chat/VoiceTransport.js';
 import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js';
@@ -36,6 +37,7 @@ import {
 import { useBranchChat, useChat, useCreateChat, useUpdateChat } from '../../../data/chats.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { QK } from '../../../data/queryKeys.js';
+import { useFilteredSeedTemplates } from '../../../data/seed-templates.js';
 import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
 import { useDisplayName, useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
@@ -43,6 +45,7 @@ import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
+import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
@@ -97,6 +100,7 @@ export function ChatPage(): JSX.Element {
   const closeArtefact = useCurrentChatStore((s) => s.closeArtefact);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [seedPickerOpen, setSeedPickerOpen] = useState(false);
   const [documentPickerOpen, setDocumentPickerOpen] = useState(false);
   const [branchPointId, setBranchPointId] = useState<string | null>(null);
   const [showCompactConfirm, setShowCompactConfirm] = useState(false);
@@ -529,6 +533,74 @@ export function ChatPage(): JSX.Element {
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
 
+  // ---- Context pre-seeding (seed templates) ----
+  // A real user message is one the person actually sent (seed body turns carry a
+  // seedRole and do not count). Once one exists, the seed block locks.
+  const seedTemplatesQuery = useFilteredSeedTemplates();
+  const hasSeed = messages.some((m) => m.kind === 'seed');
+  const hasRealUserMessage = messages.some((m) => m.role === 'user' && !m.seedRole);
+  const seedTemplatesAvailable = (seedTemplatesQuery.data ?? []).length > 0;
+  // Whether the persona owns an auto-opener — used to keep the opener and a seed
+  // greeting mutually exclusive (they are both wire-excluded "openings").
+  const personaHasOpener = !!effectivePersona?.roleplay && !!effectivePersona?.greetingEnabled;
+
+  /** Apply a template into this chat: ensure a chat exists, replace any prior
+   *  seed block, materialise the template's rows, and — when the template carries
+   *  its own greeting — take over the persona's opening (delete any auto-opener
+   *  already streamed and inhibit a future one). */
+  const applyTemplate = async (template: SeedTemplateRow): Promise<void> => {
+    if (!effectivePersona) return;
+    setSeedPickerOpen(false);
+    const db = getClientDataDb();
+    let targetChatId = activeChatId;
+    if (!targetChatId) {
+      targetChatId = await createChat.mutateAsync({
+        personaId: effectivePersona.id,
+        draftInput: isLazy && personaIdFromQuery ? loadLazyDraft(personaIdFromQuery) : '',
+      });
+      if (isLazy && personaIdFromQuery) clearLazyDraft(personaIdFromQuery);
+    }
+    const hasGreeting = (template.greeting ?? '').trim().length > 0;
+    // Replace semantics: drop existing seed rows; a greeting template also takes
+    // over the opening, so drop any auto-opener message too (they would otherwise
+    // both show as greetings).
+    const stale = await db.messages
+      .where('chatId')
+      .equals(targetChatId)
+      .filter((m) => m.kind === 'seed' || (hasGreeting && m.kind === 'opener'))
+      .primaryKeys();
+    if (stale.length > 0) await db.messages.bulkDelete(stale);
+    await db.messages.bulkAdd(materialiseSeed(template, targetChatId));
+    // A template greeting stands in for the persona opener — inhibit it.
+    if (hasGreeting) {
+      await updateChat.mutateAsync({ id: targetChatId, patch: { openerPending: false } });
+    }
+    await qc.invalidateQueries({ queryKey: QK.chat(targetChatId) });
+    await qc.invalidateQueries({ queryKey: QK.chats });
+    if (targetChatId !== activeChatId) {
+      navigate(`/app/chat/${targetChatId}`, { replace: true });
+    }
+  };
+
+  /** Remove the whole seed block while no real message exists yet, restoring the
+   *  persona's natural opener when applying had suppressed it. */
+  const removeSeed = async (): Promise<void> => {
+    if (!activeChatId || hasRealUserMessage) return;
+    const db = getClientDataDb();
+    const seedKeys = await db.messages
+      .where('chatId')
+      .equals(activeChatId)
+      .filter((m) => m.kind === 'seed')
+      .primaryKeys();
+    if (seedKeys.length > 0) await db.messages.bulkDelete(seedKeys);
+    // Re-arm the opener for a greeting persona — the auto-opener effect re-fires
+    // once the chat is empty again (it no-ops if an opener already exists).
+    if (personaHasOpener) {
+      await updateChat.mutateAsync({ id: activeChatId, patch: { openerPending: true } });
+    }
+    await qc.invalidateQueries({ queryKey: QK.chat(activeChatId) });
+  };
+
   // Voice playback. Owns one machine actor + AudioSink for this chat view; the
   // persistent transport (rendered below) governs an in-flight read-aloud
   // independently of message expansion, scrolling, and Reading↔Interaction mode.
@@ -703,6 +775,47 @@ export function ChatPage(): JSX.Element {
           currentMessageId={voice.currentMessageId}
           monologue={monologueController}
         />
+      ) : null}
+
+      {/* Seed-template affordance — a quiet control near the composer, outside
+          the primary type-here path. Available only before the first real
+          message; once the chat has begun the remove control LOCKS with a
+          reason (rather than vanishing) so the transition is visible. The locked
+          branch is keyed on a real message (not on persona-still-resolving), so
+          an empty seeded chat never briefly reads as "locked". */}
+      {hasSeed && hasRealUserMessage ? (
+        <div className="mx-auto mt-1 flex w-full max-w-prose items-center gap-2 px-4 text-[11px] text-paper-soft">
+          <button
+            type="button"
+            disabled
+            aria-disabled
+            className="cursor-not-allowed rounded-md border border-white/5 px-2.5 py-1 opacity-50"
+          >
+            Remove primer
+          </button>
+          <span>Locked — the conversation has begun.</span>
+        </div>
+      ) : effectivePersona && !hasRealUserMessage ? (
+        <div className="mx-auto mt-1 flex w-full max-w-prose flex-wrap items-center gap-2 px-4 text-[11px] text-paper-soft">
+          {!hasSeed && seedTemplatesAvailable ? (
+            <button
+              type="button"
+              onClick={() => setSeedPickerOpen(true)}
+              className="rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1 text-paper-soft transition-colors hover:border-paper-soft/50 hover:text-paper"
+            >
+              Seed from template
+            </button>
+          ) : null}
+          {hasSeed ? (
+            <button
+              type="button"
+              onClick={() => void removeSeed()}
+              className="rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1 text-paper-soft transition-colors hover:border-paper-soft/50 hover:text-paper"
+            >
+              Remove primer
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {(() => {
@@ -895,6 +1008,12 @@ export function ChatPage(): JSX.Element {
           error={branchChat.isError ? 'Could not branch — please try again.' : undefined}
         />
       ) : null}
+
+      <SeedTemplatePicker
+        open={seedPickerOpen}
+        onClose={() => setSeedPickerOpen(false)}
+        onSelect={(t) => void applyTemplate(t)}
+      />
 
       {/*
         DimOverlay lives here, always mounted, rather than inside

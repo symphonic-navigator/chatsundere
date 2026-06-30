@@ -87,6 +87,11 @@ describe('isContextMessage', () => {
     expect(isContextMessage({ kind: 'opener' })).toBe(false);
     expect(isContextMessage({})).toBe(true);
   });
+
+  it('excludes a seed greeting but includes seed body turns', () => {
+    expect(isContextMessage({ kind: 'seed', seedRole: 'greeting' })).toBe(false);
+    expect(isContextMessage({ kind: 'seed', seedRole: 'body' })).toBe(true);
+  });
 });
 
 describe('groupAdjacent', () => {

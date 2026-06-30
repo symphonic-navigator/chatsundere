@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { MessageRow } from '../../boot/client-data-db.js';
+import { OverflowMenu } from '../ui/OverflowMenu.js';
 
 interface Props {
   message: MessageRow;
@@ -15,6 +16,9 @@ interface Props {
   onSave?: () => void;
   /** Whether the message has text to save (disabled-over-hidden otherwise). */
   canSave?: boolean;
+  /** Save the conversation up to this persona message as a seed template.
+   *  Lives in the overflow (⋯), not the flat row, to avoid crowding at 380px. */
+  onSaveAsTemplate?: () => void;
   /** Start reading this message aloud (persona messages only). */
   onReadAloud?: () => void;
   /**
@@ -109,6 +113,9 @@ export function MessageControls(p: Props): JSX.Element {
           </button>
           {readNote && p.readDisabledReason ? (
             <output className="ctrl-note">{READ_TOOLTIP[p.readDisabledReason]}</output>
+          ) : null}
+          {p.onSaveAsTemplate ? (
+            <OverflowMenu items={[{ label: 'Save as template', onSelect: p.onSaveAsTemplate }]} />
           ) : null}
         </>
       ) : null}

@@ -74,14 +74,17 @@ export interface StreamEngineResult {
 }
 
 /** The opener's plaintext for the system-prompt echo. Empty unless this is a
- *  chat job and a kind:'opener' message exists in history (it is never in the
- *  wire history, so the echo is the model's only continuity with it). */
+ *  chat job and a kind:'opener' message — or a seed greeting (kind:'seed',
+ *  seedRole:'greeting') — exists in history. Neither is ever on the wire, so
+ *  the echo is the model's only continuity with it. */
 export function resolveOpenerContext(
   priorMessages: MessageRow[],
   job: 'chat' | 'greeting',
 ): string {
   if (job !== 'chat') return '';
-  const found = priorMessages.find((m) => m.kind === 'opener');
+  const found = priorMessages.find(
+    (m) => m.kind === 'opener' || (m.kind === 'seed' && m.seedRole === 'greeting'),
+  );
   return found ? flattenAnswerText(found.contentBlocks) : '';
 }
 

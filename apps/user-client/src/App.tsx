@@ -42,6 +42,8 @@ import { SettingsVoicePage } from './routes/app/settings/voice.js';
 import { SettingsWebPage } from './routes/app/settings/web.js';
 import { SettingsYouPage } from './routes/app/settings/you.js';
 import { Treasury } from './routes/app/treasury.js';
+import { TreasuryTemplatePage } from './routes/app/treasury/template.js';
+import { TreasuryTemplatesList } from './routes/app/treasury/templates.js';
 import { UiShowcase } from './routes/app/ui-showcase.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
@@ -140,6 +142,12 @@ export function App() {
                   <Route path="/app/chat/:chatId/knowledge" element={<ChatKnowledgePage />} />
                   <Route path="/app/history" element={<HistoryPage />} />
                   <Route path="/app/treasury" element={<Treasury />} />
+                  <Route path="/app/treasury/templates" element={<TreasuryTemplatesList />} />
+                  <Route path="/app/treasury/templates/new" element={<TreasuryTemplatePage />} />
+                  <Route
+                    path="/app/treasury/templates/:templateId"
+                    element={<TreasuryTemplatePage />}
+                  />
                   <Route path="/app/knowledge" element={<KnowledgeList />} />
                   <Route path="/app/knowledge/new" element={<KnowledgeLibraryPage />} />
                   <Route path="/app/knowledge/:libraryId" element={<KnowledgeLibraryPage />} />
