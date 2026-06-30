@@ -51,6 +51,16 @@ describe('segmentBlock — paragraph mode', () => {
     expect(segs[0]?.spokenText).toBe('Hello there friend.');
   });
 
+  it('strips a known integration tag from spokenText (it is never spoken)', () => {
+    const segs = segmentBlock('We did it [sfx:emoji-shower 🎉] at last.', 0, opts);
+    expect(segs[0]?.spokenText).toBe('We did it at last.');
+  });
+
+  it('leaves an unknown integration command literal (matches the display layer)', () => {
+    const segs = segmentBlock('Try [sfx:confetti 🎉] now.', 0, opts);
+    expect(segs[0]?.spokenText).toContain('[sfx:confetti');
+  });
+
   it('strips list markers and blockquote markers', () => {
     const src = '- First item here.\n- Second item here.\n\n> A quoted line follows.';
     const segs = segmentBlock(src, 0, opts);

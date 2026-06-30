@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { stripTeal } from '@chatsundere/llm-unified';
+import { INTEGRATION_TAG_RX, getIntegration, stripTeal } from '@chatsundere/llm-unified';
 import type { ContentBlock } from '../../boot/client-data-db.js';
 import { maskCodeRegions } from '../markdown/code-mask.js';
 
@@ -238,6 +238,13 @@ function stripForSpeech(text: string, { stripSingleAsteriskEmphasis }: StripOpts
   out = maskCodeRegions(out).masked.replace(/\0CODE\d+\0/g, '');
   // 2. Defensive: drop any TEAL PUA sentinels (raw LLM text should not carry them).
   out = out.replace(TEAL_PUA, '');
+  // 2a. Integration tags (e.g. `[sfx:emoji-shower 🔥]`) are silent visual
+  // flourishes — never spoken. Strip KNOWN tags entirely so they match the
+  // display layer (which renders them as a non-spoken glow); unknown tags stay
+  // literal, exactly as the display leaves them.
+  out = out.replace(INTEGRATION_TAG_RX, (raw, prefix: string, command: string, rawArgs: string) =>
+    getIntegration(prefix)?.handle(command, rawArgs) ? '' : raw,
+  );
   // 3. Images before links (image syntax is a superset of link syntax).
   out = out.replace(/!\[[^\]]*\]\([^)]*\)/g, '');
   // 4. Links → label. Bracket spans without a following `(` (e.g. `[laugh]`) stay.

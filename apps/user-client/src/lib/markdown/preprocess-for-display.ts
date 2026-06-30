@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { preprocessIntegrations } from '../integrations/preprocess-integrations.js';
 import { preprocessTeal } from '../teal/preprocess-teal.js';
 import { preprocessMath } from './preprocess-math.js';
 
 /**
  * The single display-preprocessing chain applied to raw block text before it
- * reaches ReactMarkdown: TEAL tags first (so `[laugh]` → emoji and wrapping
+ * reaches ReactMarkdown: integration tags first (so `[sfx:…]` becomes a
+ * bracket-free glow span), then TEAL tags (so `[laugh]` → emoji and wrapping
  * tags become PUA sentinels), then math-delimiter normalisation.
  *
  * It lives in one place so the renderer ({@link MarkdownContent}) and the
@@ -15,5 +17,5 @@ import { preprocessMath } from './preprocess-math.js';
  * Pure: no I/O, no DOM, no React.
  */
 export function preprocessForDisplay(text: string): string {
-  return preprocessMath(preprocessTeal(text));
+  return preprocessMath(preprocessTeal(preprocessIntegrations(text)));
 }

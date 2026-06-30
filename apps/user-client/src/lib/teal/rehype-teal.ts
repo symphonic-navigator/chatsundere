@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Element, ElementContent, Root, Text } from 'hast';
+import { resolveDisplayGlow } from '../integrations/display.js';
 import { TEAL_MARK_END, TEAL_MARK_START } from './preprocess-teal.js';
 import { resolveTealWrap } from './teal-render-map.js';
 
@@ -45,15 +46,21 @@ function transformText(node: Text, active: string[]): ElementContent[] {
     if (slash === undefined || name === undefined) continue;
 
     const closing = slash === '/';
-    const action = resolveTealWrap(name);
-    // Unknown tag (null) or silent tag: marker simply vanishes
-    if (action === null || action.kind !== 'wrap') continue;
+    const tealAction = resolveTealWrap(name);
+    // A TEAL wrap class, or a non-TEAL display class the integration layer owns
+    // (e.g. the screen-effects glow), which reuses the same PUA-marker mechanism.
+    const className =
+      tealAction !== null && tealAction.kind === 'wrap'
+        ? tealAction.className
+        : resolveDisplayGlow(name);
+    // Unknown tag or silent tag: marker simply vanishes.
+    if (className === null) continue;
 
     if (closing) {
-      const idx = active.lastIndexOf(action.className);
+      const idx = active.lastIndexOf(className);
       if (idx >= 0) active.splice(idx, 1);
     } else {
-      active.push(action.className);
+      active.push(className);
     }
   }
   const rest = node.value.slice(last);

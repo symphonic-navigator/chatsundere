@@ -66,3 +66,38 @@ describe('transformTealStream', () => {
     expect(flat(['```\n[laugh]', ' [laugh]'])).toEqual([['```\n[laugh]|'], [' [laugh]|']]);
   });
 });
+
+describe('transformTealStream — integration tags', () => {
+  const spansOf = (chunks: string[]) =>
+    transformTealStream(chunks)
+      .flat()
+      .map((s) => ({ t: s.text, c: s.classNames }));
+
+  it('renders a complete shower tag as a glowing display span', () => {
+    const spans = spansOf(['nice [sfx:emoji-shower 🔥🦊💖] day']);
+    const glow = spans.find((s) => s.c.includes('sfx-glow'));
+    expect(glow?.t).toBe('🚿🔥🦊💖🚿');
+    expect(spans.map((s) => s.t).join('')).toBe('nice 🚿🔥🦊💖🚿 day');
+  });
+
+  it('does not flash a half-typed integration tag at the stream tip', () => {
+    const spans = spansOf(['celebrate [sfx:emoji-sho']);
+    expect(spans.map((s) => s.t).join('')).toBe('celebrate ');
+  });
+
+  it('completes a tag split across chunks', () => {
+    const spans = spansOf(['[sfx:emoji-shower 🔥', '🦊💖]']);
+    expect(spans.find((s) => s.c.includes('sfx-glow'))?.t).toBe('🚿🔥🦊💖🚿');
+  });
+
+  it('leaves a normal TEAL tag working alongside', () => {
+    const spans = spansOf(['[laugh] ok']);
+    expect(spans.map((s) => s.t).join('')).toBe('😄 ok');
+  });
+
+  it('leaves an unknown integration command literal', () => {
+    const spans = spansOf(['[sfx:confetti 🎉] hi']);
+    expect(spans.map((s) => s.t).join('')).toBe('[sfx:confetti 🎉] hi');
+    expect(spans.some((s) => s.c.includes('sfx-glow'))).toBe(false);
+  });
+});

@@ -42,6 +42,8 @@ export interface StartStreamArgs {
   reasoning: ReasoningState;
   globalInstructions: string;
   globalAboutMe: string;
+  /** Global toggle — injects the screen-effects guidance and gates the overlay. */
+  screenEffectsEnabled: boolean;
   /** Joined tool system-prompt instructions for the Band-3 tools segment. */
   toolsInstruction?: string;
   /** Band-2 phrase-triggered lore text (chat only); '' when nothing fired. */
@@ -105,6 +107,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       knowledgeLibrariesContext: args.knowledgeLibrariesContext ?? '',
       toolsInstruction: args.toolsInstruction ?? '',
       modelInstructions: resolveModelInstructions(args.offering),
+      screenEffectsEnabled: args.screenEffectsEnabled,
       roleplayEnabled: args.persona.roleplay,
       narration: args.persona.narration,
       personaName: args.persona.name,

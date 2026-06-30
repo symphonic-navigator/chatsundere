@@ -18,6 +18,7 @@ describe('title-gen prompt composition', () => {
         memoryContext: '',
         toolsInstruction: '',
         modelInstructions: '',
+        screenEffectsEnabled: false,
       },
       'title',
     );
@@ -36,6 +37,7 @@ describe('title-gen prompt composition', () => {
         memoryContext: '',
         toolsInstruction: '',
         modelInstructions: '',
+        screenEffectsEnabled: false,
       },
       'title',
     );
@@ -56,6 +58,7 @@ describe('title-gen prompt composition', () => {
         memoryContext: '',
         toolsInstruction: '',
         modelInstructions: '',
+        screenEffectsEnabled: false,
         roleplayEnabled: true,
         narration: 'third',
         personaName: 'Mira',

@@ -102,6 +102,8 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
         memoryContext: '',
         toolsInstruction: '',
         modelInstructions: resolveModelInstructions(args.offering),
+        // Title generation produces no spoken text — never inject screen-effects.
+        screenEffectsEnabled: false,
         roleplayEnabled: args.persona.roleplay,
         narration: args.persona.narration,
         personaName: args.persona.name,

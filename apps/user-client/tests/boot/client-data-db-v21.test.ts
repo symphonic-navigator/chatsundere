@@ -98,7 +98,7 @@ describe('client-data-db v21 (voice settings + voiceAudio table)', () => {
   it('opens at verno 21 on a fresh install and voiceAudio table exists', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(30);
+    expect(db.verno).toBe(31);
     // Table must exist and be queryable
     expect(await db.voiceAudio.count()).toBe(0);
   });
@@ -115,7 +115,7 @@ describe('client-data-db v21 (voice settings + voiceAudio table)', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(30);
+    expect(db.verno).toBe(31);
 
     // Settings: voiceMode must default to 'paragraph'
     const settings = await db.settings.get(1);

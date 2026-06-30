@@ -118,6 +118,7 @@ export function VoiceSection(): JSX.Element {
   const spectrumOpacity = settings?.spectrumOpacity ?? SPECTRUM_DEFAULTS.spectrumOpacity;
   const spectrumBarCount = settings?.spectrumBarCount ?? SPECTRUM_DEFAULTS.spectrumBarCount;
   const ttsHighpass = settings?.ttsHighpass ?? 'auto';
+  const screenEffectsEnabled = settings?.screenEffectsEnabled ?? true;
 
   const rows = providerRows ?? [];
 
@@ -390,6 +391,31 @@ export function VoiceSection(): JSX.Element {
             </div>
           </>
         )}
+      </div>
+
+      {/* ── Screen effects ──────────────────────────────────────────────────── */}
+      <div>
+        <div className="mb-2 text-[11px] uppercase tracking-widest text-paper-soft">
+          Screen effects
+        </div>
+        <div className="mb-3">
+          <button
+            type="button"
+            aria-pressed={screenEffectsEnabled}
+            onClick={() => update.mutate({ screenEffectsEnabled: !screenEffectsEnabled })}
+            className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+              screenEffectsEnabled
+                ? 'border-paper bg-white/5 text-paper'
+                : 'border-white/5 text-paper-soft hover:border-paper-soft/50'
+            }`}
+          >
+            Show screen effects
+          </button>
+          <p className="mt-1.5 text-[11px] text-paper-soft">
+            Brief emoji showers your Circle can sprinkle into a reply — a celebration, a flirt, a
+            punchline.
+          </p>
+        </div>
       </div>
     </div>
   );

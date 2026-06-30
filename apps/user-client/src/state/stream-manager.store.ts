@@ -139,6 +139,7 @@ export type OpenerArgs = {
   reasoning: import('../lib/reasoning-resolver.js').ReasoningState;
   globalInstructions: string;
   globalAboutMe: string;
+  screenEffectsEnabled: boolean;
 };
 
 export type RegenerateOpenerArgs = OpenerArgs & {
@@ -1167,6 +1168,7 @@ async function runOpenerStream(
     reasoning: args.reasoning,
     globalInstructions: args.globalInstructions,
     globalAboutMe: args.globalAboutMe,
+    screenEffectsEnabled: args.screenEffectsEnabled,
     job: 'greeting',
     signal: controller.signal,
     onChunk,

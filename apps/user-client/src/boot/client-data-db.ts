@@ -59,6 +59,10 @@ export interface SettingsRow {
   voiceStopHintSeen: boolean;
   /** Spectrum analyser: master on/off (behaviour-axis setting — global, persisted). */
   spectrumEnabled: boolean;
+  /** Screen effects: master on/off for inline emoji-shower flourishes the persona
+   *  may emit (behaviour-axis setting — global, persisted). Display glow always
+   *  renders; only the full-screen overlay is gated on this. */
+  screenEffectsEnabled: boolean;
   /** Spectrum analyser: bar render style. */
   spectrumStyle: 'sharp' | 'soft' | 'glow';
   /** Spectrum analyser: bar opacity, clamped [0.05, 0.80]. */
@@ -1024,6 +1028,18 @@ class ClientDataDb extends Dexie {
           if (typeof s.allowDirect !== 'boolean') s.allowDirect = s.routing === 'direct';
         });
     });
+
+    // Version 31 — screen effects. The settings singleton gains
+    // `screenEffectsEnabled` (no index change). Backfilled to `true` so existing
+    // installs default to having the flourish available.
+    this.version(31).upgrade(async (tx) => {
+      await tx
+        .table('settings')
+        .toCollection()
+        .modify((row: Record<string, unknown>) => {
+          if (typeof row.screenEffectsEnabled !== 'boolean') row.screenEffectsEnabled = true;
+        });
+    });
   }
 }
 
@@ -1149,6 +1165,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         spectrumStyle: 'soft',
         spectrumOpacity: 0.5,
         spectrumBarCount: 24,
+        screenEffectsEnabled: true,
         ttsHighpass: 'auto',
         createdAt: now,
         updatedAt: now,

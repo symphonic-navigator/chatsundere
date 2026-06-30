@@ -102,6 +102,7 @@ interface PersonaContext {
   offering: Offering;
   globalInstructions: string;
   globalAboutMe: string;
+  screenEffectsEnabled: boolean;
   webInterfacing: { search: OfferingRef | null; fetch: OfferingRef | null };
   knowledge: import('../knowledge/query-tool.js').KnowledgeContext | null;
   expertBase: ExpertBase | null;
@@ -207,6 +208,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     offering,
     globalInstructions: settings.globalInstructions,
     globalAboutMe: settings.globalAboutMe,
+    screenEffectsEnabled: settings.screenEffectsEnabled,
     webInterfacing,
     knowledge,
     expertBase: expert?.base ?? null,
@@ -502,6 +504,7 @@ export function useStartOpener() {
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
+        screenEffectsEnabled: ctx.screenEffectsEnabled,
       });
     },
     onSuccess: (_d, vars) => {
@@ -624,6 +627,7 @@ export function useSendMessage() {
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
+        screenEffectsEnabled: ctx.screenEffectsEnabled,
         webInterfacing: ctx.webInterfacing,
         knowledge: ctx.knowledge,
         loreContext: lore?.loreContext ?? '',
@@ -708,6 +712,7 @@ export function useRegenerate() {
           reasoning: args.reasoning,
           globalInstructions: ctx.globalInstructions,
           globalAboutMe: ctx.globalAboutMe,
+          screenEffectsEnabled: ctx.screenEffectsEnabled,
         });
         return;
       }
@@ -767,6 +772,7 @@ export function useRegenerate() {
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
+        screenEffectsEnabled: ctx.screenEffectsEnabled,
         webInterfacing: ctx.webInterfacing,
         knowledge: ctx.knowledge,
         loreContext: lore?.loreContext ?? '',

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { getIntegration } from '@chatsundere/llm-unified';
 import { resolveTealInline, resolveTealWrap } from './teal-render-map.js';
 
 /**
@@ -35,6 +36,14 @@ const INLINE_RX = new RegExp(`^\\[([A-Za-z][A-Za-z\\- ]{0,${MAX_TAG_CONTENT}})\\
 const WRAP_RX = /^<(\/?)([a-z-]+)>/;
 const INLINE_PARTIAL_RX = /^\[[A-Za-z\- ]*$/;
 const WRAP_PARTIAL_RX = /^<\/?[a-z-]*$/;
+// Integration tags ([prefix:command args]) carry ':' and emoji, which the TEAL
+// INLINE_RX deliberately rejects — so the two patterns never collide.
+const INTEGRATION_RX = /^\[([a-z][a-z0-9-]*):([a-z][a-z0-9-]*) ([^\]]*)\]/;
+const INTEGRATION_PARTIAL_RX = /^\[[a-z][a-z0-9-]*(:([a-z0-9-]*( [^\]]*)?)?)?$/;
+// Emoji blow past the TEAL candidate cap (38), so integration tags get a larger one.
+const MAX_INTEGRATION_CANDIDATE = 160;
+/** The display class an integration glow span carries (mirrors the finalised CSS). */
+const GLOW_CLASS = 'sfx-glow';
 
 export function transformTealStream(chunks: string[]): TealStreamSpan[][] {
   const result: TealStreamSpan[][] = [];
@@ -99,6 +108,37 @@ export function transformTealStream(chunks: string[]): TealStreamSpan[][] {
       // --- tag candidates
       if (ch === '[' || ch === '<') {
         const rest = text.slice(i);
+
+        // Integration tags ([prefix:command args]) are tried first on '['. They
+        // never collide with TEAL inline tags (which carry no ':' or emoji).
+        if (ch === '[') {
+          const im = INTEGRATION_RX.exec(rest);
+          // Over-long spans are not tags (matches the lib's findIntegrationTags
+          // guard), so the streaming and finalised paths agree.
+          if (im !== null && im[0].length <= MAX_INTEGRATION_CANDIDATE) {
+            const raw = im[0];
+            const prefix = im[1];
+            const command = im[2];
+            const rawArgs = im[3];
+            const result =
+              prefix !== undefined && command !== undefined && rawArgs !== undefined
+                ? (getIntegration(prefix)?.handle(command, rawArgs) ?? null)
+                : null;
+            if (result === null) {
+              append(raw); // unknown / no-op: leave the tag literal
+            } else {
+              // Emit the display as its own glow span; following text is unstyled.
+              active.push(GLOW_CLASS);
+              append(result.display);
+              const gi = active.lastIndexOf(GLOW_CLASS);
+              if (gi >= 0) active.splice(gi, 1);
+            }
+            i += raw.length;
+            atLineStart = false;
+            continue;
+          }
+        }
+
         const m = (ch === '[' ? INLINE_RX : WRAP_RX).exec(rest);
         if (m !== null) {
           if (ch === '[') {
@@ -125,7 +165,12 @@ export function transformTealStream(chunks: string[]): TealStreamSpan[][] {
         }
         // No complete tag — possibly incomplete at the end of this text?
         const partialRx = ch === '[' ? INLINE_PARTIAL_RX : WRAP_PARTIAL_RX;
-        if (rest.length <= MAX_CANDIDATE && partialRx.test(rest)) {
+        const isInlinePartial = rest.length <= MAX_CANDIDATE && partialRx.test(rest);
+        const isIntegrationPartial =
+          ch === '[' &&
+          rest.length <= MAX_INTEGRATION_CANDIDATE &&
+          INTEGRATION_PARTIAL_RX.test(rest);
+        if (isInlinePartial || isIntegrationPartial) {
           if (!isLast) carry = rest; // complete it with the next chunk
           // last chunk: stream tip — suppress the half-typed tag (no raw flash)
           break;

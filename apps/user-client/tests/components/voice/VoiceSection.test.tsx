@@ -282,3 +282,24 @@ describe('VoiceSection — auto-send toggle', () => {
     ).toBeTruthy();
   });
 });
+
+describe('VoiceSection — screen-effects toggle', () => {
+  it('renders a pressable screen-effects toggle', () => {
+    setup();
+    const btn = screen.getByRole('button', { name: /screen effects/i });
+    expect(btn).toHaveAttribute('aria-pressed');
+  });
+
+  it('defaults to aria-pressed true when the setting is unset', () => {
+    setup();
+    const btn = screen.getByRole('button', { name: /screen effects/i });
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('clicking when on fires update.mutate({ screenEffectsEnabled: false })', () => {
+    useSettingsMock.mockReturnValueOnce(settingsData({ screenEffectsEnabled: true }));
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /screen effects/i }));
+    expect(updateMutate).toHaveBeenCalledWith({ screenEffectsEnabled: false });
+  });
+});
