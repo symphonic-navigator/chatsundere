@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -416,5 +416,94 @@ describe('ChatPage cleanup', () => {
 
     unmount();
     expect(useCurrentChatStore.getState().chatId).toBeNull();
+  });
+});
+
+describe('ChatPage — seed templates', () => {
+  async function seedEmptyChat() {
+    const { db, personaId } = await seedPersonaWithMindspace();
+    const ms = await db.mindspaces.toArray();
+    const firstMs = ms[0];
+    if (!firstMs) throw new Error('No mindspace seeded');
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: 'Empty',
+      resolvedMindspaceId: firstMs.id,
+      createdAt: 0,
+      lastMessageAt: 0,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    return { db, personaId, chatId };
+  }
+
+  it('applies a template into an empty chat and marks the rows as Primer', async () => {
+    const { db, chatId } = await seedEmptyChat();
+    await db.seedTemplates.add({
+      id: 't1',
+      name: 'Mid-thread primer',
+      description: '',
+      nsfw: false,
+      greeting: 'Oh, you again — good.',
+      body: [
+        { role: 'user', text: 'hey' },
+        { role: 'persona', text: 'hey yourself' },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<ChatPage />, { wrapper: makeWrapper(qc, `/app/chat/${chatId}`) });
+
+    const seedBtn = await screen.findByText('Seed from template');
+    fireEvent.click(seedBtn);
+    fireEvent.click(await screen.findByText('Mid-thread primer'));
+
+    // Three seed rows (greeting + two body turns), each carrying a Primer marker.
+    await waitFor(() => expect(screen.getAllByText('Primer').length).toBe(3));
+
+    const seeds = await db.messages.where('chatId').equals(chatId).toArray();
+    expect(seeds.filter((m) => m.kind === 'seed')).toHaveLength(3);
+    // The template greeting suppresses the persona auto-opener.
+    expect((await db.chats.get(chatId))?.openerPending).toBe(false);
+  });
+
+  it('locks the remove control once a real user message exists', async () => {
+    const { db, chatId } = await seedEmptyChat();
+    await db.messages.bulkAdd([
+      {
+        id: uuidv7(),
+        chatId,
+        role: 'persona',
+        contentBlocks: [{ type: 'text', text: 'primer line' }],
+        createdAt: 1,
+        bookmarked: false,
+        kind: 'seed',
+        seedRole: 'body',
+        streamingState: 'complete',
+      },
+      {
+        id: uuidv7(),
+        chatId,
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'a real message' }],
+        createdAt: 2,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ]);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<ChatPage />, { wrapper: makeWrapper(qc, `/app/chat/${chatId}`) });
+
+    await waitFor(() =>
+      expect(screen.getByText(/locked — the conversation has begun/i)).toBeTruthy(),
+    );
+    // The never-applied "Seed from template" affordance is gone once a chat begins.
+    expect(screen.queryByText('Seed from template')).toBeNull();
   });
 });

@@ -23,11 +23,18 @@ export function flattenAnswerText(blocks: ContentBlock[]): string {
  * Whether a persisted message belongs in the model's context. Openers are
  * shown in the UI but never sent — some models refuse a conversation that
  * begins with an assistant message, and the opener is presentation, not
- * dialogue history. Single shared predicate: the wire builder, title-gen
- * and the lore companion-scan must all agree.
+ * dialogue history. A seed *greeting* is the inverse-opener equivalent: it is
+ * echoed to the system prompt, not placed on the wire. Seed *body* turns DO go
+ * on the wire as real user/persona turns. Single shared predicate: the wire
+ * builder, title-gen and the lore companion-scan must all agree.
  */
-export function isContextMessage(m: { kind?: 'opener' }): boolean {
-  return m.kind !== 'opener';
+export function isContextMessage(m: {
+  kind?: 'opener' | 'seed';
+  seedRole?: 'greeting' | 'body';
+}): boolean {
+  if (m.kind === 'opener') return false;
+  if (m.kind === 'seed' && m.seedRole === 'greeting') return false;
+  return true;
 }
 
 /**

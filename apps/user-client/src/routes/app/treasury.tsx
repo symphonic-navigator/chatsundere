@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TagEditor } from '../../components/artefact/TagEditor.js';
 import { HistorySearchBar } from '../../components/history/HistorySearchBar.js';
 import { Lightbox } from '../../components/lightbox/Lightbox.js';
@@ -25,6 +25,7 @@ import { type TreasuryType, applyTreasuryFilters, collectTags } from '../../lib/
 
 export function Treasury(): JSX.Element {
   const [search, setSearch] = useSearchParams();
+  const navigate = useNavigate();
   const { data: rows = [] } = useAllArtefacts();
   const personas = useFilteredPersonas();
   const { onHelp, helpOverlay } = useHelp('treasury');
@@ -223,6 +224,19 @@ export function Treasury(): JSX.Element {
     >
       {helpOverlay}
       <div className="flex min-h-[60dvh] flex-col gap-2 px-4 pb-24 pt-3">
+        <button
+          type="button"
+          onClick={() => navigate('/app/treasury/templates')}
+          className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.02] px-3 py-2 text-left text-sm text-paper transition-colors hover:border-paper-soft/50"
+        >
+          <span>
+            📜 Templates
+            <span className="ml-2 text-[11px] text-paper-soft">prime a fresh chat</span>
+          </span>
+          <span aria-hidden className="text-paper-soft">
+            →
+          </span>
+        </button>
         {filtered.length === 0 ? (
           <div className="mt-8 grid place-items-center text-center text-paper-soft">
             <p className="font-display text-lg italic text-paper">

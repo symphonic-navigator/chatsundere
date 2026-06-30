@@ -4,6 +4,13 @@ import { resolveOpenerContext } from '../../src/lib/stream-engine.js';
 
 const opener = (text: string): MessageRow =>
   ({ role: 'persona', kind: 'opener', contentBlocks: [{ type: 'text', text }] }) as MessageRow;
+const seedGreeting = (text: string): MessageRow =>
+  ({
+    role: 'persona',
+    kind: 'seed',
+    seedRole: 'greeting',
+    contentBlocks: [{ type: 'text', text }],
+  }) as MessageRow;
 const userMsg = (text: string): MessageRow =>
   ({ role: 'user', contentBlocks: [{ type: 'text', text }] }) as MessageRow;
 
@@ -16,5 +23,10 @@ describe('resolveOpenerContext', () => {
   });
   it('returns empty when there is no opener', () => {
     expect(resolveOpenerContext([userMsg('hi')], 'chat')).toBe('');
+  });
+  it('echoes a seed greeting like an opener', () => {
+    expect(resolveOpenerContext([seedGreeting('Oh, you again.'), userMsg('hi')], 'chat')).toBe(
+      'Oh, you again.',
+    );
   });
 });

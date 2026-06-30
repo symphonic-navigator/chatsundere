@@ -2,16 +2,19 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import { getClientDataDb } from '../../boot/client-data-db.js';
 import { useSaveCodeBlockArtefact, useSaveMessageArtefact } from '../../data/artefacts.js';
 import { renameAttachment, useMessageAttachments } from '../../data/attachments.js';
 import { QK } from '../../data/queryKeys.js';
-import { useSettings } from '../../data/settings.js';
+import { useCreateSeedTemplate } from '../../data/seed-templates.js';
+import { useAdultMode, useSettings } from '../../data/settings.js';
 import { codeSnippetTitle, messageSnippetTitle } from '../../lib/artefact-titles.js';
 import { groupAdjacent } from '../../lib/content-blocks.js';
 import { useLiveEffectSource } from '../../lib/integrations/use-live-effect-source.js';
 import { useReadAloudEffectSource } from '../../lib/integrations/use-readaloud-effect-source.js';
 import { useHighlighter } from '../../lib/markdown/highlighter.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
+import { captureTemplate } from '../../lib/seed-template.js';
 import { transformTealStream } from '../../lib/teal/teal-streaming.js';
 import { splitStreamingContent } from '../../lib/voice/committed-prefix.js';
 import {
@@ -87,6 +90,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
   // ---- Save-as-artefact mutations (called unconditionally — Rules of Hooks) ----
   const saveMessage = useSaveMessageArtefact(p.message.chatId);
   const saveCode = useSaveCodeBlockArtefact(p.message.chatId);
+  const createSeedTemplate = useCreateSeedTemplate();
+  const { mode: adultMode } = useAdultMode();
 
   // ---- Sent attachments (user messages only) ----
   const qc = useQueryClient();
@@ -350,6 +355,51 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     );
   };
 
+  // Capture the conversation up to this persona message as a seed template.
+  const handleSaveAsTemplate = async (): Promise<void> => {
+    if (!p.persona) return;
+    try {
+      const all = await getClientDataDb()
+        .messages.where('chatId')
+        .equals(p.message.chatId)
+        .sortBy('createdAt');
+      const captured = captureTemplate({
+        messages: all,
+        uptoMessageId: p.message.id,
+        sourceNsfw: p.persona.adultPersona,
+      });
+      const date = new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }).format(new Date());
+      await createSeedTemplate.mutateAsync({
+        name: `${p.persona.name} — ${date}`,
+        description: '',
+        nsfw: captured.nsfw,
+        greeting: captured.greeting,
+        body: captured.body,
+      });
+      // If the new template would be hidden by the current filter, say so rather
+      // than letting it seem to vanish (mirrors the §6 vanish-guard).
+      if (captured.nsfw && adultMode === 'sfw') {
+        toastStore.show({
+          message: 'Saved to Treasury → Templates. It is hidden while adult mode is off.',
+          tone: 'info',
+          durationMs: 5000,
+        });
+      } else {
+        toastStore.show({
+          message: 'Saved to Treasury → Templates.',
+          tone: 'success',
+          durationMs: 3000,
+        });
+      }
+    } catch {
+      toastStore.show({ message: 'Could not save template', tone: 'warn', durationMs: 2500 });
+    }
+  };
+
   const saveCtx =
     personaId === null
       ? null
@@ -380,6 +430,13 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           {namePrefix}
         </span>
         <span className="msg-name-text">{nameText}</span>
+        {p.message.kind === 'seed' ? (
+          // Positive primer marker (inline-marker aesthetic) — reads as an
+          // intentional primer, not a failed turn.
+          <span className="msg-primer-pill" title="From a seed template">
+            Primer
+          </span>
+        ) : null}
       </div>
       {p.expanded ? (
         <div className="msg-timestamp">{formatTimestamp(p.message.createdAt)}</div>
@@ -452,6 +509,9 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           branchDisabled={p.branchDisabled}
           onSave={handleSaveMessage}
           canSave={canSaveMessage}
+          onSaveAsTemplate={
+            isPersona && canSaveMessage ? () => void handleSaveAsTemplate() : undefined
+          }
           onReadAloud={p.onReadAloud}
           readDisabledReason={p.readDisabledReason}
         />

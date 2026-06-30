@@ -33,6 +33,7 @@ import settingsVoice from './settings-voice.md?raw';
 import settingsWeb from './settings-web.md?raw';
 import settingsYou from './settings-you.md?raw';
 import settings from './settings.md?raw';
+import treasuryTemplates from './treasury-templates.md?raw';
 import treasury from './treasury.md?raw';
 
 export type HelpKey =
@@ -65,6 +66,7 @@ export type HelpKey =
   | 'settings-images'
   | 'settings-expert'
   | 'treasury'
+  | 'treasury-templates'
   | 'circle'
   | 'chat-bookmarks'
   | 'chat-artefacts'
@@ -100,6 +102,7 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'settings-images': { title: 'Images — help', markdown: settingsImages },
   'settings-expert': { title: '"Ask an Expert" — help', markdown: settingsExpert },
   treasury: { title: 'My Treasury — help', markdown: treasury },
+  'treasury-templates': { title: 'Templates — help', markdown: treasuryTemplates },
   circle: { title: 'My Circle — help', markdown: circle },
   'chat-bookmarks': { title: 'Chat Bookmarks — help', markdown: chatBookmarks },
   'chat-artefacts': { title: 'Chat Artefacts — help', markdown: chatArtefacts },

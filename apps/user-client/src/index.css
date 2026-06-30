@@ -548,6 +548,20 @@ h1 {
   opacity: 0.5;
   margin-bottom: 0.25rem;
 }
+/* Primer marker — a positive inline-marker pill on a seed-template message
+   (context-pre-seeding spec §7), so it reads as an intentional primer. */
+.msg-primer-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mindspace-accent, #8c76d7) 18%, transparent);
+  color: var(--color-paper-soft, #b8b3c7);
+  align-self: center;
+}
 .msg-text {
   font-size: 0.95rem;
   line-height: 1.5;
