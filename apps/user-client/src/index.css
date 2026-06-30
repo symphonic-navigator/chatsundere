@@ -731,6 +731,64 @@ h1 {
 .msg-stream-text .teal-singing::after {
   content: " ♪";
 }
+/* Screen-effects glow — soft-glowing inline display for integration tags
+   (screen-effects spec 2026-06-29 §4.2). Shared by the finalised Markdown path
+   (.msg-text) and the live stream (.msg-stream-text), mirroring the TEAL
+   aesthetic and reusing the mindspace accent. */
+.msg-text .sfx-glow,
+.msg-stream-text .sfx-glow {
+  color: var(--mindspace-accent, #8c76d7);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--mindspace-accent, #8c76d7) 60%, transparent);
+}
+/* Screen-effects overlay (screen-effects spec 2026-06-29 §4.3). A global,
+   non-interactive layer above chat content (z ≤ 40) but below the modal/dialog
+   layer (z ≥ 50), so a shower never rains over an open modal. Each particle
+   rises with per-particle randomisation fed in via CSS custom properties. */
+.sfx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sfx-shower {
+  position: absolute;
+  inset: 0;
+}
+.sfx-particle {
+  position: absolute;
+  bottom: -10vh;
+  will-change: transform, opacity;
+  opacity: 0;
+  transform: translateY(0) translateX(0) rotate(var(--sfx-rot0, 0deg));
+  animation-name: screenEffectsRise;
+  animation-timing-function: cubic-bezier(0.25, 0.6, 0.35, 1);
+  animation-fill-mode: forwards;
+  animation-iteration-count: 1;
+}
+@keyframes screenEffectsRise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) translateX(0) rotate(var(--sfx-rot0, 0deg));
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-115vh) translateX(var(--sfx-drift, 0px)) rotate(var(--sfx-rot1, 0deg));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced-motion users get a gentler, shorter rise (the reduced profile also
+     spawns far fewer particles). */
+  .sfx-particle {
+    animation-timing-function: ease-out;
+  }
+}
 /* Image marker — the privacy-preserving tap-to-load pill that stands in for a
    model-emitted image until the user consents (see ImageMarker.tsx). Inline
    marker aesthetic, matching the inline-code pill. */

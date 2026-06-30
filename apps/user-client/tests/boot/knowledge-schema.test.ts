@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe('knowledge schema (v14)', () => {
   it('opens at version 17', () => {
-    expect(getClientDataDb().verno).toBe(30);
+    expect(getClientDataDb().verno).toBe(31);
   });
 
   it('round-trips a library and a document', async () => {

@@ -7,6 +7,7 @@ import {
   ROLEPLAY_BEHAVIOUR_PROMPT,
   TONALITY_PROMPT,
 } from './identity/chatsundere-identity.js';
+import { SCREEN_EFFECTS_PROMPT } from './integrations/index.js';
 import { TEAL_EXPRESSION_PROMPT } from './teal/teal.js';
 
 function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
@@ -20,6 +21,7 @@ function inputs(overrides: Partial<BuildPromptInputs> = {}): BuildPromptInputs {
     memoryContext: '',
     toolsInstruction: '',
     modelInstructions: '',
+    screenEffectsEnabled: false,
     ...overrides,
   };
 }
@@ -134,6 +136,7 @@ const baseInputs: BuildPromptInputs = {
   memoryContext: '',
   toolsInstruction: '',
   modelInstructions: '',
+  screenEffectsEnabled: false,
 };
 
 describe('tools segment', () => {
@@ -383,5 +386,26 @@ describe('modelInstructions segment', () => {
   it('drops the segment when the string is empty', () => {
     const out = buildPrompt(inputs({}), 'chat');
     expect(out).not.toContain('MODEL-MARK');
+  });
+});
+
+describe('screen-effects prompt segment', () => {
+  it('is injected for chat when enabled', () => {
+    const out = buildPrompt(inputs({ screenEffectsEnabled: true }), 'chat');
+    expect(out).toContain(SCREEN_EFFECTS_PROMPT);
+  });
+
+  it('is omitted when disabled (gated on the toggle)', () => {
+    const out = buildPrompt(inputs({ screenEffectsEnabled: false }), 'chat');
+    expect(out).not.toContain('emoji-shower');
+  });
+
+  it('is omitted for title and memory jobs even when enabled', () => {
+    expect(buildPrompt(inputs({ screenEffectsEnabled: true }), 'title')).not.toContain(
+      'emoji-shower',
+    );
+    expect(buildPrompt(inputs({ screenEffectsEnabled: true }), 'memory')).not.toContain(
+      'emoji-shower',
+    );
   });
 });

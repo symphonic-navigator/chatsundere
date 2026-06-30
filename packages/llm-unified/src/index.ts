@@ -91,6 +91,10 @@ export {
 // Catalogue data model (CanonicalModel, Offering, ModelProfile, validation, freedom).
 export * from './catalogue/index.js';
 
+// Integrations subsystem (tag grammar, registry, screen-effects). See the
+// screen-effects spec (2026-06-29).
+export * from './integrations/index.js';
+
 export {
   defaultConfigFor,
   isImageModelConfig,

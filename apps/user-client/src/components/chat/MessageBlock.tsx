@@ -5,8 +5,11 @@ import type { ContentBlock, MessageRow, PersonaRow, PillRow } from '../../boot/c
 import { useSaveCodeBlockArtefact, useSaveMessageArtefact } from '../../data/artefacts.js';
 import { renameAttachment, useMessageAttachments } from '../../data/attachments.js';
 import { QK } from '../../data/queryKeys.js';
+import { useSettings } from '../../data/settings.js';
 import { codeSnippetTitle, messageSnippetTitle } from '../../lib/artefact-titles.js';
 import { groupAdjacent } from '../../lib/content-blocks.js';
+import { useLiveEffectSource } from '../../lib/integrations/use-live-effect-source.js';
+import { useReadAloudEffectSource } from '../../lib/integrations/use-readaloud-effect-source.js';
 import { useHighlighter } from '../../lib/markdown/highlighter.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { transformTealStream } from '../../lib/teal/teal-streaming.js';
@@ -293,6 +296,43 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
     .map((b) => b.text)
     .join('');
   const canSaveMessage = personaId !== null && textContent.trim().length > 0;
+
+  // ---- Screen effects (screen-effects spec 2026-06-29 §4.4) ----
+  // Two trigger sources, never both for the same moment: the live stream fires
+  // as the draft grows; read-aloud replays on a finalised message. A bare
+  // re-render of a persisted message plays nothing.
+  const screenEffectsEnabled = useSettings().data?.screenEffectsEnabled ?? true;
+  useLiveEffectSource(p.isStreamingDraft === true ? textContent : null, screenEffectsEnabled);
+  // Segment char-ranges from segmentBlock are block-local; globalise them into
+  // textContent's coordinate space so a tag's index lines up with the spoken
+  // segment that contains it.
+  const effectSegments = useMemo(() => {
+    const out: { segmentId: string; charRange: readonly [number, number] }[] = [];
+    // The read-aloud source is disabled while streaming, so skip the offset work
+    // on the per-chunk hot path — it is only consumed once the draft finalises.
+    if (p.isStreamingDraft === true) return out;
+    let offset = 0;
+    renderSourceBlocks.forEach((block, index) => {
+      if (block.type !== 'text') return;
+      for (const s of blockSegments.get(index) ?? []) {
+        out.push({
+          segmentId: s.segmentId,
+          charRange: [offset + s.charRange[0], offset + s.charRange[1]],
+        });
+      }
+      offset += block.text.length;
+    });
+    return out;
+  }, [renderSourceBlocks, blockSegments, p.isStreamingDraft]);
+  useReadAloudEffectSource({
+    messageId: p.message.id,
+    rawText: textContent,
+    segments: effectSegments,
+    currentSegmentId: p.currentSegmentId ?? null,
+    currentMessageId: p.currentMessageId ?? null,
+    // The live source owns the streaming draft; read-aloud only replays finals.
+    enabled: screenEffectsEnabled && p.isStreamingDraft !== true,
+  });
 
   const confirmSaved = (title: string): void => {
     toastStore.show({ message: `Saved «${title}»`, tone: 'success', durationMs: 2500 });

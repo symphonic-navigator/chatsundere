@@ -56,7 +56,7 @@ export function Settings(): JSX.Element {
           icon={AudioLines}
           label="Voice"
           to="/app/settings/voice"
-          meta="read-aloud & dictation"
+          meta="read-aloud, dictation & FX"
         />
         <NavTile
           colour="purple"

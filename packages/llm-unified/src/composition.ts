@@ -7,6 +7,7 @@ import {
   TONALITY_PROMPT,
   roleplayFormattingPrompt,
 } from './identity/chatsundere-identity.js';
+import { SCREEN_EFFECTS_PROMPT } from './integrations/index.js';
 import { TEAL_EXPRESSION_PROMPT } from './teal/teal.js';
 
 /** The job a prompt is being built for. `chat` is the main conversation turn;
@@ -42,6 +43,8 @@ export interface BuildPromptInputs {
   /** Curated per-model steering resolved from the active offering's canonical
    *  (`resolveModelInstructions`); '' when the model carries none. */
   modelInstructions: string;
+  /** Global toggle — `screenEffectsEnabled`. Injects the screen-effects guidance. */
+  screenEffectsEnabled: boolean;
   /** Persona toggle — roleplay mode. Injects the curated roleplay blocks. */
   roleplayEnabled?: boolean;
   /** Narration perspective for the roleplay formatting block. Default 'first'. */
@@ -55,6 +58,7 @@ type SegmentId =
   | 'nsfw'
   | 'global'
   | 'teal'
+  | 'screenEffects'
   | 'modelInstructions'
   | 'roleplay'
   | 'persona'
@@ -107,6 +111,17 @@ const SEGMENTS: readonly SegmentSpec[] = [
   // roleplay segment so the roleplay → persona adjacency stays intact. Chat and
   // greeting only — title and memory produce no spoken text (D8).
   { id: 'teal', band: 1, order: 3, jobs: CHAT_AND_GREETING, resolve: () => TEAL_EXPRESSION_PROMPT },
+  // Screen-effects guidance (screen-effects spec 2026-06-29): Band-1 platform
+  // curation like TEAL, gated on the global toggle. Placed after teal and before
+  // model-instructions so the load-bearing roleplay → persona adjacency is kept.
+  // Chat + greeting — a celebratory greeting may shower too.
+  {
+    id: 'screenEffects',
+    band: 1,
+    order: 4,
+    jobs: CHAT_AND_GREETING,
+    resolve: (i) => (i.screenEffectsEnabled ? SCREEN_EFFECTS_PROMPT : ''),
+  },
   // Curated per-model steering (model-instructions spec 2026-06-12): platform
   // curation like TEAL, placed before roleplay so the empirically load-bearing
   // roleplay → persona adjacency stays intact and persona instructions can
@@ -114,7 +129,7 @@ const SEGMENTS: readonly SegmentSpec[] = [
   {
     id: 'modelInstructions',
     band: 1,
-    order: 4,
+    order: 5,
     jobs: CHAT_AND_GREETING,
     resolve: (i) => i.modelInstructions,
   },
@@ -124,7 +139,7 @@ const SEGMENTS: readonly SegmentSpec[] = [
   {
     id: 'roleplay',
     band: 1,
-    order: 5,
+    order: 6,
     jobs: ALL_JOBS,
     resolve: (i) =>
       i.roleplayEnabled
@@ -135,7 +150,7 @@ const SEGMENTS: readonly SegmentSpec[] = [
           ].join('\n\n')
         : '',
   },
-  { id: 'persona', band: 1, order: 6, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
+  { id: 'persona', band: 1, order: 7, jobs: ALL_JOBS, resolve: (i) => i.personaInstructions },
   { id: 'aboutMe', band: 2, order: 0, jobs: CHAT_AND_GREETING, resolve: (i) => i.aboutMe },
   { id: 'project', band: 2, order: 1, jobs: CHAT_ONLY, resolve: (i) => i.projectInstructions },
   { id: 'memories', band: 2, order: 2, jobs: CHAT_ONLY, resolve: (i) => i.memoryContext },

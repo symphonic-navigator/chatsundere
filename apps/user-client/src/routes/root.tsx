@@ -11,6 +11,7 @@ import { PersonaAvatar } from '../components/PersonaAvatar.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
 import { Toast } from '../components/Toast.js';
+import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
 import { useCurrentChatStore } from '../state/current-chat.store.js';
@@ -217,6 +218,7 @@ export function Root() {
           <NavTransitionOutlet />
         </main>
         <SplashOverlay />
+        <ScreenEffectsOverlay />
         <Toast />
       </div>
     </SplashContext.Provider>

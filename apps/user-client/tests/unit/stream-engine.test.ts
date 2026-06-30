@@ -74,6 +74,7 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
     reasoning: { kind: 'on' },
     globalInstructions: '',
     globalAboutMe: '',
+    screenEffectsEnabled: false,
     signal: new AbortController().signal,
     onChunk: vi.fn(),
     ...overrides,

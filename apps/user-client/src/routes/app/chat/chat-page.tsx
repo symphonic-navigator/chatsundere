@@ -394,6 +394,8 @@ export function ChatPage(): JSX.Element {
         memoryContext: '',
         toolsInstruction: '',
         modelInstructions: resolveModelInstructions(offering),
+        // Mirror the real send so the context gauge counts the same prompt.
+        screenEffectsEnabled: settingsQuery.data.screenEffectsEnabled ?? true,
       },
       'chat',
     );
