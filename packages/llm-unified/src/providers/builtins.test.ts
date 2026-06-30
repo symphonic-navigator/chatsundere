@@ -139,6 +139,10 @@ describe('built-in providers', () => {
       expect(llm.every((o) => o.confidence === 'verified')).toBe(true);
       expect(llm.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
       expect(llm.every((o) => o.profile.reasoning.mode === 'fixed-on')).toBe(true);
+      // ZDR is scoped to GLM 5.2 only (deployment-level, US/EU hosting); the
+      // other ollama models carry no such statement.
+      expect(llm.find((o) => o.upstreamSlug === 'glm-5.2:cloud')?.trust.zdr).toBe(true);
+      expect(llm.filter((o) => o.trust.zdr).map((o) => o.upstreamSlug)).toEqual(['glm-5.2:cloud']);
 
       const web = p.offerings.filter((o) => o.serviceKind === 'web');
       expect(web.map((o) => o.upstreamSlug).sort()).toEqual([

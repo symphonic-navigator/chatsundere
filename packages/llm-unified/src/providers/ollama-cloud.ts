@@ -24,6 +24,10 @@ interface OllamaSpec {
   // Optional hard ceiling distinct from the recommended window. Defaults to
   // `ctx` (recommended === max).
   maxCtx?: number;
+  // Zero data retention. A deployment-level property — ollama enforces it
+  // server-side with no per-request flag, so this only drives the trust badge.
+  // Defaults to false; set true only where ollama states ZDR for that model.
+  zdr?: boolean;
 }
 
 function ollamaOffering(spec: OllamaSpec): Offering {
@@ -39,7 +43,7 @@ function ollamaOffering(spec: OllamaSpec): Offering {
       replayReasoning: false,
     },
     context: { recommended: spec.ctx, max: spec.maxCtx ?? spec.ctx },
-    trust: { tee: false, zdr: false },
+    trust: { tee: false, zdr: spec.zdr ?? false },
     freedomOrientedDeployment: null,
     source: 'curated',
     confidence: 'verified',
@@ -63,6 +67,11 @@ const SPECS: OllamaSpec[] = [
   // think:false still streams reasoning (leaks into content) → fixed-on, as for
   // GLM 5.1. /api/show reports a 1,000,000 ceiling; recommended capped at 200k.
   // Live-probed 2026-06-17.
+  // ZDR: ollama states GLM 5.2 is hosted in the US and Europe "with zero data
+  // retention. Your data is never trained on." It is enforced server-side with
+  // no per-request flag, so the badge is purely a deployment property (cf. the
+  // chutes TEE flag). Scoped to GLM 5.2 only — ollama makes no such statement
+  // for GLM 5.1 or DeepSeek V4 Pro, so they stay zdr:false. (Chris, 2026-06-30.)
   {
     canonicalRef: 'glm-5.2',
     slug: 'glm-5.2:cloud',
@@ -70,6 +79,7 @@ const SPECS: OllamaSpec[] = [
     vision: false,
     ctx: 200_000,
     maxCtx: 1_000_000,
+    zdr: true,
   },
   {
     canonicalRef: 'deepseek-v4-pro',
