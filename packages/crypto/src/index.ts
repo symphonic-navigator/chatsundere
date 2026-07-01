@@ -183,3 +183,14 @@ export type { DeleteServerAccountArgs } from './flows/server-account-delete.js';
 export { addPasskeyPostLink } from './flows/add-passkey-post-link.js';
 export type { AddPasskeyPostLinkArgs } from './flows/add-passkey-post-link.js';
 export type { ServerClient } from './server-client.js';
+export {
+  computeBlindId,
+  decodeRow,
+  encodeRow,
+  padPlaintext,
+  unpadPlaintext,
+  PADDED_COLLECTIONS,
+  openRecord,
+  sealRecord,
+} from './sync-envelope/index.js';
+export type { SealedRecord } from './sync-envelope/index.js';
