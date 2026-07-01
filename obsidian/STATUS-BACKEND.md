@@ -1,7 +1,38 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-06-30 (deep-dive) — **Block 6 design decisions now
-complete.** A focused brainstorm with Chris closed every open sync question and
+**Last updated:** 2026-07-01 — **Proxy workstream (Block 6A) fully specced,
+planned, and hardened for overnight remote execution.** A session with Chris
+resolved the last proxy details and settled the deployment strategy. Four
+refinements over the analysis: **token-only** (the shared-key mode is dropped —
+the old `tidesson.net` relay is retired in a **coordinated cut**, not a soft
+overlap); the **two-Bearer header rule** (`x-chatsundere-authorization` carries
+the account token, `Authorization` the forwarded upstream key); a **single
+transparent egress policy** (no LLM allow-list — a private-range SSRF block +
+per-user/IP rate limits are the whole boundary; method-agnostic forward with a
+tested header deny-list); and **backend self-description** via a new public
+`GET /api/v1/config` (self-hosting first-class — the client learns the proxy URL,
+never hard-codes it). The spec passed **two adversarial reviews — Larissa
+(security) and Fable (protocol/functional)** — both folded in (redirect-follow
+SSRF bypass, `X-Forwarded-For` rate-limit bypass, NAT64/6to4 range gaps, the
+wrong skeleton `JWT_ISSUER`, the `/metrics` namespace collision → a second ops
+port, `Location` dropped by the response filter, MCP GET/DELETE + reconnect
+headers; **Bun pinned-IP connect empirically verified**). Artefacts on `master`:
+spec `superpowers/specs/2026-07-01-authenticated-cors-proxy-design.md`, plan
+`superpowers/plans/2026-07-01-authenticated-cors-proxy.md` (15 TDD tasks + the
+overnight Operating-Rules contract). Branch for the remote run:
+**`feat/backend-01-cors-proxy`**. **Deployment strategy settled:** the whole
+backend goes live for the first time (auth+proxy+sync+postgres+redis were never
+deployed) as **v0.2.0, not v0.3.0** (so much landed in 0.1.x that the
+intermediate is dropped — **needs an ADR amendment to 0031 / CLAUDE.md §12**);
+Chris pre-stages the stack (`docker compose ps` green) before going live;
+coordinated cut of the old proxy with a **constructive in-client message** (the
+*dere* way), old container stopped-not-deleted for a 60 s rollback; the existing
+~10 alpha users uplevel their local (plaintext-at-rest) data **in-place**. The
+proxy **client-side** (header swap, discovery consumption, `CorsProxyBlock`
+collapse, onboarding, the constructive cut message) is a **separate Laura-gated
+client session**, not the overnight run. **Next: the sync spec** (the big,
+zero-knowledge-critical one) in a fresh context window. Prior entry: 2026-06-30
+(deep-dive) — **Block 6 design decisions now complete.** A focused brainstorm with Chris closed every open sync question and
 revised two earlier calls; all captured in the
 `BACKEND-ANALYSIS-cors-proxy-and-sync.md` "Deep-dive session 2026-06-30" section.
 Resolutions: delete **always** wins over a racing edit (shame-delete dignity;
@@ -167,27 +198,37 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Doing now
 
-- **Block 6 is the active workstream (2026-06-30).** The client side is
-  feature-complete and live at `v0.1.3` (only **projects** deferred), so the
-  backend is no longer "dormant until v0.3.0" — it is what we build next.
-- **Block 6 analysis + deep-dive decisions complete** —
-  `BACKEND-ANALYSIS-cors-proxy-and-sync.md` at repo root (PR #4 merged; deep-dive
-  decisions folded into the "Deep-dive session 2026-06-30" section). **Every open
-  design question is now resolved.** Feeds the two real briefs to be written
-  next: **proxy first**, then sync.
+- **Block 6 is the active workstream.** The client side is feature-complete and
+  live at `v0.1.3`; the whole backend ships live for the first time as **v0.2.0**.
+- **Block 6A — proxy: DONE (specced + planned + hardened for overnight).** Spec +
+  plan on `master`; remote run goes on `feat/backend-01-cors-proxy`. Larissa
+  re-audits the built diff **after** the run, before merge.
+- **Block 6B — sync: NEXT (fresh context window).** The big zero-knowledge piece;
+  all design decisions settled in `BACKEND-ANALYSIS-cors-proxy-and-sync.md`
+  (analysis + deep-dive). This is consolidation into a spec, not fresh design.
 
 ---
 
 ## Next session
 
-1. **Write the two Block-6 briefs** from the analysis doc (now incl. the
-   deep-dive decisions) — proxy brief first (smaller, proves the JWT
-   resource-server integration), then the sync brief (blind-indexed oplog, two
-   write-classes, delete-wins conflict resolution, in-place merge uplevelling,
-   doorbell-WSS poke). Every design question is settled; this is consolidation,
-   not fresh design. Likely Lyra-led; the analysis doc is the input. Overnight
-   remote-execution branches will be numbered **`feat/backend-NN-<slug>`** so
-   Chris merges the PRs in order.
+1. **Sync spec (Block 6B)** — the immediate next step, in a fresh context window
+   ("gleich drüben"). Consolidate the settled decisions from
+   `BACKEND-ANALYSIS-cors-proxy-and-sync.md` (blind-indexed per-account oplog,
+   two write-classes, delete-wins conflict resolution, in-place-merge
+   uplevelling, doorbell-WSS poke, size-padding personas+memory only) into a
+   spec → Larissa spec-pass (zero-knowledge-critical) → plan → overnight
+   hardening, on branch **`feat/backend-02-sync`**. This is consolidation, not
+   fresh design.
+2. **Full-build spec + two docs** — the whole backend deployed for the first
+   time (auth+proxy+sync+postgres+redis; Traefik/Watchtower/healthcheck/metrics;
+   dry-run-first), plus (a) a **deploy guide for Chris** built on his existing
+   VPS compose, and (b) a **Discord announcement** ("Chatsundere has a backend").
+3. **ADR amendment** — record the v0.3.0 → **v0.2.0** roadmap revision against
+   ADR 0031 / CLAUDE.md §12 (Chris's call; not a silent drift).
+4. **Proxy client-side session** (Laura-gated, device-verified) — header swap in
+   `transport.ts`/`mcp-client.ts`, `GET /api/v1/config` consumption,
+   `CorsProxyBlock` collapse, onboarding overhaul, the constructive old-proxy-cut
+   message. Bundles with the cross-device-identity onboarding already briefed.
 2. **Client-side cross-device identity** — user-client onboarding
    overhaul (three paths: QR / manual / local) targeting the new
    `/api/v1/join/{start,finish}` surface. Replaces the now-broken
