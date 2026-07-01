@@ -10,6 +10,96 @@
 
 **Design spec:** `superpowers/specs/2026-07-01-authenticated-cors-proxy-design.md` (read it first; `[L]` = Larissa finding, `[F]` = Fable finding).
 
+---
+
+## Operating rules for the overnight worker (READ FIRST)
+
+You are executing this plan in a session that has **none** of this repo's
+context. These rules are binding and override your defaults. Read them fully
+before touching a file.
+
+1. **Language — British English everywhere in the repo.** Code, comments,
+   identifiers, log strings, error messages, commit messages, docs. Use
+   `colour`, `behaviour`, `initialise`, `authorise`. **Never** write German or
+   US spelling into the repo. (The repo has drifted on this before; it is a
+   hard rule.)
+
+2. **Branch.** Do all work on **`feat/backend-01-cors-proxy`** (create it from
+   `master`). **Never switch the branch of the main working tree**; if you use
+   worktrees, keep the main tree on `master`.
+
+3. **TDD per task, no exceptions.** For every task: write the failing test →
+   run it and confirm it **fails for the stated reason** → write the minimal
+   implementation → run and confirm it **passes** → commit. Never write
+   implementation before its test.
+
+4. **Execution discipline — subagent-driven.** Use
+   `superpowers:subagent-driven-development`: one fresh subagent per task, with a
+   two-stage review (spec-conformance + code-quality) between tasks. **Subagents
+   never merge, push, or switch branches** — say so in every subagent prompt.
+
+5. **Commit granularity.** Commit per task (the plan's TDD steps). **Do NOT
+   squash** — leave the branch as its per-task commits; the human squashes at
+   integration. Commit message style: imperative, capitalised subject, no
+   Conventional-Commits prefix. **These are code commits — no `[skip ci]`.**
+
+6. **Co-author tag** on every commit, exactly:
+   `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
+
+7. **Exact commands** (monorepo uses pnpm + Turbo + Bun's test runner):
+   - Proxy tests (mostly hermetic): `cd apps/proxy-service && bun test`
+   - Proxy typecheck: `pnpm --filter @chatsundere/proxy-service typecheck`
+   - Auth tests: `cd apps/auth-service && bun test` — **needs a Postgres test DB
+     via `TEST_DATABASE_URL`** (+ Redis). See the auth-service `env.ts` and
+     `tests/integration/full-lifecycle.test.ts` for the setup.
+   - Auth typecheck: `pnpm --filter @chatsundere/auth-service typecheck`
+   - Repo-wide gate: `pnpm typecheck` (= `turbo run typecheck`) **and**
+     `pnpm build` (= `turbo run build`). **Run both** — they diverge subtly, and
+     `pnpm build` is the real build-verification gate, not `tsc` alone.
+
+8. **Known-green baseline — confirm on `master` before you start.**
+   - `apps/proxy-service`: **3 pass / 0 fail** (the health tests; verified
+     2026-07-01). Task 13 legitimately replaces the public-port `/metrics`
+     health test — that is expected, not a regression.
+   - `apps/auth-service`: there are **known pre-existing failures in
+     `tests/integration/full-lifecycle.test.ts`** (≈9 at the last integration).
+     Run the auth suite on `master` first and **record the exact number**; your
+     job is to **not increase it**. Do not chase these pre-existing failures and
+     do not paper over a new one.
+
+9. **Full verification at the end — not just the dirs you touched.** Per-task-dir
+   runs have missed regressions in this repo. The final task runs the **full**
+   proxy + auth suites, `pnpm typecheck`, and `pnpm build`, and reports every
+   number against the baseline.
+
+10. **Security gate — this IS a Larissa path** (`apps/proxy-service/**` +
+    `apps/auth-service/**`). **You do NOT run the security audit** — that is done
+    by Liz on the built diff after your run, before merge. Your obligation:
+    treat the security-critical tests as **non-negotiable** — the account-token
+    header invariant (Task 8), the SSRF `test.each` cases (Task 2), the
+    metric-anonymity + no-URL-in-logs invariant (Tasks 9/11), the pinned-IP
+    mechanism (Tasks 4/12). **If a security test fails, fix the code, never the
+    test.**
+
+11. **If the remote environment has no Postgres/Redis test DB:** the proxy suite
+    is still fully runnable (its tests use a fake Redis, injected JWKS keys, and
+    only the `target.ts` DNS tests need network). For **Task 14** (auth-service),
+    if you cannot run the full auth suite, still run `pnpm --filter
+    @chatsundere/auth-service typecheck` + `pnpm build` + the hermetic config
+    test, and **state clearly in your report** that the full auth suite was not
+    run so Liz verifies it at integration.
+
+12. **Do NOT touch the STATUS files** (`obsidian/STATUS-*.md`). Session-lifecycle
+    updates happen at integration, done by Liz — not by you.
+
+13. **Hand-off — do NOT push and do NOT merge.** Stop at the final task. Report
+    back: (a) every suite + typecheck + build number with the baseline noted,
+    (b) the list of commits on `feat/backend-01-cors-proxy`, (c) anything you
+    could not verify (e.g. the auth suite per rule 11). The human device-tests
+    and integrates.
+
+---
+
 ## Global Constraints
 
 - **British English** in all code, comments, log strings, commit messages (CLAUDE.md §3.7).
