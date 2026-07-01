@@ -591,8 +591,11 @@ deny-list:
   carries **TTL = `ACCESS_TTL`** — after 15 minutes all affected tokens have
   expired anyway (suspended users cannot refresh; the middleware already
   refuses them), so the deny-list is self-cleaning and never grows.
-- **sync-service checks** after signature verification: `EXISTS` on both keys
-  → `401`. Redis outage → `503` fail closed (already the house rule). The
+- **sync-service checks** after signature verification: a `jti` hit → `401`
+  unconditionally; a `sub` entry stores the **revocation timestamp** and
+  refuses only tokens with `iat` **before** it — so a user who logs out
+  everywhere and immediately logs back in is not locked out by their own
+  deny entry. Redis outage → `503` fail closed (already the house rule). The
   doorbell inherits the check at ticket mint.
 - **Deployment requirement:** auth-service and sync-service must share the
   Redis instance/database for the deny-list keys to be visible (§14).
