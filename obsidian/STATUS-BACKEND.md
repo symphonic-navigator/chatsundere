@@ -1,7 +1,45 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-01 — **Proxy workstream (Block 6A) fully specced,
-planned, and hardened for overnight remote execution.** A session with Chris
+**Last updated:** 2026-07-02 — **Sync workstream (Block 6B) fully specced,
+planned, and hardened for overnight remote execution.** Built in one session
+with Chris from the settled deep-dive decisions: spec
+`superpowers/specs/2026-07-01-client-sync-design.md` (v2), plan
+`superpowers/plans/2026-07-01-client-sync.md` (18 TDD tasks + a probe task
+with decision matrices + the overnight Operating-Rules contract). The spec
+passed a **dual Fable-class adversarial review — Larissa (security: 1
+Critical, 4 Medium, 4 Low) and a protocol/functional lens (3 Critical, 11
+Important)** — all findings folded, tagged `[L]`/`[P]`. Headline outcomes:
+the server is honestly framed as a **rev-watermarked state store** (not an
+oplog); an explicit **§6.2 integrity/availability trust boundary**
+(malicious-server withholding/rollback/destruction undefended in v1, said
+plainly); the tombstone destruction primitive bounded three ways
+(**`jti`/`sub` revocation deny-list pulled into v1** — Chris's call, iat-aware
+`sub` entries; per-account delete-rate ceiling; client-side 30-day trash for
+*pulled* tombstones — local shame-delete stays immediate); a **binary-aware
+envelope codec** (bare JSON silently corrupts `EncryptedBlob`/`Uint8Array`
+fields); a **store `instance_epoch`** against silent restore divergence;
+`seedTemplates` added to allowlist + padding set (schema is at Dexie **v32**,
+engine bump will be **v33**); a per-field **`chats` disposition table**
+(`draftInput` demoted to device-local — Chris revised the 2026-06-30
+inventory); per-collection conflict-resolution keys (LWW needs engine-stamped
+`updatedAt` on chats/messages/mindspaces; journal = state precedence; vectors
+= stamp-based adoption, **kept in v1** per Chris — battery over bytes);
+ceiling arithmetic fixed (2 MiB record cap, pull byte budget, batch-by-bytes);
+doorbell hardened (single-use tickets, ping vs Bun's 120 s idleTimeout,
+post-commit publish, token-TTL socket lifetime). **Scope seam:** overnight =
+sync-service + `packages/crypto` envelope + shared-types + auth-service
+deny-list writes + `/config` `syncUrl`; the **client engine** (Dexie v33,
+outbox, worker, gating) is a later Liz-inline + Laura session — its contract
+is spec §12. **Blobs (artefacts/attachments/personaAvatars) deferred to an S3
+blob-transport follow-up spec.** Branch for the remote run:
+**`feat/backend-02-sync`** — **sequenced strictly after the proxy run merges**
+(it extends `GET /api/v1/config` and adapts proxy-service in-tree files;
+kickoff prompt STOP-guard checks `routes/config.ts` exists). Larissa
+re-audits the built diff before squash. **Next: S3/MinIO blob-transport spec
++ deployment documentation (deployment = docs for Chris AND for third-party
+operators — AGPLv3, deredere towards operators too), planned with Chris in the
+next session.** Prior entry: 2026-07-01 — **Proxy workstream (Block 6A) fully
+specced, planned, and hardened for overnight remote execution.** A session with Chris
 resolved the last proxy details and settled the deployment strategy. Four
 refinements over the analysis: **token-only** (the shared-key mode is dropped —
 the old `tidesson.net` relay is retired in a **coordinated cut**, not a soft
@@ -203,22 +241,24 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 - **Block 6A — proxy: DONE (specced + planned + hardened for overnight).** Spec +
   plan on `master`; remote run goes on `feat/backend-01-cors-proxy`. Larissa
   re-audits the built diff **after** the run, before merge.
-- **Block 6B — sync: NEXT (fresh context window).** The big zero-knowledge piece;
-  all design decisions settled in `BACKEND-ANALYSIS-cors-proxy-and-sync.md`
-  (analysis + deep-dive). This is consolidation into a spec, not fresh design.
+- **Block 6B — sync: DONE (specced + planned + hardened for overnight,
+  2026-07-02).** Spec v2 (dual Fable review folded) + plan (18 tasks) on
+  `master`; remote run goes on `feat/backend-02-sync`, **strictly after the
+  proxy run has merged**. Larissa re-audits the built diff before squash.
+- **Block 6C — blobs (S3/MinIO) + deployment docs: NEXT.** Blob transport is
+  records-first-deferred (spec §16); deployment documentation is for Chris and
+  for third-party operators alike (AGPLv3, deredere towards operators).
 
 ---
 
 ## Next session
 
-1. **Sync spec (Block 6B)** — the immediate next step, in a fresh context window
-   ("gleich drüben"). Consolidate the settled decisions from
-   `BACKEND-ANALYSIS-cors-proxy-and-sync.md` (blind-indexed per-account oplog,
-   two write-classes, delete-wins conflict resolution, in-place-merge
-   uplevelling, doorbell-WSS poke, size-padding personas+memory only) into a
-   spec → Larissa spec-pass (zero-knowledge-critical) → plan → overnight
-   hardening, on branch **`feat/backend-02-sync`**. This is consolidation, not
-   fresh design.
+1. **Blob transport (S3/MinIO) spec + deployment documentation (Block 6C)** —
+   planned with Chris. Blob transport brings `personaAvatars`, `artefacts`,
+   `attachments` (and the binary codec's `Blob` path) into sync per spec §16.
+   Deployment docs serve two audiences: Chris's own VPS rollout AND
+   third-party operators (AGPLv3 — deredere towards operators, not only their
+   users). Feeds `obsidian/DEPLOYMENT.md`.
 2. **Full-build spec + two docs** — the whole backend deployed for the first
    time (auth+proxy+sync+postgres+redis; Traefik/Watchtower/healthcheck/metrics;
    dry-run-first), plus (a) a **deploy guide for Chris** built on his existing

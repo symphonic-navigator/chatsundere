@@ -91,7 +91,12 @@ before touching a file.
    - `packages/crypto`: record the vitest count on your base.
    - `apps/auth-service`: known pre-existing failures in
      `tests/integration/full-lifecycle.test.ts` (≈9). Record the exact number;
-     your job is to **not increase it**.
+     your job is to **not increase it**. Do not chase these pre-existing
+     failures and do not paper over a new one.
+   **Full verification at the end — not just the dirs you touched.**
+   Per-task-dir runs have missed regressions in this repo before; Task 18 runs
+   every full suite plus `pnpm typecheck` plus `pnpm build` and reports every
+   number against this baseline. It is not optional and not skippable.
 
 10. **Task 1 (probes) gates everything.** Run the probes first and record the
     results in `apps/sync-service/PROBES.md` (committed). Three probes have
@@ -1096,7 +1101,9 @@ ciphertext.)
   with `{ error: 'bad_since' }`; byte-budget page break (`more: true`);
   tombstones on the wire without crypto fields; auth + revocation as in push;
   account isolation (account B's token never sees account A's records).
-- [ ] **Step 2–4:** implement, PASS, typecheck.
+- [ ] **Step 2: Run** `cd apps/sync-service && bun test tests/pull.test.ts` — FAIL (route missing).
+- [ ] **Step 3: Implement** the pull half of `routes/changes.ts`.
+- [ ] **Step 4: Run** the test — PASS; `pnpm --filter @chatsundere/sync-service typecheck`.
 - [ ] **Step 5: Commit** `Add the sync pull route with paging and byte budget`
 
 ---
@@ -1131,7 +1138,9 @@ ciphertext.)
   account is refused; a socket whose `tokenExp` is 2 s away closes itself
   within ~3 s; ping frames observed at the configured interval (drop the
   interval to 100 ms in test).
-- [ ] **Step 2–4:** implement, PASS, typecheck.
+- [ ] **Step 2: Run** `cd apps/sync-service && bun test tests/doorbell.test.ts` — FAIL.
+- [ ] **Step 3: Implement** `routes/doorbell.ts`, `doorbell/hub.ts`, and the `index.ts` upgrade wrapper (the Probe-A pattern).
+- [ ] **Step 4: Run** the test — PASS; `pnpm --filter @chatsundere/sync-service typecheck`.
 - [ ] **Step 5: Commit** `Add the doorbell WebSocket with single-use tickets and Redis pub/sub`
 
 ---
@@ -1161,7 +1170,9 @@ ciphertext.)
     no log line and no metric output contains the test's `accountId`, `jti`,
     or any `blindId` base64url; the string `collection="` does not occur in
     the metrics output.
-- [ ] **Step 2–4:** implement, PASS, typecheck.
+- [ ] **Step 2: Run** `cd apps/sync-service && bun test tests/ops.test.ts tests/anonymity.test.ts` — FAIL.
+- [ ] **Step 3: Implement** `cors.ts`, `error.ts`, `ops.ts`, the metrics set, the `readyz` checks, and the two-server `index.ts` wiring.
+- [ ] **Step 4: Run** the tests — PASS; `pnpm --filter @chatsundere/sync-service typecheck`.
 - [ ] **Step 5: Commit** `Wire sync-service CORS, ops split, metrics, and anonymity invariants`
 
 ---
@@ -1215,7 +1226,9 @@ ciphertext.)
   unset → neither key present; malformed (`http://`, relative) → env-load
   throws. Both-unset topology still serves a valid (possibly feature-empty)
   config.
-- [ ] **Step 2–4:** implement, PASS; full auth suite unchanged; typecheck.
+- [ ] **Step 2: Run** `cd apps/auth-service && bun test tests/config.test.ts` (or the file the proxy task created) — new cases FAIL.
+- [ ] **Step 3: Implement** the env + route changes; update `.env.example`.
+- [ ] **Step 4: Run** the **full** auth suite — new cases PASS, pre-existing failure count unchanged; `pnpm --filter @chatsundere/auth-service typecheck`.
 - [ ] **Step 5: Commit** `Extend backend discovery with syncUrl and the sync feature flag`
 
 ---
@@ -1243,7 +1256,9 @@ envelope runs under Bun (Probe G's durable form on the Bun side).
   CLI's exported functions, push as device 1 (JWT A), pull as device 2 (JWT B,
   same `sub`), open the pulled blob → row equals input; then delete from
   device 2 and confirm device 1's edit push returns `tombstoned`.
-- [ ] **Step 2–4:** implement, PASS, typecheck.
+- [ ] **Step 2: Run** `cd apps/sync-service && bun test tests/e2e.test.ts` — FAIL.
+- [ ] **Step 3: Implement** `tools/seal-cli.ts` (export the command functions; the CLI entry parses argv).
+- [ ] **Step 4: Run** the test — PASS; `pnpm --filter @chatsundere/sync-service typecheck`.
 - [ ] **Step 5: Commit** `Add the seal CLI and the end-to-end sync round-trip test`
 
 ---
