@@ -567,3 +567,44 @@ Full audit: Larissa run on the MCP client feature branch before squash, spec `su
 - **Severity:** low-medium (matching the parent Mistral entry — same data class, weaker jurisdiction/ZDR posture on the new targets, mitigated by the conscious opt-in below).
 - **Safe by construction / disclosure:** This is a **conscious opt-in pick** — Mistral (EU) stays the curated STT auto-default per Chris's decision; xAI is never auto-resolved ahead of it. The egress is disclosed **at the decision point**: the Speech-to-text picker entries carry "Sends microphone audio to xAI (US)" / "Sends microphone audio via nano-gpt to xAI (US)" / "Sends microphone audio to Mistral AI (EU)". **No audio persistence** — identical lifecycle to the Mistral STT egress: blobs live in machine context for at most one Retry cycle and die with the session; nothing touches Dexie or any cache. On the nano-gpt path, webm blobs are declared `audio/x-matroska` (the endpoint rejects `audio/webm`) — the **audio bytes are unchanged** by the spoof, only the declared type and filename; no content transformation happens on the egress path.
 - **Follow-up commitment:** none blocking for the local-only alpha. Same triggers as the parent entry: (1) xAI ZDR negotiation; (2) proxy-service (Phase 2) routing; (3) any future feature persisting or replaying dictation audio gets its own entry — the no-persistence posture stays load-bearing.
+
+## 2026-07-02 — Block 6C blob transport — deferred Larissa findings
+
+Full audit at [[2026-07-02-larissa-audit-6c-built-diff]] (built diff, PR #7,
+`8acf1021^1..8acf1021`). Critical: none. High: none. The Mediums (L6C-M1
+re-epoch restart, L6C-M2 divergent-racer false 201, L6C-M3 stale MinIO pin)
+and the cheap Lows (L6C-L1 dead `S3_FORCE_PATH_STYLE` knob, L6C-L2 507
+payload, L6C-L6 a–c test gaps) were fixed on `fix/blob-audit-6c` before
+squash. The items below were consciously deferred.
+
+### L6C-L3 — Short-body PUT likely misclassifies as 503 against real S3
+
+- **Affected paths:** `apps/sync-service/src/routes/blobs.ts`, `apps/sync-service/src/blobs/s3.ts`
+- **Finding (Larissa's summary):** A body that closes short of the declared `Content-Length` is detected only after `putStream` resolves; the live client signs `content-length: declared`, so real MinIO will likely reset the request, `fetch` rejects with a non-`UploadValidationError`, and the route answers `503 blob_backend_unavailable` (+ backend-error metric) for a client lie that should be a `400`. Flagged PLAUSIBLE — the in-memory fake cannot reproduce it.
+- **Severity:** low (Larissa's classification; conservative failure direction — a retriable 503 and an over-counted backend-error metric, no data loss and no false success).
+- **Rationale for deferral:** The finding cannot be confirmed or refuted without a live MinIO; the build host has neither Docker nor a MinIO binary. Fixing blind would mean guessing at the error shape the real backend produces — exactly the docs-over-probes failure mode the house rules forbid.
+- **Follow-up commitment:** Added as **Probe L6C-L3** to the owed probe list in `apps/sync-service/probes/README-blobs.md`; runs in the VPS dry-run S3 probe family. If confirmed, split stream-side errors from transport errors in the PUT catch. Before v0.3.0 (encrypted backend live).
+
+### L6C-L4 — Bootstrap/liveness treat any HTTP status < 500 as success; gauge never updated after boot
+
+- **Affected paths:** `apps/sync-service/src/blobs/s3.ts`, `apps/sync-service/src/index.ts`
+- **Finding (Larissa's summary):** `bootstrapBucket` treats a 403 (wrong credentials) as "bootstrap complete" and sets `sync_blob_backend_up` to 1; `healthy()` likewise accepts 403 and is currently unwired dead code — the gauge is never refreshed after boot, so misconfigured credentials surface only as opaque 503s on the first user PUT.
+- **Severity:** low (Larissa's classification; observability/operator-experience gap, not an exposure — no request succeeds with wrong credentials).
+- **Rationale for deferral:** On the compose-internal reference topology, wrong credentials are a first-boot operator error that the VPS dry-run will hit immediately and loudly on the first probe PUT. The correct fix (401/403 as a loud constructive bootstrap error + a periodic gauge refresh wiring `healthy()`) touches the same `s3.ts` error-handling seam as the L6C-L3 outcome and should land as one coherent change, not two half-passes.
+- **Follow-up commitment:** Fix together with the L6C-L3 resolution after the VPS dry-run probes: treat 401/403 at bootstrap as a loud constructive error (credentials wrong, retry pointless) and wire `healthy()` to a periodic `sync_blob_backend_up` refresh. Before v0.3.0.
+
+### L6C-L5 — S3 error strings can embed the object key
+
+- **Affected paths:** `apps/sync-service/src/blobs/s3.ts`
+- **Finding (Larissa's summary):** The thrown error message interpolates up to 200 chars of the S3 error body; MinIO error XML routinely includes `<Key>accountId/blobId</Key>`. Today every consumer swallows these errors silently (verified in the audit: route catches, `fail()`/DELETE `.catch(() => {})`, static `onSyncError`), so there is no live leak — but the anonymity invariant is held by omission, not construction, and the §18 anonymity scan covers only the bootstrap path.
+- **Severity:** low (Larissa's classification; no reachable leak today — one future log line away from one).
+- **Rationale for deferral:** Zero live exposure, and the fix (whitelist status + S3 `Code` element into the message, extend the anonymity scan to a failing object leg) belongs in the same `s3.ts` error-shape pass as L6C-L3/L4 — the error taxonomy should be redesigned once, against empirical MinIO error bodies from the dry-run, not twice.
+- **Follow-up commitment:** In the L6C-L3/L4 follow-up change: strip the interpolated body to status + S3 `Code`, and extend the §18 anonymity scan to a failing object-leg error. Before v0.3.0.
+
+### L6C-L6(d) — Stalled-body idle-timeout watchdog untested
+
+- **Affected paths:** `apps/sync-service/src/routes/blobs.ts` (`instrumentUpload`), `apps/sync-service/tests/blob-routes.test.ts`
+- **Finding (Larissa's summary):** The §8 idle watchdog (abort a PUT whose body stalls past `BLOB_UPLOAD_IDLE_TIMEOUT_S`) has no test; the other §18 gaps (a–c) were closed in this fix round, this leg was not.
+- **Severity:** low (Larissa's classification; missing coverage on a defensive timer, not a functional defect).
+- **Rationale for deferral:** A meaningful test needs a genuinely stalled producer against a live server socket; in the in-process fake harness the options are timer-mocking that tests the mock, or real multi-second sleeps that make the suite flaky — the brittle-retry-test lesson applies. The watchdog path is short and was reviewed line-by-line in the audit.
+- **Follow-up commitment:** Exercise on the VPS dry-run alongside the L6C-L3 probe (a rate-limited `curl --limit-rate` upload that stalls mid-body must be aborted and answered per spec). If that probe motivates a code change (see the audit's 503-vs-400 note), add the structural test with it. Before v0.3.0.

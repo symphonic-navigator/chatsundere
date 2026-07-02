@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, it } from 'bun:test';
-import { computeBlindId } from '../../src/sync-envelope/blind-index.js';
 import { toBase64Url } from '../../src/encoding/base64url.js';
+import { computeBlindId } from '../../src/sync-envelope/blind-index.js';
 import { PADDED_COLLECTIONS, openRecord, sealRecord } from '../../src/sync-envelope/seal.js';
 import { asMasterKey } from '../../src/types.js';
 
@@ -22,11 +22,16 @@ describe('sealRecord / openRecord', () => {
   });
 
   it('round-trips a providers row with a nested EncryptedBlob Uint8Array field', async () => {
-    const row = { id: 'pr1', apiKey: { ciphertext: new Uint8Array([9, 8, 7]), nonce: new Uint8Array(12) } };
+    const row = {
+      id: 'pr1',
+      apiKey: { ciphertext: new Uint8Array([9, 8, 7]), nonce: new Uint8Array(12) },
+    };
     const opened = (await openRecord(
       mk,
       'providers',
-      (await sealRecord(mk, 'providers', row.id, row)).blindId,
+      (
+        await sealRecord(mk, 'providers', row.id, row)
+      ).blindId,
       await sealRecord(mk, 'providers', row.id, row),
       byId,
     )) as typeof row;
@@ -35,7 +40,12 @@ describe('sealRecord / openRecord', () => {
   });
 
   it('round-trips a vectors row with the composite key d1#0', async () => {
-    const row = { id: 'd1#0', codes: new Uint8Array(64), scales: new Uint8Array(8), tags: ['lib1'] };
+    const row = {
+      id: 'd1#0',
+      codes: new Uint8Array(64),
+      scales: new Uint8Array(8),
+      tags: ['lib1'],
+    };
     const sealed = await sealRecord(mk, 'vectors', row.id, row);
     expect(await openRecord(mk, 'vectors', sealed.blindId, sealed, byId)).toEqual(row);
   });
@@ -88,7 +98,12 @@ describe('sealRecord / openRecord', () => {
     const persona = await sealRecord(mk, 'personas', 'p1', { id: 'p1', adultPersona: true });
     const seed = await sealRecord(mk, 'seedTemplates', 's1', { id: 's1', nsfw: true });
     for (const s of [persona, seed]) {
-      const wire = ['personas', toBase64Url(s.blindId), toBase64Url(s.nonce), toBase64Url(s.ciphertextHash)].join('|');
+      const wire = [
+        'personas',
+        toBase64Url(s.blindId),
+        toBase64Url(s.nonce),
+        toBase64Url(s.ciphertextHash),
+      ].join('|');
       expect(wire).not.toContain('adultPersona');
       expect(wire).not.toContain('nsfw');
       expect(wire).not.toContain('true');

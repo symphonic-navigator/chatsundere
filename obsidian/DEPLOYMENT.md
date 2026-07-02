@@ -180,10 +180,14 @@ the variables documented here.
 | `S3_BUCKET` | `chatsundere-blobs` | no | created at boot if absent |
 | `S3_ACCESS_KEY_ID` | scoped key | **yes** | pino-redacted; NOT the MinIO root user |
 | `S3_SECRET_ACCESS_KEY` | scoped secret | **yes** | pino-redacted |
-| `S3_FORCE_PATH_STYLE` | `true` | no | `true` for MinIO; `false` for AWS vhost style |
 
 Setting `S3_ENDPOINT` **requires** both `S3_ACCESS_KEY_ID` and
 `S3_SECRET_ACCESS_KEY` — the service refuses to boot otherwise, by design.
+
+The S3 client uses **path-style addressing only** (`<endpoint>/<bucket>/<key>`)
+— MinIO, Garage, and Hetzner Object Storage all speak it. Endpoints that
+require virtual-host-style addressing are not supported; there is no
+configuration knob pretending otherwise.
 
 ### 4.3 proxy-service
 
@@ -277,6 +281,17 @@ object is ever logged.
 **Upgrades.** Pull the new tag-gated image and recreate; `:latest` only moves on a
 `v*.*.*` release tag, so scope any Watchtower to conscious releases.
 
+**Keep MinIO current — a conscious duty, not a Watchtower job.** MinIO stopped
+publishing community container images in October 2025; the compose example pins
+the newest published image (`RELEASE.2025-09-07T16-13-09Z`), and later security
+fixes — including the CVE-2025-62506 session-policy fix in
+`RELEASE.2025-10-15T17-29-55Z` — exist **only as source releases**. The exposure
+is bounded here (exploiting it needs valid S3 credentials; the store is
+internal-network-only with a single scoped-key client), but review the pin at
+every release cut: build MinIO from source, use a maintained third-party build
+you trust, or move to a maintained S3-compatible store (e.g. Garage) — a
+deliberate decision, never drift.
+
 **Backups & restore.** Postgres **and** the MinIO bucket are the backup pair —
 take them close together. Skew self-heals (a client re-uploads a blob the server
 lost, idempotently, under deterministic sealing), but avoid it where you can.
@@ -285,10 +300,24 @@ Redis is safe to lose (rate-limit counters and the deny-list rebuild).
 > **Restore runbook — flip the epoch.** The sync `instance_epoch` lives *inside*
 > the Postgres backup (`sync_meta`), so a plain `pg_restore` reinstates the **old**
 > epoch and **no client recovery fires** — exactly the silent divergence the epoch
-> exists to prevent. After restoring, do one of:
-> - run `DATABASE_URL=… bun tools/re-epoch.ts --yes` in the sync-service (mints a
->   fresh epoch, invalidating every client watermark → clean re-sync), **or**
-> - exclude `sync_meta` from the dump so a fresh epoch is minted on next boot.
+> exists to prevent. After restoring:
+>
+> 1. Restore the Postgres backup (and the MinIO bucket, taken close to it).
+> 2. Run `DATABASE_URL=… bun tools/re-epoch.ts --yes` in the sync-service — mints
+>    a fresh epoch, invalidating every client watermark → clean re-sync.
+> 3. **Restart the sync-service — mandatory.** The service reads `instance_epoch`
+>    **once at boot** and serves that cached value; skip the restart and the
+>    database holds the new epoch while the service keeps echoing the old one —
+>    the silent divergence persists indefinitely. (The tool prints this reminder
+>    on success.)
+>
+> The alternative — excluding `sync_meta` data from the dump — does **not** mint
+> a fresh epoch by itself: the Drizzle migration journal is inside the backup
+> too, so the epoch-seeding migration does not re-run, and the sync-service
+> **refuses to boot** on an empty `sync_meta` (a loud, constructive failure, not
+> a bug). Run `re-epoch` (it handles the empty table) and start the service —
+> the boot itself then reads the fresh epoch, so no separate restart is needed
+> in that path.
 
 Honest caveats: backup **retention is deletion latency** — a blob you deleted
 persists in bucket backups until they rotate. And a restore can **resurrect blobs

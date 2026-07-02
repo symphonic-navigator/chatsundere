@@ -7,7 +7,10 @@ import type { Env } from '../src/env.js';
 async function fixture() {
   const { publicKey, privateKey } = await generateKeyPair('EdDSA');
   const jwk = { ...(await exportJWK(publicKey)), kid: 'test', alg: 'EdDSA', use: 'sig' };
-  const env = { JWT_ISSUER: 'chatsundere-auth-v1', AUTH_JWKS_URL: 'https://unused' } as unknown as Env;
+  const env = {
+    JWT_ISSUER: 'chatsundere-auth-v1',
+    AUTH_JWKS_URL: 'https://unused',
+  } as unknown as Env;
   const verify = createTokenVerifier(env, async () => ({ keys: [jwk] }));
   const sign = (claims: Record<string, unknown>, exp = '5m') =>
     new SignJWT(claims)
@@ -32,7 +35,10 @@ describe('verifyToken', () => {
     const { verify, privateKey } = await fixture();
     const bad = await new SignJWT({ sub: 'x' })
       .setProtectedHeader({ alg: 'EdDSA', kid: 'test' })
-      .setIssuer('someone-else').setJti('j').setIssuedAt().setExpirationTime('5m')
+      .setIssuer('someone-else')
+      .setJti('j')
+      .setIssuedAt()
+      .setExpirationTime('5m')
       .sign(privateKey);
     expect(await verify(bad)).toBeNull();
   });
@@ -49,7 +55,10 @@ describe('verifyToken', () => {
     const { privateKey } = await generateKeyPair('RS256');
     const rs = await new SignJWT({ sub: 'x' })
       .setProtectedHeader({ alg: 'RS256', kid: 'test' })
-      .setIssuer('chatsundere-auth-v1').setJti('j').setIssuedAt().setExpirationTime('5m')
+      .setIssuer('chatsundere-auth-v1')
+      .setJti('j')
+      .setIssuedAt()
+      .setExpirationTime('5m')
       .sign(privateKey);
     expect(await verify(rs)).toBeNull();
   });

@@ -32,7 +32,8 @@ export function createTokenVerifier(
 
   return async (token: string) => {
     try {
-      const keySet = jwks ?? createLocalJWKSet(await (keySetLoader as () => Promise<JSONWebKeySet>)());
+      const keySet =
+        jwks ?? createLocalJWKSet(await (keySetLoader as () => Promise<JSONWebKeySet>)());
       const { payload } = await jwtVerify(token, keySet, {
         issuer: env.JWT_ISSUER,
         algorithms: ['EdDSA'],

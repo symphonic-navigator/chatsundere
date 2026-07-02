@@ -8,7 +8,6 @@ import { writeAudit } from '../audit/log.js';
 import { denySub, nowSeconds } from '../auth/deny-list.js';
 import { createDb } from '../db/client.js';
 import { authMethods, pendingCodes, users } from '../db/schema.js';
-import { createRedis } from '../redis/client.js';
 import type { AccessClaims } from '../jwt/verify.js';
 import { bearerAuth, invalidateUserExistsCache } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error-envelope.js';
@@ -19,6 +18,7 @@ import {
   getServerSetup,
   storeOpaqueState,
 } from '../opaque/server.js';
+import { createRedis } from '../redis/client.js';
 
 const USERNAME_RE = /^[a-z][a-z0-9_-]{2,31}$/;
 const RESERVED = new Set(['admin', 'root', 'system', 'me', 'you']);

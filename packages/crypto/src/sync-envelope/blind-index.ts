@@ -33,6 +33,8 @@ export async function computeBlindId(
     false,
     ['sign'],
   );
-  const mac = new Uint8Array(await globalThis.crypto.subtle.sign('HMAC', hmacKey, input as BufferSource));
+  const mac = new Uint8Array(
+    await globalThis.crypto.subtle.sign('HMAC', hmacKey, input as BufferSource),
+  );
   return mac.slice(0, BLIND_ID_BYTES);
 }

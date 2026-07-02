@@ -62,7 +62,13 @@ services:
     # STRICTLY internal: on the `chatsundere` network only — NEITHER the S3 API
     # port (9000) NOR the web console (9001) is published to the host or Traefik
     # (blob spec §17 ch.10). The sync-service reaches it at http://minio:9000.
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    # Pin honesty: this is the NEWEST published community image — MinIO stopped
+    # publishing container images in October 2025, and the CVE-2025-62506
+    # session-policy fix (RELEASE.2025-10-15T17-29-55Z) is source-only. The
+    # exposure needs valid S3 credentials and this store is internal-only with
+    # a single scoped-key client; review the pin at every release cut
+    # (DEPLOYMENT.md ch. 7 "keep MinIO current").
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: always
     command: ['server', '/data']
     environment:

@@ -23,7 +23,12 @@ describe('limiter', () => {
   });
 
   test('fails closed on Redis error', async () => {
-    const broken = { incr: async () => { throw new Error('down'); }, expire: async () => 1 };
+    const broken = {
+      incr: async () => {
+        throw new Error('down');
+      },
+      expire: async () => 1,
+    };
     expect(await createLimiter(broken)('user:u', 100, 60)).toBe(false);
   });
 

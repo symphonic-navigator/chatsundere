@@ -145,10 +145,7 @@
       "compositePrimaryKeys": {
         "sync_records_account_id_blind_id_pk": {
           "name": "sync_records_account_id_blind_id_pk",
-          "columns": [
-            "account_id",
-            "blind_id"
-          ]
+          "columns": ["account_id", "blind_id"]
         }
       },
       "uniqueConstraints": {},

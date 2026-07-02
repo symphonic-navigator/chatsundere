@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Hono } from 'hono';
-import { initialiseMetrics } from './metrics.js';
 import { onProxyError } from './error.js';
+import { initialiseMetrics } from './metrics.js';
 import { type ProxyDeps, registerProxyRoute } from './routes/proxy.js';
 
 /**

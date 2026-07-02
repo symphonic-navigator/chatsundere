@@ -22,7 +22,12 @@ export function registerDoorbellRoute(app: Hono, deps: SyncDeps): void {
     if (!auth.ok) return auth.response;
     const ticket = toBase64Url(getRandomBytes(32));
     const data: TicketData = { accountId: auth.claims.sub, tokenExp: auth.claims.exp };
-    await deps.redis.set(ticketKey(ticket), JSON.stringify(data), 'EX', deps.env.DOORBELL_TICKET_TTL_S);
+    await deps.redis.set(
+      ticketKey(ticket),
+      JSON.stringify(data),
+      'EX',
+      deps.env.DOORBELL_TICKET_TTL_S,
+    );
     return c.json({ ticket });
   });
 }

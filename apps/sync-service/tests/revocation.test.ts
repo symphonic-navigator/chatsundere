@@ -29,7 +29,11 @@ describe('isRevoked', () => {
     expect(await isRevoked(fakeRedis({}), claims)).toBe(false);
   });
   test('a Redis error propagates (route maps to 503)', async () => {
-    const broken = { mget: async () => { throw new Error('down'); } };
+    const broken = {
+      mget: async () => {
+        throw new Error('down');
+      },
+    };
     await expect(isRevoked(broken, claims)).rejects.toThrow();
   });
 });

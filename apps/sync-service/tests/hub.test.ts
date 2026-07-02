@@ -64,7 +64,10 @@ describe('doorbell hub', () => {
     const b = fakeSocket('acc-B', 9_999_999_999);
     hub.add(a.ws);
     hub.add(b.ws);
-    (redis as unknown as { emitMessage: (c: string, m: string) => void }).emitMessage('sync:acc-A', '{"rev":7}');
+    (redis as unknown as { emitMessage: (c: string, m: string) => void }).emitMessage(
+      'sync:acc-A',
+      '{"rev":7}',
+    );
     expect(a.sent).toEqual(['{"rev":7}']);
     expect(b.sent).toEqual([]);
   });
@@ -92,8 +95,12 @@ describe('doorbell hub', () => {
 
   test('pings live sockets and closes expired ones on each tick', async () => {
     const { redis } = fakeSubscriber();
-    let clock = 1_000_000;
-    const hub = createDoorbellHub(redis, { maxSocketsPerAccount: 8, pingIntervalMs: 20, now: () => clock });
+    const clock = 1_000_000;
+    const hub = createDoorbellHub(redis, {
+      maxSocketsPerAccount: 8,
+      pingIntervalMs: 20,
+      now: () => clock,
+    });
     stopFns.push(() => hub.stop());
     const live = fakeSocket('acc', 2000); // tokenExp 2000 s → far future in ms terms below
     const expired = fakeSocket('acc', 999); // tokenExp*1000 = 999000 < clock

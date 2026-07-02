@@ -7,7 +7,10 @@ import type { Env } from '../src/env.js';
 async function fixture() {
   const { publicKey, privateKey } = await generateKeyPair('EdDSA');
   const jwk = { ...(await exportJWK(publicKey)), kid: 'test', alg: 'EdDSA', use: 'sig' };
-  const env = { JWT_ISSUER: 'chatsundere-auth-v1', AUTH_JWKS_URL: 'https://unused' } as unknown as Env;
+  const env = {
+    JWT_ISSUER: 'chatsundere-auth-v1',
+    AUTH_JWKS_URL: 'https://unused',
+  } as unknown as Env;
   // Verifier accepts an injected key set for testing (see impl note).
   const verify = createTokenVerifier(env, async () => ({ keys: [jwk] }));
   const sign = (claims: Record<string, unknown>, exp = '5m') =>
@@ -30,7 +33,9 @@ describe('verifyToken', () => {
     const { verify } = await fixture();
     const bad = await new SignJWT({ sub: 'x' })
       .setProtectedHeader({ alg: 'EdDSA', kid: 'test' })
-      .setIssuer('someone-else').setIssuedAt().setExpirationTime('5m')
+      .setIssuer('someone-else')
+      .setIssuedAt()
+      .setExpirationTime('5m')
       .sign((await generateKeyPair('EdDSA')).privateKey);
     await expect(verify(bad)).rejects.toThrow();
   });

@@ -23,6 +23,13 @@ async function main(): Promise<void> {
   await sql.end();
   // eslint-disable-next-line no-console
   console.log(`instance_epoch: ${old ?? '(none)'} → ${next}`);
+  // eslint-disable-next-line no-console
+  console.log(
+    'Mandatory next step: RESTART the sync-service. It reads instance_epoch once at\n' +
+      'boot and serves that cached value — until restarted it keeps echoing the old\n' +
+      'epoch, so no client recovery fires and the divergence this tool exists to\n' +
+      'prevent persists.',
+  );
 }
 
 if (import.meta.main) await main();

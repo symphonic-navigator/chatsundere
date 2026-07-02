@@ -7,7 +7,9 @@ describe('onProxyError', () => {
   test('never leaks the target URL from a fetch error message', async () => {
     const app = new Hono();
     app.onError(onProxyError);
-    app.get('/x', () => { throw new Error('fetch failed https://mcp.secret-host.example/path'); });
+    app.get('/x', () => {
+      throw new Error('fetch failed https://mcp.secret-host.example/path');
+    });
     const res = await app.request('/x');
     const body = await res.text();
     expect(res.status).toBe(502);
