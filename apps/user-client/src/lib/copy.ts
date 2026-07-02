@@ -264,6 +264,25 @@ export const copy = {
       'That address doesn’t look like a Chatsundere server. Check it with whoever invited you.',
     checking: 'Checking…',
   },
+  addDevice: {
+    heading: 'Add a device',
+    body: 'Create a pairing code, then choose “Add this device” on your other device and scan or type it.',
+    createCta: 'Add a device',
+    creating: 'Creating…',
+    shownOnce:
+      'You won’t see this code again — the server keeps only a fingerprint. Your other device needs it now.',
+    codeLabel: 'Or type this code',
+    expiresPrefix: 'Expires',
+    doneCta: 'Done',
+    standingNote:
+      'Codes are shown once, when created. Lost one? Add a device to create a fresh one.',
+    listHeading: 'Active codes',
+    emptyList: 'No active codes. Add a device to create one.',
+    createdPrefix: 'Created',
+    revokeCta: 'Revoke',
+    listError: 'Couldn’t load your active codes. They reappear when your server does.',
+    createError: 'Couldn’t create a code right now. Try again in a moment.',
+  },
   serverLinking: {
     checking: 'Checking…',
     statusLabel: 'Status',

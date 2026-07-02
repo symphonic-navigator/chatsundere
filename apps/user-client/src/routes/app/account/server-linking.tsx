@@ -10,6 +10,7 @@ import { Button } from '../../../components/ui/Button.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { copy } from '../../../lib/copy.js';
+import { AddDeviceSection } from './add-device-section.js';
 
 const ROLE_LABELS: Record<'primary_admin' | 'admin' | 'user', string> = {
   primary_admin: copy.serverLinking.rolePrimaryAdmin,
@@ -120,6 +121,8 @@ export function ServerLinkingPage(): JSX.Element {
                 </div>
               )}
             </dl>
+
+            <AddDeviceSection baseUrl={baseUrl} />
           </>
         )}
       </div>
