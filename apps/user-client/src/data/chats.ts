@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ChatRow, type ContentBlock, getClientDataDb } from '../boot/client-data-db.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 
 /** List all chat rows ordered by most-recently-active first. */
@@ -62,19 +64,25 @@ export function useCreateChat() {
       if (!resolvedMindspaceId) throw new Error('useCreateChat: no mindspace to snapshot');
       const id = uuidv7();
       const now = Date.now();
-      await db.chats.add({
-        id,
-        personaId: args.personaId,
-        title: null,
-        resolvedMindspaceId,
-        createdAt: now,
-        updatedAt: now,
-        lastMessageAt: now,
-        bookmarkedMessageCount: 0,
-        draftInput: args.draftInput ?? '',
-        libraryIds: [],
-        ...(args.openerPending ? { openerPending: true } : {}),
+      const linked = isLinkedForSync();
+      // Class-1 creation-insert: the chat row and its outbox row are atomic.
+      await db.transaction('rw', [db.chats, db.syncOutbox], async (tx) => {
+        await db.chats.add({
+          id,
+          personaId: args.personaId,
+          title: null,
+          resolvedMindspaceId,
+          createdAt: now,
+          updatedAt: now,
+          lastMessageAt: now,
+          bookmarkedMessageCount: 0,
+          draftInput: args.draftInput ?? '',
+          libraryIds: [],
+          ...(args.openerPending ? { openerPending: true } : {}),
+        });
+        if (linked) enqueueSync(tx, 'chats', id, 'upsert');
       });
+      if (linked) scheduleClass1Sync();
       return id;
     },
     onSuccess: () => {
@@ -214,8 +222,9 @@ export function useBranchChat() {
       const db = getClientDataDb();
       const newChatId = uuidv7();
       const now = Date.now();
+      const linked = isLinkedForSync();
 
-      await db.transaction('rw', db.chats, db.messages, db.pills, async () => {
+      await db.transaction('rw', [db.chats, db.messages, db.pills, db.syncOutbox], async (tx) => {
         const source = await db.chats.get(args.sourceChatId);
         if (!source) throw new Error(`useBranchChat: source chat ${args.sourceChatId} not found`);
 
@@ -249,13 +258,17 @@ export function useBranchChat() {
           draftInput: '',
           libraryIds: [...source.libraryIds],
         });
+        // Class-1 creation-inserts: the branch mints fresh uuids across chat,
+        // messages and pills; each is enqueued atomically inside this transaction.
+        if (linked) enqueueSync(tx, 'chats', newChatId, 'upsert');
 
         for (const m of copied) {
+          const newMessageId = msgIdMap.get(m.id) ?? uuidv7();
           const blocks = (structuredClone(m.contentBlocks) as ContentBlock[]).map((b) =>
             b.type === 'pill' ? { ...b, pillId: pillIdMap.get(b.pillId) ?? b.pillId } : b,
           );
           await db.messages.add({
-            id: msgIdMap.get(m.id) ?? uuidv7(),
+            id: newMessageId,
             chatId: newChatId,
             role: m.role,
             contentBlocks: blocks,
@@ -266,11 +279,13 @@ export function useBranchChat() {
             kind: m.kind,
             streamingState: m.streamingState,
           });
+          if (linked) enqueueSync(tx, 'messages', newMessageId, 'upsert');
         }
 
         for (const pl of pills) {
+          const newPillId = pillIdMap.get(pl.id) ?? uuidv7();
           await db.pills.add({
-            id: pillIdMap.get(pl.id) ?? uuidv7(),
+            id: newPillId,
             messageId: msgIdMap.get(pl.messageId) ?? pl.messageId,
             kind: pl.kind,
             positionHint: pl.positionHint,
@@ -278,9 +293,11 @@ export function useBranchChat() {
             payload: structuredClone(pl.payload),
             createdAt: pl.createdAt,
           });
+          if (linked) enqueueSync(tx, 'pills', newPillId, 'upsert');
         }
       });
 
+      if (linked) scheduleClass1Sync();
       return newChatId;
     },
     onSuccess: () => {

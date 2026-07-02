@@ -10,6 +10,8 @@ import {
 } from '../boot/knowledge-vectors-db.js';
 import { enqueueDocument } from '../knowledge/start-ingestion.js';
 import { normalisePhrases } from '../lib/treasury-filter.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { materialiseReferencesForDocument } from './attachments.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
@@ -26,7 +28,14 @@ export async function createLibrary(
 ): Promise<LibraryRow> {
   const now = Date.now();
   const row: LibraryRow = { id: uuidv7(), createdAt: now, updatedAt: now, ...input };
-  await getClientDataDb().libraries.add(row);
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  // Class-1 creation-insert: the library row and its outbox row are atomic.
+  await db.transaction('rw', [db.libraries, db.syncOutbox], async (tx) => {
+    await db.libraries.add(row);
+    if (linked) enqueueSync(tx, 'libraries', row.id, 'upsert');
+  });
+  if (linked) scheduleClass1Sync();
   return row;
 }
 
@@ -187,8 +196,16 @@ export async function addDocuments(
     });
   }
   if (rows.length === 0) return [];
-  await getClientDataDb().documents.bulkAdd(rows);
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  // Class-1 creation-inserts (knowledge ingestion): rows + outbox rows are atomic.
+  await db.transaction('rw', [db.documents, db.syncOutbox], async (tx) => {
+    await db.documents.bulkAdd(rows);
+    if (linked) for (const row of rows) enqueueSync(tx, 'documents', row.id, 'upsert');
+  });
+  // Embedding queue (device-local) is a separate concern from sync.
   for (const row of rows) enqueueDocument(row.id);
+  if (linked) scheduleClass1Sync();
   return rows.map((r) => r.id);
 }
 

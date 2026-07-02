@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
 
@@ -48,7 +50,13 @@ export function useCreatePersona() {
       const db = getClientDataDb();
       const now = Date.now();
       const row: PersonaRow = { id: uuidv7(), createdAt: now, updatedAt: now, ...args };
-      await db.personas.add(row);
+      const linked = isLinkedForSync();
+      // Class-1 creation-insert: the persona and its outbox row commit atomically.
+      await db.transaction('rw', [db.personas, db.syncOutbox], async (tx) => {
+        await db.personas.add(row);
+        if (linked) enqueueSync(tx, 'personas', row.id, 'upsert');
+      });
+      if (linked) scheduleClass1Sync();
       return row;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.personas }),

@@ -8,6 +8,8 @@ import {
   getClientDataDb,
 } from '../boot/client-data-db.js';
 import { estimateTokens } from '../lib/token-estimator.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { assembleMemoryContext } from './assembly.js';
 import { MAX_BODY_VERSIONS, MEMORY_INJECTION_MAX_TOKENS } from './config.js';
 import type { ExtractedEntry } from './extraction-parse.js';
@@ -49,7 +51,16 @@ export async function addJournalEntries(
     autoCommitted: false,
     archivedByDreamId: null,
   }));
-  if (rows.length) await getClientDataDb().memoryJournal.bulkAdd(rows);
+  if (rows.length) {
+    const db = getClientDataDb();
+    const linked = isLinkedForSync();
+    // Class-1 append: journal rows + their outbox rows commit atomically.
+    await db.transaction('rw', [db.memoryJournal, db.syncOutbox], async (tx) => {
+      await db.memoryJournal.bulkAdd(rows);
+      if (linked) for (const r of rows) enqueueSync(tx, 'memoryJournal', r.id, 'upsert');
+    });
+    if (linked) scheduleClass1Sync();
+  }
   return rows;
 }
 

@@ -39,6 +39,17 @@ export function enqueueSync(
   void tx.table<SyncOutboxRow, number>('syncOutbox').add(row);
 }
 
+/**
+ * Whether the sync engine exists for this account (spec §5): it does only for a
+ * linked account. Class-1 write sites (Task 11) gate both their `enqueueSync`
+ * and the debounced kick on this — `enqueueSync` is deliberately lower-level
+ * than `mutateSynced` and does NOT check link status itself, so for a
+ * local-only user the write must land with no outbox row.
+ */
+export function isLinkedForSync(): boolean {
+  return useAccountLinkStore.getState().linkStatus === 'linked';
+}
+
 // ===== Immediate drain registration (avoids a worker import cycle) =====
 
 type ImmediateDrain = (target: { collection: SyncCollection; key: string }) => Promise<void>;

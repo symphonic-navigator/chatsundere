@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ProviderRow, getClientDataDb } from '../boot/client-data-db.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 
 /** List all configured provider rows. */
@@ -59,7 +61,13 @@ export function useUpsertProvider() {
         createdAt: now,
         updatedAt: now,
       };
-      await db.providers.add(row);
+      const linked = isLinkedForSync();
+      // Class-1 creation-insert: the provider row and its outbox row are atomic.
+      await db.transaction('rw', [db.providers, db.syncOutbox], async (tx) => {
+        await db.providers.add(row);
+        if (linked) enqueueSync(tx, 'providers', row.id, 'upsert');
+      });
+      if (linked) scheduleClass1Sync();
       return row;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.providers }),

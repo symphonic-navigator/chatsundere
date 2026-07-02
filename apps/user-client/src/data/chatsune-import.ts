@@ -15,6 +15,8 @@ import type { ChatsuneMemoryExport, ChatsuneSessionExport } from '../lib/chatsun
 import { normalisePhrases } from '../lib/treasury-filter.js';
 import { normaliseForDedup } from '../memory/dedup.js';
 import { getCurrentBody, listBodyVersions, listJournal, saveBody } from '../memory/repo.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { createLibrary } from './knowledge.js';
 
 function isoToMs(s: string | undefined, fallback: number): number {
@@ -67,8 +69,11 @@ export async function importChatsuneSessions(
   const now = Date.now();
   let imported = 0;
   let skipped = 0;
+  const linked = isLinkedForSync();
 
-  await db.transaction('rw', db.chats, db.messages, async () => {
+  // Class-1 creation-inserts: imported chats and messages carry fresh uuids by
+  // construction; each is enqueued atomically inside the import transaction.
+  await db.transaction('rw', [db.chats, db.messages, db.syncOutbox], async (tx) => {
     const existing = await db.chats.where('personaId').equals(personaId).toArray();
     const seen = new Set(existing.map((c) => c.importedFrom).filter((v): v is string => !!v));
 
@@ -93,14 +98,16 @@ export async function importChatsuneSessions(
         libraryIds: [],
         importedFrom: session.original_id,
       });
+      if (linked) enqueueSync(tx, 'chats', chatId, 'upsert');
 
       let index = 0;
       for (const m of session.messages) {
         const mapped = mapChatsuneMessage(m, createdAt + index);
         index++;
         if (!mapped) continue;
+        const messageId = uuidv7();
         await db.messages.add({
-          id: uuidv7(),
+          id: messageId,
           chatId,
           role: mapped.role,
           contentBlocks: mapped.contentBlocks,
@@ -109,10 +116,12 @@ export async function importChatsuneSessions(
           bookmarked: false,
           streamingState: 'complete',
         });
+        if (linked) enqueueSync(tx, 'messages', messageId, 'upsert');
       }
       imported++;
     }
   });
+  if (linked) scheduleClass1Sync();
 
   return { imported, skipped };
 }
@@ -146,8 +155,15 @@ export async function importChatsuneLibrary(parsed: ParsedKnowledgeExport): Prom
     });
   }
   if (rows.length > 0) {
-    await getClientDataDb().documents.bulkAdd(rows);
+    const db = getClientDataDb();
+    const linked = isLinkedForSync();
+    // Class-1 creation-inserts (the library itself is enqueued by createLibrary).
+    await db.transaction('rw', [db.documents, db.syncOutbox], async (tx) => {
+      await db.documents.bulkAdd(rows);
+      if (linked) for (const row of rows) enqueueSync(tx, 'documents', row.id, 'upsert');
+    });
     for (const row of rows) enqueueDocument(row.id);
+    if (linked) scheduleClass1Sync();
   }
   return library.id;
 }
@@ -248,7 +264,15 @@ export async function importChatsuneMemory(
       importedFrom: 'chatsune',
     });
   }
-  if (rows.length) await db.memoryJournal.bulkAdd(rows);
+  if (rows.length) {
+    const linked = isLinkedForSync();
+    // Class-1 journal appends (imported bodies go via saveBody → Class 2, Task 12).
+    await db.transaction('rw', [db.memoryJournal, db.syncOutbox], async (tx) => {
+      await db.memoryJournal.bulkAdd(rows);
+      if (linked) for (const r of rows) enqueueSync(tx, 'memoryJournal', r.id, 'upsert');
+    });
+    if (linked) scheduleClass1Sync();
+  }
 
   return { importedEntries: rows.length, skippedEntries, importedBodies, skippedBodies };
 }

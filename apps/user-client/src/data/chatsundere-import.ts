@@ -25,6 +25,8 @@ import {
 } from '../lib/chatsundere-transfer/knowledge-pack.js';
 import { readPersonaPack } from '../lib/chatsundere-transfer/persona-pack.js';
 import { resolveVectorStrategy } from '../lib/chatsundere-transfer/vector-strategy.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 
 /** Result returned by `importPersonaPack`. */
 export interface ImportedPersonaResult {
@@ -55,6 +57,7 @@ export async function importPersonaPack(
   const { payload } = await readPersonaPack(input);
   const db = getClientDataDb();
   const remap = new IdRemap();
+  const linked = isLinkedForSync();
 
   // Mint a fresh persona id. The sentinel 'persona' is a stable key that will
   // never collide with a real exported entity id (which are uuidv7 hex strings).
@@ -112,7 +115,14 @@ export async function importPersonaPack(
   };
 
   // ── Write persona ─────────────────────────────────────────────────────────
-  await db.personas.add(personaRow);
+  // Class-1 creation-inserts throughout: the pack mints fresh uuids, so every
+  // handled-collection insert is enqueued atomically with its write. Blob-bearing
+  // tables (personaAvatars/attachments/artefacts) join in WS-D; memoryBody is
+  // Class 2 (Task 12). One debounced kick fires after the whole import.
+  await db.transaction('rw', [db.personas, db.syncOutbox], async (tx) => {
+    await db.personas.add(personaRow);
+    if (linked) enqueueSync(tx, 'personas', personaId, 'upsert');
+  });
 
   // ── Write avatar ──────────────────────────────────────────────────────────
   if (payload.avatar) {
@@ -178,7 +188,12 @@ export async function importPersonaPack(
       };
     }),
   );
-  if (chatRows.length > 0) await db.chats.bulkAdd(chatRows);
+  if (chatRows.length > 0) {
+    await db.transaction('rw', [db.chats, db.syncOutbox], async (tx) => {
+      await db.chats.bulkAdd(chatRows);
+      if (linked) for (const c of chatRows) enqueueSync(tx, 'chats', c.id, 'upsert');
+    });
+  }
 
   // ── Remap and write messages ──────────────────────────────────────────────
   const messageRows: MessageRow[] = payload.messages.map((msg) => {
@@ -195,7 +210,12 @@ export async function importPersonaPack(
       streamingState: (msg.streamingState as 'complete' | 'incomplete' | undefined) ?? 'complete',
     };
   });
-  if (messageRows.length > 0) await db.messages.bulkAdd(messageRows);
+  if (messageRows.length > 0) {
+    await db.transaction('rw', [db.messages, db.syncOutbox], async (tx) => {
+      await db.messages.bulkAdd(messageRows);
+      if (linked) for (const m of messageRows) enqueueSync(tx, 'messages', m.id, 'upsert');
+    });
+  }
 
   // ── Remap and write pills ─────────────────────────────────────────────────
   const pillRows: PillRow[] = payload.pills.map((pill) => ({
@@ -205,7 +225,12 @@ export async function importPersonaPack(
     // Remap artefact id references inside the payload (I1 fix).
     payload: remapPillArtefactRefs(pill.payload, remap),
   }));
-  if (pillRows.length > 0) await db.pills.bulkAdd(pillRows);
+  if (pillRows.length > 0) {
+    await db.transaction('rw', [db.pills, db.syncOutbox], async (tx) => {
+      await db.pills.bulkAdd(pillRows);
+      if (linked) for (const p of pillRows) enqueueSync(tx, 'pills', p.id, 'upsert');
+    });
+  }
 
   // ── Remap and write attachments ───────────────────────────────────────────
   const attachmentRows: AttachmentRow[] = payload.attachments.map((att) => {
@@ -256,7 +281,13 @@ export async function importPersonaPack(
       ? (remap.map(cp.prevCheckpointId) ?? cp.prevCheckpointId)
       : null,
   }));
-  if (checkpointRows.length > 0) await db.compactionCheckpoints.bulkAdd(checkpointRows);
+  if (checkpointRows.length > 0) {
+    await db.transaction('rw', [db.compactionCheckpoints, db.syncOutbox], async (tx) => {
+      await db.compactionCheckpoints.bulkAdd(checkpointRows);
+      if (linked)
+        for (const cp of checkpointRows) enqueueSync(tx, 'compactionCheckpoints', cp.id, 'upsert');
+    });
+  }
 
   // ── Remap and write memory ────────────────────────────────────────────────
   if (payload.memory) {
@@ -265,8 +296,14 @@ export async function importPersonaPack(
       id: remap.fresh(je.id),
       personaId,
     }));
-    if (journalRows.length > 0) await db.memoryJournal.bulkAdd(journalRows);
+    if (journalRows.length > 0) {
+      await db.transaction('rw', [db.memoryJournal, db.syncOutbox], async (tx) => {
+        await db.memoryJournal.bulkAdd(journalRows);
+        if (linked) for (const j of journalRows) enqueueSync(tx, 'memoryJournal', j.id, 'upsert');
+      });
+    }
 
+    // memoryBody is Class 2 (spec §5 exception, Task 12) — inserted without enqueue.
     const bodyRows: MemoryBodyRow[] = payload.memory.bodies.map((body) => ({
       ...body,
       id: remap.fresh(body.id),
@@ -274,6 +311,8 @@ export async function importPersonaPack(
     }));
     if (bodyRows.length > 0) await db.memoryBody.bulkAdd(bodyRows);
   }
+
+  if (linked) scheduleClass1Sync();
 
   return {
     personaId,
@@ -299,6 +338,7 @@ export async function importKnowledgePack(
   const db = getClientDataDb();
   const remap = new IdRemap();
   const now = Date.now();
+  const linked = isLinkedForSync();
 
   // Mint a fresh library id.
   const libraryId = remap.fresh('library');
@@ -311,7 +351,11 @@ export async function importKnowledgePack(
     createdAt: now,
     updatedAt: now,
   };
-  await db.libraries.add(libraryRow);
+  // Class-1 creation-insert: fresh library uuid, enqueued atomically.
+  await db.transaction('rw', [db.libraries, db.syncOutbox], async (tx) => {
+    await db.libraries.add(libraryRow);
+    if (linked) enqueueSync(tx, 'libraries', libraryId, 'upsert');
+  });
 
   // Determine vector strategy by comparing the pack's embed fingerprint to the
   // local engine constants. If they match, the encoded vectors are directly
@@ -337,7 +381,12 @@ export async function importKnowledgePack(
       updatedAt: now,
     };
   });
-  if (documentRows.length > 0) await db.documents.bulkAdd(documentRows);
+  if (documentRows.length > 0) {
+    await db.transaction('rw', [db.documents, db.syncOutbox], async (tx) => {
+      await db.documents.bulkAdd(documentRows);
+      if (linked) for (const doc of documentRows) enqueueSync(tx, 'documents', doc.id, 'upsert');
+    });
+  }
 
   // ── Handle vectors by strategy ────────────────────────────────────────────
   if (strategy === 'adopt') {
@@ -351,6 +400,7 @@ export async function importKnowledgePack(
     }
   }
 
+  if (linked) scheduleClass1Sync();
   return { libraryId };
 }
 

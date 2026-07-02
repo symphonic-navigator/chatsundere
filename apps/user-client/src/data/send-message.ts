@@ -45,6 +45,8 @@ import { buildMcpContext } from '../mcp/build-mcp-context.js';
 import type { McpToolContext } from '../mcp/mcp-tools.js';
 import { useMcpApprovalStore } from '../state/mcp-approval.store.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import type { ExpertBase } from '../tools/ask-expert.js';
 import {
   type ImageGenerationSlot,
@@ -519,20 +521,27 @@ export function useSendMessage() {
         const resolvedMindspaceId = persona.mindspaceId ?? settings?.defaultMindspaceId;
         if (!resolvedMindspaceId) throw new Error('useSendMessage: no mindspace to snapshot');
 
-        chatId = uuidv7();
+        const newChatId = uuidv7();
+        chatId = newChatId;
         const now = Date.now();
-        await db.chats.add({
-          id: chatId,
-          personaId: args.personaId,
-          title: null,
-          resolvedMindspaceId,
-          createdAt: now,
-          updatedAt: now,
-          lastMessageAt: now,
-          bookmarkedMessageCount: 0,
-          draftInput: '',
-          libraryIds: [],
+        const linked = isLinkedForSync();
+        // Class-1 creation-insert (lazy chat): chat row + outbox row are atomic.
+        await db.transaction('rw', [db.chats, db.syncOutbox], async (tx) => {
+          await db.chats.add({
+            id: newChatId,
+            personaId: args.personaId,
+            title: null,
+            resolvedMindspaceId,
+            createdAt: now,
+            updatedAt: now,
+            lastMessageAt: now,
+            bookmarkedMessageCount: 0,
+            draftInput: '',
+            libraryIds: [],
+          });
+          if (linked) enqueueSync(tx, 'chats', newChatId, 'upsert');
         });
+        if (linked) scheduleClass1Sync();
       }
 
       // ── Resolve persona chain + decrypt secrets ─────────────────────────
