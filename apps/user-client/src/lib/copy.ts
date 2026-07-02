@@ -5,6 +5,21 @@
  * strings into components. Keeps the language audit tractable.
  */
 export const copy = {
+  serverGate: {
+    localOnly:
+      'This comes alive once you link an account. Link one under Account → Server linking.',
+    localOnlyWithInvite:
+      'This comes alive once you link an account. Link one under Account → Server linking — or request an invitation.',
+    offline:
+      "Your server isn't reachable right now. This wakes up again the moment the connection returns.",
+    authAction:
+      'The server stopped recognising this session. Sync your passphrase under Account → Server linking to restore the link.',
+    serverOdd:
+      'Your server is answering unexpectedly. This usually resolves itself — if it keeps happening, your operator will want to know.',
+    featureMissing:
+      "Your server doesn't offer this yet. Operators can enable it — nothing is missing on your side.",
+    checking: 'Checking what your server offers…',
+  },
   create: {
     usernameStep: {
       title: 'Pick a username.',
