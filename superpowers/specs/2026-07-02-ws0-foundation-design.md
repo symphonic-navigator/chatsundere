@@ -3,7 +3,10 @@
 **Date:** 2026-07-02
 **Status:** approved design, pre-plan
 **Sprint:** Full Backend Transition (branch `full-backend-transition`, see `STATUS-TRANSITION.md`)
-**Audit gates:** Laura spec-pass (this document) — no Larissa gate (no mandatory path touched)
+**Audit gates:** Laura spec-pass PASSED 2026-07-02 (2 hard, 5 soft — all
+folded into v2 of this document: `auth-action`/`server-error` reasons, the
+touch affordance mandate, copy revisions) — no Larissa gate (no mandatory
+path touched)
 
 ## 1. Context and goal
 
@@ -170,7 +173,13 @@ read the linked account → populate `account-link.store` → if `linked` and
 `apps/user-client/src/lib/server-gate.ts`:
 
 ```ts
-type GateReason = 'local-only' | 'offline' | 'feature-missing' | 'unknown';
+type GateReason =
+  | 'local-only'       // no linked account — link or request an invitation
+  | 'offline'          // network down or server unreachable — self-heals
+  | 'auth-action'      // server stopped recognising the session — user must act
+  | 'server-error'     // server answers, but not like a Chatsundere backend — operator must act
+  | 'feature-missing'  // server healthy, feature not offered — operator may act
+  | 'unknown';         // still finding out — transient
 
 interface ServerGate {
   enabled: boolean;
@@ -181,38 +190,52 @@ interface ServerGate {
 function useServerGate(feature: KnownServerFeature): ServerGate;
 ```
 
+The enum is deliberately **isomorphic to the distinct user next-steps**
+(Laura spec-pass): a consumer must be able to branch on `reason` alone —
+e.g. attach the invitation pointer for `local-only` or an operator hint for
+`server-error` — without re-reading the underlying stores.
+
 Derivation, first match wins:
 
 | Condition | Result |
 |---|---|
-| `linkStatus !== 'linked'` (incl. `'unknown'` during boot-read) | `local-only`¹ |
-| connectivity `server_unreachable` / `server_auth_failed` / `local_offline` | `offline` |
+| `linkStatus 'unknown'` (boot IDB read pending) | `unknown`¹ |
+| `linkStatus 'local-only'` | `local-only` |
+| connectivity `server_auth_failed` | `auth-action`² |
+| connectivity `server_unreachable` / `local_offline` | `offline` |
+| discovery `'invalid'` | `server-error` |
 | discovery `status` `'unknown'` or `'probing'` (no prior config this session) | `unknown` |
-| discovery `'invalid'` | `offline`² |
 | `feature ∉ config.features` | `feature-missing` |
 | otherwise | `enabled: true` |
 
-¹ `linkStatus 'unknown'` lasts milliseconds (one IDB get); collapsing it
-into `local-only` avoids a fourth transient tooltip for a state the user
-can essentially never observe.
-² An invalid server answer means server-dependent functions genuinely do
-not work; `offline` is the honest user-facing bucket ("your server isn't
-answering as expected" copy variant is folded into the offline tooltip
-via the discovery status — see copy table).
+¹ Routed to the neutral checking bucket, **not** `local-only` — a linked
+user must never (even for milliseconds) be shown invitation copy (Laura
+soft finding; the neutral bucket exists anyway).
+² **Not** folded into `offline` (Laura hard finding): auth-failed does not
+self-heal by connectivity, and the app already names the real next step
+(`copy.ts:138` `serverAuthFailedBanner`). The gate must never claim a
+waiting cure for a state that requires user action.
 
 Copy catalogue (`lib/copy.ts`, draft for Laura's pass — British English,
 constructive, each names the next step, dere-toned but calm):
 
-| Key | Draft copy |
+| Key (reason) | Draft copy |
 |---|---|
-| `serverGateLocalOnly` | "This comes alive once you link an account. Link one under Account → Server linking — or request an invitation from your operator." (when `VITE_INVITE_REQUEST_URL` is set, the tooltip's surface may render it as the invitation link — surfacing form is the consumer's choice, WS-B+) |
-| `serverGateOffline` | "Your server isn't reachable right now. This wakes up again the moment you're back online." |
-| `serverGateServerOdd` (discovery `invalid`) | "Your server is answering unexpectedly. This usually resolves itself — if it keeps happening, your operator will want to know." |
-| `serverGateFeatureMissing` | "Your server doesn't offer this yet. Operators can enable it — nothing is missing on your side." |
-| `serverGateChecking` | "Checking what your server offers…" |
+| `serverGateLocalOnly` (`local-only`) | "This comes alive once you link an account. Link one under Account → Server linking." — when `VITE_INVITE_REQUEST_URL` is set, " — or request an invitation." is appended and the surface may render it as the invitation link; when unset, the operator clause is dropped entirely (never name a next step the user cannot reach — Laura) |
+| `serverGateOffline` (`offline`) | "Your server isn't reachable right now. This wakes up again the moment the connection returns." (connection-neutral — covers both network-down and server-down without asserting who is offline) |
+| `serverGateAuthAction` (`auth-action`) | "The server stopped recognising this session. Sync your passphrase under Account → Server linking to restore the link." (mirrors the existing `serverAuthFailedBanner`, `copy.ts:138` — the two surfaces must never contradict) |
+| `serverGateServerOdd` (`server-error`) | "Your server is answering unexpectedly. This usually resolves itself — if it keeps happening, your operator will want to know." |
+| `serverGateFeatureMissing` (`feature-missing`) | "Your server doesn't offer this yet. Operators can enable it — nothing is missing on your side." |
+| `serverGateChecking` (`unknown`) | "Checking what your server offers…" |
 
-Rendering stays the house pattern (`aria-disabled="true"` + `title` +
-`opacity-40`); WS-0 ships the hook and copy only.
+**Affordance mandate (Laura hard finding).** The `title` attribute never
+fires on touch — at 380 px a title-only tooltip silently mutes the entire
+payload of disabled-over-hidden. Consumers MUST surface the returned
+`tooltip` through a touch-reachable affordance (press-to-reveal popover,
+inline caption beneath the disabled control, or a pressable info dot);
+`aria-disabled` + `title` + `opacity-40` remain as the desktop-hover
+augmentation, never the sole channel. WS-0 ships the hook and copy only;
+this mandate binds every consumer surface (§14).
 
 ## 9. URL precedence
 
@@ -275,9 +298,10 @@ Rendering stays the house pattern (`aria-disabled="true"` + `title` +
 3. Boot local-only: zero config requests.
 4. Point `VITE_AUTH_URL` at a non-Chatsundere URL (any static site) and probe
    via console: result `invalid`, badge unchanged.
-5. `useServerGate('proxy')` from a scratch component/console: verify the four
-   reasons by walking the states (local-only → link → offline → feature
-   removed from a doctored config).
+5. `useServerGate('proxy')` from a scratch component/console: walk the
+   reasons through the states (local-only → link → offline → auth-failed →
+   feature removed from a doctored config → non-Chatsundere URL for
+   `server-error`).
 
 ## 14. Consumption contract for later workstreams
 
@@ -293,3 +317,8 @@ Rendering stays the house pattern (`aria-disabled="true"` + `title` +
 - **WS-D:** `useServerGate('blobs')` — the blob spec's "disabled is not
   missing; re-probe only when `/api/v1/config` changes" rule is satisfied by
   this store (re-probe happens on regain/foreground/boot only).
+- **All consumers:** the §8 affordance mandate applies — the tooltip must be
+  reachable by touch, `title` is augmentation only. The `unknown` state is
+  rendered calmly (disabled control or skeleton, never a blocking spinner);
+  on a cold boot a returning linked user briefly sees "Checking…" by design
+  (memory-only discovery, spec decision 4).
