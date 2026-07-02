@@ -5,8 +5,10 @@ import { and, eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, pipe, regex, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { denySub, nowSeconds } from '../auth/deny-list.js';
 import { createDb } from '../db/client.js';
 import { authMethods, pendingCodes, users } from '../db/schema.js';
+import { createRedis } from '../redis/client.js';
 import type { AccessClaims } from '../jwt/verify.js';
 import { bearerAuth, invalidateUserExistsCache } from '../middleware/auth.js';
 import { ApiError } from '../middleware/error-envelope.js';
@@ -114,6 +116,8 @@ export function registerMeRoutes(app: Hono): void {
         .where(eq(pendingCodes.redeemedByUserId, claims.sub));
       await tx.delete(users).where(eq(users.id, claims.sub));
     });
+    // Deny every current access token for the deleted account (spec §9).
+    await denySub(createRedis(), claims.sub, nowSeconds());
     await invalidateUserExistsCache(claims.sub);
     await writeAudit({
       db,

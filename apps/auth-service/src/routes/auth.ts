@@ -3,6 +3,7 @@
 import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { writeAudit } from '../audit/log.js';
+import { denyJti, denySub, nowSeconds } from '../auth/deny-list.js';
 import { createDb } from '../db/client.js';
 import { refreshTokens } from '../db/schema.js';
 import { sha256ForCookie } from '../jwt/issue.js';
@@ -22,6 +23,8 @@ export function registerAuthRoutes(app: Hono): void {
 
     if (all) {
       await revokeAllForUser(claims.sub);
+      // Deny every current access token for this subject (spec §9).
+      await denySub(createRedis(), claims.sub, nowSeconds());
       await writeAudit({
         db: createDb().db,
         eventType: 'auth.logout',
@@ -57,6 +60,8 @@ export function registerAuthRoutes(app: Hono): void {
         await revokeAllForUser(claims.sub);
       }
 
+      // Deny this session's access token (spec §9).
+      await denyJti(createRedis(), claims.jti);
       await writeAudit({
         db: createDb().db,
         eventType: 'auth.logout',

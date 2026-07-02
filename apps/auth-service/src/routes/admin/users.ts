@@ -4,9 +4,11 @@ import { asc, eq, ilike, sql } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, picklist, string } from 'valibot';
 import { writeAudit } from '../../audit/log.js';
+import { denySub, nowSeconds } from '../../auth/deny-list.js';
 import { createDb } from '../../db/client.js';
 import { authMethods, pendingCodes, users } from '../../db/schema.js';
 import { revokeAllForUser } from '../../jwt/refresh.js';
+import { createRedis } from '../../redis/client.js';
 import type { AccessClaims } from '../../jwt/verify.js';
 import { metrics } from '../../metrics.js';
 import { bearerAuth, invalidateUserExistsCache } from '../../middleware/auth.js';
@@ -90,6 +92,8 @@ export function registerAdminUserRoutes(app: Hono): void {
     if (!target) throw new ApiError(404, 'not_found', 'User not found');
     await db.update(users).set({ suspendedAt: new Date() }).where(eq(users.id, id));
     await revokeAllForUser(id);
+    // Deny every current access token for the suspended user (spec §9).
+    await denySub(createRedis(), id, nowSeconds());
     await invalidateUserExistsCache(id);
     await writeAudit({ db, eventType: 'user.suspended', userId: id, actorUserId: claims.sub });
     metrics.authAdminActionsTotal.inc({ action: 'suspend' });
