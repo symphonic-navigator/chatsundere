@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { getInstanceEpoch } from '../src/db/client.js';
-import { syncRecords } from '../src/db/schema.js';
+import { syncBlobs, syncRecords } from '../src/db/schema.js';
 import { type TestDb, withTestDb } from './helpers/test-db.js';
 
 let t: TestDb;
@@ -42,7 +42,11 @@ describe('sync-service schema', () => {
     expect(back).toBeInstanceOf(Uint8Array);
     expect(back.length).toBe(ciphertext.length);
     let identical = true;
-    for (let i = 0; i < ciphertext.length; i += 4093) if (back[i] !== ciphertext[i]) { identical = false; break; }
+    for (let i = 0; i < ciphertext.length; i += 4093)
+      if (back[i] !== ciphertext[i]) {
+        identical = false;
+        break;
+      }
     expect(identical).toBe(true);
     await t.reset();
   });
@@ -54,6 +58,37 @@ describe('sync-service schema', () => {
     );
     const timestampish = rows.filter((r) => String(r.data_type).includes('timestamp'));
     expect(timestampish).toEqual([]);
+  });
+
+  test('sync_blobs stores a metadata row and rejects duplicate (account, blob) pairs', async () => {
+    const accountId = '22222222-2222-2222-2222-222222222222';
+    const blobId = 'AAAAAAAAAAAAAAAAAAAAAA';
+    await t.db.insert(syncBlobs).values({
+      accountId,
+      blobId,
+      bytes: 4096,
+      ciphertextHash: new Uint8Array(32).fill(9),
+    });
+    const [row] = await t.db.select().from(syncBlobs).where(sql`account_id = ${accountId}`);
+    expect(row?.blobId).toBe(blobId);
+    expect(row?.bytes).toBe(4096);
+    expect(row?.ciphertextHash).toBeInstanceOf(Uint8Array);
+    expect((row?.ciphertextHash as Uint8Array).length).toBe(32);
+    expect(row?.createdAt).toBeInstanceOf(Date);
+    // Composite PK: a second insert of the same (account, blob) must fail.
+    let threw = false;
+    try {
+      await t.db.insert(syncBlobs).values({
+        accountId,
+        blobId,
+        bytes: 4096,
+        ciphertextHash: new Uint8Array(32),
+      });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    await t.reset();
   });
 
   test('a re-migration mints a different instance_epoch (simulated restore)', async () => {

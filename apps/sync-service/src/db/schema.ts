@@ -1,7 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, customType, index, pgTable, primaryKey, smallint, text, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  customType,
+  index,
+  pgTable,
+  primaryKey,
+  smallint,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 // bytea for fixed-shape binary fields (blind ids, nonces, ciphertext, hashes).
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
@@ -40,3 +51,21 @@ export const syncAccounts = pgTable('sync_accounts', {
 export const syncMeta = pgTable('sync_meta', {
   instanceEpoch: uuid('instance_epoch').primaryKey().default(sql`gen_random_uuid()`),
 });
+
+// Blob metadata (blob spec §4): quota ledger + existence check + listing backing
+// + purge inventory. The object bytes live in S3 under key `<account_id>/<blob_id>`.
+export const syncBlobs = pgTable(
+  'sync_blobs',
+  {
+    accountId: uuid('account_id').notNull(),
+    blobId: text('blob_id').notNull(),
+    bytes: bigint('bytes', { mode: 'number' }).notNull(),
+    ciphertextHash: bytea('ciphertext_hash').notNull(),
+    // A deliberate, spec-justified exception to the no-timestamps rule (§4):
+    // a blob's upload receipt time is a live observable the server has anyway,
+    // and persisting it earns the reconcile sweep (§19) its "older than the
+    // grace window" guard. Unlike sync_records, which hides content-creation time.
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.blobId] })],
+);
