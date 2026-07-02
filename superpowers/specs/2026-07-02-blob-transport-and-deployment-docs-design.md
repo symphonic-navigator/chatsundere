@@ -1,8 +1,11 @@
 # Blob transport (S3/MinIO) + deployment documentation — Block 6C (design)
 
 **Date:** 2026-07-02
-**Status:** draft — Chris review pending, then dual adversarial review
-(Larissa security lens + Fable protocol/functional lens), as for the sync spec
+**Status:** v2 — Chris-approved, dual adversarial review folded in
+(Larissa security lens: 1 High, 3 Medium, 7 Low; Fable protocol/functional
+lens: 2 Critical, 8 Important). Review-driven changes are tagged `[L]`
+(Larissa) / `[F]` (protocol lens); the deterministic-sealing change carries
+Larissa's explicit sign-off (§5).
 **Builds on:** `superpowers/specs/2026-07-01-client-sync-design.md` (v2) —
 referred to below as "the sync spec". This spec fills the seam the sync spec
 deliberately left open (§16/§19 there): the `Blob`-bearing collections
@@ -111,7 +114,19 @@ sync_blobs
   same transaction as the `sync_blobs` insert/delete, under the same
   `SELECT … FOR UPDATE` on the `sync_accounts` row that serialises record
   batches (sync spec §4) — blob writes and record batches cannot race the
-  counter.
+  counter. **Enforcement lives under the lock too** `[L]`/`[F]`: the §7.1
+  pre-check is a cheap early reject only; the commit-time transaction
+  re-verifies the quota (§7.1 step 6). N concurrent PUTs that each fit
+  alone but not together must yield exactly one `201` — pre-check-only
+  enforcement would overshoot by up to N × `MAX_BLOB_BYTES`.
+- **Accounting floor** `[L]`/`[F]`: each blob charges
+  `max(bytes, BLOB_QUOTA_FLOOR_BYTES)` (default 64 KiB) against the quota.
+  A valid sealed body can be as small as 28 bytes; without a floor, the
+  quota would never brake `sync_blobs` row growth (millions of near-free
+  rows → the unpaginated listing becomes an amplification target, §7.4).
+  With the floor, 2 GiB bounds an account at ~32k blobs — filesystem-block
+  semantics, honestly stated. `sync_blobs.bytes` stores the true size; the
+  floor applies at accounting time.
 
 ## 5. The blob envelope (`packages/crypto`)
 
@@ -121,7 +136,9 @@ end to end, testable in Bun and the browser alike:
 ```
 blobId     = mintBlobId()          // 16 random bytes, base64url (22 chars)
 key        = deriveDek(mk, 'sync/blobs-v1')
-nonce      = 12 random bytes       (fresh per seal, never reused)
+nonceKey   = deriveDek(mk, 'sync/blobs-nonce-v1')   // separate HMAC-SHA256 key
+nonce      = HMAC-SHA256(nonceKey,
+               utf8(blobId) || SHA-256(blobBytes))[0..11]   // 96-bit truncation
 aad        = utf8('chatsundere-blob-v1') || utf8(blobId)
 body       = nonce || AES-256-GCM(key, nonce, blobBytes, aad)
 hash       = SHA-256(body)         // → x-ciphertext-hash header
@@ -130,11 +147,37 @@ hash       = SHA-256(body)         // → x-ciphertext-hash header
 Exports (names indicative): `mintBlobId()`, `sealBlob(mk, blobId, bytes)` →
 `{ body, hash }`, `openBlob(mk, blobId, body)` → bytes.
 
+- **Sealing is deterministic — SIV-style derived nonce** `[F]`, **Larissa
+  sign-off on record**: any re-seal of the same `(blobId, plaintext)` under
+  the same MK is **byte-identical**, on any device of the account. This is
+  load-bearing, not cosmetic: outbox retries land on the idempotent
+  same-hash `200` path even when the engine re-seals from plaintext; two
+  devices re-uploading the same blob during epoch recovery produce the same
+  body (the same-id/different-body race collapses to the harmless
+  identical-body case); the reconcile sweep never sees phantom hash skew.
+  Soundness (Larissa-verified): a GCM nonce repeat under this derivation
+  requires identical `(blobId, plaintext)` — which yields identical
+  ciphertext and discloses only "this is a retry", already implied by the
+  shared `blobId` — or a 96-bit truncated-HMAC collision across distinct
+  inputs, the same ~2⁴⁸ birthday bound already accepted for random nonces.
+  The nonce commits to `blobId`, so equal images under different ids
+  produce unrelated bodies (no plaintext-equality oracle); keys are
+  MK-derived, so nothing converges across accounts. **Pins (Larissa):**
+  `nonceKey` is its own derivation context, never the encryption DEK; the
+  full 32-byte `SHA-256(plaintext)` enters the HMAC input, truncation
+  applies to the HMAC output only; and **the plaintext hash never leaves
+  the device** — it exists only inside the seal computation, never as a
+  header, column, or dedup key (a content fingerprint on the wire would be
+  a known-image oracle); `x-ciphertext-hash` remains the only hash on the
+  wire, invariant-tested by whole-wire scan (§18).
 - **No blind-index layer for blobs — by decision, not omission.** Record
   keys need HMAC blinding because they are meaning-bearing (uuidv7 embeds a
   creation timestamp). A `blobId` is random from birth: 128 bits of entropy,
   no relationship to content or time. Blinding would hide nothing that is
-  not already hidden.
+  not already hidden. **And `blobId` stays random** `[L]`: determinism must
+  never extend to deriving the id from content — content-addressed ids
+  would reintroduce exactly the equality-oracle surface the nonce
+  construction avoids.
 - **The AAD binds the `blobId` and the version tag** — the record envelope's
   anti-swap discipline, continued: the server cannot serve blob X under id
   Y (the GCM open fails), and a future `blob-v2` can never be confused with
@@ -153,10 +196,11 @@ Exports (names indicative): `mintBlobId()`, `sealBlob(mk, blobId, bytes)` →
   files would burn real quota and bandwidth. What the server learns is
   stated honestly in §6. The three collections' *record rows* are likewise
   unpadded (consistent with `messages`).
-- **Nonce bound, documented:** one DEK (`sync/blobs-v1`) with random 96-bit
-  nonces is subject to the NIST SP 800-38D ~2³² invocation bound —
-  unreachable for realistic image volumes; recorded as the same rotation
-  trigger as the record envelope's (sync spec §19).
+- **Nonce bound, documented:** with derived 96-bit nonces the analysis is
+  birthday-parity with the record envelope's random nonces (~2⁴⁸ distinct
+  `(blobId, plaintext)` pairs before collision concern) — unreachable for
+  realistic image volumes; recorded as the same rotation trigger as the
+  record envelope's, with `blob-v2` as the migration seam (sync spec §19).
 
 ### 5.1 `BlobRef` and the wire-row shapes (`packages/shared-types`)
 
@@ -176,13 +220,24 @@ interface BlobRef {
 | `artefacts` | `blob?: Blob` | `blobRef?: BlobRef` |
 | `artefacts` | `thumbBlob?: Blob` | `thumbBlobRef?: BlobRef` |
 | `attachments` | `blob?: Blob` | `blobRef?: BlobRef` |
-| `personaAvatars` | `blob: Blob` | `blobRef: BlobRef` |
+| `personaAvatars` | `blob: Blob` | `blobRef: BlobRef \| null` |
 
 The transform (strip the `Blob`, attach the `BlobRef`) is the client
 engine's job before sealing — the same place the device-local strip already
 lives (sync spec §12.5). `bytes` is carried so the engine can make fetch
 decisions (progress, wifi-only thresholds, quota display) without a server
 round trip.
+
+**Why `personaAvatars.blobRef` is nullable — the terminality trap** `[F]`:
+`personaAvatars` is keyed by the persona's stable `personaId`, which lives
+as long as the persona does. Avatar *removal* ("back to the monogram",
+`useRemovePersonaAvatar`) must therefore be a **Class-2 update to a cleared
+wire state (`blobRef: null`)**, never a record tombstone: tombstone
+terminality is per `blind_id`, and the sync spec's escape hatch ("a
+re-created entity has a new uuid") does not exist for a 1:1 row on a stable
+key — a tombstone here would brick avatar sync for that persona forever
+(every later avatar hits `tombstoned` and is discarded). The tombstone is
+reserved for the persona-deletion cascade, where the key never recurs.
 
 ### 5.2 The three collections join the record allowlist
 
@@ -200,10 +255,16 @@ Extending the sync spec's §6 for the blob channel:
 **What the server (and the bucket) learns:** per account, the number of
 blobs, each blob's exact ciphertext size, upload/fetch/delete timing, and
 access patterns (which opaque ids a device fetches, when). It does **not**
-learn content, MIME type, dimensions, whether a blob is an original or a
-thumbnail, or which persona/chat/message it belongs to — all of that lives
-inside record ciphertext. Size correlation is real (a ~40 KiB object *looks
-like* a thumbnail); accepted and stated, per the no-padding decision (§5).
+learn content, MIME type, or dimensions — those live inside record
+ciphertext. **Traffic-shape correlation is real and owned honestly** `[L]`:
+an artefact creation is two back-to-back PUTs (one ~40 KiB, one multi-MiB)
+followed within moments by a record push whose `collection` tag is
+cleartext — so the server *can* classify blobs (thumbnail vs original;
+avatar vs artefact vs attachment) and probabilistically link a blob to the
+blind record that references it. The mandated blob-before-record ordering
+(§12) makes this correlation reliable, not incidental. Content, ids, and
+the object graph stay sealed; the classification residue is accepted and
+stated, per the no-padding decision (§5).
 
 **What a malicious server can do:** exactly the sync spec's §6.2 boundary,
 extended — it can withhold, destroy, or roll back blobs, and serve a blob
@@ -236,33 +297,58 @@ PUT /api/v1/sync/blobs/:blobId
 
 Server pipeline, in order:
 
-1. Validate `blobId` (exactly 22 base64url chars decoding to 16 bytes) →
-   else `400`.
-2. `Content-Length` present → else `411`; ≤ `MAX_BLOB_BYTES` → else
+1. Validate `blobId` (exactly 22 base64url chars decoding to 16 bytes) and
+   `x-ciphertext-hash` (decodes to exactly 32 bytes) `[L]` → else `400`.
+2. `Content-Length` present → else `411`; ≥ 28 bytes (the minimum sealed
+   body: nonce + tag) `[L]`/`[F]` and ≤ `MAX_BLOB_BYTES` → else `400` /
    `blob_too_large` — **before a byte flows towards S3**.
-3. Quota pre-check: `total_bytes + Content-Length ≤ ACCOUNT_QUOTA_BYTES` →
-   else `quota_exceeded` with `{ usedBytes, quotaBytes }` (the record
-   channel's constructive payload, verbatim).
-4. Existence check against `sync_blobs`: present with the **same hash** →
-   `200` (idempotent retry after a dropped connection — nothing re-stored,
-   nothing double-counted); present with a **different hash** →
-   `blob_exists` (immutability is enforced, never overwrite).
+3. **Existence check first, quota pre-check second** `[F]` — the order
+   matters: a blob whose `201` ack was lost is already counted in
+   `total_bytes`, so checking quota before existence would reject the
+   idempotent retry with a false `quota_exceeded` at a near-full account
+   (permanently wedging the outbox). Present with the **same hash** →
+   `200` (nothing re-stored, nothing double-counted); present with a
+   **different hash** → `blob_exists` (immutability is enforced, never
+   overwrite — and under deterministic sealing, §5, a different hash for
+   the same id can only mean corruption or a foreign plaintext, never an
+   honest retry).
+4. Quota pre-check: `total_bytes + max(Content-Length,
+   BLOB_QUOTA_FLOOR_BYTES) ≤ ACCOUNT_QUOTA_BYTES` → else `quota_exceeded`
+   with `{ usedBytes, quotaBytes }`. **This is the cheap fast-fail only —
+   it does not enforce** (step 6 does).
 5. Stream the body to S3 while counting bytes and hashing incrementally.
    Byte count ≠ `Content-Length` or computed hash ≠ header → abort, delete
-   the S3 object best-effort, record nothing, return `hash_mismatch` (or
+   the S3 object (best-effort **with short-backoff retries**, not
+   fire-and-forget `[L]`), record nothing, return `hash_mismatch` (or
    `400` for the length lie).
-6. Insert the `sync_blobs` row and bump `sync_accounts.total_bytes` in one
-   transaction → `201`.
+6. Open the transaction, take the `sync_accounts` `FOR UPDATE` lock, and
+   **re-verify the quota under the lock** `[L]`/`[F]`: over → roll back,
+   best-effort-delete the S3 object, return `quota_exceeded`. Within: insert
+   the `sync_blobs` row and bump `total_bytes` (floored, §4) → `201`.
+   Pre-check-only enforcement would let N concurrent PUTs that each fit
+   alone overshoot the quota together; the lock closes that hole for blob
+   writes and record batches alike.
+
+**Blob routes are exempt from the record channel's `MAX_BODY_BYTES`**
+`[F]`: the sync run mounts its 24 MiB body limit for the JSON push
+endpoint; applied service-wide it would silently cap blob PUTs below the
+32 MiB `MAX_BLOB_BYTES`. The blob routes' sole body ceiling is
+`MAX_BLOB_BYTES`, asserted by a >24 MiB upload test (§18).
 
 The S3-write-then-DB-commit order is deliberate: a crash between the two
 leaves an S3 object **without** a DB row — invisible to quota and to GET,
 cleaned by the reconcile sweep (§19). The opposite order could mint quota
 charges for bytes that were never stored.
 
-Two devices racing the same `blobId` (possible only via replay of the same
-outbox entry) resolve via the existence check + the uniqueness constraint:
-one wins, the other lands in the idempotent-`200` path; the quota is bumped
-once.
+Two devices racing the same `blobId` — outbox replay, or two devices in
+epoch recovery re-uploading the same blob — carry **byte-identical bodies
+under deterministic sealing (§5)** `[F]`, so the race is harmless by
+construction: both stream the same bytes to the same key, the existence
+check + the PK constraint let one insert win, the other lands on the
+idempotent-`200` path, and the quota is bumped once. A different-body
+racer requires a valid token *and* a diverging plaintext for the same id —
+no honest client path produces it; if it ever occurs, GET-side hash
+verification surfaces it as the DB/S3 inconsistency metric (§7.2) `[L]`.
 
 ### 7.2 Download
 
@@ -272,7 +358,11 @@ GET /api/v1/sync/blobs/:blobId
 → 404 (unknown id — including another account's id: scoping is absolute)
 ```
 
-- Streams from S3 through the service; no full buffering.
+- Streams from S3 through the service; no full buffering. While streaming,
+  the service hashes incrementally and compares against the row's
+  `ciphertext_hash` after the last byte `[L]` — a mismatch cannot be
+  un-sent, but it bumps the DB/S3 inconsistency metric (detection, not
+  prevention; the client's GCM open is the real integrity gate).
 - `Cache-Control: no-store` — the engine persists decrypted bytes into
   Dexie; letting the browser's HTTP cache hold a second (ciphertext) copy
   would double storage for nothing. A decision, revisitable if fetch
@@ -287,13 +377,24 @@ DELETE /api/v1/sync/blobs/:blobId
 → 204 (idempotent — absent id is also 204)
 ```
 
-- Deletes the DB row and the S3 object, frees the quota bytes.
+- **Order pinned, mirror-image of PUT** `[F]`: DB row delete + quota credit
+  commit **first**, S3 object delete best-effort **after**. A crash between
+  the two leaves an invisible orphaned object for the reconcile sweep —
+  the same failure direction PUT chose; the reverse order would leave a
+  quota-charged row that 404s. A DELETE interleaving an in-flight PUT of
+  the same id (S3 operations run outside the account lock) can likewise
+  strand a row-less object or an object-less row — bounded, self-healing
+  via the §12 repair rules, and said out loud here rather than discovered.
 - **Counts against the same per-account delete-rate window as record
   tombstones** (`RATE_LIMIT_DELETE_PER_MIN`): the destruction-bounding
   rationale applies with full force — a stolen token must not be able to
   erase an image archive in one burst. Over the window →
-  `delete_rate_limited` (retriable); the engine spreads legitimate bulk
-  deletes exactly as it does tombstones.
+  `delete_rate_limited` (retriable, `Retry-After` set as on the record
+  channel `[F]`); the engine spreads legitimate bulk deletes exactly as it
+  does tombstones. Note the added pressure: a chat-deletion cascade emits
+  record tombstones **plus** blob DELETEs into the same window — roughly
+  double the per-image budget the sync spec sized for; the default lands in
+  §19's tuning bullet `[F]`.
 
 ### 7.4 Listing
 
@@ -304,10 +405,12 @@ GET /api/v1/sync/blobs
 
 Account-scoped inventory. Three consumers: the client's quota/usage display,
 the engine's epoch-recovery blob reconciliation (§12), and the engine's
-future orphan sweep. Deliberately unpaginated in v1 — at 2 GiB / ~40 KiB
-minimum-interesting-blob the worst case is tens of thousands of tuples of a
-few dozen bytes; a `more` cursor can be added compatibly if reality
-disagrees.
+future orphan sweep. Deliberately unpaginated in v1 — a bound that is now
+**enforced, not assumed** `[L]`/`[F]`: the `BLOB_QUOTA_FLOOR_BYTES`
+accounting floor (§4) caps an account at ~32k blobs within 2 GiB, so the
+worst-case listing is tens of thousands of small tuples, not the millions
+of near-free rows that 28-byte blobs would otherwise permit. A `more`
+cursor can still be added compatibly if reality disagrees.
 
 ### 7.5 Error vocabulary
 
@@ -317,12 +420,12 @@ meaning):
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `blob_too_large` | `413` | `Content-Length` over `MAX_BLOB_BYTES` |
+| `blob_too_large` | `413` | over `MAX_BLOB_BYTES`; payload carries `maxBlobBytes` `[F]` (env-tunable — the client cannot know an operator's limit; the constructive error must) |
 | `quota_exceeded` | `507` | with `usedBytes`/`quotaBytes` payload |
 | `blob_exists` | `409` | id taken with a different hash (immutability) |
 | `hash_mismatch` | `400` | body did not hash to `x-ciphertext-hash` |
 | `not_found` | `404` | unknown id (including foreign accounts' ids) |
-| `delete_rate_limited` | `429` | shared delete window tripped (retriable) |
+| `delete_rate_limited` | `429` | shared delete window tripped (retriable, `Retry-After` set) |
 | `blob_backend_unavailable` | `503` | S3 configured but unreachable |
 | `blobs_disabled` | `501` | no S3 configured on this instance |
 
@@ -339,15 +442,29 @@ discipline as the record channel.
 - **Streaming discipline:** the service never holds a whole blob in memory —
   request bodies stream to S3 with incremental hashing/counting; responses
   stream from S3 with backpressure. Probed before plan lock-in (§21).
+- **Upload inactivity timeout** `[L]`: a body-progress timeout
+  (`BLOB_UPLOAD_IDLE_TIMEOUT_S`, default 30) aborts stalled PUTs (abort +
+  best-effort delete) — rate limits count request *starts*; without this, a
+  token holder trickling many slow PUTs pins sockets and S3 connections
+  indefinitely. A body that keeps flowing **past** the declared
+  `Content-Length` is aborted likewise (probed, §21).
 - **Degradation:** S3 unreachable at runtime → `503
   blob_backend_unavailable` on blob routes **only**; the record channel is
   untouched; `readyz` stays green (S3 liveness becomes a metric, not a
   readiness criterion — an operator's object-store hiccup must not take
   record sync down).
 - **Bucket bootstrap:** at boot, with S3 configured, the service creates the
-  bucket if absent (idempotent) — one operator hand-step fewer. S3
-  unreachable at boot does **not** block startup: log, expose the metric,
-  retry in the background, serve records meanwhile.
+  bucket if absent (idempotent) — one operator hand-step fewer. **An
+  already-existing bucket is verified, not trusted** `[L]`: object
+  **versioning** enabled would silently break the deletion promise (every
+  DELETE leaves the ciphertext retrievable as a prior version) — the
+  bootstrap checks the versioning status and logs a loud, constructive
+  warning if it is on (and DEPLOYMENT ch. 10 names it). If the chosen S3
+  client uses multipart uploads (probe 1 records this), the bootstrap also
+  sets an `AbortIncompleteMultipartUpload` lifecycle rule — abandoned parts
+  otherwise consume storage invisible to both quota and the reconcile
+  sweep `[F]`. S3 unreachable at boot does **not** block startup: log,
+  expose the metric, retry in the background, serve records meanwhile.
 - **Metrics** (anonymity invariant upheld — no `account_id`/`blob_id`
   label, ever): upload/download/delete counters and byte histograms, errors
   by code, S3 backend errors, an S3-liveness gauge, and the DB/S3
@@ -371,6 +488,18 @@ request time). `syncUrl` is unchanged. Clients that see `"sync"` without
 `"blobs"` show the honest records-only boundary (placeholders + copy);
 self-hosters get blob sync the moment they add MinIO to their compose.
 
+Pinned semantics `[F]`:
+
+- **The mirror can drift** — it is a manual pairing. Flag on + S3 unset:
+  clients meet `501 blobs_disabled` and fall back to placeholder mode (no
+  retry loop, §12). Flag off + S3 configured: the capability sits unused —
+  harmless, wasteful, named. DEPLOYMENT ch. 4 lists the pairing as a
+  congruence checkpoint.
+- **The three collections' records sync regardless of the flag.** Text
+  artefacts and text attachments are blob-less rows; gating their record
+  sync on `"blobs"` would be wrong. The flag gates only blob
+  upload/download; without it, `blobRef`s render as placeholders.
+
 ## 11. Collection dispositions (engine contract input)
 
 The sync spec's §12.1 discipline, extended to the three joining
@@ -379,9 +508,23 @@ questions:
 
 | Collection | Disposition |
 |---|---|
-| `artefacts` | Creation is a Class-1 insert (fresh uuid, complete at birth). `title`/`fileName`/`tags`/`favourite` edits are Class 2. `blob`/`thumbBlob` never change after creation (an image artefact is immutable content; renames touch metadata only). |
-| `attachments` | Sync **only once `messageId` is set** (sent) — a pending compose attachment is device-local transient state, exactly like lazy-chat drafts. From send, the row is a Class-1 append riding its message. `state: 'deleted'` soft-deletes are Class-2 edits. `visionDescription` is a Class-2 background-job edit (cache — converges via CAS like `lastExtractedMessageId`). |
-| `personaAvatars` | Insert Class 1 with a new persona's avatar; replacing an avatar is Class 2 (new `blobId` + row update + old-blob delete); `crop` edits are Class 2 (row-only — the blob is untouched). |
+| `artefacts` | Creation is a Class-1 insert (fresh uuid, complete at birth). `title`/`fileName`/`tags`/`favourite` edits are Class 2 — **and so is `content` for `kind: 'text'`** `[F]`: text artefacts (HTML/markdown/code) are user-editable via `updateArtefactContent`; only image artefacts are immutable content. User-reachable `deleteArtefact` → tombstone + blob DELETEs (original + thumb). |
+| `attachments` | Sync **only once `messageId` is set** (sent) — a pending compose attachment is device-local transient state, exactly like lazy-chat drafts. From send, the row is a Class-1 append riding its message. `state: 'deleted'` soft-deletes are Class-2 edits; **the blob is retained on soft-delete** `[F]` (the row still references it and remains restorable; only a hard delete/cascade releases blobs) — pinned now even though no client path writes the state yet. `visionDescription` is a Class-2 background-job edit; anti-ping-pong rule: **adopt any present description, regenerate only when none exists** `[F]` (two devices with different vision models must not overwrite each other in turns). |
+| `personaAvatars` | Insert Class 1 with a new persona's avatar; replacing an avatar is Class 2 (new `blobId` + row update + old-blob delete); `crop` edits are Class 2 (row-only — the blob is untouched). **Removal is a Class-2 update to `blobRef: null` — never a tombstone** (§5.1's terminality trap `[F]`); the tombstone happens only in the persona-deletion cascade. |
+
+**Cascades, named** `[F]`: deleting a chat cascade-deletes its attachments
+*and* artefacts (tombstones + blob DELETEs — see §7.3's rate-window
+pressure note); deleting a persona cascades its avatar (tombstone + blob
+DELETE). The engine spreads these like any bulk delete.
+
+**Conflict-resolution keys** `[F]` — extending the sync spec's §12.3 table,
+which the three collections never joined:
+
+| Collection | Resolution key |
+|---|---|
+| `artefacts` | existing `updatedAt` (LWW, tie-break by uuid) |
+| `personaAvatars` | existing `updatedAt` (LWW) |
+| `attachments` | **engine-stamped `updatedAt`**, added by the v33 engine migration — `AttachmentRow` has none today, yet carries real Class-2 edits (`state`, `fileName`, `visionDescription`); it joins the same stamp sweep already planned for `chats`/`messages`/`mindspaces` |
 
 ## 12. The client engine — the blob contract (built later, like §12 there)
 
@@ -398,19 +541,29 @@ implements, against this server:
   user-visible hole.
 - **Dangling refs resolve inertly:** a `blobRef` whose GET returns 404 shows
   the placeholder state and schedules a retry; it never fails the record's
-  application. If the local device still holds the bytes, it repairs — with
-  a case split that matters: when the server has **no row** for the id
-  (absent from the listing — epoch recovery, lost DB), re-upload under the
-  **same** `blobId` (a fresh seal under the same id is fine — the AAD binds
-  the id, not the old nonce). When the server **has the row but lost the
-  object** (backup skew: GET 404s yet the listing shows the id), a re-PUT
-  would trip `blob_exists` (a fresh seal hashes differently) — repair with a
-  **fresh `blobId`** plus a Class-2 record update carrying the new ref, then
-  DELETE the skewed id.
+  application. If the local device still holds the bytes, it repairs. Under
+  deterministic sealing (§5) the same-id re-PUT is byte-identical, so
+  **repair is simply: PUT the blob again** — the server answers `201` (row
+  lost), `200` (object present after all), and both heal. The residual
+  cases `[L]`/`[F]`:
+  - `blob_exists` (`409`) on a repair PUT — the row exists with a hash that
+    does not match a deterministic re-seal: the stored state is corrupt or
+    foreign. Repair with a **fresh `blobId`** + a Class-2 record update
+    carrying the new ref, then DELETE the old id.
+  - **GET succeeds but `openBlob` fails** (bit rot, server-side garbage) —
+    the third case: same fresh-id repair when the device holds the bytes;
+    placeholder + diagnostic when it does not. Like the record channel's
+    inert-rejection rule, a corrupt blob never fails or mutates the
+    referencing record's application.
+  - `501 blobs_disabled` on GET — placeholder, **retry suppressed** `[F]`
+    (disabled is not missing; re-probe only when `/api/v1/config` changes).
+  - `413 blob_too_large` on PUT is **permanent for that blob** `[F]`: mark
+    the outbox entry failed with constructive copy (the payload names the
+    operator's `maxBlobBytes`), never block the queue behind it.
 - **Epoch recovery includes blobs:** on an `instance_epoch` change, after
   the record recovery (sync spec §12.2), the engine diffs local `blobRef`s
-  against `GET /api/v1/sync/blobs` and re-uploads what the server lost
-  (same-id case above).
+  against `GET /api/v1/sync/blobs` and re-uploads what the server lost —
+  plain re-PUTs, idempotent and hash-stable under deterministic sealing.
 - **Trash interplay:** a pulled tombstone routes the row to the client-side
   trash *with its local blob bytes* — the 30-day grace window keeps images
   restorable. Restore mints a new uuid **and a new `blobId`** and re-uploads
@@ -442,9 +595,11 @@ neighbours (each blob request stands alone — there is no batch to protect).
 | `S3_BUCKET` | sync | default `chatsundere-blobs`; created at boot if absent |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | sync | credentials (secret; pino-redacted) |
 | `S3_FORCE_PATH_STYLE` | sync | default `true` (MinIO); `false` for AWS virtual-host style |
-| `MAX_BLOB_BYTES` | sync | default `33554432` (32 MiB ciphertext body) |
-| `ACCOUNT_QUOTA_BYTES` | sync | **default raised to `2147483648` (2 GiB)** — shared records + blobs (amends sync spec §7.4/§14) |
-| `SYNC_BLOBS_ENABLED` | auth-service | mirrors S3 presence for the `/api/v1/config` `"blobs"` flag (§10) |
+| `MAX_BLOB_BYTES` | sync | default `33554432` (32 MiB ciphertext body); **blob routes are exempt from `MAX_BODY_BYTES`** `[F]` (§7.1) |
+| `BLOB_QUOTA_FLOOR_BYTES` | sync | default `65536` (64 KiB accounting floor per blob, §4) `[L]`/`[F]` |
+| `BLOB_UPLOAD_IDLE_TIMEOUT_S` | sync | default `30` (body-progress timeout, §8) `[L]` |
+| `ACCOUNT_QUOTA_BYTES` | sync | **default raised to `2147483648` (2 GiB)** — shared records + blobs (amends sync spec §7.4/§14); instance-global, no per-account override exists `[F]` |
+| `SYNC_BLOBS_ENABLED` | auth-service | mirrors S3 presence for the `/api/v1/config` `"blobs"` flag (§10); pairing is a DEPLOYMENT ch. 4 congruence checkpoint |
 
 `.env.example` updated for both services; MinIO joins
 `infra/docker-compose.dev.yml` (dev credentials, healthcheck) and the prod
@@ -495,6 +650,9 @@ curl -X DELETE https://sync.chatsundere.me/api/v1/sync/blobs/<blobId> \
 - `apps/auth-service`: the `"blobs"` config flag (`SYNC_BLOBS_ENABLED`).
 - `infra/`: MinIO in dev compose + prod example.
 - `tools/seal-cli.ts` blob subcommands.
+- The sync-service **`re-epoch` command** `[F]` (mint a fresh
+  `instance_epoch` after an operator restore, §17.7) — small, and the
+  restore runbook is unpublishable without it.
 - `obsidian/DEPLOYMENT.md` (§17) — written against the built services.
 - **Larissa re-audits the built diff before squash** (sync-service +
   `packages/crypto` are mandatory paths).
@@ -539,7 +697,10 @@ Chapter structure (fixed here so the plan's doc tasks are mechanical):
    passphrases, plaintext, or image content — and that protects the
    *operator* too ("you cannot leak what you cannot read").
 3. **Prerequisites** — VPS sizing guidance, Docker Compose, domain + TLS
-   (Traefik as the reference front, any reverse proxy viable).
+   (Traefik as the reference front, any reverse proxy viable). **Includes
+   image provenance** `[F]`: registry location, tag scheme, supported
+   architectures, and — identity-relevant for an AGPLv3 project —
+   **building from source**.
 4. **Configuration reference** — every env var per service: purpose, format,
    example, secret-or-not, key-generation commands. Kept congruent with
    `.env.example` (congruence is part of the definition of done).
@@ -550,16 +711,34 @@ Chapter structure (fixed here so the plan's doc tasks are mechanical):
    (tag-gated images, Watchtower scoping), **backups & restore**: Postgres +
    the MinIO bucket are the backup pair (take them close together; skew
    self-heals via client re-upload but is worth avoiding), Redis is safe to
-   lose; and the honest `instance_epoch` consequence — restoring from backup
-   flips the epoch and sends every client through recovery (local data wins
-   its way back up; documented so an operator is not alarmed).
+   lose. **The restore runbook must flip the epoch itself** `[F]` — this
+   was mechanically unbacked in the drafts: `instance_epoch` lives in
+   `sync_meta` and is therefore *inside* every Postgres backup, so a plain
+   `pg_restore` restores the old epoch and no client recovery fires —
+   exactly the silent divergence the epoch exists to prevent. The runbook
+   step: exclude `sync_meta` from the dump (fresh mint on next boot) or run
+   the sync-service `re-epoch` command after restore; the small mechanism
+   lands with this spec's implementation (§16) and is **flagged across to
+   the in-flight 02 run**, which is building the epoch this week. Also
+   honest here `[L]`: backup retention is deletion latency (deleted blobs
+   persist in bucket backups until rotation), and a restore can resurrect
+   blobs whose referencing records are tombstoned — quota-charged orphans
+   until the client-side sweep ships.
 8. **Scaling honesty** — single-replica is the v1 reality (in-process
    doorbell registry); said plainly, not vaguely promised away.
 9. **Troubleshooting** — the common failure shapes, each with its next
    constructive step.
 10. **Operator security checklist** — ops ports never public, secrets
     hygiene, TLS, deny-list dependency on shared Redis, what to do on
-    suspected compromise.
+    suspected compromise. **MinIO-specific items** `[L]`: neither the S3
+    API port nor the **web console** (9001) published; **no default root
+    credentials** (`minioadmin` must die in the compose example itself);
+    sync-service runs on a **scoped access key** (one bucket's CRUD), not
+    the root credential; **versioning/ILM off** (or documented as breaking
+    the deletion promise — the bootstrap warns, §8); and MinIO
+    **audit/access logging** implications — object keys + request timing
+    are exactly the access-pattern residue §6 owns, and enabling audit
+    logs materialises it at rest.
 
 The document is written **after** the implementation tasks in the plan, so
 env names, defaults, and behaviours are verified against the built services
@@ -568,24 +747,45 @@ env names, defaults, and behaviours are verified against the built services
 ## 18. Testing (Bun runner; crypto in the packages/crypto vitest suite)
 
 - **Envelope:** seal/open round-trip with real multi-MiB bytes; AAD tamper
-  matrix (foreign `blobId`, v2 tag → open fails); foreign MK fails; nonce
-  uniqueness across seals; hash covers nonce + ciphertext; `mintBlobId`
-  shape (22 base64url chars, 16 bytes); WebCrypto parity Bun/browser.
+  matrix (foreign `blobId`, v2 tag → open fails); foreign MK fails;
+  **determinism** `[L]`/`[F]`: byte-identical bodies for the same
+  `(mk, blobId, plaintext)` across repeated seals and across Bun/browser;
+  divergent bodies for a different `blobId` (same plaintext), different
+  plaintext, different MK; **the plaintext hash never on the wire** —
+  whole-request scan asserts `SHA-256(plaintext)` bytes appear nowhere
+  (the NSFW-flag discipline) `[L]`; hash covers nonce + ciphertext;
+  `mintBlobId` shape (22 base64url chars, 16 bytes); WebCrypto parity
+  Bun/browser.
 - **PUT:** happy path → `201` + row + quota bump; missing `Content-Length` →
-  `411`; header over cap → `blob_too_large` with **zero S3 traffic**
-  (asserted via the S3 test double); actual bytes ≠ header → abort, nothing
-  recorded, S3 object cleaned; hash mismatch → likewise; quota edge (exact
-  fit passes, +1 byte → `quota_exceeded` with `usedBytes`/`quotaBytes`);
-  idempotent re-PUT (same hash → `200`, **no double count**); different
-  hash → `blob_exists`, stored object untouched; two concurrent PUTs of one
-  `blobId` → one `201`, one `200`, quota bumped once; invalid `blobId`
-  shapes → `400`.
+  `411`; body < 28 bytes → `400`; header over cap → `blob_too_large`
+  (payload carries `maxBlobBytes`) with **zero S3 traffic** (asserted via
+  the S3 test double); **a >24 MiB, <32 MiB upload succeeds** (the
+  `MAX_BODY_BYTES` exemption, §7.1) `[F]`; actual bytes ≠ header → abort,
+  nothing recorded, S3 object cleaned; hash mismatch → likewise; malformed
+  `x-ciphertext-hash` (wrong decoded length) → `400` `[L]`; quota edge
+  (exact fit passes, +1 byte → `quota_exceeded` with
+  `usedBytes`/`quotaBytes`); **floor accounting** — a 1 KiB blob charges
+  `BLOB_QUOTA_FLOOR_BYTES` `[L]`/`[F]`; idempotent re-PUT (same hash →
+  `200`, **no double count**) — **including at a full account** (existence
+  before quota, §7.1 step 3) `[F]`; different hash → `blob_exists`, stored
+  object untouched; two concurrent PUTs of one `blobId` (identical bodies,
+  per determinism) → one `201`, one `200`, quota bumped once; **two
+  concurrent PUTs of different ids that each fit alone but not together →
+  exactly one `201`, counter ≤ quota** (in-transaction enforcement, §7.1
+  step 6) `[L]`/`[F]`; invalid `blobId` shapes → `400`.
 - **GET:** byte-identical round-trip at cap size; unknown id → `404`;
   **another account's id → `404`** (absolute scoping); DB row without S3
   object → `404` + inconsistency metric; `Cache-Control: no-store`.
 - **DELETE:** frees quota; idempotent (`204` on absent); **a mix of record
   tombstones and blob deletes trips the same
-  `RATE_LIMIT_DELETE_PER_MIN` window** while ordinary writes are unaffected.
+  `RATE_LIMIT_DELETE_PER_MIN` window** while ordinary writes are
+  unaffected; the `429` carries `Retry-After` `[F]`; DB-first order — after
+  a simulated S3-delete failure the row is gone and quota freed (orphaned
+  object, sweep territory) `[F]`.
+- **Avatar lifecycle (allowlist + wire shape):** set → remove
+  (`blobRef: null` Class-2 update, **no tombstone**) → set again
+  round-trips; a tombstoned `personaAvatars` row (persona deletion) stays
+  terminal `[F]`.
 - **Listing:** account-scoped ids + bytes + totals; empty account → empty
   list.
 - **Shared quota:** records and blobs jointly cross `ACCOUNT_QUOTA_BYTES`;
@@ -600,7 +800,12 @@ env names, defaults, and behaviours are verified against the built services
 - **Auth matrix inherited:** valid / expired / deny-listed / tampered /
   wrong-algorithm → `401` on every blob route.
 - **Anonymity invariant:** no log line, no metric label carries
-  `account_id`/`sub`/`jti`/`blob_id`; S3 credentials pino-redacted.
+  `account_id`/`sub`/`jti`/`blob_id`; S3 credentials pino-redacted —
+  **including a failing S3 call fed through the logger** `[L]` (SDK error
+  objects can embed the endpoint URL and access-key id outside the
+  redacted config path).
+- **Bootstrap:** an existing bucket with versioning enabled → loud
+  constructive warning at boot `[L]`.
 - **Ops split:** blob metrics on `OPS_PORT` only.
 - **Config flag:** `"blobs"` present ⇔ `SYNC_BLOBS_ENABLED`.
 - **seal-cli:** blob-seal → PUT → GET → blob-open round-trip through the
@@ -619,8 +824,26 @@ env names, defaults, and behaviours are verified against the built services
   account-lifecycle workstream.
 - **Client-side orphan sweep** (blobs no local row references — engine
   crash between tombstone and delete): engine session, using §7.4's listing.
-- **Quota default (2 GiB) and `MAX_BLOB_BYTES` (32 MiB)** are first guesses;
-  tune against real usage, like the record ceilings.
+- **Quota default (2 GiB), `MAX_BLOB_BYTES` (32 MiB), the 64 KiB accounting
+  floor, and `RATE_LIMIT_DELETE_PER_MIN` under cascade pressure** `[F]`
+  (chat deletion now emits tombstones *and* blob DELETEs into one window)
+  are first guesses; tune against real usage, like the record ceilings.
+- **Per-account download egress budget** `[L]` — a token replaying its own
+  32 MiB blob at the request rate limit draws ~4× the record channel's
+  worst-case operator egress; extends an accepted posture rather than
+  breaking it, named here as a deferred knob beside the quota tunables.
+- **Cross-flags to the in-flight workstreams** `[F]`:
+  1. **To the 02 run / engine session — `vectors` terminality hazard**, the
+     same failure class as the avatar trap (§5.1): a document *edit* that
+     shrinks the chunk count would tombstone tail keys (`<docId>#7`) that a
+     later growth re-creates under the same composite key → `tombstoned`
+     forever. The engine must handle shrunk tails on edit as
+     **cleared-state Class-2 updates (defaults-over-delete)**, reserving
+     tombstones for document deletion, where the docId never recurs.
+  2. **To the 02 run — epoch-restore mechanics** (§17.7): `instance_epoch`
+     travels inside the Postgres backup, so a restore alone flips nothing;
+     the `re-epoch` escape hatch (or a documented `sync_meta` dump
+     exclusion) is required for the epoch's core promise to hold.
 - **Listing pagination** — add a cursor compatibly if inventories ever grow
   past sanity (§7.4).
 - **Per-blob-size padding** — revisit only if size correlation ever proves
@@ -656,12 +879,16 @@ House discipline — empirical checks the plan runs before tasks lock:
 
 1. **Bun's native S3 client vs `@aws-sdk/client-s3` against MinIO** —
    streaming PUT with known length, streaming GET, path-style addressing,
-   idempotent bucket creation, error shapes on a dead endpoint. The winner
-   is chosen empirically, not from docs.
+   idempotent bucket creation, error shapes on a dead endpoint, **and
+   whether the client uses multipart uploads at 32 MiB** `[F]` (if yes, the
+   bootstrap's `AbortIncompleteMultipartUpload` lifecycle rule becomes
+   mandatory, §8). The winner is chosen empirically, not from docs.
 2. **Hono/Bun request-body streaming at 32 MiB** — memory profile
    (no full buffering), incremental SHA-256 while consuming the stream,
    abort semantics on client disconnect mid-upload (is the partial S3 write
-   observable? does the delete-best-effort path run?).
+   observable? does the delete-best-effort path run?), **a stalled body
+   (inactivity timeout fires), and a body that keeps flowing past the
+   declared `Content-Length`** `[L]`.
 3. **GET passthrough S3 → client** — backpressure behaviour, memory under a
    slow reader, `Content-Length` propagation.
 4. **`Content-Length` in Bun/Hono** — is it surfaced pre-body reliably; are
