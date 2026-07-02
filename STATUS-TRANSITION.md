@@ -1,6 +1,6 @@
 # Chatsundere Status — Full Backend Transition
 
-**Last updated:** 2026-07-02 — WS-0 Foundation built on the branch, awaiting review.
+**Last updated:** 2026-07-02 (late evening) — all remaining specs + plans done; WS-B+E building remotely.
 This file is the orientation surface for the **Full Backend Transition**: the
 focused, deploy-free sprint that integrates the three built backend workstreams
 (authenticated proxy, zero-knowledge sync, blob transport) plus the two auth
@@ -128,28 +128,52 @@ in `superpowers/`.
 
 ## 6. Doing now
 
-- **WS-0 Foundation BUILT on this branch** — spec
-  `superpowers/specs/2026-07-02-ws0-foundation-design.md` (v2, Laura-passed),
-  plan `superpowers/plans/2026-07-02-ws0-foundation.md`, all tasks green
-  (typecheck 14/14, both vitest suites green, `pnpm build` 9/9, Biome clean).
-  Ships the four foundation primitives — `ServerConfig` wire type +
-  `parseServerConfig` validation, the central `account-link.store`, the
-  `discovery.store` single-flight `probeServer`/`maybeProbeLinkedServer`, the
-  connectivity regain-probe wiring — plus `useServerGate` + the gate copy
-  catalogue + effective-URL selectors and the boot wiring. No user-visible flow
-  change; consumers arrive in WS-B/A/C/D. **Awaiting Liz's review and Chris's
-  §13 manual verification** before the next workstream.
+- **WS-B + WS-E BUILDING remotely** — spec
+  `superpowers/specs/2026-07-02-ws-b-e-onboarding-and-step-up-design.md` (v2,
+  Laura-passed), plan
+  `superpowers/plans/2026-07-02-ws-b-e-onboarding-and-step-up.md` handed to an
+  overnight worker; PR to this branch expected. Integration pipeline on
+  arrival: Liz review → Larissa (auth-service + crypto touched) → Laura →
+  merge.
+- **WS-A / WS-C / WS-D fully specced and planned (2026-07-02 evening):**
+  - WS-A: spec `…ws-a-proxy-client-design.md` (v2, Laura-passed) + plan
+    `…ws-a-proxy-client.md`. Open decision 1 RESOLVED: linking is the
+    prerequisite for proxy egress, no legacy escape hatch. Found + pinned:
+    browser fetch cannot read a proxied 3xx's Location — client re-issue
+    (server spec §5.3) is impossible; terminal constructive error + a
+    server-side 3xx-envelope follow-up registered for go-live.
+  - WS-C: spec `…ws-c-sync-engine-design.md` (**v2** — Larissa spec-pass
+    H-1/M-1–M-8/L-1–L-7/I-1–I-5 + Laura 2-hard/7-soft folded) + plan
+    `…ws-c-sync-engine.md` (16 tasks). Open decision 2 RESOLVED (staging
+    pattern, reference corrected). Chris decisions: trash internal-only v1,
+    minimal status line (enriched vocabulary), Dexie v33 confirmed, offline
+    bookmarking stays Class 2 with gentle copy.
+  - WS-D: spec `…ws-d-blob-client-design.md` (**v2** — Larissa M-1–M-4/
+    L-1–L-5/I-1–I-3 + Laura 1-hard/5-soft folded) + plan
+    `…ws-d-blob-client.md`. Chris decisions: simple fetch strategy (eager
+    thumbs/avatars, lazy originals), quota in the status line.
+  - Spec-pass auditor models this sprint: Larissa as Fable, Laura on Opus 4.8
+    (Chris 2026-07-02).
 
 ## 7. Next
 
-1. **WS-0 Foundation** — ✅ built, done-pending-verify (Liz review + Chris's
-   spec §13 manual verification on a dev build).
-2. **WS-B + WS-E** (onboarding un-gate + step-up) — the next spec session; cheap,
-   produces linked accounts to exercise the rest.
-3. **WS-A** proxy client.
-4. **WS-C** sync engine (its own multi-step effort; Larissa + Laura).
-5. **WS-D** blob client (rides on C; the deferrable tail).
-6. Turnkey gate → merge to master → hand off to the separate go-live event.
+1. **WS-0** — built; Chris's spec §13 manual verification on a dev build
+   still owed.
+2. **WS-B + WS-E** — remote build in flight → integrate on PR arrival
+   (Liz review, Larissa, Laura, merge).
+3. **Hand off the remaining plans SEQUENTIALLY: A → C → D**, each cutting
+   from the branch tip after the previous PR merges. A and C both touch
+   `send-message.ts`/`stream-engine.ts`/settings routes (A removes corsProxy
+   threading, C adds enqueue calls) — parallel runs would manufacture
+   integration conflicts. D's STOP-guard requires C landed.
+4. Post-build per workstream: Liz review → Larissa re-audit of the built
+   diff (A: token-attach path light; C: full zero-knowledge boundary; D:
+   blob-transport/repair) → Laura pre-squash → merge to this branch.
+5. Weekend: device testing (the specs' §-manual-verification lists),
+   bugfixing, polish.
+6. Turnkey gate → merge to master → hand off to the separate go-live event
+   (which now also owns: the proxy 3xx JSON-envelope follow-up, the
+   shared-proxy-retired cut message — a REQUIRED artefact coupled to WS-A).
 
 ## 8. Pointers
 
