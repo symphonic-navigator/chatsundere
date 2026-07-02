@@ -2,10 +2,11 @@
 import {
   CryptoError,
   finishJoinByPairing,
+  getLinkedAccount,
   setBiometricPromptDue,
   startJoinByPairing,
 } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
@@ -104,6 +105,8 @@ function PairingConfirmInner() {
       useSessionStore.getState().setSession(result.session, result.mk);
       useOnboardingStore.getState().reset();
       await setBiometricPromptDue(getDb());
+      const linkedRow = await getLinkedAccount(getDb());
+      if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
       navigate('/app', { replace: true });
     } catch (err) {
       const mapped = mapError(err);

@@ -264,6 +264,21 @@ export const copy = {
       'That address doesn’t look like a Chatsundere server. Check it with whoever invited you.',
     checking: 'Checking…',
   },
+  serverLinking: {
+    checking: 'Checking…',
+    statusLabel: 'Status',
+    localOnlyTitle: 'Local-only mode',
+    localOnlyBody:
+      'Link this device to a server to enable cross-device sync. You can run Chatsundere entirely on this device, without ever talking to a server.',
+    linkCta: 'Link to server',
+    linkedToPrefix: 'Linked to',
+    operatorTerm: 'Operator',
+    roleTerm: 'Role',
+    linkedSinceTerm: 'Linked since',
+    rolePrimaryAdmin: 'Primary admin',
+    roleAdmin: 'Admin',
+    roleUser: 'User',
+  },
   stepUp: {
     title: 'Confirm it’s you',
     bodyBoth: 'A quick re-check keeps your account safe.',
