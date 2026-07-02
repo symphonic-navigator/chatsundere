@@ -36,7 +36,7 @@ export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
   const url = joinUrl(opts.baseUrl, opts.path);
   let res = await fetch(url, buildInit(opts));
   if (res.status === 401 && opts.authMode === 'bearer') {
-    const refreshed = await tryRefresh(opts.baseUrl);
+    const refreshed = await refreshAccessToken(opts.baseUrl);
     if (refreshed) {
       res = await fetch(url, buildInit(opts));
     }
@@ -91,7 +91,13 @@ function buildInit(opts: ApiFetchOptions): RequestInit {
   };
 }
 
-async function tryRefresh(baseUrl: string): Promise<boolean> {
+/**
+ * Refresh the account access token via the HTTP-only refresh cookie. Exported
+ * so the proxy auth source (lib/proxy-auth.ts) can share the one refresh path
+ * on a proxied 401. Returns true on success; on failure it closes-and-forgets
+ * the session (per the 2026-05-18 refresh-reuse deferral) and returns false.
+ */
+export async function refreshAccessToken(baseUrl: string): Promise<boolean> {
   try {
     const url = joinUrl(baseUrl, '/api/v1/token/refresh');
     const res = await fetch(url, { method: 'POST', credentials: 'include' });
