@@ -67,6 +67,8 @@ export type {
   PassphraseChangeFinishResponse,
 } from './me.js';
 
+export type { ServerConfig, KnownServerFeature } from './config.js';
+
 export { SYNC_COLLECTIONS, revokedJtiKey, revokedSubKey } from './sync.js';
 export type {
   SyncCollection,
