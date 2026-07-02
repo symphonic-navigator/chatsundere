@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { requireStepUp } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods, users } from '../db/schema.js';
 import { metrics } from '../metrics.js';
@@ -35,6 +36,8 @@ export function registerLinkRoutes(app: Hono): void {
    */
   app.post('/api/v1/link/passkey/start', bearerAuth(), async (c) => {
     const claims = c.get('claims');
+    // Tier 1 step-up: adding a passkey mutates the account's auth methods.
+    await requireStepUp({ sessionId: c.get('sessionId') as string, tier: 1 });
     const { db } = createDb();
 
     // Verify the user has an existing OPAQUE auth method (not a fresh account trying to skip it).
