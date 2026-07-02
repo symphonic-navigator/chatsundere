@@ -11,6 +11,7 @@ import { registerAdminAuditRoutes } from './routes/admin/audit.js';
 import { registerAdminInvitationRoutes } from './routes/admin/invitations.js';
 import { registerAdminUserRoutes } from './routes/admin/users.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerConfigRoute } from './routes/config.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerJoinRoutes } from './routes/join.js';
 import { registerJwksRoute } from './routes/jwks.js';
@@ -35,6 +36,7 @@ export function createServer(): Hono {
 
   registerHealthRoutes(app);
   registerMetricsRoute(app);
+  registerConfigRoute(app);
   registerJwksRoute(app);
   registerTokenRoutes(app);
   registerAuthRoutes(app);

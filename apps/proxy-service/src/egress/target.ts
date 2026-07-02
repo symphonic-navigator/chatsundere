@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import { lookup } from 'node:dns/promises';
+import { isBlockedIp } from './blocked-ranges.js';
+
+/** A parsed, shape-validated forward target. */
+export interface Target {
+  origin: string;
+  host: string;
+  protocol: 'https:' | 'http:';
+}
+
+/** A rejected target; `status` maps directly to the HTTP response code. */
+export class TargetError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 403,
+  ) {
+    super(message);
+    this.name = 'TargetError';
+  }
+}
+
+/** Validates the `x-cors-proxy-target` shape (spec §5.6): absolute https/http origin, no userinfo, no path/query. */
+export function parseTarget(raw: string): Target {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new TargetError('Malformed target URL', 400);
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new TargetError('Target scheme must be https or http', 400);
+  }
+  if (url.username || url.password) throw new TargetError('Target must not contain userinfo', 400);
+  if ((url.pathname && url.pathname !== '/') || url.search) {
+    throw new TargetError('Target must be an origin, without path or query', 400);
+  }
+  return { origin: url.origin, host: url.hostname, protocol: url.protocol };
+}
+
+/**
+ * Resolves every A/AAAA record for `host`, blocks if ANY is a private/internal
+ * range, and returns one allowed IP to pin the connection to (DNS-rebinding
+ * defence — the checked IP is the connected IP).
+ */
+export async function resolveAndPin(host: string): Promise<string> {
+  let records: { address: string }[];
+  try {
+    records = await lookup(host, { all: true });
+  } catch {
+    throw new TargetError('Target host does not resolve', 403);
+  }
+  if (records.length === 0) throw new TargetError('Target host does not resolve', 403);
+  for (const r of records) {
+    if (isBlockedIp(r.address)) throw new TargetError('Target resolves to a blocked range', 403);
+  }
+  const first = records[0];
+  if (!first) throw new TargetError('Target host does not resolve', 403);
+  return first.address;
+}
+
+/**
+ * Connects to the pre-checked IP directly (no second DNS lookup → no TOCTOU),
+ * validating SNI + cert against the real host. `redirect: 'manual'` so a 3xx to a
+ * private range is never followed — it is returned to the client to re-issue and
+ * re-check from scratch (spec §5.2/§5.3).
+ */
+export function pinnedFetch(
+  ip: string,
+  target: Target,
+  requestUrl: URL,
+  method: string,
+  headers: Headers,
+  body: RequestInit['body'],
+): Promise<Response> {
+  const hostForUrl = ip.includes(':') ? `[${ip}]` : ip;
+  const connectUrl = `${target.protocol}//${hostForUrl}${requestUrl.pathname}${requestUrl.search}`;
+  // Bun's fetch accepts `tls.serverName`; typed loosely here since the standard
+  // RequestInit lacks it. SNI is only meaningful for the TLS (https) path.
+  const init: RequestInit & { tls?: { serverName: string } } = {
+    method,
+    headers,
+    body,
+    redirect: 'manual',
+    ...(method === 'GET' || method === 'HEAD' ? {} : { duplex: 'half' as const }),
+    ...(target.protocol === 'https:' ? { tls: { serverName: target.host } } : {}),
+  };
+  return fetch(connectUrl, init as RequestInit);
+}
