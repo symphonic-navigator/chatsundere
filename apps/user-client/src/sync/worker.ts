@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { computeBlindId, fromBase64Url, openRecord, sealRecord } from '@chatsundere/crypto';
 import type { MasterKey } from '@chatsundere/crypto';
-import type { SyncCollection, SyncPushRecord, SyncPushResponse } from '@chatsundere/shared-types';
+import type {
+  SyncCollection,
+  SyncPullResponse,
+  SyncPushRecord,
+  SyncPushResponse,
+} from '@chatsundere/shared-types';
 import {
   useAccountLinkStore,
   useConnectivityStore,
@@ -11,6 +16,7 @@ import {
 import type { SyncAttention, SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { apiFetch } from '../lib/fetch.js';
+import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
 import {
   type CoalescedEntry,
   DEFAULT_MAX_BATCH_BYTES,
@@ -20,7 +26,13 @@ import {
   prepareRecord,
 } from './seal-batch.js';
 import { extractKeyFor } from './sync-keys.js';
-import { checkEpoch, getSyncState, setAttention } from './watermark.js';
+import {
+  advanceWatermark,
+  checkEpoch,
+  getSyncState,
+  setAttention,
+  setPulling,
+} from './watermark.js';
 
 /**
  * The single-flight sync worker — DRAIN/PUSH half (spec §6 drain, §7.0 hashes).
@@ -62,6 +74,7 @@ function emptyDrain(): DrainResult {
 // ===== Injectable seams (production defaults; tests override) =====
 
 type PushTransport = (records: SyncPushRecord[]) => Promise<SyncPushResponse>;
+type PullTransport = (sinceRev: number, limit: number) => Promise<SyncPullResponse>;
 type OpenRecordFn = (
   mk: MasterKey,
   collection: string,
@@ -74,6 +87,7 @@ const defaultCrypto: SealCryptoDeps = { computeBlindId, sealRecord };
 let cryptoOverride: Partial<SealCryptoDeps> | null = null;
 let openRecordOverride: OpenRecordFn | null = null;
 let pushOverride: PushTransport | null = null;
+let pullOverride: PullTransport | null = null;
 let maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
 
 /** Task 7 registers the pull loop here; defaults to a no-op until then. */
@@ -93,6 +107,10 @@ export function _setOpenRecord(fn: OpenRecordFn | null): void {
 export function _setPushTransport(fn: PushTransport | null): void {
   pushOverride = fn;
 }
+/** Test seam: intercept the HTTP pull transport (the `GET changes` pages). */
+export function _setPullTransport(fn: PullTransport | null): void {
+  pullOverride = fn;
+}
 /** Test seam: shrink the byte-batch ceiling so boundary tests need no megabytes. */
 export function _setMaxBatchBytes(n: number): void {
   maxBatchBytes = n;
@@ -110,6 +128,7 @@ export function _resetWorkerForTests(): void {
   cryptoOverride = null;
   openRecordOverride = null;
   pushOverride = null;
+  pullOverride = null;
   maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
   pullLoop = async () => undefined;
   recovery = async () => undefined;
@@ -502,3 +521,76 @@ async function purgeTrash(): Promise<void> {
   const db = getClientDataDb();
   await db.trash.where('purgeAt').belowOrEqual(Date.now()).delete();
 }
+
+// ===== The pull loop (spec §6 pull, §7 apply) =====
+
+/** Server page size (spec §6): the `limit` on every `GET changes` request. */
+const PULL_PAGE_LIMIT = 200;
+/**
+ * Per-cycle page cap (spec §6, Larissa M-7): an unbounded `more: true` server
+ * must not pin the client. The rest continues next cycle from the watermark.
+ */
+const PULL_PAGE_CAP = 64;
+
+/** GET one page of changes since `sinceRev` (bearer + refresh via `apiFetch`). */
+function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<SyncPullResponse> {
+  return apiFetch<SyncPullResponse>({
+    baseUrl: syncUrl,
+    path: `/api/v1/sync/changes?since=${sinceRev}&limit=${limit}`,
+    authMode: 'bearer',
+  });
+}
+
+/**
+ * Pull loop (spec §6 pull + §7 apply). Pages from the watermark under a
+ * per-cycle cap, applies every record on a page, then advances the watermark to
+ * the page's highest rev — MONOTONE (Larissa M-7): a maliciously ordered page
+ * whose last rev is below the watermark cannot regress it (`advanceWatermark`
+ * clamps to `max`). Invalidations are coalesced and flushed ONCE per page
+ * (§7.6). An authenticated epoch mismatch aborts and hands off to recovery
+ * (§8). Registered as the default pull loop and re-invoked via `_setPullLoop`.
+ */
+export async function runPullLoop(): Promise<void> {
+  const syncUrl = useDiscoveryStore.getState().config?.syncUrl;
+  if (!syncUrl) return;
+  const pull =
+    pullOverride ?? ((since: number, limit: number) => defaultPull(syncUrl, since, limit));
+
+  // Reset the per-cycle pulled-tombstone tally + panic flag (§7.3a).
+  resetTombstoneCounter();
+
+  const startedAt = Date.now();
+  let pages = 0;
+  await setPulling({ pages, startedAt });
+  try {
+    let more = true;
+    while (more && pages < PULL_PAGE_CAP) {
+      const { watermarkRev } = await getSyncState();
+      const response = await pull(watermarkRev, PULL_PAGE_LIMIT);
+      pages += 1;
+      await setPulling({ pages, startedAt });
+
+      // §8 — an authenticated response with a differing epoch aborts the cycle.
+      if ((await checkEpoch(response.epoch)) === 'mismatch') {
+        await recovery();
+        return;
+      }
+
+      let highestRev = watermarkRev;
+      for (const record of response.records) {
+        await applyRecord(record);
+        if (record.rev > highestRev) highestRev = record.rev;
+      }
+      // Advance page by page, never ahead of application; monotone by clamp.
+      await advanceWatermark(Math.max(watermarkRev, highestRev));
+      flushInvalidations();
+
+      more = response.more;
+    }
+  } finally {
+    await setPulling(null);
+  }
+}
+
+// Register the real pull loop as the cycle default (tests override via _setPullLoop).
+pullLoop = runPullLoop;
