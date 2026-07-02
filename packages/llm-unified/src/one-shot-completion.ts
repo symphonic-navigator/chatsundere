@@ -13,8 +13,6 @@ export interface OneShotArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   target: CompletionTarget;
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
@@ -96,8 +94,6 @@ export async function runOneShotCompletionWithSleep(
       const request = buildRequest({
         provider: args.providerConfig,
         apiKey: args.apiKey,
-        corsProxyUrl: args.corsProxyUrl,
-        corsProxyKey: args.corsProxyKey,
         path: '/chat/completions',
         method: 'POST',
         body,

@@ -15,8 +15,6 @@ export interface TtsVoice {
 export interface ListTtsVoicesArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   /** Wire shape of the voice catalogue; mirrors `TtsVoiceSource`'s fetch endpoint. */
   endpoint: 'mistral-paginated' | 'xai-flat';
   signal?: AbortSignal;
@@ -37,8 +35,6 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoice[]
     const request = buildRequest({
       provider: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       path: '/tts/voices',
       method: 'GET',
     });
@@ -76,8 +72,6 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoice[]
     const request = buildRequest({
       provider: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       path: `/audio/voices?limit=${PAGE_LIMIT}&offset=${offset}`,
       method: 'GET',
     });

@@ -34,8 +34,6 @@ describe('synthesiseSpeech', () => {
     const result = await synthesiseSpeech({
       providerConfig: PROVIDER,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'voxtral-mini-tts-2603',
       teal: 'strip',
       transport: 'mistral-speech',
@@ -69,8 +67,6 @@ describe('synthesiseSpeech', () => {
     await synthesiseSpeech({
       providerConfig: PROVIDER,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'voxtral-mini-tts-2603',
       teal: 'passthrough',
       transport: 'mistral-speech',
@@ -89,8 +85,6 @@ describe('synthesiseSpeech', () => {
       synthesiseSpeech({
         providerConfig: PROVIDER,
         apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         upstreamSlug: 'voxtral-mini-tts-2603',
         teal: 'strip',
         transport: 'mistral-speech',
@@ -107,8 +101,6 @@ describe('synthesiseSpeech', () => {
       synthesiseSpeech({
         providerConfig: PROVIDER,
         apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         upstreamSlug: 'voxtral-mini-tts-2603',
         teal: 'strip',
         transport: 'mistral-speech',
@@ -130,8 +122,6 @@ describe('synthesiseSpeech', () => {
     const result = await synthesiseSpeech({
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'grok-tts',
       teal: 'passthrough',
       transport: 'xai-native',
@@ -163,8 +153,6 @@ describe('synthesiseSpeech', () => {
     await synthesiseSpeech({
       providerConfig: { baseUrl: 'https://nano-gpt.com/api/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'xai-tts',
       teal: 'passthrough',
       transport: 'openai-speech',
@@ -192,8 +180,6 @@ describe('synthesiseSpeech', () => {
     const attempt = synthesiseSpeech({
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'grok-tts',
       teal: 'passthrough',
       transport: 'xai-native',
@@ -215,8 +201,6 @@ describe('synthesiseSpeech', () => {
     const result = await synthesiseSpeech({
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'grok-tts',
       teal: 'passthrough',
       transport: 'xai-native',

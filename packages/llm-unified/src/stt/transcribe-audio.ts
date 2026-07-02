@@ -20,8 +20,6 @@ export class TranscriptionError extends Error {
 export interface TranscribeAudioArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   upstreamSlug: string;
   /** Wire shape of the transcription request (path, multipart fields). */
   transport: SttTransportKind;
@@ -70,8 +68,6 @@ export async function transcribeAudio(args: TranscribeAudioArgs): Promise<Transc
   const request = buildRequest({
     provider: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     path: args.transport === 'xai-native' ? '/stt' : '/audio/transcriptions',
     method: 'POST',
     body: form,

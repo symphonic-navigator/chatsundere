@@ -9,13 +9,15 @@ export interface WebLocation {
 }
 
 /** The per-call context a web backend may use: NSFW permission, an optional
- *  location hint, and the call-time CORS-proxy routing (null when the adapter
- *  is allowed direct, e.g. the Bun live-suite; populated in the browser). */
+ *  location hint, and whether this call must route through the account's
+ *  authenticated proxy. */
 export interface WebContext {
   nsfwAllowed: boolean;
   location: WebLocation | null;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
+  /** True when this web call must route through the account's authenticated
+   *  proxy (the backend sends no CORS headers); false when the adapter may go
+   *  direct (e.g. the Bun live-suite). */
+  useProxy: boolean;
 }
 
 /** One result row from a web search. */

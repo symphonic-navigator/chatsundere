@@ -18,7 +18,7 @@ const SNIPPET_CAP = 600;
 function routeFor(ctx: WebContext): ProviderConfig {
   return {
     baseUrl: WEB_BASE_URL,
-    routing: ctx.corsProxyUrl ? { kind: 'cors-proxy' } : { kind: 'direct' },
+    routing: ctx.useProxy ? { kind: 'cors-proxy' } : { kind: 'direct' },
   };
 }
 
@@ -33,8 +33,6 @@ async function postWeb(
   const req = buildRequest({
     provider: routeFor(ctx),
     apiKey: key,
-    corsProxyUrl: ctx.corsProxyUrl,
-    corsProxyKey: ctx.corsProxyKey,
     path,
     method: 'POST',
     body,

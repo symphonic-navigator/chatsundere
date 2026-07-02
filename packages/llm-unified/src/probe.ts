@@ -7,8 +7,6 @@ export interface ProbeArgs {
   definition: ProviderDefinition;
   config: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   fetchFn?: typeof fetch;
 }
 
@@ -23,8 +21,6 @@ export async function probeProvider(args: ProbeArgs): Promise<ProbeResult> {
   const request = buildRequest({
     provider: args.config,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     path: args.definition.probe.path,
     method: args.definition.probe.method,
   });

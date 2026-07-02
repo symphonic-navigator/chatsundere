@@ -20,8 +20,6 @@ const URL_FETCH_TIMEOUT_MS = 60_000;
 export interface ImageRequestBase {
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
 }
 
 export interface GenerateImagesArgs extends ImageRequestBase {
@@ -80,8 +78,6 @@ export async function generateImages(args: GenerateImagesArgs): Promise<Generate
   const request = buildRequest({
     provider: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     path: '/images/generations',
     method: 'POST',
     body,

@@ -24,8 +24,7 @@ const apiKey = readKey();
 const ctx: WebContext = {
   nsfwAllowed: false,
   location: null,
-  corsProxyUrl: null,
-  corsProxyKey: null,
+  useProxy: false,
 };
 
 const SEARCH_QUERY = 'latest stable Bun runtime version in 2026';

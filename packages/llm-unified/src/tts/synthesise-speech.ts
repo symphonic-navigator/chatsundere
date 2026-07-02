@@ -22,8 +22,6 @@ export class SpeechSynthesisError extends Error {
 export interface SynthesiseSpeechArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   upstreamSlug: string;
   teal: 'strip' | 'passthrough';
   /** Wire shape of the synthesis request (path, body, response encoding). */
@@ -92,8 +90,6 @@ export async function synthesiseSpeech(
   const request = buildRequest({
     provider: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     path: wire.path,
     method: 'POST',
     body: wire.body,
