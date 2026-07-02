@@ -1,6 +1,32 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-02 (evening) — **6A + 6B are BUILT AND MERGED to
+**Last updated:** 2026-07-02 (later) — **Block 6C blob transport is BUILT** on
+branch `claude/blob-transport-impl-xtpius` (17 `03:` commits; the designated
+remote-run branch — the plan's `feat/backend-03-blobs` name was overridden by the
+harness). All 16 plan tasks landed TDD-style: the deterministic blob envelope
+(`packages/crypto` sync-blob), `BlobRef` + the three collections in shared-types,
+the `sync_blobs` table + migration, the S3 backend (a hand-rolled SigV4 client —
+a documented deviation from the provisional Bun.S3Client probe pick, since
+Bun.S3Client exposes no bucket-admin ops; single-shot UNSIGNED-PAYLOAD PUT → no
+multipart → no lifecycle rule), the locked-quota blob store, the four routes
+(§7.1 pipeline + §7.5 statuses verbatim), ciphertext-blind metrics + logger
+credential redaction, the avatar cleared-state lifecycle pin, the `re-epoch`
+command, the auth-service `"blobs"` flag, the seal-cli blob subcommands, the
+cross-channel e2e, MinIO in both composes, and `obsidian/DEPLOYMENT.md` (10
+chapters, congruent with the `.env.example`s). Gates on the build host:
+`pnpm typecheck --force` **14/14**; sync-service `bun test` **125 pass / 5 skip /
+0 fail** (baseline 73); crypto **181 pass** (baseline 165); auth config unit
+**7 pass**; Biome clean on all 40 changed TS files. **Environment caveat, owned
+honestly:** the build host had no Docker daemon and no MinIO binary, so the 5
+S3-live legs (`s3.test.ts`) skip loudly and the route/store/e2e suites run
+against an in-memory `BlobBackend` (the interface seam) over native Postgres +
+Redis. The empirical S3 probes (Bun-fetch streaming PUT/GET against real MinIO,
+bucket bootstrap, versioning read) are **OWED** and recorded in
+`apps/sync-service/probes/README-blobs.md` — Chris's §20 VPS dry-run exercises
+them for real. **Next: Larissa audits the built diff** (sync-service +
+`packages/crypto` are mandatory paths; the SigV4 client + streaming pipeline +
+credential-redaction are the focus), Chris device/VPS-verifies (blob spec §20),
+then merge. Prior entry: **6A + 6B are BUILT AND MERGED to
 master** (remote runs completed; PRs #5 `feat/backend-01-cors-proxy` and #6
 `feat/backend-02-sync`, merged by Chris — post-merge Larissa re-audit of the
 built diffs is still owed before deploy). **Block 6C (blob transport S3/MinIO
