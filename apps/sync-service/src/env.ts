@@ -9,7 +9,7 @@ const EnvSchema = v.object({
   NODE_ENV: v.optional(v.picklist(['development', 'production', 'test']), 'development'),
   PORT: num('3200'),
   OPS_PORT: num('9091'),
-  LOG_LEVEL: v.optional(v.picklist(['trace', 'debug', 'info', 'warn', 'error', 'fatal']), 'info'),
+  LOG_LEVEL: v.optional(v.picklist(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']), 'info'),
   DATABASE_URL: v.string(),
   // Must point at the SAME Redis instance/db as the auth-service so the token
   // deny-list keys are visible (spec §9/§14).
