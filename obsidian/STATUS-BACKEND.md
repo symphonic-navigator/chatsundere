@@ -277,7 +277,15 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 ## Next session
 
-1. **After the 6C remote run lands:** Larissa re-audit of ALL THREE built
+1. **Frontend integration of the backend — spec + plan** (agreed with Chris
+   2026-07-02, runs while the 6C remote run builds): the client engine
+   (sync spec §12 + blob spec §11/§12 contracts — Dexie v33, outbox, worker,
+   BlobRef transform, fetch strategy) plus the proxy client-side (header
+   swap, `GET /api/v1/config` consumption, `CorsProxyBlock` collapse) and
+   the cross-device onboarding overhaul. Laura gates the UX (spec-pass
+   first). Carry the two cross-flags in: `vectors` shrunk-tail cleared-state
+   rule and the epoch-restore mechanics.
+2. **After the 6C remote run lands:** Larissa re-audit of ALL THREE built
    diffs (6A + 6B owed, 6C fresh), Chris's device/VPS dry-run verification
    (sync spec §18 + blob spec §20), then merge + the roadmap ADR amendment.
 2. **Full-build spec + two docs** — the whole backend deployed for the first
