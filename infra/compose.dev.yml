@@ -37,6 +37,32 @@ services:
     networks:
       - chatsundere-dev
 
+  minio:
+    # S3-compatible object store backing the blob transport (blob spec §14).
+    # Pinned to a concrete release for reproducibility — bump to the current
+    # stable tag when convenient. Dev-only, secret-free lab credentials.
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    restart: unless-stopped
+    command: ['server', '/data']
+    environment:
+      MINIO_ROOT_USER: chatsundere-dev
+      MINIO_ROOT_PASSWORD: chatsundere-dev-secret
+    ports:
+      # API only, bound to loopback for local dev; the web console (9001) is
+      # deliberately NOT published (blob spec §17 ch.10).
+      - '127.0.0.1:9000:9000'
+    volumes:
+      - ./data/minio:/data
+    healthcheck:
+      # /minio/health/live is the documented liveness endpoint. If a future
+      # image drops curl, switch to ['CMD', 'mc', 'ready', 'local'].
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - chatsundere-dev
+
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped
