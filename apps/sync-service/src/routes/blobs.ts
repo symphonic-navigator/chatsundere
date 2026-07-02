@@ -6,6 +6,7 @@ import type { Context, Hono } from 'hono';
 import type { BlobBackend } from '../blobs/s3.js';
 import { blobKey } from '../blobs/s3.js';
 import {
+  bytesEqual,
   commitBlob,
   deleteBlobRow,
   findBlob,
@@ -42,12 +43,6 @@ function errorBody(
   extra: { usedBytes?: number; quotaBytes?: number; maxBlobBytes?: number } = {},
 ): { error: Record<string, unknown> } {
   return { error: { code, message, ...extra } };
-}
-
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
 }
 
 /**
@@ -243,9 +238,10 @@ export function registerBlobRoutes(app: Hono, deps: SyncDeps, hooks: BlobHooks =
       status: HttpStatus,
       code: SyncBlobErrorCode | 'bad_request',
       msg: string,
+      extra?: { usedBytes?: number; quotaBytes?: number },
     ) => {
       await backend.delete(key).catch(() => {}); // best-effort, retrying delete
-      return c.json(errorBody(code, msg), status);
+      return c.json(errorBody(code, msg, extra), status);
     };
 
     try {
@@ -272,9 +268,20 @@ export function registerBlobRoutes(app: Hono, deps: SyncDeps, hooks: BlobHooks =
       quotaBytes: env.ACCOUNT_QUOTA_BYTES,
       floorBytes: env.BLOB_QUOTA_FLOOR_BYTES,
     });
+    if (commit.status === 'blob_exists') {
+      // A divergent-body racer won the id between the unlocked step-3 check and
+      // this commit. Do NOT delete the S3 object — the key may hold the
+      // committed winner's bytes; GET-side hash verification owns any residual
+      // skew (spec §7.1). The 409 triggers the client's §12 fresh-id repair.
+      onUpload('blob_exists');
+      return c.json(errorBody('blob_exists', 'a different blob already exists under this id'), 409);
+    }
     if (commit.status === 'quota_exceeded') {
       onUpload('quota_exceeded');
-      return fail(507, 'quota_exceeded', 'account storage quota exceeded');
+      return fail(507, 'quota_exceeded', 'account storage quota exceeded', {
+        usedBytes: commit.usedBytes,
+        quotaBytes: commit.quotaBytes,
+      });
     }
     onUpload('created');
     observeBytes(declared);

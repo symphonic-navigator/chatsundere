@@ -39,9 +39,11 @@ services:
 
   minio:
     # S3-compatible object store backing the blob transport (blob spec §14).
-    # Pinned to a concrete release for reproducibility — bump to the current
-    # stable tag when convenient. Dev-only, secret-free lab credentials.
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    # Pinned to the newest published community image (MinIO stopped publishing
+    # container images in October 2025; later fixes, incl. the CVE-2025-62506
+    # session-policy fix in RELEASE.2025-10-15T17-29-55Z, are source-only —
+    # see DEPLOYMENT.md ch. 7). Dev-only, secret-free lab credentials.
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: ['server', '/data']
     environment:

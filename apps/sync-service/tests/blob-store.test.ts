@@ -79,6 +79,15 @@ describe('commitBlob', () => {
     expect(await total(ACC)).toBe(FLOOR); // still one charge
   });
 
+  test('re-commit of the same blobId with a DIFFERENT hash → blob_exists, first hash stands', async () => {
+    await commitBlob(t.db, ACC, 'mismAAAAAAAAAAAAAAAAAA', 1024, hash(1), limits);
+    const clash = await commitBlob(t.db, ACC, 'mismAAAAAAAAAAAAAAAAAA', 1024, hash(2), limits);
+    expect(clash.status).toBe('blob_exists'); // never a false success for a divergent racer
+    expect(await total(ACC)).toBe(FLOOR); // no double count
+    const row = await findBlob(t.db, ACC, 'mismAAAAAAAAAAAAAAAAAA');
+    expect(Array.from(row?.ciphertextHash ?? [])).toEqual(Array.from(hash(1)));
+  });
+
   test('two concurrent commits that each fit alone but not together → one created, counter ≤ quota', async () => {
     const tight = { quotaBytes: FLOOR + 1024, floorBytes: FLOOR };
     const [a, b] = await Promise.all([

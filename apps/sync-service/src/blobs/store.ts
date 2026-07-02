@@ -12,7 +12,15 @@ import { syncAccounts, syncBlobs } from '../db/schema.js';
 
 export type BlobCommitResult =
   | { status: 'created' }
+  | { status: 'blob_exists' }
   | { status: 'quota_exceeded'; usedBytes: number; quotaBytes: number };
+
+/** Byte-wise equality, used for ciphertext-hash comparison. */
+export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 /** Each blob charges `max(bytes, floor)` against the shared quota (§4). */
 export const flooredBytes = (bytes: number, floor: number): number => Math.max(bytes, floor);
@@ -62,12 +70,20 @@ export async function commitBlob(
       .for('update');
     const totalBytes = account?.totalBytes ?? 0;
 
-    // Under the lock: a row already present is already counted → idempotent.
+    // Under the lock: a row already present with the SAME hash is already
+    // counted → idempotent. A DIFFERENT hash means a divergent-body racer won
+    // the id (spec §7.1 step 3 semantics re-checked here, because both racers
+    // can pass the unlocked route-level existence check) — the caller must see
+    // `blob_exists`, never a false success, so the §12 fresh-id repair fires.
     const [existing] = await tx
       .select()
       .from(syncBlobs)
       .where(and(eq(syncBlobs.accountId, accountId), eq(syncBlobs.blobId, blobId)));
-    if (existing) return { status: 'created' as const };
+    if (existing) {
+      return bytesEqual(existing.ciphertextHash, hash)
+        ? { status: 'created' as const }
+        : { status: 'blob_exists' as const };
+    }
 
     const charge = flooredBytes(bytes, limits.floorBytes);
     if (totalBytes + charge > limits.quotaBytes) {
