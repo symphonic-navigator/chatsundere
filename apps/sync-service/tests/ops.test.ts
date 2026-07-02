@@ -38,6 +38,16 @@ describe('ops app', () => {
     expect((await app.request('/readyz')).status).toBe(200);
   });
 
+  test('blob metrics are registered and served on the ops port', async () => {
+    createServer(deps); // ensures initialiseMetrics has run
+    const text = await (await createOpsApp(okCheck).request('/metrics')).text();
+    expect(text).toContain('sync_blob_uploads_total');
+    expect(text).toContain('sync_blob_downloads_total');
+    expect(text).toContain('sync_blob_deletes_total');
+    expect(text).toContain('sync_blob_backend_up');
+    expect(text).toContain('sync_blob_inconsistency_total');
+  });
+
   test('readyz degrades to 503 when a dependency is down', async () => {
     const dbDown = createOpsApp(async () => ({ database: 'down', redis: 'ok' }));
     expect((await dbDown.request('/readyz')).status).toBe(503);

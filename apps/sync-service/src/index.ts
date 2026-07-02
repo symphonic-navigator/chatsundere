@@ -9,6 +9,7 @@ import { createDoorbellHub } from './doorbell/hub.js';
 import { blobsEnabled, loadEnv } from './env.js';
 import type { SyncDeps } from './http/deps.js';
 import { createLogger } from './logger.js';
+import { setBlobBackendUp } from './metrics.js';
 import { createOpsApp } from './ops.js';
 import { createLimiter } from './ratelimit/limiter.js';
 import { type TicketData, consumeTicket } from './routes/doorbell.js';
@@ -37,6 +38,7 @@ if (blobsEnabled(env)) {
   };
   const tryBootstrap = async (): Promise<void> => {
     const ok = await bootstrapBucket(env, bootLog);
+    setBlobBackendUp(ok);
     if (!ok) setTimeout(() => void tryBootstrap(), 30_000);
   };
   void tryBootstrap();

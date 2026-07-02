@@ -4,7 +4,15 @@ import { Hono } from 'hono';
 import { corsMiddleware } from './cors.js';
 import { onSyncError } from './error.js';
 import type { SyncDeps } from './http/deps.js';
-import { initialiseMetrics } from './metrics.js';
+import {
+  initialiseMetrics,
+  observeBlobBytes,
+  recordBlobBackendError,
+  recordBlobDelete,
+  recordBlobDownload,
+  recordBlobInconsistency,
+  recordBlobUpload,
+} from './metrics.js';
 import { registerBlobRoutes } from './routes/blobs.js';
 import { registerChangesRoutes } from './routes/changes.js';
 import { registerDoorbellRoute } from './routes/doorbell.js';
@@ -21,7 +29,14 @@ export function createServer(deps: SyncDeps): Hono {
   app.onError(onSyncError);
   app.use('*', corsMiddleware(deps.env.CORS_ALLOWED_ORIGINS));
   registerChangesRoutes(app, deps);
-  registerBlobRoutes(app, deps);
+  registerBlobRoutes(app, deps, {
+    onUpload: recordBlobUpload,
+    onDownload: recordBlobDownload,
+    onDelete: recordBlobDelete,
+    onBackendError: recordBlobBackendError,
+    onInconsistency: recordBlobInconsistency,
+    observeBytes: observeBlobBytes,
+  });
   registerDoorbellRoute(app, deps);
   return app;
 }

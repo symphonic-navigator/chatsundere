@@ -18,6 +18,14 @@ let rateLimitedTotal: Counter<string>;
 let pushLatency: Histogram<string>;
 let pullLatency: Histogram<string>;
 let recordSize: Histogram<string>;
+// Blob transport (blob spec §8) — outcome labels only, NEVER account_id/blob_id.
+let blobUploadsTotal: Counter<'outcome'>;
+let blobDownloadsTotal: Counter<'outcome'>;
+let blobDeletesTotal: Counter<string>;
+let blobBytes: Histogram<string>;
+let blobBackendErrorsTotal: Counter<string>;
+let blobBackendUp: Gauge<string>;
+let blobInconsistencyTotal: Counter<string>;
 
 export function initialiseMetrics(): void {
   if (initialised) return;
@@ -29,7 +37,11 @@ export function initialiseMetrics(): void {
     labelNames: ['outcome'] as const,
     registers: [register],
   });
-  pullTotal = new Counter({ name: 'sync_pull_total', help: 'Pull requests served', registers: [register] });
+  pullTotal = new Counter({
+    name: 'sync_pull_total',
+    help: 'Pull requests served',
+    registers: [register],
+  });
   pullRecordsTotal = new Counter({
     name: 'sync_pull_records_total',
     help: 'Records returned across pulls',
@@ -60,8 +72,16 @@ export function initialiseMetrics(): void {
     help: 'Requests refused by a rate limit',
     registers: [register],
   });
-  pushLatency = new Histogram({ name: 'sync_push_latency_seconds', help: 'Push handler latency', registers: [register] });
-  pullLatency = new Histogram({ name: 'sync_pull_latency_seconds', help: 'Pull handler latency', registers: [register] });
+  pushLatency = new Histogram({
+    name: 'sync_push_latency_seconds',
+    help: 'Push handler latency',
+    registers: [register],
+  });
+  pullLatency = new Histogram({
+    name: 'sync_pull_latency_seconds',
+    help: 'Pull handler latency',
+    registers: [register],
+  });
   recordSize = new Histogram({
     name: 'sync_record_size_bytes',
     help: 'Stored ciphertext size (coarse buckets by design)',
@@ -69,7 +89,68 @@ export function initialiseMetrics(): void {
     registers: [register],
   });
 
+  blobUploadsTotal = new Counter({
+    name: 'sync_blob_uploads_total',
+    help: 'Blob uploads by outcome',
+    labelNames: ['outcome'] as const,
+    registers: [register],
+  });
+  blobDownloadsTotal = new Counter({
+    name: 'sync_blob_downloads_total',
+    help: 'Blob downloads by outcome',
+    labelNames: ['outcome'] as const,
+    registers: [register],
+  });
+  blobDeletesTotal = new Counter({
+    name: 'sync_blob_deletes_total',
+    help: 'Blob deletes served',
+    registers: [register],
+  });
+  blobBytes = new Histogram({
+    name: 'sync_blob_bytes',
+    help: 'Uploaded blob ciphertext size (coarse buckets by design)',
+    buckets: [65536, 262144, 1048576, 8388608, 33554432],
+    registers: [register],
+  });
+  blobBackendErrorsTotal = new Counter({
+    name: 'sync_blob_backend_errors_total',
+    help: 'S3 backend errors observed on the blob path',
+    registers: [register],
+  });
+  blobBackendUp = new Gauge({
+    name: 'sync_blob_backend_up',
+    help: 'S3 backend liveness (1 up, 0 down); a metric, not a readiness criterion',
+    registers: [register],
+  });
+  blobInconsistencyTotal = new Counter({
+    name: 'sync_blob_inconsistency_total',
+    help: 'DB/S3 inconsistencies detected (row without object, or hash mismatch on GET)',
+    registers: [register],
+  });
+
   initialised = true;
+}
+
+export function recordBlobUpload(outcome: string): void {
+  blobUploadsTotal?.inc({ outcome });
+}
+export function recordBlobDownload(outcome: string): void {
+  blobDownloadsTotal?.inc({ outcome });
+}
+export function recordBlobDelete(): void {
+  blobDeletesTotal?.inc();
+}
+export function observeBlobBytes(bytes: number): void {
+  blobBytes?.observe(bytes);
+}
+export function recordBlobBackendError(): void {
+  blobBackendErrorsTotal?.inc();
+}
+export function setBlobBackendUp(up: boolean): void {
+  blobBackendUp?.set(up ? 1 : 0);
+}
+export function recordBlobInconsistency(): void {
+  blobInconsistencyTotal?.inc();
 }
 
 export function recordPushOutcome(outcome: string): void {
