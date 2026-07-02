@@ -34,7 +34,7 @@ afterAll(async () => {
 const verifyToken = async (token: string) => {
   if (token === 'BAD') return null;
   const [sub, jti, iat] = token.split('|');
-  return sub && jti && iat ? { sub, jti, iat: Number(iat) } : null;
+  return sub && jti && iat ? { sub, jti, iat: Number(iat), exp: Number(iat) + 900 } : null;
 };
 
 function build(envOverrides: Partial<ReturnType<typeof loadEnv>> = {}, allowOverride?: SyncDeps['allow']) {

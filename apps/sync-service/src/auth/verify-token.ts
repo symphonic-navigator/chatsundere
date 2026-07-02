@@ -3,11 +3,12 @@
 import { type JSONWebKeySet, createLocalJWKSet, createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Env } from '../env.js';
 
-/** The verified claims the sync-service needs: subject, session id, issued-at. */
+/** The verified claims the sync-service needs: subject, session id, issued-at, expiry. */
 export interface TokenClaims {
   sub: string;
   jti: string;
   iat: number;
+  exp: number;
 }
 
 /**
@@ -37,10 +38,15 @@ export function createTokenVerifier(
         algorithms: ['EdDSA'],
         clockTolerance: 5,
       });
-      if (typeof payload.sub !== 'string' || typeof payload.jti !== 'string' || typeof payload.iat !== 'number') {
+      if (
+        typeof payload.sub !== 'string' ||
+        typeof payload.jti !== 'string' ||
+        typeof payload.iat !== 'number' ||
+        typeof payload.exp !== 'number'
+      ) {
         return null;
       }
-      return { sub: payload.sub, jti: payload.jti, iat: payload.iat };
+      return { sub: payload.sub, jti: payload.jti, iat: payload.iat, exp: payload.exp };
     } catch {
       return null;
     }
