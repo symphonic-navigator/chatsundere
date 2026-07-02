@@ -1,6 +1,33 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-02 — **Sync workstream (Block 6B) fully specced,
+**Last updated:** 2026-07-02 (evening) — **6A + 6B are BUILT AND MERGED to
+master** (remote runs completed; PRs #5 `feat/backend-01-cors-proxy` and #6
+`feat/backend-02-sync`, merged by Chris — post-merge Larissa re-audit of the
+built diffs is still owed before deploy). **Block 6C (blob transport S3/MinIO
++ deployment docs) is fully specced, planned, and hardened for a remote
+run.** Spec `superpowers/specs/2026-07-02-blob-transport-and-deployment-docs-design.md`
+(v2 — dual Fable-class review folded: Larissa 1 High / 3 Medium / 7 Low;
+protocol lens 2 Critical / 8 Important; tags `[L]`/`[F]`). Headline outcomes:
+**proxy-through-sync-service** (MinIO never public), **immutable rev-less
+blobs**, **deterministic SIV-style sealing** (nonce =
+HMAC(nonceKey, blobId ‖ SHA-256(plaintext)) — Larissa sign-off on record;
+collapses the same-id race + retry idempotency in one stroke; plaintext hash
+never leaves the device), **quota enforced under the account lock** (shared
+2 GiB records+blobs, 64 KiB accounting floor), the **avatar terminality trap**
+fixed (`personaAvatars.blobRef` nullable — removal is a cleared-state Class-2
+update, never a tombstone), traffic-shape correlation owned honestly in §6,
+and a **`re-epoch` command** (a Postgres restore alone does NOT flip the
+epoch — it travels inside the backup; DEPLOYMENT ch. 7 runbook depends on
+it). **Two cross-flags for the engine session:** (1) `vectors` shrunk-tail
+terminality — cleared-state updates, not tombstones, on document-edit
+shrinks; (2) epoch-restore mechanics above. Plan
+`superpowers/plans/2026-07-02-blob-transport.md` (16 TDD tasks + 6-probe
+Task 0 with decision matrices + overnight Operating-Rules contract). Branch
+for the remote run: **`feat/backend-03-blobs`** (STOP-guard: `routes/changes.ts`
+exists, `routes/blobs.ts` does not). After the run: Larissa audits the built
+diff, Chris device-verifies (spec §20), then merge. The **client engine**
+(Dexie v33, outbox, BlobRef transform, fetch strategy with Laura) remains a
+later Liz-inline session. Prior entry: 2026-07-02 — **Sync workstream (Block 6B) fully specced,
 planned, and hardened for overnight remote execution.** Built in one session
 with Chris from the settled deep-dive decisions: spec
 `superpowers/specs/2026-07-01-client-sync-design.md` (v2), plan
@@ -238,27 +265,21 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 
 - **Block 6 is the active workstream.** The client side is feature-complete and
   live at `v0.1.3`; the whole backend ships live for the first time as **v0.2.0**.
-- **Block 6A — proxy: DONE (specced + planned + hardened for overnight).** Spec +
-  plan on `master`; remote run goes on `feat/backend-01-cors-proxy`. Larissa
-  re-audits the built diff **after** the run, before merge.
-- **Block 6B — sync: DONE (specced + planned + hardened for overnight,
-  2026-07-02).** Spec v2 (dual Fable review folded) + plan (18 tasks) on
-  `master`; remote run goes on `feat/backend-02-sync`, **strictly after the
-  proxy run has merged**. Larissa re-audits the built diff before squash.
-- **Block 6C — blobs (S3/MinIO) + deployment docs: NEXT.** Blob transport is
-  records-first-deferred (spec §16); deployment documentation is for Chris and
-  for third-party operators alike (AGPLv3, deredere towards operators).
+- **Block 6A — proxy: BUILT + MERGED** (PR #5). Post-merge Larissa re-audit of
+  the built diff still owed before deploy.
+- **Block 6B — sync: BUILT + MERGED** (PR #6). Same owed re-audit. Note from
+  the 02 run: Bun caps WS `idleTimeout` at 255 s (spec said 960) — liveness is
+  carried by the 30 s ping; recorded in `apps/sync-service/src/env.ts`.
+- **Block 6C — blobs (S3/MinIO) + deployment docs: SPECCED + PLANNED +
+  HARDENED (2026-07-02).** Remote run next, on `feat/backend-03-blobs`.
 
 ---
 
 ## Next session
 
-1. **Blob transport (S3/MinIO) spec + deployment documentation (Block 6C)** —
-   planned with Chris. Blob transport brings `personaAvatars`, `artefacts`,
-   `attachments` (and the binary codec's `Blob` path) into sync per spec §16.
-   Deployment docs serve two audiences: Chris's own VPS rollout AND
-   third-party operators (AGPLv3 — deredere towards operators, not only their
-   users). Feeds `obsidian/DEPLOYMENT.md`.
+1. **After the 6C remote run lands:** Larissa re-audit of ALL THREE built
+   diffs (6A + 6B owed, 6C fresh), Chris's device/VPS dry-run verification
+   (sync spec §18 + blob spec §20), then merge + the roadmap ADR amendment.
 2. **Full-build spec + two docs** — the whole backend deployed for the first
    time (auth+proxy+sync+postgres+redis; Traefik/Watchtower/healthcheck/metrics;
    dry-run-first), plus (a) a **deploy guide for Chris** built on his existing
