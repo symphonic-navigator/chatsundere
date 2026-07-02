@@ -122,8 +122,12 @@ in `mcp-client.ts`.)
   and no headers; `redirect: 'follow'` would chase the Location directly,
   off-proxy, into a CORS wall). The client therefore treats an opaque-redirect
   response (`response.type === 'opaqueredirect'` / status 0) as a terminal,
-  constructive error: *"The provider redirected the request; the proxy does not
-  follow redirects. Check the provider's base URL."* A server-side follow-up
+  constructive error: *"This provider tried to redirect the request, which
+  can't be followed safely. If you set a custom base URL for it, double-check
+  it — otherwise the provider may have moved."* (Laura: hedge the diagnosis,
+  no proxy-internals in user copy. The correct-URL-but-provider-redirects
+  sub-case remains a conscious dead-end until the server follow-up in §10
+  lands.) A server-side follow-up
   (map upstream 3xx to a readable JSON envelope) is logged in §10 for the
   go-live backlog; proxy requests set `redirect: 'manual'` so the browser can
   never wander off-proxy `[L]`.
@@ -158,8 +162,21 @@ in `mcp-client.ts`.)
   surfaces render disabled-over-hidden with the WS-0 gate tooltip
   (`copy.serverGate.localOnly` / `localOnlyWithInvite`). Linked-but-offline
   yields the `offline` reason; linked against a proxy-less server yields
-  `feature-missing`. No new copy category is required; Laura judges the fit at
-  spec-pass.
+  `feature-missing`.
+- **Stale proxy vocabulary must be re-copied (Laura spec-pass, hard).** After
+  the key form is deleted, any surface that still tells the user to obtain a
+  CORS proxy is active misdirection. Every such surface swaps to the gate
+  reason/tooltip:
+  - `AddProviderPicker.tsx:81` "Needs a CORS proxy" and the `:88-95` "Set up a
+    CORS proxy →" link (`onNeedProxy`, a no-op after this change) — replaced by
+    the gate tooltip and, where a link is rendered, a navigation affordance to
+    Account → Server linking;
+  - `settings/providers.tsx:47` `statusOf` "✗ Needs proxy" — becomes the gate
+    reason ("needs a linked account" wording from the gate copy);
+  - `settings/providers.tsx:30` `hasProxy = !!settings.data?.corsProxy` — re-
+    pointed at the gate derivation (§7 first bullet);
+  - the images/voice/expert picker surfaces touched by the §9 sweep get the
+    same copy check as they lose the threading.
 - Mid-conversation loss (linked user goes offline mid-chat): the send path
   fails through the existing constructive error surfaces; no new modal.
 
@@ -169,10 +186,15 @@ in `mcp-client.ts`.)
   flow, edit/clear affordances and the "providers will become unavailable"
   confirm dialogue are deleted. Replacement, same location (settings →
   providers): a read-only row —
-  - linked + `proxy` feature: *"Routed via your linked server"* + issuer label;
-  - otherwise: the `useServerGate('proxy')` tooltip, disabled-over-hidden.
-- No new screens, no new navigation. Provider cards and model pickers reuse
-  the existing disabled affordances.
+  - linked + `proxy` feature: *"Providers that need a relay are routed via
+    your linked server"* + issuer label (scoped so it cannot read as "all
+    traffic goes via the server" — direct providers stay direct);
+  - otherwise: the `useServerGate('proxy')` tooltip, disabled-over-hidden,
+    with the "Server linking" reference rendered as an actual navigation
+    affordance (tap-through to Account → Server linking), not prose alone.
+- No new screens, no new navigation targets. Provider cards and model pickers
+  reuse the existing disabled *mechanism*; proxy-specific *copy* is replaced
+  by the gate tooltip everywhere (§7).
 - Copy is British English, calm, one intent per line (ND audience).
 
 ## 9. Retirement sweep
@@ -199,8 +221,18 @@ in `mcp-client.ts`.)
 - **Server follow-up (go-live backlog, STATUS-BACKEND):** map upstream 3xx to
   a readable JSON envelope so a browser client can re-issue through the proxy;
   until then redirects are terminal (§5).
-- The go-live cut itself (old `cors-proxy.tidesson.net` container, in-client
-  cut message) — a deploy-time event, not client code on this branch.
+- The go-live cut itself (old `cors-proxy.tidesson.net` container) — a
+  deploy-time event, not client code on this branch. **The in-client cut
+  message is a REQUIRED go-live artefact coupled to WS-A** (Laura): upgrading
+  alpha users whose shared-key proxy silently retires must see a "your shared
+  proxy was retired — link an account to restore these providers" narrative,
+  or the gate copy reads as if their providers never worked.
+- **Conscious hidden-state deferral (Laura, log in ux-deferrals at squash):**
+  the model picker folds enabled-but-ungated providers' models into the
+  anonymous `hiddenCount` (`model-picker-data.ts:119-129`), indistinguishable
+  from never-configured ones. Pre-existing behaviour, unchanged here, but
+  WS-A enlarges the affected cohort; distinguishing "needs linking" models in
+  the picker is deferred, not overlooked.
 - Admin-client: no LLM egress, no changes.
 - `jti` revocation / suspension checks: server-side deferral, unchanged here.
 
