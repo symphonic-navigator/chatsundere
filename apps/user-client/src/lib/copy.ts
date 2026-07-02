@@ -258,6 +258,12 @@ export const copy = {
     genericError: 'Could not add biometric. Please try again.',
     defaultLabel: 'This device',
   },
+  onboardingProbe: {
+    unreachable: 'That server isn’t answering. Check the address, or try again in a moment.',
+    invalid:
+      'That address doesn’t look like a Chatsundere server. Check it with whoever invited you.',
+    checking: 'Checking…',
+  },
   stepUp: {
     title: 'Confirm it’s you',
     bodyBoth: 'A quick re-check keeps your account safe.',
