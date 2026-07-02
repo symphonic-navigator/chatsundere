@@ -35,7 +35,10 @@ export function preflightResponse(c: Context, origin: string): Response {
   c.header('Access-Control-Allow-Origin', origin);
   c.header('Vary', 'Origin');
   c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  c.header('Access-Control-Allow-Headers', requested && requested.length > 0 ? requested : DEFAULT_ALLOW_HEADERS);
+  c.header(
+    'Access-Control-Allow-Headers',
+    requested && requested.length > 0 ? requested : DEFAULT_ALLOW_HEADERS,
+  );
   c.header('Access-Control-Expose-Headers', 'Mcp-Session-Id');
   c.header('Access-Control-Max-Age', '600');
   return c.body(null, 204);

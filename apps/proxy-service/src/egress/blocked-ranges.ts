@@ -61,7 +61,7 @@ function expandV6(ip: string): number[] | null {
   if (missing < 0) return null;
   const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...tail];
   if (groups.length !== 8) return null;
-  return groups.map((g) => parseInt(g || '0', 16));
+  return groups.map((g) => Number.parseInt(g || '0', 16));
 }
 
 function isBlockedV4(ip: string): boolean {
@@ -77,10 +77,18 @@ function isBlockedV4(ip: string): boolean {
     return (n & mask) === (bn & mask);
   };
   return (
-    inRange('0.0.0.0', 8) || inRange('10.0.0.0', 8) || inRange('127.0.0.0', 8) ||
-    inRange('169.254.0.0', 16) || inRange('172.16.0.0', 12) || inRange('192.168.0.0', 16) ||
-    inRange('100.64.0.0', 10) || inRange('192.0.0.0', 24) || inRange('198.18.0.0', 15) ||
-    inRange('224.0.0.0', 4) || inRange('240.0.0.0', 4) || n === 0xffffffff
+    inRange('0.0.0.0', 8) ||
+    inRange('10.0.0.0', 8) ||
+    inRange('127.0.0.0', 8) ||
+    inRange('169.254.0.0', 16) ||
+    inRange('172.16.0.0', 12) ||
+    inRange('192.168.0.0', 16) ||
+    inRange('100.64.0.0', 10) ||
+    inRange('192.0.0.0', 24) ||
+    inRange('198.18.0.0', 15) ||
+    inRange('224.0.0.0', 4) ||
+    inRange('240.0.0.0', 4) ||
+    n === 0xffffffff
   );
 }
 

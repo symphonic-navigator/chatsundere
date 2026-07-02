@@ -64,7 +64,11 @@ export async function sealRecord(
   const cryptoKey = await collectionKey(mk, collection);
   const ciphertext = new Uint8Array(
     await globalThis.crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: nonce as BufferSource, additionalData: buildAad(collection, blindId) as BufferSource },
+      {
+        name: 'AES-GCM',
+        iv: nonce as BufferSource,
+        additionalData: buildAad(collection, blindId) as BufferSource,
+      },
       cryptoKey,
       plaintext as BufferSource,
     ),
@@ -87,7 +91,11 @@ export async function openRecord(
   let plainBuf: ArrayBuffer;
   try {
     plainBuf = await globalThis.crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: sealed.nonce as BufferSource, additionalData: buildAad(collection, blindId) as BufferSource },
+      {
+        name: 'AES-GCM',
+        iv: sealed.nonce as BufferSource,
+        additionalData: buildAad(collection, blindId) as BufferSource,
+      },
       cryptoKey,
       sealed.ciphertext as BufferSource,
     );

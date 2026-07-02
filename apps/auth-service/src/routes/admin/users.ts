@@ -8,11 +8,11 @@ import { denySub, nowSeconds } from '../../auth/deny-list.js';
 import { createDb } from '../../db/client.js';
 import { authMethods, pendingCodes, users } from '../../db/schema.js';
 import { revokeAllForUser } from '../../jwt/refresh.js';
-import { createRedis } from '../../redis/client.js';
 import type { AccessClaims } from '../../jwt/verify.js';
 import { metrics } from '../../metrics.js';
 import { bearerAuth, invalidateUserExistsCache } from '../../middleware/auth.js';
 import { ApiError } from '../../middleware/error-envelope.js';
+import { createRedis } from '../../redis/client.js';
 
 const roleChangeReq = object({ role: picklist(['admin', 'user']) });
 const transferPrimaryReq = object({ target_user_id: string() });

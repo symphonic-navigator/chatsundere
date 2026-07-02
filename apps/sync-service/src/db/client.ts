@@ -34,7 +34,9 @@ export async function closeDb(): Promise<void> {
 
 /** Reads the single `sync_meta` row's `instance_epoch` (spec §4). */
 export async function getInstanceEpoch(db: Db): Promise<string> {
-  const rows = await db.execute<{ instance_epoch: string }>(sql`SELECT instance_epoch FROM sync_meta LIMIT 1`);
+  const rows = await db.execute<{ instance_epoch: string }>(
+    sql`SELECT instance_epoch FROM sync_meta LIMIT 1`,
+  );
   const first = rows[0];
   if (!first) throw new Error('sync_meta is empty — migrations did not seed the instance epoch');
   return first.instance_epoch;

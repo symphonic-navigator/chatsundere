@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 const HOP_BY_HOP = new Set([
-  'connection', 'keep-alive', 'upgrade', 'te', 'transfer-encoding',
-  'proxy-authorization', 'proxy-connection',
+  'connection',
+  'keep-alive',
+  'upgrade',
+  'te',
+  'transfer-encoding',
+  'proxy-authorization',
+  'proxy-connection',
 ]);
 
 /** True for headers that must never be forwarded upstream (proxy-only + hop-by-hop). */
 function isStrippedRequestHeader(key: string): boolean {
   const k = key.toLowerCase();
   return (
-    k.startsWith('x-chatsundere-') || k.startsWith('x-cors-proxy-') ||
-    HOP_BY_HOP.has(k) || k === 'host'
+    k.startsWith('x-chatsundere-') ||
+    k.startsWith('x-cors-proxy-') ||
+    HOP_BY_HOP.has(k) ||
+    k === 'host'
   );
 }
 

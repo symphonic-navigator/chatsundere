@@ -17,13 +17,16 @@ describe('buildForwardHeaders', () => {
   });
   const out = buildForwardHeaders(incoming, 'api.x.ai');
 
-  test('account token never forwarded', () => expect(out.get('x-chatsundere-authorization')).toBeNull());
-  test('proxy target header never forwarded', () => expect(out.get('x-cors-proxy-target')).toBeNull());
+  test('account token never forwarded', () =>
+    expect(out.get('x-chatsundere-authorization')).toBeNull());
+  test('proxy target header never forwarded', () =>
+    expect(out.get('x-cors-proxy-target')).toBeNull());
   test('hop-by-hop stripped', () => expect(out.get('connection')).toBeNull());
   test('Host rewritten to target', () => expect(out.get('host')).toBe('api.x.ai'));
   test('upstream key forwarded', () => expect(out.get('authorization')).toBe('Bearer UPSTREAM'));
   test.each(['x-api-key', 'mcp-session-id', 'last-event-id', 'mcp-protocol-version', 'x-title'])(
-    'forwards %s', (h) => expect(out.get(h)).not.toBeNull(),
+    'forwards %s',
+    (h) => expect(out.get(h)).not.toBeNull(),
   );
 });
 

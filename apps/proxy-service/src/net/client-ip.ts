@@ -12,7 +12,10 @@ export function deriveClientIp(
   trustHops: number,
 ): string {
   if (trustHops <= 0 || !xForwardedFor) return directIp;
-  const parts = xForwardedFor.split(',').map((s) => s.trim()).filter(Boolean);
+  const parts = xForwardedFor
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const idx = parts.length - trustHops;
   return idx >= 0 ? (parts[idx] as string) : directIp;
 }
