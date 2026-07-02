@@ -1,6 +1,10 @@
 # Chatsundere Status — Full Backend Transition
 
-**Last updated:** 2026-07-02 — WS-0 Foundation built on the branch, awaiting review.
+**Last updated:** 2026-07-02 — WS-E (step-up vertical) and WS-B (onboarding
+un-gate, Add-a-device, server-synced passkeys) built on a branch cut from
+`full-backend-transition`, awaiting Larissa (auth-service + `packages/crypto` +
+both interceptor paths) and Laura (pre-squash on WS-B's user-reachable flows)
+audits, then squash into two units (`E:` → one squash, `B:` → one squash).
 This file is the orientation surface for the **Full Backend Transition**: the
 focused, deploy-free sprint that integrates the three built backend workstreams
 (authenticated proxy, zero-knowledge sync, blob transport) plus the two auth
@@ -122,31 +126,50 @@ in `superpowers/`.
    (`packages/crypto/src/flows/change-passphrase.ts` + `db/staging.ts` +
    `reconcileStagingOnBoot`) — a better model (write-ahead staging + boot
    reconcile). Correct the reference and adopt the staging pattern.
-3. **Server-passkey-linking caller (WS-B).** `linkPasskeyStart/Finish` exist in
-   `server-client.ts` but have **no caller**. Wire it into the linked-account
-   flow or consciously defer — a decision, not a silent gap.
+3. **Server-passkey-linking caller (WS-B).** ✅ **Resolved — wired in WS-B.**
+   `registerServerSyncedPasskey` (`apps/user-client/src/lib/server-passkey.ts`)
+   now drives `linkPasskeyStart`/`addPasskeyPostLink` from the post-onboarding
+   biometric prompt and the Account → Biometric unlock page, with a
+   local-fallback path when the server-sync step fails after a credential is
+   minted (never an orphan credential, never a second `credentials.create`).
 
 ## 6. Doing now
 
-- **WS-0 Foundation BUILT on this branch** — spec
-  `superpowers/specs/2026-07-02-ws0-foundation-design.md` (v2, Laura-passed),
-  plan `superpowers/plans/2026-07-02-ws0-foundation.md`, all tasks green
-  (typecheck 14/14, both vitest suites green, `pnpm build` 9/9, Biome clean).
-  Ships the four foundation primitives — `ServerConfig` wire type +
-  `parseServerConfig` validation, the central `account-link.store`, the
-  `discovery.store` single-flight `probeServer`/`maybeProbeLinkedServer`, the
-  connectivity regain-probe wiring — plus `useServerGate` + the gate copy
-  catalogue + effective-URL selectors and the boot wiring. No user-visible flow
-  change; consumers arrive in WS-B/A/C/D. **Awaiting Liz's review and Chris's
-  §13 manual verification** before the next workstream.
+- **WS-E (step-up vertical) + WS-B (onboarding un-gate) BUILT on a branch cut
+  from `full-backend-transition`** — spec
+  `superpowers/specs/2026-07-02-ws-b-e-onboarding-and-step-up-design.md` (v2,
+  Laura-passed), plan `superpowers/plans/2026-07-02-ws-b-e-onboarding-and-step-up.md`,
+  all 11 implementation tasks green. **WS-E** (Tasks 1–7): step-up wire shapes
+  in `shared-types`; auth-service t1-seeding on fresh OPAQUE/recovery evidence +
+  the recovery `opaque_client_identifier` fix + tier enforcement on
+  passkey-link / auth-method removal / passphrase-change / account-delete; the
+  `packages/crypto` step-up ceremony flows (`stepUpWithPasskey`/`…Passphrase`);
+  the `packages/ui-shared` step-up store + shared `StepUpModal`; the `apiFetch`
+  403 `step_up_required` interceptor + modal host in both user-client and
+  admin-client. **WS-B** (Tasks 8–11): un-gated onboarding matrix +
+  probe-validated URL entry; the server-linking page made real off the
+  `account-link.store`; Add-a-device pairing-code generation UI; server-synced
+  passkeys (§5 decision #3). Verification battery: typecheck 14/14 (0 cached),
+  crypto 189, ui-shared 68, admin-client 45, user-client 0-failure baseline (one
+  known load-dependent `stream-manager-store` flake, unrelated — passes in
+  isolation and on clean runs), auth-service 149 pass / 12 skip / 4 fail (the 4
+  are the pre-existing `bootstrap.test.ts` environmental subprocess baseline),
+  `pnpm build` 9/9, Biome clean. **Awaiting Larissa (auth-service +
+  `packages/crypto` + both interceptor paths) and Laura (pre-squash on WS-B's
+  user-reachable flows), then squash as two units and Chris's §15 manual
+  verification.**
+- **WS-0 Foundation** — built earlier on `full-backend-transition`; consumed by
+  the WS-B work above (matrix `probeServer`, `account-link.store`,
+  `discovery.store`).
 
 ## 7. Next
 
 1. **WS-0 Foundation** — ✅ built, done-pending-verify (Liz review + Chris's
    spec §13 manual verification on a dev build).
-2. **WS-B + WS-E** (onboarding un-gate + step-up) — the next spec session; cheap,
-   produces linked accounts to exercise the rest.
-3. **WS-A** proxy client.
+2. **WS-B + WS-E** (onboarding un-gate + step-up) — ✅ built on the branch,
+   awaiting Larissa + Laura audits and squash; produces linked accounts to
+   exercise the rest.
+3. **WS-A** proxy client — the next spec session.
 4. **WS-C** sync engine (its own multi-step effort; Larissa + Laura).
 5. **WS-D** blob client (rides on C; the deferrable tail).
 6. Turnkey gate → merge to master → hand off to the separate go-live event.
