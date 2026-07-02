@@ -88,8 +88,11 @@ After successful cryptographic verification, these endpoints set
 - `POST /api/v1/opaque/login/finish`
 - `POST /api/v1/join/finish` (both `kind: 'invitation'` and `kind: 'pairing'`)
 - `POST /api/v1/recovery/finish`
-- `POST /api/v1/auth-methods/passphrase/change/finish` (fresh OPAQUE evidence for
-  the new passphrase registration round)
+
+`passphrase/change/finish` deliberately does **not** seed (plan-time
+correction): it stores a fresh OPAQUE *registration record*, which verifies no
+evidence — the identity proof in that flow is the t1 step-up already required
+at `change/start`, whose grace is still live.
 
 Rationale: ADR 0027 already states for pairing-redeem that "the OPAQUE evidence in
 the request *is* the step-up"; this generalises that rule consistently. The user
@@ -147,11 +150,16 @@ Two UI-free functions:
 
 ```ts
 type PasskeyStepUpOutcome = 'confirmed' | 'no_passkey' | 'uv_required' | 'failed';
-stepUpWithPasskey({ serverClient, baseUrl, tier, getAssertion }): Promise<PasskeyStepUpOutcome>
+stepUpWithPasskey({ db, serverClient, accessToken, tier, getAssertion }): Promise<PasskeyStepUpOutcome>
 
 type PassphraseStepUpOutcome = 'confirmed' | 'wrong_passphrase' | 'failed';
-stepUpWithPassphrase({ serverClient, baseUrl, tier, passphrase }): Promise<PassphraseStepUpOutcome>
+stepUpWithPassphrase({ db, serverClient, accessToken, tier, passphrase }): Promise<PassphraseStepUpOutcome>
 ```
+
+Both flows take the crypto IDB handle and resolve the linked `base_url` (and,
+for the OPAQUE round, the `local_account.username` identifier) themselves —
+mirroring `login-online-linked` exactly, so the two clients wire them without
+duplicating account plumbing.
 
 - `getAssertion: (options) => Promise<AuthenticationResponseJSON>` is injected by
   the caller — the user-client passes `@simplewebauthn/browser`'s
@@ -337,6 +345,10 @@ WS-B adds the two call sites.
 
 ### 11.1 Post-onboarding biometric prompt
 
+Plan-time discovery: the built `PostOnboardingBiometricPrompt` component has
+**no mount point** — WS-B also mounts it on the post-join landing surface
+(entrance hall); its self-hiding states make unconditional rendering correct.
+
 For linked accounts, `PostOnboardingBiometricPrompt` registration takes the server
 path: `linkPasskeyStart` (server issues the challenge) →
 `navigator.credentials.create` with the PRF extension →
@@ -435,9 +447,9 @@ Mechanism A becomes real (§7.2 `passkeyAvailable`).
 1. **auth-service (Bun):** per newly gated endpoint — 403 `step_up_required` (with
    numeric tier in the envelope) without the key, success with a seeded key; t1
    seed written after `opaque/login/finish`, `join/finish` (both kinds),
-   `recovery/finish`, `passphrase/change/finish`; failed evidence seeds nothing;
+   `recovery/finish`; failed evidence seeds nothing;
    **t4 is never seeded by any login/join path**.
-2. **packages/crypto (Vitest):** ceremony flows against a mocked `ServerClient` —
+2. **packages/crypto (Bun):** ceremony flows against a mocked `ServerClient` —
    full outcome matrix (`confirmed` / `no_passkey` / `uv_required` / `failed` /
    `wrong_passphrase`), assertion-callback wiring, no retries. Structural
    assertions, no copy string-matching.
