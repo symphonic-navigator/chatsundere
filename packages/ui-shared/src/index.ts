@@ -10,3 +10,5 @@ export type { InlineMarkerProps } from './components/InlineMarker.js';
 export * as motion from './components/motion.js';
 export * from './login/index.js';
 export { parseServerConfig } from './state/server-config.js';
+export { useAccountLinkStore, initAccountLinkFromDb } from './state/account-link.store.js';
+export type { LinkStatus } from './state/account-link.store.js';
