@@ -24,7 +24,7 @@ async function getRefreshKey(): Promise<CryptoKey> {
   return refreshKeyCache;
 }
 
-const ACCESS_TTL_SECONDS = 15 * 60;
+export const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 const REFRESH_TOKEN_BYTES = 32;
 

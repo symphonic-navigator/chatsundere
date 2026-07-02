@@ -4,13 +4,25 @@ import type { Hono } from 'hono';
 import { loadEnv } from '../env.js';
 
 /**
- * Public, unauthenticated backend self-description (spec §7). The client learns
- * the proxy URL rather than hard-coding it, so self-hosting is first-class. No
- * state, no secret, no DB read — sourced from the validated PROXY_PUBLIC_URL.
+ * Public, unauthenticated backend self-description (spec §7, sync spec §11). The
+ * client learns the proxy/sync URLs rather than hard-coding them, so self-hosting
+ * is first-class. Each URL and its feature flag appear only when configured, so
+ * an operator running any subset of the services emits a coherent topology. No
+ * state, no secret, no DB read.
  */
 export function registerConfigRoute(app: Hono): void {
   app.get('/api/v1/config', (c) => {
     const env = loadEnv();
-    return c.json({ proxyUrl: env.PROXY_PUBLIC_URL, features: ['proxy'] });
+    const features: string[] = [];
+    const body: { proxyUrl?: string; syncUrl?: string; features: string[] } = { features };
+    if (env.PROXY_PUBLIC_URL) {
+      body.proxyUrl = env.PROXY_PUBLIC_URL;
+      features.push('proxy');
+    }
+    if (env.SYNC_PUBLIC_URL) {
+      body.syncUrl = env.SYNC_PUBLIC_URL;
+      features.push('sync');
+    }
+    return c.json(body);
   });
 }

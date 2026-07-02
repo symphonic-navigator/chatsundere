@@ -3,15 +3,17 @@
 import type { Hono } from 'hono';
 import { renderMetrics } from '../metrics.js';
 
-export function registerHealthRoutes(app: Hono): void {
+/** Reports dependency reachability for /readyz. */
+export type ReadyCheck = () => Promise<{ database: 'ok' | 'down'; redis: 'ok' | 'down' }>;
+
+/** Registers the ops endpoints (health + metrics). Mounted on the internal ops app. */
+export function registerHealthRoutes(app: Hono, check: ReadyCheck): void {
   app.get('/healthz', (c) => c.json({ status: 'ok' }));
 
-  app.get('/readyz', (c) => {
-    const deps: Record<string, 'ok' | 'unknown'> = {
-      database: 'unknown',
-      redis: 'unknown',
-    };
-    return c.json({ status: 'ok', deps });
+  app.get('/readyz', async (c) => {
+    const deps = await check();
+    const ok = deps.database === 'ok' && deps.redis === 'ok';
+    return c.json({ status: ok ? 'ok' : 'degraded', deps }, ok ? 200 : 503);
   });
 
   app.get('/metrics', async (c) => {
