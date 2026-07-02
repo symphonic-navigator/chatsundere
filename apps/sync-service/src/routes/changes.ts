@@ -6,8 +6,8 @@ import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import * as v from 'valibot';
 import { publishPoke } from '../doorbell/publish.js';
-import { observePushLatency, observeRecordSize, recordPushOutcome } from '../metrics.js';
-import { type StoreResult, type StoreWriteRecord, type StoredRecord, applyBatch } from '../records/store.js';
+import { observePullLatency, observePushLatency, observeRecordSize, recordPull, recordPushOutcome } from '../metrics.js';
+import { type StoreResult, type StoreWriteRecord, type StoredRecord, applyBatch, getHead, pullSince } from '../records/store.js';
 import { authenticate } from '../http/authenticate.js';
 import type { SyncDeps } from '../http/deps.js';
 
@@ -151,4 +151,35 @@ export function registerChangesRoutes(app: Hono, deps: SyncDeps): void {
       return c.json({ head, epoch, results: results.map(toWireResult) });
     },
   );
+
+  app.get('/api/v1/sync/changes', async (c) => {
+    const auth = await authenticate(c, deps);
+    if (!auth.ok) return auth.response;
+    const sub = auth.claims.sub;
+
+    const sinceRaw = c.req.query('since') ?? '0';
+    const since = Number(sinceRaw);
+    if (!Number.isInteger(since) || since < 0) {
+      return c.json({ error: { code: 'bad_request', message: 'since must be a non-negative integer' } }, 400);
+    }
+
+    // Over-max limit clamps (never a 400); missing/invalid falls back to the default.
+    const limitRaw = Number(c.req.query('limit'));
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0
+      ? Math.min(limitRaw, env.PULL_LIMIT_MAX)
+      : env.PULL_LIMIT_DEFAULT;
+
+    const head = await getHead(db, sub);
+    if (since > head) {
+      // A watermark ahead of head signals a reset the epoch rule (§12.2) catches.
+      return c.json({ error: { code: 'bad_since', message: 'since is ahead of head' } }, 400);
+    }
+
+    const started = performance.now();
+    const page = await pullSince(db, sub, since, limit, env.PULL_BYTE_BUDGET);
+    observePullLatency((performance.now() - started) / 1000);
+    recordPull(page.records.length);
+
+    return c.json({ head: page.head, epoch, more: page.more, records: page.records.map(toWire) });
+  });
 }
