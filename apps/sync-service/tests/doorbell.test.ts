@@ -36,6 +36,7 @@ beforeAll(async () => {
     verifyToken,
     allow: createLimiter(redis),
     epoch: 'epoch-1',
+    blobBackend: null,
   };
   const app = new Hono();
   registerDoorbellRoute(app, deps);
@@ -56,7 +57,8 @@ beforeAll(async () => {
     },
     websocket: {
       open(ws) {
-        if (!hub.add(ws as unknown as Parameters<typeof hub.add>[0])) ws.close(4401, 'too many sockets');
+        if (!hub.add(ws as unknown as Parameters<typeof hub.add>[0]))
+          ws.close(4401, 'too many sockets');
       },
       message() {},
       close(ws) {

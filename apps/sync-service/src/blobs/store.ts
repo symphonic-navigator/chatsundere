@@ -17,6 +17,15 @@ export type BlobCommitResult =
 /** Each blob charges `max(bytes, floor)` against the shared quota (§4). */
 export const flooredBytes = (bytes: number, floor: number): number => Math.max(bytes, floor);
 
+/** The account's current `total_bytes` (0 if never written) — the §7.1 quota pre-check read. */
+export async function getAccountTotal(db: Db, accountId: string): Promise<number> {
+  const [account] = await db
+    .select()
+    .from(syncAccounts)
+    .where(eq(syncAccounts.accountId, accountId));
+  return account?.totalBytes ?? 0;
+}
+
 /** Looks up a blob row (existence check without an S3 round trip). */
 export async function findBlob(
   db: Db,

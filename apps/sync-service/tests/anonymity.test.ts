@@ -37,7 +37,15 @@ const verifyToken = async (token: string) => {
 
 function app(allow: SyncDeps['allow']) {
   const a = new Hono();
-  const deps: SyncDeps = { env: loadEnv(), db: t.db, redis, verifyToken, allow, epoch: 'epoch-anon' };
+  const deps: SyncDeps = {
+    env: loadEnv(),
+    db: t.db,
+    redis,
+    verifyToken,
+    allow,
+    epoch: 'epoch-anon',
+    blobBackend: null,
+  };
   registerServer(a, deps);
   return a;
 }
@@ -74,9 +82,13 @@ describe('anonymity invariant', () => {
       body: JSON.stringify({ records: [await wire()] }),
     });
     // one pull
-    await allowing.request('/api/v1/sync/changes?since=0', { headers: { authorization: `Bearer ${token}` } });
+    await allowing.request('/api/v1/sync/changes?since=0', {
+      headers: { authorization: `Bearer ${token}` },
+    });
     // a 401
-    await allowing.request('/api/v1/sync/changes?since=0', { headers: { authorization: 'Bearer BAD' } });
+    await allowing.request('/api/v1/sync/changes?since=0', {
+      headers: { authorization: 'Bearer BAD' },
+    });
     // a 429
     await app(async () => false).request('/api/v1/sync/changes?since=0', {
       headers: { authorization: `Bearer ${token}` },

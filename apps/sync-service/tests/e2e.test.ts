@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Redis } from 'ioredis';
 import { getInstanceEpoch } from '../src/db/client.js';
 import { loadEnv } from '../src/env.js';
 import type { SyncDeps } from '../src/http/deps.js';
 import { createLimiter } from '../src/ratelimit/limiter.js';
 import { createServer } from '../src/server.js';
-import { type TestDb, withTestDb } from './helpers/test-db.js';
 import { mintMk, openFromWire, sealToWire } from '../tools/seal-cli.js';
+import { type TestDb, withTestDb } from './helpers/test-db.js';
 
 // Two devices of ONE account (same sub, different session).
 const ACC = '99999999-9999-9999-9999-999999999999';
@@ -34,6 +34,7 @@ beforeAll(async () => {
     verifyToken,
     allow: createLimiter(redis),
     epoch: await getInstanceEpoch(t.db),
+    blobBackend: null,
   };
   app = createServer(deps);
 });
@@ -50,7 +51,9 @@ function push(token: string, records: unknown[]) {
   });
 }
 function pull(token: string) {
-  return app.request('/api/v1/sync/changes?since=0&limit=200', { headers: { authorization: `Bearer ${token}` } });
+  return app.request('/api/v1/sync/changes?since=0&limit=200', {
+    headers: { authorization: `Bearer ${token}` },
+  });
 }
 
 describe('end-to-end sync round-trip (spec §15)', () => {
@@ -80,9 +83,15 @@ describe('end-to-end sync round-trip (spec §15)', () => {
 
     // Device 2 deletes; device 1's edit push to the same blindId → tombstoned.
     const del = await push(D2, [
-      { blindId: sealed.blindId, collection: 'personas', envelopeVersion: 1, baseRev: 1, deleted: true },
+      {
+        blindId: sealed.blindId,
+        collection: 'personas',
+        envelopeVersion: 1,
+        baseRev: 1,
+        deleted: true,
+      },
     ]);
-    expect((await del.json() as { results: { status: string }[] }).results[0]?.status).toBe('ok');
+    expect(((await del.json()) as { results: { status: string }[] }).results[0]?.status).toBe('ok');
 
     const edited = await sealToWire(mk, 'personas', row.id, { ...row, name: 'Wafer 2' });
     const editRes = await push(D1, [{ ...edited, baseRev: 1 }]);

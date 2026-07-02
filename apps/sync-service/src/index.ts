@@ -3,7 +3,7 @@
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import { createTokenVerifier } from './auth/verify-token.js';
-import { bootstrapBucket } from './blobs/s3.js';
+import { bootstrapBucket, createS3Backend } from './blobs/s3.js';
 import { createDb, getInstanceEpoch } from './db/client.js';
 import { createDoorbellHub } from './doorbell/hub.js';
 import { blobsEnabled, loadEnv } from './env.js';
@@ -26,7 +26,8 @@ const subscriber = redis.duplicate();
 const epoch = await getInstanceEpoch(db);
 const verifyToken = createTokenVerifier(env);
 const allow = createLimiter(redis);
-const deps: SyncDeps = { env, db, redis, verifyToken, allow, epoch };
+const blobBackend = blobsEnabled(env) ? createS3Backend(env) : null;
+const deps: SyncDeps = { env, db, redis, verifyToken, allow, epoch, blobBackend };
 
 // Bucket bootstrap (blob spec §8): non-blocking. S3 down at boot must NOT stop
 // the service — records serve regardless; retry in the background until it takes.

@@ -50,6 +50,7 @@ function build(
     verifyToken,
     allow: allowOverride ?? createLimiter(redis),
     epoch,
+    blobBackend: null,
   };
   registerChangesRoutes(app, deps);
   return app;

@@ -19,6 +19,7 @@ beforeAll(() => {
     verifyToken: async () => null,
     allow: async () => true,
     epoch: 'e',
+    blobBackend: null,
   };
 });
 afterAll(async () => {
@@ -70,7 +71,10 @@ describe('public app', () => {
       headers: { origin: 'https://app.chatsundere.me.evil.com' },
     });
     expect(evil.headers.get('access-control-allow-origin')).toBeNull();
-    const nul = await app.request('/api/v1/sync/changes', { method: 'OPTIONS', headers: { origin: 'null' } });
+    const nul = await app.request('/api/v1/sync/changes', {
+      method: 'OPTIONS',
+      headers: { origin: 'null' },
+    });
     expect(nul.headers.get('access-control-allow-origin')).toBeNull();
   });
 });
