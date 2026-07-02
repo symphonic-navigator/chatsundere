@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { object, optional, parse, picklist, string, unknown } from 'valibot';
 import { writeAudit } from '../audit/log.js';
-import { type StepUpTier, tierGraceMs } from '../auth/step-up.js';
+import { type StepUpTier, seedStepUpKey, tierGraceMs } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods } from '../db/schema.js';
 import { loadEnv } from '../env.js';
@@ -370,11 +370,7 @@ async function finishOpaque(c: Context, body: FinishBody): Promise<Response> {
  * expiry and clock-skewed eviction.
  */
 async function setStepUpKey(sessionIdUser: string, tier: AcceptedStartTier): Promise<void> {
-  const numericTier = numericTierFor(tier);
-  const graceMs = tierGraceMs(numericTier);
-  const graceSeconds = Math.ceil(graceMs / 1000);
-  const redis = createRedis();
-  await redis.set(`step_up:${sessionIdUser}:${tier}`, String(Date.now()), 'EX', graceSeconds);
+  await seedStepUpKey(sessionIdUser, numericTierFor(tier));
 }
 
 function numericTierFor(tier: AcceptedStartTier): StepUpTier {
