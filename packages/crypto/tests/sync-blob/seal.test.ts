@@ -107,7 +107,8 @@ describe('sealBlob / openBlob', () => {
     const blobId = mintBlobId();
     const { body } = await sealBlob(mk, blobId, bytes);
     const tampered = new Uint8Array(body);
-    tampered[tampered.length - 1] ^= 0x01;
+    const last = tampered.length - 1;
+    tampered[last] = (tampered[last] ?? 0) ^ 0x01;
     await expect(openBlob(mk, blobId, tampered)).rejects.toThrow();
   });
 
