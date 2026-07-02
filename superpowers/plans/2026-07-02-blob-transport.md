@@ -2,6 +2,80 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Operating rules for the overnight worker (READ FIRST)
+
+These rules are binding and override your defaults. They encode repo
+conventions you cannot otherwise see.
+
+1. **Language.** Every artefact you produce — code, comments, tests, commit
+   messages, log strings, docs — is **British English** (`colour`,
+   `initialise`, `behaviour`). No German anywhere in the repo. No emojis in
+   code or commits.
+2. **Branch discipline.** Work happens on **`feat/backend-03-blobs`**, forked
+   from the current `master`. **STOP-guard before anything else:**
+   `apps/sync-service/src/routes/changes.ts` must exist and
+   `apps/sync-service/src/routes/blobs.ts` must NOT — if either check fails,
+   the base is wrong; stop and report instead of improvising. **Never merge to
+   `master`, never push, never switch the branch mid-run.** Subagents never
+   merge, push, or switch branches either — put that sentence in every
+   subagent prompt.
+3. **Baseline capture, before the first task.** On `master`, with the dev
+   services up, run and RECORD (counts + any failure names):
+   - `docker compose -f infra/compose.dev.yml up -d postgres redis`
+   - `cd apps/sync-service && TEST_DATABASE_URL=<the test-db URL per
+     .env.example / tests/helpers/test-db.ts> bun test`
+   - `cd apps/auth-service && bun test` (it has its own `TEST_DATABASE_URL`
+     isolation — read its `.env.example`)
+   - the `packages/crypto` test suite (see its `package.json` scripts)
+   - `pnpm typecheck --force` (expect 14/14)
+   Anything failing here is the **known baseline** — re-confirm on `master`
+   before blaming or "fixing" it on your branch; never paper over a NEW
+   failure as pre-existing.
+4. **TDD per task, literally.** Failing test → run to confirm FAIL → minimal
+   implementation → run to confirm PASS → commit. No implementation-first, no
+   tests-after.
+5. **Execution discipline.** One fresh subagent per task
+   (superpowers:subagent-driven-development), two-stage review per task
+   (spec-compliance review, then code-quality review) before its commit is
+   accepted. Tasks in order; Task 0's probe decisions gate Tasks 5–7.
+6. **Verification is FULL-suite.** At the end (Task 16) run every suite named
+   in rule 3 plus Biome on changed files — not just the directories you
+   touched. `pnpm typecheck --force` is the CI gate (Turbo caches: without
+   `--force` a cached pass lies to you).
+7. **Commits.** One squashable commit per task, imperative subject, prefixed
+   `03: ` (e.g. `03: Add the blob transport routes`). Doc-only commits append
+   ` [skip ci]` (exactly that form, with the space). Every commit ends with
+   the trailer, verbatim:
+   `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
+8. **Security boundary.** This run touches `apps/sync-service`,
+   `apps/auth-service`, and `packages/crypto` — all Larissa-audited paths.
+   The audit happens **after** your run, at home, on the built diff, before
+   any squash-to-master. You do not run it and you do not merge; your job
+   ends at the hand-off report. Do not weaken any invariant the spec marks
+   `[L]`/`[F]` — if a task seems to require it, STOP and flag it in the
+   report instead.
+9. **Environment for tests.** Integration tests need Postgres + Redis (and
+   from Task 3 on, MinIO) from `infra/compose.dev.yml`, plus
+   `TEST_DATABASE_URL` per the existing pattern in
+   `apps/sync-service/tests/helpers/test-db.ts` (it refuses non-test URLs by
+   design). S3-dependent tests follow the same discipline via
+   `S3_TEST_ENDPOINT` (Task 5 defines it); when MinIO is unavailable they
+   must skip loudly, never silently.
+10. **Deviation rule.** If a probe result or implementation reality
+    contradicts the spec
+    (`superpowers/specs/2026-07-02-blob-transport-and-deployment-docs-design.md`),
+    stop that task, record the contradiction (probe README or commit
+    message), choose the smallest spec-consistent resolution, and flag it in
+    the final report. Never silently diverge from the spec §7.1 pipeline
+    order, the §7.5 status table, or the §5 crypto pins.
+11. **End of run.** Final doc commit on the branch: update
+    `obsidian/STATUS-BACKEND.md` — add a dated entry saying Block 6C blob
+    transport is BUILT on `feat/backend-03-blobs`, awaiting Larissa audit +
+    Chris device-verify + merge; do not restructure the rest of the file.
+    Then report back: per-suite verification numbers (against the rule-3
+    baseline), the probe decisions from Task 0, any deviation flags, and
+    `git log --oneline master..HEAD`.
+
 **Goal:** Bring `personaAvatars`, `artefacts`, and `attachments` into sync via an S3/MinIO blob transport proxied through `sync-service`, and write the operator-facing `obsidian/DEPLOYMENT.md`.
 
 **Architecture:** Client-side sealed blobs (AES-256-GCM, MK-derived DEK, **deterministic SIV-style nonce**) stream through new `/api/v1/sync/blobs/*` routes on the existing `sync-service` into an internal S3-compatible store. Blobs are immutable, rev-less, doorbell-less; the referencing record rides the existing push/pull channel. One shared account quota, enforced **inside** the locked transaction. MinIO never leaves the compose network.
