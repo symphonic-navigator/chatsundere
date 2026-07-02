@@ -87,3 +87,14 @@ export type {
   BlobListResponse,
   BlobErrorBody,
 } from './sync.js';
+
+export type {
+  StepUpTier,
+  StepUpMechanism,
+  StepUpStartRequest,
+  StepUpStartWebAuthnResponse,
+  StepUpStartOpaqueResponse,
+  StepUpStartResponse,
+  StepUpFinishRequest,
+  StepUpFinishResponse,
+} from './step-up.js';

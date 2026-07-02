@@ -175,5 +175,11 @@ function makeFakeServer(serverSetup: string, userId: string): ServerClient {
     async passphraseChangeFinish(_req, _baseUrl, _accessToken) {
       throw new Error('not in test');
     },
+    async stepUpStart(_req, _baseUrl, _accessToken) {
+      throw new Error('not in test');
+    },
+    async stepUpFinish(_req, _baseUrl) {
+      throw new Error('not in test');
+    },
   };
 }

@@ -166,6 +166,12 @@ function makeServerClient(opts: MockOpts): ServerClient {
     async passphraseChangeFinish() {
       throw new Error('not used');
     },
+    async stepUpStart() {
+      throw new Error('not used');
+    },
+    async stepUpFinish() {
+      throw new Error('not used');
+    },
     async linkPasskeyStart() {
       throw new Error('not used');
     },

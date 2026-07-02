@@ -3,14 +3,13 @@ import {
   CryptoError,
   PRF_INPUT_SALT,
   type PasskeyCredentialRow,
-  getLinkedAccount,
   getLocalAccount,
   listLocalBiometric,
   loginLocalWithPassphrase,
   loginOnlineLinked,
   loginWithLocalBiometric,
 } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
@@ -32,8 +31,12 @@ export function Login() {
   const navigate = useNavigate();
 
   const [username, setUsername] = useState<string | null>(null);
-  // Whether a linked account exists — drives which login flow to call.
-  const [hasLinked, setHasLinked] = useState(false);
+  // Whether a linked account exists — drives which login flow to call. Sourced
+  // from the account-link store (WS-0 boot populates it before this screen).
+  const hasLinked = useAccountLinkStore((s) => s.linkStatus === 'linked');
+  // 'unknown' means the boot-time read has not resolved yet — treat it as
+  // loading, exactly as a not-yet-loaded username is treated below.
+  const linkStatusKnown = useAccountLinkStore((s) => s.linkStatus !== 'unknown');
   const [passkeys, setPasskeys] = useState<PasskeyCredentialRow[]>([]);
   const [webAuthnAvailable] = useState(() => isWebAuthnAvailable());
 
@@ -80,11 +83,7 @@ export function Login() {
 
     void (async () => {
       const db = getDb();
-      const [local, linked, creds] = await Promise.all([
-        getLocalAccount(db),
-        getLinkedAccount(db),
-        listLocalBiometric(db),
-      ]);
+      const [local, creds] = await Promise.all([getLocalAccount(db), listLocalBiometric(db)]);
 
       if (cancelled) return;
 
@@ -95,7 +94,6 @@ export function Login() {
       }
 
       setUsername(local.username);
-      setHasLinked(linked !== null);
       setPasskeys(creds);
     })();
 
@@ -231,8 +229,8 @@ export function Login() {
     }
   }
 
-  // Show nothing while username is still loading.
-  if (username === null) {
+  // Show nothing while the username or the link status is still loading.
+  if (username === null || !linkStatusKnown) {
     return <p className="mt-12 text-center text-paper-soft">Loading…</p>;
   }
 

@@ -7,6 +7,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { object, optional, parse, picklist, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { seedStepUpKey } from '../auth/step-up.js';
 import { assertOpaqueWrappingPresent } from '../auth/wrapping-integrity.js';
 import { consumePendingCodeAttempt } from '../codes/rate-limit.js';
 import { hashCode, isValidCodeFormat } from '../codes/token.js';
@@ -335,6 +336,9 @@ async function finishInvitation(c: Context, body: FinishBody): Promise<Response>
       userAgent: c.req.header('User-Agent') ?? undefined,
     });
 
+    // Fresh OPAQUE evidence seeds the Tier-1 grace window (spec §4.1).
+    await seedStepUpKey(tokens.sessionId, 1);
+
     await writeAudit({
       db,
       eventType: 'user.linked',
@@ -464,6 +468,9 @@ async function finishPairing(c: Context, body: FinishBody): Promise<Response> {
     role: ownerRole,
     userAgent: c.req.header('User-Agent') ?? undefined,
   });
+
+  // Fresh OPAQUE evidence seeds the Tier-1 grace window (spec §4.1).
+  await seedStepUpKey(tokens.sessionId, 1);
 
   await writeAudit({
     db,

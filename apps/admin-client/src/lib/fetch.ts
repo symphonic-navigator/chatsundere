@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useSessionStore } from '@chatsundere/ui-shared';
+import type { StepUpTier } from '@chatsundere/shared-types';
+import { requestStepUp, useSessionStore } from '@chatsundere/ui-shared';
 import { joinUrl } from './joinUrl.js';
 
 /**
@@ -25,15 +26,31 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   path: string;
   json?: unknown;
   authMode?: 'none' | 'bearer';
+  /**
+   * Opt-out for the step-up endpoints themselves — the ceremony must never
+   * recurse into the step-up gate. Leave unset everywhere else.
+   */
+  skipStepUpGate?: boolean;
 }
 
 export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
   const url = joinUrl(opts.baseUrl, opts.path);
-  const init = buildInit(opts);
-  const res = await fetch(url, init);
+  let res = await fetch(url, buildInit(opts));
+  // Step-up gate (ADR 0027): one modal round, one retry, never a loop. The
+  // admin-client has no silent refresh, so this branch slots straight after
+  // the initial fetch.
+  if (res.status === 403 && !opts.skipStepUpGate) {
+    const envelope = await safeReadError(res);
+    if (envelope?.code === 'step_up_required') {
+      const confirmed = await requestStepUp(tierFromEnvelope(envelope));
+      if (confirmed) {
+        res = await fetch(url, buildInit(opts));
+      }
+    }
+  }
   if (!res.ok) {
-    const code = await safeReadCode(res);
-    throw new HttpError(res.status, code, `${res.status} ${res.statusText}`);
+    const envelope = await safeReadError(res);
+    throw new HttpError(res.status, envelope?.code, `${res.status} ${res.statusText}`);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -54,11 +71,23 @@ function buildInit(opts: ApiFetchOptions): RequestInit {
   };
 }
 
-async function safeReadCode(res: Response): Promise<string | undefined> {
+interface ErrorEnvelope {
+  code?: string;
+  tier?: number;
+}
+
+async function safeReadError(res: Response): Promise<ErrorEnvelope | undefined> {
   try {
-    const body = (await res.clone().json()) as { error?: { code?: string } };
-    return body.error?.code;
+    const body = (await res.clone().json()) as { error?: ErrorEnvelope };
+    return body.error;
   } catch {
     return undefined;
   }
+}
+
+/** The server sends the tier numerically (`{ tier: 1 | 3 | 4 }`) — map to the wire enum. */
+function tierFromEnvelope(envelope: ErrorEnvelope): StepUpTier {
+  if (envelope.tier === 3) return 't3';
+  if (envelope.tier === 4) return 't4';
+  return 't1';
 }

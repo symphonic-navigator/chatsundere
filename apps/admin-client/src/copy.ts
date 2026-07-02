@@ -158,6 +158,20 @@ export const copy = {
     invitations: 'Invitations',
     audit: 'Audit',
   },
+  stepUp: {
+    title: 'Confirm it’s you',
+    bodyBoth: 'A quick re-check keeps your account safe.',
+    bodyPassphraseOnly: 'Re-enter your passphrase to continue.',
+    usePasskeyCta: 'Use passkey',
+    usePassphraseCta: 'Use passphrase instead',
+    passphraseLabel: 'Passphrase',
+    confirmCta: 'Confirm',
+    cancelCta: 'Cancel',
+    passkeyFailed: 'Couldn’t verify with passkey. Try your passphrase.',
+    wrongPassphrase: 'Wrong passphrase. Try again.',
+    genericError: 'Something went wrong. Please try again.',
+    busy: 'Checking…',
+  },
   audit: {
     title: 'Audit log',
     filters: {

@@ -6,6 +6,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { seedStepUpKey } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods, users } from '../db/schema.js';
 import { loadEnv } from '../env.js';
@@ -236,6 +237,9 @@ export function registerLoginRoutes(app: Hono): void {
       role: user.role,
       userAgent: c.req.header('User-Agent') ?? undefined,
     });
+
+    // Fresh OPAQUE evidence seeds the Tier-1 grace window (spec §4.1).
+    await seedStepUpKey(tokens.sessionId, 1);
 
     await writeAudit({
       db,

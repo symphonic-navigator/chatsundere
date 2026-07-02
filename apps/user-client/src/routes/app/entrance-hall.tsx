@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect } from 'react';
+import { PostOnboardingBiometricPrompt } from '../../components/PostOnboardingBiometricPrompt.js';
 import { SetupCard, type SetupStep } from '../../components/SetupCard.js';
 import { NavTile } from '../../components/ui/NavTile.js';
 import { useAllArtefactCount } from '../../data/artefacts.js';
@@ -62,6 +63,7 @@ export function EntranceHall(): JSX.Element {
 
   return (
     <section className="flex min-h-[80dvh] flex-col gap-6 px-4 pb-12 pt-6">
+      <PostOnboardingBiometricPrompt />
       <div className="text-center">
         <div className="text-[10px] uppercase tracking-[0.3em] text-paper-soft">Welcome back</div>
         <div

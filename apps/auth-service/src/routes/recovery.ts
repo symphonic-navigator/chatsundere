@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { seedStepUpKey } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods, users } from '../db/schema.js';
 import { loadEnv } from '../env.js';
@@ -179,6 +180,10 @@ export function registerRecoveryRoutes(app: Hono): void {
         methodType: 'opaque',
         // Re-use the same OPAQUE userIdentifier (user.id) for the fresh registration.
         opaqueUserIdentifier: user.id,
+        // Freeze the registration-time username so post-recovery OPAQUE
+        // login and step-up keep working after a later rename (mirrors the
+        // join path; without it step-up /start returns 400 no_opaque).
+        opaqueClientIdentifier: body.username,
         opaqueCredential: Buffer.from(body.registration_record, 'base64url'),
         wrappedMasterKey: Buffer.from(body.new_wrapped_mk_opaque, 'base64url'),
         wrapNonce: Buffer.from(body.new_wrap_nonce_opaque, 'base64url'),
@@ -201,6 +206,9 @@ export function registerRecoveryRoutes(app: Hono): void {
         userAgent: c.req.header('User-Agent') ?? undefined,
       });
     });
+
+    // Fresh recovery-key evidence seeds the Tier-1 grace window (spec §4.1).
+    await seedStepUpKey(tokens.sessionId, 1);
 
     await writeAudit({
       db,

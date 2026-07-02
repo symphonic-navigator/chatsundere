@@ -21,6 +21,10 @@ import type {
   RecoveryFinishResponse,
   RecoveryStartRequest,
   RecoveryStartResponse,
+  StepUpFinishRequest,
+  StepUpFinishResponse,
+  StepUpStartRequest,
+  StepUpStartResponse,
 } from '@chatsundere/shared-types';
 
 /**
@@ -61,4 +65,10 @@ export interface ServerClient {
     baseUrl: string,
     accessToken: string,
   ): Promise<PassphraseChangeFinishResponse>;
+  stepUpStart(
+    req: StepUpStartRequest,
+    baseUrl: string,
+    accessToken: string,
+  ): Promise<StepUpStartResponse>;
+  stepUpFinish(req: StepUpFinishRequest, baseUrl: string): Promise<StepUpFinishResponse>;
 }

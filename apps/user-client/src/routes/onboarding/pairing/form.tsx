@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { probeServer } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { JoinFormFields } from '../../../components/JoinFormFields.js';
 import { isValidCode } from '../../../lib/code-input.js';
+import { copy } from '../../../lib/copy.js';
 import { isValidServerUrl } from '../../../lib/server-url.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 
@@ -27,14 +29,32 @@ export function PairingForm() {
     return s.kind === 'pairing_input' || s.kind === 'pairing_confirm' ? s.code : '';
   });
 
+  const [probing, setProbing] = useState(false);
+  const [probeError, setProbeError] = useState<string | null>(null);
+
   const urlValid = isValidServerUrl(baseUrl);
   const codeValid = isValidCode(code);
   const continueEnabled = urlValid && codeValid;
 
-  function handleContinue() {
-    if (!continueEnabled) return;
-    setOnboardingState({ kind: 'pairing_input', baseUrl, code });
-    navigate('/onboarding/pairing/confirm');
+  async function handleContinue() {
+    if (!continueEnabled || probing) return;
+    setProbeError(null);
+    setProbing(true);
+    try {
+      const probe = await probeServer(baseUrl);
+      if (probe.kind === 'unreachable') {
+        setProbeError(copy.onboardingProbe.unreachable);
+        return;
+      }
+      if (probe.kind === 'invalid') {
+        setProbeError(copy.onboardingProbe.invalid);
+        return;
+      }
+      setOnboardingState({ kind: 'pairing_input', baseUrl, code });
+      navigate('/onboarding/pairing/confirm');
+    } finally {
+      setProbing(false);
+    }
   }
 
   return (
@@ -51,7 +71,7 @@ export function PairingForm() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          handleContinue();
+          void handleContinue();
         }}
         className="mt-6"
       >
@@ -62,12 +82,18 @@ export function PairingForm() {
           onCodeChange={setCode}
         />
 
+        {probeError && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            {probeError}
+          </p>
+        )}
+
         <button
           type="submit"
-          disabled={!continueEnabled}
+          disabled={!continueEnabled || probing}
           className="mt-6 w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Continue
+          {probing ? copy.onboardingProbe.checking : 'Continue'}
         </button>
       </form>
 

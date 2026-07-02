@@ -32,6 +32,25 @@ export function tierGraceMs(tier: StepUpTier): number {
   return GRACE_MS[tier];
 }
 
+/**
+ * Writes the per-session step-up confirmation key
+ * (`step_up:<sessionId>:t<tier>`) with the current millisecond timestamp and
+ * the tier's grace TTL. Called by POST /api/v1/auth/step-up/finish on
+ * explicit confirmation, and by the fresh-evidence seed points (OPAQUE
+ * login, join, recovery) for Tier 1 only — WS-B+E spec §4.1. t3/t4 are
+ * never seeded from evidence; operators always step up explicitly.
+ */
+export async function seedStepUpKey(sessionId: string, tier: StepUpTier): Promise<void> {
+  const graceMs = GRACE_MS[tier];
+  const redis = createRedis();
+  await redis.set(
+    `step_up:${sessionId}:t${tier}`,
+    String(Date.now()),
+    'EX',
+    Math.ceil(graceMs / 1000),
+  );
+}
+
 interface RequireStepUpInput {
   sessionId: string;
   tier: StepUpTier;

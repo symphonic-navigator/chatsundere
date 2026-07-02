@@ -218,6 +218,15 @@ describe.skipIf(skip)('/api/v1/me — self-management endpoints', () => {
   });
 
   it('DELETE /api/v1/me removes the user and cascades auth_methods', async () => {
+    // DELETE /api/v1/me is Tier-3 gated (ADR 0027); a join only seeds Tier 1,
+    // so seed a fresh Tier-3 grace key for this session before the call.
+    const jtiPayload = accessToken.split('.')[1];
+    if (!jtiPayload) throw new Error('malformed access token');
+    const { jti } = JSON.parse(Buffer.from(jtiPayload, 'base64url').toString('utf-8')) as {
+      jti: string;
+    };
+    await createRedis().set(`step_up:${jti}:t3`, String(Date.now()), 'EX', 10);
+
     const res = await app.request('/api/v1/me', {
       method: 'DELETE',
       headers: {

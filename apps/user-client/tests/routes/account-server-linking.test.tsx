@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -29,6 +30,15 @@ function renderPage() {
 }
 
 describe('ServerLinkingPage', () => {
+  beforeEach(() => {
+    useAccountLinkStore.setState({
+      linkStatus: 'local-only',
+      baseUrl: null,
+      issuerLabel: null,
+      role: null,
+    });
+  });
+
   it('renders the PageBar with My Account / Server linking crumbs', () => {
     renderPage();
     expect(screen.getByText('My Account')).toBeInTheDocument();

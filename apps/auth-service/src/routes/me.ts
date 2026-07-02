@@ -6,6 +6,7 @@ import type { Hono } from 'hono';
 import { object, parse, pipe, regex, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
 import { denySub, nowSeconds } from '../auth/deny-list.js';
+import { requireStepUp } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods, pendingCodes, users } from '../db/schema.js';
 import type { AccessClaims } from '../jwt/verify.js';
@@ -107,6 +108,8 @@ export function registerMeRoutes(app: Hono): void {
    */
   app.delete('/api/v1/me', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
+    const sessionId = c.get('sessionId') as string;
+    await requireStepUp({ sessionId, tier: 3 });
     const { db } = createDb();
     await db.transaction(async (tx) => {
       // pending_codes.redeemed_by_user_id has no ON DELETE CASCADE, so NULL it out first.
@@ -140,6 +143,8 @@ export function registerMeRoutes(app: Hono): void {
    */
   app.delete('/api/v1/auth-methods/:id', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
+    const sessionId = c.get('sessionId') as string;
+    await requireStepUp({ sessionId, tier: 1 });
     const id = c.req.param('id');
     const confirm = c.req.query('confirm_lockout') === 'true';
     const { db } = createDb();
@@ -175,6 +180,8 @@ export function registerMeRoutes(app: Hono): void {
   app.post('/api/v1/auth-methods/passphrase/change/start', bearerAuth(), async (c) => {
     await ensureOpaqueReady();
     const claims = c.get('claims') as AccessClaims;
+    // Tier 1 step-up: this begins re-registration of the passphrase credential.
+    await requireStepUp({ sessionId: c.get('sessionId') as string, tier: 1 });
     const body = parse(passphraseChangeStartReq, await c.req.json());
     const { db } = createDb();
 

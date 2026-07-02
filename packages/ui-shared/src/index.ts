@@ -19,3 +19,6 @@ export {
   maybeProbeLinkedServer,
 } from './state/discovery.store.js';
 export type { DiscoveryStatus, ProbeResult } from './state/discovery.store.js';
+export { requestStepUp, resolveStepUp, useStepUpStore } from './state/step-up.store.js';
+export { StepUpModal } from './components/StepUpModal.js';
+export type { StepUpModalCopy, StepUpModalProps } from './components/StepUpModal.js';

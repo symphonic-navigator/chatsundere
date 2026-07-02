@@ -2,11 +2,12 @@
 import {
   CryptoError,
   finishJoinByInvitation,
+  getLinkedAccount,
   linkToServer,
   setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
@@ -132,6 +133,8 @@ function InvitationConfirmInner() {
         useSessionStore.getState().setSession({ ...localSession, mode: 'linked' });
         useOnboardingStore.getState().reset();
         await setBiometricPromptDue(getDb());
+        const linkedRow = await getLinkedAccount(getDb());
+        if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
         navigate('/app', { replace: true });
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is
@@ -162,6 +165,8 @@ function InvitationConfirmInner() {
           recoveryKeyString: result.recoveryKeyString,
         });
         await setBiometricPromptDue(getDb());
+        const linkedRow = await getLinkedAccount(getDb());
+        if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
         navigate(navTarget('/onboarding/invitation/recovery'), { replace: true });
       }
     } catch (err) {
