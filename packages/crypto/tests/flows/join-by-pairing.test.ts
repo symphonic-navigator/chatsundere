@@ -225,6 +225,12 @@ function makeServerClient(opts: MockClientOpts): ServerClient {
     async linkPasskeyFinish() {
       throw new Error('not used');
     },
+    async stepUpStart() {
+      throw new Error('not used');
+    },
+    async stepUpFinish() {
+      throw new Error('not used');
+    },
   };
 }
 

@@ -52,4 +52,10 @@ export const httpServerClient: ServerClient = {
   passphraseChangeFinish: () => {
     throw new Error('not used in admin-client');
   },
+  stepUpStart: () => {
+    throw new Error('not used in admin-client');
+  },
+  stepUpFinish: () => {
+    throw new Error('not used in admin-client');
+  },
 };

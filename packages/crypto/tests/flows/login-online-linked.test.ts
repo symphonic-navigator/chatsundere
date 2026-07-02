@@ -63,6 +63,12 @@ function makeServerClient(behaviour: 'ok' | '401' | '500'): ServerClient {
     async passphraseChangeFinish() {
       throw new Error('unexpected');
     },
+    async stepUpStart() {
+      throw new Error('unexpected');
+    },
+    async stepUpFinish() {
+      throw new Error('unexpected');
+    },
   };
 }
 

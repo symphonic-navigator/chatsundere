@@ -83,6 +83,12 @@ describe('linkToServer', () => {
       async passphraseChangeFinish() {
         throw new Error('not used');
       },
+      async stepUpStart() {
+        throw new Error('not used');
+      },
+      async stepUpFinish() {
+        throw new Error('not used');
+      },
     };
 
     const fakeMk = asMasterKey(Uint8Array.from(Array.from({ length: 32 }, (_, i) => i)));

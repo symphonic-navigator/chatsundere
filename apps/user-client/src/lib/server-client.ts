@@ -22,6 +22,10 @@ import type {
   RecoveryFinishResponse,
   RecoveryStartRequest,
   RecoveryStartResponse,
+  StepUpFinishRequest,
+  StepUpFinishResponse,
+  StepUpStartRequest,
+  StepUpStartResponse,
 } from '@chatsundere/shared-types';
 import { apiFetch } from './fetch.js';
 
@@ -105,5 +109,19 @@ export const httpServerClient: ServerClient = {
       path: '/api/v1/auth-methods/passphrase/change/finish',
       json: req,
       authMode: 'bearer',
+    }),
+  stepUpStart: (req: StepUpStartRequest, baseUrl: string, _accessToken: string) =>
+    apiFetch<StepUpStartResponse>({
+      baseUrl,
+      path: '/api/v1/auth/step-up/start',
+      json: req,
+      authMode: 'bearer',
+    }),
+  stepUpFinish: (req: StepUpFinishRequest, baseUrl: string) =>
+    apiFetch<StepUpFinishResponse>({
+      baseUrl,
+      path: '/api/v1/auth/step-up/finish',
+      json: req,
+      authMode: 'none',
     }),
 };

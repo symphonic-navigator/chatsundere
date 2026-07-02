@@ -182,6 +182,14 @@ export { deleteServerAccount } from './flows/server-account-delete.js';
 export type { DeleteServerAccountArgs } from './flows/server-account-delete.js';
 export { addPasskeyPostLink } from './flows/add-passkey-post-link.js';
 export type { AddPasskeyPostLinkArgs } from './flows/add-passkey-post-link.js';
+export {
+  stepUpWithPasskey,
+  stepUpWithPassphrase,
+  type PasskeyStepUpOutcome,
+  type PassphraseStepUpOutcome,
+  type StepUpWithPasskeyArgs,
+  type StepUpWithPassphraseArgs,
+} from './flows/step-up.js';
 export type { ServerClient } from './server-client.js';
 export {
   computeBlindId,
