@@ -19,6 +19,7 @@ beforeAll(() => {
     verifyToken: async () => null,
     allow: async () => true,
     epoch: 'e',
+    blobBackend: null,
   };
 });
 afterAll(async () => {
@@ -35,6 +36,16 @@ describe('ops app', () => {
     expect(metrics.status).toBe(200);
     expect(await metrics.text()).toContain('# TYPE');
     expect((await app.request('/readyz')).status).toBe(200);
+  });
+
+  test('blob metrics are registered and served on the ops port', async () => {
+    createServer(deps); // ensures initialiseMetrics has run
+    const text = await (await createOpsApp(okCheck).request('/metrics')).text();
+    expect(text).toContain('sync_blob_uploads_total');
+    expect(text).toContain('sync_blob_downloads_total');
+    expect(text).toContain('sync_blob_deletes_total');
+    expect(text).toContain('sync_blob_backend_up');
+    expect(text).toContain('sync_blob_inconsistency_total');
   });
 
   test('readyz degrades to 503 when a dependency is down', async () => {
@@ -70,7 +81,10 @@ describe('public app', () => {
       headers: { origin: 'https://app.chatsundere.me.evil.com' },
     });
     expect(evil.headers.get('access-control-allow-origin')).toBeNull();
-    const nul = await app.request('/api/v1/sync/changes', { method: 'OPTIONS', headers: { origin: 'null' } });
+    const nul = await app.request('/api/v1/sync/changes', {
+      method: 'OPTIONS',
+      headers: { origin: 'null' },
+    });
     expect(nul.headers.get('access-control-allow-origin')).toBeNull();
   });
 });

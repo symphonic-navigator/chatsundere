@@ -3,11 +3,13 @@
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import { createTokenVerifier } from './auth/verify-token.js';
+import { bootstrapBucket, createS3Backend } from './blobs/s3.js';
 import { createDb, getInstanceEpoch } from './db/client.js';
 import { createDoorbellHub } from './doorbell/hub.js';
-import { loadEnv } from './env.js';
+import { blobsEnabled, loadEnv } from './env.js';
 import type { SyncDeps } from './http/deps.js';
 import { createLogger } from './logger.js';
+import { setBlobBackendUp } from './metrics.js';
 import { createOpsApp } from './ops.js';
 import { createLimiter } from './ratelimit/limiter.js';
 import { type TicketData, consumeTicket } from './routes/doorbell.js';
@@ -25,7 +27,22 @@ const subscriber = redis.duplicate();
 const epoch = await getInstanceEpoch(db);
 const verifyToken = createTokenVerifier(env);
 const allow = createLimiter(redis);
-const deps: SyncDeps = { env, db, redis, verifyToken, allow, epoch };
+const blobBackend = blobsEnabled(env) ? createS3Backend(env) : null;
+const deps: SyncDeps = { env, db, redis, verifyToken, allow, epoch, blobBackend };
+
+// Bucket bootstrap (blob spec §8): non-blocking. S3 down at boot must NOT stop
+// the service — records serve regardless; retry in the background until it takes.
+if (blobsEnabled(env)) {
+  const bootLog = (level: 'info' | 'warn' | 'error', msg: string): void => {
+    logger[level](msg);
+  };
+  const tryBootstrap = async (): Promise<void> => {
+    const ok = await bootstrapBucket(env, bootLog);
+    setBlobBackendUp(ok);
+    if (!ok) setTimeout(() => void tryBootstrap(), 30_000);
+  };
+  void tryBootstrap();
+}
 
 const app = createServer(deps);
 const hub = createDoorbellHub(subscriber, {

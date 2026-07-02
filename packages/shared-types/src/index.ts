@@ -79,4 +79,9 @@ export type {
   SyncPullResponse,
   DoorbellTicketResponse,
   DoorbellPoke,
+  BlobRef,
+  SyncBlobErrorCode,
+  BlobListEntry,
+  BlobListResponse,
+  BlobErrorBody,
 } from './sync.js';

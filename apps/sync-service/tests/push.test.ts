@@ -37,7 +37,10 @@ const verifyToken = async (token: string) => {
   return sub && jti && iat ? { sub, jti, iat: Number(iat), exp: Number(iat) + 900 } : null;
 };
 
-function build(envOverrides: Partial<ReturnType<typeof loadEnv>> = {}, allowOverride?: SyncDeps['allow']) {
+function build(
+  envOverrides: Partial<ReturnType<typeof loadEnv>> = {},
+  allowOverride?: SyncDeps['allow'],
+) {
   const env = { ...loadEnv(), ...envOverrides };
   const app = new Hono();
   const deps: SyncDeps = {
@@ -47,6 +50,7 @@ function build(envOverrides: Partial<ReturnType<typeof loadEnv>> = {}, allowOver
     verifyToken,
     allow: allowOverride ?? createLimiter(redis),
     epoch,
+    blobBackend: null,
   };
   registerChangesRoutes(app, deps);
   return app;
@@ -102,7 +106,10 @@ describe('POST /api/v1/sync/changes', () => {
     const bad = await build();
     const malformed = await bad.request('/api/v1/sync/changes', {
       method: 'POST',
-      headers: { authorization: 'Bearer 33333333-3333-3333-3333-333333333333|sess1|1000', 'content-type': 'application/json' },
+      headers: {
+        authorization: 'Bearer 33333333-3333-3333-3333-333333333333|sess1|1000',
+        'content-type': 'application/json',
+      },
       body: '{not json',
     });
     expect(malformed.status).toBe(400);
@@ -123,10 +130,25 @@ describe('POST /api/v1/sync/changes', () => {
     expect(res.status).toBe(413);
   });
 
+  test('accepts the blob-bearing collections on the record channel (§5.2)', async () => {
+    const app = build();
+    const collections = ['artefacts', 'personaAvatars', 'attachments'] as const;
+    for (let i = 0; i < collections.length; i++) {
+      const res = await post(app, { records: [await wire(i + 1, { collection: collections[i] })] });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { results: { status: string; code?: string }[] };
+      expect(body.results[0]?.status).toBe('ok');
+    }
+  });
+
   test('happy path returns ok + head + epoch', async () => {
     const res = await post(build(), { records: [await wire(1)] });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { head: number; epoch: string; results: { status: string }[] };
+    const body = (await res.json()) as {
+      head: number;
+      epoch: string;
+      results: { status: string }[];
+    };
     expect(body.results[0]?.status).toBe('ok');
     expect(body.head).toBe(1);
     expect(body.epoch).toBe(epoch);
@@ -175,7 +197,10 @@ describe('POST /api/v1/sync/changes', () => {
   });
 
   test('429 with Retry-After when the limiter denies', async () => {
-    const res = await post(build({}, async () => false), { records: [await wire(1)] });
+    const res = await post(
+      build({}, async () => false),
+      { records: [await wire(1)] },
+    );
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('60');
   });

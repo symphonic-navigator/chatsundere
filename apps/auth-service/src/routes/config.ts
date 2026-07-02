@@ -22,6 +22,8 @@ export function registerConfigRoute(app: Hono): void {
     if (env.SYNC_PUBLIC_URL) {
       body.syncUrl = env.SYNC_PUBLIC_URL;
       features.push('sync');
+      // Blobs are meaningless without sync, so gate on both (blob spec §10).
+      if (env.SYNC_BLOBS_ENABLED) features.push('blobs');
     }
     return c.json(body);
   });

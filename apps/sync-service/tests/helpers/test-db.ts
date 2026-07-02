@@ -37,7 +37,7 @@ export async function withTestDb(): Promise<TestDb> {
     db,
     sql: client,
     reset: async () => {
-      await client.unsafe('TRUNCATE sync_records, sync_accounts');
+      await client.unsafe('TRUNCATE sync_records, sync_blobs, sync_accounts');
     },
     close: async () => {
       await client.end();

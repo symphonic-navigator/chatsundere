@@ -2,6 +2,7 @@
 
 import type { Redis } from 'ioredis';
 import type { TokenClaims } from '../auth/verify-token.js';
+import type { BlobBackend } from '../blobs/s3.js';
 import type { Db } from '../db/client.js';
 import type { Env } from '../env.js';
 
@@ -14,4 +15,6 @@ export interface SyncDeps {
   allow: (key: string, limit: number, windowSec: number) => Promise<boolean>;
   /** The store's `instance_epoch`, read once at boot and echoed on every response. */
   epoch: string;
+  /** The blob object store, or null when no S3 backend is configured (§3/§10). */
+  blobBackend: BlobBackend | null;
 }

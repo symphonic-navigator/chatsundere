@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Probe 1 + 3 + 5 + 6 (spec §21). The S3 legs (1/3/5) exercise Bun's native
+// S3 client (Bun.S3Client) against a local MinIO; they SKIP LOUDLY when
+// S3_TEST_ENDPOINT is unset (this build environment has neither Docker nor a
+// MinIO binary — the empirical S3 decision is owed on a machine that has one).
+// Probe 6 (WebCrypto AES-GCM at 32 MiB) runs unconditionally — it needs no S3.
+// Run: S3_TEST_ENDPOINT=http://localhost:9000 bun probes/s3-client.ts
+
+const MiB = 1024 * 1024;
+const SIZE = 32 * MiB;
+
+function rssMiB(): number {
+  return Math.round((process.memoryUsage().rss / MiB) * 10) / 10;
+}
+
+async function probeWebCryptoGcm(): Promise<void> {
+  // Probe 6: single-shot AES-256-GCM seal + open at 32 MiB — time + peak RSS.
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+    'encrypt',
+    'decrypt',
+  ]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new Uint8Array(SIZE);
+  crypto.getRandomValues(plaintext.subarray(0, MiB)); // seed a MiB, rest zero — timing is size-bound
+  const rssBefore = rssMiB();
+  const t0 = performance.now();
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+  const t1 = performance.now();
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  const t2 = performance.now();
+  console.log('[probe6] AES-256-GCM 32 MiB single-shot:', {
+    sealMs: Math.round(t1 - t0),
+    openMs: Math.round(t2 - t1),
+    roundTripOk: pt.byteLength === SIZE,
+    rssBeforeMiB: rssBefore,
+    rssAfterMiB: rssMiB(),
+  });
+}
+
+async function probeS3(): Promise<void> {
+  const endpoint = process.env.S3_TEST_ENDPOINT;
+  if (!endpoint) {
+    console.log(
+      '[probe1/3/5] SKIPPED — S3_TEST_ENDPOINT unset. MinIO is unavailable in this ' +
+        'environment (no Docker daemon, no minio binary). The empirical S3-client ' +
+        'decision (Bun.S3Client vs @aws-sdk; multipart-at-32-MiB) MUST be run on a ' +
+        'host with MinIO before relying on it. See README-blobs.md.',
+    );
+    return;
+  }
+
+  // @ts-expect-error Bun.S3Client is provided by the Bun runtime types.
+  const client = new Bun.S3Client({
+    endpoint,
+    accessKeyId: process.env.S3_TEST_ACCESS_KEY_ID ?? 'chatsundere-dev',
+    secretAccessKey: process.env.S3_TEST_SECRET_ACCESS_KEY ?? 'chatsundere-dev-secret',
+    bucket: process.env.S3_TEST_BUCKET ?? 'chatsundere-blobs',
+    region: 'us-east-1',
+    // forcePathStyle is required for MinIO.
+  });
+
+  const key = `probe/${Date.now()}`;
+  const body = new Uint8Array(SIZE);
+  const rssBefore = rssMiB();
+  // Streaming PUT with a known length.
+  await client.write(key, body, { type: 'application/octet-stream' });
+  console.log(
+    '[probe1] streaming PUT 32 MiB done, rssDeltaMiB=',
+    Math.round((rssMiB() - rssBefore) * 10) / 10,
+  );
+
+  // Streaming GET.
+  const file = client.file(key);
+  const stream = file.stream();
+  let count = 0;
+  const reader = stream.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) count += value.byteLength;
+  }
+  console.log('[probe3] streaming GET bytes=', count, 'matches=', count === SIZE);
+
+  await client.delete(key);
+  console.log('[probe5] delete + bucket ops — see MinIO request log for multipart vs single PUT.');
+}
+
+await probeWebCryptoGcm();
+await probeS3();

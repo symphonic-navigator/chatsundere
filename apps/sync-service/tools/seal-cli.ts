@@ -7,8 +7,20 @@
 //   bun tools/seal-cli.ts mint-mk
 //   bun tools/seal-cli.ts seal --mk <b64url> --collection personas --key <id> --row '<json>'
 //   bun tools/seal-cli.ts open --mk <b64url> --collection personas --blind-id <b64url> --record '<json>' [--key-field id]
+//   bun tools/seal-cli.ts blob-seal --mk <b64url> --in <file> [--blob-id <id>] --out <file>
+//   bun tools/seal-cli.ts blob-open --mk <b64url> --blob-id <id> --in <file> --out <file>
 
-import { asMasterKey, fromBase64Url, getRandomBytes, openRecord, sealRecord, toBase64Url } from '@chatsundere/crypto';
+import {
+  asMasterKey,
+  fromBase64Url,
+  getRandomBytes,
+  mintBlobId,
+  openBlob,
+  openRecord,
+  sealBlob,
+  sealRecord,
+  toBase64Url,
+} from '@chatsundere/crypto';
 import type { SyncPushRecord } from '@chatsundere/shared-types';
 
 /** Mints a random 32-byte master key as base64url. */
@@ -55,6 +67,37 @@ export async function openFromWire(
   );
 }
 
+/**
+ * Seals a file into a blob body on disk (blob spec §15). Mints a `blobId` when
+ * none is given. Returns the `blobId` and the base64url `x-ciphertext-hash`.
+ */
+export async function blobSealFile(
+  mkB64: string,
+  inPath: string,
+  outPath: string,
+  blobIdArg?: string,
+): Promise<{ blobId: string; hashB64: string }> {
+  const mk = asMasterKey(fromBase64Url(mkB64));
+  const bytes = new Uint8Array(await Bun.file(inPath).arrayBuffer());
+  const blobId = blobIdArg ?? mintBlobId();
+  const { body, hash } = await sealBlob(mk, blobId, bytes);
+  await Bun.write(outPath, body);
+  return { blobId, hashB64: toBase64Url(hash) };
+}
+
+/** Opens a sealed blob body from disk back to its plaintext file (blob spec §15). */
+export async function blobOpenFile(
+  mkB64: string,
+  blobId: string,
+  inPath: string,
+  outPath: string,
+): Promise<void> {
+  const mk = asMasterKey(fromBase64Url(mkB64));
+  const body = new Uint8Array(await Bun.file(inPath).arrayBuffer());
+  const plain = await openBlob(mk, blobId, body);
+  await Bun.write(outPath, plain);
+}
+
 function arg(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
@@ -87,7 +130,26 @@ async function main(argv: string[]): Promise<void> {
     process.stdout.write(`${JSON.stringify(row)}\n`);
     return;
   }
-  process.stderr.write('usage: seal-cli <mint-mk|seal|open> [flags]\n');
+  if (command === 'blob-seal') {
+    const { blobId, hashB64 } = await blobSealFile(
+      arg(argv, 'mk') as string,
+      arg(argv, 'in') as string,
+      arg(argv, 'out') as string,
+      arg(argv, 'blob-id'),
+    );
+    process.stdout.write(`${JSON.stringify({ blobId, xCiphertextHash: hashB64 })}\n`);
+    return;
+  }
+  if (command === 'blob-open') {
+    await blobOpenFile(
+      arg(argv, 'mk') as string,
+      arg(argv, 'blob-id') as string,
+      arg(argv, 'in') as string,
+      arg(argv, 'out') as string,
+    );
+    return;
+  }
+  process.stderr.write('usage: seal-cli <mint-mk|seal|open|blob-seal|blob-open> [flags]\n');
   process.exitCode = 1;
 }
 

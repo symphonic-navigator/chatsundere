@@ -5,11 +5,24 @@ import * as v from 'valibot';
 const num = (fallback: string) =>
   v.optional(v.pipe(v.string(), v.transform(Number), v.number()), fallback);
 
-const EnvSchema = v.object({
+// Booleans arrive as env strings: 'false'/'0'/'' are false, everything else true.
+const bool = (fallback: string) =>
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.transform((s) => s !== 'false' && s !== '0' && s !== ''),
+    ),
+    fallback,
+  );
+
+const BaseEnvSchema = v.object({
   NODE_ENV: v.optional(v.picklist(['development', 'production', 'test']), 'development'),
   PORT: num('3200'),
   OPS_PORT: num('9091'),
-  LOG_LEVEL: v.optional(v.picklist(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']), 'info'),
+  LOG_LEVEL: v.optional(
+    v.picklist(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']),
+    'info',
+  ),
   DATABASE_URL: v.string(),
   // Must point at the SAME Redis instance/db as the auth-service so the token
   // deny-list keys are visible (spec §9/§14).
@@ -22,7 +35,12 @@ const EnvSchema = v.object({
   CORS_ALLOWED_ORIGINS: v.optional(
     v.pipe(
       v.string(),
-      v.transform((s) => s.split(',').map((o) => o.trim().toLowerCase()).filter(Boolean)),
+      v.transform((s) =>
+        s
+          .split(',')
+          .map((o) => o.trim().toLowerCase())
+          .filter(Boolean),
+      ),
     ),
     'https://app.chatsundere.me',
   ),
@@ -31,7 +49,8 @@ const EnvSchema = v.object({
   RATE_LIMIT_IP_PER_MIN: num('600'),
   RATE_LIMIT_DELETE_PER_MIN: num('60'),
   MAX_RECORD_BYTES: num('2097152'), // 2 MiB ciphertext
-  ACCOUNT_QUOTA_BYTES: num('1073741824'), // 1 GiB
+  // Blob spec §2.3/§14: shared records+blobs quota, default raised to 2 GiB.
+  ACCOUNT_QUOTA_BYTES: num('2147483648'), // 2 GiB
   MAX_PUSH_RECORDS: num('100'), // backstop; clients batch by bytes
   MAX_BODY_BYTES: num('25165824'), // 24 MiB
   PULL_LIMIT_DEFAULT: num('200'),
@@ -43,11 +62,39 @@ const EnvSchema = v.object({
   // is unusable. 255 is the accepted max; liveness is carried by the 30 s ping.
   WS_IDLE_TIMEOUT_S: num('255'),
   MAX_SOCKETS_PER_ACCOUNT: num('8'),
+
+  // --- Blob transport (S3/MinIO), blob spec §14 ---------------------------
+  // Unset ⇒ blobs disabled; the service runs records-only.
+  S3_ENDPOINT: v.optional(v.string()),
+  S3_REGION: v.optional(v.string(), 'us-east-1'),
+  S3_BUCKET: v.optional(v.string(), 'chatsundere-blobs'),
+  S3_ACCESS_KEY_ID: v.optional(v.string()),
+  S3_SECRET_ACCESS_KEY: v.optional(v.string()),
+  S3_FORCE_PATH_STYLE: bool('true'),
+  MAX_BLOB_BYTES: num('33554432'), // 32 MiB ciphertext body
+  BLOB_QUOTA_FLOOR_BYTES: num('65536'), // 64 KiB accounting floor per blob (§4)
+  BLOB_UPLOAD_IDLE_TIMEOUT_S: num('30'), // body-progress timeout (§8)
 });
+
+// Cross-field: a configured S3 endpoint must carry credentials. Without them the
+// bucket bootstrap and every blob request would fail confusingly at runtime;
+// fail fast at boot instead (blob spec §14).
+const EnvSchema = v.pipe(
+  BaseEnvSchema,
+  v.check(
+    (env) => !env.S3_ENDPOINT || (!!env.S3_ACCESS_KEY_ID && !!env.S3_SECRET_ACCESS_KEY),
+    'S3_ENDPOINT requires S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY',
+  ),
+);
 
 export type Env = v.InferOutput<typeof EnvSchema>;
 
 /** Parses and validates the sync-service environment. Throws on invalid config. */
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
   return v.parse(EnvSchema, source);
+}
+
+/** True iff an S3 backend is configured — the blob endpoints are live (§3). */
+export function blobsEnabled(env: Env): boolean {
+  return Boolean(env.S3_ENDPOINT);
 }

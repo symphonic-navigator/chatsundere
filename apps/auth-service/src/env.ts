@@ -46,10 +46,28 @@ const envSchema = object({
   // subset (auth+proxy, auth+sync, or all three); the client drives "disabled
   // over hidden" from the features array (spec §7 / sync spec §11).
   PROXY_PUBLIC_URL: optional(
-    pipe(string(), url(), check((u) => u.startsWith('https://'), 'PROXY_PUBLIC_URL must be an absolute https URL')),
+    pipe(
+      string(),
+      url(),
+      check((u) => u.startsWith('https://'), 'PROXY_PUBLIC_URL must be an absolute https URL'),
+    ),
   ),
   SYNC_PUBLIC_URL: optional(
-    pipe(string(), url(), check((u) => u.startsWith('https://'), 'SYNC_PUBLIC_URL must be an absolute https URL')),
+    pipe(
+      string(),
+      url(),
+      check((u) => u.startsWith('https://'), 'SYNC_PUBLIC_URL must be an absolute https URL'),
+    ),
+  ),
+  // Mirrors the sync-service's S3 presence for the /api/v1/config "blobs" flag
+  // (blob spec §10/§14). A manual pairing — DEPLOYMENT ch.4 names it a congruence
+  // checkpoint. 'true' enables; anything else (incl. unset) disables.
+  SYNC_BLOBS_ENABLED: optional(
+    pipe(
+      string(),
+      transform((s) => s === 'true'),
+    ),
+    'false',
   ),
 });
 
@@ -70,6 +88,7 @@ export function loadEnv(): {
   CORS_ALLOWED_ORIGINS: string[];
   PROXY_PUBLIC_URL?: string;
   SYNC_PUBLIC_URL?: string;
+  SYNC_BLOBS_ENABLED: boolean;
 } {
   return parse(envSchema, {
     NODE_ENV: process.env.NODE_ENV ?? 'development',
@@ -86,5 +105,6 @@ export function loadEnv(): {
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ?? '',
     PROXY_PUBLIC_URL: process.env.PROXY_PUBLIC_URL,
     SYNC_PUBLIC_URL: process.env.SYNC_PUBLIC_URL,
+    SYNC_BLOBS_ENABLED: process.env.SYNC_BLOBS_ENABLED,
   });
 }
