@@ -14,6 +14,14 @@
 #   TRAEFIK_HOST_PROMETHEUS  (e.g. prometheus.chatsundere.app)
 #   TRAEFIK_HOST_GRAFANA     (e.g. grafana.chatsundere.app)
 #   TRAEFIK_AUTH_USERS       (htpasswd-format, e.g. user:$apr1$...)
+#   MINIO_ROOT_USER, MINIO_ROOT_PASSWORD  (blob object store — see below)
+#
+# The application service blocks (auth-service, sync-service, proxy-service) are
+# added in the full-build cutover session; when they land, the sync-service block
+# MUST carry S3_ENDPOINT=http://minio:9000 plus a SCOPED S3 access key (NOT the
+# root credential — see the note on the minio service), and the auth-service block
+# MUST set SYNC_BLOBS_ENABLED=true to advertise the "blobs" feature (DEPLOYMENT
+# ch.4 names this pairing a congruence checkpoint). See obsidian/DEPLOYMENT.md.
 
 name: chatsundere-prod
 
@@ -46,6 +54,34 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - chatsundere
+
+  minio:
+    # S3-compatible object store backing the blob transport (blob spec §14/§17).
+    # STRICTLY internal: on the `chatsundere` network only — NEITHER the S3 API
+    # port (9000) NOR the web console (9001) is published to the host or Traefik
+    # (blob spec §17 ch.10). The sync-service reaches it at http://minio:9000.
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    restart: always
+    command: ['server', '/data']
+    environment:
+      # There is NO default credential — set these to strong secrets before first
+      # boot (the CHANGE-ME values are a deliberate tripwire, not usable creds).
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER — do not run on a default}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD — do not run on a default}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Operator hand-step (blob spec §17 ch.10): after first boot create a bucket
+    # `chatsundere-blobs` and a SCOPED access key limited to that bucket's CRUD,
+    # and give the sync-service THAT key — never the root credential above. Keep
+    # object versioning and ILM OFF (versioning would defeat the deletion promise;
+    # the sync-service bootstrap warns if it detects versioning enabled).
     networks:
       - chatsundere
 
@@ -99,6 +135,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  minio_data:
 
 networks:
   chatsundere:
