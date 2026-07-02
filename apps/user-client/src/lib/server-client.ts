@@ -116,6 +116,7 @@ export const httpServerClient: ServerClient = {
       path: '/api/v1/auth/step-up/start',
       json: req,
       authMode: 'bearer',
+      skipStepUpGate: true,
     }),
   stepUpFinish: (req: StepUpFinishRequest, baseUrl: string) =>
     apiFetch<StepUpFinishResponse>({
@@ -123,5 +124,6 @@ export const httpServerClient: ServerClient = {
       path: '/api/v1/auth/step-up/finish',
       json: req,
       authMode: 'none',
+      skipStepUpGate: true,
     }),
 };
