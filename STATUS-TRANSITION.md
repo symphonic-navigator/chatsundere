@@ -1,6 +1,6 @@
 # Chatsundere Status — Full Backend Transition
 
-**Last updated:** 2026-07-02 — sprint framed, worktree created, not yet started.
+**Last updated:** 2026-07-02 — WS-0 Foundation built on the branch, awaiting review.
 This file is the orientation surface for the **Full Backend Transition**: the
 focused, deploy-free sprint that integrates the three built backend workstreams
 (authenticated proxy, zero-knowledge sync, blob transport) plus the two auth
@@ -128,15 +128,24 @@ in `superpowers/`.
 
 ## 6. Doing now
 
-- **Nothing built yet.** Sprint framed; `full-backend-transition` worktree
-  created. Immediate next step: WS-0 Foundation brainstorm → spec.
+- **WS-0 Foundation BUILT on this branch** — spec
+  `superpowers/specs/2026-07-02-ws0-foundation-design.md` (v2, Laura-passed),
+  plan `superpowers/plans/2026-07-02-ws0-foundation.md`, all tasks green
+  (typecheck 14/14, both vitest suites green, `pnpm build` 9/9, Biome clean).
+  Ships the four foundation primitives — `ServerConfig` wire type +
+  `parseServerConfig` validation, the central `account-link.store`, the
+  `discovery.store` single-flight `probeServer`/`maybeProbeLinkedServer`, the
+  connectivity regain-probe wiring — plus `useServerGate` + the gate copy
+  catalogue + effective-URL selectors and the boot wiring. No user-visible flow
+  change; consumers arrive in WS-B/A/C/D. **Awaiting Liz's review and Chris's
+  §13 manual verification** before the next workstream.
 
 ## 7. Next
 
-1. **WS-0 Foundation** — brainstorm → spec → plan → build. Everything keys off
-   discovery + connectivity + the linked-state gate.
-2. **WS-B + WS-E** (onboarding un-gate + step-up) — cheap, produces linked
-   accounts to exercise the rest.
+1. **WS-0 Foundation** — ✅ built, done-pending-verify (Liz review + Chris's
+   spec §13 manual verification on a dev build).
+2. **WS-B + WS-E** (onboarding un-gate + step-up) — the next spec session; cheap,
+   produces linked accounts to exercise the rest.
 3. **WS-A** proxy client.
 4. **WS-C** sync engine (its own multi-step effort; Larissa + Laura).
 5. **WS-D** blob client (rides on C; the deferrable tail).
