@@ -90,20 +90,30 @@ endpoint, and never appears in diagnostics (§6).
 
 ## 5. Retry and error behaviour
 
-New shared helper in `llm-unified` (used by the streaming engine and reusable
-by the MCP client):
+Two mechanisms in `llm-unified`, sharing `source.refreshToken()`:
+
+1. **Streaming path:** `withStreamingRetry` (retry.ts) already owns the retry
+   loop with a fresh `buildRequest()` per attempt — precisely what a token
+   refresh needs, since the rebuild re-reads the source. It gains an optional
+   `onUnauthorised?: () => Promise<boolean>` hook: on a 401, invoked at most
+   once per call; `true` → immediate fresh attempt (no backoff), `false` or
+   absent → the 401 returns as today. `stream-completion.ts` wires the hook to
+   `source.refreshToken()` only when the provider routes via `cors-proxy`.
+2. **Single-shot paths** (one-shot completion, probe, TTI, STT, TTS, voices,
+   web adapters, MCP client):
 
 ```ts
-/** Fetch a proxied request; on 401, refresh the token once and rebuild. */
+/** Fetch; when proxied, on 401 refresh the token once and rebuild. */
 export async function fetchWithProxyAuth(
   build: () => Request,
-  init?: Pick<RequestInit, 'signal'>,
+  opts: { proxied: boolean; signal?: AbortSignal },
 ): Promise<Response>;
 ```
 
-(The `signal` passthrough exists because call sites pass abort signals to
-`fetch` rather than baking them into the `Request` — see the cross-realm note
-in `mcp-client.ts`.)
+(`proxied: false` degrades to a plain fetch — a direct upstream's 401 must
+never trigger an account-token refresh. The `signal` passthrough exists
+because call sites pass abort signals to `fetch` rather than baking them into
+the `Request` — see the cross-realm note in `mcp-client.ts`.)
 
 - First attempt with the current token. On **401** (whether the proxy rejected
   the token or the upstream rejected its own key — indistinguishable by
