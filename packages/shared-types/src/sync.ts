@@ -17,6 +17,11 @@ export const SYNC_COLLECTIONS = [
   'memoryJournal',
   'memoryBody',
   'compactionCheckpoints',
+  // Blob-bearing collections (blob spec §5.2). Their records carry BlobRefs, not
+  // image bytes; the blobs themselves ride the /api/v1/sync/blobs channel.
+  'personaAvatars',
+  'artefacts',
+  'attachments',
 ] as const;
 export type SyncCollection = (typeof SYNC_COLLECTIONS)[number];
 
@@ -83,3 +88,48 @@ export interface DoorbellPoke {
 /** Redis deny-list keys (spec §9) — written by auth-service, read by sync-service. */
 export const revokedJtiKey = (jti: string): string => `revoked:jti:${jti}`;
 export const revokedSubKey = (sub: string): string => `revoked:sub:${sub}`;
+
+// --- Blob transport (blob spec §5.1/§7) ------------------------------------
+
+/**
+ * A reference to a sealed blob, carried inside a record envelope in place of a
+ * `Blob` value. `bytes` is the ciphertext body size (matches `sync_blobs.bytes`)
+ * so the client engine can make fetch decisions without a server round trip.
+ */
+export interface BlobRef {
+  /** 22-char base64url (16 random bytes). */
+  blobId: string;
+  /** Ciphertext body size in bytes. */
+  bytes: number;
+}
+
+export type SyncBlobErrorCode =
+  | 'blob_too_large'
+  | 'quota_exceeded'
+  | 'blob_exists'
+  | 'hash_mismatch'
+  | 'not_found'
+  | 'delete_rate_limited'
+  | 'blob_backend_unavailable'
+  | 'blobs_disabled';
+
+export interface BlobListEntry {
+  blobId: string;
+  bytes: number;
+}
+
+export interface BlobListResponse {
+  blobs: BlobListEntry[];
+  totalBytes: number;
+  quotaBytes: number;
+}
+
+export interface BlobErrorBody {
+  error: {
+    code: SyncBlobErrorCode;
+    message: string;
+    usedBytes?: number;
+    quotaBytes?: number;
+    maxBlobBytes?: number;
+  };
+}
