@@ -17,11 +17,9 @@ export interface McpActiveServer {
   hiddenTools: string[];
 }
 
-/** Per-send MCP context: the active servers plus the proxy coords, key opener, and approval hook. */
+/** Per-send MCP context: the active servers plus the key opener and approval hook. */
 export interface McpToolContext {
   servers: McpActiveServer[];
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   /** Opens a server's plaintext key (MasterKey-gated) at call time, or null. */
   getServerKey: (serverId: string) => Promise<string | null>;
   /** Surfaces an approval request and resolves with the user's decision. */
@@ -76,10 +74,6 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
           const endpoint: McpEndpoint = {
             url: server.resolvedEndpoint,
             routing: server.routing,
-            corsProxy:
-              server.routing === 'proxy' && ctx.corsProxyUrl && ctx.corsProxyKey
-                ? { url: ctx.corsProxyUrl, key: ctx.corsProxyKey }
-                : null,
             auth: resolveAuth(server, key),
           };
           const r = await mcpToolsCall(endpoint, n.originalName, args, 30_000, signal);

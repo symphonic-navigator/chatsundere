@@ -5,17 +5,16 @@ import { NavTile } from '../../components/ui/NavTile.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
 import { useProviders } from '../../data/providers.js';
-import { useSettings } from '../../data/settings.js';
+import { useServerGate } from '../../lib/server-gate.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
 
 /** My Settings — the root navigation matrix (spec §2). */
 export function Settings(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings');
   const providers = useProviders();
-  const settings = useSettings();
+  const hasProxy = useServerGate('proxy').enabled;
 
   const rows = providers.data ?? [];
-  const hasProxy = !!settings.data?.corsProxy;
   const usable = usableTemplateIds(rows, hasProxy);
   const hasWeb = aggregateServiceKinds(usable).includes('web');
   const providerCount = rows.length;

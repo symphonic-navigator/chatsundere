@@ -33,8 +33,6 @@ const args = (over: Partial<Record<string, unknown>> = {}) =>
     provider: {},
     providerConfig: {},
     apiKey: 'k',
-    corsProxyUrl: null,
-    corsProxyKey: null,
     offering: {},
     ...over,
   }) as never;

@@ -2,6 +2,7 @@
 import {
   type Offering,
   getProvider,
+  getProxyAuthSource,
   probeProvider,
   providerServiceKinds,
 } from '@chatsundere/llm-unified';
@@ -18,9 +19,9 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useDeleteProvider, useProviders, useUpsertProvider } from '../../../data/providers.js';
-import { useSettings } from '../../../data/settings.js';
 import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 
 type Status =
   | { kind: 'idle' }
@@ -35,7 +36,7 @@ export function SettingsProviderPage(): JSX.Element {
   const definition = getProvider(templateId);
 
   const providers = useProviders();
-  const settings = useSettings();
+  const proxyGate = useServerGate('proxy');
   const upsert = useUpsertProvider();
   const del = useDeleteProvider();
   const mk = useSessionStore((s) => s.mk);
@@ -44,14 +45,14 @@ export function SettingsProviderPage(): JSX.Element {
   const requiresProxy = definition?.corsHint === 'requires-proxy';
 
   // "Test a model" can only reach the transport when a key is saved and, for
-  // proxy-required providers, a CORS proxy is configured. Otherwise a precondition
-  // failure would masquerade as a model failure (spec §7).
+  // proxy-required providers, the account relay is available. Otherwise a
+  // precondition failure would masquerade as a model failure (spec §7).
   const hasSavedKey = existing != null;
-  const proxyReady = !requiresProxy || settings.data?.corsProxy != null;
+  const proxyReady = !requiresProxy || proxyGate.enabled;
   const testDisabledReason = !hasSavedKey
     ? 'Save a key first'
     : !proxyReady
-      ? 'Set a CORS proxy first'
+      ? (proxyGate.tooltip ?? 'Link a server first')
       : null;
 
   const [apiKey, setApiKey] = useState('');
@@ -75,10 +76,10 @@ export function SettingsProviderPage(): JSX.Element {
       setStatus({ kind: 'error', reason: 'No master key in session — re-login required' });
       return;
     }
-    if (requiresProxy && !settings.data?.corsProxy) {
+    if (requiresProxy && !proxyGate.enabled) {
       setStatus({
         kind: 'error',
-        reason: 'Set a CORS proxy first (My Settings → AI Providers)',
+        reason: proxyGate.tooltip ?? 'Link a server to relay this provider',
       });
       return;
     }
@@ -112,16 +113,9 @@ export function SettingsProviderPage(): JSX.Element {
         });
       }
 
-      // Proxy-required providers reuse the global CORS proxy configured in
-      // My Settings → AI Providers. We only read it here for the probe;
-      // it is never sealed or written from this page.
-      const sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
-      const decryptedProxyKey =
-        requiresProxy && sealedShared
-          ? await openSecret(sealedShared, mk, 'cors-proxy/shared-key')
-          : null;
-      const corsProxyUrl = requiresProxy ? (settings.data?.corsProxy?.url ?? null) : null;
-
+      // Proxy-required providers route through the account's authenticated
+      // proxy, which is read late (at request-build time) from the registered
+      // proxy auth source — nothing proxy-related is sealed or written here.
       const decryptedKey = await openSecret(stableSealedKey, mk, stableSlotId);
 
       const config = {
@@ -132,8 +126,6 @@ export function SettingsProviderPage(): JSX.Element {
         definition,
         config,
         apiKey: decryptedKey,
-        corsProxyUrl,
-        corsProxyKey: decryptedProxyKey,
       });
 
       if (result.ok) {
@@ -159,16 +151,11 @@ export function SettingsProviderPage(): JSX.Element {
     if (!definition || !existing || !mk) {
       throw new Error('Model test: provider not fully configured');
     }
-    if (requiresProxy && !settings.data?.corsProxy) {
-      throw new Error('CORS proxy removed — configure it again under My Settings');
+    if (requiresProxy && !proxyGate.enabled) {
+      throw new Error(proxyGate.tooltip ?? 'Link a server to relay this provider');
     }
-    const sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
-    const corsProxyKey =
-      requiresProxy && sealedShared
-        ? await openSecret(sealedShared, mk, 'cors-proxy/shared-key')
-        : null;
-    const corsProxyUrl = requiresProxy ? (settings.data?.corsProxy?.url ?? null) : null;
     const apiKeyPlain = await openSecret(existing.apiKey, mk, `provider/${existing.id}/api-key`);
+    const proxyUrl = requiresProxy ? (getProxyAuthSource()?.getUrl() ?? null) : null;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), MODEL_DEBUG_TIMEOUT_MS);
     try {
@@ -181,10 +168,8 @@ export function SettingsProviderPage(): JSX.Element {
             : ({ kind: 'direct' } as const),
         },
         apiKey: apiKeyPlain,
-        corsProxyUrl,
-        corsProxyKey,
         offering,
-        proxyHost: corsProxyUrl ? new URL(corsProxyUrl).host : undefined,
+        proxyHost: proxyUrl ? new URL(proxyUrl).host : undefined,
         signal: controller.signal,
       });
     } finally {

@@ -9,6 +9,7 @@ import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { pickExpertSearchRef } from '../../../lib/resolve-expert-web.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds, useUsableTemplateIds } from '../../../lib/usable-providers.js';
 import { webBackendOptions } from '../../../lib/web-backend-options.js';
 import { webBackendSummary } from '../../../lib/web-backend-summary.js';
@@ -34,9 +35,9 @@ export function SettingsExpertPage(): JSX.Element {
   const triggerRef = useRef<HTMLElement | null>(null);
 
   const rows = providerRows ?? [];
-  const configuredTemplateIds = usableTemplateIds(rows, !!settings?.corsProxy);
+  const hasProxy = useServerGate('proxy').enabled;
+  const configuredTemplateIds = usableTemplateIds(rows, hasProxy);
   const current = parseModelRef(settings?.expertModel);
-  const hasProxy = settings?.corsProxy != null;
   const hasWeb = aggregateServiceKinds(usable).includes('web');
   const options = webBackendOptions(usable, hasProxy);
 

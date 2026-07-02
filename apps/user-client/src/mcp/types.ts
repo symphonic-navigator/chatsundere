@@ -15,8 +15,6 @@ export interface McpEndpoint {
   /** Resolved endpoint URL (bare or +/mcp), as decided by the connection test. */
   url: string;
   routing: McpRouting;
-  /** Required when routing === 'proxy'. */
-  corsProxy: { url: string; key: string } | null;
   /** Auth header to send to the upstream, or null. */
   auth: { header: string; value: string } | null;
 }

@@ -2,7 +2,7 @@
 
 import { getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
-import type { ProviderRow, SettingsRow } from '../../boot/client-data-db.js';
+import type { ProviderRow } from '../../boot/client-data-db.js';
 import { openSecret } from '../secrets.js';
 import type { SelectedOffering } from './select-offering.js';
 
@@ -10,22 +10,20 @@ import type { SelectedOffering } from './select-offering.js';
 export interface VoiceTransportMaterial {
   providerConfig: { baseUrl: string; routing: { kind: 'direct' } | { kind: 'cors-proxy' } };
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
 }
 
 /**
- * Resolve the transport material (auth + routing + proxy) for an already-selected
+ * Resolve the transport material (auth + routing) for an already-selected
  * voice offering. Shared policy for resolveTtsTransport and resolveStt: provider
- * lookup, master-key check, api-key decrypt, the direct-routing computation, and
- * the proxy-decrypt fatal/lenient split. Returns null when resolution fails —
- * callers map that to their own no-provider shape. `logLabel` keeps each
- * resolver's warn prefix (e.g. 'resolveTts'). UI-free: no React imports.
+ * lookup, master-key check, api-key decrypt, and the direct-routing computation.
+ * Returns null when resolution fails — callers map that to their own no-provider
+ * shape. When routing is cors-proxy the account's authenticated proxy is read
+ * late at request-build time. `logLabel` keeps each resolver's warn prefix
+ * (e.g. 'resolveTts'). UI-free: no React imports.
  */
 export async function resolveVoiceTransportMaterial(
   selected: SelectedOffering,
   providerRows: readonly ProviderRow[],
-  settings: SettingsRow | undefined,
   logLabel: string,
 ): Promise<VoiceTransportMaterial | null> {
   const { offering } = selected;
@@ -61,26 +59,5 @@ export async function resolveVoiceTransportMaterial(
     routing: direct ? ({ kind: 'direct' } as const) : ({ kind: 'cors-proxy' } as const),
   };
 
-  // Resolve the optional CORS proxy material.
-  const corsProxyUrl = settings?.corsProxy?.url ?? null;
-  let corsProxyKey: string | null = null;
-  if (settings?.corsProxy) {
-    try {
-      corsProxyKey = await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key');
-    } catch {
-      // Fatal only when the request actually routes through the proxy; a
-      // direct offering proceeds without proxy material.
-      if (!direct) {
-        console.warn(
-          `${logLabel}: failed to decrypt cors-proxy/shared-key — falling back to no-provider`,
-        );
-        return null;
-      }
-      console.warn(
-        `${logLabel}: failed to decrypt cors-proxy/shared-key — proceeding on direct routing`,
-      );
-    }
-  }
-
-  return { providerConfig, apiKey, corsProxyUrl, corsProxyKey };
+  return { providerConfig, apiKey };
 }

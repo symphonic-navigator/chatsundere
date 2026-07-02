@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { fetchWithProxyAuth, getProxyAuthSource } from '@chatsundere/llm-unified';
 import type { McpEndpoint, McpToolDefinition } from './types.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -34,19 +35,26 @@ function buildRequest(endpoint: McpEndpoint, body: unknown, sessionId: string | 
   if (sessionId) headers.set('Mcp-Session-Id', sessionId);
 
   let url: string;
+  // Direct requests follow redirects; a proxied request must never chase an
+  // upstream redirect off-proxy (spec §5).
+  let redirect: RequestInit['redirect'] = 'follow';
   if (endpoint.routing === 'direct') {
     url = endpoint.url;
   } else {
-    if (!endpoint.corsProxy)
-      throw new Error('MCP proxy routing selected but no CORS proxy configured');
+    const source = getProxyAuthSource();
+    const proxyUrl = source?.getUrl() ?? null;
+    const token = source?.getToken() ?? null;
+    if (proxyUrl === null || token === null)
+      throw new Error('MCP proxy routing selected but the linked server proxy is unavailable');
     const target = new URL(endpoint.url);
-    headers.set('x-cors-proxy-api-key', endpoint.corsProxy.key);
+    headers.set('x-chatsundere-authorization', `Bearer ${token}`);
     headers.set('x-cors-proxy-target', target.origin);
-    url = joinUrl(endpoint.corsProxy.url, target.pathname + target.search);
+    url = joinUrl(proxyUrl, target.pathname + target.search);
+    redirect = 'manual';
   }
   // Signal is passed to fetch() rather than Request() to avoid cross-realm
   // AbortSignal instanceof checks that fail in jsdom and some bundler environments.
-  return new Request(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  return new Request(url, { method: 'POST', headers, body: JSON.stringify(body), redirect });
 }
 
 function joinUrl(base: string, path: string): string {
@@ -94,23 +102,25 @@ export async function readJsonRpcResponse(
 }
 
 async function doInitialise(endpoint: McpEndpoint, signal?: AbortSignal): Promise<string | null> {
+  const proxied = endpoint.routing === 'proxy';
   const initId = nextId();
-  const initResp = await fetch(
-    buildRequest(
-      endpoint,
-      {
-        jsonrpc: '2.0',
-        id: initId,
-        method: 'initialize',
-        params: {
-          protocolVersion: MCP_PROTOCOL_VERSION,
-          capabilities: {},
-          clientInfo: CLIENT_INFO,
+  const initResp = await fetchWithProxyAuth(
+    () =>
+      buildRequest(
+        endpoint,
+        {
+          jsonrpc: '2.0',
+          id: initId,
+          method: 'initialize',
+          params: {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities: {},
+            clientInfo: CLIENT_INFO,
+          },
         },
-      },
-      null,
-    ),
-    { signal },
+        null,
+      ),
+    { proxied, signal },
   );
   if (!initResp.ok) throw new Error(`MCP initialise failed: HTTP ${initResp.status}`);
   const sessionId = initResp.headers.get('mcp-session-id');
@@ -119,9 +129,10 @@ async function doInitialise(endpoint: McpEndpoint, signal?: AbortSignal): Promis
   } catch {
     /* session-id header is what matters here */
   }
-  await fetch(
-    buildRequest(endpoint, { jsonrpc: '2.0', method: 'notifications/initialized' }, sessionId),
-    { signal },
+  await fetchWithProxyAuth(
+    () =>
+      buildRequest(endpoint, { jsonrpc: '2.0', method: 'notifications/initialized' }, sessionId),
+    { proxied, signal },
   );
   return sessionId;
 }
@@ -149,9 +160,10 @@ export async function mcpToolsList(
   timeoutMs = 10_000,
 ): Promise<McpToolDefinition[]> {
   const sessionId = await ensureSession(endpoint, AbortSignal.timeout(timeoutMs));
-  const resp = await fetch(
-    buildRequest(endpoint, { jsonrpc: '2.0', id: nextId(), method: 'tools/list' }, sessionId),
-    { signal: AbortSignal.timeout(timeoutMs) },
+  const listId = nextId();
+  const resp = await fetchWithProxyAuth(
+    () => buildRequest(endpoint, { jsonrpc: '2.0', id: listId, method: 'tools/list' }, sessionId),
+    { proxied: endpoint.routing === 'proxy', signal: AbortSignal.timeout(timeoutMs) },
   );
   if (!resp.ok) {
     if (resp.status === 404) sessions.delete(endpoint.url);
@@ -181,20 +193,23 @@ export async function mcpToolsCall(
     };
   }
 
-  const callOnce = (sid: string | null): Promise<Response> =>
-    fetch(
-      buildRequest(
-        endpoint,
-        {
-          jsonrpc: '2.0',
-          id: nextId(),
-          method: 'tools/call',
-          params: { name: toolName, arguments: args },
-        },
-        sid,
-      ),
-      { signal: signal ?? AbortSignal.timeout(timeoutMs) },
+  const callOnce = (sid: string | null): Promise<Response> => {
+    const callId = nextId();
+    return fetchWithProxyAuth(
+      () =>
+        buildRequest(
+          endpoint,
+          {
+            jsonrpc: '2.0',
+            id: callId,
+            method: 'tools/call',
+            params: { name: toolName, arguments: args },
+          },
+          sid,
+        ),
+      { proxied: endpoint.routing === 'proxy', signal: signal ?? AbortSignal.timeout(timeoutMs) },
     );
+  };
 
   let resp: Response;
   try {

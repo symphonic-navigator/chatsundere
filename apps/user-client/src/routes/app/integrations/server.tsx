@@ -17,8 +17,7 @@ import {
   useMcpServers,
   useUpsertMcpServer,
 } from '../../../data/mcp-servers.js';
-import { useSettings } from '../../../data/settings.js';
-import { openSecret } from '../../../lib/secrets.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
 import { sanitiseToolName } from '../../../mcp/tool-naming.js';
 import type { McpAuthResolved, McpToolDefinition } from '../../../mcp/types.js';
@@ -78,7 +77,7 @@ export function IntegrationServerPage(): JSX.Element {
 function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
-  const settings = useSettings();
+  const proxyGate = useServerGate('proxy');
   const upsert = useUpsertMcpServer();
   const del = useDeleteMcpServer();
   const mk = useSessionStore((s) => s.mk);
@@ -137,22 +136,14 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     setRoutingChangedHint(false);
     setTest({ kind: 'testing' });
     try {
-      const sealedShared = settings.data?.corsProxy?.sharedKey ?? null;
-      const hasProxy = settings.data?.corsProxy != null;
+      const hasProxy = proxyGate.enabled;
       if (!allowDirect && !hasProxy) {
         setLastError(
-          'No CORS proxy configured. Turn on Local network to connect directly, or add a proxy in AI provider settings.',
+          'The linked server relay is unavailable. Turn on Local network to connect directly, or link a server first.',
         );
         setTest({ kind: 'done' });
         return;
       }
-      const proxyUrl = settings.data?.corsProxy?.url ?? null;
-      const decryptedKey =
-        hasProxy && sealedShared
-          ? await openSecret(sealedShared, mk, 'cors-proxy/shared-key')
-          : null;
-      const corsProxy =
-        hasProxy && proxyUrl && decryptedKey ? { url: proxyUrl, key: decryptedKey } : null;
 
       const plaintextKey =
         authScheme === 'none'
@@ -164,7 +155,7 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
               : null;
       const auth = buildAuth(plaintextKey);
 
-      const result = await testMcpConnection({ url, hasProxy, allowDirect, corsProxy, auth });
+      const result = await testMcpConnection({ url, hasProxy, allowDirect, auth });
 
       setRouting(result.routing);
       setResolvedEndpoint(result.resolvedEndpoint);

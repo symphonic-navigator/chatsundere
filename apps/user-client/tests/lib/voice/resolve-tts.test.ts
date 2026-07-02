@@ -538,68 +538,6 @@ describe('resolveTts', () => {
     });
   });
 
-  describe('(h) corrupt CORS proxy key', () => {
-    it('returns no-provider and warns when the offering routes via the proxy', async () => {
-      // No real TTS offering routes via the proxy today (xAI's voice endpoints
-      // override to direct, nano-gpt is CORS-open), so the cors-proxy branch is
-      // pinned with a contrived requires-proxy definition and no override.
-      await seedProvider('nano-gpt');
-      getProviderMock.mockImplementation((id: string) =>
-        id === 'nano-gpt' ? { ...NANO_PROVIDER_DEF, corsHint: 'requires-proxy' } : undefined,
-      );
-
-      const db = await openClientDataDb();
-      await db.settings.update(1, {
-        ttsOffering: 'nano-gpt:xai-tts',
-        corsProxy: {
-          url: 'https://proxy.example.com',
-          sharedKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
-        },
-      });
-
-      // api-key succeeds; proxy-key fails.
-      openSecretMock
-        .mockResolvedValueOnce('test-api-key')
-        .mockRejectedValueOnce(new DOMException('AES-GCM auth tag failure'));
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      const result = await resolveTts(minimalPersona({ voice: 'voice-x' }));
-      expect(result).toEqual({ ok: false, reason: 'no-provider' });
-      expect(warnSpy).toHaveBeenCalledOnce();
-      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/cors-proxy/);
-
-      warnSpy.mockRestore();
-    });
-
-    it('proceeds with a null proxy key when the offering routes direct', async () => {
-      await seedProvider();
-
-      const db = await openClientDataDb();
-      await db.settings.update(1, {
-        corsProxy: {
-          url: 'https://proxy.example.com',
-          sharedKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
-        },
-      });
-
-      openSecretMock
-        .mockResolvedValueOnce('test-api-key')
-        .mockRejectedValueOnce(new DOMException('AES-GCM auth tag failure'));
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      const transport = await resolveTtsTransport();
-      expect(transport).not.toBeNull();
-      expect(transport?.corsProxyKey).toBeNull();
-      expect(transport?.providerConfig.routing).toEqual({ kind: 'direct' });
-      expect(warnSpy).toHaveBeenCalledOnce();
-      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/cors-proxy/);
-
-      warnSpy.mockRestore();
-    });
-  });
-
   describe('offering selection (slot picker)', () => {
     it('respects an explicit ttsOffering pick from settings', async () => {
       await seedProvider('xai');
@@ -628,8 +566,6 @@ describe('resolveTts', () => {
       const transport = await resolveTtsTransport();
       expect(transport).not.toBeNull();
       expect(transport?.providerConfig.routing).toEqual({ kind: 'direct' });
-      expect(transport?.corsProxyUrl).toBeNull();
-      expect(transport?.corsProxyKey).toBeNull();
     });
   });
 

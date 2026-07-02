@@ -4,12 +4,12 @@ import { getProvider } from '@chatsundere/llm-unified';
 import { useMemo } from 'react';
 import type { ProviderRow } from '../boot/client-data-db.js';
 import { useProviders } from '../data/providers.js';
-import { useSettings } from '../data/settings.js';
+import { useServerGate } from './server-gate.js';
 
 /**
  * Template ids of *usable* providers: enabled AND with a working route —
- * either not proxy-required, or a CORS proxy is configured. The single source
- * of truth for the summary and model availability.
+ * either not proxy-required, or the account's authenticated proxy is available.
+ * The single source of truth for the summary and model availability.
  */
 export function usableTemplateIds(providers: ProviderRow[], hasProxy: boolean): string[] {
   return providers
@@ -19,11 +19,10 @@ export function usableTemplateIds(providers: ProviderRow[], hasProxy: boolean): 
     .map((p) => p.templateId);
 }
 
-/** Hook form: reads providers + settings and returns usable template ids. */
+/** Hook form: reads providers + the server 'proxy' gate and returns usable template ids. */
 export function useUsableTemplateIds(): string[] {
   const providers = useProviders();
-  const settings = useSettings();
-  const hasProxy = !!settings.data?.corsProxy;
+  const hasProxy = useServerGate('proxy').enabled;
   return useMemo(
     () => usableTemplateIds(providers.data ?? [], hasProxy),
     [providers.data, hasProxy],

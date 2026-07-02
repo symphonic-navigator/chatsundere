@@ -7,7 +7,7 @@ test('context carries chatId, personaId and personaOffering', () => {
     { adultPersona: false },
     { search: null, fetch: null },
     null,
-    { corsProxyUrl: null, corsProxyKey: null, webSearchTierId: null },
+    { useProxy: false, webSearchTierId: null },
     {
       chatId: 'c1',
       personaId: 'p1',

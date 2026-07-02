@@ -21,6 +21,7 @@ import { QK } from '../../../data/queryKeys.js';
 import { useSettings } from '../../../data/settings.js';
 import { normaliseAvatar } from '../../../lib/avatar-normalise.js';
 import { resolveImportedNsfw } from '../../../lib/chatsune-import/nsfw.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { type DraftPersona, defaultDraft } from './persona-draft.js';
@@ -31,6 +32,7 @@ export function PersonaCreate(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('persona');
 
   const settings = useSettings();
+  const hasProxy = useServerGate('proxy').enabled;
   const mindspaces = useMindspaces();
   const providers = useProviders();
   const qc = useQueryClient();
@@ -268,10 +270,7 @@ export function PersonaCreate(): JSX.Element {
             emptyLabel="Choose a model"
             filter="all"
             providers={providers.data ?? []}
-            configuredTemplateIds={usableTemplateIds(
-              providers.data ?? [],
-              !!settings.data?.corsProxy,
-            )}
+            configuredTemplateIds={usableTemplateIds(providers.data ?? [], hasProxy)}
             current={currentModel}
             onSelect={(sel) =>
               setDraft((d) => ({

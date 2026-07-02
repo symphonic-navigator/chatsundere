@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@chatsundere/llm-unified', () => ({
@@ -12,18 +13,26 @@ vi.mock('@chatsundere/llm-unified', () => ({
   providerServiceKinds: () => ['llm'],
 }));
 
+const GATE_TOOLTIP = 'Link a server to route this provider.';
+vi.mock('../../src/lib/server-gate.js', () => ({
+  useServerGate: () => ({ enabled: false, reason: 'local-only', tooltip: GATE_TOOLTIP }),
+}));
+
 import { AddProviderPicker } from '../../src/components/AddProviderPicker.js';
 
 const noop = () => {};
 
+function renderPicker(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
 describe('AddProviderPicker', () => {
   it('excludes already-configured providers', () => {
-    render(
+    renderPicker(
       <AddProviderPicker
         configuredTemplateIds={['chutes']}
         hasProxy={true}
         onPick={noop}
-        onNeedProxy={noop}
         onClose={noop}
       />,
     );
@@ -31,35 +40,33 @@ describe('AddProviderPicker', () => {
     expect(screen.getByText('Mistral AI')).toBeInTheDocument();
   });
 
-  it('greys proxy-providers and offers a proxy shortcut when no proxy is set', () => {
-    const onNeedProxy = vi.fn();
-    render(
+  it('greys proxy-providers, shows the gate tooltip, and links to server linking', () => {
+    renderPicker(
       <AddProviderPicker
         configuredTemplateIds={[]}
         hasProxy={false}
         onPick={noop}
-        onNeedProxy={onNeedProxy}
         onClose={noop}
       />,
     );
     const wafer = screen.getByRole('button', { name: 'Wafer' });
     expect(wafer).toBeDisabled();
-    expect(screen.getAllByText(/needs a cors proxy/i).length).toBeGreaterThan(0);
-    // Two proxy-requiring providers each render a shortcut, so scope the click
-    // to the Wafer entry's container to target its shortcut unambiguously.
-    const waferEntry = wafer.parentElement as HTMLElement;
-    fireEvent.click(within(waferEntry).getByRole('button', { name: /set up a cors proxy/i }));
-    expect(onNeedProxy).toHaveBeenCalled();
+    // The retired "CORS proxy" copy is gone; the honest gate tooltip stands in.
+    expect(screen.queryByText(/cors proxy/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(GATE_TOOLTIP).length).toBeGreaterThan(0);
+    const links = screen.getAllByRole('link', { name: /open server linking/i });
+    expect(links.length).toBeGreaterThan(0);
+    // biome-ignore lint/style/noNonNullAssertion: getAllByRole returns a non-empty array here
+    expect(links[0]!.getAttribute('href')).toBe('/app/account/server-linking');
   });
 
   it('enables proxy-providers when a proxy is set, and picks one', () => {
     const onPick = vi.fn();
-    render(
+    renderPicker(
       <AddProviderPicker
         configuredTemplateIds={[]}
         hasProxy={true}
         onPick={onPick}
-        onNeedProxy={noop}
         onClose={noop}
       />,
     );

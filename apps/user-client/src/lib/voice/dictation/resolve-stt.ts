@@ -34,14 +34,9 @@ export async function resolveStt(): Promise<SttResolution> {
   const sttMeta = offering.stt;
   if (!sttMeta) return { ok: false, reason: 'no-provider' };
 
-  const material = await resolveVoiceTransportMaterial(
-    selected,
-    providerRows,
-    settings,
-    'resolveStt',
-  );
+  const material = await resolveVoiceTransportMaterial(selected, providerRows, 'resolveStt');
   if (!material) return { ok: false, reason: 'no-provider' };
-  const { providerConfig, apiKey, corsProxyUrl, corsProxyKey } = material;
+  const { providerConfig, apiKey } = material;
 
   const { upstreamSlug } = offering;
   // The helper already verified the provider definition exists.
@@ -52,8 +47,6 @@ export async function resolveStt(): Promise<SttResolution> {
       const result = await transcribeAudio({
         providerConfig,
         apiKey,
-        corsProxyUrl,
-        corsProxyKey,
         upstreamSlug,
         transport: sttMeta.transport,
         spoofWebmAsMatroska: sttMeta.spoofWebmAsMatroska,

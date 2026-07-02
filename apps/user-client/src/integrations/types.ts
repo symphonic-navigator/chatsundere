@@ -20,9 +20,9 @@ export interface IntegrationContext {
   webSearch: OfferingRef | null;
   /** Selected web fetch backend, independently chosen, or null. */
   webFetch: OfferingRef | null;
-  /** Call-time CORS proxy (the LLM path's decrypted corsProxy), or null. */
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
+  /** True when web calls should route through the account's authenticated
+   *  proxy (mirrors the server 'proxy' gate); false when they go direct. */
+  useProxy: boolean;
   /** The cockpit-selected search tier id, or null (→ the offering's default). */
   webSearchTierId: string | null;
   /** Retrieve a provider's plaintext key at call time — credential-bus,

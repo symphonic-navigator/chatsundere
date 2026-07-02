@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { getProvider, providerServiceKinds } from '@chatsundere/llm-unified';
+import { Link } from 'react-router-dom';
 import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../lib/built-in-providers.js';
+import { useServerGate } from '../lib/server-gate.js';
 import { CapBadgeRow } from './CapBadgeRow.js';
 
 /** Sort key: freedom-oriented first, then provider sortPriority. */
@@ -15,15 +17,14 @@ export function AddProviderPicker({
   configuredTemplateIds,
   hasProxy,
   onPick,
-  onNeedProxy,
   onClose,
 }: {
   configuredTemplateIds: string[];
   hasProxy: boolean;
   onPick: (templateId: ProviderTemplateId) => void;
-  onNeedProxy: () => void;
   onClose: () => void;
 }): JSX.Element {
+  const proxyGate = useServerGate('proxy');
   const configured = new Set(configuredTemplateIds);
   const candidates = BUILT_IN_PROVIDERS.filter((b) => !configured.has(b.id)).sort((a, b) => {
     const [fa, pa] = rankKey(a.id);
@@ -78,7 +79,7 @@ export function AddProviderPicker({
                   <div className="min-w-0 flex-1">
                     <div className="font-display text-sm text-paper">{b.name}</div>
                     {blocked ? (
-                      <div className="text-[11px] text-paper-soft">Needs a CORS proxy</div>
+                      <div className="text-[11px] text-paper-soft">{proxyGate.tooltip}</div>
                     ) : null}
                     <div className="mt-1">
                       <CapBadgeRow lit={providerServiceKinds(b.id)} />
@@ -86,13 +87,13 @@ export function AddProviderPicker({
                   </div>
                 </button>
                 {blocked ? (
-                  <button
-                    type="button"
-                    onClick={onNeedProxy}
-                    className="mt-1 ml-12 text-[11px] text-aurora-200 underline"
+                  <Link
+                    to="/app/account/server-linking"
+                    onClick={onClose}
+                    className="mt-1 ml-12 block text-[11px] text-aurora-200 underline"
                   >
-                    Set up a CORS proxy →
-                  </button>
+                    Open server linking →
+                  </Link>
                 ) : null}
               </div>
             );

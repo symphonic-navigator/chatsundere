@@ -26,8 +26,7 @@ const dormantCtx: IntegrationContext = {
   location: null,
   webSearch: null,
   webFetch: null,
-  corsProxyUrl: null,
-  corsProxyKey: null,
+  useProxy: false,
   webSearchTierId: null,
   getKey: async () => null,
   chatId: '',
@@ -126,8 +125,6 @@ describe('tool registry composition', () => {
           hiddenTools: [],
         },
       ],
-      corsProxyUrl: null,
-      corsProxyKey: null,
       getServerKey: async () => null,
       requestApproval: async () => true,
     };

@@ -66,8 +66,6 @@ function makeArgs(overrides: Partial<StartStreamArgs> = {}): StartStreamArgs {
     provider: nanoGpt,
     providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
     apiKey: 'k',
-    corsProxyUrl: null,
-    corsProxyKey: null,
     offering: baseOffering,
     priorMessages: [],
     userMessageText: 'hi',

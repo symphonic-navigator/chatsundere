@@ -6,11 +6,18 @@ import { vi } from 'vitest';
 // Mutable so individual tests can set a non-empty list without re-mocking.
 let providerRows: Array<{ id: string; templateId: string; enabled: boolean; createdAt: number }> =
   [];
+// Mutable so individual tests can drive the 'proxy' server-gate state.
+let proxyGate: { enabled: boolean; reason: string | null; tooltip: string | null } = {
+  enabled: true,
+  reason: null,
+  tooltip: null,
+};
 
 vi.mock('../../src/data/providers.js', () => ({ useProviders: () => ({ data: providerRows }) }));
-vi.mock('../../src/data/settings.js', () => ({
-  useSettings: () => ({ data: { corsProxy: null } }),
-  useUpdateSettings: () => ({ mutateAsync: vi.fn() }),
+vi.mock('../../src/lib/server-gate.js', () => ({ useServerGate: () => proxyGate }));
+vi.mock('@chatsundere/ui-shared', () => ({
+  useAccountLinkStore: (sel: (s: { issuerLabel: string | null }) => unknown) =>
+    sel({ issuerLabel: null }),
 }));
 vi.mock('../../src/content/help/use-help.js', () => ({
   useHelp: vi.fn(() => ({ onHelp: vi.fn(), helpOverlay: null })),
@@ -18,7 +25,7 @@ vi.mock('../../src/content/help/use-help.js', () => ({
 vi.mock('@chatsundere/llm-unified', () => ({
   MODALITY_ORDER: ['llm', 'web', 'tts', 'stt', 'tti'],
   getProvider: (id: string) => ({
-    corsHint: 'direct',
+    corsHint: id === 'wafer' ? 'requires-proxy' : 'direct',
     displayName: id,
     offerings: [{ serviceKind: 'llm' }],
     sortPriority: 10,
@@ -48,6 +55,7 @@ function wrap(ui: React.ReactNode) {
 describe('SettingsProvidersPage', () => {
   beforeEach(() => {
     providerRows = [];
+    proxyGate = { enabled: true, reason: null, tooltip: null };
   });
 
   it('shows the empty-Circle copy and an add-provider control when no providers', async () => {
@@ -63,5 +71,24 @@ describe('SettingsProvidersPage', () => {
     expect(screen.getByText('chutes')).toBeInTheDocument();
     // No unconfigured built-in leaks into the list.
     expect(screen.queryByText('OpenRouter')).not.toBeInTheDocument();
+  });
+
+  it('never renders the retired "CORS proxy" vocabulary', () => {
+    wrap(<SettingsProvidersPage />);
+    expect(screen.queryByText(/cors proxy/i)).not.toBeInTheDocument();
+  });
+
+  it('maps the disabled proxy-gate reason into a requires-proxy provider status', () => {
+    providerRows = [{ id: 'r1', templateId: 'wafer', enabled: true, createdAt: 0 }];
+    proxyGate = { enabled: false, reason: 'local-only', tooltip: 'Link a server first' };
+    wrap(<SettingsProvidersPage />);
+    expect(screen.getByText('✗ Needs a linked account')).toBeInTheDocument();
+  });
+
+  it('shows a requires-proxy provider as connected when the proxy gate is enabled', () => {
+    providerRows = [{ id: 'r1', templateId: 'wafer', enabled: true, createdAt: 0 }];
+    proxyGate = { enabled: true, reason: null, tooltip: null };
+    wrap(<SettingsProvidersPage />);
+    expect(screen.getByText('● Connected')).toBeInTheDocument();
   });
 });

@@ -7,6 +7,7 @@ import {
   getCanonical,
   getOffering,
   getProvider,
+  getProxyAuthSource,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
@@ -46,6 +47,7 @@ import {
   createDiagnosticsCollector,
 } from '../lib/model-debug.js';
 import { buildOpenerInstruction } from '../lib/opener.js';
+import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { queryClient } from '../lib/queryClient.js';
 import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
@@ -90,8 +92,8 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   substituteVisionModel?: string | null;
   /**
    * The substitute model's resolved one-shot call context (provider, decrypted
-   * api-key, CORS proxy, target). Resolved in the send path because it needs the
-   * MasterKey, which the store never touches. Absent when no substitute is set.
+   * api-key, target). Resolved in the send path because it needs the MasterKey,
+   * which the store never touches. Absent when no substitute is set.
    */
   substituteOneShotBase?: Omit<OneShotArgs, 'messages' | 'bodyExtras'>;
   /**
@@ -133,8 +135,6 @@ export type OpenerArgs = {
   provider: import('@chatsundere/llm-unified').ProviderDefinition;
   providerConfig: import('@chatsundere/llm-unified').ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: import('@chatsundere/llm-unified').Offering;
   reasoning: import('../lib/reasoning-resolver.js').ReasoningState;
   globalInstructions: string;
@@ -183,8 +183,6 @@ function compactionArgsFrom(args: StartArgs): Omit<CompactionArgs, 'trigger'> {
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     offering: args.offering,
   };
 }
@@ -215,8 +213,6 @@ function fireMemoryPipeline(args: StartArgs): void {
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     offering: args.offering,
   })
     .then(async () => {
@@ -261,8 +257,6 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
       provider: args.provider,
       providerConfig: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       offering: args.offering,
       firstUserMessage: args.userText,
       firstPersonaResponse,
@@ -307,9 +301,6 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const provider = await db.providers.get(persona.providerId);
     if (!provider) throw new Error('compactNow: provider not found');
 
-    const settings = await db.settings.get(1);
-    if (!settings) throw new Error('compactNow: settings row missing');
-
     const providerDef = getProvider(provider.templateId);
     if (!providerDef)
       throw new Error(`compactNow: unknown provider template "${provider.templateId}"`);
@@ -318,10 +309,6 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     if (!offering) throw new Error(`compactNow: no offering for "${persona.modelId}"`);
 
     const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
-    const corsProxyUrl = settings.corsProxy?.url ?? null;
-    const corsProxyKey = settings.corsProxy
-      ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
-      : null;
 
     const providerConfig: import('@chatsundere/llm-unified').ProviderConfig = {
       baseUrl: providerDef.baseUrl,
@@ -335,8 +322,6 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       provider: providerDef,
       providerConfig,
       apiKey,
-      corsProxyUrl,
-      corsProxyKey,
       offering,
       trigger: 'manual',
     };
@@ -802,8 +787,7 @@ async function runIntoDraft(
     args.webInterfacing ?? { search: null, fetch: null },
     useSessionStore.getState().mk,
     {
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
+      useProxy: isProxyAvailable(),
       webSearchTierId: useCurrentChatStore.getState().webSearchTierId,
     },
     {
@@ -1055,17 +1039,16 @@ async function runIntoDraft(
               return args.provider.baseUrl;
             }
           })(),
-          ...(routing === 'cors-proxy' && args.corsProxyUrl
-            ? {
-                proxyHost: (() => {
-                  try {
-                    return new URL(args.corsProxyUrl as string).host;
-                  } catch {
-                    return args.corsProxyUrl as string;
-                  }
-                })(),
-              }
-            : {}),
+          ...(() => {
+            if (routing !== 'cors-proxy') return {};
+            const proxyUrl = getProxyAuthSource()?.getUrl() ?? null;
+            if (proxyUrl === null) return {};
+            try {
+              return { proxyHost: new URL(proxyUrl).host };
+            } catch {
+              return { proxyHost: proxyUrl };
+            }
+          })(),
         },
         model: args.offering.upstreamSlug,
         whenIso: new Date().toISOString(),
@@ -1160,8 +1143,6 @@ async function runOpenerStream(
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     offering: args.offering,
     priorMessages: [],
     userMessageText: buildOpenerInstruction(args.persona.greetingInstructions),

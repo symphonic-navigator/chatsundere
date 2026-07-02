@@ -11,6 +11,10 @@ vi.mock('../../src/data/settings.js', () => ({
   useUpdateSettings: () => ({ mutate: mutateMock, mutateAsync: vi.fn() }),
 }));
 vi.mock('../../src/data/providers.js', () => ({ useProviders: () => ({ data: providerRows }) }));
+vi.mock('../../src/lib/server-gate.js', () => ({
+  // xai requires the relay; an enabled 'proxy' gate makes both providers usable.
+  useServerGate: () => ({ enabled: true, reason: null, tooltip: null }),
+}));
 
 import { ImageGenerationSection } from '../../src/components/image-gen/ImageGenerationSection.js';
 
