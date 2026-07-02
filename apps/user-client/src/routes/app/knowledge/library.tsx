@@ -24,6 +24,7 @@ import { useAdultMode } from '../../../data/settings.js';
 import { slug, triggerDownload } from '../../../lib/download.js';
 import { STATUS_LABEL, STATUS_TONE } from '../../../lib/knowledge-status.js';
 import { toastStore } from '../../../state/toast.store.js';
+import { useClass2Gate } from '../../../sync/gate.js';
 import { InlineEditRow } from '../account/InlineEditRow.js';
 import { InlineEditTextarea } from '../settings/InlineEditTextarea.js';
 
@@ -156,6 +157,7 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
   const libraries = useLibraries();
   const update = useUpdateLibrary();
   const del = useDeleteLibrary();
+  const class2 = useClass2Gate();
   const { onHelp, helpOverlay } = useHelp('knowledge-library');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -237,6 +239,8 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
                 label: 'Delete library',
                 tone: 'destructive',
                 onSelect: () => setConfirmDelete(true),
+                disabled: class2.disabled,
+                disabledReason: class2.tooltip ?? undefined,
               },
             ]}
           />

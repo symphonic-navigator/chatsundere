@@ -5,6 +5,7 @@ import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { useChatArtefactCount } from '../../data/artefacts.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { relativeTimeLabel } from '../../lib/relative-time.js';
+import { useClass2Gate } from '../../sync/gate.js';
 import { PersonaAvatar } from '../PersonaAvatar.js';
 import { StreamingOrb } from '../StreamingOrb.js';
 import { Badge } from '../ui/Badge.js';
@@ -30,6 +31,9 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Rename and delete are Class-2 writes on synced records — disabled offline
+  // for a linked account (spec §11.2); a local-only user is never gated.
+  const class2 = useClass2Gate();
   // Only fetch the artefact count while the delete dialog is open — avoids
   // loading artefact content for every row just to render a warning count.
   const artefactCountQuery = useChatArtefactCount(chat.id, confirmDelete);
@@ -95,7 +99,12 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
         <OverflowMenu
           triggerLabel="Chat actions"
           items={[
-            { label: 'Rename', onSelect: () => setRenaming(true) },
+            {
+              label: 'Rename',
+              onSelect: () => setRenaming(true),
+              disabled: class2.disabled,
+              disabledReason: class2.tooltip ?? undefined,
+            },
             {
               label: 'New chat with this persona',
               onSelect: () => navigate(`/app/chat/new?personaId=${persona.id}`),
@@ -109,7 +118,13 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
                   )}`,
                 ),
             },
-            { label: 'Delete', tone: 'destructive', onSelect: () => setConfirmDelete(true) },
+            {
+              label: 'Delete',
+              tone: 'destructive',
+              onSelect: () => setConfirmDelete(true),
+              disabled: class2.disabled,
+              disabledReason: class2.tooltip ?? undefined,
+            },
           ]}
         />
       </span>

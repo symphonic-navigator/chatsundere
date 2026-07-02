@@ -4,6 +4,14 @@ interface Props {
   onRetry: () => void;
   onDiscard: () => void;
   disabled?: boolean;
+  /**
+   * Disables Retry alone (spec §11.2): a retry re-rolls the turn, which
+   * tombstones the synced prior user message — a Class-2 write that needs a
+   * reachable server. Discard is local cleanup and stays enabled offline.
+   */
+  retryDisabled?: boolean;
+  /** Touch-reachable reason shown under Retry when `retryDisabled` (§11.2). */
+  retryDisabledReason?: string;
   /** Present only when an in-memory diagnostic report exists for this message. */
   onShowDiagnostics?: () => void;
 }
@@ -20,12 +28,16 @@ export function StreamInterruptedFooter(p: Props): JSX.Element {
         <button
           type="button"
           data-action="retry"
-          disabled={p.disabled}
+          disabled={p.disabled || p.retryDisabled}
+          title={p.retryDisabled ? (p.retryDisabledReason ?? undefined) : undefined}
           onClick={p.onRetry}
           className="ctrl-btn"
         >
           ↻ Retry
         </button>
+        {p.retryDisabled && p.retryDisabledReason ? (
+          <p className="stream-interrupted-reason">{p.retryDisabledReason}</p>
+        ) : null}
         <button
           type="button"
           data-action="discard"

@@ -81,7 +81,12 @@ export function PersonaHub(): JSX.Element {
       : null;
   const [showExportOverlay, setShowExportOverlay] = useState(false);
 
-  const { persona, patch } = usePersonaEditing(id ?? null);
+  const {
+    persona,
+    patch,
+    disabled: editDisabled,
+    tooltip: editTooltip,
+  } = usePersonaEditing(id ?? null);
   const chats = useChats();
   const mindspaces = useMindspaces();
   const settings = useSettings();
@@ -310,6 +315,18 @@ export function PersonaHub(): JSX.Element {
     >
       {helpOverlay}
       <div data-testid="persona-hub" className="flex flex-col gap-4 px-4 pb-8 pt-4">
+        {/* Offline notice: persona edits are Class-2 writes paused while the
+            server is unreachable (spec §11.2). Edits no-op until reconnection;
+            the ambient connectivity badge carries the system-level framing. */}
+        {editDisabled ? (
+          <p
+            data-testid="persona-edit-offline-note"
+            className="rounded-md border border-paper-soft/20 bg-paper-soft/5 px-3 py-2 text-xs text-paper-soft/80"
+          >
+            {editTooltip ?? 'Editing is paused while your server is unreachable.'}
+          </p>
+        ) : null}
+
         {/* Post-import note — rendered once when landing here from a Chatsundere pack import. */}
         {justImported ? (
           <PostImportNote

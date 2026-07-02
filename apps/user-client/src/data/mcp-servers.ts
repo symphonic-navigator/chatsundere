@@ -3,6 +3,7 @@ import type { MasterKey } from '@chatsundere/crypto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type McpServerRow, getClientDataDb } from '../boot/client-data-db.js';
 import { openSecret, sealSecret } from '../lib/secrets.js';
+import { mutateSynced } from '../sync/enqueue.js';
 import { QK } from './queryKeys.js';
 
 /** All configured MCP servers, ordered by creation. */
@@ -19,7 +20,17 @@ export function useUpsertMcpServer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (row: McpServerRow): Promise<McpServerRow> => {
-      await getClientDataDb().mcpServers.put(row);
+      // Class-2 upsert (spec §5): device-probe fields are stripped before seal
+      // (§10 deny-list). Gated write-through — the integrations affordance is
+      // disabled offline.
+      await mutateSynced({
+        collection: 'mcpServers',
+        key: row.id,
+        tables: ['mcpServers'],
+        write: async (tx) => {
+          await tx.table('mcpServers').put(row);
+        },
+      });
       return row;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.mcpServers }),
@@ -30,7 +41,16 @@ export function useUpsertMcpServer() {
 export function useDeleteMcpServer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string): Promise<void> => getClientDataDb().mcpServers.delete(id),
+    mutationFn: (id: string): Promise<void> =>
+      mutateSynced({
+        collection: 'mcpServers',
+        key: id,
+        op: 'delete',
+        tables: ['mcpServers'],
+        write: async (tx) => {
+          await tx.table('mcpServers').delete(id);
+        },
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.mcpServers }),
   });
 }

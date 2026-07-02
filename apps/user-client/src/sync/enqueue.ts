@@ -92,8 +92,26 @@ export async function mutateSynced(args: {
   op?: 'upsert' | 'delete';
   tables: readonly string[];
   write: (tx: Transaction) => Promise<void>;
+  /**
+   * Additional keys to enqueue as `delete` tombstones alongside the primary, in
+   * the SAME transaction (spec §7.3a). Used by cascade deletes: the apply
+   * pipeline does not cascade (`apply.ts` moves only the single tombstoned row
+   * to trash), so a parent delete must carry its own synced children's
+   * tombstones or they orphan on other devices. Only enqueued in the linked
+   * path; ignored for a local-only user and when offline-deferred.
+   */
+  cascade?: readonly { collection: SyncCollection; key: string }[];
+  /**
+   * Offline-defer instead of throwing (spec §5 field dispositions): background
+   * jobs (title generation, the memory pipeline) must never lose their local
+   * write when the sync server is unreachable. When linked but a Class-2 write
+   * is disallowed, the local write still commits (no outbox row, no drain) and
+   * syncs later via a subsequent online edit or epoch recovery. User-facing
+   * affordances leave this false so the disabled-UI backstop throws instead.
+   */
+  deferWhenOffline?: boolean;
 }): Promise<void> {
-  const { collection, key, write, tables } = args;
+  const { collection, key, write, tables, cascade, deferWhenOffline } = args;
   const op = args.op ?? 'upsert';
   const db = getClientDataDb();
 
@@ -105,14 +123,26 @@ export async function mutateSynced(args: {
     return;
   }
 
-  // Linked: the gate is the programming-error backstop for the disabled UI.
-  if (!isClass2Allowed()) throw new SyncOfflineError();
+  if (!isClass2Allowed()) {
+    // Offline-defer site: commit the local write, skip sync, converge later (§5).
+    if (deferWhenOffline) {
+      await db.transaction('rw', [...tables], async (tx) => {
+        await write(tx);
+      });
+      return;
+    }
+    // User-facing site: the gate is the programming-error backstop for the
+    // disabled UI (the affordance should already be greyed out).
+    throw new SyncOfflineError();
+  }
 
-  // Local write and outbox row commit as one transaction (write-ahead staging).
+  // Local write and outbox row(s) commit as one transaction (write-ahead staging).
   const scope = [...new Set([...tables, 'syncOutbox'])];
   await db.transaction('rw', scope, async (tx) => {
     await write(tx);
     enqueueSync(tx, collection, key, op);
+    if (cascade)
+      for (const child of cascade) enqueueSync(tx, child.collection, child.key, 'delete');
   });
 
   // After the commit, drain this key and await the server ack (§5). A crash

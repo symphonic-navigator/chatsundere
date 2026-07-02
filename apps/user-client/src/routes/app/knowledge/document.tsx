@@ -21,6 +21,7 @@ import {
 } from '../../../data/knowledge.js';
 import { STATUS_LABEL, STATUS_TONE } from '../../../lib/knowledge-status.js';
 import { normalisePhrases } from '../../../lib/treasury-filter.js';
+import { useClass2Gate } from '../../../sync/gate.js';
 
 /** Outer shell — resolves loading / not-found states before rendering the form. */
 export function KnowledgeDocumentPage(): JSX.Element {
@@ -82,6 +83,7 @@ function DocumentForm(props: {
   const update = useUpdateDocument(libraryId);
   const del = useDeleteDocument(libraryId);
   const retry = useRetryDocument(libraryId);
+  const class2 = useClass2Gate();
   const { onHelp, helpOverlay } = useHelp('knowledge-document');
   const librariesQuery = useLibraries();
   const libraryName =
@@ -178,6 +180,8 @@ function DocumentForm(props: {
                   label: 'Delete document',
                   tone: 'destructive',
                   onSelect: () => setConfirmDelete(true),
+                  disabled: class2.disabled,
+                  disabledReason: class2.tooltip ?? undefined,
                 },
               ]}
             />

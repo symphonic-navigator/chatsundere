@@ -87,6 +87,30 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
   ],
 };
 
+/**
+ * Whether a partial patch touches any field that is actually SYNCED for the
+ * collection (spec §5/§10). Generic edit hooks (`useUpdateSettings`,
+ * `useUpdateChat`) mix synced fields (e.g. `settings.displayName`,
+ * `chats.title`) with device-local ones (`settings.adultMode`,
+ * `chats.draftInput`): a device-local-only patch must stay editable offline
+ * (plain local write, never gated), while any synced-field patch is a genuine
+ * Class-2 mutation that goes through `mutateSynced`. Single source of truth with
+ * {@link stripForSeal}: settings uses the allowlist, everything else the
+ * deny-list; a collection with no deny-list syncs every field.
+ */
+export function patchTouchesSyncedField(
+  collection: SyncCollection,
+  keys: readonly string[],
+): boolean {
+  if (keys.length === 0) return false;
+  if (collection === 'settings') {
+    return keys.some((k) => SETTINGS_SYNC_ALLOWLIST.includes(k));
+  }
+  const denied = DENY_LISTS[collection];
+  if (!denied) return true; // no deny-list → every field syncs
+  return keys.some((k) => !denied.includes(k));
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }

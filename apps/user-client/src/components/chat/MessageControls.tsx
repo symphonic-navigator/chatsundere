@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { MessageRow } from '../../boot/client-data-db.js';
+import { syncCopy } from '../../sync/copy.js';
+import { useClass2Gate } from '../../sync/gate.js';
 import { OverflowMenu } from '../ui/OverflowMenu.js';
 
 interface Props {
@@ -43,6 +45,11 @@ function stop(e: React.MouseEvent): void {
 
 export function MessageControls(p: Props): JSX.Element {
   const [readNote, setReadNote] = useState(false);
+  const [bookmarkNote, setBookmarkNote] = useState(false);
+  // Offline bookmarking is disabled for a linked account (spec §5/§11.2), with
+  // the gentlest copy in the catalogue (decision 5). A local-only user is never
+  // gated. Mirrors the Read control's tap-to-reveal note for touch reachability.
+  const bookmarkGate = useClass2Gate();
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: stop-propagation wrapper div — not an interactive element, buttons inside handle keyboard events
     <div className="msg-controls" onClick={stop}>
@@ -73,12 +80,25 @@ export function MessageControls(p: Props): JSX.Element {
       <button
         type="button"
         data-ctrl="bookmark"
-        onClick={p.onBookmark}
         data-active={p.message.bookmarked || undefined}
+        data-disabled={bookmarkGate.disabled ? 'true' : undefined}
+        aria-disabled={bookmarkGate.disabled ? true : undefined}
+        onClick={() => {
+          if (bookmarkGate.disabled) {
+            setBookmarkNote(true);
+            return;
+          }
+          setBookmarkNote(false);
+          p.onBookmark();
+        }}
+        title={bookmarkGate.disabled ? syncCopy.offlineBookmark : 'Bookmark this message'}
         className="ctrl-btn"
       >
         ◈ Bookmark
       </button>
+      {bookmarkNote && bookmarkGate.disabled ? (
+        <output className="ctrl-note">{syncCopy.offlineBookmark}</output>
+      ) : null}
       <button
         type="button"
         data-ctrl="save"

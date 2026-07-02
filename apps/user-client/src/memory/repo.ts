@@ -8,7 +8,8 @@ import {
   getClientDataDb,
 } from '../boot/client-data-db.js';
 import { estimateTokens } from '../lib/token-estimator.js';
-import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { isClass2Allowed } from '../sync/gate.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { assembleMemoryContext } from './assembly.js';
 import { MAX_BODY_VERSIONS, MEMORY_INJECTION_MAX_TOKENS } from './config.js';
@@ -73,29 +74,43 @@ export async function commitOldestUncommitted(
   const toCommit = uncommitted.slice(0, Math.max(0, uncommitted.length - keepRecent));
   if (!toCommit.length) return 0;
   const now = Date.now();
-  await Promise.all(
-    toCommit.map((r) =>
-      getClientDataDb().memoryJournal.update(r.id, {
+  const db = getClientDataDb();
+  // Class-2-by-background-job journal transition (spec §5): offline-defer — the
+  // enqueue only runs when a Class-2 write is currently allowed, so the auto-commit
+  // never breaks the memory pipeline while the sync server is unreachable. When it
+  // does sync, `memoryJournal` resolves by state precedence (§7.5).
+  const linked = isClass2Allowed();
+  await db.transaction('rw', [db.memoryJournal, db.syncOutbox], async (tx) => {
+    for (const r of toCommit) {
+      await db.memoryJournal.update(r.id, {
         state: 'committed',
         committedAt: now,
         autoCommitted: true,
-      }),
-    ),
-  );
+      });
+      if (linked) enqueueSync(tx, 'memoryJournal', r.id, 'upsert');
+    }
+  });
+  if (linked) scheduleClass1Sync();
   return toCommit.length;
 }
 
 export async function archiveCommitted(personaId: string, dreamId: string): Promise<number> {
   const committed = await listJournal(personaId, 'committed');
   if (!committed.length) return 0;
-  await Promise.all(
-    committed.map((r) =>
-      getClientDataDb().memoryJournal.update(r.id, {
+  const db = getClientDataDb();
+  // Class-2-by-background-job journal transition (spec §5): offline-defer, same
+  // shape as the auto-commit above — coupled to the dream's `memoryBody` save.
+  const linked = isClass2Allowed();
+  await db.transaction('rw', [db.memoryJournal, db.syncOutbox], async (tx) => {
+    for (const r of committed) {
+      await db.memoryJournal.update(r.id, {
         state: 'archived',
         archivedByDreamId: dreamId,
-      }),
-    ),
-  );
+      });
+      if (linked) enqueueSync(tx, 'memoryJournal', r.id, 'upsert');
+    }
+  });
+  if (linked) scheduleClass1Sync();
   return committed.length;
 }
 
@@ -114,7 +129,11 @@ export async function saveBody(
   source: MemoryBodySource,
 ): Promise<MemoryBodyRow> {
   const db = getClientDataDb();
-  const current = await getCurrentBody(personaId);
+  const existing = await db.memoryBody.where('personaId').equals(personaId).toArray();
+  const current = existing.reduce<MemoryBodyRow | undefined>(
+    (acc, b) => (acc === undefined || b.version > acc.version ? b : acc),
+    undefined,
+  );
   const row: MemoryBodyRow = {
     id: uuidv7(),
     personaId,
@@ -125,12 +144,28 @@ export async function saveBody(
     createdAt: Date.now(),
     source,
   };
-  await db.memoryBody.add(row);
-  const all = await db.memoryBody.where('personaId').equals(personaId).toArray();
-  if (all.length > MAX_BODY_VERSIONS) {
-    all.sort((a, b) => b.version - a.version);
-    await Promise.all(all.slice(MAX_BODY_VERSIONS).map((s) => db.memoryBody.delete(s.id)));
-  }
+  // Prune-to-MAX after the add: the freshest row (highest version) is never
+  // pruned, so it is always retained and its outbox `upsert` is meaningful.
+  const pruneIds = [...existing, row]
+    .sort((a, b) => b.version - a.version)
+    .slice(MAX_BODY_VERSIONS)
+    .map((s) => s.id);
+
+  // memoryBody creation is the spec §5 Class-2 exception, coupled to the dream's
+  // journal transitions above. Both the dream (background) and the manual editor
+  // reach here, so it OFFLINE-DEFERS: the body persists locally regardless, and
+  // enqueues (new version → upsert; pruned versions → delete tombstones) only
+  // when a Class-2 write is currently allowed. CAS + re-dream converge the rest.
+  const linked = isClass2Allowed();
+  await db.transaction('rw', [db.memoryBody, db.syncOutbox], async (tx) => {
+    await db.memoryBody.add(row);
+    if (pruneIds.length > 0) await db.memoryBody.bulkDelete(pruneIds);
+    if (linked) {
+      enqueueSync(tx, 'memoryBody', row.id, 'upsert');
+      for (const id of pruneIds) enqueueSync(tx, 'memoryBody', id, 'delete');
+    }
+  });
+  if (linked) scheduleClass1Sync();
   return row;
 }
 
@@ -165,23 +200,63 @@ export async function getUnextractedUserText(
 }
 
 export async function advanceCursor(chatId: string, messageId: string): Promise<void> {
-  await getClientDataDb().chats.update(chatId, { lastExtractedMessageId: messageId });
-}
-
-export async function commitEntry(id: string): Promise<void> {
-  await getClientDataDb().memoryJournal.update(id, {
-    state: 'committed',
-    committedAt: Date.now(),
-    autoCommitted: false,
+  // `lastExtractedMessageId` is a synced chat field advanced by the background
+  // extraction job (spec §5, Class-2-by-background-job). Offline-defer so the
+  // pipeline never loses the cursor when the sync server is unreachable; the
+  // `updatedAt` bump lets the advance propagate under LWW, and CAS converges it
+  // (worst case another device re-extracts, which the dedup pass tolerates).
+  await mutateSynced({
+    collection: 'chats',
+    key: chatId,
+    tables: ['chats'],
+    deferWhenOffline: true,
+    write: async (tx) => {
+      await tx
+        .table('chats')
+        .update(chatId, { lastExtractedMessageId: messageId, updatedAt: Date.now() });
+    },
   });
 }
 
-export async function rejectEntry(id: string): Promise<void> {
-  await getClientDataDb().memoryJournal.delete(id);
+/** Manually commit one journal entry (user action in the Memory screen). Class-2 edit. */
+export async function commitEntry(id: string): Promise<void> {
+  await mutateSynced({
+    collection: 'memoryJournal',
+    key: id,
+    tables: ['memoryJournal'],
+    write: async (tx) => {
+      await tx.table('memoryJournal').update(id, {
+        state: 'committed',
+        committedAt: Date.now(),
+        autoCommitted: false,
+      });
+    },
+  });
 }
 
+/** Reject (delete) one journal entry (user action). Class-2 delete. */
+export async function rejectEntry(id: string): Promise<void> {
+  await mutateSynced({
+    collection: 'memoryJournal',
+    key: id,
+    op: 'delete',
+    tables: ['memoryJournal'],
+    write: async (tx) => {
+      await tx.table('memoryJournal').delete(id);
+    },
+  });
+}
+
+/** Edit one journal entry's content (user action). Class-2 edit. */
 export async function updateEntryContent(id: string, content: string): Promise<void> {
-  await getClientDataDb().memoryJournal.update(id, { content });
+  await mutateSynced({
+    collection: 'memoryJournal',
+    key: id,
+    tables: ['memoryJournal'],
+    write: async (tx) => {
+      await tx.table('memoryJournal').update(id, { content });
+    },
+  });
 }
 
 /** All body versions for a persona, newest version first. */

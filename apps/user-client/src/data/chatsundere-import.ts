@@ -303,13 +303,20 @@ export async function importPersonaPack(
       });
     }
 
-    // memoryBody is Class 2 (spec §5 exception, Task 12) — inserted without enqueue.
+    // memoryBody is the spec §5 Class-2 exception, but an IMPORT is a Class-1
+    // creation-insert of fresh uuids (§5) — enqueue each body so imported memory
+    // syncs like the journal above; the outbox row is atomic with the insert.
     const bodyRows: MemoryBodyRow[] = payload.memory.bodies.map((body) => ({
       ...body,
       id: remap.fresh(body.id),
       personaId,
     }));
-    if (bodyRows.length > 0) await db.memoryBody.bulkAdd(bodyRows);
+    if (bodyRows.length > 0) {
+      await db.transaction('rw', [db.memoryBody, db.syncOutbox], async (tx) => {
+        await db.memoryBody.bulkAdd(bodyRows);
+        if (linked) for (const b of bodyRows) enqueueSync(tx, 'memoryBody', b.id, 'upsert');
+      });
+    }
   }
 
   if (linked) scheduleClass1Sync();

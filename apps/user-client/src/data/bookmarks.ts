@@ -7,6 +7,7 @@ import {
   getClientDataDb,
 } from '../boot/client-data-db.js';
 import { labelFor } from '../lib/toc.js';
+import { mutateSynced } from '../sync/enqueue.js';
 import { QK } from './queryKeys.js';
 
 export interface BookmarkGroup {
@@ -20,7 +21,19 @@ export async function setBookmarkLabel(args: {
   messageId: string;
   label: string | null;
 }): Promise<void> {
-  await getClientDataDb().messages.update(args.messageId, { bookmarkLabel: args.label });
+  // Class-2 edit of `messages.bookmarkLabel` (spec §5), same family as the
+  // bookmark toggle — disabled offline with the gentle copy (§11.3).
+  await mutateSynced({
+    collection: 'messages',
+    key: args.messageId,
+    tables: ['messages'],
+    write: async (tx) => {
+      await tx.table('messages').update(args.messageId, {
+        bookmarkLabel: args.label,
+        updatedAt: Date.now(),
+      });
+    },
+  });
 }
 
 /** All starred messages, grouped by chat (most-recently-active chat first),
