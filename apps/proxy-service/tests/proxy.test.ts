@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, test } from 'bun:test';
 import { Hono } from 'hono';
-import { registerProxyRoute } from '../src/routes/proxy.js';
 import type { Env } from '../src/env.js';
+import { registerProxyRoute } from '../src/routes/proxy.js';
 
 const env = {
-  JWT_ISSUER: 'chatsundere-auth-v1', TRUST_PROXY_HOPS: 1,
-  RATE_LIMIT_USER_PER_MIN: 120, RATE_LIMIT_IP_PER_MIN: 600, MAX_BODY_BYTES: 52428800,
+  JWT_ISSUER: 'chatsundere-auth-v1',
+  TRUST_PROXY_HOPS: 1,
+  RATE_LIMIT_USER_PER_MIN: 120,
+  RATE_LIMIT_IP_PER_MIN: 600,
+  MAX_BODY_BYTES: 52428800,
   MAX_CONCURRENT_PER_USER: 6,
   CORS_ALLOWED_ORIGINS: ['https://app.chatsundere.me'],
 } as unknown as Env;
@@ -15,10 +18,17 @@ function build(overrides: Partial<Parameters<typeof registerProxyRoute>[1]> = {}
   const app = new Hono();
   registerProxyRoute(app, {
     env,
-    verifyToken: async (t: string) => { if (t !== 'GOOD') throw new Error('bad'); return { sub: 'user-1' }; },
+    verifyToken: async (t: string) => {
+      if (t !== 'GOOD') throw new Error('bad');
+      return { sub: 'user-1' };
+    },
     allow: async () => true,
     // seam: skip real DNS/fetch — echo the request the proxy built
-    pinnedFetch: async (req: Request) => new Response('ok', { status: 200, headers: { 'x-fwd-auth': req.headers.get('authorization') ?? '' } }),
+    pinnedFetch: async (req: Request) =>
+      new Response('ok', {
+        status: 200,
+        headers: { 'x-fwd-auth': req.headers.get('authorization') ?? '' },
+      }),
     ...overrides,
   });
   return app;
@@ -47,7 +57,10 @@ describe('proxy route', () => {
   test('429 when the per-user limiter denies', async () => {
     const res = await build({ allow: async () => false }).request('/v1/chat', {
       method: 'POST',
-      headers: { 'x-chatsundere-authorization': 'Bearer GOOD', 'x-cors-proxy-target': 'https://api.x.ai' },
+      headers: {
+        'x-chatsundere-authorization': 'Bearer GOOD',
+        'x-cors-proxy-target': 'https://api.x.ai',
+      },
     });
     expect(res.status).toBe(429);
   });
@@ -61,7 +74,9 @@ describe('proxy route', () => {
     });
     expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('https://app.chatsundere.me');
-    expect(res.headers.get('access-control-allow-headers')).toBe('x-cors-proxy-target, authorization');
+    expect(res.headers.get('access-control-allow-headers')).toBe(
+      'x-cors-proxy-target, authorization',
+    );
   });
   test('400 when the target header is missing', async () => {
     const res = await build().request('/v1/chat', {

@@ -19,8 +19,12 @@ export async function isRevoked(
   redis: RevocationRedis,
   claims: { sub: string; jti: string; iat: number },
 ): Promise<boolean> {
-  const [jtiHit, subRevokedAt] = await redis.mget(revokedJtiKey(claims.jti), revokedSubKey(claims.sub));
+  const [jtiHit, subRevokedAt] = await redis.mget(
+    revokedJtiKey(claims.jti),
+    revokedSubKey(claims.sub),
+  );
   if (jtiHit !== null && jtiHit !== undefined) return true;
-  if (subRevokedAt !== null && subRevokedAt !== undefined && claims.iat < Number(subRevokedAt)) return true;
+  if (subRevokedAt !== null && subRevokedAt !== undefined && claims.iat < Number(subRevokedAt))
+    return true;
   return false;
 }

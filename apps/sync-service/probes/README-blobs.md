@@ -63,23 +63,25 @@ each `reader.read()`** (the plan's Probe-2 decision-matrix branch).
 
 **Decision:** the §7.1 step-2 `411` guard is implementable exactly as specced.
 
-## Probe 1 — Bun.S3Client vs @aws-sdk against MinIO (OWED — not run)
+## Probe 1 — S3 client choice (OWED — not run; implementation deviated)
 
-**Provisional decision (conservative): use Bun's native `Bun.S3Client`.** It
-ships with the Bun runtime (no new dependency — the spec's preferred outcome),
-exposes `write(key, body)`, `file(key).stream()`, `.exists()`, `.delete()`, and
-supports `endpoint` + path-style addressing for MinIO. Task 5 wraps it behind
-the `BlobBackend` interface, so if the empirical run reveals whole-body
-buffering or a broken streaming GET, swapping to `@aws-sdk/client-s3` +
-`@aws-sdk/lib-storage` is a one-file change with no route impact.
+**Provisional decision at plan time was Bun's native `Bun.S3Client`. The
+implementation deviated** (recorded here per the spec §10 deviation rule; the
+header of `src/blobs/s3.ts` points at this section): what shipped is a
+**hand-rolled single-shot SigV4 client over `fetch`** —
 
-**Multipart-at-32-MiB (OWED):** could not observe MinIO's request log. Task 5's
-`bootstrapBucket` sets the `AbortIncompleteMultipartUpload` lifecycle rule
-**defensively when the S3 client supports the call** (harmless if the client
-never does multipart); if `Bun.S3Client` does not expose lifecycle
-configuration, the bootstrap logs a constructive warning naming the manual
-`mc ilm` step, and DEPLOYMENT ch. 10 documents it. Re-run this probe with MinIO
-to confirm and, if single-shot, drop the rule.
+- streaming PUT with `UNSIGNED-PAYLOAD` and a signed, known `Content-Length`
+  (no full buffering, no chunked signing);
+- **no multipart, by construction** — a single-shot PUT means the §8
+  `AbortIncompleteMultipartUpload` lifecycle rule is unnecessary and was
+  **dropped**, not implemented defensively;
+- bucket-admin operations (create, versioning check) that `Bun.S3Client` does
+  not expose but the bootstrap (§8) requires;
+- SigV4 signing verified offline against AWS's published test vector.
+
+**The owed probes below must therefore exercise this hand-rolled client, not
+`Bun.S3Client`.** The multipart leg of this probe is superseded — there is no
+multipart path to observe.
 
 ## Probe 3 — GET passthrough S3 → client (OWED — not run)
 
@@ -94,11 +96,29 @@ the `/minio/health/live` healthcheck endpoint are all used by Task 5 /
 compose but unverified here. The compose healthcheck uses
 `/minio/health/live`; if the image lacks `curl`, fall back to `mc ready local`.
 
+## Probe L6C-L3 — short-body PUT classification (OWED — from the Larissa audit)
+
+Audit finding L6C-L3 (`obsidian/insights/2026-07-02-larissa-audit-6c-built-diff.md`):
+a body that closes **short** of the declared `Content-Length` is detected by
+the route only *after* `putStream` resolves, but the live client signs
+`content-length: declared` — real MinIO will likely fail/reset the request on
+early close, `fetch` rejects with a non-`UploadValidationError`, and the route
+answers `503 blob_backend_unavailable` (+ backend-error metric) for what is a
+client lie that should be a `400`. The in-memory fake (which merely drains the
+stream) cannot show this. **Run against real MinIO:** PUT with
+`Content-Length: N`, stream `N - k` bytes, close. If the 503 misclassification
+is confirmed, distinguish stream-side errors from transport errors in the PUT
+catch (this would also tidy the watchdog's stalled-consumer misattribution).
+
 ## Summary of decisions carried into the plan
 
 1. `MAX_BLOB_BYTES` = 32 MiB (Probe 6 — confirmed safe).
 2. Stream + `Bun.CryptoHasher` upload pipeline; manual idle watchdog (Probe 2).
 3. `411` on absent `Content-Length` (Probe 4).
-4. Native `Bun.S3Client` behind the `BlobBackend` interface (Probe 1 — **OWED**,
-   swappable by design).
-5. Defensive multipart-abort lifecycle rule + documented fallback (Probe 1/5 — **OWED**).
+4. Hand-rolled single-shot SigV4 client behind the `BlobBackend` interface
+   (Probe 1 — **deviation from the provisional `Bun.S3Client` pick**, recorded
+   above; object legs still **OWED** against real MinIO).
+5. ~~Defensive multipart-abort lifecycle rule~~ — dropped: the single-shot
+   client never does multipart, so the rule is unnecessary by construction
+   (Probe 1, superseded).
+6. Short-body classification against real MinIO (Probe L6C-L3 — **OWED**).

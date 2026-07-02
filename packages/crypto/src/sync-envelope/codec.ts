@@ -17,7 +17,10 @@ export function encodeRow(row: unknown): Uint8Array {
   const json = JSON.stringify(row, (_key, value: unknown) => {
     if (value instanceof Uint8Array) return { [RESERVED]: toBase64Url(value) };
     if (typeof Blob !== 'undefined' && value instanceof Blob) {
-      throw new CryptoError('invalid_input', 'Blob values are not representable (excluded collection?)');
+      throw new CryptoError(
+        'invalid_input',
+        'Blob values are not representable (excluded collection?)',
+      );
     }
     if (value instanceof ArrayBuffer) {
       throw new CryptoError('invalid_input', 'ArrayBuffer values are not representable');

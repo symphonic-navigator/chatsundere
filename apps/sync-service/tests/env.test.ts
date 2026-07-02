@@ -41,7 +41,6 @@ describe('sync env', () => {
       expect(env.BLOB_UPLOAD_IDLE_TIMEOUT_S).toBe(30);
       expect(env.S3_REGION).toBe('us-east-1');
       expect(env.S3_BUCKET).toBe('chatsundere-blobs');
-      expect(env.S3_FORCE_PATH_STYLE).toBe(true);
     });
 
     test('S3_ENDPOINT unset ⇒ blobs disabled, no credentials required', () => {
@@ -65,11 +64,6 @@ describe('sync env', () => {
       expect(() =>
         loadEnv({ ...base, S3_ENDPOINT: 'http://minio:9000', S3_ACCESS_KEY_ID: 'key' }),
       ).toThrow();
-    });
-
-    test('S3_FORCE_PATH_STYLE accepts a false string', () => {
-      const env = loadEnv({ ...base, S3_FORCE_PATH_STYLE: 'false' });
-      expect(env.S3_FORCE_PATH_STYLE).toBe(false);
     });
   });
 });

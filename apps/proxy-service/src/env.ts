@@ -19,7 +19,12 @@ const EnvSchema = v.object({
   CORS_ALLOWED_ORIGINS: v.optional(
     v.pipe(
       v.string(),
-      v.transform((s) => s.split(',').map((o) => o.trim().toLowerCase()).filter(Boolean)),
+      v.transform((s) =>
+        s
+          .split(',')
+          .map((o) => o.trim().toLowerCase())
+          .filter(Boolean),
+      ),
     ),
     'https://app.chatsundere.me',
   ),

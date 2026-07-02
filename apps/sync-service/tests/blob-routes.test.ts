@@ -3,13 +3,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { mintBlobId, toBase64Url } from '@chatsundere/crypto';
 import { Hono } from 'hono';
 import { Redis } from 'ioredis';
-import type { BlobBackend } from '../src/blobs/s3.js';
+import { register } from 'prom-client';
+import { type BlobBackend, blobKey } from '../src/blobs/s3.js';
+import { findBlob } from '../src/blobs/store.js';
 import { getInstanceEpoch } from '../src/db/client.js';
 import { loadEnv } from '../src/env.js';
 import type { SyncDeps } from '../src/http/deps.js';
 import { createLimiter } from '../src/ratelimit/limiter.js';
 import { registerBlobRoutes } from '../src/routes/blobs.js';
 import { registerChangesRoutes } from '../src/routes/changes.js';
+import { createServer } from '../src/server.js';
 import { type TestDb, withTestDb } from './helpers/test-db.js';
 
 let t: TestDb;
@@ -30,7 +33,8 @@ afterAll(async () => {
   await redis.quit();
 });
 
-const TOKEN = '66666666-6666-6666-6666-666666666666|sess1|1000';
+const SUB = '66666666-6666-6666-6666-666666666666';
+const TOKEN = `${SUB}|sess1|1000`;
 const TOKEN2 = '77777777-7777-7777-7777-777777777777|sess2|1000';
 const verifyToken = async (token: string) => {
   if (token === 'BAD') return null;
@@ -75,6 +79,44 @@ class FakeBackend implements BlobBackend {
   }
   async healthy(): Promise<boolean> {
     return !this.down;
+  }
+}
+
+/**
+ * A backend whose uploads can be held open after the body has drained — the
+ * seam for deterministic route-level races: with `hold` set, every PUT has
+ * passed the unlocked step-3 existence check and the quota pre-check but has
+ * not yet committed, until `releaseAll` lets the commits proceed.
+ */
+class GatedBackend extends FakeBackend {
+  hold = false;
+  private waiters: (() => void)[] = [];
+  releaseAll(): void {
+    for (const w of this.waiters) w();
+    this.waiters = [];
+  }
+  override async putStream(
+    key: string,
+    body: ReadableStream<Uint8Array>,
+    length: number,
+  ): Promise<void> {
+    await super.putStream(key, body, length);
+    if (this.hold) await new Promise<void>((resolve) => this.waiters.push(resolve));
+  }
+}
+
+/** A backend whose object deletes always fail (spec §18: DB-first delete order). */
+class FailingDeleteBackend extends FakeBackend {
+  override async delete(_key: string): Promise<void> {
+    throw new Error('object store refused the delete');
+  }
+}
+
+async function until(cond: () => boolean, timeoutMs = 2000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error('condition not met in time');
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 
@@ -277,6 +319,48 @@ describe('PUT /api/v1/sync/blobs/:blobId', () => {
     expect(body.error.quotaBytes).toBe(200);
   });
 
+  test('two concurrent PUTs of one blobId with DIFFERENT bodies → exactly one 201, one 409; the DB hash is the winner’s', async () => {
+    const backend = new GatedBackend();
+    const app = build(backend);
+    const first = await makeBlob(64);
+    const second = await makeBlob(64); // different bytes → different hash, same id below
+    backend.hold = true;
+    const pA = put(app, first.blobId, first.bytes, first.hashB64);
+    const pB = put(app, first.blobId, second.bytes, second.hashB64);
+    // Both racers past the unlocked existence check (and streamed) before either commits.
+    await until(() => backend.puts === 2);
+    backend.releaseAll();
+    const [resA, resB] = await Promise.all([pA, pB]);
+    expect([resA.status, resB.status].sort((x, y) => x - y)).toEqual([201, 409]);
+    const loser = resA.status === 409 ? resA : resB;
+    expect(asErr(await loser.json()).error.code).toBe('blob_exists');
+    // The stored hash is the 201 winner's — the divergent loser was never recorded.
+    const winner = resA.status === 201 ? first : second;
+    const row = await findBlob(t.db, SUB, first.blobId);
+    expect(row ? toBase64Url(new Uint8Array(row.ciphertextHash)) : null).toBe(winner.hashB64);
+  });
+
+  test('commit-time quota race → 507 carries usedBytes/quotaBytes; the loser’s object is cleaned', async () => {
+    const backend = new GatedBackend();
+    const app = build(backend, { ACCOUNT_QUOTA_BYTES: 65536 }); // room for exactly one floored blob
+    const a = await makeBlob(64);
+    const b = await makeBlob(64);
+    backend.hold = true;
+    const pA = put(app, a.blobId, a.bytes, a.hashB64); // pre-check passes at the empty account
+    await until(() => backend.puts === 1);
+    backend.hold = false;
+    expect((await put(app, b.blobId, b.bytes, b.hashB64)).status).toBe(201); // fills the quota
+    backend.releaseAll();
+    const res = await pA; // enforcement under the lock (spec §7.1 step 6)
+    expect(res.status).toBe(507);
+    const body = asErr(await res.json());
+    expect(body.error.code).toBe('quota_exceeded');
+    expect(body.error.usedBytes).toBe(65536); // spec §7.5: the constructive payload
+    expect(body.error.quotaBytes).toBe(65536);
+    expect(backend.store.has(blobKey(SUB, a.blobId))).toBe(false); // best-effort cleanup ran
+    expect(backend.store.has(blobKey(SUB, b.blobId))).toBe(true);
+  });
+
   test('backend throws → 503 blob_backend_unavailable, record push still green', async () => {
     const backend = new FakeBackend();
     backend.down = true;
@@ -319,6 +403,34 @@ describe('GET /api/v1/sync/blobs/:blobId', () => {
     expect(res.status).toBe(404);
   });
 
+  test('DB row present / S3 object missing → 404 AND the inconsistency counter increments', async () => {
+    const backend = new FakeBackend();
+    const deps: SyncDeps = {
+      env: loadEnv(),
+      db: t.db,
+      redis,
+      verifyToken,
+      allow: createLimiter(redis),
+      epoch,
+      blobBackend: backend,
+    };
+    const app = createServer(deps); // the REAL metrics wiring (server.ts), not a fake hook
+    const { bytes, hashB64, blobId } = await makeBlob(64);
+    expect((await put(app, blobId, bytes, hashB64)).status).toBe(201);
+    backend.store.clear(); // backup skew: the row survives, the object is gone
+    const counter = async (): Promise<number> => {
+      const metric = await register.getSingleMetric('sync_blob_inconsistency_total')?.get();
+      return metric?.values[0]?.value ?? 0;
+    };
+    const before = await counter();
+    const res = await app.request(`/api/v1/sync/blobs/${blobId}`, {
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.status).toBe(404);
+    expect(asErr(await res.json()).error.code).toBe('not_found');
+    expect(await counter()).toBe(before + 1);
+  });
+
   test("another account's id → 404 (absolute scoping)", async () => {
     const backend = new FakeBackend();
     const app = build(backend);
@@ -355,6 +467,28 @@ describe('DELETE /api/v1/sync/blobs/:blobId', () => {
       headers: { authorization: `Bearer ${TOKEN}` },
     });
     expect(again.status).toBe(204);
+  });
+
+  test('failing S3 delete → DB-first upheld: 204, row gone, quota freed, object orphaned', async () => {
+    const backend = new FailingDeleteBackend();
+    const app = build(backend);
+    const { bytes, hashB64, blobId } = await makeBlob(1024);
+    await put(app, blobId, bytes, hashB64);
+    const del = await app.request(`/api/v1/sync/blobs/${blobId}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(del.status).toBe(204); // spec §7.3: the S3 delete is best-effort AFTER the DB commit
+    expect(await findBlob(t.db, SUB, blobId)).toBeNull();
+    const list = asList(
+      await (
+        await app.request('/api/v1/sync/blobs', {
+          headers: { authorization: `Bearer ${TOKEN}` },
+        })
+      ).json(),
+    );
+    expect(list.totalBytes).toBe(0); // quota credited despite the S3 failure
+    expect(backend.store.has(blobKey(SUB, blobId))).toBe(true); // orphaned object → sweep territory
   });
 
   test('a mix of record tombstones and blob deletes trips the same delete window', async () => {

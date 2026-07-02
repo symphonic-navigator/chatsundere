@@ -37,7 +37,12 @@ describe('sync shared-types', () => {
       ],
     };
     const ok: SyncPushResult = { status: 'ok', rev: 1 };
-    const err: SyncPushResult = { status: 'error', code: 'quota_exceeded', usedBytes: 1, quotaBytes: 2 };
+    const err: SyncPushResult = {
+      status: 'error',
+      code: 'quota_exceeded',
+      usedBytes: 1,
+      quotaBytes: 2,
+    };
     expect(req.records[0]?.collection).toBe('chats');
     expect(ok.status).toBe('ok');
     expect(err.status).toBe('error');

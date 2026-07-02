@@ -29,6 +29,7 @@ export function padPlaintext(encoded: Uint8Array, padded: boolean): Uint8Array {
 export function unpadPlaintext(framed: Uint8Array): Uint8Array {
   if (framed.length < 4) throw new CryptoError('corrupted_data', 'framed plaintext too short');
   const len = new DataView(framed.buffer, framed.byteOffset).getUint32(0, true);
-  if (4 + len > framed.length) throw new CryptoError('corrupted_data', 'invalid plaintext length prefix');
+  if (4 + len > framed.length)
+    throw new CryptoError('corrupted_data', 'invalid plaintext length prefix');
   return framed.slice(4, 4 + len);
 }

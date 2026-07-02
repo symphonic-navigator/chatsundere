@@ -16,7 +16,12 @@ describe('sync codec', () => {
     expect(out).toEqual(row);
   });
   it('round-trips vectors-shaped rows (codes/scales/offsets)', () => {
-    const row = { id: 'd1#0', codes: new Uint8Array(64), scales: new Uint8Array(8), tags: ['lib1'] };
+    const row = {
+      id: 'd1#0',
+      codes: new Uint8Array(64),
+      scales: new Uint8Array(8),
+      tags: ['lib1'],
+    };
     expect(decodeRow(encodeRow(row))).toEqual(row);
   });
   it('rejects a Blob value', () => {

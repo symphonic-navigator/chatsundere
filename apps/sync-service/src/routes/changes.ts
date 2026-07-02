@@ -6,10 +6,23 @@ import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import * as v from 'valibot';
 import { publishPoke } from '../doorbell/publish.js';
-import { observePullLatency, observePushLatency, observeRecordSize, recordPull, recordPushOutcome } from '../metrics.js';
-import { type StoreResult, type StoreWriteRecord, type StoredRecord, applyBatch, getHead, pullSince } from '../records/store.js';
 import { authenticate } from '../http/authenticate.js';
 import type { SyncDeps } from '../http/deps.js';
+import {
+  observePullLatency,
+  observePushLatency,
+  observeRecordSize,
+  recordPull,
+  recordPushOutcome,
+} from '../metrics.js';
+import {
+  type StoreResult,
+  type StoreWriteRecord,
+  type StoredRecord,
+  applyBatch,
+  getHead,
+  pullSince,
+} from '../records/store.js';
 
 const PushRecordSchema = v.strictObject({
   blindId: v.string(),
@@ -69,7 +82,13 @@ function toStoreRecords(body: v.InferOutput<typeof PushBodySchema>): StoreWriteR
   return body.records.map((r) => {
     const blindId = decodeField(r.blindId, 16, 'blindId');
     if (r.deleted) {
-      return { blindId, collection: r.collection, envelopeVersion: r.envelopeVersion, baseRev: r.baseRev, deleted: true };
+      return {
+        blindId,
+        collection: r.collection,
+        envelopeVersion: r.envelopeVersion,
+        baseRev: r.baseRev,
+        deleted: true,
+      };
     }
     if (!r.nonce || !r.ciphertext || !r.ciphertextHash) {
       throw new ShapeError('a non-delete record must carry nonce, ciphertext and ciphertextHash');
@@ -95,7 +114,8 @@ export function registerChangesRoutes(app: Hono, deps: SyncDeps): void {
     '/api/v1/sync/changes',
     bodyLimit({
       maxSize: env.MAX_BODY_BYTES,
-      onError: (c) => c.json({ error: { code: 'body_too_large', message: 'Request body too large' } }, 413),
+      onError: (c) =>
+        c.json({ error: { code: 'body_too_large', message: 'Request body too large' } }, 413),
     }),
     async (c) => {
       const auth = await authenticate(c, deps);
@@ -117,7 +137,8 @@ export function registerChangesRoutes(app: Hono, deps: SyncDeps): void {
       try {
         records = toStoreRecords(parsed);
       } catch (e) {
-        if (e instanceof ShapeError) return c.json({ error: { code: 'bad_request', message: e.message } }, 400);
+        if (e instanceof ShapeError)
+          return c.json({ error: { code: 'bad_request', message: e.message } }, 400);
         throw e;
       }
 
@@ -145,7 +166,8 @@ export function registerChangesRoutes(app: Hono, deps: SyncDeps): void {
         const r = results[i] as StoreResult;
         recordPushOutcome(r.status === 'error' ? r.code : r.status);
         const rec = records[i];
-        if (r.status === 'ok' && rec && !rec.deleted && rec.ciphertext) observeRecordSize(rec.ciphertext.length);
+        if (r.status === 'ok' && rec && !rec.deleted && rec.ciphertext)
+          observeRecordSize(rec.ciphertext.length);
       }
 
       return c.json({ head, epoch, results: results.map(toWireResult) });
@@ -160,14 +182,18 @@ export function registerChangesRoutes(app: Hono, deps: SyncDeps): void {
     const sinceRaw = c.req.query('since') ?? '0';
     const since = Number(sinceRaw);
     if (!Number.isInteger(since) || since < 0) {
-      return c.json({ error: { code: 'bad_request', message: 'since must be a non-negative integer' } }, 400);
+      return c.json(
+        { error: { code: 'bad_request', message: 'since must be a non-negative integer' } },
+        400,
+      );
     }
 
     // Over-max limit clamps (never a 400); missing/invalid falls back to the default.
     const limitRaw = Number(c.req.query('limit'));
-    const limit = Number.isInteger(limitRaw) && limitRaw > 0
-      ? Math.min(limitRaw, env.PULL_LIMIT_MAX)
-      : env.PULL_LIMIT_DEFAULT;
+    const limit =
+      Number.isInteger(limitRaw) && limitRaw > 0
+        ? Math.min(limitRaw, env.PULL_LIMIT_MAX)
+        : env.PULL_LIMIT_DEFAULT;
 
     const head = await getHead(db, sub);
     if (since > head) {

@@ -3,7 +3,10 @@
 import type { MiddlewareHandler } from 'hono';
 
 /** Exact, lowercased, full-origin match — never a suffix; `null`/missing never match. */
-export function matchOrigin(origin: string | null | undefined, allowed: Set<string>): string | null {
+export function matchOrigin(
+  origin: string | null | undefined,
+  allowed: Set<string>,
+): string | null {
   if (!origin || origin === 'null') return null;
   return allowed.has(origin.toLowerCase()) ? origin : null;
 }
@@ -22,7 +25,10 @@ export function corsMiddleware(allowedOrigins: string[]): MiddlewareHandler {
         c.header('Access-Control-Allow-Origin', matched);
         c.header('Vary', 'Origin');
         c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-        c.header('Access-Control-Allow-Headers', c.req.header('access-control-request-headers') ?? 'Authorization, Content-Type');
+        c.header(
+          'Access-Control-Allow-Headers',
+          c.req.header('access-control-request-headers') ?? 'Authorization, Content-Type',
+        );
         c.header('Access-Control-Max-Age', '600');
       }
       return c.body(null, 204);

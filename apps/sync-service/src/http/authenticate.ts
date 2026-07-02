@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Context } from 'hono';
-import type { TokenClaims } from '../auth/verify-token.js';
 import { isRevoked } from '../auth/revocation.js';
-import { deriveClientIp } from '../net/client-ip.js';
+import type { TokenClaims } from '../auth/verify-token.js';
 import { recordRateLimited, recordRevoked, recordUnauthorized } from '../metrics.js';
+import { deriveClientIp } from '../net/client-ip.js';
 import type { SyncDeps } from './deps.js';
 
 export type AuthOutcome = { ok: true; claims: TokenClaims } | { ok: false; response: Response };
@@ -23,7 +23,11 @@ function json(c: Context, status: 401 | 429 | 503, code: string): Response {
 export async function authenticate(c: Context, deps: SyncDeps): Promise<AuthOutcome> {
   const { env, redis, verifyToken, allow } = deps;
   const directIp = (c.env as { ip?: string } | undefined)?.ip ?? '0.0.0.0';
-  const clientIp = deriveClientIp(c.req.header('x-forwarded-for') ?? null, directIp, env.TRUST_PROXY_HOPS);
+  const clientIp = deriveClientIp(
+    c.req.header('x-forwarded-for') ?? null,
+    directIp,
+    env.TRUST_PROXY_HOPS,
+  );
 
   if (!(await allow(`ip:${clientIp}`, env.RATE_LIMIT_IP_PER_MIN, 60))) {
     recordRateLimited();

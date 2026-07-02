@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Context, Hono } from 'hono';
-import type { Env } from '../env.js';
-import { normaliseLlmHost } from '../egress/known-hosts.js';
-import { type Target, TargetError, parseTarget, pinnedFetch, resolveAndPin } from '../egress/target.js';
-import { buildForwardHeaders, filterResponseHeaders } from '../proxy/headers.js';
-import { deriveClientIp } from '../net/client-ip.js';
 import { applyCorsHeaders, matchOrigin, preflightResponse } from '../cors.js';
+import { normaliseLlmHost } from '../egress/known-hosts.js';
+import {
+  type Target,
+  TargetError,
+  parseTarget,
+  pinnedFetch,
+  resolveAndPin,
+} from '../egress/target.js';
+import type { Env } from '../env.js';
 import {
   recordLlmRequest,
   recordRateLimited,
@@ -14,6 +18,8 @@ import {
   recordSsrfBlocked,
   recordUnauthorized,
 } from '../metrics.js';
+import { deriveClientIp } from '../net/client-ip.js';
+import { buildForwardHeaders, filterResponseHeaders } from '../proxy/headers.js';
 
 /** Raised when the streamed request body exceeds MAX_BODY_BYTES. */
 class BodyTooLargeError extends Error {}
@@ -38,7 +44,10 @@ async function defaultPinnedFetch(forward: Request, target: Target): Promise<Res
 }
 
 /** Caps the streamed request body at `max` bytes, erroring the stream over the cap. */
-function capBody(body: ReadableStream<Uint8Array> | null, max: number): ReadableStream<Uint8Array> | null {
+function capBody(
+  body: ReadableStream<Uint8Array> | null,
+  max: number,
+): ReadableStream<Uint8Array> | null {
   if (!body) return null;
   let total = 0;
   return body.pipeThrough(
@@ -56,7 +65,10 @@ function capBody(body: ReadableStream<Uint8Array> | null, max: number): Readable
 }
 
 /** Wraps a response body so `release` runs exactly once on end, error, or client cancel. */
-function releaseOnEnd(body: ReadableStream<Uint8Array>, release: () => void): ReadableStream<Uint8Array> {
+function releaseOnEnd(
+  body: ReadableStream<Uint8Array>,
+  release: () => void,
+): ReadableStream<Uint8Array> {
   const reader = body.getReader();
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -80,7 +92,12 @@ function releaseOnEnd(body: ReadableStream<Uint8Array>, release: () => void): Re
   });
 }
 
-function errorResponse(c: Context, matched: string | null, status: 400 | 401 | 403 | 413 | 429 | 502, code: string): Response {
+function errorResponse(
+  c: Context,
+  matched: string | null,
+  status: 400 | 401 | 403 | 413 | 429 | 502,
+  code: string,
+): Response {
   if (matched) applyCorsHeaders(c, matched);
   if (status === 429) c.header('Retry-After', '60');
   return c.json({ error: { code, message: 'Request refused' } }, status);
@@ -107,7 +124,11 @@ export function registerProxyRoute(app: Hono, deps: ProxyDeps): void {
 
     // 1. Derive the trusted client IP.
     const directIp = (c.env as { ip?: string } | undefined)?.ip ?? '0.0.0.0';
-    const clientIp = deriveClientIp(c.req.header('x-forwarded-for') ?? null, directIp, env.TRUST_PROXY_HOPS);
+    const clientIp = deriveClientIp(
+      c.req.header('x-forwarded-for') ?? null,
+      directIp,
+      env.TRUST_PROXY_HOPS,
+    );
 
     // 2. Per-IP rate limit (PRE-AUTH).
     if (!(await allow(`ip:${clientIp}`, env.RATE_LIMIT_IP_PER_MIN, 60))) {
@@ -147,7 +168,9 @@ export function registerProxyRoute(app: Hono, deps: ProxyDeps): void {
 
     const kind: 'llm' | 'mcp' = c.req.header('x-cors-proxy-kind') === 'mcp' ? 'mcp' : 'llm';
     const llmOutcome = (o: 'ok' | 'upstream_error') =>
-      kind === 'llm' ? recordLlmRequest({ host: normaliseLlmHost(target.host), outcome: o }) : undefined;
+      kind === 'llm'
+        ? recordLlmRequest({ host: normaliseLlmHost(target.host), outcome: o })
+        : undefined;
 
     // Content-Length fast-path for the size ceiling (streamed enforcement below).
     const declaredLen = Number(c.req.header('content-length') ?? '0');
@@ -183,12 +206,14 @@ export function registerProxyRoute(app: Hono, deps: ProxyDeps): void {
         redirect: 'manual',
         ...(body ? { duplex: 'half' } : {}),
       };
-      const forward = new Request(`${target.origin}${reqUrl.pathname}${reqUrl.search}`, forwardInit);
+      const forward = new Request(
+        `${target.origin}${reqUrl.pathname}${reqUrl.search}`,
+        forwardInit,
+      );
 
       const upstream = await doPinnedFetch(forward, target);
 
-      const outcome: 'ok' | 'upstream_error' =
-        upstream.status >= 500 ? 'upstream_error' : 'ok';
+      const outcome: 'ok' | 'upstream_error' = upstream.status >= 500 ? 'upstream_error' : 'ok';
       recordRequest({ kind, outcome });
       llmOutcome(outcome);
 
@@ -198,7 +223,12 @@ export function registerProxyRoute(app: Hono, deps: ProxyDeps): void {
         respHeaders.set('Vary', 'Origin');
       }
 
-      const outBody = upstream.body ? releaseOnEnd(upstream.body, release) : (release(), null);
+      let outBody: ReadableStream<Uint8Array> | null = null;
+      if (upstream.body) {
+        outBody = releaseOnEnd(upstream.body, release);
+      } else {
+        release();
+      }
       return new Response(outBody, { status: upstream.status, headers: respHeaders });
     } catch (e) {
       release();

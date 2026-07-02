@@ -5,16 +5,6 @@ import * as v from 'valibot';
 const num = (fallback: string) =>
   v.optional(v.pipe(v.string(), v.transform(Number), v.number()), fallback);
 
-// Booleans arrive as env strings: 'false'/'0'/'' are false, everything else true.
-const bool = (fallback: string) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.transform((s) => s !== 'false' && s !== '0' && s !== ''),
-    ),
-    fallback,
-  );
-
 const BaseEnvSchema = v.object({
   NODE_ENV: v.optional(v.picklist(['development', 'production', 'test']), 'development'),
   PORT: num('3200'),
@@ -64,13 +54,14 @@ const BaseEnvSchema = v.object({
   MAX_SOCKETS_PER_ACCOUNT: num('8'),
 
   // --- Blob transport (S3/MinIO), blob spec §14 ---------------------------
-  // Unset ⇒ blobs disabled; the service runs records-only.
+  // Unset ⇒ blobs disabled; the service runs records-only. The client uses
+  // path-style addressing ONLY (MinIO, Garage, Hetzner Object Storage);
+  // virtual-host-style-only endpoints are not supported.
   S3_ENDPOINT: v.optional(v.string()),
   S3_REGION: v.optional(v.string(), 'us-east-1'),
   S3_BUCKET: v.optional(v.string(), 'chatsundere-blobs'),
   S3_ACCESS_KEY_ID: v.optional(v.string()),
   S3_SECRET_ACCESS_KEY: v.optional(v.string()),
-  S3_FORCE_PATH_STYLE: bool('true'),
   MAX_BLOB_BYTES: num('33554432'), // 32 MiB ciphertext body
   BLOB_QUOTA_FLOOR_BYTES: num('65536'), // 64 KiB accounting floor per blob (§4)
   BLOB_UPLOAD_IDLE_TIMEOUT_S: num('30'), // body-progress timeout (§8)

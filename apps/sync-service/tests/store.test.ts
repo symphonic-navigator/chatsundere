@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from 'drizzle-orm';
-import { type BatchLimits, type StoreWriteRecord, applyBatch, getHead, pullSince } from '../src/records/store.js';
+import {
+  type BatchLimits,
+  type StoreWriteRecord,
+  applyBatch,
+  getHead,
+  pullSince,
+} from '../src/records/store.js';
 import { type TestDb, withTestDb } from './helpers/test-db.js';
 
 let t: TestDb;
@@ -32,7 +38,16 @@ async function rec(
   if (deleted) return { blindId, collection, envelopeVersion: 1, baseRev, deleted: true };
   const ciphertext = new Uint8Array(size).fill(fill);
   const ciphertextHash = new Uint8Array(await crypto.subtle.digest('SHA-256', ciphertext));
-  return { blindId, collection, envelopeVersion: 1, baseRev, deleted: false, nonce: new Uint8Array(12), ciphertext, ciphertextHash };
+  return {
+    blindId,
+    collection,
+    envelopeVersion: 1,
+    baseRev,
+    deleted: false,
+    nonce: new Uint8Array(12),
+    ciphertext,
+    ciphertextHash,
+  };
 }
 
 describe('applyBatch CAS matrix', () => {
@@ -60,7 +75,12 @@ describe('applyBatch CAS matrix', () => {
 
   test('update with a mismatched collection → collection_mismatch', async () => {
     await applyBatch(t.db, ACC, [await rec(1, { collection: 'chats' })], allow);
-    const { results } = await applyBatch(t.db, ACC, [await rec(1, { collection: 'personas', baseRev: 1 })], allow);
+    const { results } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(1, { collection: 'personas', baseRev: 1 })],
+      allow,
+    );
     expect(results[0]).toEqual({ status: 'error', code: 'collection_mismatch' });
   });
 
@@ -78,7 +98,12 @@ describe('applyBatch CAS matrix', () => {
   });
 
   test('delete of an absent blindId creates a terminal tombstone', async () => {
-    const { results, accepted } = await applyBatch(t.db, ACC, [await rec(5, { deleted: true })], allow);
+    const { results, accepted } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(5, { deleted: true })],
+      allow,
+    );
     expect(results[0]?.status).toBe('ok');
     expect(accepted).toBe(true);
   });
@@ -101,7 +126,12 @@ describe('applyBatch CAS matrix', () => {
 
   test('per-record atomicity: [ok, conflict, ok] aligned, both inserts persisted', async () => {
     await applyBatch(t.db, ACC, [await rec(2)], allow); // rev 1, makes rec(2) conflict on re-insert
-    const { results } = await applyBatch(t.db, ACC, [await rec(1), await rec(2), await rec(3)], allow);
+    const { results } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(1), await rec(2), await rec(3)],
+      allow,
+    );
     expect(results.map((r) => r.status)).toEqual(['ok', 'conflict', 'ok']);
     expect(await getHead(t.db, ACC)).toBe(3);
   });
@@ -116,26 +146,45 @@ describe('applyBatch CAS matrix', () => {
   });
 
   test('revs are contiguous within a batch and accounts are isolated', async () => {
-    const { results } = await applyBatch(t.db, ACC, [await rec(1), await rec(2), await rec(3)], allow);
+    const { results } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(1), await rec(2), await rec(3)],
+      allow,
+    );
     expect(results.map((r) => (r as { rev: number }).rev)).toEqual([1, 2, 3]);
     const b = await applyBatch(t.db, ACC2, [await rec(1)], allow);
     expect(b.results[0]).toEqual({ status: 'ok', rev: 1 }); // account B starts fresh
   });
 
   test('record_too_large and quota_exceeded', async () => {
-    const tooBig = await applyBatch(t.db, ACC, [await rec(1, { size: 200 })], { ...allow, maxRecordBytes: 100 });
+    const tooBig = await applyBatch(t.db, ACC, [await rec(1, { size: 200 })], {
+      ...allow,
+      maxRecordBytes: 100,
+    });
     expect(tooBig.results[0]).toEqual({ status: 'error', code: 'record_too_large' });
-    const overQuota = await applyBatch(t.db, ACC, [await rec(2, { size: 500 })], { ...allow, quotaBytes: 100 });
-    expect(overQuota.results[0]).toMatchObject({ status: 'error', code: 'quota_exceeded', quotaBytes: 100 });
+    const overQuota = await applyBatch(t.db, ACC, [await rec(2, { size: 500 })], {
+      ...allow,
+      quotaBytes: 100,
+    });
+    expect(overQuota.results[0]).toMatchObject({
+      status: 'error',
+      code: 'quota_exceeded',
+      quotaBytes: 100,
+    });
   });
 
   test('quota accounting: update replaces old bytes, tombstone frees them', async () => {
     await applyBatch(t.db, ACC, [await rec(1, { size: 500 })], allow); // used 500
     await applyBatch(t.db, ACC, [await rec(1, { size: 200, baseRev: 1 })], allow); // used 200
-    const [acct1] = await t.sql.unsafe(`SELECT total_bytes FROM sync_accounts WHERE account_id = '${ACC}'`);
+    const [acct1] = await t.sql.unsafe(
+      `SELECT total_bytes FROM sync_accounts WHERE account_id = '${ACC}'`,
+    );
     expect(Number(acct1?.total_bytes)).toBe(200);
     await applyBatch(t.db, ACC, [await rec(1, { deleted: true })], allow); // freed
-    const [acct2] = await t.sql.unsafe(`SELECT total_bytes FROM sync_accounts WHERE account_id = '${ACC}'`);
+    const [acct2] = await t.sql.unsafe(
+      `SELECT total_bytes FROM sync_accounts WHERE account_id = '${ACC}'`,
+    );
     expect(Number(acct2?.total_bytes)).toBe(0);
   });
 
@@ -176,7 +225,12 @@ describe('pullSince', () => {
   });
 
   test('byte budget ends a page early with more: true', async () => {
-    await applyBatch(t.db, ACC, [await rec(1, { size: 1000 }), await rec(2, { size: 1000 })], allow);
+    await applyBatch(
+      t.db,
+      ACC,
+      [await rec(1, { size: 1000 }), await rec(2, { size: 1000 })],
+      allow,
+    );
     const page = await pullSince(t.db, ACC, 0, 200, 1500); // second record would exceed budget
     expect(page.records).toHaveLength(1);
     expect(page.more).toBe(true);

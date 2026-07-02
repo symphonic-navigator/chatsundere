@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { and, asc, eq, gt } from 'drizzle-orm';
 import type { SyncRecordErrorCode } from '@chatsundere/shared-types';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { syncAccounts, syncRecords } from '../db/schema.js';
 import { isSyncCollection } from './collections.js';
@@ -174,9 +174,13 @@ export async function applyBatch(
       }
       // 7. Compare-and-swap.
       const isInsert = record.baseRev === 0;
-      const casConflict = isInsert === (current !== undefined) || (current && current.rev !== record.baseRev);
+      const casConflict =
+        isInsert === (current !== undefined) || (current && current.rev !== record.baseRev);
       if (casConflict) {
-        results.push({ status: 'conflict', current: toStored(current as typeof syncRecords.$inferSelect) });
+        results.push({
+          status: 'conflict',
+          current: toStored(current as typeof syncRecords.$inferSelect),
+        });
         continue;
       }
       // 8. Quota.
@@ -207,7 +211,15 @@ export async function applyBatch(
         })
         .onConflictDoUpdate({
           target: [syncRecords.accountId, syncRecords.blindId],
-          set: { collection: record.collection, envelopeVersion: record.envelopeVersion, rev, deleted: false, nonce: record.nonce, ciphertext, ciphertextHash },
+          set: {
+            collection: record.collection,
+            envelopeVersion: record.envelopeVersion,
+            rev,
+            deleted: false,
+            nonce: record.nonce,
+            ciphertext,
+            ciphertextHash,
+          },
         });
       totalBytes = totalBytes - oldSize + newSize;
       accepted = true;
@@ -224,7 +236,10 @@ export async function applyBatch(
 
 /** The account's current high-water rev (0 if the account has never written). */
 export async function getHead(db: Db, accountId: string): Promise<number> {
-  const [account] = await db.select().from(syncAccounts).where(eq(syncAccounts.accountId, accountId));
+  const [account] = await db
+    .select()
+    .from(syncAccounts)
+    .where(eq(syncAccounts.accountId, accountId));
   return account?.headRev ?? 0;
 }
 
