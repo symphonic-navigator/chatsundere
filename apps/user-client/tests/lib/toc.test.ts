@@ -8,6 +8,7 @@ function msg(p: Partial<MessageRow> & { id: string }): MessageRow {
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'hello world' }],
     createdAt: 0,
+    updatedAt: 0,
     bookmarked: false,
     streamingState: 'complete',
     ...p,

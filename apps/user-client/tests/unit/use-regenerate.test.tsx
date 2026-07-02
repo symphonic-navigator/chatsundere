@@ -127,6 +127,7 @@ async function seedChatWithExchange() {
     title: null,
     resolvedMindspaceId: 'm1',
     createdAt: 1,
+    updatedAt: 1,
     lastMessageAt: 4,
     bookmarkedMessageCount: 0,
     draftInput: '',
@@ -139,6 +140,7 @@ async function seedChatWithExchange() {
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'tell me a joke' }],
     createdAt: 2,
+    updatedAt: 2,
     bookmarked: false,
     streamingState: 'complete',
   });
@@ -149,6 +151,7 @@ async function seedChatWithExchange() {
     role: 'persona',
     contentBlocks: [{ type: 'text', text: 'why did the chicken' }],
     createdAt: 3,
+    updatedAt: 3,
     bookmarked: false,
     streamingState: 'complete',
   });
@@ -233,6 +236,7 @@ describe('useRegenerate (non-destructive)', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -254,6 +258,7 @@ describe('useRegenerate (non-destructive)', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 2,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -267,6 +272,7 @@ describe('useRegenerate (non-destructive)', () => {
       kind: 'opener',
       contentBlocks: [{ type: 'text', text: 'Hello there!' }],
       createdAt: 2,
+      updatedAt: 2,
       bookmarked: false,
       streamingState: 'complete',
     });
@@ -301,6 +307,7 @@ describe('useRegenerate (non-destructive)', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 2,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -314,6 +321,7 @@ describe('useRegenerate (non-destructive)', () => {
       kind: 'opener',
       contentBlocks: [],
       createdAt: 2,
+      updatedAt: 2,
       bookmarked: false,
       streamingState: 'incomplete',
     });
@@ -344,6 +352,7 @@ describe('useRegenerate (non-destructive)', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 4,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -357,6 +366,7 @@ describe('useRegenerate (non-destructive)', () => {
       kind: 'opener',
       contentBlocks: [{ type: 'text', text: 'Hello!' }],
       createdAt: 2,
+      updatedAt: 2,
       bookmarked: false,
       streamingState: 'complete',
     });
@@ -367,6 +377,7 @@ describe('useRegenerate (non-destructive)', () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'tell me a joke' }],
       createdAt: 3,
+      updatedAt: 3,
       bookmarked: false,
       streamingState: 'complete',
     });
@@ -377,6 +388,7 @@ describe('useRegenerate (non-destructive)', () => {
       role: 'persona',
       contentBlocks: [{ type: 'text', text: 'Why did the chicken' }],
       createdAt: 4,
+      updatedAt: 4,
       bookmarked: false,
       streamingState: 'complete',
     });

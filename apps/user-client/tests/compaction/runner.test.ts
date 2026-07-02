@@ -37,6 +37,7 @@ describe('runCompaction', () => {
       title: null,
       resolvedMindspaceId: 'm',
       createdAt: now,
+      updatedAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -50,6 +51,7 @@ describe('runCompaction', () => {
         role: i % 2 === 0 ? 'user' : 'persona',
         contentBlocks: [{ type: 'text', text: `message ${i} with enough words to count` }] as never,
         createdAt: now + i,
+        updatedAt: now + i,
         bookmarked: false,
         streamingState: 'complete',
       });

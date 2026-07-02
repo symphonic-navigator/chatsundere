@@ -24,6 +24,7 @@ function userMsg(over: Partial<MessageRow> = {}): MessageRow {
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'hello' }],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'complete',
     ...over,
@@ -37,6 +38,7 @@ function personaMsg(over: Partial<MessageRow> = {}): MessageRow {
     role: 'persona',
     contentBlocks: [{ type: 'text', text: 'reply' }],
     createdAt: 2,
+    updatedAt: 2,
     bookmarked: false,
     streamingState: 'complete',
     ...over,
@@ -595,6 +597,7 @@ describe('<MessageBlock> reasoning rendering', () => {
       streamingState: 'complete',
       bookmarked: false,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     render(
       <MessageBlock
@@ -630,6 +633,7 @@ describe('<MessageBlock> reasoning rendering', () => {
       streamingState: 'complete',
       bookmarked: false,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     render(
       <MessageBlock
@@ -664,6 +668,7 @@ describe('<MessageBlock> reasoning rendering', () => {
       streamingState: 'incomplete',
       bookmarked: false,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     render(
       <MessageBlock

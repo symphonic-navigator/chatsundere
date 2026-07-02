@@ -23,6 +23,7 @@ const ms = (id: string, name: string, accent: string): MindspaceRow => ({
   texture: 'cloudy',
   builtIn: true,
   createdAt: 0,
+  updatedAt: 0,
 });
 
 const sevenMindspaces: MindspaceRow[] = [

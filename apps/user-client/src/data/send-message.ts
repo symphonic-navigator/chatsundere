@@ -527,6 +527,7 @@ export function useSendMessage() {
           title: null,
           resolvedMindspaceId,
           createdAt: now,
+          updatedAt: now,
           lastMessageAt: now,
           bookmarkedMessageCount: 0,
           draftInput: '',

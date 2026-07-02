@@ -44,6 +44,7 @@ const chatRow: import('../../src/boot/client-data-db').ChatRow = {
   title: null,
   resolvedMindspaceId: 'm1',
   createdAt: new Date('2026-05-26T10:00:00').getTime(),
+  updatedAt: new Date('2026-05-26T10:00:00').getTime(),
   lastMessageAt: 0,
   bookmarkedMessageCount: 0,
   draftInput: '',

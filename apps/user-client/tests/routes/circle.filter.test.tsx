@@ -138,6 +138,7 @@ describe('Circle filter (adult mode)', () => {
         texture: 'cloudy',
         builtIn: false,
         createdAt: 0,
+        updatedAt: 0,
       },
     });
     renderCircle();

@@ -24,6 +24,7 @@ function makeGroup(): BookmarkGroup {
       title: 'Long talk',
       resolvedMindspaceId: 'm1',
       createdAt: 0,
+      updatedAt: 0,
       lastMessageAt: 10,
       bookmarkedMessageCount: 1,
       draftInput: '',

@@ -47,6 +47,7 @@ export async function addAttachment(input: AddAttachmentInput): Promise<string> 
       order,
       state: 'active',
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       blob: input.blob,
       text: input.text,
       width: input.width,

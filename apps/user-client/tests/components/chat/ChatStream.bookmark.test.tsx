@@ -23,6 +23,7 @@ beforeEach(async () => {
     title: null,
     resolvedMindspaceId: 'm1',
     createdAt: 1,
+    updatedAt: 1,
     lastMessageAt: 1,
     bookmarkedMessageCount: 0,
     draftInput: '',
@@ -34,6 +35,7 @@ beforeEach(async () => {
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'hi' }],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'complete',
   });

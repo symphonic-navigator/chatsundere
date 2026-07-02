@@ -86,6 +86,7 @@ export async function importChatsuneSessions(
         title: session.session_fields.title ?? null,
         resolvedMindspaceId,
         createdAt,
+        updatedAt: createdAt,
         lastMessageAt: isoToMs(session.session_fields.updated_at, createdAt),
         bookmarkedMessageCount: 0,
         draftInput: '',
@@ -104,6 +105,7 @@ export async function importChatsuneSessions(
           role: mapped.role,
           contentBlocks: mapped.contentBlocks,
           createdAt: mapped.createdAt,
+          updatedAt: mapped.createdAt,
           bookmarked: false,
           streamingState: 'complete',
         });

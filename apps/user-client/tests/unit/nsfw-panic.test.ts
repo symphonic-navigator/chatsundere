@@ -65,6 +65,7 @@ async function seedAdultPersona(): Promise<{ personaId: string; chatId: string }
     title: null,
     resolvedMindspaceId: first.id,
     createdAt: 1,
+    updatedAt: 1,
     lastMessageAt: 2,
     bookmarkedMessageCount: 0,
     draftInput: '',
@@ -143,6 +144,7 @@ describe('nsfwPanic', () => {
       role: 'persona',
       contentBlocks: [{ type: 'text', text: 'partial …' }],
       createdAt: 100,
+      updatedAt: 100,
       bookmarked: false,
       // Seed as 'complete' (the only non-'incomplete' value the schema permits)
       // so the post-condition `streamingState === 'incomplete'` meaningfully
@@ -189,6 +191,7 @@ describe('nsfwPanic', () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'hi' }],
       createdAt: 100,
+      updatedAt: 100,
       bookmarked: false,
       streamingState: 'complete',
     });

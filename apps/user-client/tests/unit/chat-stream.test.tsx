@@ -54,6 +54,7 @@ function userMsg(id: string, text: string, ts: number): MessageRow {
     role: 'user',
     contentBlocks: [{ type: 'text', text }],
     createdAt: ts,
+    updatedAt: ts,
     bookmarked: false,
     streamingState: 'complete',
   };
@@ -70,6 +71,7 @@ function personaMsg(
     role: 'persona',
     contentBlocks: [{ type: 'text', text }],
     createdAt: ts,
+    updatedAt: ts,
     bookmarked: false,
     streamingState: state,
   };
@@ -161,6 +163,7 @@ describe('ChatStream', () => {
       streamingState: 'complete',
       bookmarked: false,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
     const { container } = renderWithQuery(

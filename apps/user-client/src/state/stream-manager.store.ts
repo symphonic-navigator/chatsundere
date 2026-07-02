@@ -399,6 +399,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           role: 'user',
           contentBlocks: [{ type: 'text', text: args.userText }],
           createdAt: now,
+          updatedAt: now,
           bookmarked: false,
           streamingState: 'complete',
         });
@@ -408,6 +409,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           role: 'persona',
           contentBlocks: [],
           createdAt: now + 1,
+          updatedAt: now + 1,
           bookmarked: false,
           streamingState: 'incomplete',
         });
@@ -486,6 +488,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         kind: 'opener',
         contentBlocks: [],
         createdAt: now,
+        updatedAt: now,
         bookmarked: false,
         streamingState: 'incomplete',
       });

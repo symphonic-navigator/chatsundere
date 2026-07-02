@@ -172,6 +172,7 @@ describe('persona import — cursor remapping (C1/C2 regression)', () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'hello' }],
       createdAt: 10,
+      updatedAt: 10,
       bookmarked: false,
       streamingState: 'complete',
     } satisfies MessageRow);
@@ -198,6 +199,7 @@ describe('persona import — cursor remapping (C1/C2 regression)', () => {
       personaId: 'p-cursor',
       title: 'cursor chat',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 2,
       resolvedMindspaceId: '',
       libraryIds: [],
@@ -268,6 +270,7 @@ describe('persona import — nested pillId / artefact-ref remapping (C1+I1 regre
       personaId: 'p-pill',
       title: 'pill chat',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 2,
       resolvedMindspaceId: '',
       libraryIds: [],
@@ -281,6 +284,7 @@ describe('persona import — nested pillId / artefact-ref remapping (C1+I1 regre
       role: 'persona',
       contentBlocks: [{ type: 'pill', pillId: 'pill-orig-1' }],
       createdAt: 1,
+      updatedAt: 1,
       bookmarked: false,
       streamingState: 'complete',
     } satisfies MessageRow);

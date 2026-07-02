@@ -10,6 +10,7 @@ function row(over: Partial<ChatRow> = {}): ChatRow {
     title: null,
     resolvedMindspaceId: 'm1',
     createdAt: new Date('2026-05-24T18:06:00').getTime(),
+    updatedAt: new Date('2026-05-24T18:06:00').getTime(),
     lastMessageAt: 0,
     bookmarkedMessageCount: 0,
     draftInput: '',

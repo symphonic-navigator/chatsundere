@@ -75,6 +75,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     title: null,
     resolvedMindspaceId: ms[0]?.id ?? '',
     createdAt: 1,
+    updatedAt: 1,
     lastMessageAt: 3,
     bookmarkedMessageCount: 0,
     draftInput: '',
@@ -86,6 +87,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'hi' }],
     createdAt: 2,
+    updatedAt: 2,
     bookmarked: false,
     streamingState: 'complete',
   });
@@ -95,6 +97,7 @@ async function seedChat(opts: { lastStreamingState: 'incomplete' | 'complete' })
     role: 'persona',
     contentBlocks: opts.lastStreamingState === 'complete' ? [{ type: 'text', text: 'fine' }] : [],
     createdAt: 3,
+    updatedAt: 3,
     bookmarked: false,
     streamingState: opts.lastStreamingState,
   });

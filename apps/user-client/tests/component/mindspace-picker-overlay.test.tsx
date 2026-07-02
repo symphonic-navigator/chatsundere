@@ -24,6 +24,7 @@ const MINDSPACES: MindspaceRow[] = [
     texture: 'aurora',
     builtIn: true,
     createdAt: 0,
+    updatedAt: 0,
   },
   {
     id: 'm2',
@@ -32,6 +33,7 @@ const MINDSPACES: MindspaceRow[] = [
     texture: 'grain',
     builtIn: true,
     createdAt: 0,
+    updatedAt: 0,
   },
 ];
 
