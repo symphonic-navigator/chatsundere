@@ -46,6 +46,16 @@ export function getKnowledgeVectorStore(): VectorStore {
 }
 
 /**
+ * Read one persisted vector row by its primary key (the sync key
+ * `` `${documentId}#${chunkIndex}` `` for a knowledge chunk). Used by the sync
+ * drain to seal a `vectors` outbox entry, since the `VectorStore` façade only
+ * exposes bulk scan/upsert/delete. Returns undefined when the chunk is gone.
+ */
+export function getKnowledgeVectorRow(key: string): Promise<VectorRow | undefined> {
+  return db().vectors.get(key);
+}
+
+/**
  * The shared on-device embedding engine, created once. Surfaces load progress
  * to the model-progress store so the UI can show a one-time download banner.
  */
