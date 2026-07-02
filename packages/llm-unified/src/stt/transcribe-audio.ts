@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SttTransportKind } from '../catalogue/types.js';
+import { fetchWithProxyAuth } from '../proxy-fetch.js';
 import { buildRequest } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 
@@ -65,14 +66,18 @@ export async function transcribeAudio(args: TranscribeAudioArgs): Promise<Transc
   // xAI's /stt endpoint takes no model field; the slug is internal-only there.
   if (args.transport !== 'xai-native') form.append('model', args.upstreamSlug);
   // `language` deliberately omitted on both transports — auto-detect.
-  const request = buildRequest({
-    provider: args.providerConfig,
-    apiKey: args.apiKey,
-    path: args.transport === 'xai-native' ? '/stt' : '/audio/transcriptions',
-    method: 'POST',
-    body: form,
-  });
-  const response = await fetchFn(request, { signal });
+  const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+  const response = await fetchWithProxyAuth(
+    () =>
+      buildRequest({
+        provider: args.providerConfig,
+        apiKey: args.apiKey,
+        path: args.transport === 'xai-native' ? '/stt' : '/audio/transcriptions',
+        method: 'POST',
+        body: form,
+      }),
+    { proxied, signal, doFetch: fetchFn },
+  );
   if (!response.ok) {
     throw new TranscriptionError(`STT upstream ${response.status}`, response.status);
   }

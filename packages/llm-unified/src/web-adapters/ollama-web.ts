@@ -6,6 +6,7 @@ import type {
   WebSearchOpts,
   WebSearchResult,
 } from '../integrations/web-interfacing.js';
+import { fetchWithProxyAuth } from '../proxy-fetch.js';
 import { buildRequest } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 
@@ -32,14 +33,17 @@ async function postWeb(
   fetchImpl: typeof fetch,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  const req = buildRequest({
-    provider: routeFor(ctx),
-    apiKey: key,
-    path,
-    method: 'POST',
-    body,
-  });
-  const res = await fetchImpl(signal ? new Request(req, { signal }) : req);
+  const res = await fetchWithProxyAuth(
+    () =>
+      buildRequest({
+        provider: routeFor(ctx),
+        apiKey: key,
+        path,
+        method: 'POST',
+        body,
+      }),
+    { proxied: ctx.useProxy, signal, doFetch: fetchImpl },
+  );
   if (!res.ok) {
     throw new Error(`ollama web ${path} failed: HTTP ${res.status}`);
   }

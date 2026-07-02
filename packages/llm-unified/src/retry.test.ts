@@ -337,4 +337,45 @@ describe('withStreamingRetry', () => {
     expect(res.ok).toBe(true);
     expect(attempts).toBe(2);
   });
+
+  it('401 + onUnauthorised(true) retries immediately without consuming a retry', async () => {
+    let calls = 0;
+    const doFetch = (async () =>
+      ++calls === 1
+        ? new Response('', { status: 401 })
+        : new Response('ok')) as unknown as typeof fetch;
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test'),
+      doFetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      onUnauthorised: async () => true,
+      sleepFn: async () => {},
+    });
+    expect(res.status).toBe(200);
+    expect(calls).toBe(2);
+  });
+
+  it('onUnauthorised fires at most once, then the 401 returns as normal', async () => {
+    let calls = 0;
+    let hookCalls = 0;
+    const doFetch = (async () => {
+      calls += 1;
+      return new Response('', { status: 401 });
+    }) as unknown as typeof fetch;
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test'),
+      doFetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      onUnauthorised: async () => {
+        hookCalls += 1;
+        return true;
+      },
+      sleepFn: async () => {},
+    });
+    expect(res.status).toBe(401);
+    expect(hookCalls).toBe(1);
+    expect(calls).toBe(2);
+  });
 });

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fetchWithProxyAuth } from '../proxy-fetch.js';
 import { buildRequest } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 import { SpeechSynthesisError } from './synthesise-speech.js';
@@ -32,13 +33,17 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoice[]
   if (args.endpoint === 'xai-flat') {
     // xAI returns the whole catalogue in one unpaginated response (probed
     // 2026-06-12) with `voice_id` rather than `id`.
-    const request = buildRequest({
-      provider: args.providerConfig,
-      apiKey: args.apiKey,
-      path: '/tts/voices',
-      method: 'GET',
-    });
-    const response = await fetchFn(request, { signal: args.signal });
+    const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+    const response = await fetchWithProxyAuth(
+      () =>
+        buildRequest({
+          provider: args.providerConfig,
+          apiKey: args.apiKey,
+          path: '/tts/voices',
+          method: 'GET',
+        }),
+      { proxied, signal: args.signal, doFetch: fetchFn },
+    );
     if (!response.ok) {
       throw new SpeechSynthesisError(`voices upstream ${response.status}`, response.status);
     }
@@ -69,13 +74,17 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoice[]
   let offset = 0;
 
   do {
-    const request = buildRequest({
-      provider: args.providerConfig,
-      apiKey: args.apiKey,
-      path: `/audio/voices?limit=${PAGE_LIMIT}&offset=${offset}`,
-      method: 'GET',
-    });
-    const response = await fetchFn(request, { signal: args.signal });
+    const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+    const response = await fetchWithProxyAuth(
+      () =>
+        buildRequest({
+          provider: args.providerConfig,
+          apiKey: args.apiKey,
+          path: `/audio/voices?limit=${PAGE_LIMIT}&offset=${offset}`,
+          method: 'GET',
+        }),
+      { proxied, signal: args.signal, doFetch: fetchFn },
+    );
     if (!response.ok) {
       throw new SpeechSynthesisError(`voices upstream ${response.status}`, response.status);
     }
