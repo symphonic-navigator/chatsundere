@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { StepUpModalHost } from '../components/StepUpModalHost.js';
 import { copy } from '../copy.js';
 
 export function RootLayout() {
@@ -15,6 +16,7 @@ export function RootLayout() {
 
   return (
     <div className="min-h-dvh">
+      <StepUpModalHost />
       <header className="flex items-center justify-between border-b border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-4 py-3">
         <div className="flex items-center gap-6">
           <span className="text-lg">{copy.appName}</span>
