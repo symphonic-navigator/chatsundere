@@ -3,6 +3,7 @@
 import {
   url,
   array,
+  check,
   minLength,
   number,
   object,
@@ -40,6 +41,16 @@ const envSchema = object({
     ),
     array(string()),
   ),
+  // Public URLs surfaced by GET /api/v1/config so the client never hard-codes
+  // topology. Both are OPTIONAL absolute https URLs — an operator may run any
+  // subset (auth+proxy, auth+sync, or all three); the client drives "disabled
+  // over hidden" from the features array (spec §7 / sync spec §11).
+  PROXY_PUBLIC_URL: optional(
+    pipe(string(), url(), check((u) => u.startsWith('https://'), 'PROXY_PUBLIC_URL must be an absolute https URL')),
+  ),
+  SYNC_PUBLIC_URL: optional(
+    pipe(string(), url(), check((u) => u.startsWith('https://'), 'SYNC_PUBLIC_URL must be an absolute https URL')),
+  ),
 });
 
 export type Env = ReturnType<typeof loadEnv>;
@@ -57,6 +68,8 @@ export function loadEnv(): {
   REFRESH_TOKEN_HMAC_KEY: string;
   HMAC_KEY_PENDING_CODES: string;
   CORS_ALLOWED_ORIGINS: string[];
+  PROXY_PUBLIC_URL?: string;
+  SYNC_PUBLIC_URL?: string;
 } {
   return parse(envSchema, {
     NODE_ENV: process.env.NODE_ENV ?? 'development',
@@ -71,5 +84,7 @@ export function loadEnv(): {
     REFRESH_TOKEN_HMAC_KEY: process.env.REFRESH_TOKEN_HMAC_KEY,
     HMAC_KEY_PENDING_CODES: process.env.HMAC_KEY_PENDING_CODES,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ?? '',
+    PROXY_PUBLIC_URL: process.env.PROXY_PUBLIC_URL,
+    SYNC_PUBLIC_URL: process.env.SYNC_PUBLIC_URL,
   });
 }

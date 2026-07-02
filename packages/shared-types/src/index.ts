@@ -66,3 +66,17 @@ export type {
   PassphraseChangeFinishRequest,
   PassphraseChangeFinishResponse,
 } from './me.js';
+
+export { SYNC_COLLECTIONS, revokedJtiKey, revokedSubKey } from './sync.js';
+export type {
+  SyncCollection,
+  SyncPushRecord,
+  SyncPulledRecord,
+  SyncRecordErrorCode,
+  SyncPushResult,
+  SyncPushRequest,
+  SyncPushResponse,
+  SyncPullResponse,
+  DoorbellTicketResponse,
+  DoorbellPoke,
+} from './sync.js';

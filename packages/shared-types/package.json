@@ -16,11 +16,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'no tests yet for shared-types'"
+    "test": "bun test"
   },
   "devDependencies": {
     "@simplewebauthn/server": "^11.0.0",
     "@simplewebauthn/types": "^11.0.0",
+    "@types/bun": "^1.1.0",
     "typescript": "^5.7.0"
   }
 }

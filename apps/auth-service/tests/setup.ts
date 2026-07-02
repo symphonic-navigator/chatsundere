@@ -16,3 +16,5 @@ process.env.HMAC_KEY_PENDING_CODES ??= Buffer.from(new Uint8Array(32).fill(17)).
   'base64url',
 );
 process.env.CORS_ALLOWED_ORIGINS ??= 'http://localhost:3000';
+process.env.PROXY_PUBLIC_URL ??= 'https://proxy.example';
+process.env.SYNC_PUBLIC_URL ??= 'https://sync.example';
