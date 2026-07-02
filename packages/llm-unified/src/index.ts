@@ -47,6 +47,12 @@ export {
   stripTeal,
 } from './teal/teal.js';
 
+export {
+  setProxyAuthSource,
+  getProxyAuthSource,
+  type ProxyAuthSource,
+} from './proxy-auth.js';
+
 export { buildRequest, type BuildRequestArgs, type StreamDiagnosticsSink } from './transport.js';
 
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';
