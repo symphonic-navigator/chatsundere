@@ -3,6 +3,7 @@ export { useSessionStore } from './state/session.store.js';
 export type { AppSession } from './state/session.store.js';
 export { useConnectivityStore, attachConnectivityListeners } from './state/connectivity.store.js';
 export type { Connectivity } from './state/connectivity.store.js';
+export type { ConnectivityListenerOptions } from './state/connectivity.store.js';
 export { ConfirmTyped } from './components/ConfirmTyped.js';
 export type { ConfirmTypedProps } from './components/ConfirmTyped.js';
 export { InlineMarker } from './components/InlineMarker.js';
