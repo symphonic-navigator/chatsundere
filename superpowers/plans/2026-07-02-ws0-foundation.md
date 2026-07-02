@@ -8,6 +8,64 @@
 
 **Tech Stack:** TypeScript strict, Zustand v5, Valibot, Vitest (jsdom + fake-indexeddb), pnpm + Turborepo.
 
+## Operating rules for the overnight worker (READ FIRST)
+
+These rules are binding and override your defaults. The repo's CLAUDE.md may
+not be in your context — everything you need is in this section.
+
+1. **STOP-guard — verify the base before touching anything.** All three must
+   hold, or STOP immediately, change nothing, and report:
+   - `STATUS-TRANSITION.md` exists at the repo root (you are based on the
+     `full-backend-transition` sprint branch, not master);
+   - `superpowers/specs/2026-07-02-ws0-foundation-design.md` exists;
+   - `packages/ui-shared/src/state/discovery.store.ts` does NOT exist
+     (the work is not already done).
+2. **Branch + integration target.** Work on a fresh branch cut from
+   `full-backend-transition` (if your harness names the branch itself, accept
+   its name). Any PR you open targets **`full-backend-transition` — NEVER
+   `master`**. Do NOT merge anything yourself; the humans device-test and
+   integrate.
+3. **Language.** Every text artefact is British English — code, comments,
+   tests, copy strings, commit messages (`initialise`, `behaviour`, `colour`).
+   No German anywhere in the repo.
+4. **TDD per task, in plan order.** Failing test → run it and confirm the
+   exact expected failure → minimal implementation → confirm pass → commit.
+   Tasks are ordered topologically over the import graph; do not reorder.
+   If you dispatch subagents: one per task, review between tasks; subagents
+   never merge, push, or switch branches.
+5. **Commit convention.** Free-form imperative subject, capitalised, prefixed
+   `00:` (workstream marker, e.g. `00: Add ServerConfig wire type and
+   discovery-response validation`). Footer on every commit:
+   `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`.
+6. **Gates — exact commands.** Per task, the commands the task names. At the
+   end (Task 7), the FULL battery, never just touched dirs:
+   `pnpm typecheck --force` (expect **14 successful, 14 total, 0 cached** —
+   never trust a cached typecheck), `pnpm --filter @chatsundere/ui-shared test`,
+   `pnpm --filter @chatsundere/user-client test`, `pnpm build`, and the Biome
+   check Task 7 spells out. Biome **bans non-null assertions (`!`)** and is
+   the pre-commit hook; run it before committing, not after.
+7. **Known-green baseline.** The user-client vitest suite has a known
+   environmental baseline on some hosts: exactly **8 failures** from a trio of
+   Node-26 experimental-localStorage tests. **0 or exactly 8** are both
+   acceptable; any other failure count is a regression you introduced. Never
+   claim a failure is "pre-existing" without confirming it fails identically
+   on the base branch (`git stash`-free: use a worktree or `git show`).
+8. **Security gate: NOT triggered.** This plan touches no
+   `packages/crypto/src`, no auth/sync/proxy service. If you find yourself
+   needing to modify any of those paths, the plan is wrong — STOP and report
+   instead of proceeding. (UX audit already passed at spec level; do not
+   re-run any audit.)
+9. **Scope guard.** Never touch `apps/user-client/src/boot/client-data-db.ts`
+   (the next Dexie version is reserved), anything under `packages/crypto/src`,
+   `apps/user-client/src/lib/cors-proxy.ts`,
+   `apps/user-client/src/routes/onboarding/matrix.tsx`, or
+   `apps/user-client/src/routes/app/account/server-linking.tsx`.
+10. **End of run.** Complete Task 7 (STATUS update) as your final commit, then
+    report back: every verification number (both suites, typecheck, build,
+    Biome — with the baseline from rule 7 noted), the list of commits on your
+    branch, and anything you could not do, stated honestly. Do not paper over
+    a failing gate.
+
 ## Global Constraints
 
 - **Base branch:** `full-backend-transition` — branch off it and PR back into it, NEVER master.
@@ -182,7 +240,8 @@ Expected: PASS (6 tests).
 git add packages/shared-types/src/config.ts packages/shared-types/src/index.ts \
   packages/ui-shared/src/state/server-config.ts packages/ui-shared/src/index.ts \
   packages/ui-shared/tests/state/server-config.test.ts
-git commit -m "Add ServerConfig wire type and discovery-response validation"
+git commit -m "00: Add ServerConfig wire type and discovery-response validation" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
@@ -348,7 +407,8 @@ Expected: PASS (4 tests).
 git add packages/ui-shared/src/state/account-link.store.ts \
   packages/ui-shared/src/index.ts \
   packages/ui-shared/tests/state/account-link.store.test.ts
-git commit -m "Add central account-link gate store with boot-time IDB init"
+git commit -m "00: Add central account-link gate store with boot-time IDB init" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
@@ -660,7 +720,8 @@ Expected: PASS (7 tests).
 git add packages/ui-shared/src/state/discovery.store.ts \
   packages/ui-shared/src/index.ts \
   packages/ui-shared/tests/state/discovery.store.test.ts
-git commit -m "Add discovery store with single-flight config probe"
+git commit -m "00: Add discovery store with single-flight config probe" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
@@ -801,7 +862,8 @@ Expected: PASS — all ui-shared tests including the pre-existing `connectivity.
 git add packages/ui-shared/src/state/connectivity.store.ts \
   packages/ui-shared/src/index.ts \
   packages/ui-shared/tests/state/connectivity.regain.test.ts
-git commit -m "Add regain callback and foreground listener to connectivity wiring"
+git commit -m "00: Add regain callback and foreground listener to connectivity wiring" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
@@ -1087,7 +1149,8 @@ git add apps/user-client/src/env.ts apps/user-client/.env.example \
   apps/user-client/src/lib/copy.ts apps/user-client/src/lib/server-gate.ts \
   apps/user-client/src/lib/server-urls.ts \
   apps/user-client/tests/lib/server-gate.test.ts
-git commit -m "Add useServerGate derivation, gate copy catalogue, and effective URL selectors"
+git commit -m "00: Add useServerGate derivation, gate copy catalogue, and effective URL selectors" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
@@ -1254,7 +1317,8 @@ Expected: PASS (2 tests).
 ```bash
 git add apps/user-client/src/boot/server-foundation.ts apps/user-client/src/main.tsx \
   apps/user-client/tests/boot/server-foundation.test.ts
-git commit -m "Wire server foundation into boot with regain probe callback"
+git commit -m "00: Wire server foundation into boot with regain probe callback" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
@@ -1297,7 +1361,8 @@ WS-0 Foundation BUILT on this branch (spec `superpowers/specs/2026-07-02-ws0-fou
 
 ```bash
 git add STATUS-TRANSITION.md
-git commit -m "Record WS-0 Foundation build in transition status [skip ci]"
+git commit -m "00: Record WS-0 Foundation build in transition status [skip ci]" \
+  -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 ```
 
 ---
