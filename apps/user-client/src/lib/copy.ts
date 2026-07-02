@@ -126,6 +126,15 @@ export const copy = {
       confirmLockoutTitle: 'This is your only remaining unlock method.',
       confirmLockoutBody:
         'Removing this leaves the recovery key as your only way in. If you lose both, the account on this device is gone forever.',
+      syncedMarker: 'Synced with your server',
+      localOnlyMarker: 'On this device only',
+      syncedCaption:
+        'This passkey is registered with your server and can confirm actions on your account.',
+      localOnlyCaption:
+        'Passkeys can’t be copied between devices, so this one only works here. To get one that follows your account, register a new passkey.',
+      markerInfoAria: 'What does this mean?',
+      localFallbackNotice:
+        'Saved on this device, but couldn’t be synced with your server just now.',
     },
     serverLinking: {
       title: 'Server linking',
@@ -257,6 +266,11 @@ export const copy = {
       'This authenticator does not support the PRF extension. A PRF-capable passkey is required to protect your master key. Try a different authenticator.',
     genericError: 'Could not add biometric. Please try again.',
     defaultLabel: 'This device',
+    startUnreachable:
+      'Couldn’t reach your server just now — you can add this any time under Account → Biometric unlock.',
+    localFallback:
+      'Your passkey is set up on this device, but couldn’t be synced with your server. It still unlocks Chatsundere here — Account → Biometric unlock shows its status.',
+    fallbackOkCta: 'Got it',
   },
   onboardingProbe: {
     unreachable: 'That server isn’t answering. Check the address, or try again in a moment.',

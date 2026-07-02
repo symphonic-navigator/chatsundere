@@ -5,6 +5,7 @@ import {
   deletePasskeyCredential,
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { getDb } from '../../../boot/open-db.js';
 import { Button } from '../../../components/ui/Button.js';
@@ -14,6 +15,7 @@ import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { copy } from '../../../lib/copy.js';
 import { renamePasskey } from '../../../lib/passkey-management.js';
+import { StartUnreachableError, registerServerSyncedPasskey } from '../../../lib/server-passkey.js';
 import { isWebAuthnAvailable } from '../../../lib/webauthn-availability.js';
 import { PrfRequiredError, registerLocalBiometric } from '../../../lib/webauthn.js';
 
@@ -36,7 +38,11 @@ type RemoveState =
   | { kind: 'lockout'; credentialId: Uint8Array; busy: boolean };
 
 /** Add-biometric flow state. */
-type AddBiometricState = { kind: 'idle' } | { kind: 'busy' } | { kind: 'error'; message: string };
+type AddBiometricState =
+  | { kind: 'idle' }
+  | { kind: 'busy' }
+  | { kind: 'notice'; message: string }
+  | { kind: 'error'; message: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,10 +63,24 @@ function credKey(id: Uint8Array): string {
 export function BiometricPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('biometric');
 
+  const session = useSessionStore((s) => s.session);
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
   const [renameStates, setRenameStates] = useState<Map<string, RenameState>>(new Map());
   const [removeState, setRemoveState] = useState<RemoveState>({ kind: 'none' });
   const [addState, setAddState] = useState<AddBiometricState>({ kind: 'idle' });
+  // Credential keys whose sync-status caption is currently revealed
+  // (press-to-reveal — never a `title`-only affordance, Laura §11.2).
+  const [openCaptions, setOpenCaptions] = useState<Set<string>>(new Set());
+
+  function toggleCaption(id: Uint8Array) {
+    setOpenCaptions((prev) => {
+      const next = new Set(prev);
+      const key = credKey(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   // Load biometrics on mount.
   useEffect(() => {
@@ -149,6 +169,19 @@ export function BiometricPage(): JSX.Element {
   async function handleAddBiometric() {
     setAddState({ kind: 'busy' });
     try {
+      if (session?.mode === 'linked') {
+        const result = await registerServerSyncedPasskey(
+          copy.settings.authMethods.addBiometricDefaultLabel,
+        );
+        const rows = await listPasskeyCredentials(getDb());
+        setLoadState({ kind: 'ready', passkeys: rows });
+        setAddState(
+          result === 'local-fallback'
+            ? { kind: 'notice', message: copy.settings.authMethods.localFallbackNotice }
+            : { kind: 'idle' },
+        );
+        return;
+      }
       await registerLocalBiometric(copy.settings.authMethods.addBiometricDefaultLabel);
       const rows = await listPasskeyCredentials(getDb());
       setLoadState({ kind: 'ready', passkeys: rows });
@@ -157,6 +190,11 @@ export function BiometricPage(): JSX.Element {
       // User-initiated cancellation (Esc, system dismiss) is silent — back to idle.
       if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
         setAddState({ kind: 'idle' });
+        return;
+      }
+      // Server unreachable before any credential was minted — a plain retryable error.
+      if (e instanceof StartUnreachableError) {
+        setAddState({ kind: 'error', message: copy.biometricPrompt.startUnreachable });
         return;
       }
       const message =
@@ -238,8 +276,9 @@ export function BiometricPage(): JSX.Element {
                     );
                   }
 
+                  const captionOpen = openCaptions.has(key);
                   return (
-                    <li key={key}>
+                    <li key={key} className="space-y-1">
                       <ListRow
                         title={pk.label}
                         subtitle={pk.aaguid ?? undefined}
@@ -261,6 +300,29 @@ export function BiometricPage(): JSX.Element {
                           },
                         ]}
                       />
+                      <div className="flex items-center gap-1.5 px-1 text-xs text-paper-soft">
+                        <span>
+                          {pk.is_synced_with_server
+                            ? copy.settings.authMethods.syncedMarker
+                            : copy.settings.authMethods.localOnlyMarker}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={copy.settings.authMethods.markerInfoAria}
+                          aria-expanded={captionOpen}
+                          onClick={() => toggleCaption(pk.credential_id)}
+                          className="text-paper-soft/70 transition-colors hover:text-paper"
+                        >
+                          ⓘ
+                        </button>
+                      </div>
+                      {captionOpen && (
+                        <p className="px-1 text-xs text-paper-soft/70">
+                          {pk.is_synced_with_server
+                            ? copy.settings.authMethods.syncedCaption
+                            : copy.settings.authMethods.localOnlyCaption}
+                        </p>
+                      )}
                     </li>
                   );
                 })}
@@ -285,6 +347,9 @@ export function BiometricPage(): JSX.Element {
               </Button>
               {addState.kind === 'error' && (
                 <p className="text-xs text-danger">{addState.message}</p>
+              )}
+              {addState.kind === 'notice' && (
+                <p className="text-xs text-paper-soft">{addState.message}</p>
               )}
             </div>
           </>

@@ -126,7 +126,7 @@ export async function registerLocalBiometric(label: string): Promise<void> {
  *   [55..55+L] credentialId (L bytes)
  *   [55+L..]   credentialPublicKey (COSE_Key) — to end of slice
  */
-function extractCosePublicKey(authData: Uint8Array): Uint8Array {
+export function extractCosePublicKey(authData: Uint8Array): Uint8Array {
   if (authData.length < 55) {
     throw new Error('authenticatorData too short for attested credential data');
   }
@@ -161,7 +161,7 @@ function extractCosePublicKey(authData: Uint8Array): Uint8Array {
  *   [33..36]  signCount (4 bytes)
  *   [37..52]  aaguid (16 bytes)  — present only when AT flag is set
  */
-function parseAaguid(authData: Uint8Array): string | null {
+export function parseAaguid(authData: Uint8Array): string | null {
   if (authData.length < 53) return null;
   const flags = authData[32];
   // AT flag is bit 6.
