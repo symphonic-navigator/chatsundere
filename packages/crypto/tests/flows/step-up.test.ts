@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import {
   client as opaqueClient,
   ready as opaqueReady,
@@ -27,7 +28,7 @@ const LINKED_ROW = {
   linked_at: new Date(),
 };
 
-const SERVER_ID = `${LINKED_ROW.base_url}/auth/v1`;
+const SERVER_ID = opaqueServerIdentity(LINKED_ROW.base_url);
 
 function httpError(status: number, code: string): Error {
   return Object.assign(new Error(code), { status, code });
@@ -71,7 +72,7 @@ function makeServerClient(overrides: Partial<ServerClient>): ServerClient {
 
 /**
  * Registers an OPAQUE record for the given passphrase against the step-up
- * client identifiers (client: username, server: `${base_url}/auth/v1`) and
+ * client identifiers (client: username, server: opaqueServerIdentity(base_url)) and
  * returns the server setup plus the registration record needed to answer
  * `startLogin` server-side.
  */

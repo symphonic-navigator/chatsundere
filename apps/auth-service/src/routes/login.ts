@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { server as opaqueServer } from '@serenity-kit/opaque';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -110,9 +111,10 @@ export function registerLoginRoutes(app: Hono): void {
     //   client = registration-time username (frozen on the auth_methods row
     //            as opaque_client_identifier — survives later PATCH /api/v1/me
     //            username changes)
-    //   server = `${baseUrl}/auth/v1`
-    // With API_BASE_URL=`<host>/auth`, `${API_BASE_URL}/v1` resolves to the
-    // identical string. Spec §3 anti-replay binding.
+    //   server = opaqueServerIdentity(base_url) — origin-derived, shared by
+    //            client and server (packages/shared-types/opaque-identity.ts),
+    //            so it agrees in dev (direct port) and prod (reverse proxy).
+    // Spec §3 anti-replay binding.
     const clientIdentifier = row?.opaqueClientIdentifier ?? body.username;
     const env = loadEnv();
     const { serverLoginState, loginResponse } = opaqueServer.startLogin({
@@ -122,7 +124,7 @@ export function registerLoginRoutes(app: Hono): void {
       userIdentifier,
       identifiers: {
         client: clientIdentifier,
-        server: `${env.API_BASE_URL}/v1`,
+        server: opaqueServerIdentity(env.API_BASE_URL),
       },
     });
 

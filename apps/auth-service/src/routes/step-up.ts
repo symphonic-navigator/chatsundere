@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { server as opaqueServer } from '@serenity-kit/opaque';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
 import { and, eq } from 'drizzle-orm';
@@ -170,7 +171,7 @@ export function registerStepUpRoutes(app: Hono): void {
       userIdentifier: row.opaqueUserIdentifier,
       identifiers: {
         client: row.opaqueClientIdentifier,
-        server: `${env.API_BASE_URL}/v1`,
+        server: opaqueServerIdentity(env.API_BASE_URL),
       },
     });
 

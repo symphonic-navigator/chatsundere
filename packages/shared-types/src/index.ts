@@ -23,6 +23,8 @@ export type {
 
 export { JoinError } from './join.js';
 
+export { opaqueServerIdentity } from './opaque-identity.js';
+
 export type {
   JoinStartRequest,
   JoinStartResponse,

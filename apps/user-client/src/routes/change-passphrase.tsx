@@ -15,6 +15,7 @@ import {
   opaqueRegistrationStart,
   toBase64Url,
 } from '@chatsundere/crypto';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -174,7 +175,7 @@ export function ChangePassphrase() {
         // not a URL — both sides only need to agree on the same byte sequence,
         // so plain concatenation is correct here. Keep separate from joinUrl
         // (lib/fetch.ts), which is for actual HTTP request URLs.
-        const serverIdentity = `${baseUrl}/auth/v1`;
+        const serverIdentity = opaqueServerIdentity(baseUrl);
         const accessToken = session.accessToken ?? '';
         // Capture mk into a typed local so the async callback closes over a
         // narrowed MasterKey rather than re-reading the store mid-flight.

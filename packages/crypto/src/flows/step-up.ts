@@ -6,6 +6,7 @@ import type {
   StepUpStartResponse,
   StepUpTier,
 } from '@chatsundere/shared-types';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { getLinkedAccount } from '../db/linked-account.js';
 import { getLocalAccount } from '../db/local-account.js';
 import { toBase64Url } from '../encoding/base64url.js';
@@ -79,7 +80,7 @@ export interface StepUpWithPassphraseArgs {
  * Step-up Mechanism B (ADR 0027): a fresh OPAQUE round on the existing
  * session. No username crosses the wire — the server binds the round to the
  * bearer; the client identifiers mirror login-online-linked exactly
- * (local_account.username + `${base_url}/auth/v1`).
+ * (local_account.username + opaqueServerIdentity(base_url)).
  */
 export async function stepUpWithPassphrase(
   args: StepUpWithPassphraseArgs,
@@ -87,7 +88,7 @@ export async function stepUpWithPassphrase(
   const linked = await getLinkedAccount(args.db);
   const local = await getLocalAccount(args.db);
   if (!linked || !local) return 'failed';
-  const serverIdentity = `${linked.base_url}/auth/v1`;
+  const serverIdentity = opaqueServerIdentity(linked.base_url);
 
   try {
     const { clientLoginState, startLoginRequest } = await opaqueLoginStart(args.passphrase);

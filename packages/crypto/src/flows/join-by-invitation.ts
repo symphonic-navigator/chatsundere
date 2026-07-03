@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { deriveLocalAmk, deriveOpaqueAmk, deriveRecoveryAmk } from '../amk.js';
 import { putLocalAndLinkedAccount } from '../db/account-pair.js';
 import type { LinkedAccountRow, LocalAccountRow } from '../db/schema.js';
@@ -147,7 +148,7 @@ export async function startJoinByInvitation(
 export async function finishJoinByInvitation(
   args: FinishJoinByInvitationArgs,
 ): Promise<FinishJoinByInvitationResult> {
-  const serverId = `${args.baseUrl}/auth/v1`;
+  const serverId = opaqueServerIdentity(args.baseUrl);
 
   // --- Generate fresh key material -------------------------------------------
   const mk = asMasterKey(getRandomBytes(32));

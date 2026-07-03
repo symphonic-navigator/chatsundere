@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { getLinkedAccount } from '../db/linked-account.js';
 import { getLocalAccount, requireLocalAccount } from '../db/local-account.js';
 import { toBase64Url } from '../encoding/base64url.js';
@@ -163,14 +164,17 @@ async function reflect<T>(p: Promise<T>): Promise<ReflectOk<T> | ReflectErr> {
   }
 }
 
-/** Returns true if the error looks like a 401 HTTP response. */
+/**
+ * Returns true for a genuine authentication failure: a server 401, or a
+ * client-side OPAQUE credential rejection (`wrong_passphrase`). The latter
+ * carries no HTTP status, so without the code check it would fall through to a
+ * misleading `unreachable` outcome ("Could not reach the server") instead of
+ * `auth_failed` ("wrong passphrase").
+ */
 function isAuthFailure(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'status' in error &&
-    (error as { status: unknown }).status === 401
-  );
+  if (typeof error !== 'object' || error === null) return false;
+  const e = error as { status?: unknown; code?: unknown };
+  return e.status === 401 || e.code === 'wrong_passphrase';
 }
 
 function classifyServerOutcome(
@@ -188,7 +192,7 @@ async function runServerLogin(
   username: string,
   baseUrl: string,
 ): Promise<{ accessToken: string; role: 'primary_admin' | 'admin' | 'user' } | null> {
-  const serverId = `${baseUrl}/auth/v1`;
+  const serverId = opaqueServerIdentity(baseUrl);
 
   const { clientLoginState, startLoginRequest } = await opaqueLoginStart(args.passphrase);
 

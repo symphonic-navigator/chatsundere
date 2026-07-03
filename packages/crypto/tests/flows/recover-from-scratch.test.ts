@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import {
   client as opaqueClient,
   ready as opaqueReady,
@@ -28,7 +29,7 @@ const BASE_URL = 'https://example.com/api';
 const PASSPHRASE = 'correct horse battery staple';
 const NEW_PASSPHRASE = 'new passphrase for fresh device';
 const USERNAME = 'alice';
-const SERVER_ID = `${BASE_URL}/auth/v1`;
+const SERVER_ID = opaqueServerIdentity(BASE_URL);
 
 // ---------------------------------------------------------------------------
 // OPAQUE server-side simulation helpers

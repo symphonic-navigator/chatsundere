@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { deriveOpaqueAmk, deriveRecoveryAmk } from '../amk.js';
 import { putLinkedAccount } from '../db/linked-account.js';
 import { getLocalAccount, putLocalAccount, requireLocalAccount } from '../db/local-account.js';
@@ -56,7 +57,7 @@ export interface RecoveryOnlineArgs {
  *   8. Client persists updated linked_account and local_account rows.
  */
 export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<void> {
-  const serverId = `${args.baseUrl}/auth/v1`;
+  const serverId = opaqueServerIdentity(args.baseUrl);
   const rk = decodeRecoveryKey(args.recoveryKeyString);
 
   // Step 1 — start fresh OPAQUE registration for the new passphrase.

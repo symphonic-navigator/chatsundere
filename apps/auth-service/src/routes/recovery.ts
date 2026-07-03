@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { server as opaqueServer } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
@@ -149,7 +150,7 @@ export function registerRecoveryRoutes(app: Hono): void {
       ['verify'],
     );
     const env = loadEnv();
-    const serverId = `${env.API_BASE_URL}/v1`;
+    const serverId = opaqueServerIdentity(env.API_BASE_URL);
     const message = concat(
       nonceBytes,
       new TextEncoder().encode(body.username),

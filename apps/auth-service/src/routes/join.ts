@@ -2,6 +2,7 @@
 
 import { unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { server as opaqueServer } from '@serenity-kit/opaque';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
@@ -179,7 +180,7 @@ export function registerJoinRoutes(app: Hono): void {
       userIdentifier: owner.opaqueUserIdentifier,
       identifiers: {
         client: owner.opaqueClientIdentifier,
-        server: `${env.API_BASE_URL}/v1`,
+        server: opaqueServerIdentity(env.API_BASE_URL),
       },
     });
 
