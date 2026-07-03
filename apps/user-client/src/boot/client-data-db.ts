@@ -572,6 +572,12 @@ export interface SyncStateRow {
   lastSyncAt: number | null;
   pulling: { pages: number; startedAt: number } | null;
   attention: SyncAttention | null;
+  /** §3.1 — set by the late-link path; the worker hands off to the backfill pump. */
+  backfillPending?: boolean;
+  /** §3.7 — one-off snapshot of rows to upload, counted at first pump run. */
+  backfillTotal?: number | null;
+  /** §3.7 — rows enqueued-and-drained so far. */
+  backfillDone?: number | null;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */

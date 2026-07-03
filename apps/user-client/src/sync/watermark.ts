@@ -19,6 +19,9 @@ function defaultState(): SyncStateRow {
     lastSyncAt: null,
     pulling: null,
     attention: null,
+    backfillPending: false,
+    backfillTotal: null,
+    backfillDone: null,
   };
 }
 
