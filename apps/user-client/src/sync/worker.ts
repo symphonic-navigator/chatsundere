@@ -269,7 +269,9 @@ export async function drainOutbox(): Promise<DrainResult> {
   const syncUrl = effectiveSyncUrl();
   if (!mk || !syncUrl) return emptyDrain();
 
-  const outbox = await db.syncOutbox.orderBy('seq').toArray();
+  // Terminally-refused entries (§3.4) never re-enter a drain phase: excluded
+  // right after the read so they can neither hot-loop nor wedge the drain.
+  const outbox = (await db.syncOutbox.orderBy('seq').toArray()).filter((r) => r.terminal !== true);
   if (outbox.length === 0) return emptyDrain();
 
   resetBlobRepairCycle();
@@ -371,6 +373,7 @@ export async function drainOutbox(): Promise<DrainResult> {
         } else if (result.status === 'tombstoned') {
           await applyTombstoned(prep);
         } else {
+          if (result.code === 'record_too_large') await markTerminal(prep);
           await applyError(result);
         }
       }
@@ -488,6 +491,19 @@ function defaultPush(syncUrl: string, records: SyncPushRecord[]): Promise<SyncPu
 }
 
 /**
+ * §3.4 terminal disposition: a `record_too_large` refusal is permanent for
+ * this payload — mark the covered outbox entries so they stop draining. The
+ * attention state (raised by `applyError`) names the condition; a later
+ * smaller edit enqueues afresh and `applyOk` sweeps the sentinel.
+ */
+async function markTerminal(prep: PreparedRecord): Promise<void> {
+  const db = getClientDataDb();
+  for (const seq of prep.seqs) {
+    await db.syncOutbox.update(seq, { terminal: true as const });
+  }
+}
+
+/**
  * `ok`: adopt the server rev. An upsert records the LOCALLY-computed ciphertext
  * hash for the §7.0 echo shortcut; a delete removes the now-dead `syncRows`
  * entry. Either way the covered outbox seqs are cleared.
@@ -507,6 +523,13 @@ async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
       await db.syncRows.put(meta);
     }
     await db.syncOutbox.bulkDelete(prep.seqs);
+    // §3.4: a later smaller edit that acks clears any lingering terminal sentinel
+    // for this key. Only terminal rows — a racing live-edit's entry must survive.
+    await db.syncOutbox
+      .where('[collection+key]')
+      .equals([prep.collection, prep.key])
+      .and((r) => r.terminal === true)
+      .delete();
   });
 }
 

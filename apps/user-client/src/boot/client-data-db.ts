@@ -553,6 +553,13 @@ export interface SyncOutboxRow {
   /** WS-D §5 — set for `blob-put`/`blob-delete` only; the blob the op acts on. */
   blobId?: string;
   enqueuedAt: number;
+  /**
+   * Backfill spec §3.4 (Larissa L-6): the server refused this record terminally
+   * (`record_too_large`). Excluded from every drain phase and from the backfill
+   * remainder, so a doomed record can neither hot-loop nor wedge completion.
+   * Swept by `applyOk` when a later (smaller) edit of the same key lands.
+   */
+  terminal?: true;
 }
 
 /** Per-row CAS metadata: the last server rev seen and the locally computed
