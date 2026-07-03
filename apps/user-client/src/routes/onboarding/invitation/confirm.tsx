@@ -113,6 +113,25 @@ function InvitationConfirmInner() {
   const localMk = useSessionStore((s) => s.mk);
   const isLateLink = !!localSession && !!localMk;
 
+  // Replace-link guard: an unlocked device that already carries a linked account
+  // must not silently re-point when a new invitation is opened. Read the current
+  // link on mount so we can interpose an explicit acknowledgement naming both
+  // servers before the normal late-link form.
+  const [existingLink, setExistingLink] = useState<Awaited<
+    ReturnType<typeof getLinkedAccount>
+  > | null>(null);
+  const [replaceAcknowledged, setReplaceAcknowledged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getLinkedAccount(getDb()).then((row) => {
+      if (!cancelled) setExistingLink(row);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ── Submit ────────────────────────────────────────────────────────────────────
 
   async function handleContinue() {
@@ -259,6 +278,36 @@ function InvitationConfirmInner() {
         >
           Try again
         </Link>
+      </main>
+    );
+  }
+
+  // Replace-link acknowledgement: an unlocked device with an existing link opening
+  // a new invitation must confirm the re-point before the late-link form appears.
+  if (isLateLink && existingLink && !replaceAcknowledged) {
+    return (
+      <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
+        <Link
+          to={navTarget('/onboarding/invitation')}
+          className="text-2xl text-paper-soft"
+          aria-label="Back"
+        >
+          ←
+        </Link>
+        <h1 className="mt-4 font-display text-2xl italic">Replace this device's server?</h1>
+        <p className="mt-2 text-sm text-paper-soft">
+          This device is currently connected to{' '}
+          <span className="font-mono">{existingLink.base_url}</span>. Connecting to{' '}
+          <span className="font-mono">{storeCtx.baseUrl}</span> replaces that link and uploads your
+          data there instead. Your local data is not touched.
+        </p>
+        <button
+          type="button"
+          onClick={() => setReplaceAcknowledged(true)}
+          className="mt-6 w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+        >
+          Replace and connect →
+        </button>
       </main>
     );
   }
