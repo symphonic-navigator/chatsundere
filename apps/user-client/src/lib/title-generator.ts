@@ -70,8 +70,6 @@ export interface TitleGenArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
   firstUserMessage: string;
   firstPersonaResponse: string;
@@ -120,8 +118,6 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
       provider: args.provider,
       providerConfig: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       target: offeringToTarget(args.offering),
       messages,
       // Reasoning off: a title needs none, and on reasoning-capable models it

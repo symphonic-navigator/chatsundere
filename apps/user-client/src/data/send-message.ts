@@ -34,6 +34,7 @@ import { buildLoreContext } from '../knowledge/lore-context.js';
 import { KNOWLEDGE_LORE_OPTS } from '../knowledge/lore.js';
 import { isContextMessage } from '../lib/content-blocks.js';
 import { thumbnailFromBlob } from '../lib/image-thumbnail.js';
+import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { type ResolvedExpertWeb, resolveExpertWeb } from '../lib/resolve-expert-web.js';
 import { openSecret } from '../lib/secrets.js';
@@ -97,8 +98,6 @@ interface PersonaContext {
   providerDef: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
   globalInstructions: string;
   globalAboutMe: string;
@@ -115,7 +114,8 @@ interface PersonaContext {
 
 /**
  * Resolve the persona → provider → ProviderDefinition → Offering chain for a
- * chat and decrypt its api-key + (optional) CORS-proxy key via the master key.
+ * chat and decrypt its api-key via the master key. Proxy routing, when needed,
+ * is late-bound at request-build time from the registered proxy auth source.
  * Shared by useSendMessage and useRegenerate. `who` prefixes error messages so
  * the originating hook is identifiable.
  */
@@ -146,13 +146,9 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     );
 
   const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
-  const corsProxyUrl = settings.corsProxy?.url ?? null;
-  const corsProxyKey = settings.corsProxy
-    ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
-    : null;
 
   const allProviders = await db.providers.toArray();
-  const hasProxy = settings.corsProxy != null;
+  const hasProxy = isProxyAvailable();
   const webOptions = webBackendOptions(usableTemplateIds(allProviders, hasProxy), hasProxy);
   const webInterfacing = {
     search: resolveWebBackend(settings.webInterfacing?.search ?? null, webOptions, 'search'),
@@ -161,34 +157,24 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
 
   const knowledge = await buildKnowledgeContext(persona, chat);
 
-  const expert = await resolveExpert(settings.expertModel ?? null, mk, corsProxyUrl, corsProxyKey);
+  const expert = await resolveExpert(settings.expertModel ?? null, mk);
 
   const expertWeb = settings.expertModel
     ? resolveExpertWeb({
         expertWeb: settings.expertWeb ?? { search: null, fetch: null, searchTierId: null },
         options: webOptions,
         nsfwAllowed: persona.adultPersona,
-        corsProxyUrl,
-        corsProxyKey,
+        useProxy: hasProxy,
       })
     : null;
 
-  const images = await resolveImageGeneration(
-    settings,
-    persona,
-    chatId,
-    mk,
-    corsProxyUrl,
-    corsProxyKey,
-  );
+  const images = await resolveImageGeneration(settings, persona, chatId, mk);
 
   const mcpServers = await db.mcpServers.toArray();
   const mcp = buildMcpContext({
     servers: mcpServers,
     overrides: persona.mcpOverrides ?? {},
     hasProxy,
-    corsProxyUrl,
-    corsProxyKey,
     mk,
     requestApproval: (req) => useMcpApprovalStore.getState().request(req),
   });
@@ -203,8 +189,6 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
         providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
     },
     apiKey,
-    corsProxyUrl,
-    corsProxyKey,
     offering,
     globalInstructions: settings.globalInstructions,
     globalAboutMe: settings.globalAboutMe,
@@ -228,7 +212,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
  * Resolve the global substitute-vision model (`settings.substituteVisionModel`,
  * a "providerTemplateId:upstreamSlug" ref) into a one-shot call context: its
  * ProviderDefinition, decrypted api-key (via the MasterKey, same path as the
- * active model), the shared CORS proxy, and the completion target. Returns
+ * active model), and the completion target. Returns
  * `null` when no substitute is configured or it cannot be resolved (no enabled
  * provider row / unknown offering) — the send then falls back to placeholders.
  *
@@ -238,8 +222,6 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
 async function resolveSubstituteVision(
   ref: string | null,
   mk: MasterKey,
-  corsProxyUrl: string | null,
-  corsProxyKey: string | null,
 ): Promise<Omit<OneShotArgs, 'messages' | 'bodyExtras'> | null> {
   if (!ref) return null;
   const idx = ref.indexOf(':');
@@ -275,8 +257,6 @@ async function resolveSubstituteVision(
         providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
     },
     apiKey,
-    corsProxyUrl,
-    corsProxyKey,
     target: offeringToTarget(offering),
   };
 }
@@ -295,8 +275,6 @@ interface ResolvedImageSlot {
 async function resolveImageSlot(
   stored: { ref: string; config: ImageModelConfig } | null,
   mk: MasterKey,
-  corsProxyUrl: string | null,
-  corsProxyKey: string | null,
 ): Promise<ResolvedImageSlot | null> {
   if (!stored) return null;
   const idx = stored.ref.indexOf(':');
@@ -337,8 +315,6 @@ async function resolveImageSlot(
           providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
       },
       apiKey,
-      corsProxyUrl,
-      corsProxyKey,
     },
   };
 }
@@ -350,21 +326,9 @@ async function resolveImageGeneration(
   persona: PersonaRow,
   chatId: string,
   mk: MasterKey,
-  corsProxyUrl: string | null,
-  corsProxyKey: string | null,
 ): Promise<ImageToolContext> {
-  const primary = await resolveImageSlot(
-    settings?.imageGeneration?.primary ?? null,
-    mk,
-    corsProxyUrl,
-    corsProxyKey,
-  );
-  const nsfw = await resolveImageSlot(
-    settings?.imageGeneration?.nsfw ?? null,
-    mk,
-    corsProxyUrl,
-    corsProxyKey,
-  );
+  const primary = await resolveImageSlot(settings?.imageGeneration?.primary ?? null, mk);
+  const nsfw = await resolveImageSlot(settings?.imageGeneration?.nsfw ?? null, mk);
 
   const baseByRef = new Map<string, ImageRequestBase>();
   if (primary) baseByRef.set(primary.slot.ref, primary.base);
@@ -423,8 +387,6 @@ async function resolveImageGeneration(
 export async function resolveExpert(
   ref: string | null,
   mk: MasterKey,
-  corsProxyUrl: string | null,
-  corsProxyKey: string | null,
 ): Promise<{ base: ExpertBase; modelLabel: string; reasoning: ReasoningIntent } | null> {
   if (!ref) return null;
   const idx = ref.indexOf(':');
@@ -462,8 +424,6 @@ export async function resolveExpert(
           providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
       },
       apiKey,
-      corsProxyUrl,
-      corsProxyKey,
       target: offeringToTarget(offering),
     },
     modelLabel,
@@ -498,8 +458,6 @@ export function useStartOpener() {
         provider: ctx.providerDef,
         providerConfig: ctx.providerConfig,
         apiKey: ctx.apiKey,
-        corsProxyUrl: ctx.corsProxyUrl,
-        corsProxyKey: ctx.corsProxyKey,
         offering: ctx.offering,
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
@@ -533,8 +491,8 @@ export interface SendMessageArgs {
  * 1. For lazy chats (`chatId === null`): create the ChatRow, snapshotting the
  *    persona's mindspace at the time of first send.
  * 2. Resolve the persona → provider → ProviderDefinition → Offering chain.
- * 3. Decrypt the api-key and (if configured) the CORS-proxy shared key via
- *    `openSecret` using the master key held in `useSessionStore`.
+ * 3. Decrypt the api-key via `openSecret` using the master key held in
+ *    `useSessionStore`.
  * 4. Delegate to `useStreamManagerStore.start(...)` for the actual streaming.
  * 5. Return the `chatId` (useful for the lazy-chat navigation redirect).
  *
@@ -586,12 +544,7 @@ export function useSendMessage() {
       // store can route images through it when the active model cannot see them.
       const settings = await db.settings.get(1);
       const substituteVisionModel = settings?.substituteVisionModel ?? null;
-      const substituteOneShotBase = await resolveSubstituteVision(
-        substituteVisionModel,
-        mk,
-        ctx.corsProxyUrl,
-        ctx.corsProxyKey,
-      );
+      const substituteOneShotBase = await resolveSubstituteVision(substituteVisionModel, mk);
 
       const recentPersonaIds = priorMessages
         .filter((m) => m.role === 'persona' && isContextMessage(m))
@@ -619,8 +572,6 @@ export function useSendMessage() {
         // stores templateId, apiKey and the enabled flag authoritatively).
         providerConfig: ctx.providerConfig,
         apiKey: ctx.apiKey,
-        corsProxyUrl: ctx.corsProxyUrl,
-        corsProxyKey: ctx.corsProxyKey,
         offering: ctx.offering,
         priorMessages,
         userMessageText: args.text,
@@ -706,8 +657,6 @@ export function useRegenerate() {
           provider: ctx.providerDef,
           providerConfig: ctx.providerConfig,
           apiKey: ctx.apiKey,
-          corsProxyUrl: ctx.corsProxyUrl,
-          corsProxyKey: ctx.corsProxyKey,
           offering: ctx.offering,
           reasoning: args.reasoning,
           globalInstructions: ctx.globalInstructions,
@@ -764,8 +713,6 @@ export function useRegenerate() {
         provider: ctx.providerDef,
         providerConfig: ctx.providerConfig,
         apiKey: ctx.apiKey,
-        corsProxyUrl: ctx.corsProxyUrl,
-        corsProxyKey: ctx.corsProxyKey,
         offering: ctx.offering,
         priorMessages,
         userMessageText,

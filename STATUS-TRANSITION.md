@@ -136,6 +136,28 @@ in `superpowers/`.
 
 ## 6. Doing now
 
+- **WS-A (proxy client) BUILT on branch `claude/01-ws-a-proxy-client`** (cut from
+  `full-backend-transition`) — plan `superpowers/plans/2026-07-02-ws-a-proxy-client.md`,
+  all 8 tasks green TDD-style. llm-unified: `ProxyAuthSource` late-binding seam,
+  transport swap (`x-chatsundere-authorization` account JWT + `x-cors-proxy-target`,
+  `redirect: 'manual'`), `fetchWithProxyAuth` (single 401-refresh + opaque-redirect →
+  terminal `ProxyRedirectError`) and `withStreamingRetry.onUnauthorised`. user-client:
+  boot-registered `proxyAuthSource`/`isProxyAvailable`, corsProxy threading retired
+  across the send path (`WebContext`/`IntegrationContext` → a single `useProxy`),
+  gate-driven availability (`useServerGate('proxy')`/`isProxyAvailable`), MCP proxy
+  swap, and `CorsProxyBlock` collapsed into read-only `ServerRelayStatus`. Verification
+  battery: `pnpm typecheck --force` **14/14** (0 cached); llm-unified `bun test` **420
+  pass**; ui-shared **68**; user-client vitest **2253 pass / 0 fail** (clean end of the
+  0/8 baseline); admin-client 40 pass / 2 pre-existing env-parse baseline failures
+  (untouched, no llm-unified import — missing `.env` in the container); `pnpm build`
+  **9/9**; Biome clean. Retirement greps: production code carries no
+  `corsProxyUrl`/`corsProxyKey`/`x-cors-proxy-api-key`/`VITE_PROXY_URL` (residuals are
+  deliberate negative test guards + the unrelated pre-existing admin `VITE_PROXY_URL`).
+  Attach-scope invariant holds — the account JWT is attached at exactly two sites
+  (llm-unified transport cors-proxy branch + `mcp-client.ts` proxy branch), both
+  null-guarded, redacted from diagnostics. **Awaiting Larissa (light audit of the
+  token-attach path) + Laura (pre-squash on the relay-status/provider surfaces) +
+  Chris's spec §11 manual verification;** PR to `full-backend-transition`.
 - **WS-E (step-up vertical) + WS-B (onboarding un-gate) BUILT on a branch cut
   from `full-backend-transition`** — spec
   `superpowers/specs/2026-07-02-ws-b-e-onboarding-and-step-up-design.md` (v2,
@@ -170,8 +192,11 @@ in `superpowers/`.
 2. **WS-B + WS-E** (onboarding un-gate + step-up) — ✅ built on the branch,
    awaiting Larissa + Laura audits and squash; produces linked accounts to
    exercise the rest.
-3. **WS-A** proxy client — the next spec session.
-4. **WS-C** sync engine (its own multi-step effort; Larissa + Laura).
+3. **WS-A** proxy client — ✅ built on `claude/01-ws-a-proxy-client`, green on the
+   branch, awaiting Larissa + Laura audits and Chris's device-verify; PR open to
+   `full-backend-transition`.
+4. **WS-C** sync engine (its own multi-step effort; Larissa + Laura) — next, cut
+   from the WS-A branch tip (shares send-path files with A).
 5. **WS-D** blob client (rides on C; the deferrable tail).
 6. Turnkey gate → merge to master → hand off to the separate go-live event.
 - **WS-B + WS-E BUILDING remotely** — spec

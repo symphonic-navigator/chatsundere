@@ -26,8 +26,7 @@ function toWebContext(ctx: IntegrationContext): WebContext {
   return {
     nsfwAllowed: ctx.nsfwAllowed,
     location: ctx.location,
-    corsProxyUrl: ctx.corsProxyUrl,
-    corsProxyKey: ctx.corsProxyKey,
+    useProxy: ctx.useProxy,
   };
 }
 
@@ -38,7 +37,7 @@ export function createWebIntegration(deps: WebIntegrationDeps): Integration {
     if (!ref) return null;
     const offering = deps.getOffering(ref.providerId, ref.upstreamSlug);
     if (!offering || offering.serviceKind !== 'web' || !offering.web) return null;
-    if (offering.web.requiresProxy && !ctx.corsProxyUrl) return null;
+    if (offering.web.requiresProxy && !ctx.useProxy) return null;
     if (offering.adapter.kind !== 'catalogue') return null;
     const provider = deps.resolveWebAdapter(offering.adapter.adapterId);
     return provider ? { offering, provider } : null;

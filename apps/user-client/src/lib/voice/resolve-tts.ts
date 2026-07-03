@@ -32,8 +32,6 @@ export type TtsResolution =
 export interface TtsTransport {
   providerConfig: { baseUrl: string; routing: { kind: 'direct' } | { kind: 'cors-proxy' } };
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
   /** Full TTS metadata — always present when TtsTransport is returned. */
   ttsMeta: TtsOfferingMeta;
@@ -58,12 +56,7 @@ export async function resolveTtsTransport(): Promise<TtsTransport | null> {
   const ttsMeta = offering.tts;
   if (!ttsMeta) return null;
 
-  const material = await resolveVoiceTransportMaterial(
-    selected,
-    providerRows,
-    settings,
-    'resolveTts',
-  );
+  const material = await resolveVoiceTransportMaterial(selected, providerRows, 'resolveTts');
   if (!material) return null;
 
   return { ...material, offering, ttsMeta };
@@ -81,7 +74,7 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
     return { ok: false, reason: 'no-provider' };
   }
 
-  const { providerConfig, apiKey, corsProxyUrl, corsProxyKey, offering, ttsMeta } = transport;
+  const { providerConfig, apiKey, offering, ttsMeta } = transport;
 
   // Check voice configuration AFTER provider resolution, so provider problems surface first.
   if (!persona.voice) {
@@ -141,8 +134,6 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
         const result = await synthesiseSpeech({
           providerConfig,
           apiKey,
-          corsProxyUrl,
-          corsProxyKey,
           upstreamSlug,
           teal: ttsMeta.teal,
           transport: ttsMeta.transport,

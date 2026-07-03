@@ -10,8 +10,6 @@ export interface BuildMcpContextArgs {
   servers: McpServerRow[];
   overrides: Record<string, 'on' | 'off'>;
   hasProxy: boolean;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   mk: MasterKey | null;
   requestApproval: McpToolContext['requestApproval'];
 }
@@ -47,8 +45,6 @@ export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | nul
 
   return {
     servers,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     getServerKey: async (serverId) => {
       const row = byId.get(serverId);
       if (!row || !args.mk) return null;

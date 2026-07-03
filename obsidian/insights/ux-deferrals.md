@@ -332,3 +332,29 @@ line rather than a silent absorb.
      report friction setting per-server defaults; otherwise the depth stands.
    - Chris sign-off: ✅ Chris, 2026-06-25 — accepted the deferral at spec review
      (set-once default seed; live lever is the per-persona override section).
+
+## 2026-07-02 — Model picker folds ungated proxy providers into the anonymous hidden-count (WS-A spec §10)
+
+- **Affected flow / surface:** The model picker (`ModelPickerOverlay`) and any
+  provider-model list that hides offerings whose provider needs the relay when the
+  proxy gate is disabled (local-only / offline / server without the `proxy`
+  feature).
+- **Finding (Laura's summary):** A model whose provider is `requires-proxy` and
+  currently ungated is counted into the picker's anonymous `hiddenCount` alongside
+  NSFW-filtered and otherwise-unavailable models, rather than being surfaced as a
+  distinct, actionable "needs a linked account / relay" bucket the user could act on.
+- **Mode:** spec-pass.
+- **Criterion:** Disabled-over-hidden / "name the destination"; a hidden capability
+  the user could unlock is not individually reachable.
+- **Rationale for deferral:** The relay-availability story already has a first-class,
+  reachable home — `ServerRelayStatus` on the provider settings surface and the
+  gate-driven provider status copy both name the "link an account" next step. The
+  model picker's anonymous count is an acceptable interim: no function is
+  *unreachable*, only its per-model reason is generic at the picker altitude. A
+  dedicated "needs linking" model bucket is additive polish, not a hard defect.
+- **Follow-up commitment:** Revisit when the sync/blob workstreams land the fuller
+  linked-account UX; if alpha testers with local-only installs report confusion
+  about missing models, promote the bucket to a distinct, tappable picker row that
+  routes to server linking. Otherwise the anonymous count stands.
+- **Chris sign-off:** Not a blocking hard defect — logged per the spec §10 mandate;
+  no sign-off required.

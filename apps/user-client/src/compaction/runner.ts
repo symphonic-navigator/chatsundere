@@ -36,8 +36,6 @@ export interface CompactionArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
   trigger: 'manual' | 'auto' | 'overflow';
 }
@@ -63,8 +61,6 @@ async function summarise(args: CompactionArgs, transcript: string): Promise<stri
       provider: args.provider,
       providerConfig: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       target: offeringToTarget(args.offering),
       messages: [
         { role: 'system', content: system },
@@ -84,8 +80,6 @@ async function summarise(args: CompactionArgs, transcript: string): Promise<stri
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     target: offeringToTarget(args.offering),
     messages: [
       { role: 'system', content: COMPACTION_SYSTEM_PROMPT + COMPACTION_RETRY_REMINDER },

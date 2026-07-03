@@ -10,8 +10,7 @@ import { buildWebTools } from '../../src/integrations/web/build-web-tools.js';
 const ctx: WebContext = {
   nsfwAllowed: true,
   location: null,
-  corsProxyUrl: 'p',
-  corsProxyKey: null,
+  useProxy: true,
 };
 
 const searchProvider: WebInterfacingProvider = {

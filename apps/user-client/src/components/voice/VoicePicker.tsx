@@ -31,8 +31,6 @@ async function fetchVoices(retry = false): Promise<TtsVoice[]> {
     promise = listTtsVoices({
       providerConfig: transport.providerConfig,
       apiKey: transport.apiKey,
-      corsProxyUrl: transport.corsProxyUrl,
-      corsProxyKey: transport.corsProxyKey,
       endpoint: meta.voices.endpoint,
       signal: AbortSignal.timeout(15_000),
     });

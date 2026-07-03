@@ -33,9 +33,6 @@ export async function resolveMemoryPipelineArgs(
   const provider = await db.providers.get(persona.providerId);
   if (!provider) throw new Error(`${who}: provider not found`);
 
-  const settings = await db.settings.get(1);
-  if (!settings) throw new Error(`${who}: settings row missing`);
-
   const providerDef = getProvider(provider.templateId);
   if (!providerDef) throw new Error(`${who}: unknown provider template "${provider.templateId}"`);
 
@@ -46,10 +43,6 @@ export async function resolveMemoryPipelineArgs(
     );
 
   const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
-  const corsProxyUrl = settings.corsProxy?.url ?? null;
-  const corsProxyKey = settings.corsProxy
-    ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
-    : null;
 
   return {
     persona,
@@ -61,8 +54,6 @@ export async function resolveMemoryPipelineArgs(
         providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
     },
     apiKey,
-    corsProxyUrl,
-    corsProxyKey,
     offering,
   };
 }

@@ -19,8 +19,8 @@ vi.mock('../../src/data/mcp-servers.js', () => ({
   sealMcpKey: vi.fn(async () => ({ blob: 'sealed' })),
   openMcpKey: vi.fn(async () => 'plain'),
 }));
-vi.mock('../../src/data/settings.js', () => ({
-  useSettings: () => ({ data: { corsProxy: null } }),
+vi.mock('../../src/lib/server-gate.js', () => ({
+  useServerGate: () => ({ enabled: true, reason: null, tooltip: null }),
 }));
 vi.mock('../../src/content/help/use-help.js', () => ({
   useHelp: () => ({ onHelp: vi.fn(), helpOverlay: null }),

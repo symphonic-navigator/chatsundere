@@ -43,8 +43,6 @@ describe('probeProvider', () => {
       definition: novitaDef,
       config: novitaCfg,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       fetchFn,
     });
     expect(result.ok).toBe(true);
@@ -61,8 +59,6 @@ describe('probeProvider', () => {
       definition: novitaDef,
       config: novitaCfg,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       fetchFn,
     });
     expect(result.ok).toBe(true);
@@ -75,8 +71,6 @@ describe('probeProvider', () => {
       definition: novitaDef,
       config: novitaCfg,
       apiKey: 'wrong',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       fetchFn,
     });
     expect(result.ok).toBe(false);
@@ -92,8 +86,6 @@ describe('probeProvider', () => {
       definition: novitaDef,
       config: novitaCfg,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       fetchFn,
     });
     expect(result.ok).toBe(false);

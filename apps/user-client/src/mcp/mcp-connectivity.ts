@@ -52,10 +52,10 @@ export async function resolveConnection(
  * Security note: `auth` is sent on EVERY probe candidate. All candidates target
  * the same user-entered origin, so credential egress is bounded to that origin.
  * A future maintainer who introduces a third-party fallback candidate MUST NOT
- * reuse this probe as-is — doing so would widen credential egress.
+ * reuse this probe as-is — doing so would widen credential egress. Proxy routing
+ * is late-bound: `mcp-client` reads the account proxy at request-build time.
  */
 export function liveProbe(
-  corsProxy: { url: string; key: string } | null,
   auth: McpAuthResolved | null,
 ): (c: McpCandidate) => Promise<McpProbeResult> {
   return async (c) => {
@@ -63,7 +63,6 @@ export function liveProbe(
       const tools = await mcpToolsList({
         url: c.url,
         routing: c.routing,
-        corsProxy: c.routing === 'proxy' ? corsProxy : null,
         auth,
       });
       return { ok: true, tools, error: null };
@@ -78,11 +77,10 @@ export async function testMcpConnection(input: {
   url: string;
   hasProxy: boolean;
   allowDirect: boolean;
-  corsProxy: { url: string; key: string } | null;
   auth: McpAuthResolved | null;
 }): Promise<McpConnectionResult> {
   return resolveConnection(
     buildCandidates(input.url, input.hasProxy, input.allowDirect),
-    liveProbe(input.corsProxy, input.auth),
+    liveProbe(input.auth),
   );
 }

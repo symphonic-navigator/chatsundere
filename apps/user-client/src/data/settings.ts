@@ -3,7 +3,6 @@
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type SettingsRow, getClientDataDb } from '../boot/client-data-db.js';
-import { CORS_PROXY_URL } from '../lib/cors-proxy.js';
 import { QK } from './queryKeys.js';
 
 /** Read the singleton settings row (id = 1). Throws if the seed has not run. */
@@ -14,10 +13,6 @@ export function useSettings() {
       const db = getClientDataDb();
       const row = await db.settings.get(1);
       if (!row) throw new Error('settings singleton missing — seed should have run');
-      // The proxy URL is fixed for the alpha (CorsProxyBlock no longer edits it).
-      // Coerce any pre-existing stored URL to the constant so every consumer
-      // reads the canonical endpoint; the sealed key is left untouched.
-      if (row.corsProxy) row.corsProxy = { ...row.corsProxy, url: CORS_PROXY_URL };
       return row;
     },
   });

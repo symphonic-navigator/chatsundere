@@ -48,6 +48,7 @@ import {
   modelBehaviourMeta,
   roleplayMeta,
 } from '../../../lib/persona-hub.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -84,6 +85,7 @@ export function PersonaHub(): JSX.Element {
   const chats = useChats();
   const mindspaces = useMindspaces();
   const settings = useSettings();
+  const hasProxy = useServerGate('proxy').enabled;
   const providers = useProviders();
   const qc = useQueryClient();
 
@@ -415,10 +417,7 @@ export function PersonaHub(): JSX.Element {
                 emptyLabel="Choose a model"
                 filter="all"
                 providers={providers.data ?? []}
-                configuredTemplateIds={usableTemplateIds(
-                  providers.data ?? [],
-                  !!settings.data?.corsProxy,
-                )}
+                configuredTemplateIds={usableTemplateIds(providers.data ?? [], hasProxy)}
                 current={currentModel}
                 onSelect={(sel) =>
                   void patch({

@@ -8,8 +8,7 @@ import { env } from '../env.js';
  * `import.meta.env.DEV`, so a production build can never pin a stale URL.
  */
 export function effectiveProxyUrl(): string | null {
-  const override = import.meta.env.DEV ? env.VITE_PROXY_URL : undefined;
-  return override ?? useDiscoveryStore.getState().config?.proxyUrl ?? null;
+  return useDiscoveryStore.getState().config?.proxyUrl ?? null;
 }
 
 export function effectiveSyncUrl(): string | null {

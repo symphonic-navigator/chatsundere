@@ -42,8 +42,6 @@ export interface MemoryPipelineArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
 }
 
@@ -61,8 +59,6 @@ async function callModel(
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     target: offeringToTarget(args.offering),
     messages,
     // Reasoning off: extraction/dreaming need the answer in `content`, not the

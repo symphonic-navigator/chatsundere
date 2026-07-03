@@ -26,7 +26,7 @@ describe('expert tool loop', () => {
         tierParams: {},
       },
       fetch: null,
-      ctx: { nsfwAllowed: true, location: null, corsProxyUrl: 'p', corsProxyKey: null },
+      ctx: { nsfwAllowed: true, location: null, useProxy: true },
       getKey: async () => 'k',
     });
 
@@ -85,7 +85,7 @@ describe('expert tool loop', () => {
         tierParams: {},
       },
       fetch: null,
-      ctx: { nsfwAllowed: true, location: null, corsProxyUrl: 'p', corsProxyKey: null },
+      ctx: { nsfwAllowed: true, location: null, useProxy: true },
       getKey: async () => 'k',
     });
     const tool = createAskExpertTool(base, 'm', { enabled: true }, true, streamFn, {

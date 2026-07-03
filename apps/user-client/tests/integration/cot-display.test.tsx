@@ -183,8 +183,6 @@ function startArgs(persona: PersonaRow, chat: ChatRow): Record<string, unknown> 
     provider: nanoGpt,
     providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } as const },
     apiKey: 'not-used-because-stream-is-mocked',
-    corsProxyUrl: null,
-    corsProxyKey: null,
     offering,
     priorMessages: [] as MessageRow[],
     userMessageText: 'Hello',

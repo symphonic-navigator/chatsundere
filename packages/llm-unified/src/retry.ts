@@ -168,6 +168,12 @@ export interface StreamingRetryOpts {
   onRetry?: OnRetry;
   /** Injectable sleep (tests). */
   sleepFn?: (ms: number) => Promise<void>;
+  /**
+   * Called on a 401, at most once per call. Return true after a successful
+   * token refresh — the loop retries immediately with a fresh request (which
+   * re-reads the auth source) without consuming a retry or backing off.
+   */
+  onUnauthorised?: () => Promise<boolean>;
 }
 
 /**
@@ -186,6 +192,7 @@ export async function withStreamingRetry(opts: StreamingRetryOpts): Promise<Resp
   const timeoutMs = opts.initialResponseTimeoutMs;
 
   let lastError: unknown = null;
+  let authRetried = false;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -229,6 +236,16 @@ export async function withStreamingRetry(opts: StreamingRetryOpts): Promise<Resp
       throw err;
     }
     if (timeoutId !== undefined) clearTimeout(timeoutId);
+
+    if (response.status === 401 && opts.onUnauthorised && !authRetried) {
+      authRetried = true;
+      const refreshed = await opts.onUnauthorised();
+      if (refreshed) {
+        await response.body?.cancel();
+        attempt -= 1; // the refreshed attempt does not consume a retry
+        continue;
+      }
+    }
 
     if (response.ok) return response;
     if (!shouldRetryStatus(response.status) || attempt >= maxRetries) return response;

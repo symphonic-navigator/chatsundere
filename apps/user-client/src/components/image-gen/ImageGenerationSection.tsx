@@ -8,6 +8,7 @@ import {
 } from '@chatsundere/llm-unified';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
+import { useServerGate } from '../../lib/server-gate.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
 import { TtiModelSelect } from './TtiModelSelect.js';
 import { ImageModelConfigView } from './config-views.js';
@@ -44,7 +45,8 @@ export function ImageGenerationSection(): JSX.Element {
   const update = useUpdateSettings();
   const { data: providerRows } = useProviders();
   const rows = providerRows ?? [];
-  const usable = usableTemplateIds(rows, !!settings?.corsProxy);
+  const hasProxy = useServerGate('proxy').enabled;
+  const usable = usableTemplateIds(rows, hasProxy);
 
   // Defensive: an older row may predate the v19 migration.
   const stored = settings?.imageGeneration ?? { primary: null, nsfw: null };

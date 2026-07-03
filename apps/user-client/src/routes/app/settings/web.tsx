@@ -6,6 +6,7 @@ import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { PickerField } from '../../../components/ui/PickerField.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { useUsableTemplateIds } from '../../../lib/usable-providers.js';
 import { webBackendOptions } from '../../../lib/web-backend-options.js';
 import { webBackendSummary } from '../../../lib/web-backend-summary.js';
@@ -20,7 +21,7 @@ export function SettingsWebPage(): JSX.Element {
   const triggerRef = useRef<HTMLElement | null>(null);
 
   const hasWeb = aggregateServiceKinds(usable).includes('web');
-  const hasProxy = settings.data?.corsProxy != null;
+  const hasProxy = useServerGate('proxy').enabled;
   const options = webBackendOptions(usable, hasProxy);
   const wi = settings.data?.webInterfacing ?? { search: null, fetch: null };
 

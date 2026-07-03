@@ -12,7 +12,5 @@ export interface SubagentBase {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   target: CompletionTarget;
 }

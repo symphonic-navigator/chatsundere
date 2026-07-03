@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { setProxyAuthSource } from './proxy-auth.js';
 import {
   type StreamDiagnosticsSink,
   buildRequest,
@@ -7,13 +8,15 @@ import {
   redactRequestHeaders,
 } from './transport.js';
 
+afterEach(() => setProxyAuthSource(null));
+
 describe('redactRequestHeaders', () => {
   test('drops secret-bearing headers entirely, keeps the rest', () => {
     const h = new Headers({
       Authorization: 'Bearer sk-supersecret',
       'x-api-key': 'sk-supersecret',
       'api-key': 'sk-supersecret',
-      'x-cors-proxy-api-key': 'proxy-secret',
+      'x-chatsundere-authorization': 'Bearer proxy-secret',
       'Content-Type': 'application/json',
       'x-cors-proxy-target': 'https://api.example.com',
     });
@@ -56,8 +59,6 @@ describe('buildRequest onDiagnostics', () => {
     buildRequest({
       provider: { baseUrl: 'https://api.example.com', routing: { kind: 'direct' } },
       apiKey: 'sk-supersecret',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: '/chat/completions',
       method: 'POST',
       body: { model: 'm', messages: [] },
@@ -69,7 +70,12 @@ describe('buildRequest onDiagnostics', () => {
     expect(JSON.stringify(seen[0]?.headers)).not.toContain('sk-supersecret');
   });
 
-  test('redacts the cors-proxy key but keeps the target on the proxy path', () => {
+  test('redacts the account token but keeps the target on the proxy path', () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy',
+      getToken: () => 'proxy-secret',
+      refreshToken: async () => null,
+    });
     const seen: { method: string; url: string; headers: Record<string, string> }[] = [];
     const sink: StreamDiagnosticsSink = {
       onRequest: (info) => seen.push(info),
@@ -78,8 +84,6 @@ describe('buildRequest onDiagnostics', () => {
     buildRequest({
       provider: { baseUrl: 'https://api.example.com', routing: { kind: 'cors-proxy' } },
       apiKey: 'sk-supersecret',
-      corsProxyUrl: 'https://proxy',
-      corsProxyKey: 'proxy-secret',
       path: '/chat/completions',
       method: 'POST',
       body: { model: 'm', messages: [] },
@@ -89,6 +93,6 @@ describe('buildRequest onDiagnostics', () => {
     expect(seen[0]?.headers['x-cors-proxy-target']).toBe('https://api.example.com');
     const serialised = JSON.stringify(seen[0]?.headers);
     expect(serialised).not.toContain('proxy-secret');
-    expect('x-cors-proxy-api-key' in (seen[0]?.headers ?? {})).toBe(false);
+    expect('x-chatsundere-authorization' in (seen[0]?.headers ?? {})).toBe(false);
   });
 });

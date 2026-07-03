@@ -14,12 +14,11 @@ interface WebSettings {
   fetch: OfferingRef | null;
 }
 
-/** Call-time routing metadata: CORS proxy coords and the cockpit-selected
- *  search tier. Assembled by the stream-manager from the decrypted LLM route
- *  and cockpit settings, then forwarded to the integration context. */
+/** Call-time routing metadata: whether proxy routing is available and the
+ *  cockpit-selected search tier. Assembled by the stream-manager from the
+ *  server gate and cockpit settings, then forwarded to the integration context. */
 export interface IntegrationRoute {
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
+  useProxy: boolean;
   webSearchTierId: string | null;
 }
 
@@ -50,8 +49,7 @@ export function buildIntegrationContext(
     location: null,
     webSearch: web.search,
     webFetch: web.fetch,
-    corsProxyUrl: route.corsProxyUrl,
-    corsProxyKey: route.corsProxyKey,
+    useProxy: route.useProxy,
     webSearchTierId: route.webSearchTierId,
     chatId: artefact.chatId,
     personaId: artefact.personaId,

@@ -62,8 +62,6 @@ describe('runCompaction', () => {
       provider: {} as never,
       providerConfig: {} as never,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       // Small window so the tail algorithm carves a source slice from the 20 messages.
       // 512-token window → tokenTarget=102; 12 tail messages × ~9 tokens ≈ 108 ≥ 102 → tailStart=8.
       // upstreamSlug + adapter are required by offeringToTarget (called inside runner).

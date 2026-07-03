@@ -32,8 +32,6 @@ export interface StartStreamArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
   priorMessages: MessageRow[];
   /** The active user turn content. Pass a plain string for text-only turns or a
@@ -143,8 +141,6 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     target: offeringToTarget(args.offering),
     messages: sentMessages,
     bodyExtras: extras,

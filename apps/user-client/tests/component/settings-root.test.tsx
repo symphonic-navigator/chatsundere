@@ -4,8 +4,8 @@ import { vi } from 'vitest';
 // ─── Module mocks (hoisted before static imports by Vitest) ───────────────────
 
 vi.mock('../../src/data/providers.js', () => ({ useProviders: () => ({ data: [] }) }));
-vi.mock('../../src/data/settings.js', () => ({
-  useSettings: () => ({ data: { corsProxy: null } }),
+vi.mock('../../src/lib/server-gate.js', () => ({
+  useServerGate: () => ({ enabled: false, reason: 'local-only', tooltip: null }),
 }));
 vi.mock('../../src/content/help/use-help.js', () => ({
   useHelp: vi.fn(() => ({ onHelp: vi.fn(), helpOverlay: null })),

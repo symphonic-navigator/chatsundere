@@ -115,8 +115,6 @@ export function createAskExpertTool(
             provider: base.provider,
             providerConfig: base.providerConfig,
             apiKey: base.apiKey,
-            corsProxyUrl: base.corsProxyUrl,
-            corsProxyKey: base.corsProxyKey,
             target: base.target,
             messages,
             bodyExtras: { reasoning },

@@ -213,8 +213,6 @@ export interface RunStreamingTestArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: Offering;
   /** Host shown in the report for cors-proxy routing (no scheme). */
   proxyHost?: string;
@@ -253,8 +251,6 @@ export async function runStreamingTest(args: RunStreamingTestArgs): Promise<Diag
       provider: args.provider,
       providerConfig: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       target: offeringToTarget(args.offering),
       messages: [{ role: 'user', content: TEST_PROMPT }],
       bodyExtras: {},

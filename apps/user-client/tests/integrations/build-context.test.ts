@@ -7,7 +7,7 @@ import type { OfferingRef } from '../../src/integrations/types.js';
 
 const REF: OfferingRef = { providerId: 'nano-gpt', upstreamSlug: 'brave' };
 const fakeMk = {} as MasterKey;
-const noRoute: IntegrationRoute = { corsProxyUrl: null, corsProxyKey: null, webSearchTierId: null };
+const noRoute: IntegrationRoute = { useProxy: false, webSearchTierId: null };
 /** Minimal placeholder used by tests that do not exercise artefact fields. */
 const noArtefact = {
   chatId: '',
@@ -33,8 +33,7 @@ describe('buildIntegrationContext', () => {
 
   it('maps route fields into the context', () => {
     const route: IntegrationRoute = {
-      corsProxyUrl: 'https://proxy.example.com',
-      corsProxyKey: 'pk-secret',
+      useProxy: true,
       webSearchTierId: 'advanced',
     };
     const ctx = buildIntegrationContext(
@@ -44,8 +43,7 @@ describe('buildIntegrationContext', () => {
       route,
       noArtefact,
     );
-    expect(ctx.corsProxyUrl).toBe('https://proxy.example.com');
-    expect(ctx.corsProxyKey).toBe('pk-secret');
+    expect(ctx.useProxy).toBe(true);
     expect(ctx.webSearchTierId).toBe('advanced');
   });
 
@@ -57,8 +55,7 @@ describe('buildIntegrationContext', () => {
       noRoute,
       noArtefact,
     );
-    expect(ctx.corsProxyUrl).toBeNull();
-    expect(ctx.corsProxyKey).toBeNull();
+    expect(ctx.useProxy).toBe(false);
     expect(ctx.webSearchTierId).toBeNull();
   });
 

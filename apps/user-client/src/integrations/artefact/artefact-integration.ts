@@ -51,8 +51,6 @@ function defaultResolveBase(ctx: IntegrationContext): {
           providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
       },
       apiKey: '', // filled by execute (async key fetch)
-      corsProxyUrl: ctx.corsProxyUrl,
-      corsProxyKey: ctx.corsProxyKey,
       target: offeringToTarget(offering),
     },
     reasoning,

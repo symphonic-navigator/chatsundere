@@ -55,8 +55,6 @@ describe('streamCompletion (openai-chat-completions)', () => {
       streamCompletion({
         provider: directProvider,
         apiKey: 'sk-test',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         messages,
         modelId: 'deepseek-v4-flash',
         fetchFn,
@@ -81,8 +79,6 @@ describe('streamCompletion (openai-chat-completions)', () => {
       streamCompletion({
         provider: directProvider,
         apiKey: 'sk-test',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         messages,
         modelId: 'deepseek-v4-flash',
         fetchFn,
@@ -100,8 +96,6 @@ describe('streamCompletion (openai-chat-completions)', () => {
       streamCompletion({
         provider: directProvider,
         apiKey: 'sk-test',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         messages,
         modelId: 'deepseek-v4-flash',
         fetchFn,
@@ -120,8 +114,6 @@ describe('streamCompletion (openai-chat-completions)', () => {
       streamCompletion({
         provider: directProvider,
         apiKey: 'sk-test',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         messages,
         modelId: 'deepseek-v4-flash',
         fetchFn,
@@ -139,8 +131,6 @@ describe('streamCompletion (openai-chat-completions)', () => {
       streamCompletion({
         provider: directProvider,
         apiKey: 'sk-test',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         messages,
         modelId: 'deepseek-v4-flash',
         fetchFn,
@@ -164,8 +154,6 @@ describe('streamCompletion (openai-chat-completions)', () => {
       streamCompletion({
         provider: directProvider,
         apiKey: 'sk-test',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         messages,
         modelId: 'deepseek-v4-flash',
         signal: ac.signal,
