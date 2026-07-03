@@ -15,6 +15,8 @@ import { PassphraseField } from '../../../components/PassphraseField.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
+import { runSyncCycle } from '../../../sync/worker.js';
 import { useNavTarget } from './_return-url.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
@@ -135,6 +137,10 @@ function InvitationConfirmInner() {
         await setBiometricPromptDue(getDb());
         const linkedRow = await getLinkedAccount(getDb());
         if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+        // A fresh link seeds the engine state for this server, then kicks a first
+        // sync cycle so the local vault backfills onto the newly-linked account.
+        await resetEngineStateForNewLink();
+        void runSyncCycle();
         navigate('/app', { replace: true });
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is

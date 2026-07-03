@@ -2,10 +2,11 @@
 import { setProxyAuthSource } from '@chatsundere/llm-unified';
 import { initAccountLinkFromDb, maybeProbeLinkedServer } from '@chatsundere/ui-shared';
 import { proxyAuthSource } from '../lib/proxy-auth.js';
+import { runBackfillIfPending } from '../sync/backfill.js';
 import { initDoorbell } from '../sync/doorbell.js';
 import { runRecovery } from '../sync/recovery.js';
 import { initSyncTriggers } from '../sync/triggers.js';
-import { _setRecovery } from '../sync/worker.js';
+import { _setBackfill, _setRecovery } from '../sync/worker.js';
 import { getDb } from './open-db.js';
 
 /**
@@ -27,6 +28,7 @@ export async function initServerFoundation(): Promise<void> {
   // WS-C: recovery runs ONLY from the worker's authenticated epoch-mismatch
   // handoff (never from a doorbell poke, Larissa M-4).
   _setRecovery(runRecovery);
+  _setBackfill(runBackfillIfPending);
   initSyncTriggers();
   initDoorbell();
 }

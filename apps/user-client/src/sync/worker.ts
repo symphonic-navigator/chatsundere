@@ -121,6 +121,8 @@ let maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
 let pullLoop: () => Promise<void> = async () => undefined;
 /** Task 9 registers epoch recovery here; defaults to a no-op until then. */
 let recovery: () => Promise<void> = async () => undefined;
+/** Boot registers the pending-collection backfill here; no-op until then. */
+let backfill: () => Promise<void> = async () => undefined;
 
 /** Test seam: override the crypto used for sealing/blind-id derivation. */
 export function _setCryptoDeps(deps: Partial<SealCryptoDeps> | null): void {
@@ -160,6 +162,10 @@ export function _setPullLoop(fn: () => Promise<void>): void {
 export function _setRecovery(fn: () => Promise<void>): void {
   recovery = fn;
 }
+/** Boot seam: register the backfill the cycle runs at its tail after drain+pull. */
+export function _setBackfill(fn: () => Promise<void>): void {
+  backfill = fn;
+}
 /** Test seam: restore every override to its production default. */
 export function _resetWorkerForTests(): void {
   cryptoOverride = null;
@@ -172,6 +178,7 @@ export function _resetWorkerForTests(): void {
   maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
   pullLoop = async () => undefined;
   recovery = async () => undefined;
+  backfill = async () => undefined;
   cycleMutex = false;
 }
 
@@ -696,6 +703,11 @@ export async function runSyncCycle(): Promise<void> {
       // === Task 7 SEAM: the pull loop lands here (registered via _setPullLoop). ===
       await pullLoop();
     }
+    // Backfill handoff (tail of the cycle, inside the single-flight lock, AFTER
+    // drain+pull): registered at boot via `_setBackfill`. Deliberately NOT reached
+    // on a recovery-handoff cycle — recovery returns early above, and recovery
+    // re-syncs everything wholesale, so a backfill on top would be redundant.
+    await backfill();
   });
 }
 
