@@ -30,6 +30,9 @@ export const syncCopy = {
       count === 1 ? '1 change waiting' : `${count} changes waiting`,
     offline: 'Offline — changes queued',
     pulling: 'Pulling your data onto this device…',
+    /** Page-based pull progress (§11.1); there is no known total, so we count pages fetched. */
+    pullingProgress: (pages: number): string =>
+      pages === 1 ? '1 page so far' : `${pages} pages so far`,
     recovery: 'Re-checking everything is in sync — your data is safe.',
   },
 
@@ -52,9 +55,35 @@ export const syncCopy = {
       `${count} ${
         count === 1 ? 'item was' : 'items were'
       } removed by another device. They stay recoverable for 30 days.`,
+    tombstonePaused: (count: number): string =>
+      `A large number of items (${count}) were removed by another device — that's paused for safety. They stay recoverable for 30 days.`,
     recoveryPaused: 'Your server is behaving inconsistently — syncing is paused.',
     tamper:
       'Your server sent something that should not be possible. To protect your data, that change was refused — if this keeps happening, tell your operator.',
+  },
+
+  /** Action labels the status line renders alongside retriable attention states. */
+  actions: {
+    /** The manual affordance behind the `recovery_paused` attention state (§8). */
+    retry: 'Try again',
+  },
+
+  /** The calm inline breadcrumb shown on the chat surface (§7.3, Laura soft). */
+  breadcrumb: {
+    deletedElsewhere: 'This was deleted on another device.',
+  },
+
+  /**
+   * The ambient `ConnectivityBadge`'s expanded/tapped state — "the badge
+   * explains the weather" (§11.2). The offline framing rests the app into
+   * reading mode rather than reporting breakage.
+   */
+  connectivity: {
+    offlinePaused:
+      "Your server isn't reachable, so shared edits are paused — nothing is lost, and everything wakes up the moment you're back. Reading works as always.",
+    linkedOnline: 'Connected to your server — shared edits sync as you make them.',
+    authFailed: 'Your server needs you to sign in again before syncing resumes.',
+    local: 'Local-only — everything stays on this device.',
   },
 
   /** Post-resolution surface, shown only when the local edit lost the conflict. */

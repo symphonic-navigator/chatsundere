@@ -10,6 +10,7 @@ import NavTransitionOutlet from '../components/NavTransitionOutlet.js';
 import { PersonaAvatar } from '../components/PersonaAvatar.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
+import { SyncSurfaceHost } from '../components/SyncSurfaceHost.js';
 import { Toast } from '../components/Toast.js';
 import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay.js';
 import { copy } from '../lib/copy.js';
@@ -219,6 +220,7 @@ export function Root() {
         </main>
         <SplashOverlay />
         <ScreenEffectsOverlay />
+        <SyncSurfaceHost />
         <Toast />
       </div>
     </SplashContext.Provider>

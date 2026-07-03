@@ -8,6 +8,7 @@ import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { markCompactionToastShown } from '../../../compaction/repo.js';
 import { isCompactable, shouldShowToast } from '../../../compaction/trigger.js';
 import { ModelDebugReport } from '../../../components/ModelDebugReport.js';
+import { SyncTombstoneBreadcrumb } from '../../../components/SyncTombstoneBreadcrumb.js';
 import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
@@ -737,6 +738,7 @@ export function ChatPage(): JSX.Element {
         isAudible={monologueActive ? monologue.isAudible : voice.getIsAudible}
         personaThinking={isLiveVoice && liveVoice.floor === 'personaThinking'}
       />
+      <SyncTombstoneBreadcrumb />
       {!hasMessages && !isStreamLive && effectivePersona ? (
         <PersonaGreeting
           name={effectivePersona.name}

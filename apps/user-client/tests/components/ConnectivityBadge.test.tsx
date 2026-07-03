@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-shared';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { ConnectivityBadge } from '../../src/components/ConnectivityBadge.js';
+
+function linked(): void {
+  useAccountLinkStore
+    .getState()
+    .setLinked({ base_url: 'https://s.example', issuer_label: 's.example', role: 'user' });
+}
+
+describe('ConnectivityBadge expanded framing (§11.2)', () => {
+  beforeEach(() => {
+    useAccountLinkStore.getState().setLocalOnly();
+    useConnectivityStore.getState().setState({ kind: 'linked_online' });
+  });
+
+  it('carries the paused-shared-edits framing when a linked user is offline', async () => {
+    linked();
+    useConnectivityStore.getState().setState({ kind: 'server_unreachable' });
+    render(<ConnectivityBadge />);
+    // Framing is behind the expanded/tapped state, not shown by default.
+    expect(screen.queryByText(/shared edits are paused/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
+    expect(
+      screen.getByText(
+        /Your server isn't reachable, so shared edits are paused — nothing is lost/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the connected framing when linked and online', async () => {
+    linked();
+    useConnectivityStore.getState().setState({ kind: 'linked_online' });
+    render(<ConnectivityBadge />);
+    await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
+    expect(screen.getByText(/shared edits sync as you make them/i)).toBeInTheDocument();
+  });
+
+  it('shows the local-only framing when not linked', async () => {
+    useAccountLinkStore.getState().setLocalOnly();
+    render(<ConnectivityBadge />);
+    await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
+    expect(screen.getByText(/everything stays on this device/i)).toBeInTheDocument();
+  });
+});
