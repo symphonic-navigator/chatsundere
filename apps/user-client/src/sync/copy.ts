@@ -97,4 +97,39 @@ export const syncCopy = {
 
   /** The gentlest copy in the catalogue (decision 5): offline bookmarking. */
   offlineBookmark: 'Saved bookmarks need your server — this wakes up the moment you’re back.',
+
+  /**
+   * Blob channel copy (WS-D §9). The 413 origin/remote pair distinguishes the
+   * device that created the too-large image from every other device (Laura hard);
+   * the quota copy names the linked instance ("your server at <host>") rather
+   * than an abstract operator; the fetch/placeholder strings drive §10's surfaces.
+   */
+  blob: {
+    /** §9 — origin device: the image the operator's limit rejected stays local. */
+    tooLargeOrigin: (maxBlobBytes: number): string =>
+      `This image is larger than your server accepts (limit: ${formatBytes(
+        maxBlobBytes,
+      )}). It stays on this device.`,
+    /** §9 — remote device: the terminal placeholder for an oversize-sentinel ref. */
+    tooLargeRemote:
+      'This image was too large for the server — it lives on the device that created it.',
+    /** §9 — quota copy naming the linked instance host (Laura). */
+    quotaFull: (
+      host: string,
+      { usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: number },
+    ): string =>
+      `Your server at ${host} is out of storage (${formatBytes(usedBytes)} of ${formatBytes(
+        quotaBytes,
+      )} used). Free space by deleting large images and it will sync.`,
+    /** §6/§10 — the status-line sub-state gating "Synced" until the queue drains. */
+    fetching: 'Fetching images…',
+    /** §10 — a pending (retriable) fetch placeholder. */
+    placeholderPending: 'Loading image…',
+    /** §10 — a terminal placeholder (oversize sentinel or the §7.1 rest state). */
+    placeholderTerminal: 'Image unavailable',
+    /** §10 — per-item marker at the origin item: a 413-terminal blob. */
+    markerTooLarge: 'Not synced — too large',
+    /** §10 — per-item marker at the origin item: a blob waiting on quota. */
+    markerStorageFull: 'Not synced — storage full',
+  },
 } as const;

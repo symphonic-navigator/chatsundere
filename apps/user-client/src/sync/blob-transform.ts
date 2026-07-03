@@ -78,6 +78,56 @@ export function isBlobCollection(collection: SyncCollection): boolean {
   return collection in BLOB_FIELDS;
 }
 
+/** The resolved field trio for one blob on a row (drain phase 1 + repair §7). */
+export interface ResolvedBlobField {
+  /** The local `Blob` field name holding the plaintext bytes. */
+  bytesField: string;
+  /** The persisted `BlobRef` field name. */
+  refField: string;
+  /** The durable §7.3 oversize sentinel field name. */
+  oversizedField: string;
+}
+
+/**
+ * Find which blob field of a live row a `blobId` belongs to, by matching the
+ * row's persisted refs (WS-D §5/§7). Returns the field trio, or `undefined` when
+ * no ref on the row names this blob. The single map from a queued `blob-put`/
+ * `blob-delete`'s `blobId` back to the row field the drain must seal or the
+ * repair must re-ref.
+ */
+export function resolveBlobFieldById(
+  collection: SyncCollection,
+  row: unknown,
+  blobId: string,
+): ResolvedBlobField | undefined {
+  const specs = BLOB_FIELDS[collection];
+  if (!specs || !isRecord(row)) return undefined;
+  for (const spec of specs) {
+    const ref = row[spec.ref];
+    if (isBlobRef(ref) && ref.blobId === blobId) {
+      return { bytesField: spec.bytes, refField: spec.ref, oversizedField: spec.oversized };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Read the live plaintext `Blob` a queued `blob-put` names, from LIVE rows only
+ * (WS-D §5 — no trash-read upload path, Larissa L-1). Returns `undefined` when
+ * the row is gone or no field's ref matches, which the drain treats as
+ * "bytes nowhere locally → drop the entry with a diagnostic".
+ */
+export function readBlobBytesById(
+  collection: SyncCollection,
+  row: unknown,
+  blobId: string,
+): Blob | undefined {
+  const field = resolveBlobFieldById(collection, row, blobId);
+  if (!field || !isRecord(row)) return undefined;
+  const bytes = row[field.bytesField];
+  return hasBytes(bytes) ? bytes : undefined;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }

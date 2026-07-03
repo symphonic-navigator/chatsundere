@@ -336,10 +336,13 @@ export async function applyRecord(pulled: SyncPulledRecord): Promise<ApplyOutcom
 
   const collection = pulled.collection;
 
-  // §7.2 — unhandled (blob-bearing) collection → inert skip; watermark advances.
-  if (BLOB_COLLECTIONS.has(collection)) return { kind: 'skipped' };
-
+  // A pulled TOMBSTONE routes through trash for every collection — including the
+  // blob-bearing ones (WS-D §8): the row (with its blob bytes) is preserved for
+  // the 30-day grace, and the same transaction drops any pending `blob-put`s for
+  // the owning key (Larissa L-1). Blob-bearing UPSERTS remain inertly skipped
+  // until WS-D Task 6 wires their apply-side join (§7.2).
   if (pulled.deleted) return applyTombstone(mk, pulled);
+  if (BLOB_COLLECTIONS.has(collection)) return { kind: 'skipped' };
   return applyUpsert(mk, pulled);
 }
 

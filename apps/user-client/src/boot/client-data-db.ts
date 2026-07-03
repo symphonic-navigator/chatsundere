@@ -536,12 +536,18 @@ export interface CompactionCheckpointRow {
 // ===== Sync engine rows (v33, WS-C — spec §4) =====
 
 /** An outbound change awaiting seal + push. No payload — sealing reads the
- *  live row at drain time, so queued edits of one key coalesce for free. */
+ *  live row at drain time, so queued edits of one key coalesce for free.
+ *
+ *  WS-D §5: the op union gains `blob-put`/`blob-delete` for the binary channel.
+ *  A blob op carries the owning record's sync `key` (so cascades and coalescing
+ *  group with the record naturally) plus the specific `blobId` it acts on. */
 export interface SyncOutboxRow {
   seq?: number;
   collection: SyncCollection;
   key: string;
-  op: 'upsert' | 'delete';
+  op: 'upsert' | 'delete' | 'blob-put' | 'blob-delete';
+  /** WS-D §5 — set for `blob-put`/`blob-delete` only; the blob the op acts on. */
+  blobId?: string;
   enqueuedAt: number;
 }
 
