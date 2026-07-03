@@ -70,6 +70,10 @@ export const syncCopy = {
       }). Confirm before it uploads.`,
     tamper:
       'Your server sent something that should not be possible. To protect your data, that change was refused — if this keeps happening, tell your operator.',
+    /** §5.2 — the server definitively refused to refresh this session; syncing is
+     *  paused until the account is re-linked. Local work is unaffected. */
+    authDegraded:
+      'Your server no longer recognises this session — syncing is paused. Your local data is safe; re-link your account to resume.',
   },
 
   /** Action labels the status line renders alongside retriable attention states. */

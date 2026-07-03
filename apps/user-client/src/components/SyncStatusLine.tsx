@@ -66,6 +66,10 @@ function attentionView(a: SyncAttention): { text: string; action?: StatusView['a
       return { text: syncCopy.attention.blobReuploadThreshold(a) };
     case 'tamper':
       return { text: syncCopy.attention.tamper };
+    case 'auth_degraded':
+      // §5.2 — the relink flow lives on the account surface, not the status
+      // line, so this surfaces as explanatory copy without an inline action.
+      return { text: syncCopy.attention.authDegraded };
   }
 }
 

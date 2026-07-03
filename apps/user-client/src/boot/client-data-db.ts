@@ -606,7 +606,8 @@ export type SyncAttention =
   | { kind: 'tombstone_paused'; count: number }
   | { kind: 'recovery_paused' }
   | { kind: 'blob_reupload_threshold'; bytes: number; count: number }
-  | { kind: 'tamper' };
+  | { kind: 'tamper' }
+  | { kind: 'auth_degraded' };
 
 // ===== Dexie subclass =====
 
