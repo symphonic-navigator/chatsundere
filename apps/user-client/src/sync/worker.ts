@@ -27,7 +27,7 @@ import type {
   TrashRow,
 } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
-import { apiFetch } from '../lib/fetch.js';
+import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
 import {
@@ -783,7 +783,20 @@ export async function runPullLoop(): Promise<void> {
     let more = true;
     while (more && pages < PULL_PAGE_CAP) {
       const { watermarkRev } = await getSyncState();
-      const response = await pull(watermarkRev, PULL_PAGE_LIMIT);
+      let response: SyncPullResponse;
+      try {
+        response = await pull(watermarkRev, PULL_PAGE_LIMIT);
+      } catch (err) {
+        // 400 bad_since: the watermark is ahead of this account's head — an
+        // authenticated signal of account-level divergence (a relink or a
+        // server account reset). Same remedy as an epoch mismatch: full
+        // recovery (§3.2, Larissa L-1 defence-in-depth).
+        if (err instanceof HttpError && err.code === 'bad_since') {
+          await recovery();
+          return;
+        }
+        throw err;
+      }
       pages += 1;
       await setPulling({ pages, startedAt });
 
