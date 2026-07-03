@@ -144,7 +144,9 @@ async function fetchWithAuth(url: string, base: RequestInit): Promise<Response> 
     // Refresh always targets the AUTH origin — the endpoint and its HTTP-only
     // cookie do not exist on the sync service.
     const authBase = useAccountLinkStore.getState().baseUrl;
-    const refreshed = authBase !== null && (await refreshAccessToken(authBase));
+    // §5.2: the blob channel is a background path — a refused refresh latches
+    // auth-degraded rather than logging the user out.
+    const refreshed = authBase !== null && (await refreshAccessToken(authBase, 'background'));
     if (refreshed) res = await fetch(url, authInit(base));
   }
   return res;

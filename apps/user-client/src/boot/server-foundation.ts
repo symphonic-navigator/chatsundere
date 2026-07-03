@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { setProxyAuthSource } from '@chatsundere/llm-unified';
 import { initAccountLinkFromDb, maybeProbeLinkedServer } from '@chatsundere/ui-shared';
+import { armAuthDegradeFromBoot } from '../lib/auth-degrade.js';
 import { proxyAuthSource } from '../lib/proxy-auth.js';
 import { runBackfillIfPending } from '../sync/backfill.js';
 import { initDoorbell } from '../sync/doorbell.js';
@@ -29,6 +30,10 @@ export async function initServerFoundation(): Promise<void> {
   // handoff (never from a doorbell poke, Larissa M-4).
   _setRecovery(runRecovery);
   _setBackfill(runBackfillIfPending);
+  // §5.2: re-arm the auth-degraded latch from the persisted attention BEFORE the
+  // triggers fire the first cycle — a boot into a degraded state must not drain
+  // or pull before the latch is restored (canRunCycle/gateOpen consult it).
+  await armAuthDegradeFromBoot();
   initSyncTriggers();
   initDoorbell();
 }
