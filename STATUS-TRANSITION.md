@@ -33,9 +33,12 @@ watch-items clean — proxy dead-end framed the dere way, disabled-over-hidden h
 matrix honest, step-up never dead-ends, blob placeholders never read as broken).
 Three softs: **SOFT-1** (ConnectivityBadge suppressed on chat) and **SOFT-2**
 (auth-action relay tap-through) both **fixed** (`8d901f45` — a minimal in-chat
-offline cue + the auth-action linking link, +3 tests); **SOFT-3** (global
+offline cue + the auth-action linking link, +3 tests); the SOFT-1 chat cue was
+then **Laura-re-glanced clean** and polished (`e92a7fa8` — `min-w-0` on the chat
+title so `truncate` is the real 380 px shrink valve, and the `server_unreachable`
+minimal label reads "Not synced" not "Offline"). **SOFT-3** (global
 sync-attention surface) is spec-sanctioned (WS-C decision 2), **deferred to the
-design-language pass** — no squash action. **Still owed before merge-to-master:**
+design-language pass** (registered in [[follow-ups-index]]). **Still owed before merge-to-master:**
 (1) **Chris's device/two-browser manual verification** per each spec's
 §-verification list; (2) the LT-L2 conscious confirmation (username-change
 step-up gate vs ADR 0027). **Both audit gates are now green.**
