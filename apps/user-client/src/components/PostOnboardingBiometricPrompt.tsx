@@ -114,7 +114,7 @@ export function PostOnboardingBiometricPrompt() {
       <dialog
         open
         aria-label={copy.biometricPrompt.title}
-        className="mx-auto mt-6 w-full max-w-sm rounded-[var(--radius-card)] bg-ink-soft px-5 py-4 ring-1 ring-inset ring-aurora-700/30"
+        className="static mx-auto w-full max-w-sm rounded-[var(--radius-card)] bg-ink-soft px-5 py-4 ring-1 ring-inset ring-aurora-700/30"
       >
         <h2 className="font-display text-lg italic text-paper">{copy.biometricPrompt.title}</h2>
         <p className="mt-1 text-sm text-paper-soft">{copy.biometricPrompt.localFallback}</p>
@@ -135,7 +135,7 @@ export function PostOnboardingBiometricPrompt() {
     <dialog
       open
       aria-label={copy.biometricPrompt.title}
-      className="mx-auto mt-6 w-full max-w-sm rounded-[var(--radius-card)] bg-ink-soft px-5 py-4 ring-1 ring-inset ring-aurora-700/30"
+      className="static mx-auto w-full max-w-sm rounded-[var(--radius-card)] bg-ink-soft px-5 py-4 ring-1 ring-inset ring-aurora-700/30"
     >
       <h2 className="font-display text-lg italic text-paper">{copy.biometricPrompt.title}</h2>
       <p className="mt-1 text-sm text-paper-soft">{copy.biometricPrompt.body}</p>
