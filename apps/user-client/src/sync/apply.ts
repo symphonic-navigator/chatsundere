@@ -493,6 +493,13 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
     return { kind: 'rejected' };
   }
 
+  // Built-in mindspaces never sync (engine spec §12.5, apply side): a sealed
+  // built-in from another device (or a pre-fix recovery) is inert — its uuid is
+  // device-local by construction and applying it would duplicate the seeded seven.
+  if (collection === 'mindspaces' && (row as { builtIn?: boolean }).builtIn === true) {
+    return { kind: 'rejected' };
+  }
+
   const key = extractKeyFor(collection)(row);
   const meta = await db.syncRows.get([collection, key]);
 
