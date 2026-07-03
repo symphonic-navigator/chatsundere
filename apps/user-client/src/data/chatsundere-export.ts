@@ -120,6 +120,7 @@ export async function exportPersona(personaId: string, opts: PersonaExportOption
           order: att.order,
           state: 'active',
           createdAt: att.createdAt,
+          updatedAt: att.updatedAt,
           text: IMAGE_PLACEHOLDER_TEXT,
         };
         attachments.push(placeholder);

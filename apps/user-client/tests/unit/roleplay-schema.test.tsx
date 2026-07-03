@@ -83,7 +83,7 @@ describe('Dexie v20 — roleplay & greeting schema', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(32);
+    expect(db.verno).toBe(33);
 
     const row = await db.personas.get('p-legacy');
     expect(row?.roleplay).toBe(false);
@@ -102,6 +102,7 @@ describe('Dexie v20 — roleplay & greeting schema', () => {
       title: 'Source',
       resolvedMindspaceId: 'm1',
       createdAt: 100,
+      updatedAt: 100,
       lastMessageAt: 300,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -115,6 +116,7 @@ describe('Dexie v20 — roleplay & greeting schema', () => {
       role: 'persona',
       contentBlocks: [{ type: 'text', text: 'Hello there!' }],
       createdAt: 100,
+      updatedAt: 100,
       bookmarked: false,
       streamingState: 'complete',
       kind: 'opener',
@@ -127,6 +129,7 @@ describe('Dexie v20 — roleplay & greeting schema', () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'hi' }],
       createdAt: 200,
+      updatedAt: 200,
       bookmarked: false,
       streamingState: 'complete',
     });

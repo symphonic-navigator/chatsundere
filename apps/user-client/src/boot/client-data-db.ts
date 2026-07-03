@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ImageModelConfig } from '@chatsundere/llm-unified';
+import type { SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
@@ -139,6 +140,9 @@ export interface MindspaceRow {
   texture: MindspaceTexture;
   builtIn: boolean;
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; written on every mutation thereafter. */
+  updatedAt: number;
 }
 
 export interface PersonaRow {
@@ -200,6 +204,10 @@ export interface ChatRow {
   title: string | null;
   resolvedMindspaceId: string;
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; written on every mutation thereafter.
+   *  Distinct from the derived `lastMessageAt` (never synced). */
+  updatedAt: number;
   lastMessageAt: number;
   bookmarkedMessageCount: number;
   draftInput: string; // NEW — Phase 3 cockpit autosave
@@ -237,6 +245,9 @@ export interface MessageRow {
   role: 'user' | 'persona' | 'system';
   contentBlocks: ContentBlock[];
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; written on every mutation thereafter. */
+  updatedAt: number;
   bookmarked: boolean;
   /** Custom bookmark name. `null`/absent ⇒ derive the default snippet from
    *  the message text. Non-indexed: Dexie stores it schemalessly, so adding
@@ -348,6 +359,10 @@ export interface AttachmentRow {
   order: number;
   state: AttachmentState;
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; full blob-bearing handling arrives with
+   *  WS-D, but the clock lands here so WS-D needs no further migration. */
+  updatedAt: number;
   /** kind === 'image' — the NORMALISED JPEG (see image-normalise.ts), the only stored copy. */
   blob?: Blob;
   /** kind === 'text' — editable via the lightbox Source view while pending. */
@@ -495,6 +510,57 @@ export interface CompactionCheckpointRow {
   trigger: CompactionTrigger;
 }
 
+// ===== Sync engine rows (v33, WS-C — spec §4) =====
+
+/** An outbound change awaiting seal + push. No payload — sealing reads the
+ *  live row at drain time, so queued edits of one key coalesce for free. */
+export interface SyncOutboxRow {
+  seq?: number;
+  collection: SyncCollection;
+  key: string;
+  op: 'upsert' | 'delete';
+  enqueuedAt: number;
+}
+
+/** Per-row CAS metadata: the last server rev seen and the locally computed
+ *  hash of the last sealed ciphertext (§7.0 echo shortcut). */
+export interface SyncRowMeta {
+  collection: SyncCollection;
+  key: string;
+  rev: number;
+  ciphertextHash: string;
+}
+
+/** The singleton sync-engine state row. */
+export interface SyncStateRow {
+  id: 'state';
+  epoch: string | null;
+  watermarkRev: number;
+  lastSyncAt: number | null;
+  pulling: { pages: number; startedAt: number } | null;
+  attention: SyncAttention | null;
+}
+
+/** A pulled-tombstone row held for its 30-day grace window (§7.3). */
+export interface TrashRow {
+  id: string;
+  collection: SyncCollection;
+  key: string;
+  row: unknown;
+  deletedAt: number;
+  purgeAt: number;
+}
+
+/** Engine attention state (spec §11.1/§11.3). Downstream tasks consume this union. */
+export type SyncAttention =
+  | { kind: 'quota_exceeded'; usedBytes: number; quotaBytes: number }
+  | { kind: 'record_too_large' }
+  | { kind: 'delete_rate_limited' }
+  | { kind: 'tombstone_threshold'; count: number }
+  | { kind: 'tombstone_paused'; count: number }
+  | { kind: 'recovery_paused' }
+  | { kind: 'tamper' };
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -516,6 +582,10 @@ class ClientDataDb extends Dexie {
   memoryBody!: Table<MemoryBodyRow, string>;
   compactionCheckpoints!: Table<CompactionCheckpointRow, string>;
   seedTemplates!: Table<SeedTemplateRow, string>;
+  syncOutbox!: Table<SyncOutboxRow, number>;
+  syncRows!: Table<SyncRowMeta, [string, string]>;
+  syncState!: Table<SyncStateRow, string>;
+  trash!: Table<TrashRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -1076,6 +1146,28 @@ class ClientDataDb extends Dexie {
     // MessageRow.kind 'seed' / seedRole additions are non-indexed JSON fields,
     // so they need no migration.
     this.version(32).stores({ seedTemplates: 'id, createdAt, nsfw' });
+
+    // Version 33 — sync engine (this version is RESERVED for WS-C). Four new
+    // tables; the upgrade stamps updatedAt on the LWW-keyed rows lacking it so
+    // WS-D needs no further migration.
+    this.version(33)
+      .stores({
+        syncOutbox: '++seq, [collection+key]',
+        syncRows: '[collection+key]',
+        syncState: 'id',
+        trash: 'id, purgeAt',
+      })
+      .upgrade(async (tx) => {
+        const now = Date.now();
+        for (const table of ['chats', 'messages', 'mindspaces', 'attachments'] as const) {
+          await tx
+            .table(table)
+            .toCollection()
+            .modify((row: Record<string, unknown>) => {
+              if (typeof row.updatedAt !== 'number') row.updatedAt = now;
+            });
+        }
+      });
   }
 }
 
@@ -1241,6 +1333,7 @@ function buildMindspace(
     texture: 'cloudy',
     builtIn: true,
     createdAt: now,
+    updatedAt: now,
   };
 }
 

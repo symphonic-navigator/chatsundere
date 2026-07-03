@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ProviderRow, getClientDataDb } from '../boot/client-data-db.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 
 /** List all configured provider rows. */
@@ -38,13 +40,22 @@ export function useUpsertProvider() {
       const db = getClientDataDb();
       const now = Date.now();
       if (args.id) {
-        await db.providers.update(args.id, {
-          templateId: args.templateId,
-          apiKey: args.apiKey,
-          enabled: args.enabled,
-          updatedAt: now,
+        // Class-2 edit (spec §5): gated write-through with the awaited drain.
+        const providerId = args.id;
+        await mutateSynced({
+          collection: 'providers',
+          key: providerId,
+          tables: ['providers'],
+          write: async (tx) => {
+            await tx.table('providers').update(providerId, {
+              templateId: args.templateId,
+              apiKey: args.apiKey,
+              enabled: args.enabled,
+              updatedAt: now,
+            });
+          },
         });
-        const row = await db.providers.get(args.id);
+        const row = await db.providers.get(providerId);
         if (!row) throw new Error('upsert failed: provider missing post-update');
         return row;
       }
@@ -59,7 +70,13 @@ export function useUpsertProvider() {
         createdAt: now,
         updatedAt: now,
       };
-      await db.providers.add(row);
+      const linked = isLinkedForSync();
+      // Class-1 creation-insert: the provider row and its outbox row are atomic.
+      await db.transaction('rw', [db.providers, db.syncOutbox], async (tx) => {
+        await db.providers.add(row);
+        if (linked) enqueueSync(tx, 'providers', row.id, 'upsert');
+      });
+      if (linked) scheduleClass1Sync();
       return row;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.providers }),
@@ -71,8 +88,16 @@ export function useDeleteProvider() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const db = getClientDataDb();
-      await db.providers.delete(id);
+      // Class-2 delete (spec §5): enqueue a `delete` tombstone.
+      await mutateSynced({
+        collection: 'providers',
+        key: id,
+        op: 'delete',
+        tables: ['providers'],
+        write: async (tx) => {
+          await tx.table('providers').delete(id);
+        },
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.providers }),
   });

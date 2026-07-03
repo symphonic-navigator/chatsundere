@@ -5,6 +5,7 @@ import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
+import { SyncStatusLine } from '../../../components/SyncStatusLine.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
@@ -100,6 +101,8 @@ export function ServerLinkingPage(): JSX.Element {
               </p>
               <Badge tone="success">{`${copy.serverLinking.linkedToPrefix} ${baseUrl}`}</Badge>
             </div>
+
+            <SyncStatusLine />
 
             <dl className="space-y-2 text-[11px]">
               {issuerLabel && (

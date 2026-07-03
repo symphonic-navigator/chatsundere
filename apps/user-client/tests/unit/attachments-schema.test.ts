@@ -14,7 +14,7 @@ beforeEach(async () => {
 describe('attachments schema (Dexie v12)', () => {
   it('opens at verno 12 with an attachments table', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(32);
+    expect(db.verno).toBe(33);
     expect(db.tables.map((t) => t.name)).toContain('attachments');
   });
 
@@ -37,6 +37,7 @@ describe('attachments schema (Dexie v12)', () => {
       order: 0,
       state: 'active',
       createdAt: 1,
+      updatedAt: 1,
       blob: new Blob(['x'], { type: 'image/jpeg' }),
       width: 100,
       height: 80,

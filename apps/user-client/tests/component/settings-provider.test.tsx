@@ -48,6 +48,10 @@ vi.mock('@chatsundere/llm-unified', () => ({
 vi.mock('@chatsundere/ui-shared', () => ({
   useSessionStore: (selector: (s: { mk: CryptoKey }) => unknown) =>
     selector({ mk: {} as CryptoKey }),
+  // The Class-2 sync gate (Remove provider) reads the link status directly;
+  // local-only means the affordance is never gated for these provider tests.
+  useAccountLinkStore: (selector: (s: { linkStatus: string }) => unknown) =>
+    selector({ linkStatus: 'local-only' }),
 }));
 
 vi.mock('../../src/data/providers.js', () => ({

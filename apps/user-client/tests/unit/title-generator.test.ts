@@ -100,6 +100,7 @@ async function seed() {
     title: null,
     resolvedMindspaceId: 'm1',
     createdAt: 1717000000000,
+    updatedAt: 1717000000000,
     lastMessageAt: 1717000000000,
     bookmarkedMessageCount: 0,
     draftInput: '',

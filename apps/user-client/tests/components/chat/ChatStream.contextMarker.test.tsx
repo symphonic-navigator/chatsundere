@@ -18,6 +18,7 @@ function msg(id: string, createdAt: number, text: string): MessageRow {
     role: 'user',
     contentBlocks: [{ type: 'text', text }],
     createdAt,
+    updatedAt: createdAt,
     bookmarked: false,
     streamingState: 'complete',
   };

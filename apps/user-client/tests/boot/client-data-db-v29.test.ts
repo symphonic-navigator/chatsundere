@@ -18,7 +18,7 @@ describe('client-data-db v29 — compaction checkpoints', () => {
   it('opens at version 29 with the compactionCheckpoints table', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(32);
+    expect(db.verno).toBe(33);
     expect(db.tables.map((t) => t.name)).toContain('compactionCheckpoints');
   });
 

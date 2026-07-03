@@ -75,6 +75,7 @@ describe('Pill rendering integration', () => {
       title: null,
       resolvedMindspaceId: ms[0]?.id ?? '',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 3,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -93,6 +94,7 @@ describe('Pill rendering integration', () => {
         { type: 'text', text: ' for confirmation.' },
       ],
       createdAt: 3,
+      updatedAt: 3,
       bookmarked: false,
       streamingState: 'complete',
     });

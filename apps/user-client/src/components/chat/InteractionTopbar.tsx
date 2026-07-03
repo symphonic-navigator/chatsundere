@@ -4,6 +4,7 @@ import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { sanitiseTitle } from '../../lib/title-generator.js';
 import { contextUtilisation } from '../../lib/token-estimator.js';
+import { useClass2Gate } from '../../sync/gate.js';
 import { PersonaAvatar } from '../PersonaAvatar.js';
 
 interface Props {
@@ -36,6 +37,9 @@ export function InteractionTopbar(p: Props): JSX.Element {
   // Escape sets this to true so the blur handler that immediately
   // follows the unmount doesn't re-save the in-progress draft.
   const discardRef = useRef(false);
+  // Renaming a chat is a Class-2 write — disabled offline for a linked account
+  // (spec §11.2); a local-only user is never gated.
+  const class2 = useClass2Gate();
 
   function startEdit(): void {
     if (!p.chat) return;
@@ -117,8 +121,10 @@ export function InteractionTopbar(p: Props): JSX.Element {
             <button
               type="button"
               className="topbar-title-btn"
-              aria-label="Rename chat"
+              aria-label={class2.disabled ? 'Rename chat (unavailable)' : 'Rename chat'}
               onClick={startEdit}
+              disabled={class2.disabled}
+              title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
             >
               <span className="topbar-title">{displayTitle(p.chat)}</span>
               <span aria-hidden className="topbar-pencil">

@@ -56,6 +56,8 @@ import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
 import { loadMemoryContext } from '../memory/repo.js';
+import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
 import {
   dispatch as dispatchTool,
@@ -389,25 +391,31 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const userMessageId = uuidv7();
     const draftMessageId = uuidv7();
 
+    const linked = isLinkedForSync();
     await db.transaction(
       'rw',
-      [db.messages, db.chats, db.attachments, db.documents, db.personas],
-      async () => {
+      [db.messages, db.chats, db.attachments, db.documents, db.personas, db.syncOutbox],
+      async (tx) => {
         await db.messages.add({
           id: userMessageId,
           chatId: args.chatId,
           role: 'user',
           contentBlocks: [{ type: 'text', text: args.userText }],
           createdAt: now,
+          updatedAt: now,
           bookmarked: false,
           streamingState: 'complete',
         });
+        // Class-1: the user message is already complete on insert → enqueue it.
+        // The persona draft below is incomplete and is enqueued at completion.
+        if (linked) enqueueSync(tx, 'messages', userMessageId, 'upsert');
         await db.messages.add({
           id: draftMessageId,
           chatId: args.chatId,
           role: 'persona',
           contentBlocks: [],
           createdAt: now + 1,
+          updatedAt: now + 1,
           bookmarked: false,
           streamingState: 'incomplete',
         });
@@ -439,6 +447,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         await db.personas.update(args.persona.id, { lastInteractionAt: now + 1 });
       },
     );
+    if (linked) scheduleClass1Sync();
     void queryClient.invalidateQueries({ queryKey: QK.personas });
 
     // The persona response goes live immediately; runIntoDraft resolves the user
@@ -486,6 +495,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         kind: 'opener',
         contentBlocks: [],
         createdAt: now,
+        updatedAt: now,
         bookmarked: false,
         streamingState: 'incomplete',
       });
@@ -938,14 +948,22 @@ async function runIntoDraft(
         ...result.finalContentBlocks,
       ];
 
-      await db.transaction('rw', db.messages, db.pills, db.chats, async () => {
+      const linked = isLinkedForSync();
+      await db.transaction('rw', [db.messages, db.pills, db.chats, db.syncOutbox], async (tx) => {
         await db.messages.update(draftMessageId, {
           contentBlocks: finalContentBlocks,
           streamingState: 'complete',
         });
         if (pillsWithMessageId.length) await db.pills.bulkAdd(pillsWithMessageId);
+        // Class-1: the persona message is now complete, and its pills are terminal.
+        // chats.lastMessageAt is a device-local derived recompute (§5), not enqueued.
+        if (linked) {
+          enqueueSync(tx, 'messages', draftMessageId, 'upsert');
+          for (const p of pillsWithMessageId) enqueueSync(tx, 'pills', p.id, 'upsert');
+        }
         await db.chats.update(args.chatId, { lastMessageAt: Date.now() });
       });
+      if (linked) scheduleClass1Sync();
 
       // TanStack-Query has no idea the underlying Dexie rows just changed.
       // Invalidate both the single-chat key (for the active ChatPage) and
@@ -1168,16 +1186,21 @@ async function runOpenerStream(
         return { streams: m };
       });
 
-      await db.transaction('rw', db.messages, db.chats, async () => {
+      const linked = isLinkedForSync();
+      await db.transaction('rw', [db.messages, db.chats, db.syncOutbox], async (tx) => {
         await db.messages.update(draftMessageId, {
           contentBlocks: result.finalContentBlocks,
           streamingState: 'complete',
         });
+        // Class-1: the opener message is now complete → enqueue it. The chats
+        // lastMessageAt/openerPending writes are device-local (§5), not enqueued.
+        if (linked) enqueueSync(tx, 'messages', draftMessageId, 'upsert');
         await db.chats.update(args.chatId, {
           lastMessageAt: Date.now(),
           openerPending: false,
         });
       });
+      if (linked) scheduleClass1Sync();
 
       void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
       void queryClient.invalidateQueries({ queryKey: ['chats'] });

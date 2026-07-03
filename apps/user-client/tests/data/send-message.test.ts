@@ -10,6 +10,7 @@ function msg(p: Partial<MessageRow>): MessageRow {
     role: 'persona',
     contentBlocks: [{ type: 'text', text: 'hi' }],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'complete',
     ...p,

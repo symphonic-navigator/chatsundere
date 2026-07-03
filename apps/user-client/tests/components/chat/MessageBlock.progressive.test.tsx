@@ -52,6 +52,7 @@ function msg(text: string): MessageRow {
     role: 'persona',
     contentBlocks: [{ type: 'text', text }],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'incomplete',
   };

@@ -15,6 +15,7 @@ function makeRow(over: Partial<AttachmentRow>): AttachmentRow {
     order: 0,
     state: 'active',
     createdAt: 0,
+    updatedAt: 0,
     blob: new Blob(['x'], { type: 'image/jpeg' }),
     width: 1,
     height: 1,
@@ -131,6 +132,7 @@ function libRow(over: Partial<AttachmentRow> = {}): AttachmentRow {
     order: 0,
     state: 'active',
     createdAt: 0,
+    updatedAt: 0,
     kbRef: { libraryId: 'lib1', documentId: 'doc1' },
     ...over,
   };

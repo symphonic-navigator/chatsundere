@@ -103,7 +103,7 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
   it('reports verno === 11 after open on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(32);
+    expect(db.verno).toBe(33);
   });
 
   it('round-trips a message with a reasoning ContentBlock', async () => {
@@ -116,6 +116,7 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
       title: null,
       resolvedMindspaceId: 'ms-r',
       createdAt: now,
+      updatedAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -131,6 +132,7 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
       role: 'persona',
       contentBlocks: [reasoningBlock, { type: 'text', text: 'My answer is 42.' }],
       createdAt: now,
+      updatedAt: now,
       bookmarked: false,
       streamingState: 'complete',
     };
@@ -146,7 +148,7 @@ describe('client-data-db v7 (reasoning ContentBlock variant)', () => {
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(32);
+    expect(db.verno).toBe(33);
     const row = await db.messages.get('msg-legacy');
     expect(row).toBeDefined();
     expect(row?.contentBlocks).toEqual([

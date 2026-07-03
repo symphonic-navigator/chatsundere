@@ -8,6 +8,7 @@ import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { markCompactionToastShown } from '../../../compaction/repo.js';
 import { isCompactable, shouldShowToast } from '../../../compaction/trigger.js';
 import { ModelDebugReport } from '../../../components/ModelDebugReport.js';
+import { SyncTombstoneBreadcrumb } from '../../../components/SyncTombstoneBreadcrumb.js';
 import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
@@ -57,6 +58,8 @@ import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
+import { mutateSynced } from '../../../sync/enqueue.js';
+import { useClass2Gate } from '../../../sync/gate.js';
 
 const DRAFT_DEBOUNCE_MS = 250;
 
@@ -78,6 +81,7 @@ export function ChatPage(): JSX.Element {
   const branchChat = useBranchChat();
   const createChat = useCreateChat();
   const startOpener = useStartOpener();
+  const class2Gate = useClass2Gate();
 
   const setChatId = useCurrentChatStore((s) => s.setChatId);
   const setLazy = useCurrentChatStore((s) => s.setLazy);
@@ -734,6 +738,7 @@ export function ChatPage(): JSX.Element {
         isAudible={monologueActive ? monologue.isAudible : voice.getIsAudible}
         personaThinking={isLiveVoice && liveVoice.floor === 'personaThinking'}
       />
+      <SyncTombstoneBreadcrumb />
       {!hasMessages && !isStreamLive && effectivePersona ? (
         <PersonaGreeting
           name={effectivePersona.name}
@@ -829,6 +834,8 @@ export function ChatPage(): JSX.Element {
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
+            retryDisabled={class2Gate.disabled}
+            retryDisabledReason={class2Gate.tooltip ?? undefined}
             onShowDiagnostics={diagnosticsReport ? () => setDiagOpen(true) : undefined}
             onRetry={async () => {
               // activeChatId is non-null whenever messages exist (chat-mode only).
@@ -860,8 +867,18 @@ export function ChatPage(): JSX.Element {
                   .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
                   .map((b) => b.text)
                   .join('');
-                // Delete the prior user-message too so useSendMessage's insert doesn't duplicate it.
-                await db.messages.delete(priorUser.id);
+                // Delete the prior user-message too so useSendMessage's insert
+                // doesn't duplicate it. It is a completed (synced) message, so this
+                // is a Class-2 delete — a tombstone follows on other devices.
+                await mutateSynced({
+                  collection: 'messages',
+                  key: priorUser.id,
+                  op: 'delete',
+                  tables: ['messages'],
+                  write: async (tx) => {
+                    await tx.table('messages').delete(priorUser.id);
+                  },
+                });
                 await qc.invalidateQueries({ queryKey: ['chats', activeChatId] });
                 await sendMessage.mutateAsync({
                   chatId: activeChatId,

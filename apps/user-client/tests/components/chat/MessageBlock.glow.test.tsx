@@ -52,6 +52,7 @@ function personaMessage(text: string): MessageRow {
     role: 'persona',
     contentBlocks: [{ type: 'text', text }],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'complete',
   };
@@ -69,6 +70,7 @@ function multiBlockMessage(text0: string, pillId: string, text2: string): Messag
       { type: 'text', text: text2 },
     ],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'complete',
   };

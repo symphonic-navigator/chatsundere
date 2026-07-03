@@ -20,6 +20,7 @@ import {
 } from '../../data/memory.js';
 import { useMemoryActions } from '../../lib/use-memory-actions.js';
 import { toastStore } from '../../state/toast.store.js';
+import { useClass2Gate } from '../../sync/gate.js';
 import { usePersonaEditing } from './persona/use-persona-editing.js';
 
 /** The single home for a persona's memory: review/triage journal entries and
@@ -49,6 +50,9 @@ export function PersonaMemory(): JSX.Element {
   const { data: versions = [] } = useBodyVersions(personaId);
   const saveBodyManual = useSaveBodyManual(personaId);
   const rollback = useRollbackBody(personaId);
+  // Memory management edits are Class-2 writes on synced records — disabled
+  // offline for a linked account (spec §11.2); local-only users are never gated.
+  const class2 = useClass2Gate();
 
   const { data: unextracted = 0 } = useUnextractedCount(chatId);
   const { learnState, consolidateState, learnNow, consolidateNow } = useMemoryActions(chatId);
@@ -161,6 +165,8 @@ export function PersonaMemory(): JSX.Element {
           <div className="memory-page-entry-actions">
             <button
               type="button"
+              disabled={class2.disabled}
+              title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
               onClick={() => {
                 update.mutate({ id: e.id, content: editing.text });
                 setEditing(null);
@@ -178,14 +184,29 @@ export function PersonaMemory(): JSX.Element {
           <span className="memory-page-entry-content">{e.content}</span>
           <div className="memory-page-entry-actions">
             {canCommit ? (
-              <button type="button" onClick={() => commit.mutate(e.id)}>
+              <button
+                type="button"
+                disabled={class2.disabled}
+                title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+                onClick={() => commit.mutate(e.id)}
+              >
                 Commit
               </button>
             ) : null}
-            <button type="button" onClick={() => setEditing({ id: e.id, text: e.content })}>
+            <button
+              type="button"
+              disabled={class2.disabled}
+              title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+              onClick={() => setEditing({ id: e.id, text: e.content })}
+            >
               Edit
             </button>
-            <button type="button" onClick={() => deleteWithUndo(e.id)}>
+            <button
+              type="button"
+              disabled={class2.disabled}
+              title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+              onClick={() => deleteWithUndo(e.id)}
+            >
               Delete
             </button>
           </div>
@@ -343,7 +364,12 @@ export function PersonaMemory(): JSX.Element {
               <button
                 type="button"
                 className="memory-page-save-body"
-                disabled={bodyDraft.trim() === '' || bodyDraft === (currentBody?.content ?? '')}
+                disabled={
+                  class2.disabled ||
+                  bodyDraft.trim() === '' ||
+                  bodyDraft === (currentBody?.content ?? '')
+                }
+                title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
                 onClick={() => saveBodyManual.mutate(bodyDraft)}
               >
                 Save memory
@@ -355,7 +381,12 @@ export function PersonaMemory(): JSX.Element {
                       v{v.version} · {v.source}
                     </span>
                     {v.version !== (currentBody?.version ?? 0) ? (
-                      <button type="button" onClick={() => rollback.mutate(v.version)}>
+                      <button
+                        type="button"
+                        disabled={class2.disabled}
+                        title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+                        onClick={() => rollback.mutate(v.version)}
+                      >
                         Restore
                       </button>
                     ) : (

@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
 
@@ -48,7 +50,13 @@ export function useCreatePersona() {
       const db = getClientDataDb();
       const now = Date.now();
       const row: PersonaRow = { id: uuidv7(), createdAt: now, updatedAt: now, ...args };
-      await db.personas.add(row);
+      const linked = isLinkedForSync();
+      // Class-1 creation-insert: the persona and its outbox row commit atomically.
+      await db.transaction('rw', [db.personas, db.syncOutbox], async (tx) => {
+        await db.personas.add(row);
+        if (linked) enqueueSync(tx, 'personas', row.id, 'upsert');
+      });
+      if (linked) scheduleClass1Sync();
       return row;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.personas }),
@@ -63,8 +71,15 @@ export function useUpdatePersona() {
       id: string;
       patch: Partial<Omit<PersonaRow, 'id' | 'createdAt'>>;
     }) => {
-      const db = getClientDataDb();
-      await db.personas.update(args.id, { ...args.patch, updatedAt: Date.now() });
+      // Class-2 edit (spec §5): gate → local write + outbox enqueue → awaited drain.
+      await mutateSynced({
+        collection: 'personas',
+        key: args.id,
+        tables: ['personas'],
+        write: async (tx) => {
+          await tx.table('personas').update(args.id, { ...args.patch, updatedAt: Date.now() });
+        },
+      });
     },
     onSuccess: (_v, args) => {
       qc.invalidateQueries({ queryKey: QK.personas });
@@ -82,25 +97,38 @@ export function useDeletePersona() {
   return useMutation({
     mutationFn: async (id: string) => {
       const db = getClientDataDb();
-      await db.transaction(
-        'rw',
-        [db.personas, db.chats, db.messages, db.pills, db.personaAvatars],
-        async () => {
-          const chats = await db.chats.where('personaId').equals(id).toArray();
-          const chatIds = chats.map((c) => c.id);
-          if (chatIds.length > 0) {
-            const messages = await db.messages.where('chatId').anyOf(chatIds).toArray();
-            const messageIds = messages.map((m) => m.id);
-            if (messageIds.length > 0) {
-              await db.pills.where('messageId').anyOf(messageIds).delete();
-            }
-            await db.messages.where('chatId').anyOf(chatIds).delete();
-            await db.chats.bulkDelete(chatIds);
-          }
-          await db.personaAvatars.delete(id);
-          await db.personas.delete(id);
+      // Enumerate the synced descendants BEFORE the mutation so their tombstones
+      // ride the same transaction (spec §7.3a): the apply pipeline never cascades,
+      // so a persona tombstone alone would orphan its chats/messages/pills on
+      // other devices. `personaAvatars` is a blob collection (WS-D) — deleted
+      // locally, but not tombstoned here.
+      const chats = await db.chats.where('personaId').equals(id).toArray();
+      const chatIds = chats.map((c) => c.id);
+      const messages =
+        chatIds.length > 0 ? await db.messages.where('chatId').anyOf(chatIds).toArray() : [];
+      const messageIds = messages.map((m) => m.id);
+      const pills =
+        messageIds.length > 0 ? await db.pills.where('messageId').anyOf(messageIds).toArray() : [];
+      const pillIds = pills.map((p) => p.id);
+
+      await mutateSynced({
+        collection: 'personas',
+        key: id,
+        op: 'delete',
+        tables: ['personas', 'chats', 'messages', 'pills', 'personaAvatars'],
+        cascade: [
+          ...chatIds.map((k) => ({ collection: 'chats' as const, key: k })),
+          ...messageIds.map((k) => ({ collection: 'messages' as const, key: k })),
+          ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
+        ],
+        write: async (tx) => {
+          if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
+          if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
+          if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
+          await tx.table('personaAvatars').delete(id);
+          await tx.table('personas').delete(id);
         },
-      );
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.personas });

@@ -51,6 +51,7 @@ function message(over: Partial<MessageRow> = {}): MessageRow {
     role: 'persona',
     contentBlocks: [{ type: 'text', text: 'Oh, you again — good.' }],
     createdAt: 1,
+    updatedAt: 1,
     bookmarked: false,
     streamingState: 'complete',
     ...over,

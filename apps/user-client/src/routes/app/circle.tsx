@@ -21,6 +21,7 @@ import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
+import { useClass2Gate } from '../../sync/gate.js';
 
 /**
  * My Circle — lists the user's personas (filtered by current adult-mode)
@@ -44,6 +45,9 @@ export function Circle(): JSX.Element {
   const setMindspace = useMindspaceStore((s) => s.update);
   const deletePersona = useDeletePersona();
   const [confirmDelete, setConfirmDelete] = useState<PersonaRow | null>(null);
+  // Deleting a persona is a Class-2 delete (spec §11.2) — disabled offline for a
+  // linked account; local-only users are never gated.
+  const class2 = useClass2Gate();
 
   useEffect(() => {
     if (!mindspaces.data || !settings.data) return;
@@ -126,6 +130,8 @@ export function Circle(): JSX.Element {
               label: 'Delete…',
               tone: 'destructive',
               onSelect: () => setConfirmDelete(p),
+              disabled: class2.disabled,
+              disabledReason: class2.tooltip ?? undefined,
             },
           ];
 

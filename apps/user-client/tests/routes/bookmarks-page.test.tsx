@@ -39,6 +39,7 @@ const msgPlain: MessageRow = {
   role: 'user',
   contentBlocks: [{ type: 'text', text: 'What is the capital of France?' }],
   createdAt: 1000,
+  updatedAt: 1000,
   bookmarked: false,
   streamingState: 'complete',
 };
@@ -49,6 +50,7 @@ const msgStarred: MessageRow = {
   role: 'user',
   contentBlocks: [{ type: 'text', text: 'Tell me about the Eiffel Tower' }],
   createdAt: 2000,
+  updatedAt: 2000,
   bookmarked: true,
   streamingState: 'complete',
 };

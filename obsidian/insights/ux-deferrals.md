@@ -358,3 +358,33 @@ line rather than a silent absorb.
   routes to server linking. Otherwise the anonymous count stands.
 - **Chris sign-off:** Not a blocking hard defect — logged per the spec §10 mandate;
   no sign-off required.
+
+---
+
+## 2026-07-02 — WS-C Task 12: dense auto-save editors gate at the container, not per-field
+
+- **Context:** The Class-2 offline sweep (spec §11.2) requires every mutating
+  affordance on a synced record to disable (never hide) when a linked account is
+  offline. All discrete/destructive affordances are gated per-control with a
+  touch-reachable reason: persona delete (Circle), chat rename + delete (History
+  row and in-chat topbar), message bookmark (gentle copy), provider remove, MCP
+  server edits, document/library delete, seed-template delete, the persona Memory
+  buttons (commit/edit/delete/save-body/rollback), and the interrupted-stream
+  Retry (which tombstones a synced message).
+- **Deferred:** The two DENSE auto-save editors — the persona editor (8 sub-screens,
+  dozens of `patch()` field calls via `usePersonaEditing`) and the synced-settings
+  toggles/inline-edits (you/web/expert/images) — are NOT greyed field-by-field.
+  Instead: `usePersonaEditing.patch` is a guarded no-op offline (no doomed writes),
+  the persona hub shows an offline notice, `useUpdateSettings`/`useUpdateChat`
+  field-split so device-local edits (adultMode, draftInput, …) stay editable
+  offline, and any synced-field write that slips through is caught by React Query
+  (mutation error) — never a crash. The ambient `ConnectivityBadge` carries the
+  system-level framing.
+- **Rationale:** Per-field greying across ~13 files is a large, low-risk surface
+  (edits, not destructive actions); the container notice + guard + ambient badge
+  cover correctness and framing for the alpha.
+- **Follow-up:** Thread a shared "edit disabled" state through the persona-editor
+  field components and the synced-settings controls for full per-control greying.
+- **Chris sign-off:** Not a blocking hard defect (no dead-end, no data loss, no
+  active misdirection — controls visibly do not change offline); logged for Laura's
+  pre-squash walk.

@@ -23,6 +23,7 @@ function mkMsg(
     role,
     contentBlocks: [{ type: 'text', text }],
     createdAt: ++seq,
+    updatedAt: ++seq,
     bookmarked: false,
     streamingState: 'complete',
     ...extra,

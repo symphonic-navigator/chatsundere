@@ -16,6 +16,7 @@ import {
 } from '../../../data/seed-templates.js';
 import { useAdultMode } from '../../../data/settings.js';
 import { endsOnPersona, isApplyable, normaliseBody, roleAt } from '../../../lib/seed-template.js';
+import { useClass2Gate } from '../../../sync/gate.js';
 
 const TEMPLATES_PATH = '/app/treasury/templates';
 
@@ -63,6 +64,7 @@ function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): 
   const create = useCreateSeedTemplate();
   const update = useUpdateSeedTemplate();
   const del = useDeleteSeedTemplate();
+  const class2 = useClass2Gate();
   const { mode } = useAdultMode();
   const { onHelp, helpOverlay } = useHelp('treasury-templates');
 
@@ -166,6 +168,8 @@ function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): 
                   label: 'Delete template',
                   tone: 'destructive',
                   onSelect: () => setConfirmDelete(true),
+                  disabled: class2.disabled,
+                  disabledReason: class2.tooltip ?? undefined,
                 },
               ]}
             />

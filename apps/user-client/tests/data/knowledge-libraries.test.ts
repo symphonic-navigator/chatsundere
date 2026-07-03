@@ -67,6 +67,7 @@ function makeChat(overrides: Partial<ChatRow> = {}): ChatRow {
     title: null,
     resolvedMindspaceId: '',
     createdAt: 1,
+    updatedAt: 1,
     lastMessageAt: 1,
     bookmarkedMessageCount: 0,
     draftInput: '',

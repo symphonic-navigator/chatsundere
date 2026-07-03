@@ -22,6 +22,7 @@ import { useDeleteProvider, useProviders, useUpsertProvider } from '../../../dat
 import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
 import { useServerGate } from '../../../lib/server-gate.js';
+import { useClass2Gate } from '../../../sync/gate.js';
 
 type Status =
   | { kind: 'idle' }
@@ -37,6 +38,7 @@ export function SettingsProviderPage(): JSX.Element {
 
   const providers = useProviders();
   const proxyGate = useServerGate('proxy');
+  const class2 = useClass2Gate();
   const upsert = useUpsertProvider();
   const del = useDeleteProvider();
   const mk = useSessionStore((s) => s.mk);
@@ -296,17 +298,24 @@ export function SettingsProviderPage(): JSX.Element {
         ) : null}
 
         {existing ? (
-          <button
-            type="button"
-            onClick={() => setConfirmRemove(true)}
-            className="self-start rounded-md border px-3 py-1 text-xs uppercase tracking-wider"
-            style={{
-              borderColor: 'var(--color-destructive)',
-              color: 'var(--color-destructive-text)',
-            }}
-          >
-            Remove provider
-          </button>
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              onClick={() => setConfirmRemove(true)}
+              disabled={class2.disabled}
+              title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+              className="self-start rounded-md border px-3 py-1 text-xs uppercase tracking-wider disabled:opacity-50"
+              style={{
+                borderColor: 'var(--color-destructive)',
+                color: 'var(--color-destructive-text)',
+              }}
+            >
+              Remove provider
+            </button>
+            {class2.disabled && class2.tooltip ? (
+              <p className="text-xs text-paper-soft/70">{class2.tooltip}</p>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

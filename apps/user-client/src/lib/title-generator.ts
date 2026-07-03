@@ -12,6 +12,7 @@ import {
 } from '@chatsundere/llm-unified';
 import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from '../data/queryKeys.js';
+import { mutateSynced } from '../sync/enqueue.js';
 import { queryClient } from './queryClient.js';
 
 const MONTHS = [
@@ -133,14 +134,33 @@ export async function generateTitleAsync(args: TitleGenArgs): Promise<void> {
     // LLM, do not overwrite. See spec §2 Decision 2.
     const current = await db.chats.get(args.chat.id);
     if (current?.title != null) return;
-    await db.chats.update(args.chat.id, { title: cleaned });
+    await writeTitle(args.chat.id, cleaned);
     invalidateChat(args.chat.id);
   } catch {
     const current = await db.chats.get(args.chat.id);
     if (current?.title != null) return;
-    await db.chats.update(args.chat.id, { title: fallbackTitle(args.chat.createdAt) });
+    await writeTitle(args.chat.id, fallbackTitle(args.chat.createdAt));
     invalidateChat(args.chat.id);
   }
+}
+
+/**
+ * Persist the generated (or fallback) title as a Class-2 chat edit with
+ * OFFLINE-DEFER (spec §5/§11.2): `title` syncs, but when the server is
+ * unreachable the title still lands locally and the sync is deferred — title
+ * generation never surfaces an error state. It converges on a later edit or
+ * epoch recovery.
+ */
+async function writeTitle(chatId: string, title: string): Promise<void> {
+  await mutateSynced({
+    collection: 'chats',
+    key: chatId,
+    tables: ['chats'],
+    deferWhenOffline: true,
+    write: async (tx) => {
+      await tx.table('chats').update(chatId, { title, updatedAt: Date.now() });
+    },
+  });
 }
 
 /**
