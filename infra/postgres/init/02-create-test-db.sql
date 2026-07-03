@@ -13,3 +13,6 @@
 
 SELECT 'CREATE DATABASE auth_db_test OWNER chatsundere'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'auth_db_test')\gexec
+
+SELECT 'CREATE DATABASE sync_db_test OWNER chatsundere'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'sync_db_test')\gexec

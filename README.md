@@ -19,10 +19,29 @@ git clone <this-repository> chatsundere
 cd chatsundere
 mise install
 pnpm install
-./scripts/setup-dev.sh
-docker compose -f infra/compose.dev.yml up -d
-pnpm dev
+./dev.sh          # infra + migrations + all services + client, hot reload
 ```
+
+### Local development scripts
+
+The dev stack runs the supporting **infrastructure in Docker** (Postgres, Redis,
+MinIO, Prometheus, Grafana) and the **backend services on the host** via
+`bun --watch` for fast iteration. Three repo-root scripts drive it:
+
+| Script | What it does |
+|---|---|
+| `./dev.sh` | Everything: brings up infra, ensures the databases, runs migrations, then starts `auth` (:3100), `sync` (:3200), `proxy` (:8080) and the user-client (:3000) with hot reload. Ctrl-C stops the services. |
+| `./dev-infra.sh` | Infra + databases + migrations only — use it when you run the services yourself (e.g. from Rider). `start-infra.sh` is a backwards-compatible alias. |
+| `./dev-down.sh` | Stops the infra containers (data preserved). `./dev-down.sh --wipe` also deletes every volume for a clean slate. |
+
+Development secrets are **deliberately committed** in `apps/*/.env.dev` — they are
+throwaway values loaded only against the loopback-bound dev compose and are never
+used in any deployment (production keys live in an uncommitted `compose.prod.yml`;
+see [`infra/compose.prod.yml.example`](infra/compose.prod.yml.example)). The dev
+scripts load them explicitly with `bun --env-file=.env.dev`, so no
+`scripts/setup-dev.sh` step is needed for the local stack. In the client's
+server-linking flow, point at the auth-service at `http://localhost:3100`; it
+advertises the local proxy and sync URLs via `GET /api/v1/config`.
 
 ## Layout
 

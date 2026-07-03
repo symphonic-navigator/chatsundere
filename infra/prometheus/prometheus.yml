@@ -12,10 +12,12 @@ scrape_configs:
     static_configs:
       - targets: ['host.docker.internal:3100']
 
+  # sync + proxy split their /metrics onto a separate internal ops port
+  # (never the public API port). Dev ops ports: sync 3201, proxy 3300.
   - job_name: 'sync-service'
     metrics_path: /metrics
     static_configs:
-      - targets: ['host.docker.internal:3200']
+      - targets: ['host.docker.internal:3201']
 
   - job_name: 'proxy-service'
     metrics_path: /metrics

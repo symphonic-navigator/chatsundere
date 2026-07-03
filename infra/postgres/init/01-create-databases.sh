@@ -2,8 +2,8 @@
 # Runs on first container start (when /var/lib/postgresql/data is empty).
 #
 # Creates the per-service databases owned by the `chatsundere` user.
-# auth_db is the only one we need in Phase 0; sync_db and proxy_db are
-# added here when their services come online.
+# auth_db + sync_db are the two application stores; the proxy-service is
+# stateless (Redis only) and needs no database.
 set -euo pipefail
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
@@ -11,9 +11,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
     SELECT 'CREATE DATABASE auth_db OWNER chatsundere'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'auth_db')\gexec
 
-    -- Phase 1: uncomment when sync-service ships its real schema.
-    -- CREATE DATABASE sync_db OWNER chatsundere;
+    -- sync-service zero-knowledge ciphertext store.
+    SELECT 'CREATE DATABASE sync_db OWNER chatsundere'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'sync_db')\gexec
 
-    -- Phase 2: uncomment when proxy-service ships its real schema.
-    -- CREATE DATABASE proxy_db OWNER chatsundere;
+    -- proxy-service is stateless (Redis only) — no proxy_db.
 EOSQL
