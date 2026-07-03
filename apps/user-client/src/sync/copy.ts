@@ -58,6 +58,11 @@ export const syncCopy = {
     tombstonePaused: (count: number): string =>
       `A large number of items (${count}) were removed by another device — that's paused for safety. They stay recoverable for 30 days.`,
     recoveryPaused: 'Your server is behaving inconsistently — syncing is paused.',
+    /** §8 — epoch recovery would re-upload a large amount; ask before it does. */
+    blobReuploadThreshold: ({ bytes, count }: { bytes: number; count: number }): string =>
+      `Re-syncing this device would re-upload ${formatBytes(bytes)} of images (${count} ${
+        count === 1 ? 'image' : 'images'
+      }). Confirm before it uploads.`,
     tamper:
       'Your server sent something that should not be possible. To protect your data, that change was refused — if this keeps happening, tell your operator.',
   },

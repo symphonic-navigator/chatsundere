@@ -54,6 +54,8 @@ function attentionView(a: SyncAttention): { text: string; action?: StatusView['a
         text: syncCopy.attention.recoveryPaused,
         action: { label: syncCopy.actions.retry, onClick: () => void retryRecovery() },
       };
+    case 'blob_reupload_threshold':
+      return { text: syncCopy.attention.blobReuploadThreshold(a) };
     case 'tamper':
       return { text: syncCopy.attention.tamper };
   }

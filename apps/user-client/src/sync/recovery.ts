@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { SyncCollection, SyncPullResponse } from '@chatsundere/shared-types';
+import { sealBlob, toBase64Url } from '@chatsundere/crypto';
+import type { MasterKey } from '@chatsundere/crypto';
+import type { BlobListResponse, BlobRef, SyncCollection } from '@chatsundere/shared-types';
+import type { SyncPullResponse } from '@chatsundere/shared-types';
 import { SYNC_COLLECTIONS } from '@chatsundere/shared-types';
-import { useDiscoveryStore } from '@chatsundere/ui-shared';
+import { useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { apiFetch } from '../lib/fetch.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
+import { blobFieldsOf } from './blob-transform.js';
+import { type PutBlobResult, listBlobs, putBlob } from './blob-transport.js';
 import { syncKeyOfRow } from './sync-keys.js';
 import {
   advanceWatermark,
@@ -54,6 +59,13 @@ const MAX_RECOVERIES_PER_HOUR = 2;
 const PULL_PAGE_LIMIT = 200;
 const PULL_PAGE_CAP = 64;
 
+/**
+ * Per-recovery blob re-upload threshold (spec §8, default 512 MiB): above this
+ * the recovery ASKS before uploading (a `blob_reupload_threshold` attention),
+ * rather than silently pushing a large amount over a possibly-costly link.
+ */
+const REUPLOAD_THRESHOLD_BYTES = 512 * 1024 * 1024;
+
 /** Blob-bearing collections join in WS-D; recovery never re-pushes them (§3.1). */
 const BLOB_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
   'personaAvatars',
@@ -76,8 +88,21 @@ const REPUSH_COLLECTIONS: readonly SyncCollection[] = SYNC_COLLECTIONS.filter(
 
 type PullTransport = (sinceRev: number, limit: number) => Promise<SyncPullResponse>;
 
+/** The §8 blob re-upload transport/seal the epoch-recovery step consumes. */
+interface RecoveryBlobDeps {
+  listBlobs: () => Promise<BlobListResponse>;
+  putBlob: (blobId: string, body: Uint8Array, hash: string) => Promise<PutBlobResult>;
+  sealBlob: (
+    mk: MasterKey,
+    blobId: string,
+    bytes: Uint8Array,
+  ) => Promise<{ body: Uint8Array; hash: Uint8Array }>;
+}
+
 let pullOverride: PullTransport | null = null;
 let sleepOverride: ((ms: number) => Promise<void>) | null = null;
+let blobDepsOverride: Partial<RecoveryBlobDeps> | null = null;
+let reuploadThreshold = REUPLOAD_THRESHOLD_BYTES;
 
 /** Test seam: intercept the recovery pull-all transport (the `since=0` pages). */
 export function _setRecoveryPull(fn: PullTransport | null): void {
@@ -87,10 +112,24 @@ export function _setRecoveryPull(fn: PullTransport | null): void {
 export function _setRecoverySleep(fn: ((ms: number) => Promise<void>) | null): void {
   sleepOverride = fn;
 }
+/**
+ * Test seam (WS-D §8): intercept the epoch blob re-upload's inventory/seal/put and
+ * optionally shrink the per-recovery re-upload threshold so a boundary test needs
+ * no half-gigabyte of bytes. Production reads the real transport + `sealBlob`.
+ */
+export function _setRecoveryBlobDeps(
+  deps: Partial<RecoveryBlobDeps> | null,
+  thresholdBytes?: number,
+): void {
+  blobDepsOverride = deps;
+  if (thresholdBytes !== undefined) reuploadThreshold = thresholdBytes;
+}
 /** Test seam: clear the rate-limit history, the paused flag, and every override. */
 export function _resetRecoveryForTests(): void {
   pullOverride = null;
   sleepOverride = null;
+  blobDepsOverride = null;
+  reuploadThreshold = REUPLOAD_THRESHOLD_BYTES;
   recoveryTimes.length = 0;
   enginePaused = false;
 }
@@ -196,9 +235,94 @@ async function performRecovery(): Promise<void> {
   await enqueueFullRepush();
   const drain = await drainOutbox();
 
+  // Step 4b (WS-D §8) — reconcile the blob channel: diff this device's local
+  // refs against the server inventory and re-PUT what it lost (idempotent
+  // deterministic re-seals). Bounded by the recovery rate limit (a lying/
+  // flapping inventory is stopped by M-4's flap-stop, which caps re-upload
+  // rounds); above the per-recovery threshold it ASKS before uploading.
+  await recoverBlobs();
+
   // Step 5 — persist the new epoch LAST (load-bearing crash boundary).
   const newEpoch = pulledEpoch ?? drain.epoch;
   if (newEpoch !== null) await db.syncState.update(STATE_ID, { epoch: newEpoch });
+}
+
+/** A present, well-formed `BlobRef` (a `null`/absent ref carries no bytes to re-PUT). */
+function isBlobRef(value: unknown): value is BlobRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { blobId?: unknown }).blobId === 'string' &&
+    typeof (value as { bytes?: unknown }).bytes === 'number'
+  );
+}
+
+/**
+ * Epoch blob re-upload (spec §8), inside the rate-limited recovery cycle. Scans
+ * this device's blob-bearing rows for refs whose bytes it still holds, diffs them
+ * against the server inventory, and re-PUTs the ones the server lost — plain
+ * idempotent re-PUTs (deterministic re-seal), skipping oversize-sentinel refs.
+ *
+ * The inventory round-trip is skipped entirely when this device holds no
+ * re-uploadable bytes, so a record-only recovery stays network-free. A lying or
+ * flapping inventory (claiming to lack blobs the client holds) is bounded to ~2
+ * re-upload rounds by M-4's recovery flap-stop — `runRecovery` halts the engine
+ * with `recovery_paused` on the third recovery within the hour, so this never
+ * becomes an unbounded re-upload loop (Larissa L-5). Above the per-recovery
+ * threshold the attention state asks before uploading.
+ */
+async function recoverBlobs(): Promise<void> {
+  const mk = useSessionStore.getState().mk;
+  if (!mk) return;
+  const db = getClientDataDb();
+
+  // Gather local refs with bytes FIRST — no inventory fetch when there is
+  // nothing this device could re-upload (keeps record-only recovery IO-free).
+  const candidates: { blobId: string; bytes: Blob }[] = [];
+  for (const collection of BLOB_COLLECTIONS) {
+    const rows = await db.table(collection).toArray();
+    for (const row of rows) {
+      const record = row as Record<string, unknown>;
+      for (const spec of blobFieldsOf(collection)) {
+        if (record[spec.oversizedField] === true) continue; // server-terminal — never re-PUT (§8)
+        const ref = record[spec.refField];
+        if (!isBlobRef(ref)) continue;
+        const bytes = record[spec.bytesField];
+        if (!(bytes instanceof Blob) || bytes.size === 0) continue; // no local bytes to re-upload
+        candidates.push({ blobId: ref.blobId, bytes });
+      }
+    }
+  }
+  if (candidates.length === 0) return;
+
+  const deps: RecoveryBlobDeps = { listBlobs, putBlob, sealBlob, ...blobDepsOverride };
+  let inventory: BlobListResponse;
+  try {
+    inventory = await deps.listBlobs();
+  } catch {
+    // Disabled (501) or unreachable — nothing to reconcile this cycle.
+    return;
+  }
+  const present = new Set(inventory.blobs.map((b) => b.blobId));
+  const missing = candidates.filter((c) => !present.has(c.blobId));
+  if (missing.length === 0) return;
+
+  const totalBytes = missing.reduce((sum, m) => sum + m.bytes.size, 0);
+  if (totalBytes > reuploadThreshold) {
+    // Above the per-recovery threshold — ASK before uploading (§8), upload nothing.
+    await setAttention({
+      kind: 'blob_reupload_threshold',
+      bytes: totalBytes,
+      count: missing.length,
+    });
+    return;
+  }
+
+  for (const item of missing) {
+    const buf = new Uint8Array(await item.bytes.arrayBuffer());
+    const sealed = await deps.sealBlob(mk, item.blobId, buf);
+    await deps.putBlob(item.blobId, sealed.body, toBase64Url(sealed.hash)); // idempotent re-PUT
+  }
 }
 
 /**
