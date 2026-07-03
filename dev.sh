@@ -31,7 +31,8 @@ trap cleanup INT TERM
 ( cd apps/sync-service  && exec bun --env-file=.env.dev --watch src/index.ts ) & pids+=("$!")
 ( cd apps/proxy-service && exec bun --env-file=.env.dev --watch src/index.ts ) & pids+=("$!")
 ( cd apps/user-client   && exec pnpm dev )                                      & pids+=("$!")
+( cd apps/admin-client  && exec pnpm dev )                                      & pids+=("$!")
 
-echo "✓ auth :3100 · sync :3200 (ops :3201) · proxy :8090 (ops :3300) · client :3000"
+echo "✓ auth :3100 · sync :3200 (ops :3201) · proxy :8090 (ops :3300) · client :3000 · admin :5174/admin/"
 echo "  Link the client to the backend at http://localhost:3100 (server-linking)."
 wait

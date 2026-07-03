@@ -48,7 +48,7 @@ advertises the local proxy and sync URLs via `GET /api/v1/config`.
 | Directory | Contents |
 |---|---|
 | `apps/user-client` | PWA, mobile-first (port 3000) |
-| `apps/admin-client` | Admin UI (port 3010) |
+| `apps/admin-client` | Admin UI (port 5174, served under `/admin/`) |
 | `apps/auth-service` | OPAQUE + Passkey + JWT (port 3100) |
 | `apps/sync-service` | Encrypted vault (Phase 1, port 3200) |
 | `apps/proxy-service` | Authenticated LLM proxy (Phase 2, port 3300) |
@@ -85,7 +85,7 @@ rejects anything shorter than 40 characters.
 | `INVITATION_HMAC_KEY` | Keyed hashing of invitation tokens (generated) | _(generated)_ |
 | `REFRESH_TOKEN_HMAC_KEY` | Keyed hashing of refresh tokens (generated) | _(generated)_ |
 | `HMAC_KEY_PENDING_CODES` | Keyed hashing of invitation/pairing codes (generated) | _(generated)_ |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins | `http://localhost:3000,http://localhost:3010` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins | `http://localhost:3000,http://localhost:5174` |
 
 ### `apps/sync-service`
 

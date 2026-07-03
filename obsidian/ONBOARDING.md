@@ -67,7 +67,7 @@ The subnet `172.28.0.0/24` is pinned in `infra/compose.dev.yml` exactly so this 
 After `pnpm dev`:
 
 - `http://localhost:3000` — user-client
-- `http://localhost:3010` — admin-client
+- `http://localhost:5174/admin/` — admin-client
 - `http://localhost:3100` — auth-service (`/healthz`, `/readyz`, `/metrics`)
 - `http://localhost:3200` — sync-service
 - `http://localhost:3300` — proxy-service
