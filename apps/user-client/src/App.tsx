@@ -50,6 +50,7 @@ import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
 import { Login } from './routes/login/index.js';
 import { Recovery } from './routes/login/recovery.js';
+import { StartOver } from './routes/login/start-over.js';
 import { InvitationConfirm } from './routes/onboarding/invitation/confirm.js';
 import { InvitationForm } from './routes/onboarding/invitation/form.js';
 import { InvitationRecoveryReveal } from './routes/onboarding/invitation/recovery-reveal.js';
@@ -121,6 +122,7 @@ export function App() {
                 <Route path="/onboarding/local" element={<LocalCreateAccount />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/recovery" element={<Recovery />} />
+                <Route path="/login/start-over" element={<StartOver />} />
                 {/* Internal dev showcase of UI primitives — no session required (presentational only) */}
                 <Route path="/app/ui-showcase" element={<UiShowcase />} />
                 {/* Session-required */}

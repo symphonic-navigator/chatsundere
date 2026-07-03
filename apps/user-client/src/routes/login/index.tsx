@@ -300,13 +300,20 @@ export function Login() {
           </form>
 
           {/* Forgot passphrase — always visible */}
-          <div className="text-center">
+          <div className="space-y-2 text-center">
             <button
               type="button"
               onClick={() => navigate('/login/recovery')}
               className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
             >
               {copy.login.forgotLink}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login/start-over')}
+              className="block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+            >
+              Start over on this device
             </button>
           </div>
         </div>
