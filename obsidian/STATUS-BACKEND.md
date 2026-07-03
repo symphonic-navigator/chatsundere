@@ -1,6 +1,8 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-02 (later) — **Block 6C blob transport is BUILT** on
+**Last updated:** 2026-07-03 — local dev onboarding wired for the first
+end-to-end test (see "Doing now"). Prior, 2026-07-02 (later): **Block 6C blob
+transport is BUILT** on
 branch `claude/blob-transport-impl-xtpius` (17 `03:` commits; the designated
 remote-run branch — the plan's `feat/backend-03-blobs` name was overridden by the
 harness). All 16 plan tasks landed TDD-style: the deterministic blob envelope
@@ -298,6 +300,12 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   carried by the 30 s ping; recorded in `apps/sync-service/src/env.ts`.
 - **Block 6C — blobs (S3/MinIO) + deployment docs: SPECCED + PLANNED +
   HARDENED (2026-07-02).** Remote run next, on `feat/backend-03-blobs`.
+- **Local dev onboarding wired for the first end-to-end test (2026-07-03).**
+  `dev.sh` now launches the admin-client (`:5174/admin/`) and the auth CORS
+  allow-list points at `:5174`; the admin "Open user-client" CTA follows
+  `VITE_USER_CLIENT_URL` (dev `:3000`, prod `/`); and `./bootstrap-admin.sh`
+  mints the first `primary_admin` with the dev env loaded. First-owner steps
+  are in `obsidian/ONBOARDING.md` ("Create the first owner").
 
 ---
 
