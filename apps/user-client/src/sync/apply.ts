@@ -1,12 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { computeBlindId, fromBase64Url, openRecord, toBase64Url } from '@chatsundere/crypto';
+import {
+  computeBlindId,
+  fromBase64Url,
+  openRecord,
+  sealBlob,
+  toBase64Url,
+} from '@chatsundere/crypto';
 import type { MasterKey } from '@chatsundere/crypto';
-import type { SyncCollection, SyncPulledRecord } from '@chatsundere/shared-types';
+import type { BlobRef, SyncCollection, SyncPulledRecord } from '@chatsundere/shared-types';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import type { SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from '../data/queryKeys.js';
 import { queryClient } from '../lib/queryClient.js';
+import { enqueueEager } from './blob-fetch.js';
+import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
+import { applyPulledBlobRow, blobFieldsOf, isBlobCollection } from './blob-transform.js';
+import { putBlob } from './blob-transport.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
 import { extractKeyFor } from './sync-keys.js';
@@ -37,12 +47,15 @@ import { setAttention } from './watermark.js';
 /** The 30-day pulled-tombstone grace window (§7.3). */
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Blob-bearing collections deferred to WS-D; a pulled one is skipped inertly (§7.2). */
-const BLOB_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
-  'personaAvatars',
-  'artefacts',
-  'attachments',
-]);
+/**
+ * The eager-fetch bytes fields (WS-D §6): thumbnails (`artefacts.thumbBlob`) and
+ * avatars (`personaAvatars.blob`) enter the fetch queue at apply. Artefact
+ * originals and attachment images are LAZY (fetched on view, Task 8's hook).
+ */
+const EAGER_BYTES_FIELDS: Partial<Record<SyncCollection, ReadonlySet<string>>> = {
+  artefacts: new Set(['thumbBlob']),
+  personaAvatars: new Set(['blob']),
+};
 
 /** §7.3a thresholds: a calm notice, then a panic pause of tombstone application. */
 const TOMBSTONE_THRESHOLD = 20;
@@ -53,7 +66,7 @@ export type ApplyOutcome =
   | { kind: 'echo' } // §7.0 — my own re-delivered write; rev adopted, no data change
   | { kind: 'stale' } // rev ≤ syncRows.rev — ignored
   | { kind: 'rejected' } // §7.1 inert rejection (open failed) or no MK
-  | { kind: 'skipped' } // §7.2 unhandled (blob) collection
+  | { kind: 'skipped' } // §7.2 unhandled collection (vectors — materialised elsewhere)
   | { kind: 'tombstoned' } // §7.3 — row routed to trash (or nothing local to move)
   | { kind: 'tombstone-paused' } // §7.3a panic pause reached — deferred this cycle
   | { kind: 'tamper' } // §7.4 H-1 — upsert onto a live tombstone anchor, rejected
@@ -98,6 +111,33 @@ export function setSettingsNoteHook(
   fn: (note: 'settings-applied' | 'settings-precedence') => void,
 ): void {
   onSettingsNote = fn;
+}
+
+// ===== Blob apply-side hooks (WS-D §6/§7.2) =====
+
+type EagerEnqueueFn = (
+  collection: SyncCollection,
+  key: string,
+  bytesField: string,
+  ref: BlobRef,
+) => void;
+type ProactiveHealFn = (blobId: string, bytes: Uint8Array, mk: MasterKey) => Promise<void>;
+
+const defaultHealDeps: BlobRepairDeps = { sealBlob, putBlob };
+const defaultHeal: ProactiveHealFn = async (blobId, bytes, mk) => {
+  await maybeProactiveHeal({ blobId, bytes, mk }, defaultHealDeps);
+};
+
+let eagerEnqueueFn: EagerEnqueueFn = enqueueEager;
+let proactiveHealFn: ProactiveHealFn = defaultHeal;
+
+/** Test seam: intercept the apply-side eager enqueue + proactive heal (§6/§7.2). */
+export function _setApplyBlobHooks(overrides: {
+  enqueueEager?: EagerEnqueueFn;
+  proactiveHeal?: ProactiveHealFn;
+}): void {
+  if (overrides.enqueueEager) eagerEnqueueFn = overrides.enqueueEager;
+  if (overrides.proactiveHeal) proactiveHealFn = overrides.proactiveHeal;
 }
 
 // ===== Coalesced invalidation (spec §7.6, Laura soft) =====
@@ -170,6 +210,8 @@ export function _resetApplyForTests(): void {
   tombstonePaused = false;
   onViewedRecordTombstoned = () => undefined;
   onSettingsNote = () => undefined;
+  eagerEnqueueFn = enqueueEager;
+  proactiveHealFn = defaultHeal;
   pendingInvalidations.clear();
 }
 
@@ -339,10 +381,11 @@ export async function applyRecord(pulled: SyncPulledRecord): Promise<ApplyOutcom
   // A pulled TOMBSTONE routes through trash for every collection — including the
   // blob-bearing ones (WS-D §8): the row (with its blob bytes) is preserved for
   // the 30-day grace, and the same transaction drops any pending `blob-put`s for
-  // the owning key (Larissa L-1). Blob-bearing UPSERTS remain inertly skipped
-  // until WS-D Task 6 wires their apply-side join (§7.2).
+  // the owning key (Larissa L-1). Blob-bearing UPSERTS now join the handled set
+  // (WS-D Task 6, §3): they apply through the §4 `applyPulledBlobRow` transform,
+  // resolve via the §7.5 rules the blob-spec §3 keys extend, and enqueue their
+  // eager refs (§6) after the row lands.
   if (pulled.deleted) return applyTombstone(mk, pulled);
-  if (BLOB_COLLECTIONS.has(collection)) return { kind: 'skipped' };
   return applyUpsert(mk, pulled);
 }
 
@@ -494,6 +537,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
 
     await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
     await afterApplied(collection, key, row);
+    if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
     return { kind: 'inserted' };
   }
 
@@ -504,6 +548,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
   if (resolution.winner === 'pulled') {
     await applyPulledRow(collection, key, row, pulled.rev, localHash, local);
     await afterApplied(collection, key, row);
+    if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
     return { kind: 'resolved', winner: 'pulled' };
   }
 
@@ -534,7 +579,13 @@ async function applyPulledRow(
   local: unknown | undefined,
 ): Promise<void> {
   const db = getClientDataDb();
-  const toStore = restoreLocalFields(collection, row, local);
+  // Blob-bearing rows use the §4 transform: it preserves local bytes when the
+  // pulled ref still matches and otherwise leaves the placeholder state (ref
+  // present, bytes absent) for the fetch strategy (§6). Non-blob rows restore
+  // their device-local fields as before (§10).
+  const toStore = isBlobCollection(collection)
+    ? applyPulledBlobRow(collection, row, local)
+    : restoreLocalFields(collection, row, local);
   const meta: SyncRowMeta = { collection, key, rev, ciphertextHash };
   const table = collection === 'settings' ? db.settings : db.table(collection);
   await db.transaction('rw', table, db.syncRows, async () => {
@@ -550,6 +601,52 @@ async function afterApplied(collection: SyncCollection, key: string, row: unknow
   collectFor(collection, key, chatId);
   if (collection === 'chats') await recomputeChatDerivedSafe(key);
   else if (chatId) await recomputeChatDerivedSafe(chatId);
+}
+
+/**
+ * Post-apply blob step (WS-D §6/§7.2): for the just-stored blob row, enqueue the
+ * EAGER refs (thumbnails, avatars) for fetch when their bytes are absent and the
+ * blob is not server-terminal, and proactively heal any ref whose bytes this
+ * device holds after its own prior delete/replace (§7.2 M-2b, a no-op unless the
+ * id is in the locally-removed set). Artefact originals and attachment images
+ * are LAZY — never enqueued here (Task 8's hook fetches them on view).
+ */
+async function afterBlobApplied(
+  mk: MasterKey,
+  collection: SyncCollection,
+  key: string,
+): Promise<void> {
+  const stored = await readLocalRow(collection, key);
+  if (typeof stored !== 'object' || stored === null) return;
+  const row = stored as Record<string, unknown>;
+  const eagerFields = EAGER_BYTES_FIELDS[collection];
+
+  for (const spec of blobFieldsOf(collection)) {
+    const ref = row[spec.refField];
+    if (!isBlobRefValue(ref)) continue; // null / absent — nothing to fetch or heal
+
+    const bytes = row[spec.bytesField];
+    const hasLocalBytes = bytes instanceof Blob && bytes.size > 0;
+
+    if (hasLocalBytes) {
+      const buf = new Uint8Array(await bytes.arrayBuffer());
+      await proactiveHealFn(ref.blobId, buf, mk);
+    }
+
+    if (eagerFields?.has(spec.bytesField) && !hasLocalBytes && row[spec.oversizedField] !== true) {
+      eagerEnqueueFn(collection, key, spec.bytesField, ref);
+    }
+  }
+}
+
+/** A present, well-formed `BlobRef` (a `null`/absent ref is skipped, §4). */
+function isBlobRefValue(value: unknown): value is BlobRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { blobId?: unknown }).blobId === 'string' &&
+    typeof (value as { bytes?: unknown }).bytes === 'number'
+  );
 }
 
 /** Recompute a chat's derived fields, tolerating a since-deleted chat. */

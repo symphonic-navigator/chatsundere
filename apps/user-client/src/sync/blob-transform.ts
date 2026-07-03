@@ -89,6 +89,31 @@ export interface ResolvedBlobField {
 }
 
 /**
+ * The resolved field trios for a blob-bearing collection (WS-D §4). The single
+ * iterator the apply-side join and the fetch layer walk to enqueue eager refs,
+ * kick lazy fetches, and resolve a bytes field back to its ref/sentinel
+ * siblings. A non-blob collection yields the empty list.
+ */
+export function blobFieldsOf(collection: SyncCollection): readonly ResolvedBlobField[] {
+  const specs = BLOB_FIELDS[collection];
+  if (!specs) return [];
+  return specs.map((s) => ({ bytesField: s.bytes, refField: s.ref, oversizedField: s.oversized }));
+}
+
+/**
+ * Resolve one bytes field (e.g. `thumbBlob`) to its ref/sentinel siblings for a
+ * collection (WS-D §4/§6). Returns `undefined` when the collection has no such
+ * blob field — the fetch layer's map from a `useBlobBytes(collection, key,
+ * field)` request to the ref that drives its GET.
+ */
+export function resolveBlobFieldByName(
+  collection: SyncCollection,
+  bytesField: string,
+): ResolvedBlobField | undefined {
+  return blobFieldsOf(collection).find((f) => f.bytesField === bytesField);
+}
+
+/**
  * Find which blob field of a live row a `blobId` belongs to, by matching the
  * row's persisted refs (WS-D §5/§7). Returns the field trio, or `undefined` when
  * no ref on the row names this blob. The single map from a queued `blob-put`/

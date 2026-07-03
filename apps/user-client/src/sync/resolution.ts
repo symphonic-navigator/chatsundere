@@ -14,7 +14,13 @@ export type Resolution = {
   note?: 'settings-applied' | 'settings-precedence';
 };
 
-/** Collections resolved by last-write-wins on `updatedAt`, uuid tie-break. */
+/**
+ * Collections resolved by last-write-wins on `updatedAt`, uuid tie-break. The
+ * blob-bearing `artefacts` and `attachments` join here (WS-D §3): both carry an
+ * `id` + `updatedAt` (the latter engine-stamped for `attachments` by WS-C's v33
+ * migration), so the generic {@link lww} governs them exactly. `personaAvatars`
+ * is LWW too but keyed by `personaId` (no own uuid), handled in its own branch.
+ */
 const LWW_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
   'personas',
   'libraries',
@@ -24,6 +30,8 @@ const LWW_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
   'chats',
   'messages',
   'mindspaces',
+  'artefacts',
+  'attachments',
 ]);
 
 /** Creation-only / immutable collections: any conflict is an idempotent no-op. */
@@ -72,10 +80,10 @@ function lww(local: LwwRow, pulled: LwwRow): Resolution {
 }
 
 /**
- * Resolve a pulled/local collision for one record (spec §7.5). Blob-bearing
- * collections (`personaAvatars`, `artefacts`, `attachments`) are unhandled in
- * v1 — the apply pipeline skips them before this is reached, so a call here is
- * a programming error and fails loud.
+ * Resolve a pulled/local collision for one record (spec §7.5). The blob-bearing
+ * collections join the handled set in WS-D (§3): `artefacts`/`attachments` via
+ * the generic LWW set above, `personaAvatars` via its own `personaId`-keyed
+ * branch. Any still-unhandled collection is a programming error and fails loud.
  */
 export function resolveConflict(
   collection: SyncCollection,
@@ -84,6 +92,17 @@ export function resolveConflict(
 ): Resolution {
   if (LWW_COLLECTIONS.has(collection)) {
     return lww(local as LwwRow, pulled as LwwRow);
+  }
+
+  if (collection === 'personaAvatars') {
+    // LWW on `updatedAt` (WS-D §3). Keyed 1:1 by `personaId`, so a pulled/local
+    // collision is always the SAME logical avatar — an exact-clock tie is the
+    // same row, resolved to local with no repush (no uuid tie-break needed).
+    const l = local as { updatedAt: number };
+    const p = pulled as { updatedAt: number };
+    if (p.updatedAt > l.updatedAt) return { winner: 'pulled', repush: false };
+    if (p.updatedAt < l.updatedAt) return { winner: 'local', repush: true };
+    return { winner: 'local', repush: false };
   }
 
   if (IMMUTABLE_COLLECTIONS.has(collection)) {
