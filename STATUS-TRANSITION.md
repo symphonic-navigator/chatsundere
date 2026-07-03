@@ -28,10 +28,17 @@ user-client (environmental, pre-existing). **A stale cross-workstream test was
 fixed** (`47277841`): WS-D admitted the 3 blob collections to `SYNC_COLLECTIONS`
 but the WS-C `shared-types` assertion still expected 15 — it was in no
 per-workstream gate (typecheck + vitest only), so `pnpm test` was the first to
-catch it. **Still owed before merge-to-master:** (1) **Laura** on the
-user-reachable flows (WS-B onboarding/add-device, WS-A relay UI, WS-C/D offline +
-placeholder UX); (2) **Chris's device/two-browser manual verification** per each
-spec's §-verification list; (3) the LT-L2 conscious confirmation.
+catch it. **Laura is DONE — no hard defects** (pre-squash/holistic pass; all five
+watch-items clean — proxy dead-end framed the dere way, disabled-over-hidden held,
+matrix honest, step-up never dead-ends, blob placeholders never read as broken).
+Three softs: **SOFT-1** (ConnectivityBadge suppressed on chat) and **SOFT-2**
+(auth-action relay tap-through) both **fixed** (`8d901f45` — a minimal in-chat
+offline cue + the auth-action linking link, +3 tests); **SOFT-3** (global
+sync-attention surface) is spec-sanctioned (WS-C decision 2), **deferred to the
+design-language pass** — no squash action. **Still owed before merge-to-master:**
+(1) **Chris's device/two-browser manual verification** per each spec's
+§-verification list; (2) the LT-L2 conscious confirmation (username-change
+step-up gate vs ADR 0027). **Both audit gates are now green.**
 Prior (now-superseded) entries below.
 
 **Last updated:** 2026-07-02 — WS-E (step-up vertical) and WS-B (onboarding
