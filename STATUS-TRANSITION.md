@@ -136,6 +136,38 @@ in `superpowers/`.
 
 ## 6. Doing now
 
+- **WS-D (blob client — rides on C) BUILT on branch `claude/03-ws-d-blob-client`**
+  (stacked on WS-C) — plan `superpowers/plans/2026-07-02-ws-d-blob-client.md`, all
+  10 tasks green TDD-style. `blob-transport` (binary PUT/GET/DELETE/LIST, bearer +
+  one 401-refresh; the §6 size gate counts the stream and aborts over the
+  MK-authenticated `BlobRef.bytes`; `validateBlobRef` 22-char id + sane bytes
+  before any fetch; `x-ciphertext-hash` always the local seal output);
+  `blob-transform` (seal-side `Blob`→`BlobRef`+sentinel with mint-once ref
+  stability; avatar removal is a `blobRef: null` upsert, NEVER a tombstone; no v33
+  bump — interface-only ref/sentinel fields); drain phase ordering (blob-put →
+  record → tombstone → blob-delete; replaced-id delete deferred until the record's
+  `ok` ack and suppressed on `conflict` M-2; put+delete coalesce; tombstone drops
+  pending puts in the trash tx L-1); `blob-repair` (the §7 matrix behind
+  `resolveBlobFailure` — 404-with-bytes repair PUT under a per-cycle GET budget +
+  rest-state, 409/corrupt-body → tamper + fresh-id repair capped at 3 generations,
+  413 → durable oversize sentinel, quota → attention, 501 → suppressed); the fetch
+  strategy (eager thumbs/avatars concurrency-3 + view-priority, lazy
+  `useBlobBytes` for originals/attachments with detach-on-unmount-but-complete;
+  bytes written only after `openBlob` authenticates them — no partial writes); the
+  three-collection write-site sweep; the per-item markers + placeholders + quota
+  line + the "Fetching images…" status gate; and the epoch blob re-upload wired
+  into recovery. **The adversarial blob scenarios caught a real gap** — the §8
+  epoch blob re-upload was never wired — fixed (`recovery.ts` `recoverBlobs()`
+  diffs local refs against the inventory and idempotently re-PUTs what the server
+  lost, after the record re-push and before the epoch persist, threshold-asking
+  above 512 MiB, contained by the M-4 flap limit). Verification battery:
+  `pnpm typecheck --force` **14/14** (0 cached); user-client vitest **2548 pass /
+  0 fail**; ui-shared **68**; `pnpm build` **9/9**; Biome clean; no NUL bytes in any
+  blob module. §11 invariants have dedicated passing tests (size-gate abort,
+  local-hash PUT, `mintBlobId` randomness/one-ref, M-2 deferred delete, repair
+  caps + tamper). **Awaiting Larissa (`blob-transport`/`blob-repair` + the
+  recovery re-upload) + Laura (§10 placeholders/markers/lightbox) + Chris's spec
+  §14 MinIO two-browser manual verification;** PR to `full-backend-transition`.
 - **WS-C (sync engine — the long pole) BUILT on branch `claude/02-ws-c-sync-engine`**
   (stacked on WS-A) — plan `superpowers/plans/2026-07-02-ws-c-sync-engine.md`, all
   16 tasks green TDD-style. Dexie **v33** (syncOutbox/syncRows/syncState/trash +
@@ -229,8 +261,9 @@ in `superpowers/`.
 4. **WS-C** sync engine — ✅ built on `claude/02-ws-c-sync-engine` (stacked on WS-A),
    green on the branch, awaiting Larissa + Laura audits and Chris's device-verify;
    PR open to `full-backend-transition`.
-5. **WS-D** blob client (rides on C; the deferrable tail) — next, cut from the
-   WS-C branch tip.
+5. **WS-D** blob client — ✅ built on `claude/03-ws-d-blob-client` (stacked on
+   WS-C), green on the branch, awaiting Larissa + Laura audits and Chris's
+   MinIO device-verify; PR open to `full-backend-transition`.
 6. Turnkey gate → merge to master → hand off to the separate go-live event.
 - **WS-B + WS-E BUILDING remotely** — spec
   `superpowers/specs/2026-07-02-ws-b-e-onboarding-and-step-up-design.md` (v2,
