@@ -14,14 +14,24 @@ testable on a dev machine: committed loopback-only dev secrets
 (`apps/*/.env.dev`), `dev.sh`/`dev-infra.sh`/`dev-down.sh`, postgres `sync_db`
 init, prometheus ops-port fixes, and a dev-only `VITE_PROXY_URL` override
 (symmetric with `VITE_SYNC_URL`) so the http proxy is reachable locally while
-discovery advertises the https URL the validator mandates. **What is genuinely
-still owed before merge-to-master:** (1) **Larissa** on the integrated diffs
-(WS-C full zero-knowledge boundary, WS-D blob-transport/repair, WS-A token-attach,
-WS-E auth-service + `packages/crypto` + both interceptor paths); (2) **Laura** on
-the user-reachable flows (WS-B onboarding/add-device, WS-A relay UI, WS-C/D
-offline + placeholder UX); (3) **backend service `bun test` re-run** against the
-dev DBs (auth/sync integration tests need `TEST_DATABASE_URL`); (4) **Chris's
-device/two-browser manual verification** per each spec's §-verification list.
+discovery advertises the https URL the validator mandates. **Audit + test status (2026-07-03):**
+**Larissa is DONE — CLEAR TO MERGE, no Critical/High** (integrated diff vs
+merge-base `7081a4d`; crown-jewel blob/token/SSRF/sync/step-up checks all pass).
+Two Lows deferred in [[insights/security-deferrals]] (LT-L1 step-up cross-tier
+coalescing — no bypass; LT-L2 username-change no step-up gate — Chris to confirm
+vs ADR 0027). **Backend service tests green** on this machine: auth 153 pass /
+12 skip / 0 fail (integration skips cleanly without `TEST_DATABASE_URL`), sync
+129 / 0, proxy 81 / 0. **`pnpm test` smoothed** (`dev-infra.sh` + compose init
+now create/migrate `auth_test_db`/`sync_db_test`) — 18/19 turbo tasks green; the
+only red is the known 8-test Node-experimental-localStorage baseline in the
+user-client (environmental, pre-existing). **A stale cross-workstream test was
+fixed** (`47277841`): WS-D admitted the 3 blob collections to `SYNC_COLLECTIONS`
+but the WS-C `shared-types` assertion still expected 15 — it was in no
+per-workstream gate (typecheck + vitest only), so `pnpm test` was the first to
+catch it. **Still owed before merge-to-master:** (1) **Laura** on the
+user-reachable flows (WS-B onboarding/add-device, WS-A relay UI, WS-C/D offline +
+placeholder UX); (2) **Chris's device/two-browser manual verification** per each
+spec's §-verification list; (3) the LT-L2 conscious confirmation.
 Prior (now-superseded) entries below.
 
 **Last updated:** 2026-07-02 — WS-E (step-up vertical) and WS-B (onboarding
