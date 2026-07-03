@@ -231,6 +231,7 @@ async function fetchTicket(syncUrl: string): Promise<string> {
     path: '/api/v1/sync/doorbell-ticket',
     json: {},
     authMode: 'bearer',
+    credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
   });
   return res.ticket;
 }

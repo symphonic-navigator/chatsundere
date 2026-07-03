@@ -30,6 +30,14 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
    * recurse into the step-up gate. Leave unset everywhere else.
    */
   skipStepUpGate?: boolean;
+  /**
+   * Cookie mode. Default `'include'` (the auth-service sets and reads the
+   * HTTP-only refresh cookie). Calls to cookie-free services (sync) MUST pass
+   * `'omit'`: their CORS deliberately answers without
+   * `Access-Control-Allow-Credentials`, so an include-mode request fails the
+   * browser's preflight check outright.
+   */
+  credentials?: 'include' | 'omit';
 }
 
 export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
@@ -89,7 +97,7 @@ function buildInit(opts: ApiFetchOptions): RequestInit {
   return {
     method: opts.method ?? (opts.json !== undefined ? 'POST' : 'GET'),
     headers,
-    credentials: 'include',
+    credentials: opts.credentials ?? 'include',
     body: opts.json !== undefined ? JSON.stringify(opts.json) : undefined,
   };
 }

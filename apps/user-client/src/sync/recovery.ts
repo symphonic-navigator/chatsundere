@@ -144,6 +144,7 @@ function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<
     baseUrl: syncUrl,
     path: `/api/v1/sync/changes?since=${sinceRev}&limit=${limit}`,
     authMode: 'bearer',
+    credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
   });
 }
 

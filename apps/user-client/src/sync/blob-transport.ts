@@ -123,12 +123,14 @@ function syncBaseUrl(): string {
   return url;
 }
 
-/** Build a request init carrying the current bearer token + cookie credentials. */
+/** Build a request init carrying the current bearer token, cookie-free. */
 function authInit(base: RequestInit): RequestInit {
   const headers = new Headers(base.headers);
   const token = useSessionStore.getState().session?.accessToken;
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  return { ...base, headers, credentials: 'include' };
+  // The sync service is cookie-free; its CORS answers without
+  // Access-Control-Allow-Credentials, so include-mode would fail preflight.
+  return { ...base, headers, credentials: 'omit' };
 }
 
 /**

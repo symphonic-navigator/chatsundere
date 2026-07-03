@@ -13,7 +13,8 @@
     "test:integration": "bun test tests/integration",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrations.ts",
-    "bootstrap-admin": "bun run src/cli/bootstrap.ts"
+    "bootstrap-admin": "bun run src/cli/bootstrap.ts",
+    "generate-opaque-setup": "bun run src/cli/generate-opaque-setup.ts"
   },
   "dependencies": {
     "@chatsundere/shared-types": "workspace:^",
