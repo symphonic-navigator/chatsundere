@@ -125,9 +125,14 @@ export function SyncStatusLine(): JSX.Element | null {
     if (linkStatus !== 'linked') return undefined;
     let cancelled = false;
     async function poll(): Promise<void> {
-      const db = getClientDataDb();
-      const [state, outboxCount] = await Promise.all([getSyncState(), db.syncOutbox.count()]);
-      if (!cancelled) setSnapshot({ state, outboxCount });
+      try {
+        const db = getClientDataDb();
+        const [state, outboxCount] = await Promise.all([getSyncState(), db.syncOutbox.count()]);
+        if (!cancelled) setSnapshot({ state, outboxCount });
+      } catch {
+        // The DB can be transiently closed (logout, teardown) between polls;
+        // that is benign — the next poll (or a re-mount) recovers.
+      }
     }
     void poll();
     const id = window.setInterval(() => void poll(), POLL_MS);
