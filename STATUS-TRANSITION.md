@@ -136,6 +136,37 @@ in `superpowers/`.
 
 ## 6. Doing now
 
+- **WS-C (sync engine — the long pole) BUILT on branch `claude/02-ws-c-sync-engine`**
+  (stacked on WS-A) — plan `superpowers/plans/2026-07-02-ws-c-sync-engine.md`, all
+  16 tasks green TDD-style. Dexie **v33** (syncOutbox/syncRows/syncState/trash +
+  the updatedAt-stamp migration, 27-verno sweep); the pure foundations
+  (`sync-keys`/`strip` [settings allowlist polarity — corsProxy/adultMode/one-shot
+  flags stay device-local]/`resolution` [LWW + settings replay guard M-8 + state
+  precedence + stamp adoption]/`gate`/`copy`/`watermark`); `enqueue`/`mutateSynced`
+  (atomic outbox + Class-2 write-through, cascade tombstones, offline-defer); the
+  single-flight worker (drain: coalesce/seal/byte-batch/CAS/poison-adoption M-1/
+  piggyback L-1, watermark never advances in push) and the apply pipeline (echo
+  local-hash shortcut §7.0, inert rejection §7.1, H-1 trash-anchored terminality,
+  L-3 pending-delete suppression, tombstone→trash L-6 + §7.3a threshold/panic,
+  per-collection resolution, coalesced invalidation); triggers/boot wiring, epoch
+  recovery (flap rate-limit >2/hr → recovery_paused, reachable only from the
+  authenticated path), the doorbell (4401 ≤1-refresh then degrade, ticket/URL out
+  of diagnostics); the Class-1 + Class-2 write-site sweeps with disabled-over-hidden
+  gating; SyncStatusLine + attention surfaces + the ConnectivityBadge offline
+  framing; and the two-device adversarial scenarios. **The scenarios caught a real
+  bug** — a pure-reader device never pulled (`runSyncCycle` only pulled on
+  `needsPull`, but an empty outbox returns `head:null`) — fixed (pull when
+  `needsPull || head === null`, L-1 preserved). Verification battery:
+  `pnpm typecheck --force` **14/14** (0 cached); user-client vitest **2441 pass /
+  0 fail**; ui-shared **68**; `pnpm build` **9/9**; Biome clean; no NUL bytes in any
+  sync module. Security invariants (§12) each have a dedicated passing test (inert
+  rejection, H-1, watermark monotonicity + stale-rev + local-hash echo, recovery
+  rate-limit, doorbell 4401 cap, settings allowlist). **Awaiting Larissa (full
+  zero-knowledge-boundary re-audit of the built diff — apply/worker/recovery/
+  doorbell/strip) + Laura (offline-disabled UX + status surfaces; two soft
+  deferrals logged: visual-effects settings left device-local, dense auto-save
+  editors gated at the container) + Chris's spec §15 two-browser manual
+  verification;** PR to `full-backend-transition`.
 - **WS-A (proxy client) BUILT on branch `claude/01-ws-a-proxy-client`** (cut from
   `full-backend-transition`) — plan `superpowers/plans/2026-07-02-ws-a-proxy-client.md`,
   all 8 tasks green TDD-style. llm-unified: `ProxyAuthSource` late-binding seam,
@@ -195,9 +226,11 @@ in `superpowers/`.
 3. **WS-A** proxy client — ✅ built on `claude/01-ws-a-proxy-client`, green on the
    branch, awaiting Larissa + Laura audits and Chris's device-verify; PR open to
    `full-backend-transition`.
-4. **WS-C** sync engine (its own multi-step effort; Larissa + Laura) — next, cut
-   from the WS-A branch tip (shares send-path files with A).
-5. **WS-D** blob client (rides on C; the deferrable tail).
+4. **WS-C** sync engine — ✅ built on `claude/02-ws-c-sync-engine` (stacked on WS-A),
+   green on the branch, awaiting Larissa + Laura audits and Chris's device-verify;
+   PR open to `full-backend-transition`.
+5. **WS-D** blob client (rides on C; the deferrable tail) — next, cut from the
+   WS-C branch tip.
 6. Turnkey gate → merge to master → hand off to the separate go-live event.
 - **WS-B + WS-E BUILDING remotely** — spec
   `superpowers/specs/2026-07-02-ws-b-e-onboarding-and-step-up-design.md` (v2,
