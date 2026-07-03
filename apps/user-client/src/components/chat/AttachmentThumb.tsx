@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState } from 'react';
 import type { AttachmentRow } from '../../boot/client-data-db';
+import { BlobSyncMarker } from '../blob/BlobSyncMarker';
 
 function extension(name: string): string {
   const i = name.lastIndexOf('.');
@@ -56,6 +57,10 @@ export function AttachmentThumb({
       )}
       {analysing && <span className="attach-thumb-analysing" aria-label="Analysing image" />}
       <span className="attach-thumb-name">{row.fileName}</span>
+      <BlobSyncMarker
+        oversized={row.blobOversized === true}
+        hasUnsyncedBlob={row.blob !== undefined && row.blobRef === undefined}
+      />
     </button>
   );
 }

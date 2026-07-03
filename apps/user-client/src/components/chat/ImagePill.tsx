@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { type ArtefactRow, type PillRow, getClientDataDb } from '../../boot/client-data-db.js';
+import { BlobSyncMarker } from '../blob/BlobSyncMarker.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
 import type { ViewableItem } from '../lightbox/viewable-item.js';
 import { CopyButton } from './markdown/CopyButton.js';
@@ -194,6 +195,10 @@ export function ImagePill({ row }: { row: PillRow }): JSX.Element {
               }}
             >
               <img className="image-pill-thumb" src={urls.get(a.id)?.thumb} alt={a.title} />
+              <BlobSyncMarker
+                oversized={a.blobOversized === true}
+                hasUnsyncedBlob={a.blob !== undefined && a.blobRef === undefined}
+              />
             </button>
           ))}
         </span>

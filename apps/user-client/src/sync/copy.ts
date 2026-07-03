@@ -131,5 +131,15 @@ export const syncCopy = {
     markerTooLarge: 'Not synced — too large',
     /** §10 — per-item marker at the origin item: a blob waiting on quota. */
     markerStorageFull: 'Not synced — storage full',
+    /**
+     * §9 — the calm, display-only quota line on the account page. Names the
+     * linked instance ("your server at <host>") and the freeing action lives in
+     * the adjacent quota attention copy; this line only reports the numbers.
+     */
+    storageUsed: (
+      host: string,
+      { usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: number },
+    ): string =>
+      `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)} storage used on your server at ${host}.`,
   },
 } as const;

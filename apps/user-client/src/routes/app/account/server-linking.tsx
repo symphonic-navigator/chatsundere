@@ -5,6 +5,7 @@ import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
+import { SyncQuotaLine } from '../../../components/SyncQuotaLine.js';
 import { SyncStatusLine } from '../../../components/SyncStatusLine.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
@@ -103,6 +104,7 @@ export function ServerLinkingPage(): JSX.Element {
             </div>
 
             <SyncStatusLine />
+            <SyncQuotaLine baseUrl={baseUrl} />
 
             <dl className="space-y-2 text-[11px]">
               {issuerLabel && (

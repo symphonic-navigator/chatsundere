@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { SyncAttention, SyncStateRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { relativeTimeLabel } from '../lib/relative-time.js';
+import { useEagerQueueActive } from '../sync/blob-fetch.js';
 import { syncCopy } from '../sync/copy.js';
 import { retryRecovery } from '../sync/recovery.js';
 import { getSyncState, isRecovering, subscribeRecovering } from '../sync/watermark.js';
@@ -23,7 +24,7 @@ const POLL_MS = 2_000;
 type StatusTone = 'neutral' | 'active' | 'attention';
 
 interface StatusView {
-  kind: 'synced' | 'waiting' | 'offline' | 'pulling' | 'recovery' | 'attention';
+  kind: 'synced' | 'waiting' | 'offline' | 'pulling' | 'recovery' | 'attention' | 'fetching';
   tone: StatusTone;
   text: string;
   detail?: string;
@@ -64,6 +65,8 @@ export function deriveSyncStatus(input: {
   outboxCount: number;
   online: boolean;
   recovering: boolean;
+  /** WS-D §6: the eager thumb/avatar queue is still draining. */
+  fetchingImages?: boolean;
   now?: number;
 }): StatusView {
   const { state, outboxCount, online, recovering } = input;
@@ -97,7 +100,13 @@ export function deriveSyncStatus(input: {
   if (outboxCount > 0)
     return { kind: 'waiting', tone: 'active', text: syncCopy.status.waiting(outboxCount) };
 
-  // 6. Synced — nothing pending, no pull, no attention.
+  // 6. Fetching images — records are settled, but the eager thumb/avatar queue
+  //    (§6) is still draining. "Synced" is gated until it empties, so the line
+  //    never claims completion while pictures are still arriving.
+  if (input.fetchingImages)
+    return { kind: 'fetching', tone: 'active', text: syncCopy.blob.fetching };
+
+  // 7. Synced — nothing pending, no pull, no attention, no images in flight.
   const rel = state.lastSyncAt !== null ? ` · ${relativeTimeLabel(state.lastSyncAt, now)}` : '';
   return { kind: 'synced', tone: 'neutral', text: `${syncCopy.status.synced}${rel}` };
 }
@@ -115,6 +124,7 @@ export function SyncStatusLine(): JSX.Element | null {
     null,
   );
   const [recovering, setRecovering] = useState<boolean>(() => isRecovering());
+  const fetchingImages = useEagerQueueActive();
 
   // The recovery flag is an in-memory signal (§8) — subscribe rather than poll.
   useEffect(() => subscribeRecovering(setRecovering), []);
@@ -151,6 +161,7 @@ export function SyncStatusLine(): JSX.Element | null {
     outboxCount: snapshot.outboxCount,
     online,
     recovering,
+    fetchingImages,
   });
 
   return (

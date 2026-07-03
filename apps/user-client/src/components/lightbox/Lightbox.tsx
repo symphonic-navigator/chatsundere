@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TagEditor } from '../artefact/TagEditor.js';
+import { BlobImage } from '../blob/BlobImage.js';
 import { CopyButton } from '../chat/markdown/CopyButton.js';
 import { FormatPicker } from './FormatPicker';
 import { LightboxTextBody } from './LightboxTextBody';
@@ -440,7 +441,21 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
         </div>
         <div className="lightbox-body">
           {item.kind === 'image' ? (
-            <img className="lightbox-img" src={item.imageUrl} alt={item.fileName} />
+            item.blobSource && !item.imageUrl ? (
+              // Lazy-on-view (§6): the fetch is dismissable at any time — closing
+              // detaches (useBlobBytes) and the background fetch completes onto the
+              // row, so the next open hydrates instantly; a mid-fetch failure
+              // degrades to the quiet retry, never a trapping ring.
+              <BlobImage
+                className="lightbox-img"
+                collection={item.blobSource.collection}
+                recordKey={item.blobSource.key}
+                field={item.blobSource.field}
+                alt={item.fileName}
+              />
+            ) : (
+              <img className="lightbox-img" src={item.imageUrl} alt={item.fileName} />
+            )
           ) : (
             <LightboxTextBody item={item} format={format} draft={draft} onDraftChange={setDraft} />
           )}
