@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { SyncAttention, SyncStateRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { relativeTimeLabel } from '../lib/relative-time.js';
@@ -37,10 +38,16 @@ interface StatusView {
   text: string;
   detail?: string;
   action?: { label: string; onClick: () => void };
+  /** §5.2 — the attention wants a router-backed relink affordance (mapped in the component). */
+  wantsReconnect?: boolean;
 }
 
 /** Map an attention (error) state to its catalogue copy and any retry affordance (§11.3). */
-function attentionView(a: SyncAttention): { text: string; action?: StatusView['action'] } {
+function attentionView(a: SyncAttention): {
+  text: string;
+  action?: StatusView['action'];
+  wantsReconnect?: boolean;
+} {
   switch (a.kind) {
     case 'quota_exceeded':
       return {
@@ -67,9 +74,9 @@ function attentionView(a: SyncAttention): { text: string; action?: StatusView['a
     case 'tamper':
       return { text: syncCopy.attention.tamper };
     case 'auth_degraded':
-      // §5.2 — the relink flow lives on the account surface, not the status
-      // line, so this surfaces as explanatory copy without an inline action.
-      return { text: syncCopy.attention.authDegraded };
+      // §5.2 — the reconnect affordance is router-backed, so the pure derive
+      // path only signals intent; the component maps it to a navigate action.
+      return { text: syncCopy.attention.authDegraded, wantsReconnect: true };
   }
 }
 
@@ -92,7 +99,13 @@ export function deriveSyncStatus(input: {
   // 2. Attention — a deliberate engine error state (§11.1/§11.3).
   if (state.attention) {
     const view = attentionView(state.attention);
-    return { kind: 'attention', tone: 'attention', text: view.text, action: view.action };
+    return {
+      kind: 'attention',
+      tone: 'attention',
+      text: view.text,
+      action: view.action,
+      wantsReconnect: view.wantsReconnect,
+    };
   }
 
   // 3. Pulling — an active multi-page pull, or the first-ever sync
@@ -147,6 +160,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 };
 
 export function SyncStatusLine(): JSX.Element | null {
+  const navigate = useNavigate();
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
   const connectivityKind = useConnectivityStore((s) => s.state.kind);
   const [snapshot, setSnapshot] = useState<{ state: SyncStateRow; outboxCount: number } | null>(
@@ -193,19 +207,29 @@ export function SyncStatusLine(): JSX.Element | null {
     fetchingImages,
   });
 
+  // §5.2 — map the router-free reconnect intent onto a navigate-backed action.
+  const action =
+    view.action ??
+    (view.wantsReconnect
+      ? {
+          label: syncCopy.actions.reconnect,
+          onClick: () => navigate('/onboarding/invitation'),
+        }
+      : undefined);
+
   return (
     <div className="flex items-center gap-2 text-[11px]" aria-live="polite">
       <span className={TONE_CLASS[view.tone]} data-sync-status={view.kind}>
         {view.text}
         {view.detail ? <span className="text-paper-soft"> · {view.detail}</span> : null}
       </span>
-      {view.action ? (
+      {action ? (
         <button
           type="button"
-          onClick={view.action.onClick}
+          onClick={action.onClick}
           className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-0.5 text-paper-soft transition-colors hover:border-paper-soft/50 hover:text-paper"
         >
-          {view.action.label}
+          {action.label}
         </button>
       ) : null}
     </div>

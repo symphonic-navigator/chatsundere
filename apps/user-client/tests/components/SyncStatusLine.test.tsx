@@ -2,6 +2,7 @@
 import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-shared';
 import { render, screen } from '@testing-library/react';
 import 'fake-indexeddb/auto';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetClientDataDbForTests,
@@ -37,6 +38,15 @@ function linkOnline(): void {
   useConnectivityStore.getState().setState({ kind: 'linked_online' });
 }
 
+/** The line calls `useNavigate` (§5.2 relink affordance), so it needs a router. */
+function renderLine() {
+  return render(
+    <MemoryRouter initialEntries={['/app']}>
+      <SyncStatusLine />
+    </MemoryRouter>,
+  );
+}
+
 describe('SyncStatusLine', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
@@ -53,7 +63,7 @@ describe('SyncStatusLine', () => {
 
   it('renders nothing for a local-only user (no sync engine)', async () => {
     useAccountLinkStore.getState().setLocalOnly();
-    const { container } = render(<SyncStatusLine />);
+    const { container } = renderLine();
     // No linked account → the engine does not exist; nothing polls or renders.
     expect(container.querySelector('[data-sync-status]')).toBeNull();
   });
@@ -61,7 +71,7 @@ describe('SyncStatusLine', () => {
   it('Synced: outbox empty, no pull, no attention', async () => {
     linkOnline();
     await seedState({ watermarkRev: 10, lastSyncAt: Date.now() });
-    render(<SyncStatusLine />);
+    renderLine();
     const el = await screen.findByText(/^Synced/);
     expect(el).toBeInTheDocument();
   });
@@ -81,7 +91,7 @@ describe('SyncStatusLine', () => {
       op: 'upsert',
       enqueuedAt: Date.now(),
     });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText('2 changes waiting')).toBeInTheDocument();
   });
 
@@ -89,14 +99,14 @@ describe('SyncStatusLine', () => {
     linkOnline();
     useConnectivityStore.getState().setState({ kind: 'server_unreachable' });
     await seedState({ watermarkRev: 10 });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText('Offline — changes queued')).toBeInTheDocument();
   });
 
   it('Pulling: an active multi-page pull shows progress', async () => {
     linkOnline();
     await seedState({ watermarkRev: 10, pulling: { pages: 3, startedAt: Date.now() } });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText('Pulling your data onto this device…')).toBeInTheDocument();
     expect(await screen.findByText(/3 pages so far/)).toBeInTheDocument();
   });
@@ -104,7 +114,7 @@ describe('SyncStatusLine', () => {
   it('Pulling: always shown on watermarkRev === 0 (fresh device)', async () => {
     linkOnline();
     await seedState({ watermarkRev: 0, pulling: null });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText('Pulling your data onto this device…')).toBeInTheDocument();
   });
 
@@ -113,7 +123,7 @@ describe('SyncStatusLine', () => {
     // Outbox empty, attention null, watermark advanced: the ONLY thing that
     // must keep this out of "Synced" is the active pull.
     await seedState({ watermarkRev: 42, pulling: { pages: 1, startedAt: Date.now() } });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText('Pulling your data onto this device…')).toBeInTheDocument();
     expect(screen.queryByText(/^Synced/)).not.toBeInTheDocument();
   });
@@ -122,7 +132,7 @@ describe('SyncStatusLine', () => {
     linkOnline();
     await seedState({ watermarkRev: 10 });
     setRecovering(true);
-    render(<SyncStatusLine />);
+    renderLine();
     expect(
       await screen.findByText('Re-checking everything is in sync — your data is safe.'),
     ).toBeInTheDocument();
@@ -132,7 +142,7 @@ describe('SyncStatusLine', () => {
     linkOnline();
     const attention: SyncAttention = { kind: 'recovery_paused' };
     await seedState({ watermarkRev: 10, attention });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(
       await screen.findByText('Your server is behaving inconsistently — syncing is paused.'),
     ).toBeInTheDocument();
@@ -149,7 +159,7 @@ describe('SyncStatusLine', () => {
     });
     enqueueEager('artefacts', 'a1', 'thumbBlob', { blobId: 'AAAAAAAAAAAAAAAAAAAAAA', bytes: 10 });
 
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText('Fetching images…')).toBeInTheDocument();
     // Records are settled, but the line must not yet claim completion.
     expect(screen.queryByText(/^Synced/)).not.toBeInTheDocument();
@@ -163,7 +173,7 @@ describe('SyncStatusLine', () => {
       quotaBytes: 5_242_880,
     };
     await seedState({ watermarkRev: 10, attention });
-    render(<SyncStatusLine />);
+    renderLine();
     expect(await screen.findByText(/1\.5 MB of 5 MB used/)).toBeInTheDocument();
   });
 });

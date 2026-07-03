@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { SyncStateRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
+import { syncCopy } from '../sync/copy.js';
 import { getSyncState, isRecovering, subscribeRecovering } from '../sync/watermark.js';
 import { deriveSyncStatus } from './SyncStatusLine.js';
 
@@ -41,6 +42,7 @@ export function GlobalSyncLine(): JSX.Element | null {
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
   const connectivityKind = useConnectivityStore((s) => s.state.kind);
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [state, setState] = useState<SyncStateRow | null>(null);
   const [outboxCount, setOutboxCount] = useState<number>(0);
   const [recovering, setRecovering] = useState<boolean>(() => isRecovering());
@@ -89,6 +91,16 @@ export function GlobalSyncLine(): JSX.Element | null {
   // belongs to the account page's fuller SyncStatusLine.
   if (view.kind !== 'backfill' && view.kind !== 'attention') return null;
 
+  // §5.2 — map the router-free reconnect intent onto a navigate-backed action.
+  const action =
+    view.action ??
+    (view.wantsReconnect
+      ? {
+          label: syncCopy.actions.reconnect,
+          onClick: () => navigate('/onboarding/invitation'),
+        }
+      : undefined);
+
   if (collapsed) {
     return (
       <button
@@ -109,13 +121,13 @@ export function GlobalSyncLine(): JSX.Element | null {
       <span className={view.tone === 'attention' ? 'text-warning' : 'text-aurora-200'}>
         {view.text}
       </span>
-      {view.action ? (
+      {action ? (
         <button
           type="button"
-          onClick={view.action.onClick}
+          onClick={action.onClick}
           className="rounded-md border border-white/10 px-2 py-0.5 text-paper-soft transition-colors hover:border-paper-soft/50 hover:text-paper"
         >
-          {view.action.label}
+          {action.label}
         </button>
       ) : null}
       <button
