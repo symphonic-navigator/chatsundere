@@ -19,6 +19,14 @@ const label = {
   server_auth_failed: { text: 'Server auth failed', tone: 'danger' },
 } satisfies Record<Connectivity['kind'], { text: string; tone: Tone }>;
 
+// Shorter text for the in-chat minimal cue, where the reading surface is tight.
+// Only the two bad-weather states ever render there; the tap framing carries the
+// full explanation.
+const minimalLabel: Partial<Record<Connectivity['kind'], string>> = {
+  server_unreachable: 'Offline',
+  server_auth_failed: 'Auth failed',
+};
+
 /**
  * The expanded/tapped framing — "the badge explains the weather" (spec §11.2).
  * While a linked user is offline it carries the system-level explanation that
@@ -45,7 +53,7 @@ export function connectivityFraming(kind: Connectivity['kind'], linkStatus: Link
  * without becoming an ongoing distraction. Tapping expands a calm framing panel
  * (§11.2) — for a linked user offline this is the paused-shared-edits explanation.
  */
-export function ConnectivityBadge() {
+export function ConnectivityBadge({ minimal = false }: { minimal?: boolean } = {}) {
   const state = useConnectivityStore((s) => s.state);
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
   const meta = label[state.kind];
@@ -66,17 +74,23 @@ export function ConnectivityBadge() {
     setPulsing(false);
   }
 
+  // In-chat minimal mode stays silent while the weather is fine — only the
+  // warning/danger states earn space on the reading surface, so an offline or
+  // auth-failed linked user still gets an ambient cue (spec §11.2 / SOFT-1).
+  if (minimal && meta.tone !== 'warning' && meta.tone !== 'danger') return null;
+  const text = (minimal && minimalLabel[state.kind]) || meta.text;
+
   return (
     <span className="relative inline-flex">
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={`Connectivity: ${meta.text}`}
+        aria-label={`Connectivity: ${text}`}
         onClick={() => setExpanded((v) => !v)}
         style={pulsing ? { animation: 'badge-pulse 350ms ease-out both' } : undefined}
         onAnimationEnd={handleAnimationEnd}
       >
-        <InlineMarker tone={meta.tone}>{meta.text}</InlineMarker>
+        <InlineMarker tone={meta.tone}>{text}</InlineMarker>
       </button>
       {expanded ? (
         <output className="absolute right-0 top-full z-30 mt-1 block w-64 rounded-md border border-white/10 bg-ink-soft/95 p-3 text-[11px] leading-relaxed text-paper-soft shadow-lg backdrop-blur-sm">

@@ -200,7 +200,7 @@ export function Root() {
                 {session.username}
               </span>
             )}
-            {!isChatRoute && <ConnectivityBadge />}
+            {isChatRoute ? <ConnectivityBadge minimal /> : <ConnectivityBadge />}
           </div>
         </header>
         {showRolledBackBanner && (

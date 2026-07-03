@@ -48,7 +48,18 @@ describe('ServerRelayStatus', () => {
     expect(screen.queryByText(/cors proxy/i)).not.toBeInTheDocument();
   });
 
-  it('shows the tooltip without a linking link for a non-local-only disabled reason', () => {
+  it('shows a server-linking link when the session needs re-auth (auth-action)', () => {
+    gate = {
+      enabled: false,
+      reason: 'auth-action',
+      tooltip: 'Your server stopped recognising this session.',
+    };
+    renderStatus();
+    const link = screen.getByRole('link', { name: /open server linking/i });
+    expect(link.getAttribute('href')).toBe('/app/account/server-linking');
+  });
+
+  it('shows the tooltip without a linking link when offline (no useful destination)', () => {
     gate = { enabled: false, reason: 'offline', tooltip: 'The server is unreachable.' };
     renderStatus();
     expect(screen.getByText(/the server is unreachable/i)).toBeInTheDocument();

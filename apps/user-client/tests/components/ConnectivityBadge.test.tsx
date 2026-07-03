@@ -46,3 +46,27 @@ describe('ConnectivityBadge expanded framing (§11.2)', () => {
     expect(screen.getByText(/everything stays on this device/i)).toBeInTheDocument();
   });
 });
+
+describe('ConnectivityBadge minimal (in-chat) mode (SOFT-1)', () => {
+  beforeEach(() => {
+    useAccountLinkStore.getState().setLocalOnly();
+    useConnectivityStore.getState().setState({ kind: 'linked_online' });
+  });
+
+  it('stays silent while the weather is fine', () => {
+    linked();
+    useConnectivityStore.getState().setState({ kind: 'linked_online' });
+    render(<ConnectivityBadge minimal />);
+    expect(screen.queryByRole('button', { name: /connectivity/i })).not.toBeInTheDocument();
+  });
+
+  it('surfaces a short offline cue with the paused framing when the server is unreachable', async () => {
+    linked();
+    useConnectivityStore.getState().setState({ kind: 'server_unreachable' });
+    render(<ConnectivityBadge minimal />);
+    // Short label on the tight reading surface, full explanation behind the tap.
+    expect(screen.getByRole('button', { name: /connectivity: offline/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
+    expect(screen.getByText(/shared edits are paused — nothing is lost/i)).toBeInTheDocument();
+  });
+});

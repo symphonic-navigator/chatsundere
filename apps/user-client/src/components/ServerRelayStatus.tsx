@@ -20,7 +20,7 @@ export function ServerRelayStatus(): JSX.Element {
       ) : (
         <p className="text-sm text-paper-soft/70">
           {gate.tooltip}{' '}
-          {gate.reason === 'local-only' ? (
+          {gate.reason === 'local-only' || gate.reason === 'auth-action' ? (
             <Link className="underline" to="/app/account/server-linking">
               Open server linking
             </Link>
