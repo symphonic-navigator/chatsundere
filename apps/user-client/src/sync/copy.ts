@@ -34,6 +34,11 @@ export const syncCopy = {
     pullingProgress: (pages: number): string =>
       pages === 1 ? '1 page so far' : `${pages} pages so far`,
     recovery: 'Re-checking everything is in sync — your data is safe.',
+    /** §3.7 — one-off upload of pre-link data; progress numbers are interpolated. */
+    backfill: (done: number, total: number): string =>
+      `Uploading your existing data… ${done} of ${total}`,
+    /** §3.7 — offline while a backfill is pending; reassure it resumes (U-6). */
+    offlineBackfill: 'Offline — your upload will pick up where it left off.',
   },
 
   /** Attention (error) states — catalogue copy the status line surfaces. */
