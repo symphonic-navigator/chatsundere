@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { beforeAll, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { ready as opaqueReady, server as opaqueServer } from '@serenity-kit/opaque';
 import { getLinkedAccount } from '../../src/db/linked-account.js';
 import { getLocalAccount } from '../../src/db/local-account.js';
@@ -270,6 +270,41 @@ describe('finishJoinByInvitation', () => {
         passphrase: PASSPHRASE,
       }),
     ).rejects.toMatchObject({ code: 'conflict' });
+
+    db.close();
+  });
+
+  it('refuses to run over an existing local account — before any server call (spec §4.2)', async () => {
+    const db = await openLocalDb(DB);
+    const serverSetup = opaqueServer.createSetup();
+    const client = makeServerClient({ serverSetup });
+
+    // Seed a local_account row to simulate a device that already holds one.
+    const { createLocalAccount } = await import('../../src/flows/create-local-account.js');
+    await createLocalAccount({ db, username: USERNAME, passphrase: PASSPHRASE });
+
+    const joinFinishSpy = spyOn(client, 'joinFinish');
+
+    // A joinState value is required by the signature but must never be consumed:
+    // the backstop refuses before any OPAQUE work or server call.
+    const joinState = {
+      sessionId: 'test-session-123',
+      suggestedUsername: null,
+      registrationResponse: 'unused',
+      clientRegistrationState: 'unused',
+    };
+
+    await expect(
+      finishJoinByInvitation({
+        db,
+        serverClient: client,
+        baseUrl: BASE_URL,
+        joinState,
+        username: USERNAME,
+        passphrase: PASSPHRASE,
+      }),
+    ).rejects.toMatchObject({ code: 'local_account_exists' });
+    expect(joinFinishSpy).not.toHaveBeenCalled();
 
     db.close();
   });

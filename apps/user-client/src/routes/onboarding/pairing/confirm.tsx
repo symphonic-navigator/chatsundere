@@ -31,8 +31,9 @@ type Screen =
  * reveal afterwards (recovery already exists). On Continue, runs OPAQUE
  * login start + finish back-to-back and lands the user in /app.
  *
- * No late-link branch for pairing — Phase 0 accepts the local-data
- * replacement per spec § 2 Decision 7.
+ * No late-link branch for pairing — the crypto layer refuses to overwrite an
+ * existing local account: `finishJoinByPairing` (join-by-pairing.ts:152) throws
+ * before any server call when a `local_account` row already exists.
  */
 export function PairingConfirm() {
   const navigate = useNavigate();

@@ -3,6 +3,7 @@
 import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { deriveLocalAmk, deriveOpaqueAmk, deriveRecoveryAmk } from '../amk.js';
 import { putLocalAndLinkedAccount } from '../db/account-pair.js';
+import { getLocalAccount } from '../db/local-account.js';
 import type { LinkedAccountRow, LocalAccountRow } from '../db/schema.js';
 import { toBase64Url } from '../encoding/base64url.js';
 import { encodeRecoveryKey } from '../encoding/recovery-key.js';
@@ -148,6 +149,19 @@ export async function startJoinByInvitation(
 export async function finishJoinByInvitation(
   args: FinishJoinByInvitationArgs,
 ): Promise<FinishJoinByInvitationResult> {
+  // Stop-the-line backstop (spec §4.2): this flow mints a NEW master key and
+  // overwrites the local account row. On a device that already holds one, that
+  // silently destroys the existing crypto domain — refuse before any key
+  // material exists and before any server call (the invitation code burns only
+  // at /join/finish, so a refused attempt costs nothing).
+  const existing = await getLocalAccount(args.db);
+  if (existing) {
+    throw new CryptoError(
+      'local_account_exists',
+      'a local account already exists on this device; unlock it and link instead',
+    );
+  }
+
   const serverId = opaqueServerIdentity(args.baseUrl);
 
   // --- Generate fresh key material -------------------------------------------
