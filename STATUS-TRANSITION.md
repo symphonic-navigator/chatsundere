@@ -1,5 +1,29 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-03 — **ALL FIVE WORKSTREAMS ARE MERGED into
+`full-backend-transition` and the integrated branch is green.** The earlier
+"WS-B+E awaiting audits, then squash" framing below was **stale**: WS-B+E landed
+via **PR #10** (`f7b5fb72`), then WS-A/C/D via PR #11/#12/#13 — in that
+conflict-resolving order (B+E first, so the `apiFetch` step-up interceptor and
+the Dexie-v33 line were already present when A/C/D layered on). Integrated-branch
+gates on this machine: **`pnpm typecheck --force` 14/14** (0 cached); **user-client
+vitest 2540 pass / 8 fail** (the 8 are the known Node-experimental-localStorage
+baseline — `localStorage.clear()` undefined; environmental, not a regression).
+**A local development stack landed** (`cf5b5640`) so the whole backend runs and is
+testable on a dev machine: committed loopback-only dev secrets
+(`apps/*/.env.dev`), `dev.sh`/`dev-infra.sh`/`dev-down.sh`, postgres `sync_db`
+init, prometheus ops-port fixes, and a dev-only `VITE_PROXY_URL` override
+(symmetric with `VITE_SYNC_URL`) so the http proxy is reachable locally while
+discovery advertises the https URL the validator mandates. **What is genuinely
+still owed before merge-to-master:** (1) **Larissa** on the integrated diffs
+(WS-C full zero-knowledge boundary, WS-D blob-transport/repair, WS-A token-attach,
+WS-E auth-service + `packages/crypto` + both interceptor paths); (2) **Laura** on
+the user-reachable flows (WS-B onboarding/add-device, WS-A relay UI, WS-C/D
+offline + placeholder UX); (3) **backend service `bun test` re-run** against the
+dev DBs (auth/sync integration tests need `TEST_DATABASE_URL`); (4) **Chris's
+device/two-browser manual verification** per each spec's §-verification list.
+Prior (now-superseded) entries below.
+
 **Last updated:** 2026-07-02 — WS-E (step-up vertical) and WS-B (onboarding
 un-gate, Add-a-device, server-synced passkeys) built on a branch cut from
 `full-backend-transition`, awaiting Larissa (auth-service + `packages/crypto` +
