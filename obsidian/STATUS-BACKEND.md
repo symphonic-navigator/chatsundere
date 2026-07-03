@@ -306,6 +306,17 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   `VITE_USER_CLIENT_URL` (dev `:3000`, prod `/`); and `./bootstrap-admin.sh`
   mints the first `primary_admin` with the dev env loaded. First-owner steps
   are in `obsidian/ONBOARDING.md` ("Create the first owner").
+- **First local end-to-end run — AUTH GREEN (2026-07-03 evening).** Registration
+  → login works on the dev stack. Four blockers fixed inline (full account in
+  `STATUS-TRANSITION.md`): join `kind` discriminator (`b55a52a2`),
+  biometric-prompt overlap (`06bbd286`), and the big one — the **OPAQUE
+  server-identity dev/prod divergence**, fixed with an origin-only shared helper
+  `opaqueServerIdentity` across 12 call-sites, Larissa CLEAN (`dc1fff00`, LT-L3
+  frozen-at-go-live); dev auth-reset tool (`540fccf8`). Admin-client loads (still
+  demo data); biometric verified to the PRF step (device test deferred to
+  2026-07-04). **Next: the still-owed sync/blob manual verification** — the
+  engine is built + merged + audited but never run end-to-end; `sync_db` is
+  empty. A bring-up + verify task, not a build.
 
 ---
 

@@ -1,5 +1,30 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-03 (evening) — **FIRST LOCAL END-TO-END RUN: auth is
+green.** Chris drove the integrated branch on the dev stack for the first time.
+Four blockers found and fixed inline (all committed, `master`-untouched — we are
+on `full-backend-transition`):
+(1) `dev.sh` never launched the admin-client + CORS/CTA/bootstrap gaps — wired
+(`960b3df`, `6cad23a`);
+(2) **join responses omitted the `kind` discriminator** → registration died at
+`/join/start` (`b55a52a2`);
+(3) biometric prompt `<dialog>` overlapped the entrance hall (`06bbd286`);
+(4) **OPAQUE server identity diverged dev vs prod** (`${base_url}/auth/v1` client
+vs `${API_BASE_URL}/v1` server) → every login/step-up/biometric/admin failed;
+fixed with an origin-only shared helper `opaqueServerIdentity` across all 12
+call-sites, Larissa-audited CLEAN, frozen-at-go-live recorded as LT-L3
+(`dc1fff00`); dev auth-reset tool added (`540fccf8`).
+**Verified working:** registration → login → local content intact (61 local
+chats readable); admin-client loads (still shows demo data — follow-up);
+biometric verified up to the PRF step (Bitwarden-on-PC lacks PRF — **device test
+deferred to 2026-07-04**, soft deferral, biometrics seen working before).
+**NEXT — the still-owed sync/blob manual verification.** Sync is built + merged +
+audited but never exercised end-to-end: `sync_db` is empty (`sync_accounts` /
+`sync_records` / `sync_blobs` all 0). Chris's 61 chats are local-only — expected,
+since they predate account-linking (never enqueued) and auth was broken until
+today (the worker had no valid token to push). The task is a **bring-up + verify**
+of the already-wired engine, not a build. Kickoff drafted for a fresh window.
+
 **Last updated:** 2026-07-03 — **ALL FIVE WORKSTREAMS ARE MERGED into
 `full-backend-transition` and the integrated branch is green.** The earlier
 "WS-B+E awaiting audits, then squash" framing below was **stale**: WS-B+E landed
