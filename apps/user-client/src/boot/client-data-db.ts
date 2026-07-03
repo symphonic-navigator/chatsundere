@@ -404,7 +404,11 @@ export interface AvatarCrop {
 
 export interface PersonaAvatarRow {
   personaId: string; // PK, 1:1 with a persona
-  blob: Blob; // downscaled FULL image (not pre-cropped)
+  /** Downscaled FULL image (not pre-cropped). Optional (WS-D §4): absent in the
+   *  placeholder state (a pulled avatar whose bytes have not hydrated yet) and
+   *  after removal (`blobRef: null`, the row survives so avatar sync is never
+   *  bricked — the persona falls back to the monogram). */
+  blob?: Blob;
   mime: string;
   width: number; // natural width of the stored image
   height: number; // natural height of the stored image

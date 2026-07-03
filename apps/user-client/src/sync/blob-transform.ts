@@ -60,6 +60,20 @@ const BLOB_FIELDS: Partial<Record<SyncCollection, readonly BlobFieldSpec[]>> = {
   ],
 };
 
+/**
+ * Mint a fresh `BlobRef` for a plaintext `Blob` at a write site (WS-D §5,
+ * option (a)): the id is random (`mintBlobId`, §11.3) and `bytes` is the sealed
+ * ciphertext size (`blob.size + SEALED_BLOB_OVERHEAD_BYTES`) computed without
+ * sealing so the write stays IO-free. The write site sets the returned ref on the
+ * row (so the drain's phase-1 reader `readBlobBytesById` can resolve the blobId
+ * back to its bytes) and enqueues a `blob-put` for the same id in the row's
+ * transaction. The overhead constant lives here — the one source of truth for the
+ * envelope size, shared with the seal-side strip.
+ */
+export function mintBlobRefFor(blob: Blob): BlobRef {
+  return { blobId: mintBlobId(), bytes: blob.size + SEALED_BLOB_OVERHEAD_BYTES };
+}
+
 /** A freshly-minted blob whose bytes still need a PUT (the enqueue site queues it). */
 export interface NewBlob {
   blobId: string;

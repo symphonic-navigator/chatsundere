@@ -56,7 +56,7 @@ import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
 import { loadMemoryContext } from '../memory/repo.js';
-import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
 import {
@@ -650,7 +650,20 @@ async function resolveUserContent(
         });
       },
       cacheDescription: async (id, model, text) => {
-        await db.attachments.update(id, { visionDescription: { model, text } });
+        // Class-2 record edit on a sent attachment (WS-D §5). A background job
+        // (substitute-vision) — offline-defer so a describe never throws or
+        // loses its cache; it converges on the next online edit / recovery.
+        await mutateSynced({
+          collection: 'attachments',
+          key: id,
+          tables: ['attachments'],
+          deferWhenOffline: true,
+          write: async (tx) => {
+            await tx
+              .table('attachments')
+              .update(id, { visionDescription: { model, text }, updatedAt: Date.now() });
+          },
+        });
       },
       onDescribeStart: callbacks.onDescribeStart,
       onDescribeEnd: callbacks.onDescribeEnd,

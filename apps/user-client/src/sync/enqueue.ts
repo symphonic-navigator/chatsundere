@@ -137,6 +137,18 @@ export async function mutateSynced(args: {
    */
   cascade?: readonly { collection: SyncCollection; key: string }[];
   /**
+   * Blob-channel enqueues (WS-D §5) that must ride the SAME transaction as the
+   * record's outbox row: `blob-put`(s) for freshly-minted bytes and
+   * `blob-delete`(s) for replaced or cascade-deleted ids. Runs ONLY in the
+   * normal linked path (never for a local-only user and never on an
+   * offline-defer), exactly where `enqueueSync` fires — so a blob write and its
+   * record commit atomically or not at all. The callback uses
+   * `enqueueBlobPut`/`enqueueBlobDelete` against the passed `tx`; `syncOutbox` is
+   * already in scope. The row's `blobRef`/`thumbBlobRef` must be set inside
+   * `write` for the drain to resolve the queued blobId back to its bytes.
+   */
+  blobOps?: (tx: Transaction) => void;
+  /**
    * Offline-defer instead of throwing (spec §5 field dispositions): background
    * jobs (title generation, the memory pipeline) must never lose their local
    * write when the sync server is unreachable. When linked but a Class-2 write
@@ -146,7 +158,7 @@ export async function mutateSynced(args: {
    */
   deferWhenOffline?: boolean;
 }): Promise<void> {
-  const { collection, key, write, tables, cascade, deferWhenOffline } = args;
+  const { collection, key, write, tables, cascade, blobOps, deferWhenOffline } = args;
   const op = args.op ?? 'upsert';
   const db = getClientDataDb();
 
@@ -178,6 +190,7 @@ export async function mutateSynced(args: {
     enqueueSync(tx, collection, key, op);
     if (cascade)
       for (const child of cascade) enqueueSync(tx, child.collection, child.key, 'delete');
+    blobOps?.(tx);
   });
 
   // After the commit, drain this key and await the server ack (§5). A crash
