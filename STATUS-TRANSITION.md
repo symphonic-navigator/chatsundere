@@ -1,5 +1,43 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-04 (night) — **BACKFILL OVERNIGHTER IS SPECCED,
+PLANNED, HARDENED, AND HANDED OFF.** The full pipeline ran in one session:
+brainstorm (6 decisions with Chris) → spec
+`superpowers/specs/2026-07-04-sync-backfill-design.md` (**v2** — Larissa
+spec-pass 2 High / 4 Medium / 2 Low and Laura spec-pass 4 hard / 4 soft, ALL
+folded, zero deferrals) → plan `superpowers/plans/2026-07-04-sync-backfill.md`
+(18 tasks + hand-off, 3 stacked PRs) → overnight operating-rules contract →
+kickoff prompt delivered to Chris. Scope: **PR 1** same-MK backfill for the
+invitation late-link path (persistent `backfillPending` + interleaved pump
+≤100/chunk, link-time engine reset [L-1: stale `syncRows` would silently
+strand data on relink], `batchByBytes` count cap [L-2: the server rejects
+>100-record pushes wholesale and the drain never count-capped],
+`record_too_large` terminal sentinel [L-6], two-sided built-in-mindspace
+enforcement [L-8 + the latent `enqueueFullRepush` gap], `bad_since`→recovery,
+the backfill status vocabulary with pinned precedence [U-5], and the
+**minimal global sync line** [U-1/U-2 — consciously revises WS-C SOFT-3;
+design-language pass restyles later]); **PR 2** fresh-join guard (crypto
+backstop `local_account_exists` before any key minting — closes the LAST
+unguarded minting flow [L-9], unlock-first routing on both invitation routes,
+login honours validated `?return=` [U-3 — login previously discarded it],
+replace-link confirm for the linked+unlocked cell [L-7], start-over exit at
+login for the lost-both-keys dead-end [U-4]); **PR 3** 401 degrade-to-offline
+(refusal classifier on the parsed `'unauthorized'` envelope — the refresh
+endpoint's only refusal shape — for BOTH origins [L-3/L-5: today even a
+user-path 5xx destroys the session], single-flighted refresh [L-4:
+concurrent background 401s self-inflict reuse detection], `auth_degraded`
+attention with reconnect affordance, engine stop, boot re-arm). PRs stack
+1→2→3, base `full-backend-transition`, worker never merges/pushes to master.
+**Morning integration pipeline:** pull PRs → Liz review → Larissa built-diff
+audit of all three (+ the still-owed light re-audit of `e1828537`/`0f9a2a91`
+folds into the same window) → Laura pre-squash (global line, guard screen,
+start-over exit, replace-link confirm, degrade attention) → Chris's spec §8
+manual verification (8 steps; the degrade test deletes ONLY the account
+server-side — a full dev reset re-mints the instance epoch and masks L-1).
+Blob/two-browser manual verification (WS-C §15 / WS-D §14) still owed.
+
+Prior entry below.
+
 **Last updated:** 2026-07-03 (late evening) — **SYNC IS GREEN END-TO-END on the
 dev stack.** Server-side proof: `sync_records` carries ciphertext rows
 (4 chats, 1 KB), `sync_push_records_total{outcome="ok"} 4`, one pull, doorbell
