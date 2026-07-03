@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { computeBlindId, fromBase64Url, openRecord, sealRecord } from '@chatsundere/crypto';
+import {
+  computeBlindId,
+  fromBase64Url,
+  openRecord,
+  sealBlob,
+  sealRecord,
+  toBase64Url,
+} from '@chatsundere/crypto';
 import type { MasterKey } from '@chatsundere/crypto';
 import type {
   SyncCollection,
@@ -13,10 +20,25 @@ import {
   useDiscoveryStore,
   useSessionStore,
 } from '@chatsundere/ui-shared';
-import type { SyncAttention, SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
+import type {
+  SyncAttention,
+  SyncOutboxRow,
+  SyncRowMeta,
+  TrashRow,
+} from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { apiFetch } from '../lib/fetch.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
+import {
+  type BlobFailure,
+  type BlobFailureContext,
+  type BlobRepairDeps,
+  noteBlobLocallyRemoved,
+  resetBlobRepairCycle,
+  resolveBlobFailure,
+} from './blob-repair.js';
+import { readBlobBytesById, resolveBlobFieldById } from './blob-transform.js';
+import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
 import {
   type CoalescedEntry,
   DEFAULT_MAX_BATCH_BYTES,
@@ -45,13 +67,6 @@ import {
 
 /** The 30-day pulled-tombstone grace window (§7.3). */
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** Blob-bearing collections deferred to WS-D; the drain never seals them (§3.1). */
-const BLOB_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
-  'personaAvatars',
-  'artefacts',
-  'attachments',
-]);
 
 /** The outcome of one drain, consumed by the cycle and by `mutateSynced`. */
 export interface DrainResult {
@@ -83,11 +98,22 @@ type OpenRecordFn = (
   extractKey: (row: unknown) => string,
 ) => Promise<unknown>;
 
+type SealBlobFn = (
+  mk: MasterKey,
+  blobId: string,
+  bytes: Uint8Array,
+) => Promise<{ body: Uint8Array; hash: Uint8Array }>;
+type PutBlobFn = (blobId: string, body: Uint8Array, hash: string) => Promise<PutBlobResult>;
+type DeleteBlobFn = (blobId: string) => Promise<void>;
+
 const defaultCrypto: SealCryptoDeps = { computeBlindId, sealRecord };
 let cryptoOverride: Partial<SealCryptoDeps> | null = null;
 let openRecordOverride: OpenRecordFn | null = null;
 let pushOverride: PushTransport | null = null;
 let pullOverride: PullTransport | null = null;
+let sealBlobOverride: SealBlobFn | null = null;
+let putBlobOverride: PutBlobFn | null = null;
+let deleteBlobOverride: DeleteBlobFn | null = null;
 let maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
 
 /** Task 7 registers the pull loop here; defaults to a no-op until then. */
@@ -111,6 +137,16 @@ export function _setPushTransport(fn: PushTransport | null): void {
 export function _setPullTransport(fn: PullTransport | null): void {
   pullOverride = fn;
 }
+/** Test seam: intercept the binary blob transport + seal (WS-D §5 drain phases). */
+export function _setBlobTransport(deps: {
+  sealBlob?: SealBlobFn;
+  putBlob?: PutBlobFn;
+  deleteBlob?: DeleteBlobFn;
+}): void {
+  sealBlobOverride = deps.sealBlob ?? null;
+  putBlobOverride = deps.putBlob ?? null;
+  deleteBlobOverride = deps.deleteBlob ?? null;
+}
 /** Test seam: shrink the byte-batch ceiling so boundary tests need no megabytes. */
 export function _setMaxBatchBytes(n: number): void {
   maxBatchBytes = n;
@@ -129,6 +165,9 @@ export function _resetWorkerForTests(): void {
   openRecordOverride = null;
   pushOverride = null;
   pullOverride = null;
+  sealBlobOverride = null;
+  putBlobOverride = null;
+  deleteBlobOverride = null;
   maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
   pullLoop = async () => undefined;
   recovery = async () => undefined;
@@ -140,6 +179,19 @@ function activeCrypto(): SealCryptoDeps {
 }
 function activeOpenRecord(): OpenRecordFn {
   return openRecordOverride ?? openRecord;
+}
+function activeSealBlob(): SealBlobFn {
+  return sealBlobOverride ?? sealBlob;
+}
+function activePutBlob(): PutBlobFn {
+  return putBlobOverride ?? putBlob;
+}
+function activeDeleteBlob(): DeleteBlobFn {
+  return deleteBlobOverride ?? deleteBlob;
+}
+/** The repair matrix's injected seal + transport, wired to the drain's seams. */
+function blobRepairDeps(): BlobRepairDeps {
+  return { sealBlob: activeSealBlob(), putBlob: activePutBlob() };
 }
 
 // ===== Local row reads =====
@@ -195,11 +247,20 @@ function coalesce(
 
 // ===== Drain (spec §6) =====
 
+/** Serialise a `[collection, key]` pair for the blocked-key / ack lookup maps. */
+function keyId(collection: SyncCollection, key: string): string {
+  return `${collection}:${key}`;
+}
+
 /**
- * Drain the outbox once: coalesce, seal, byte-batch, push, and apply each
- * per-record result (spec §6). Never advances the watermark. Safe to call
- * standalone — it no-ops when the MK or `syncUrl` is unavailable, so the
- * gate-checked immediate path and the cycle share one implementation.
+ * Drain the outbox once under the WS-D §5 phase order (load-bearing integrity,
+ * §11.5): blob-puts FIRST (a puller must never resolve a committed record to a
+ * blob the server has not seen), then record upserts + tombstones (WS-C's
+ * phases), then blob-deletes LAST (an orphan is harmless, a dangling ref is a
+ * hole). A failed put blocks only its OWN record's upsert this cycle; a
+ * replaced-id delete waits for that record's `ok` ack and is suppressed on a
+ * `conflict` (Larissa M-2). Never advances the watermark. No-ops when the MK or
+ * `syncUrl` is unavailable, so the immediate path and the cycle share one impl.
  */
 export async function drainOutbox(): Promise<DrainResult> {
   const db = getClientDataDb();
@@ -210,15 +271,50 @@ export async function drainOutbox(): Promise<DrainResult> {
   const outbox = await db.syncOutbox.orderBy('seq').toArray();
   if (outbox.length === 0) return emptyDrain();
 
-  const groups = coalesce(outbox);
+  resetBlobRepairCycle();
 
-  // Build wire records; short-circuit the never-pushed create+delete (L-4) and
-  // any entry whose row vanished — those seqs are dropped without a push.
-  const prepared: PreparedRecord[] = [];
+  const recordRows = outbox.filter(
+    (r): r is SyncOutboxRow & { op: 'upsert' | 'delete' } => r.op === 'upsert' || r.op === 'delete',
+  );
+  const blobPuts = outbox.filter((r) => r.op === 'blob-put');
+  const blobDeletes = outbox.filter((r) => r.op === 'blob-delete');
+
   const seqsToDrop: number[] = [];
+
+  // Coalescing (§5): a `blob-put` + `blob-delete` for the same never-pushed
+  // blobId cancels to nothing (mirror of WS-C's create+delete L-4). Both entries
+  // drop without any network op.
+  const putIds = new Set(blobPuts.map((r) => r.blobId).filter((b): b is string => Boolean(b)));
+  const cancelledIds = new Set<string>();
+  for (const del of blobDeletes) {
+    if (del.blobId && putIds.has(del.blobId)) cancelledIds.add(del.blobId);
+  }
+  for (const row of [...blobPuts, ...blobDeletes]) {
+    if (row.blobId && cancelledIds.has(row.blobId) && row.seq !== undefined) {
+      seqsToDrop.push(row.seq);
+    }
+  }
+
+  // ===== Phase 1: blob-puts (§5) =====
+  const blockedKeys = new Set<string>();
+  for (const put of blobPuts) {
+    if (put.blobId && cancelledIds.has(put.blobId)) continue; // coalesced away
+    const disposition = await drainBlobPut(mk, put);
+    if (disposition.drop && put.seq !== undefined) seqsToDrop.push(put.seq);
+    if (disposition.block) blockedKeys.add(keyId(put.collection, put.key));
+  }
+
+  // ===== Phase 2: record upserts + tombstones (WS-C's phases) =====
+  const groups = coalesce(recordRows);
+  const upsertKeys = new Set<string>();
+  const prepared: PreparedRecord[] = [];
   const crypto = activeCrypto();
   for (const group of groups) {
-    if (BLOB_COLLECTIONS.has(group.collection)) continue; // deferred to WS-D (§3.1)
+    const kid = keyId(group.collection, group.key);
+    // A record whose blob-put failed this cycle is held back (ordering §5): its
+    // outbox entry stays, so it re-pushes once the blob lands.
+    if (blockedKeys.has(kid)) continue;
+    if (group.op === 'upsert') upsertKeys.add(kid);
 
     const meta = await db.syncRows.get([group.collection, group.key]);
     const baseRev = meta?.rev ?? 0;
@@ -244,39 +340,61 @@ export async function drainOutbox(): Promise<DrainResult> {
     prepared.push(await prepareRecord(crypto, mk, entry));
   }
 
-  if (seqsToDrop.length > 0) await db.syncOutbox.bulkDelete(seqsToDrop);
-  if (prepared.length === 0) return emptyDrain();
-
-  const push = pushOverride ?? ((records: SyncPushRecord[]) => defaultPush(syncUrl, records));
-  const batches = batchByBytes(prepared, maxBatchBytes);
-
   let head: number | null = null;
   let epoch: string | null = null;
   let pushedHighestRev = 0;
   let needsPull = false;
+  /** Per-key record ack, gating the phase-3 replaced-id deletes (M-2). */
+  const ackByKey = new Map<string, 'ok' | 'conflict' | 'tombstoned' | 'error'>();
 
-  for (const batch of batches) {
-    const response = await push(batch.map((p) => p.record));
-    head = response.head;
-    epoch = response.epoch;
+  if (prepared.length > 0) {
+    const push = pushOverride ?? ((records: SyncPushRecord[]) => defaultPush(syncUrl, records));
+    const batches = batchByBytes(prepared, maxBatchBytes);
 
-    for (let i = 0; i < batch.length; i++) {
-      const prep = batch[i];
-      const result = response.results[i];
-      if (!prep || !result) continue;
+    for (const batch of batches) {
+      const response = await push(batch.map((p) => p.record));
+      head = response.head;
+      epoch = response.epoch;
 
-      if (result.status === 'ok') {
-        pushedHighestRev = Math.max(pushedHighestRev, result.rev);
-        await applyOk(prep, result.rev);
-      } else if (result.status === 'conflict') {
-        needsPull = (await applyConflict(mk, prep, result.current)) || needsPull;
-      } else if (result.status === 'tombstoned') {
-        await applyTombstoned(prep);
-      } else {
-        await applyError(result);
+      for (let i = 0; i < batch.length; i++) {
+        const prep = batch[i];
+        const result = response.results[i];
+        if (!prep || !result) continue;
+        ackByKey.set(keyId(prep.collection, prep.key), result.status);
+
+        if (result.status === 'ok') {
+          pushedHighestRev = Math.max(pushedHighestRev, result.rev);
+          await applyOk(prep, result.rev);
+        } else if (result.status === 'conflict') {
+          needsPull = (await applyConflict(mk, prep, result.current)) || needsPull;
+        } else if (result.status === 'tombstoned') {
+          await applyTombstoned(prep);
+        } else {
+          await applyError(result);
+        }
       }
     }
   }
+
+  // ===== Phase 3: blob-deletes LAST (§5) =====
+  for (const del of blobDeletes) {
+    if (!del.blobId || cancelledIds.has(del.blobId)) continue;
+    const kid = keyId(del.collection, del.key);
+    // A replaced-id delete (its record was upserted this cycle) waits for the
+    // `ok` ack; a `conflict` means the old ref may still be live under LWW, so
+    // deleting the old blob would destroy a live object — DEFER it (Larissa M-2).
+    if (upsertKeys.has(kid) && ackByKey.get(kid) !== 'ok') continue;
+    try {
+      await activeDeleteBlob()(del.blobId);
+      noteBlobLocallyRemoved(del.blobId);
+      if (del.seq !== undefined) seqsToDrop.push(del.seq);
+    } catch {
+      // A failed delete (rate limit / network) keeps its entry: an orphaned blob
+      // is quota-charged but harmless, and the delete retries next cycle.
+    }
+  }
+
+  if (seqsToDrop.length > 0) await db.syncOutbox.bulkDelete(seqsToDrop);
 
   let needsRecovery = false;
   if (epoch !== null && (await checkEpoch(epoch)) === 'mismatch') needsRecovery = true;
@@ -289,6 +407,72 @@ export async function drainOutbox(): Promise<DrainResult> {
   }
 
   return { pushedHighestRev, head, epoch, needsRecovery, needsPull };
+}
+
+/**
+ * Drain one `blob-put` (§5 phase 1): read the bytes from the LIVE row only
+ * (Larissa L-1 — no trash-read upload path), seal deterministically, and PUT.
+ * Success drops the entry; a typed failure delegates to the §7 repair matrix and
+ * maps its disposition to the drain's drop/block bookkeeping. Bytes nowhere
+ * locally → drop with a diagnostic.
+ */
+async function drainBlobPut(
+  mk: MasterKey,
+  put: SyncOutboxRow,
+): Promise<{ drop: boolean; block: boolean }> {
+  if (!put.blobId) return { drop: true, block: false }; // malformed entry
+  const row = await readLocalRow(put.collection, put.key);
+  const bytesBlob = row ? readBlobBytesById(put.collection, row, put.blobId) : undefined;
+  if (!bytesBlob) return { drop: true, block: false }; // bytes gone locally — diagnostic drop
+
+  const field = resolveBlobFieldById(put.collection, row, put.blobId);
+  const bytes = new Uint8Array(await bytesBlob.arrayBuffer());
+  const sealed = await activeSealBlob()(mk, put.blobId, bytes);
+  const result = await activePutBlob()(put.blobId, sealed.body, toBase64Url(sealed.hash));
+
+  if (result.status === 'created' || result.status === 'ok') return { drop: true, block: false };
+
+  const ctx: BlobFailureContext = {
+    collection: put.collection,
+    key: put.key,
+    blobId: put.blobId,
+    refField: field?.refField ?? '',
+    oversizedField: field?.oversizedField ?? '',
+    bytes,
+    mk,
+  };
+  const disposition = await resolveBlobFailure(putFailureFor(result), ctx, blobRepairDeps());
+  return dispositionToDrain(disposition);
+}
+
+/** Map a non-2xx PUT verdict to the §7 repair matrix's failure descriptor. */
+function putFailureFor(result: PutBlobResult): BlobFailure {
+  switch (result.status) {
+    case 'blob_too_large':
+      return { kind: 'put-too-large', maxBlobBytes: result.maxBlobBytes };
+    case 'quota_exceeded':
+      return { kind: 'put-quota', usedBytes: result.usedBytes, quotaBytes: result.quotaBytes };
+    case 'blob_exists':
+      return { kind: 'put-exists' };
+    default:
+      return {
+        kind: 'put-error',
+        httpStatus: result.status === 'error' ? result.httpStatus : undefined,
+      };
+  }
+}
+
+/** Translate a repair disposition into the drain's drop/block bookkeeping (§5/§7). */
+function dispositionToDrain(disposition: string): { drop: boolean; block: boolean } {
+  switch (disposition) {
+    case 'terminal': // 413 sentinel / cap exhausted: the record syncs regardless
+    case 'reissued': // handled via a fresh id + Class-2 update; the live row is safe
+    case 'repaired':
+    case 'clear':
+      return { drop: true, block: false };
+    default: // keep-block / placeholder / suppressed: keep the entry, hold the record
+      return { drop: false, block: true };
+  }
 }
 
 /** POST a batch to the sync server (bearer + refresh via `apiFetch`). */

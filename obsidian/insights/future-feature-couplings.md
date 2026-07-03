@@ -62,6 +62,30 @@ Registered from the WS-C sync engine build (spec
   it and the field leaks to other devices. Treat a new synced-collection field
   as a strip-list review trigger.
 
+### Blob client (WS-D) follow-up couplings — OPEN 2026-07-03
+
+Registered from the WS-D blob client build (spec
+`superpowers/specs/2026-07-02-ws-d-blob-client-design.md` §8, §11.3).
+
+- **Orphaned-blob sweep must not delete before pull convergence (Larissa I-2).**
+  The server-side orphaned-blob sweep (server spec §19) reclaims blob objects no
+  record references. **When that sweep is built**, it MUST NOT delete an
+  unreferenced inventory id before a client has fully converged its pull — a
+  lying or merely slow server would otherwise turn the sweep into self-harm
+  (delete a blob whose referencing record is still in flight to another device).
+  The client's epoch-recovery blob re-upload (`recovery.ts` `recoverBlobs`) is
+  the counterpart that heals a wrongly-swept blob, but only for the byte-holding
+  device — the sweep itself must be convergence-gated on the server side.
+
+- **One blobId ↔ exactly one (row, field), forever (Larissa I-1).** A blobId is
+  minted per `(row, field)` and the deferred `blob-delete`-of-replaced-id
+  depends on this uniqueness. **Any future row-copy / forward / duplicate
+  feature** (e.g. "send this artefact to another chat", "duplicate persona")
+  MUST mint FRESH blobIds and re-seal — never share or copy a `BlobRef` across
+  rows. Sharing a ref would make one device's delete brick another row's image,
+  and would open a content-equality oracle. This is an invariant, not a
+  preference.
+
 ## Closed couplings
 
 ### Memory system ⇒ Chatsune importer memory import — CLOSED 2026-06-20

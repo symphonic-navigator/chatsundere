@@ -2,6 +2,7 @@
 import { toBase64Url } from '@chatsundere/crypto';
 import type { MasterKey, SealedRecord } from '@chatsundere/crypto';
 import type { SyncCollection, SyncPushRecord } from '@chatsundere/shared-types';
+import { type NewBlob, isBlobCollection, stripBlobsForSeal } from './blob-transform.js';
 import { stripForSeal } from './strip.js';
 
 /**
@@ -54,6 +55,13 @@ export interface PreparedRecord {
   ciphertextHashB64: string | null;
   /** Summed encoded size used for byte-batching. */
   encodedBytes: number;
+  /**
+   * Newly-minted blobs whose bytes still need a PUT (WS-D §4/§5). Non-empty only
+   * for a blob-bearing collection's upsert whose bytes had no ref yet; the drain
+   * (WS-D Task 4) queues these `blob-put`s alongside the record upsert. Always
+   * empty for record-only collections and tombstones.
+   */
+  newBlobs: NewBlob[];
 }
 
 /**
@@ -103,10 +111,25 @@ export async function prepareRecord(
       record,
       ciphertextHashB64: null,
       encodedBytes: encodedBytesOf(record),
+      newBlobs: [],
     };
   }
 
-  const sealed = await deps.sealRecord(mk, collection, key, stripForSeal(collection, entry.row));
+  // Blob-bearing collections route through the §4 transform: it strips the
+  // `Blob` fields (bytes never cross the wire), attaches refs + sentinels, and
+  // surfaces newly-minted blobs for the drain to PUT. Every other collection
+  // keeps WS-C's plain strip. Both feed the same sealer.
+  let wireRow: unknown;
+  let newBlobs: NewBlob[] = [];
+  if (isBlobCollection(collection)) {
+    const stripped = stripBlobsForSeal(collection, entry.row);
+    wireRow = stripped.wireRow;
+    newBlobs = stripped.newBlobs;
+  } else {
+    wireRow = stripForSeal(collection, entry.row);
+  }
+
+  const sealed = await deps.sealRecord(mk, collection, key, wireRow);
   const ciphertextHashB64 = toBase64Url(sealed.ciphertextHash);
   const record: SyncPushRecord = {
     blindId: toBase64Url(sealed.blindId),
@@ -126,6 +149,7 @@ export async function prepareRecord(
     record,
     ciphertextHashB64,
     encodedBytes: encodedBytesOf(record),
+    newBlobs,
   };
 }
 

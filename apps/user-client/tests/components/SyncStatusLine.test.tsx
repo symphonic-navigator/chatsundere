@@ -10,6 +10,11 @@ import {
 } from '../../src/boot/client-data-db.js';
 import type { SyncAttention, SyncStateRow } from '../../src/boot/client-data-db.js';
 import { SyncStatusLine, deriveSyncStatus } from '../../src/components/SyncStatusLine.js';
+import {
+  _resetBlobFetchForTests,
+  _setBlobFetchDeps,
+  enqueueEager,
+} from '../../src/sync/blob-fetch.js';
 import { setRecovering } from '../../src/sync/watermark.js';
 
 const BASE_STATE: SyncStateRow = {
@@ -42,6 +47,7 @@ describe('SyncStatusLine', () => {
   });
   afterEach(async () => {
     setRecovering(false);
+    _resetBlobFetchForTests();
     await _resetClientDataDbForTests();
   });
 
@@ -133,6 +139,22 @@ describe('SyncStatusLine', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
+  it('"Fetching images…" gates "Synced" while the eager queue drains (§6)', async () => {
+    linkOnline();
+    await seedState({ watermarkRev: 10, lastSyncAt: Date.now() });
+    // A never-resolving eager fetch keeps the queue active.
+    _setBlobFetchDeps({
+      getMk: () => new Uint8Array([1]) as never,
+      getBlob: () => new Promise<Uint8Array>(() => {}),
+    });
+    enqueueEager('artefacts', 'a1', 'thumbBlob', { blobId: 'AAAAAAAAAAAAAAAAAAAAAA', bytes: 10 });
+
+    render(<SyncStatusLine />);
+    expect(await screen.findByText('Fetching images…')).toBeInTheDocument();
+    // Records are settled, but the line must not yet claim completion.
+    expect(screen.queryByText(/^Synced/)).not.toBeInTheDocument();
+  });
+
   it('Attention: quota_exceeded interpolates used/quota bytes', async () => {
     linkOnline();
     const attention: SyncAttention = {
@@ -157,6 +179,26 @@ describe('deriveSyncStatus (pure precedence)', () => {
       recovering: true,
     });
     expect(view.kind).toBe('recovery');
+  });
+
+  it('fetchingImages gates Synced but Waiting still outranks it', () => {
+    const fetching = deriveSyncStatus({
+      state: { ...BASE_STATE },
+      outboxCount: 0,
+      online: true,
+      recovering: false,
+      fetchingImages: true,
+    });
+    expect(fetching.kind).toBe('fetching');
+
+    const waiting = deriveSyncStatus({
+      state: { ...BASE_STATE },
+      outboxCount: 2,
+      online: true,
+      recovering: false,
+      fetchingImages: true,
+    });
+    expect(waiting.kind).toBe('waiting');
   });
 
   it('a pulling-set state never resolves to Synced', () => {

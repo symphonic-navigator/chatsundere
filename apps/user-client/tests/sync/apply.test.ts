@@ -202,12 +202,26 @@ describe('applyRecord — §7.1 inert rejection (§12.3)', () => {
   });
 });
 
-// ===== §7.2 unhandled collection =====
+// ===== WS-D §3 — blob collections join the handled set =====
 
-describe('applyRecord — §7.2 unhandled collection', () => {
-  it('skips a blob-bearing collection inertly', async () => {
-    const outcome = await applyRecord(pulledUpsert('attachments', 'a1', new Uint8Array([1]), 3));
-    expect(outcome).toEqual({ kind: 'skipped' });
+describe('applyRecord — blob-bearing collections apply (WS-D §3)', () => {
+  it('inserts an attachments row (no longer inertly skipped)', async () => {
+    const db = getClientDataDb();
+    // The blob-bearing collections joined the handled set in WS-D: they apply
+    // through the §4 transform rather than being skipped.
+    openReturns({
+      id: 'att1',
+      chatId: 'c1',
+      messageId: 'm1',
+      updatedAt: 1,
+      blobRef: { blobId: 'attAAAAAAAAAAAAAAAAAAA', bytes: 40 },
+    });
+    const outcome = await applyRecord(pulledUpsert('attachments', 'att1', new Uint8Array([1]), 3));
+    expect(outcome).toEqual({ kind: 'inserted' });
+    // The row landed in the placeholder state: ref present, bytes absent (§4/§6).
+    const row = await db.attachments.get('att1');
+    expect(row?.blobRef).toMatchObject({ blobId: 'attAAAAAAAAAAAAAAAAAAA' });
+    expect(row?.blob).toBeUndefined();
   });
 });
 

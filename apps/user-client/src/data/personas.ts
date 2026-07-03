@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
-import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { enqueueBlobDelete, enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
@@ -95,44 +95,59 @@ export function useUpdatePersona() {
 export function useDeletePersona() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const db = getClientDataDb();
-      // Enumerate the synced descendants BEFORE the mutation so their tombstones
-      // ride the same transaction (spec §7.3a): the apply pipeline never cascades,
-      // so a persona tombstone alone would orphan its chats/messages/pills on
-      // other devices. `personaAvatars` is a blob collection (WS-D) — deleted
-      // locally, but not tombstoned here.
-      const chats = await db.chats.where('personaId').equals(id).toArray();
-      const chatIds = chats.map((c) => c.id);
-      const messages =
-        chatIds.length > 0 ? await db.messages.where('chatId').anyOf(chatIds).toArray() : [];
-      const messageIds = messages.map((m) => m.id);
-      const pills =
-        messageIds.length > 0 ? await db.pills.where('messageId').anyOf(messageIds).toArray() : [];
-      const pillIds = pills.map((p) => p.id);
-
-      await mutateSynced({
-        collection: 'personas',
-        key: id,
-        op: 'delete',
-        tables: ['personas', 'chats', 'messages', 'pills', 'personaAvatars'],
-        cascade: [
-          ...chatIds.map((k) => ({ collection: 'chats' as const, key: k })),
-          ...messageIds.map((k) => ({ collection: 'messages' as const, key: k })),
-          ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
-        ],
-        write: async (tx) => {
-          if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
-          if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
-          if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
-          await tx.table('personaAvatars').delete(id);
-          await tx.table('personas').delete(id);
-        },
-      });
-    },
+    mutationFn: (id: string) => deletePersonaCascade(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.personas });
       qc.invalidateQueries({ queryKey: QK.chats });
+    },
+  });
+}
+
+/**
+ * Delete a persona and cascade-tombstone its chats, messages, pills, and — the
+ * one case the avatar IS tombstoned (WS-D §5) — its `personaAvatars` row, with a
+ * `blob-delete` for the avatar's bytes. Plain function so the cascade is testable
+ * without React; {@link useDeletePersona} wraps it.
+ */
+export async function deletePersonaCascade(id: string): Promise<void> {
+  const db = getClientDataDb();
+  // Enumerate the synced descendants BEFORE the mutation so their tombstones
+  // ride the same transaction (spec §7.3a): the apply pipeline never cascades,
+  // so a persona tombstone alone would orphan its chats/messages/pills on
+  // other devices. Persona deletion is the ONE case where the avatar IS
+  // tombstoned (WS-D §5 — the terminality trap does not apply, the persona is
+  // gone), with a `blob-delete` for its stored bytes.
+  const chats = await db.chats.where('personaId').equals(id).toArray();
+  const chatIds = chats.map((c) => c.id);
+  const messages =
+    chatIds.length > 0 ? await db.messages.where('chatId').anyOf(chatIds).toArray() : [];
+  const messageIds = messages.map((m) => m.id);
+  const pills =
+    messageIds.length > 0 ? await db.pills.where('messageId').anyOf(messageIds).toArray() : [];
+  const pillIds = pills.map((p) => p.id);
+  const avatar = await db.personaAvatars.get(id);
+  const avatarBlobId = avatar?.blobRef?.blobId ?? null;
+
+  await mutateSynced({
+    collection: 'personas',
+    key: id,
+    op: 'delete',
+    tables: ['personas', 'chats', 'messages', 'pills', 'personaAvatars'],
+    cascade: [
+      ...chatIds.map((k) => ({ collection: 'chats' as const, key: k })),
+      ...messageIds.map((k) => ({ collection: 'messages' as const, key: k })),
+      ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
+      ...(avatar ? [{ collection: 'personaAvatars' as const, key: id }] : []),
+    ],
+    write: async (tx) => {
+      if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
+      if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
+      if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
+      await tx.table('personaAvatars').delete(id);
+      await tx.table('personas').delete(id);
+    },
+    blobOps: (tx) => {
+      if (avatarBlobId) enqueueBlobDelete(tx, 'personaAvatars', id, avatarBlobId);
     },
   });
 }

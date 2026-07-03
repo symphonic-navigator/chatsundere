@@ -58,6 +58,11 @@ export const syncCopy = {
     tombstonePaused: (count: number): string =>
       `A large number of items (${count}) were removed by another device — that's paused for safety. They stay recoverable for 30 days.`,
     recoveryPaused: 'Your server is behaving inconsistently — syncing is paused.',
+    /** §8 — epoch recovery would re-upload a large amount; ask before it does. */
+    blobReuploadThreshold: ({ bytes, count }: { bytes: number; count: number }): string =>
+      `Re-syncing this device would re-upload ${formatBytes(bytes)} of images (${count} ${
+        count === 1 ? 'image' : 'images'
+      }). Confirm before it uploads.`,
     tamper:
       'Your server sent something that should not be possible. To protect your data, that change was refused — if this keeps happening, tell your operator.',
   },
@@ -97,4 +102,49 @@ export const syncCopy = {
 
   /** The gentlest copy in the catalogue (decision 5): offline bookmarking. */
   offlineBookmark: 'Saved bookmarks need your server — this wakes up the moment you’re back.',
+
+  /**
+   * Blob channel copy (WS-D §9). The 413 origin/remote pair distinguishes the
+   * device that created the too-large image from every other device (Laura hard);
+   * the quota copy names the linked instance ("your server at <host>") rather
+   * than an abstract operator; the fetch/placeholder strings drive §10's surfaces.
+   */
+  blob: {
+    /** §9 — origin device: the image the operator's limit rejected stays local. */
+    tooLargeOrigin: (maxBlobBytes: number): string =>
+      `This image is larger than your server accepts (limit: ${formatBytes(
+        maxBlobBytes,
+      )}). It stays on this device.`,
+    /** §9 — remote device: the terminal placeholder for an oversize-sentinel ref. */
+    tooLargeRemote:
+      'This image was too large for the server — it lives on the device that created it.',
+    /** §9 — quota copy naming the linked instance host (Laura). */
+    quotaFull: (
+      host: string,
+      { usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: number },
+    ): string =>
+      `Your server at ${host} is out of storage (${formatBytes(usedBytes)} of ${formatBytes(
+        quotaBytes,
+      )} used). Free space by deleting large images and it will sync.`,
+    /** §6/§10 — the status-line sub-state gating "Synced" until the queue drains. */
+    fetching: 'Fetching images…',
+    /** §10 — a pending (retriable) fetch placeholder. */
+    placeholderPending: 'Loading image…',
+    /** §10 — a terminal placeholder (oversize sentinel or the §7.1 rest state). */
+    placeholderTerminal: 'Image unavailable',
+    /** §10 — per-item marker at the origin item: a 413-terminal blob. */
+    markerTooLarge: 'Not synced — too large',
+    /** §10 — per-item marker at the origin item: a blob waiting on quota. */
+    markerStorageFull: 'Not synced — storage full',
+    /**
+     * §9 — the calm, display-only quota line on the account page. Names the
+     * linked instance ("your server at <host>") and the freeing action lives in
+     * the adjacent quota attention copy; this line only reports the numbers.
+     */
+    storageUsed: (
+      host: string,
+      { usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: number },
+    ): string =>
+      `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)} storage used on your server at ${host}.`,
+  },
 } as const;

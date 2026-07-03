@@ -156,12 +156,36 @@ describe('resolveConflict — immutable / creation-only collections', () => {
   }
 });
 
-describe('resolveConflict — unhandled blob collections fail loud', () => {
-  for (const c of ['personaAvatars', 'artefacts', 'attachments'] as const) {
-    it(`${c}: throws (apply skips these before resolution)`, () => {
-      expect(() => resolveConflict(c, {}, {})).toThrow(/unhandled collection/);
+describe('resolveConflict — blob collections resolve LWW (WS-D §3)', () => {
+  // `artefacts`/`attachments` LWW on `updatedAt` with a uuid tie-break; joined the
+  // handled set in WS-D (they no longer fall through to the fail-loud branch).
+  for (const c of ['artefacts', 'attachments'] as const) {
+    it(`${c}: pulled newer updatedAt wins`, () => {
+      expect(resolveConflict(c, { id: 'a', updatedAt: 1 }, { id: 'a', updatedAt: 2 })).toEqual({
+        winner: 'pulled',
+        repush: false,
+      });
+    });
+    it(`${c}: local newer updatedAt wins and repushes`, () => {
+      expect(resolveConflict(c, { id: 'a', updatedAt: 5 }, { id: 'a', updatedAt: 2 })).toEqual({
+        winner: 'local',
+        repush: true,
+      });
     });
   }
+
+  // `personaAvatars` LWW on `updatedAt`, keyed 1:1 by `personaId` (no uuid) — an
+  // exact-clock tie is the same logical avatar, resolved to local with no repush.
+  it('personaAvatars: LWW on updatedAt, tie resolves to local', () => {
+    expect(resolveConflict('personaAvatars', { updatedAt: 1 }, { updatedAt: 2 })).toEqual({
+      winner: 'pulled',
+      repush: false,
+    });
+    expect(resolveConflict('personaAvatars', { updatedAt: 3 }, { updatedAt: 3 })).toEqual({
+      winner: 'local',
+      repush: false,
+    });
+  });
 });
 
 describe('memoryBodyAdoptsWinner — anti-ping-pong', () => {

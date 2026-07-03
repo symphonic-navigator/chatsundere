@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ImageModelConfig } from '@chatsundere/llm-unified';
-import type { SyncCollection } from '@chatsundere/shared-types';
+import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
@@ -334,6 +334,16 @@ export interface ArtefactRow {
   blob?: Blob;
   /** kind === 'image' — downscaled JPEG for the chat stream + Treasury. */
   thumbBlob?: Blob;
+  /** WS-D §4 — persisted ref for the sealed `blob` (present once pushed; the
+   *  wire row carries this, never the bytes). Non-indexed, no Dexie bump. */
+  blobRef?: BlobRef;
+  /** WS-D §4 — persisted ref for the sealed `thumbBlob`. */
+  thumbBlobRef?: BlobRef;
+  /** WS-D §4/§7.3 — durable "this blob is permanently too large for the server"
+   *  sentinel, set on a `413` and synced inside the sealed record. */
+  blobOversized?: true;
+  /** WS-D §4 — the same terminal sentinel for the thumbnail blob. */
+  thumbBlobOversized?: true;
   /** kind === 'image' — measured via createImageBitmap after fetch. */
   width?: number;
   height?: number;
@@ -365,6 +375,12 @@ export interface AttachmentRow {
   updatedAt: number;
   /** kind === 'image' — the NORMALISED JPEG (see image-normalise.ts), the only stored copy. */
   blob?: Blob;
+  /** WS-D §4 — persisted ref for the sealed `blob`; the wire row carries this,
+   *  never the bytes. Non-indexed, no Dexie bump. */
+  blobRef?: BlobRef;
+  /** WS-D §4/§7.3 — durable oversize sentinel, set on a `413` and synced inside
+   *  the sealed record so every device learns the blob is server-terminal. */
+  blobOversized?: true;
   /** kind === 'text' — editable via the lightbox Source view while pending. */
   text?: string;
   /** kind === 'image' — post-normalisation dimensions. */
@@ -388,12 +404,23 @@ export interface AvatarCrop {
 
 export interface PersonaAvatarRow {
   personaId: string; // PK, 1:1 with a persona
-  blob: Blob; // downscaled FULL image (not pre-cropped)
+  /** Downscaled FULL image (not pre-cropped). Optional (WS-D §4): absent in the
+   *  placeholder state (a pulled avatar whose bytes have not hydrated yet) and
+   *  after removal (`blobRef: null`, the row survives so avatar sync is never
+   *  bricked — the persona falls back to the monogram). */
+  blob?: Blob;
   mime: string;
   width: number; // natural width of the stored image
   height: number; // natural height of the stored image
   crop: AvatarCrop;
   updatedAt: number;
+  /** WS-D §4 — persisted ref for the sealed `blob`. `null` after avatar removal
+   *  (the wire row carries `blobRef: null`, NEVER a tombstone — a tombstone
+   *  would brick avatar sync for this personaId forever). Absent on pre-WS-D
+   *  rows until the first push mints one. */
+  blobRef?: BlobRef | null;
+  /** WS-D §4/§7.3 — durable oversize sentinel, set on a `413`. */
+  blobOversized?: true;
 }
 
 // ===== Voice audio cache (v21) =====
@@ -513,12 +540,18 @@ export interface CompactionCheckpointRow {
 // ===== Sync engine rows (v33, WS-C — spec §4) =====
 
 /** An outbound change awaiting seal + push. No payload — sealing reads the
- *  live row at drain time, so queued edits of one key coalesce for free. */
+ *  live row at drain time, so queued edits of one key coalesce for free.
+ *
+ *  WS-D §5: the op union gains `blob-put`/`blob-delete` for the binary channel.
+ *  A blob op carries the owning record's sync `key` (so cascades and coalescing
+ *  group with the record naturally) plus the specific `blobId` it acts on. */
 export interface SyncOutboxRow {
   seq?: number;
   collection: SyncCollection;
   key: string;
-  op: 'upsert' | 'delete';
+  op: 'upsert' | 'delete' | 'blob-put' | 'blob-delete';
+  /** WS-D §5 — set for `blob-put`/`blob-delete` only; the blob the op acts on. */
+  blobId?: string;
   enqueuedAt: number;
 }
 
@@ -559,6 +592,7 @@ export type SyncAttention =
   | { kind: 'tombstone_threshold'; count: number }
   | { kind: 'tombstone_paused'; count: number }
   | { kind: 'recovery_paused' }
+  | { kind: 'blob_reupload_threshold'; bytes: number; count: number }
   | { kind: 'tamper' };
 
 // ===== Dexie subclass =====

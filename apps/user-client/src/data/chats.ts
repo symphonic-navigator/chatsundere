@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ChatRow, type ContentBlock, getClientDataDb } from '../boot/client-data-db.js';
 import { useStreamManagerStore } from '../state/stream-manager.store.js';
-import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { enqueueBlobDelete, enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { patchTouchesSyncedField } from '../sync/strip.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
@@ -197,9 +197,10 @@ export function useToggleBookmark() {
 /**
  * Delete a chat and everything it owns (messages, pills, attachments, artefacts).
  * A shame-delete (spec §5): the local rows go immediately, and the chat plus its
- * synced children (messages, pills) enqueue `delete` tombstones so they follow on
- * other devices (the apply pipeline never cascades). `attachments`/`artefacts`
- * are blob collections (WS-D) — removed locally, not tombstoned here.
+ * synced children (messages, pills, and — WS-D §5 — attachments and artefacts)
+ * enqueue `delete` tombstones so they follow on other devices (the apply pipeline
+ * never cascades). Each attachment/artefact's blobs are enqueued as `blob-delete`s
+ * (drained LAST) so the server's objects are reclaimed after their records die.
  */
 export async function deleteChatCascade(chatId: string): Promise<void> {
   const db = getClientDataDb();
@@ -207,6 +208,19 @@ export async function deleteChatCascade(chatId: string): Promise<void> {
   const msgIds = msgs.map((m) => m.id);
   const pills = msgIds.length > 0 ? await db.pills.where('messageId').anyOf(msgIds).toArray() : [];
   const pillIds = pills.map((p) => p.id);
+  // Enumerate the blob-bearing children BEFORE the write so their tombstones ride
+  // the same transaction and their blob ids survive for the deferred deletes.
+  const attachments = await db.attachments.where('chatId').equals(chatId).toArray();
+  const artefacts = await db.artefacts.where('chatId').equals(chatId).toArray();
+  const attachmentBlobs = attachments
+    .map((a) => ({ key: a.id, blobId: a.blobRef?.blobId ?? null }))
+    .filter((b): b is { key: string; blobId: string } => b.blobId !== null);
+  const artefactBlobs = artefacts.flatMap((a) => {
+    const ids: { key: string; blobId: string }[] = [];
+    if (a.blobRef) ids.push({ key: a.id, blobId: a.blobRef.blobId });
+    if (a.thumbBlobRef) ids.push({ key: a.id, blobId: a.thumbBlobRef.blobId });
+    return ids;
+  });
 
   await mutateSynced({
     collection: 'chats',
@@ -216,6 +230,8 @@ export async function deleteChatCascade(chatId: string): Promise<void> {
     cascade: [
       ...msgIds.map((k) => ({ collection: 'messages' as const, key: k })),
       ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
+      ...attachments.map((a) => ({ collection: 'attachments' as const, key: a.id })),
+      ...artefacts.map((a) => ({ collection: 'artefacts' as const, key: a.id })),
     ],
     write: async (tx) => {
       if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
@@ -223,6 +239,10 @@ export async function deleteChatCascade(chatId: string): Promise<void> {
       await tx.table('artefacts').where('chatId').equals(chatId).delete();
       if (msgIds.length > 0) await tx.table('messages').bulkDelete(msgIds);
       await tx.table('chats').delete(chatId);
+    },
+    blobOps: (tx) => {
+      for (const b of attachmentBlobs) enqueueBlobDelete(tx, 'attachments', b.key, b.blobId);
+      for (const b of artefactBlobs) enqueueBlobDelete(tx, 'artefacts', b.key, b.blobId);
     },
   });
 }
