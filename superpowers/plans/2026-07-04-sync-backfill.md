@@ -10,6 +10,89 @@
 
 **Spec:** `superpowers/specs/2026-07-04-sync-backfill-design.md` (v2, audit-folded). Section references (§n) below point there.
 
+## Operating rules for the overnight worker (READ FIRST)
+
+These rules are binding. They override your defaults. If a rule here conflicts
+with anything you would normally do, the rule wins.
+
+1. **Language.** Every artefact you write into this repo — code, comments,
+   test names, commit messages, user-facing copy, PR titles and bodies — is
+   **British English** (`colour`, `initialise`, `behaviour`). Never US
+   spelling, never German, no mixed-language strings.
+2. **Branches and PRs.** The base branch is **`full-backend-transition`**.
+   You NEVER touch `master` — not a checkout, not a commit, not a merge, not
+   a push. Deliver **three stacked PRs, numbered in the title**:
+   - PR 1 (Tasks 1–10): branch cut from `full-backend-transition`,
+     title `Backfill 1/3: Sync backfill for the late-link path`.
+   - PR 2 (Tasks 11–15): branch cut from PR 1's branch tip,
+     title `Backfill 2/3: Fresh-join guard`.
+   - PR 3 (Tasks 16–18): branch cut from PR 2's branch tip,
+     title `Backfill 3/3: 401 degrade-to-offline`.
+   Every PR's **base is `full-backend-transition`** (GitHub will show
+   stacked diffs shrink as predecessors merge — that is expected). If your
+   environment can only produce a single branch/PR, deliver ONE PR containing
+   the three task groups as clearly separated commit sequences and say so in
+   the PR body — never collapse the grouping.
+   **You never merge anything.** The human reviews, device-tests, and merges.
+3. **TDD per task, in the plan's step order.** Failing test → run it and
+   CONFIRM it fails → minimal implementation → run it and CONFIRM it passes →
+   commit. Do not write implementation before its test. Do not batch commits
+   across tasks.
+4. **Execution discipline.** Use subagent-driven development where available
+   (one fresh subagent per task, review between tasks). Subagents never
+   merge, push, or switch branches — only the top-level session handles git
+   integration.
+5. **Verification is FULL-suite, never touched-dirs-only.** Per-PR gates
+   (also listed at each PR boundary):
+   - `pnpm typecheck --force` → **14/14 tasks green, 0 cached**. The
+     `--force` matters: Turbo caches typecheck and a cached pass on
+     test-touching work is meaningless here.
+   - `pnpm --filter user-client test` → full vitest.
+   - `cd packages/crypto && bun test` (PR 2 especially) → all pass.
+   - `pnpm build` → 9/9.
+   Do NOT declare a task or PR done on a partial run.
+6. **Known-green baseline (memorise this).** On the base branch, the
+   user-client vitest suite has **exactly 8 known environmental failures** —
+   the Node-experimental-localStorage trio-cluster (`localStorage.clear()`
+   undefined). They are NOT yours to fix and NOT cover for regressions:
+   expect exactly 8; a 9th failure is either the known load-dependent
+   `stream-manager-store` flake (re-run it in isolation — it passes) or a
+   REAL regression you introduced. Confirm the baseline on your base branch
+   BEFORE starting if in doubt. Everything else (crypto, typecheck, build)
+   is fully green at baseline.
+7. **No Dexie version bump.** The schema is at v33 and this plan needs no
+   bump (all new fields are non-indexed). If you conclude you need one, STOP
+   that task, leave a written note in the PR body, and move on — a bump is
+   v34 plus a ~27-assertion `db.verno` sweep and is a human decision.
+8. **Security boundary.** PR 2 touches `packages/crypto` and PR 1/3 touch the
+   sync engine and auth handling — ALL THREE PRs get a security audit
+   (Larissa) **after** your run, by the integrating session. You do not run
+   or simulate that audit; you write auditable code (no secrets in logs, no
+   plaintext key material crossing any wire, comments explaining non-obvious
+   security-relevant choices) and flag anything you are unsure about in the
+   PR body under a heading `## For the security audit`.
+9. **Commit style.** Free-form imperative, capitalised subject, no
+   Conventional-Commits prefix (`Add the late-link backfill pump`, not
+   `feat: ...`). Code commits do NOT get `[skip ci]`; doc-only commits do.
+   End every commit message with exactly:
+   `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
+10. **Do not edit** `STATUS-TRANSITION.md`, `obsidian/STATUS-*.md`,
+    `CLAUDE.md`, or anything under `obsidian/` — the integrating session owns
+    orientation files; a remote edit only manufactures merge conflicts.
+11. **When blocked, do not improvise around the plan.** If a verified code
+    fact below turns out wrong (a moved file, a changed signature), adapt the
+    mechanical details but keep the task's contract; note the deviation in
+    the task's commit body and the PR body. If a task's contract itself
+    cannot be met, skip the task, document why in the PR body, and continue —
+    an honest gap beats a silent workaround.
+12. **End-of-run hand-off (the last thing you do).** For each PR, the body
+    lists: the task numbers it covers, the verification numbers (every gate
+    from rule 5, with the 8-failure baseline explicitly noted), any
+    deviations (rule 11), and the `## For the security audit` section. Then
+    report back in your final message: the three PR links, the combined
+    verification numbers, and the commit list per branch. Do not merge. Do
+    not touch `master`. Stop there.
+
 ## Global Constraints
 
 - Branch base: `full-backend-transition`. PR 1 cuts from it; PR 2 stacks on PR 1; PR 3 stacks on PR 2. NEVER touch `master`.
@@ -2301,6 +2384,14 @@ git commit -m "Surface the auth-degraded attention with a reconnect affordance"
 ```
 
 **PR 3 boundary.**
+
+---
+
+### Task 19 (final): Hand-off
+
+- [ ] **Step 1: Re-run ALL gates on the PR 3 branch tip** (rule 5): `pnpm typecheck --force` (14/14, 0 cached), `pnpm --filter user-client test` (exactly the 8-failure baseline), `cd packages/crypto && bun test` (all pass), `pnpm build` (9/9).
+- [ ] **Step 2: Write the three PR bodies** per rule 12 — task coverage, verification numbers with the baseline noted, deviations, and the `## For the security audit` section.
+- [ ] **Step 3: Report back** (rule 12): the three PR links, combined verification numbers, commit list per branch. Do NOT merge anything. Do NOT touch `master`. Do NOT edit STATUS files. Stop.
 
 ---
 
