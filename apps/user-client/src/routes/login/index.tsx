@@ -11,7 +11,7 @@ import {
 } from '@chatsundere/crypto';
 import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { useDisplayName } from '../../data/settings.js';
@@ -27,8 +27,20 @@ import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
  * the passphrase field collapsed below. "Forgot passphrase?" is always
  * visible. Gate widened to any WebAuthn-capable device per ADR 0022.
  */
+/**
+ * Validate a ?return= target (spec §4.1): only a same-origin relative path may
+ * round-trip through the unlock — anything else falls back to /app. Guards the
+ * guard: a crafted link must not turn the login into an open redirect.
+ */
+export function safeReturnTarget(raw: string | null): string {
+  if (raw?.startsWith('/') && !raw.startsWith('//')) return raw;
+  return '/app';
+}
+
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTarget = safeReturnTarget(searchParams.get('return'));
 
   const [username, setUsername] = useState<string | null>(null);
   // Whether a linked account exists — drives which login flow to call. Sourced
@@ -141,7 +153,7 @@ export function Login() {
         const { session, mk } = await loginLocalWithPassphrase({ db, passphrase });
         useSessionStore.getState().setSession(session, mk);
       }
-      navigate('/app', { replace: true });
+      navigate(returnTarget, { replace: true });
     } catch (e) {
       // Spec §5.6: no distinction between wrong passphrase and missing account
       // to prevent information leakage.
@@ -219,7 +231,7 @@ export function Login() {
       });
 
       useSessionStore.getState().setSession(session);
-      navigate('/app', { replace: true });
+      navigate(returnTarget, { replace: true });
     } catch (_e) {
       // All biometric errors map to the same user-facing message regardless of
       // the underlying cause — no detail that could aid an attacker.
