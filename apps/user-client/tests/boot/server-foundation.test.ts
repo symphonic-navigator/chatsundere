@@ -2,6 +2,7 @@
 import { type LinkedAccountRow, openLocalDb, putLinkedAccount } from '@chatsundere/crypto';
 import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 
 const probeSpy = vi.hoisted(() => vi.fn());
 vi.mock('@chatsundere/ui-shared', async (importOriginal) => {
@@ -50,6 +51,11 @@ describe('initServerFoundation', () => {
       req.onblocked = () => resolve();
     });
     dbHolder.db = await openLocalDb();
+    // Production boot opens the client-data DB (via openDb) before
+    // initServerFoundation; armAuthDegradeFromBoot (§5.2) reads its sync state,
+    // so the test must open it too.
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
   });
 
   it('populates local-only and still fires the probe attempt (which no-ops)', async () => {
