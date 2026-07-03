@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { BlobRef } from '@chatsundere/shared-types';
-import { useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BlobCorruptBodyError,
@@ -15,6 +15,7 @@ import {
 } from '../../src/sync/blob-transport.js';
 
 const SYNC_URL = 'https://sync.example';
+const AUTH_URL = 'https://auth.example';
 const GOOD_ID = 'AAAAAAAAAAAAAAAAAAAAAA'; // 22 base64url chars
 
 const realFetch = globalThis.fetch;
@@ -29,6 +30,8 @@ function seedLinked(): void {
     session: { accessToken: 'tok', close: () => undefined } as never,
     mk: {} as never,
   });
+  // The 401-refresh path targets the AUTH origin, read from the link store.
+  useAccountLinkStore.setState({ linkStatus: 'linked', baseUrl: AUTH_URL } as never);
 }
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;
@@ -80,6 +83,7 @@ describe('blob-transport — verbs', () => {
     vi.restoreAllMocks();
     useDiscoveryStore.setState({ status: 'idle', config: null } as never);
     useSessionStore.setState({ session: null, mk: null });
+    useAccountLinkStore.setState({ linkStatus: 'unknown', baseUrl: null } as never);
   });
 
   it('putBlob PUTs with the caller hash + bearer and maps 201 → created', async () => {
@@ -186,9 +190,11 @@ describe('blob-transport — verbs', () => {
   it('refreshes once on a 401 and retries the request', async () => {
     let putCalls = 0;
     let refreshCalls = 0;
+    let refreshUrl: string | null = null;
     const fn = mockFetch((url) => {
       if (url.includes('/api/v1/token/refresh')) {
         refreshCalls += 1;
+        refreshUrl = url;
         return jsonResponse({ access_token: 'tok2', expires_in: 900 }, 200);
       }
       putCalls += 1;
@@ -199,6 +205,8 @@ describe('blob-transport — verbs', () => {
     const result = await putBlob(GOOD_ID, new Uint8Array([1]), 'h');
     expect(result).toEqual({ status: 'created' });
     expect(refreshCalls).toBe(1);
+    // The refresh targets the AUTH origin, never the sync service.
+    expect(refreshUrl).toBe(`${AUTH_URL}/api/v1/token/refresh`);
     expect(putCalls).toBe(2);
     // The retry carries the refreshed token.
     const retryInit = fn.mock.calls.at(-1)?.[1] as RequestInit;

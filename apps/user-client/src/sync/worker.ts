@@ -28,6 +28,7 @@ import type {
 } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { apiFetch } from '../lib/fetch.js';
+import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
 import {
   type BlobFailure,
@@ -265,7 +266,7 @@ function keyId(collection: SyncCollection, key: string): string {
 export async function drainOutbox(): Promise<DrainResult> {
   const db = getClientDataDb();
   const mk = useSessionStore.getState().mk;
-  const syncUrl = useDiscoveryStore.getState().config?.syncUrl;
+  const syncUrl = effectiveSyncUrl();
   if (!mk || !syncUrl) return emptyDrain();
 
   const outbox = await db.syncOutbox.orderBy('seq').toArray();
@@ -742,7 +743,7 @@ function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<
  * (§8). Registered as the default pull loop and re-invoked via `_setPullLoop`.
  */
 export async function runPullLoop(): Promise<void> {
-  const syncUrl = useDiscoveryStore.getState().config?.syncUrl;
+  const syncUrl = effectiveSyncUrl();
   if (!syncUrl) return;
   const pull =
     pullOverride ?? ((since: number, limit: number) => defaultPull(syncUrl, since, limit));

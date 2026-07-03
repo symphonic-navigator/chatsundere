@@ -4,9 +4,10 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type { BlobListResponse, BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import type { SyncPullResponse } from '@chatsundere/shared-types';
 import { SYNC_COLLECTIONS } from '@chatsundere/shared-types';
-import { useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useSessionStore } from '@chatsundere/ui-shared';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { apiFetch } from '../lib/fetch.js';
+import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
 import { blobFieldsOf } from './blob-transform.js';
 import { type PutBlobResult, listBlobs, putBlob } from './blob-transport.js';
@@ -334,7 +335,7 @@ async function recoverBlobs(): Promise<void> {
  * the epoch the server reported, or null when no page was fetched.
  */
 async function pullAllFromZero(): Promise<string | null> {
-  const syncUrl = useDiscoveryStore.getState().config?.syncUrl;
+  const syncUrl = effectiveSyncUrl();
   if (!syncUrl) return null;
   const pull =
     pullOverride ?? ((since: number, limit: number) => defaultPull(syncUrl, since, limit));

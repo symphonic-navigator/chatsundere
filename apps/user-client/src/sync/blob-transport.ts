@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { BlobErrorBody, BlobListResponse, BlobRef } from '@chatsundere/shared-types';
-import { useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import { joinUrl, refreshAccessToken } from '../lib/fetch.js';
+import { effectiveSyncUrl } from '../lib/server-urls.js';
 
 /**
  * Binary blob transport against `<syncUrl>/api/v1/sync/blobs` (blob spec §7,
@@ -117,7 +118,7 @@ function assertBlobId(blobId: string): void {
 
 /** The configured sync base URL, or a transport error when sync is unconfigured. */
 function syncBaseUrl(): string {
-  const url = useDiscoveryStore.getState().config?.syncUrl;
+  const url = effectiveSyncUrl();
   if (!url) throw new BlobTransportError('sync is not configured');
   return url;
 }
@@ -138,7 +139,10 @@ function authInit(base: RequestInit): RequestInit {
 async function fetchWithAuth(url: string, base: RequestInit): Promise<Response> {
   let res = await fetch(url, authInit(base));
   if (res.status === 401) {
-    const refreshed = await refreshAccessToken(syncBaseUrl());
+    // Refresh always targets the AUTH origin — the endpoint and its HTTP-only
+    // cookie do not exist on the sync service.
+    const authBase = useAccountLinkStore.getState().baseUrl;
+    const refreshed = authBase !== null && (await refreshAccessToken(authBase));
     if (refreshed) res = await fetch(url, authInit(base));
   }
   return res;

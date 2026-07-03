@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { StepUpTier } from '@chatsundere/shared-types';
-import { requestStepUp, useSessionStore } from '@chatsundere/ui-shared';
+import { requestStepUp, useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 
 /**
  * Thrown by apiFetch when the server returns a non-2xx response. Network-level
@@ -36,7 +36,10 @@ export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
   const url = joinUrl(opts.baseUrl, opts.path);
   let res = await fetch(url, buildInit(opts));
   if (res.status === 401 && opts.authMode === 'bearer') {
-    const refreshed = await refreshAccessToken(opts.baseUrl);
+    // The refresh endpoint and its HTTP-only cookie live on the AUTH origin —
+    // a call against another service (sync) must not refresh against itself.
+    const authBase = useAccountLinkStore.getState().baseUrl ?? opts.baseUrl;
+    const refreshed = await refreshAccessToken(authBase);
     if (refreshed) {
       res = await fetch(url, buildInit(opts));
     }

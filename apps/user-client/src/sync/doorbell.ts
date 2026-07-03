@@ -7,6 +7,7 @@ import {
   useSessionStore,
 } from '@chatsundere/ui-shared';
 import { apiFetch, joinUrl, refreshAccessToken } from '../lib/fetch.js';
+import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { scheduleClass1Sync } from './triggers.js';
 import { getSyncState } from './watermark.js';
 
@@ -94,7 +95,7 @@ function evaluate(): void {
 
 async function connect(): Promise<void> {
   if (connecting || socket !== null) return;
-  const syncUrl = useDiscoveryStore.getState().config?.syncUrl;
+  const syncUrl = effectiveSyncUrl();
   if (!syncUrl) return;
   connecting = true;
 
@@ -208,10 +209,12 @@ async function handleClose(code: number): Promise<void> {
 
   if (code === 4401 && !refreshedThisCycle) {
     refreshedThisCycle = true; // at most one refresh per backoff cycle (L-5)
-    const syncUrl = useDiscoveryStore.getState().config?.syncUrl;
-    if (syncUrl) {
+    // Refresh always targets the AUTH origin — the endpoint and its HTTP-only
+    // cookie do not exist on the sync service.
+    const authBase = useAccountLinkStore.getState().baseUrl;
+    if (authBase) {
       const refresh = refreshFn ?? refreshAccessToken;
-      await refresh(syncUrl);
+      await refresh(authBase);
     }
   }
 
