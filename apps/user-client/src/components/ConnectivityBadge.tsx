@@ -23,7 +23,9 @@ const label = {
 // Only the two bad-weather states ever render there; the tap framing carries the
 // full explanation.
 const minimalLabel: Partial<Record<Connectivity['kind'], string>> = {
-  server_unreachable: 'Offline',
+  // "Not synced" rather than "Offline": in a local-first app only shared-edit
+  // sync is paused — the chat itself works fully. The tap framing carries the rest.
+  server_unreachable: 'Not synced',
   server_auth_failed: 'Auth failed',
 };
 

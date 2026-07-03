@@ -65,7 +65,7 @@ describe('ConnectivityBadge minimal (in-chat) mode (SOFT-1)', () => {
     useConnectivityStore.getState().setState({ kind: 'server_unreachable' });
     render(<ConnectivityBadge minimal />);
     // Short label on the tight reading surface, full explanation behind the tap.
-    expect(screen.getByRole('button', { name: /connectivity: offline/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /connectivity: not synced/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
     expect(screen.getByText(/shared edits are paused — nothing is lost/i)).toBeInTheDocument();
   });

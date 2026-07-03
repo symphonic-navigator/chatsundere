@@ -187,7 +187,7 @@ export function Root() {
           <div className="flex min-w-0 items-center gap-2 lg:gap-3">
             {isReadingChat && chatHeader ? (
               <span
-                className="max-w-[140px] truncate text-xs text-paper-soft"
+                className="min-w-0 max-w-[140px] truncate text-xs text-paper-soft"
                 title={chatHeader.title}
               >
                 {chatHeader.title}
