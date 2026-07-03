@@ -164,6 +164,15 @@ describe('batchByBytes — boundary (spec §6.3)', () => {
     expect(oversize).toHaveLength(1); // a lone oversize record still gets its own request
   });
 
+  it('splits by record count even when bytes fit — the server rejects >100 records wholesale', () => {
+    // 250 tiny records, all fitting one byte budget.
+    const prepared = Array.from({ length: 250 }, () => ({ encodedBytes: 10 }));
+    const batches = batchByBytes(prepared, 4 * 1024 * 1024);
+    expect(batches.length).toBe(3);
+    for (const batch of batches) expect(batch.length).toBeLessThanOrEqual(100);
+    expect(batches.flat().length).toBe(250);
+  });
+
   it('drain splits a two-record push into two requests under a small ceiling', async () => {
     const db = getClientDataDb();
     await db.personas.put({ id: 'p1' } as never);
