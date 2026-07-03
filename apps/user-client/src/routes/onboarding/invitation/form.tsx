@@ -7,14 +7,27 @@ import { isValidCode } from '../../../lib/code-input.js';
 import { copy } from '../../../lib/copy.js';
 import { isValidServerUrl } from '../../../lib/server-url.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { InvitationAccountGuard } from './_account-guard.js';
 import { useNavTarget, useReturnUrl } from './_return-url.js';
 
 /**
  * `/onboarding/invitation` — form screen for the invitation join path.
  * Variant C per spec § 2 Decision 3: URL + Code fields first, with Scan QR
  * as a visually-separated alternative below the primary "Continue" CTA.
+ *
+ * Wrapped in the account-guard (spec §4.1): a device that already holds a
+ * local account with no unlocked session is routed through the local login
+ * first, so the join becomes a late-link rather than minting a fresh MK.
  */
 export function InvitationForm() {
+  return (
+    <InvitationAccountGuard>
+      <InvitationFormInner />
+    </InvitationAccountGuard>
+  );
+}
+
+function InvitationFormInner() {
   const navigate = useNavigate();
   const returnUrl = useReturnUrl();
   const navTarget = useNavTarget();

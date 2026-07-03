@@ -17,6 +17,7 @@ import { httpServerClient } from '../../../lib/server-client.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
 import { runSyncCycle } from '../../../sync/worker.js';
+import { InvitationAccountGuard } from './_account-guard.js';
 import { useNavTarget } from './_return-url.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
@@ -48,8 +49,20 @@ type Screen =
  *
  * Per spec § 2 Decision 9: `kind_mismatch` is constructive — the user is offered
  * a button to switch to the pairing path with the code pre-filled.
+ *
+ * The account-guard (spec §4.1) sits ABOVE the bounce guard so the unlock-first
+ * door wins on the QR deep-link path: a device that already holds a local
+ * account with no unlocked session is routed through the local login first.
  */
 export function InvitationConfirm() {
+  return (
+    <InvitationAccountGuard>
+      <InvitationConfirmGuarded />
+    </InvitationAccountGuard>
+  );
+}
+
+function InvitationConfirmGuarded() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const onboardingState = useOnboardingStore((s) => s.state);
