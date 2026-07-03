@@ -27,9 +27,14 @@ if ! "${COMPOSE[@]}" exec -T postgres pg_isready -U chatsundere -d postgres >/de
 fi
 
 # The init scripts only run on a fresh data volume, so an existing dev machine
-# whose volume predates sync_db needs these ensured explicitly. Idempotent.
-echo "▸ Ensuring databases exist (auth_db, auth_db_test, sync_db, sync_db_test)…"
-for db in auth_db auth_db_test sync_db sync_db_test; do
+# needs these ensured explicitly. Idempotent. Beyond the two app databases we
+# also create the test databases the test harnesses default to, so `pnpm test`
+# is green out of the box: auth's setup.ts defaults DATABASE_URL to auth_test_db
+# (integration tests skip when TEST_DATABASE_URL is unset), sync's to
+# sync_db_test; auth_db_test is the dedicated DB a full auth integration run
+# points TEST_DATABASE_URL at.
+echo "▸ Ensuring databases exist…"
+for db in auth_db auth_test_db auth_db_test sync_db sync_db_test; do
   exists=$("${COMPOSE[@]}" exec -T postgres \
     psql -tAc "SELECT 1 FROM pg_database WHERE datname = '${db}'" -U chatsundere -d postgres)
   if [ "${exists}" != "1" ]; then
@@ -38,9 +43,13 @@ for db in auth_db auth_db_test sync_db sync_db_test; do
   fi
 done
 
-echo "▸ Running migrations (auth-service, sync-service)…"
-( cd apps/auth-service && bun --env-file=.env.dev src/db/migrations.ts )
-( cd apps/sync-service && bun --env-file=.env.dev src/db/migrations.ts )
+echo "▸ Running migrations (app + test databases)…"
+for db in auth_db auth_test_db auth_db_test; do
+  ( cd apps/auth-service && DATABASE_URL="postgres://chatsundere:dev@localhost:5432/${db}" bun src/db/migrations.ts >/dev/null )
+done
+for db in sync_db sync_db_test; do
+  ( cd apps/sync-service && DATABASE_URL="postgres://chatsundere:dev@localhost:5432/${db}" bun src/db/migrations.ts >/dev/null )
+done
 
 echo "✓ Infrastructure ready."
 echo "  Postgres :5432 · Redis :6379 · MinIO :9000 · Prometheus :9090 · Grafana :3001 (admin/admin)"

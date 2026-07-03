@@ -608,3 +608,29 @@ squash. The items below were consciously deferred.
 - **Severity:** low (Larissa's classification; missing coverage on a defensive timer, not a functional defect).
 - **Rationale for deferral:** A meaningful test needs a genuinely stalled producer against a live server socket; in the in-process fake harness the options are timer-mocking that tests the mock, or real multi-second sleeps that make the suite flaky — the brittle-retry-test lesson applies. The watchdog path is short and was reviewed line-by-line in the audit.
 - **Follow-up commitment:** Exercise on the VPS dry-run alongside the L6C-L3 probe (a rate-limited `curl --limit-rate` upload that stalls mid-body must be aborted and answered per spec). If that probe motivates a code change (see the audit's 503-vs-400 note), add the structural test with it. Before v0.3.0.
+
+## 2026-07-03 — Full Backend Transition — deferred Larissa findings
+
+Larissa audited the integrated `full-backend-transition` diff vs master
+(merge-base `7081a4d`) across `packages/crypto`, the three services, and the
+client zero-knowledge boundary. **Verdict: CLEAR TO MERGE — no Critical, no
+High.** The blob/token/SSRF/sync-integrity/step-up crown-jewel checks all
+passed. Three Lows; the committed `.env.dev` Low is a deliberate, documented
+dev-only decision (loopback creds, prod uses scoped keys) and is not deferred.
+The two below are consciously carried.
+
+### LT-L1 — Step-up store coalesces concurrent requests of different tiers
+
+- **Affected paths:** `packages/ui-shared/src/state/step-up.store.ts`
+- **Finding (Larissa's summary):** Concurrent `requestStepUp` calls of *different* tiers coalesce onto one pending resolution, so a caller can be resolved by a different tier's confirmation. This is **not** a privilege escalation: the auth-service seeds and checks *per-tier* step-up keys with no hierarchy, so a mismatched caller simply receives a fresh `403 step_up_required` and re-prompts.
+- **Severity:** low (Larissa's classification; degrades to a redundant re-prompt, never an auth bypass).
+- **Rationale for deferral:** No reachable security defect. The only Tier-3 operation now reachable (account deletion, `me.ts`) degrades to a redundant prompt. Re-keying the pending map by tier is a small change, but it is best designed against the real multi-tier user-client UI when that lands, not speculatively.
+- **Follow-up commitment:** Re-key the pending step-up resolution by tier before the Tier-3 user-client UI ships. Tracked in [[follow-ups-index]].
+
+### LT-L2 — `PATCH /api/v1/me` username change carries no step-up gate
+
+- **Affected paths:** `apps/auth-service/src/routes/me.ts`
+- **Finding (Larissa's summary):** Username change via `PATCH /api/v1/me` has no step-up gate, unlike passkey-add / passphrase-change / account-delete. A live-session holder can rename the account.
+- **Severity:** low (Larissa's classification; non-destructive — recovery survives via the frozen `opaque_client_identifier`; the account is not lost or taken over).
+- **Rationale for deferral:** Likely intentional — ADR 0027 does not list username change among the Tier-1 sensitive operations. Flagged for a **conscious Chris confirmation** against the WS-B+E spec rather than a silent acceptance.
+- **Follow-up commitment:** Chris confirms against ADR 0027 / the WS-B+E spec whether username change should be step-up-gated. If yes, add the tier gate on `me.ts`; if no, record as intended and close. Before merge-to-master hardening.
