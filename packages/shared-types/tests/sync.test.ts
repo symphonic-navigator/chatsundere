@@ -14,11 +14,16 @@ describe('sync shared-types', () => {
     expect(revokedSubKey('s1')).toBe('revoked:sub:s1');
   });
 
-  test('the collection allowlist has the 15 v1 collections', () => {
+  test('the collection allowlist has the 18 v1 collections incl. the 3 blob collections', () => {
     expect(SYNC_COLLECTIONS).toContain('personas');
     expect(SYNC_COLLECTIONS).toContain('vectors');
-    expect(SYNC_COLLECTIONS).not.toContain('artefacts');
-    expect(SYNC_COLLECTIONS.length).toBe(15);
+    // WS-D (blob transport) admitted the three blob-bearing collections: their
+    // records sync with BlobRef sentinels, while the bytes travel sealed via the
+    // separate blob channel.
+    expect(SYNC_COLLECTIONS).toContain('personaAvatars');
+    expect(SYNC_COLLECTIONS).toContain('artefacts');
+    expect(SYNC_COLLECTIONS).toContain('attachments');
+    expect(SYNC_COLLECTIONS.length).toBe(18);
   });
 
   test('the wire types compile with the documented shapes', () => {
