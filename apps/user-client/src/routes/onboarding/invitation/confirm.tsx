@@ -124,9 +124,16 @@ function InvitationConfirmInner() {
 
   useEffect(() => {
     let cancelled = false;
-    void getLinkedAccount(getDb()).then((row) => {
-      if (!cancelled) setExistingLink(row);
-    });
+    void (async () => {
+      try {
+        const row = await getLinkedAccount(getDb());
+        if (!cancelled) setExistingLink(row);
+      } catch {
+        // Unreadable link store (e.g. the DB is not open yet): treat as no
+        // existing link and fall through to the normal form rather than crash.
+        if (!cancelled) setExistingLink(null);
+      }
+    })();
     return () => {
       cancelled = true;
     };

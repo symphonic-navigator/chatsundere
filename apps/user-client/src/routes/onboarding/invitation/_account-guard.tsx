@@ -21,9 +21,18 @@ export function InvitationAccountGuard({ children }: { children: ReactNode }): J
 
   useEffect(() => {
     let cancelled = false;
-    void getLocalAccount(getDb()).then((row) => {
-      if (!cancelled) setHasAccount(row !== null && row !== undefined);
-    });
+    void (async () => {
+      try {
+        const row = await getLocalAccount(getDb());
+        if (!cancelled) setHasAccount(row !== null && row !== undefined);
+      } catch {
+        // If the local account store cannot be read (e.g. the DB is not open
+        // yet), do NOT block the flow: this guard is only the UX door, and the
+        // crypto backstop (§4.2) is the hard wall that refuses a fresh-join over
+        // an existing account regardless. Fail open to the children.
+        if (!cancelled) setHasAccount(false);
+      }
+    })();
     return () => {
       cancelled = true;
     };
