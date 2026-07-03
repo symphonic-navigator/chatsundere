@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ImageModelConfig } from '@chatsundere/llm-unified';
-import type { SyncCollection } from '@chatsundere/shared-types';
+import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
@@ -334,6 +334,16 @@ export interface ArtefactRow {
   blob?: Blob;
   /** kind === 'image' — downscaled JPEG for the chat stream + Treasury. */
   thumbBlob?: Blob;
+  /** WS-D §4 — persisted ref for the sealed `blob` (present once pushed; the
+   *  wire row carries this, never the bytes). Non-indexed, no Dexie bump. */
+  blobRef?: BlobRef;
+  /** WS-D §4 — persisted ref for the sealed `thumbBlob`. */
+  thumbBlobRef?: BlobRef;
+  /** WS-D §4/§7.3 — durable "this blob is permanently too large for the server"
+   *  sentinel, set on a `413` and synced inside the sealed record. */
+  blobOversized?: true;
+  /** WS-D §4 — the same terminal sentinel for the thumbnail blob. */
+  thumbBlobOversized?: true;
   /** kind === 'image' — measured via createImageBitmap after fetch. */
   width?: number;
   height?: number;
@@ -365,6 +375,12 @@ export interface AttachmentRow {
   updatedAt: number;
   /** kind === 'image' — the NORMALISED JPEG (see image-normalise.ts), the only stored copy. */
   blob?: Blob;
+  /** WS-D §4 — persisted ref for the sealed `blob`; the wire row carries this,
+   *  never the bytes. Non-indexed, no Dexie bump. */
+  blobRef?: BlobRef;
+  /** WS-D §4/§7.3 — durable oversize sentinel, set on a `413` and synced inside
+   *  the sealed record so every device learns the blob is server-terminal. */
+  blobOversized?: true;
   /** kind === 'text' — editable via the lightbox Source view while pending. */
   text?: string;
   /** kind === 'image' — post-normalisation dimensions. */
@@ -394,6 +410,13 @@ export interface PersonaAvatarRow {
   height: number; // natural height of the stored image
   crop: AvatarCrop;
   updatedAt: number;
+  /** WS-D §4 — persisted ref for the sealed `blob`. `null` after avatar removal
+   *  (the wire row carries `blobRef: null`, NEVER a tombstone — a tombstone
+   *  would brick avatar sync for this personaId forever). Absent on pre-WS-D
+   *  rows until the first push mints one. */
+  blobRef?: BlobRef | null;
+  /** WS-D §4/§7.3 — durable oversize sentinel, set on a `413`. */
+  blobOversized?: true;
 }
 
 // ===== Voice audio cache (v21) =====
