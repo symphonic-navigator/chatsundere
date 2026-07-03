@@ -1,5 +1,48 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-03 (late evening) — **SYNC IS GREEN END-TO-END on the
+dev stack.** Server-side proof: `sync_records` carries ciphertext rows
+(4 chats, 1 KB), `sync_push_records_total{outcome="ok"} 4`, one pull, doorbell
+connected + one poke delivered; the client status line reads "Synced" with
+quota. Getting there surfaced **four real integration defects**, all fixed
+inline on the branch (device-test + console probes found them; no unit gate
+could have):
+(1) the dev URL overrides (`lib/server-urls.ts`) were built but had **no
+consumer** — the sync engine dialled the advertised `https://localhost:3200`
+against plain HTTP (`e1828537`);
+(2) **token refresh targeted the service being called** — any sync-side 401
+refreshed against the sync service (404 there, cookie not even sent) and
+`closeAndForget()` silently logged the user out (`e1828537`);
+(3) the client sent `credentials: 'include'` to the deliberately cookie-free
+sync service → every preflight failed CORS (`0f9a2a91`);
+(4) **the OPAQUE server setup was generated per process** — every auth-service
+restart/reload permanently bricked all accounts' passphrase auth. This was the
+hidden root of the whole reset-dev-auth cascade AND of Chris's dead provider
+secrets (a bricked account forced re-onboarding; the fresh-join path silently
+minted a new MK over the local account). Now persisted via
+`OPAQUE_SERVER_SETUP` (`bun run generate-opaque-setup`; dev value committed,
+DEPLOYMENT ch.4 documents never-rotate) (`0f9a2a91`).
+**Owed:** Larissa light re-audit of `e1828537` + `0f9a2a91` (token-refresh
+routing + auth-service env change) with the branch gates. **Parked findings:**
+(a) a linked client whose server forgot it gets its LOCAL session killed by the
+background worker's 401→refresh-fail→`closeAndForget` cascade — needs a
+degrade-to-offline design, candidate for the backfill overnighter; (b) cockpit
+button reportedly missing on seed-from-template chats (unverified, one
+observation).
+**NEXT (decided with Chris): sync BACKFILL + fresh-join guard** — local
+content created before linking never enters the vault (empirically: only the
+4 post-link chats synced; the 61 pre-link chats did not — no
+enqueueAll/initial-sync exists, a deliberate WS-C scope cut). Scope settled:
+same-MK backfill for the invitation late-link path PLUS a guard so the
+fresh-join can never silently overwrite an existing local account/MK again;
+foreign-MK uplevelling stays deferred (couplings register). Fresh context
+window: brainstorm → spec (Larissa + Laura spec-pass) → plan →
+`superpowers:overnight-implementation`, goal 1..n numbered PRs against
+`full-backend-transition`. Blob/two-browser manual verification (WS-C §15 /
+WS-D §14) still owed after that.
+
+Prior entry below.
+
 **Last updated:** 2026-07-03 (evening) — **FIRST LOCAL END-TO-END RUN: auth is
 green.** Chris drove the integrated branch on the dev stack for the first time.
 Four blockers found and fixed inline (all committed, `master`-untouched — we are
