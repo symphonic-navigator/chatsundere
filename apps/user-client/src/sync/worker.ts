@@ -476,7 +476,14 @@ export async function runSyncCycle(): Promise<void> {
       await recovery();
       return;
     }
-    if (result.needsPull) {
+    if (result.needsPull || result.head === null) {
+      // Pull when the drain says so (piggyback L-1 / a conflict owed resolution),
+      // OR when nothing was pushed this cycle (`head === null`): a pure-reader
+      // device with an empty outbox has no push response to read `head` from, so
+      // it cannot rule out being behind — it MUST pull to discover other devices'
+      // writes. This is the trigger-driven reader path (boot after unlock, the
+      // doorbell poke, foreground, the coarse timer), including a fresh link's
+      // "Pulling your data onto this device…" first sync (§6, §11.1).
       // === Task 7 SEAM: the pull loop lands here (registered via _setPullLoop). ===
       await pullLoop();
     }
