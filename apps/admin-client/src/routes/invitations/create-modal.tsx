@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { AdminCreateInvitationResponse } from '@chatsundere/shared-types';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { copy } from '../../copy.js';
-import type { CreateInvitationInput, InvitationCreated } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import { createInvitation } from '../../data/api.js';
+import type { CreateInvitationInput } from '../../data/types.js';
 
 interface Props {
-  onCreated: (inv: InvitationCreated) => void;
+  onCreated: (inv: AdminCreateInvitationResponse) => void;
   onCancel: () => void;
 }
 
 export function InvitationCreateModal({ onCreated, onCancel }: Props) {
-  const [role, setRole] = useState<CreateInvitationInput['role']>('user');
+  const [role, setRole] = useState<'user' | 'admin'>('user');
   const [expiresIn, setExpiresIn] = useState<1 | 7 | 30>(7);
   const [issuerLabel, setIssuerLabel] = useState('');
   const [suggestedUsername, setSuggestedUsername] = useState('');
   const [note, setNote] = useState('');
-  const api = getAdminApi();
 
   const create = useMutation({
-    mutationFn: (input: CreateInvitationInput) => api.createInvitation(input),
+    mutationFn: (input: CreateInvitationInput) => createInvitation(input),
     onSuccess: onCreated,
   });
 
@@ -110,6 +110,11 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
           {copy.invitations.modal.submit}
         </button>
       </div>
+      {create.isError && (
+        <p data-testid="create-invitation-error" className="text-xs text-[var(--color-red)]">
+          {copy.invitations.modal.failed}
+        </p>
+      )}
     </dialog>
   );
 }

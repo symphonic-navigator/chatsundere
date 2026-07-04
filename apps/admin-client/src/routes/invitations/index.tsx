@@ -1,27 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type {
+  AdminCreateInvitationResponse,
+  AdminInvitationStatus,
+} from '@chatsundere/shared-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
 import { copy } from '../../copy.js';
-import type { InvitationCreated, InvitationStatus } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import { listInvitations, revokeInvitation } from '../../data/api.js';
 import { formatRelative } from '../../lib/format.js';
 import { InvitationCreateModal } from './create-modal.js';
 import { InvitationRevealScreen } from './reveal-screen.js';
 
 export function InvitationsScreen() {
-  const api = getAdminApi();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<InvitationStatus | 'all'>('all');
+  const [filter, setFilter] = useState<AdminInvitationStatus | 'all'>('all');
   const [modalOpen, setModalOpen] = useState(false);
-  const [revealed, setRevealed] = useState<InvitationCreated | null>(null);
+  const [revealed, setRevealed] = useState<AdminCreateInvitationResponse | null>(null);
 
-  const { data } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: ['invitations', filter],
-    queryFn: () => api.listInvitations({ status: filter }),
+    queryFn: () => listInvitations({ status: filter }),
   });
 
   const revoke = useMutation({
-    mutationFn: (id: string) => api.revokeInvitation(id),
+    mutationFn: (id: string) => revokeInvitation(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invitations'] }),
   });
 
@@ -40,7 +43,7 @@ export function InvitationsScreen() {
 
       <select
         value={filter}
-        onChange={(e) => setFilter(e.target.value as InvitationStatus | 'all')}
+        onChange={(e) => setFilter(e.target.value as AdminInvitationStatus | 'all')}
         className="rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-3 py-2"
       >
         <option value="all">{copy.invitations.filter.all}</option>
@@ -50,7 +53,9 @@ export function InvitationsScreen() {
         <option value="revoked">{copy.invitations.filter.revoked}</option>
       </select>
 
-      {!data ? (
+      {error ? (
+        <QueryErrorPanel error={error} onRetry={() => void refetch()} />
+      ) : !data ? (
         <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
       ) : data.items.length === 0 ? (
         <p className="text-[var(--color-subtext-0)]">{copy.invitations.empty}</p>
@@ -60,6 +65,7 @@ export function InvitationsScreen() {
             <tr className="text-xs uppercase text-[var(--color-subtext-0)]">
               <th className="py-2">{copy.invitations.columns.createdAt}</th>
               <th className="py-2">{copy.invitations.columns.role}</th>
+              <th className="py-2">{copy.invitations.columns.suggestedUsername}</th>
               <th className="py-2">{copy.invitations.columns.status}</th>
               <th className="py-2">{copy.invitations.columns.redeemedBy}</th>
               <th className="py-2">{copy.invitations.columns.expiresAt}</th>
@@ -73,8 +79,9 @@ export function InvitationsScreen() {
               <tr key={inv.id} className="border-t border-[var(--color-overlay-0)]">
                 <td className="py-2">{formatRelative(inv.created_at)}</td>
                 <td className="py-2">{inv.role}</td>
+                <td className="py-2">{inv.suggested_username ?? '—'}</td>
                 <td className="py-2">{inv.status}</td>
-                <td className="py-2">{inv.redeemed_by ?? '—'}</td>
+                <td className="py-2">{inv.redeemed_by_user_id ?? '—'}</td>
                 <td className="py-2">{formatRelative(inv.expires_at)}</td>
                 <td className="py-2 text-[var(--color-subtext-0)]">{inv.issuer_label ?? '—'}</td>
                 <td className="py-2">

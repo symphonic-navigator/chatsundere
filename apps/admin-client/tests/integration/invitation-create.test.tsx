@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { AdminCreateInvitationResponse } from '@chatsundere/shared-types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('qrcode', () => ({
-  default: { toCanvas: vi.fn().mockResolvedValue(undefined) },
+const createInvitationMock = vi.fn();
+vi.mock('../../src/data/api.js', () => ({
+  createInvitation: (input: unknown) => createInvitationMock(input),
 }));
 
-import { InvitationsScreen } from '../../src/routes/invitations/index.js';
+import { HttpError } from '../../src/lib/fetch.js';
+import { InvitationCreateModal } from '../../src/routes/invitations/create-modal.js';
 
 function Providers({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -21,21 +24,51 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
+const RESPONSE: AdminCreateInvitationResponse = {
+  invitation_id: 'i1',
+  code: 'ABCDEFGHIJ',
+  qr_url: 'http://auth.test/join#ABCDEFGHIJ',
+  expires_at: '2026-07-11T00:00:00Z',
+  state: 'active',
+};
+
+beforeEach(() => {
+  createInvitationMock.mockReset();
+});
+
 describe('invitation create flow', () => {
-  it('opens the create modal, submits, reveals the token, and hides it on close', async () => {
+  it('preserves the filled form when step-up is declined, then reveals on retry', async () => {
     const user = userEvent.setup();
-    render(<InvitationsScreen />, { wrapper: Providers });
+    const onCreated = vi.fn();
+    render(<InvitationCreateModal onCreated={onCreated} onCancel={() => {}} />, {
+      wrapper: Providers,
+    });
 
-    await user.click(await screen.findByRole('button', { name: /create invitation/i }));
-    expect(await screen.findByRole('heading', { name: /create invitation/i })).toBeInTheDocument();
+    // Fill the form with values we expect to survive a declined step-up.
+    await user.type(screen.getByLabelText(/suggested username/i), 'newbie');
+    await user.type(screen.getByLabelText(/issuer label/i), 'June wave');
 
+    // First submit: the server refuses (step-up required → HttpError).
+    createInvitationMock.mockRejectedValueOnce(new HttpError(403, 'step_up_required', 'denied'));
     await user.click(screen.getByRole('button', { name: /^create$/i }));
 
-    expect(await screen.findByRole('heading', { name: /invitation created/i })).toBeInTheDocument();
-    expect(screen.getByText(/shown only once/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/url/i)).toBeInTheDocument();
+    // The failure line surfaces and the typed input is still present.
+    expect(await screen.findByTestId('create-invitation-error')).toBeInTheDocument();
+    expect(screen.getByLabelText(/suggested username/i)).toHaveValue('newbie');
+    expect(screen.getByLabelText(/issuer label/i)).toHaveValue('June wave');
+    expect(onCreated).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: /^close$/i }));
-    expect(screen.queryByRole('heading', { name: /invitation created/i })).not.toBeInTheDocument();
+    // Second submit: the step-up succeeds and the response flows to onCreated.
+    createInvitationMock.mockResolvedValueOnce(RESPONSE);
+    await user.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await vi.waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(onCreated.mock.calls[0]?.[0]).toEqual(RESPONSE);
+    expect(createInvitationMock).toHaveBeenLastCalledWith({
+      role: 'user',
+      expires_in_days: 7,
+      issuer_label: 'June wave',
+      suggested_username: 'newbie',
+    });
   });
 });

@@ -140,6 +140,7 @@ export const copy = {
     columns: {
       createdAt: 'Created',
       role: 'Role',
+      suggestedUsername: 'Suggested username',
       status: 'Status',
       redeemedBy: 'Redeemed by',
       expiresAt: 'Expires',
@@ -162,12 +163,15 @@ export const copy = {
         'Freeform note about this invitation. Operator-private — the redeeming user never sees it.',
       submit: 'Create',
       cancel: 'Cancel',
+      failed:
+        'Creating the invitation failed. Step-up is required — try again when ready; your input is preserved.',
     },
     reveal: {
       title: 'Invitation created',
-      warning: 'This is shown only once. Make sure to capture it before closing.',
+      warning: 'Shown once only. If you lose the code, revoke this invitation and issue a new one.',
       urlLabel: 'URL',
       copyUrl: 'Copy URL',
+      copyCode: 'Copy code',
       close: 'Close',
     },
   },
