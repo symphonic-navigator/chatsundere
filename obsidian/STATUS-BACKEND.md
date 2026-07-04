@@ -1,6 +1,22 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-04 — **Sync-lifecycle hardening squashed onto
+**Last updated:** 2026-07-05 — **Admin-console overhaul specced + planned +
+hardened for a second overnight remote run** (parallel to the trashcan run, same
+`full-backend-transition` base, disjoint file surface — worker boundary pinned in
+the contract). Spec `superpowers/specs/2026-07-04-admin-console-live-wiring-and-design.md`,
+plan `superpowers/plans/2026-07-04-admin-console-live-wiring-and-design.md`
+(19 TDD tasks + Operating-Rules contract). Scope: mock layer deleted entirely
+(the `hybrid` 501-fallback was why /admin showed demo data), audit endpoint
+enriched server-side (username joins + DESC; plus the users-list `total` bug fix
+and role/status filters), `shared-types/admin.ts` becomes the single wire truth,
+change-role + transfer-primary (typed-phrase + sign-out) + invitation
+suggested_username/note land, and a Catppuccin-Mocha **retrofuturistic
+control-panel restyle** (cassette-futurism base, CRT accents budgeted to three
+spots, synthwave login; dark-only — Latte removed; CLAUDE.md §11 revision + ADR
+in the run). Post-run owed: Larissa on the Unit 1 diff, Chris's spec-§11 manual
+verification, squash into two feature units. Laura consciously skipped (admin
+console is not the user-client's mobile surface — Chris's call). Prior entry:
+2026-07-04 — **Sync-lifecycle hardening squashed onto
 `full-backend-transition`** (`9fe0595e`), plus a separate CORS fix (`b5b2b4a3` —
 allow `PUT` in the sync-service preflight; blob/avatar uploads were blocked, so
 records synced but avatars did not). Four units from the first multi-device test
