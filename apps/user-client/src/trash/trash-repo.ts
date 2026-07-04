@@ -26,6 +26,15 @@ export function cardKeyOf(row: TrashRow, byId: ReadonlyMap<string, TrashRow>): s
   return cur.id;
 }
 
+/** Purge a whole trash card: delete its snapshot rows from db.trash only (§3.6).
+ *  LOCAL-ONLY — never touches syncOutbox (I-3) or deadKeys (§3.9). */
+export async function purgeCard(cardKey: string): Promise<void> {
+  const db = getClientDataDb();
+  const all = await db.trash.toArray();
+  const memberIds = rowsOfCard(cardKey, all).map((r) => r.id);
+  if (memberIds.length > 0) await db.trash.bulkDelete(memberIds);
+}
+
 /** §3.7 — retire this device's stale trash card for an entity restored elsewhere.
  *  Deletes only the exact keyed snapshot; each restored descendant carries its own
  *  restoredFrom, so peers retire each as they pull. No-op when nothing matches. */
