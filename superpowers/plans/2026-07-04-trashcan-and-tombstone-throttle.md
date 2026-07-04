@@ -10,6 +10,124 @@
 
 **Spec:** `superpowers/specs/2026-07-04-trashcan-and-tombstone-throttle-design.md` (v2, Chris-approved, Laura + Larissa spec-passed).
 
+---
+
+## Operating rules for the overnight worker (READ FIRST)
+
+You are a context-less Claude executing this plan unattended. You do NOT have this
+repo's CLAUDE.md, the prior session's memory, or a human to ask. Every rule you
+need is in THIS document. These rules are binding and override your defaults.
+
+1. **Branch & isolation.** Work ONLY in this worktree: `worktree-sync-lifecycle`
+   (branch `worktree-sync-lifecycle`), at absolute paths under
+   `/home/chris/workspace/chatsundere/.claude/worktrees/sync-lifecycle`. **Never
+   switch branches. Never merge. Never push.** Never `cd` to the main checkout.
+   Stop at the final hand-off task and report back; the human integrates.
+
+2. **Execution model.** Use `superpowers:subagent-driven-development`: one fresh
+   implementer subagent per task, then a task reviewer (spec compliance + code
+   quality), fix loops for Critical/Important findings, then the next task.
+   Subagents never merge/push/switch branches — say so in every dispatch. Do the
+   tasks in order (Task 1 → 15). Phase 1 (Tasks 1-2) is independently shippable;
+   do NOT let a Phase-2 problem block Phase-1's commits.
+
+3. **TDD per task, always.** Failing test → run it, confirm it fails for the
+   stated reason → minimal implementation → run, confirm pass → commit. Never
+   write implementation before its test. Never skip the "confirm it fails" run.
+
+4. **Language: British English in every artefact** — code, comments, identifiers,
+   copy, log strings, commit messages, test names. `colour`, `behaviour`,
+   `initialise`, `licence` (noun). No US spelling. No German anywhere in the repo.
+
+5. **Quality bar.** TypeScript strict; `noUncheckedIndexedAccess` on; **no `any`**
+   without an inline justifying comment; **no non-null `!`** (Biome bans it — use
+   explicit guards). Every package-public function gets a one-line JSDoc. Comments
+   explain non-obvious *why*, never restate *what*.
+
+6. **Exact gate commands** (copy-paste; monorepo uses pnpm + Turborepo):
+   - Frontend tests (this is the `user-client` app): from
+     `apps/user-client/` run `pnpm vitest run <test-path>` (e.g.
+     `pnpm vitest run tests/sync/apply.test.ts`). A single test:
+     `pnpm vitest run <path> -t "<name substring>"`.
+   - Typecheck (the CI gate): from the **repo root** run `pnpm typecheck --force`.
+     `--force` is mandatory — Turbo caches typecheck and a stale cache hides
+     breakage. Expected: `14 successful, 14 total`.
+   - Lint/format: from the repo root run `pnpm biome check <space-separated files
+     you touched>`. Biome also runs as a pre-commit hook (lefthook); a commit that
+     fails Biome is rejected — fix and re-commit.
+   - Full build verification (run once at the end, Task 15): from the repo root
+     `pnpm run build`. It is stricter than typecheck alone; both must pass.
+
+7. **Known-green test baseline.** The FULL `apps/user-client` Vitest suite has
+   **exactly 8 pre-existing failures**, all environmental (Node's experimental
+   `localStorage` is unavailable under the test runner): 6 in
+   `tests/unit/cockpit-draft.test.ts`, 1 in `tests/unit/chat-page.test.tsx` ("lazy
+   mode …"), 1 in `tests/unit/chat-route.test.tsx` ("lazy mode mounts without
+   error"). They are DISJOINT from sync/trash. If you see exactly these 8, you are
+   green. A 9th failure, or any failure in a `tests/sync/**`, `tests/trash/**`, or
+   `tests/boot/**` file, is a real regression you introduced — fix it, do not
+   paper over it. Confirm the baseline is pre-existing by checking these files are
+   untouched by your diff; do not switch to `master` to check (never switch
+   branches).
+
+8. **Security gate (Larissa).** Both phases touch `apps/user-client/src/sync/**`
+   (and the H-1 crypto-boundary logic) — this **triggers a security audit**. You
+   cannot summon Larissa yourself. So: complete all tasks, run the final
+   verification (Task 15), and in your hand-off report flag prominently that a
+   Larissa pre-squash audit is OWED on the sync/trash diff before the human
+   squashes. Do NOT squash-to-master yourself.
+
+9. **UX gate (Laura).** Tasks 13-14 add a user-facing surface + delete flow →
+   a Laura UX audit is owed pre-squash. Same handling: flag it in the report; do
+   not self-approve.
+
+10. **Dexie version ownership (critical coordination).** This plan owns Dexie
+    version **34**. BEFORE Task 3, confirm the current max in
+    `apps/user-client/src/boot/client-data-db.ts` is still `this.version(33)`. If
+    it already contains `this.version(34)` (a parallel worktree claimed it), STOP
+    Task 3 and report — do NOT guess a different number or edit around it. All
+    other tasks must NOT add any `this.version(...)`.
+
+11. **Commits.** One commit per task (the plan's tasks are the feature units).
+    Free-form imperative subject, capitalised. Code commits do NOT get `[skip ci]`;
+    a doc-only commit (e.g. the STATUS update) does. End every commit message with:
+    `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
+
+12. **End-of-run STATUS update (Task 15's last step).** Prepend a dated entry to
+    `/home/chris/workspace/chatsundere/.claude/worktrees/sync-lifecycle/STATUS-TRANSITION.md`
+    (the sprint status file; newest entry on top, format: `**Last updated:** 2026-07-05 (overnight) — **HEADLINE.** body…`) summarising what shipped, the
+    verification numbers, and the two owed audits (Larissa, Laura). Commit it with
+    `[skip ci]`.
+
+13. **Hand-off report (final action).** Report to the human: the commit list on
+    the branch (`git log --oneline master..HEAD`), the verification numbers (every
+    suite + `pnpm typecheck --force` + `pnpm run build`, with the 8-failure
+    baseline noted), the two owed audits, and any task you could not complete with
+    the reason. Then STOP. Do not push, merge, or squash.
+
+### Codebase reference anchors (read these before the tasks that cite them)
+
+- **New-identity cascade remap (Task 9 restore):** `apps/user-client/src/data/chats.ts`
+  → `useBranchChat` (from ~L284) already copies a chat + messages + pills with
+  fresh ids and rewrites pill-id references inside `contentBlocks`. Restore is
+  "branch from the trash snapshot" — follow this remap approach.
+- **Cascade delete set (Task 7 snapshot completeness):** `apps/user-client/src/data/chats.ts`
+  → `deleteChatCascade` and `mutateSynced({ cascade: [...] })` (`enqueue.ts:191-192`).
+  The snapshot must capture exactly this set.
+- **Toast (Task 14 delete-time signal):** host is `apps/user-client/src/components/Toast.tsx`,
+  backed by `apps/user-client/src/state/toast.store.ts` (`toastStore`), mounted in
+  `apps/user-client/src/routes/root.tsx`. Push the delete toast (with Undo +
+  "Delete permanently") through `toastStore`; follow an existing caller.
+- **Account surface + tile (Task 13):** the account matrix is
+  `apps/user-client/src/routes/app/account.tsx`; the "Recovery Key" tile is at
+  ~L187 (`label="Recovery Key"`, `to="/app/account/biometric"`). Add the "Recently
+  deleted" tile adjacent to it, and model `recently-deleted.tsx` on an existing
+  account subpage under `apps/user-client/src/routes/app/account/` (read one for
+  the layout/styling pattern; opulent, mobile-first 380 px, no sidebar). Register
+  its route the same way the existing account sub-routes are registered.
+
+---
+
 ## Global Constraints
 
 - British English in every artefact (code, comments, copy, commit messages).
@@ -530,10 +648,12 @@ export async function listTrashCards(): Promise<TrashCard[]>;
   4. restore on "device A" (enqueues restoredFrom upserts) → applying them on "device B" retires B's matching cards.
   5. purge persona → all descendants gone from trash; a subsequent malicious upsert on an old key trips tamper (deadKey durable).
 - [ ] **Step 2: Run → iterate to green.**
-- [ ] **Step 3: Full gate** — `pnpm typecheck --force` (14/14), `pnpm biome check` (touched), `pnpm vitest run` (full user-client suite; expect only the 8 known Node-localStorage baseline failures, all disjoint from trash/sync).
+- [ ] **Step 3: Full gate** — from repo root: `pnpm typecheck --force` (expect 14/14) AND `pnpm run build` (expect success — stricter than typecheck). From `apps/user-client/`: `pnpm vitest run` (full suite; expect ONLY the 8 known Node-localStorage baseline failures per Operating Rule #7, all disjoint from trash/sync). `pnpm biome check` on every touched file (clean).
 - [ ] **Step 4: Commit** `"Add trashcan integration scenarios"`.
+- [ ] **Step 5: STATUS update (Operating Rule #12).** Prepend a dated entry to `STATUS-TRANSITION.md` (repo root) summarising what shipped across Phases 1-2, the verification numbers, and the two owed audits. Commit `"Update STATUS: tombstone throttle + universal trashcan built [skip ci]"`.
+- [ ] **Step 6: Hand-off report (Operating Rule #13).** Report the commit list (`git log --oneline master..HEAD`), all verification numbers with the baseline noted, the two owed audits, and any incomplete task. Then STOP — do not push/merge/squash.
 
-> **Phase 2 audit gate:** summon Larissa (sync integrity — dead-key durability, restoredFrom zero-knowledge boundary, single-transaction restore, purge-no-outbox) and Laura (the built surface + delete-time toast honour the approved intent) on the Phase-2 diff before squashing. Record any conscious deferrals in `security-deferrals.md` / `ux-deferrals.md` (the live-back-reference limitation, the deadKeys growth note, the concurrent-restore window).
+> **Phase 2 audit gate (owed, human-triggered — you cannot summon these):** Larissa (sync integrity — dead-key durability, restoredFrom zero-knowledge boundary, single-transaction restore, purge-no-outbox) and Laura (the built surface + delete-time toast honour the approved intent) on the Phase-2 diff before the human squashes. Record any conscious deferrals in `security-deferrals.md` / `ux-deferrals.md` (the live-back-reference limitation, the deadKeys growth note, the concurrent-restore window). Flag both audits prominently in your hand-off report.
 
 ---
 
