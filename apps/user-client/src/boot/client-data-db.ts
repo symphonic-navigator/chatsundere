@@ -585,6 +585,15 @@ export interface SyncStateRow {
   backfillTotal?: number | null;
   /** §3.7 — rows enqueued-and-drained so far. */
   backfillDone?: number | null;
+  /**
+   * The linked account's `server_user_id`, stamped by `resetEngineStateForNewLink`
+   * at link time. Compared against the currently linked account at cycle start
+   * (Task 4) to force a deterministic reset on a server switch, rather than
+   * relying solely on the runtime epoch mismatch. Non-indexed — no `stores()`
+   * change, no Dexie version bump; absent on legacy rows (`undefined` reads as
+   * "unknown identity", never as a mismatch).
+   */
+  linkedServerUserId?: string;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */
@@ -1249,6 +1258,20 @@ export function getClientDataDb(): ClientDataDb {
   if (!dbHandle)
     throw new Error('client-data DB not opened — call openClientDataDb() during boot first');
   return dbHandle;
+}
+
+/**
+ * Release the permanent module-level Dexie handle without deleting any data.
+ * Used by the complete-wipe (`wipeDevice`) so the subsequent
+ * `Dexie.delete(DB_NAME)` sees no open connection and can run to completion
+ * instead of tripping the browser's `onblocked` path. Clearing `pending` too
+ * prevents an in-flight `openClientDataDb()` from resurrecting the handle after
+ * we have closed it.
+ */
+export function closeClientDataDb(): void {
+  dbHandle?.close();
+  dbHandle = null;
+  pending = null;
 }
 
 /**

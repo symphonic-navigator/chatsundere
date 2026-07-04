@@ -31,6 +31,9 @@ vi.mock('@chatsundere/ui-shared', () => ({
     ),
     { getState: () => ({ session: { username: 'navigator' }, mk: null }) },
   ),
+  useAccountLinkStore: vi.fn((selector: (s: { linkStatus: string }) => unknown) =>
+    selector({ linkStatus: 'local-only' }),
+  ),
 }));
 
 vi.mock('../../src/boot/open-db.js', () => ({ getDb: () => ({}) }));

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { SyncCollection } from '@chatsundere/shared-types';
-import { useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import type { SyncOutboxRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { blobFieldsOf, mintBlobRefFor } from './blob-transform.js';
@@ -149,6 +149,36 @@ async function nonTerminalOutboxCount(): Promise<number> {
 /** Guards re-checked between chunks (§3.3): unlocked, sync available, not paused. */
 function canContinue(): boolean {
   return useSessionStore.getState().mk !== null && isSyncAvailable() && !isEnginePaused();
+}
+
+/**
+ * Arm the backfill flag on an already-stranded linked device (the durable
+ * rescue, Unit 1b): a device that linked BEFORE this pump existed (or whose
+ * boot never reached {@link runBackfillIfPending} for any other reason) can
+ * hold a pre-existing corpus that never entered `syncRows`/`syncOutbox` and
+ * would otherwise never backfill. Self-guards on the same preconditions as
+ * the pump (unlocked, linked) plus "not already armed" — cheap no-ops in the
+ * overwhelmingly common already-armed/local-only/fully-synced cases — then
+ * walks {@link BACKFILL_ORDER} and arms on the first collection holding an
+ * un-synced key. `backfillTotal`/`backfillDone` are left `null` so the pump's
+ * own one-off snapshot (§3.7) fires on its next run, exactly as if the flag
+ * had been set at link time.
+ */
+export async function armBackfillIfCorpusUnsynced(): Promise<void> {
+  if (useSessionStore.getState().mk === null) return;
+  if (useAccountLinkStore.getState().linkStatus !== 'linked') return;
+  const state = await getSyncState();
+  if (state.backfillPending === true) return;
+  for (const collection of BACKFILL_ORDER) {
+    if ((await listUnsyncedKeys(collection)).length > 0) {
+      await getClientDataDb().syncState.update(STATE_ID, {
+        backfillPending: true,
+        backfillTotal: null,
+        backfillDone: null,
+      });
+      return;
+    }
+  }
 }
 
 // ===== The pump =====

@@ -3,7 +3,7 @@ import { setProxyAuthSource } from '@chatsundere/llm-unified';
 import { initAccountLinkFromDb, maybeProbeLinkedServer } from '@chatsundere/ui-shared';
 import { armAuthDegradeFromBoot } from '../lib/auth-degrade.js';
 import { proxyAuthSource } from '../lib/proxy-auth.js';
-import { runBackfillIfPending } from '../sync/backfill.js';
+import { armBackfillIfCorpusUnsynced, runBackfillIfPending } from '../sync/backfill.js';
 import { initDoorbell } from '../sync/doorbell.js';
 import { runRecovery } from '../sync/recovery.js';
 import { initSyncTriggers } from '../sync/triggers.js';
@@ -29,7 +29,27 @@ export async function initServerFoundation(): Promise<void> {
   // WS-C: recovery runs ONLY from the worker's authenticated epoch-mismatch
   // handoff (never from a doorbell poke, Larissa M-4).
   _setRecovery(runRecovery);
-  _setBackfill(runBackfillIfPending);
+  // Unit 1b rescue: on the first cycle that actually reaches the backfill
+  // handoff this boot (i.e. once linked + unlocked + online), scan the whole
+  // corpus once for un-transferred rows and arm `backfillPending` if any turn
+  // up — this is what rescues a device that linked before the pump existed
+  // (or otherwise missed arming). `corpusArmCheckDone` is scoped to this call
+  // of `initServerFoundation` (one real boot, or one test), so the full-corpus
+  // scan runs at most once per session, never on every cycle.
+  let corpusArmCheckDone = false;
+  _setBackfill(async () => {
+    if (!corpusArmCheckDone) {
+      corpusArmCheckDone = true;
+      try {
+        await armBackfillIfCorpusUnsynced();
+      } catch {
+        // Self-heals: corpusArmCheckDone stays true (never retried), and the
+        // pump below still runs this cycle and every one after — a DB hiccup
+        // on the one-off corpus scan must never skip that cycle's pump.
+      }
+    }
+    await runBackfillIfPending();
+  });
   // §5.2: re-arm the auth-degraded latch from the persisted attention BEFORE the
   // triggers fire the first cycle — a boot into a degraded state must not drain
   // or pull before the latch is restored (canRunCycle/gateOpen consult it).

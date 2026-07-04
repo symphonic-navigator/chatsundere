@@ -2,6 +2,7 @@
 import {
   computeBlindId,
   fromBase64Url,
+  getLinkedAccount,
   openRecord,
   sealBlob,
   sealRecord,
@@ -27,6 +28,7 @@ import type {
   TrashRow,
 } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
+import { getDb } from '../boot/open-db.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
@@ -41,6 +43,7 @@ import {
 } from './blob-repair.js';
 import { readBlobBytesById, resolveBlobFieldById } from './blob-transform.js';
 import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
+import { resetEngineStateForNewLink } from './link-reset.js';
 import {
   type CoalescedEntry,
   DEFAULT_MAX_BATCH_BYTES,
@@ -699,15 +702,39 @@ function attentionForError(result: {
 let cycleMutex = false;
 
 /**
+ * Cycle-start server-identity guard (Task 4). A relink to a DIFFERENT server
+ * account must reset the sync engine deterministically rather than relying
+ * solely on the runtime epoch mismatch, which only fires once a push/pull
+ * round-trip has actually happened against the new account. Compares the
+ * identity stamped at link time (`resetEngineStateForNewLink`) against the
+ * account currently linked in the crypto DB and, on a genuine mismatch, runs
+ * the same reset a fresh link performs — which also re-stamps the identity,
+ * so a repeat cycle is a no-op. Fires ONLY when both sides are known: a
+ * first-ever link has nothing stamped yet (`undefined`), which is "unknown",
+ * not "different", and must not trigger a reset that would clear a corpus
+ * that was never actually synced under a stale identity.
+ */
+export async function enforceServerIdentity(): Promise<void> {
+  const linked = await getLinkedAccount(getDb());
+  const current = linked?.server_user_id;
+  const stamped = (await getSyncState()).linkedServerUserId;
+  if (stamped !== undefined && current !== undefined && stamped !== current) {
+    await resetEngineStateForNewLink();
+  }
+}
+
+/**
  * Run one sync cycle under a cross-tab single-flight lock (spec §6). No-ops
  * unless linked with a reachable server, an unlocked session, and the `sync`
- * feature present. Purges expired trash, drains the outbox, then hands off to
- * recovery (Task 9) or the pull loop (Task 7) as the drain reports.
+ * feature present. Purges expired trash, enforces the server-identity guard
+ * (Task 4), drains the outbox, then hands off to recovery (Task 9) or the
+ * pull loop (Task 7) as the drain reports.
  */
 export async function runSyncCycle(): Promise<void> {
   if (!canRunCycle()) return;
   await withSingleFlight(async () => {
     await purgeTrash();
+    await enforceServerIdentity();
     const result = await drainOutbox();
     if (result.needsRecovery) {
       // Epoch mismatch — Task 9 re-syncs everything; skip the pull this cycle.

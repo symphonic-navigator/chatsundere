@@ -9,7 +9,7 @@ import {
   useDiscoveryStore,
   useSessionStore,
 } from '@chatsundere/ui-shared';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
@@ -24,6 +24,18 @@ import {
 import { resetEngineStateForNewLink } from '../../src/sync/link-reset.js';
 import { getSyncState } from '../../src/sync/watermark.js';
 import { _resetWorkerForTests, _setCryptoDeps, _setPushTransport } from '../../src/sync/worker.js';
+
+// The cycle-start server-identity guard (Task 4) and `resetEngineStateForNewLink`'s
+// stamp both read the crypto DB's linked account; these scenarios drive the
+// backfill pipeline, not that identity, so it is stubbed inert.
+vi.mock('../../src/boot/open-db.js', () => ({
+  getDb: vi.fn(() => ({}) as unknown as IDBDatabase),
+}));
+
+vi.mock('@chatsundere/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@chatsundere/crypto')>();
+  return { ...actual, getLinkedAccount: vi.fn(async () => null) };
+});
 
 /**
  * Integration scenarios for the late-link backfill (spec §3). Unlike

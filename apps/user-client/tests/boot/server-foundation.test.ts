@@ -18,6 +18,31 @@ vi.mock('../../src/boot/open-db.js', () => ({
   },
 }));
 
+// Task 2 wrapper-contract test: stub the two backfill functions so the test
+// can assert the "arm once / pump every cycle" contract in `_setBackfill`'s
+// closure without exercising the real corpus scan or drain.
+const armSpy = vi.hoisted(() => vi.fn(async () => undefined));
+const pumpSpy = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('../../src/sync/backfill.js', () => ({
+  armBackfillIfCorpusUnsynced: armSpy,
+  runBackfillIfPending: pumpSpy,
+}));
+
+// Spy on `_setBackfill` itself (real implementation preserved via
+// `importOriginal`) so the test can capture the wrapped callback boot
+// registers, then invoke it directly across multiple cycles.
+const setBackfillSpy = vi.hoisted(() => vi.fn());
+vi.mock('../../src/sync/worker.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../src/sync/worker.js')>();
+  return {
+    ...original,
+    _setBackfill: (fn: () => Promise<void>) => {
+      setBackfillSpy(fn);
+      original._setBackfill(fn);
+    },
+  };
+});
+
 import { initServerFoundation } from '../../src/boot/server-foundation.js';
 
 function linkedRowFixture(): LinkedAccountRow {
@@ -37,6 +62,9 @@ function linkedRowFixture(): LinkedAccountRow {
 describe('initServerFoundation', () => {
   beforeEach(async () => {
     probeSpy.mockClear();
+    armSpy.mockClear();
+    pumpSpy.mockClear();
+    setBackfillSpy.mockClear();
     useAccountLinkStore.setState({
       linkStatus: 'unknown',
       baseUrl: null,
@@ -73,5 +101,18 @@ describe('initServerFoundation', () => {
     expect(s.linkStatus).toBe('linked');
     expect(s.baseUrl).toBe('https://chatsundere.example.org');
     expect(probeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('arms the corpus scan at most once per boot but pumps every cycle', async () => {
+    await initServerFoundation();
+    expect(setBackfillSpy).toHaveBeenCalledTimes(1);
+    const wrapped = setBackfillSpy.mock.calls[0]?.[0] as (() => Promise<void>) | undefined;
+    if (!wrapped) throw new Error('unreachable: _setBackfill was not called with a callback');
+
+    await wrapped();
+    await wrapped();
+
+    expect(armSpy).toHaveBeenCalledTimes(1);
+    expect(pumpSpy).toHaveBeenCalledTimes(2);
   });
 });

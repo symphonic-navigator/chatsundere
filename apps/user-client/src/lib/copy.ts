@@ -304,6 +304,7 @@ export const copy = {
     localOnlyBody:
       'Link this device to a server to enable cross-device sync. You can run Chatsundere entirely on this device, without ever talking to a server.',
     linkCta: 'Link to server',
+    linkedBadge: 'Linked',
     linkedToPrefix: 'Linked to',
     operatorTerm: 'Operator',
     roleTerm: 'Role',
@@ -311,6 +312,19 @@ export const copy = {
     rolePrimaryAdmin: 'Primary admin',
     roleAdmin: 'Admin',
     roleUser: 'User',
+    endLinkHeading: 'End this link',
+    decoupleCta: 'Decouple this device',
+    decoupleBusyCta: 'Decoupling…',
+    decoupleConfirmToken: 'decouple',
+    decoupleConfirmLabel: 'Type decouple to confirm',
+    decoupleConfirmBody:
+      "This is different from signing out — it ends this device's link to the server. Your data stays on this device. Syncing stops. Your other devices keep their copies, and you can reconnect any time.",
+    decoupleSuccessBody:
+      'Your data is still here. Your other devices still have their copies. Link again any time.',
+    decoupleSessionNotRevokedBody:
+      "We couldn't reach the server to end this device's session — it will expire on its own. You can retry.",
+    decoupleRetryCta: 'Retry',
+    decoupleRetryBusyCta: 'Retrying…',
   },
   stepUp: {
     title: 'Confirm it’s you',

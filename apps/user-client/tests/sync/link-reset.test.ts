@@ -1,7 +1,9 @@
 // apps/user-client/tests/sync/link-reset.test.ts
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { getLinkedAccount } from '@chatsundere/crypto';
+import type { LinkedAccountRow } from '@chatsundere/crypto';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
@@ -10,10 +12,40 @@ import {
 import { resetEngineStateForNewLink } from '../../src/sync/link-reset.js';
 import { getSyncState } from '../../src/sync/watermark.js';
 
+// The crypto IDB connection is opaque here — it is only ever passed straight
+// into the mocked `getLinkedAccount` below — so a dummy value is enough.
+vi.mock('../../src/boot/open-db.js', () => ({
+  getDb: vi.fn(() => ({}) as unknown as IDBDatabase),
+}));
+
+vi.mock('@chatsundere/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@chatsundere/crypto')>();
+  return { ...actual, getLinkedAccount: vi.fn(async () => null) };
+});
+
+const mockedGetLinkedAccount = vi.mocked(getLinkedAccount);
+
+/** A minimally-populated `LinkedAccountRow` — only `server_user_id` matters here. */
+function linkedAccountRow(serverUserId: string): LinkedAccountRow {
+  return {
+    server_user_id: serverUserId,
+    base_url: 'https://server.example',
+    issuer_label: null,
+    role: 'user',
+    wrapped_mk_opaque_ciphertext: new Uint8Array(),
+    wrapped_mk_opaque_nonce: new Uint8Array(),
+    wrapped_mk_opaque_aad: new Uint8Array(),
+    wrapped_mk_opaque_integrity: new Uint8Array(),
+    linked_at: new Date(),
+  };
+}
+
 describe('resetEngineStateForNewLink', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
     await openClientDataDb();
+    mockedGetLinkedAccount.mockReset();
+    mockedGetLinkedAccount.mockResolvedValue(null);
   });
 
   it('clears syncRows, syncOutbox, and resets state to a fresh-link posture', async () => {
@@ -48,5 +80,21 @@ describe('resetEngineStateForNewLink', () => {
     const state = await getSyncState();
     expect(state.backfillPending).toBe(true);
     expect(state.watermarkRev).toBe(0);
+  });
+
+  it('stamps linkedServerUserId from the currently linked account (Task 4)', async () => {
+    mockedGetLinkedAccount.mockResolvedValue(linkedAccountRow('server-user-42'));
+
+    await resetEngineStateForNewLink();
+
+    const state = await getSyncState();
+    expect(state.linkedServerUserId).toBe('server-user-42');
+  });
+
+  it('leaves linkedServerUserId undefined when no account is linked', async () => {
+    await resetEngineStateForNewLink();
+
+    const state = await getSyncState();
+    expect(state.linkedServerUserId).toBeUndefined();
   });
 });

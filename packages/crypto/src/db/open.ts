@@ -26,7 +26,17 @@ export function openLocalDb(
       const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
       runMigrations(db, oldVersion, version);
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Defence-in-depth: if another context (e.g. the complete-wipe's
+      // `deleteDatabase`) needs to delete or upgrade this DB, release our handle
+      // rather than blocking it indefinitely. Without this, a missed `closeDb()`
+      // in the wipe path would leave the crypto DB (wrapped master key,
+      // passkey-PRF-wrapped MK, local-account record) alive on a device the user
+      // was told is erased.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () =>
       reject(new CryptoError('db_schema_mismatch', `IndexedDB open failed: ${req.error}`));
     req.onblocked = () =>

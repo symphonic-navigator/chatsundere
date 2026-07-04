@@ -102,6 +102,20 @@ export function getEmbeddingEngine(): Promise<EmbeddingEngine> {
   return enginePromise;
 }
 
+/**
+ * Release the module-level vector DB handle and drop the derived singletons
+ * (store, engine) without deleting any data. Used by the complete-wipe
+ * (`wipeDevice`) so the subsequent `Dexie.delete` of the knowledge-vectors DB
+ * sees no open connection and runs to completion rather than tripping the
+ * browser's `onblocked` path.
+ */
+export function closeKnowledgeVectorsDb(): void {
+  dbHandle?.close();
+  dbHandle = null;
+  storeHandle = null;
+  enginePromise = null;
+}
+
 /** Test-only: drop the in-memory singletons and delete the IndexedDB database. */
 export async function _resetKnowledgeVectorsForTests(): Promise<void> {
   if (dbHandle) {

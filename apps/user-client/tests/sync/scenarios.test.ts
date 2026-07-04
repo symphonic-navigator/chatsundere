@@ -54,6 +54,18 @@ import {
   runSyncCycle,
 } from '../../src/sync/worker.js';
 
+// The cycle-start server-identity guard (Task 4) reads the crypto DB's linked
+// account; these scenarios drive drain/pull/recovery, not that guard, so it
+// is stubbed inert (no account linked → the guard never fires).
+vi.mock('../../src/boot/open-db.js', () => ({
+  getDb: vi.fn(() => ({}) as unknown as IDBDatabase),
+}));
+
+vi.mock('@chatsundere/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@chatsundere/crypto')>();
+  return { ...actual, getLinkedAccount: vi.fn(async () => null) };
+});
+
 /**
  * WS-C Task 14 — adversarial sync integration scenarios (spec §14). These drive
  * the BUILT engine (`worker.ts` drain+pull, `apply.ts`, `recovery.ts`,

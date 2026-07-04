@@ -6,7 +6,7 @@ import {
   getLocalAccount,
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
-import { useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import { Fingerprint, Info, KeyRound, Link2, Lock, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -48,6 +48,7 @@ export function AccountPage(): JSX.Element {
   // IndexedDB (same pattern as account-section.tsx) to stay correct if the
   // session is closed/refreshed.
   const sessionUsername = useSessionStore((s) => s.session?.username ?? '');
+  const linkStatus = useAccountLinkStore((s) => s.linkStatus);
 
   const [accountState, setAccountState] = useState<AccountLoadState>({ kind: 'loading' });
   const [biometricState, setBiometricState] = useState<BiometricLoadState>({ kind: 'loading' });
@@ -155,8 +156,14 @@ export function AccountPage(): JSX.Element {
             )
           ) : null}
 
-          {/* Server link — Block 1: always local-only */}
-          <Badge tone="neutral">Local-only mode</Badge>
+          {/* Server link — dynamic, reflects the account-link store (spec: sync-lifecycle hardening) */}
+          {linkStatus === 'linked' && (
+            <Badge tone="success">{copy.serverLinking.linkedBadge}</Badge>
+          )}
+          {linkStatus === 'local-only' && (
+            <Badge tone="neutral">{copy.serverLinking.localOnlyTitle}</Badge>
+          )}
+          {linkStatus === 'unknown' && <Badge tone="neutral">{copy.serverLinking.checking}</Badge>}
 
           {/* Version */}
           <span className="font-mono text-xs text-paper-soft">
@@ -186,7 +193,7 @@ export function AccountPage(): JSX.Element {
           icon={Link2}
           label="Server linking"
           to="/app/account/server-linking"
-          meta="sync across devices"
+          meta="sync & unlink devices"
         />
         <NavTile
           colour="blue"

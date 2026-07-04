@@ -24,6 +24,18 @@ import {
   runSyncCycle,
 } from '../../src/sync/worker.js';
 
+// The cycle-start server-identity guard (Task 4) reads the crypto DB's linked
+// account; these tests exercise the backfill handoff, not that guard, so it
+// is stubbed inert (no account linked → the guard never fires).
+vi.mock('../../src/boot/open-db.js', () => ({
+  getDb: vi.fn(() => ({}) as unknown as IDBDatabase),
+}));
+
+vi.mock('@chatsundere/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@chatsundere/crypto')>();
+  return { ...actual, getLinkedAccount: vi.fn(async () => null) };
+});
+
 /** Deterministic fake crypto — no key material, no real WebCrypto needed. */
 function fakeSealed(collection: string, key: string): SealedRecord {
   return {

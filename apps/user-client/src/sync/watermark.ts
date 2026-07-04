@@ -32,7 +32,21 @@ function defaultState(): SyncStateRow {
 export async function getSyncState(): Promise<SyncStateRow> {
   const db = getClientDataDb();
   const existing = await db.syncState.get(STATE_ID);
-  if (existing) return existing;
+  if (existing) {
+    // Heal a legacy row predating a field (e.g. the backfill trio): merge in
+    // defaults for whatever is missing and persist once, so callers never see
+    // `undefined` where a default should apply.
+    const defaults = defaultState();
+    const patch: Partial<SyncStateRow> = {};
+    for (const key of Object.keys(defaults) as (keyof SyncStateRow)[]) {
+      if (existing[key] === undefined) (patch as Record<string, unknown>)[key] = defaults[key];
+    }
+    if (Object.keys(patch).length > 0) {
+      await db.syncState.update(STATE_ID, patch);
+      return { ...existing, ...patch };
+    }
+    return existing;
+  }
   const seed = defaultState();
   // putIfAbsent semantics: a concurrent cycle may have seeded it first.
   await db.syncState.add(seed).catch(() => undefined);
