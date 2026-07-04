@@ -10,6 +10,11 @@ export const copy = {
   signOut: 'Sign out',
   loading: 'Loading…',
   genericError: 'Something went wrong. Please try again.',
+  errors: {
+    queryFailedTitle: 'The server could not be reached or refused the request.',
+    network: 'network unreachable',
+    retry: 'Retry',
+  },
   login: {
     title: 'Sign in to Chatsundere Admin',
     passphraseLabel: 'Passphrase',
@@ -176,6 +181,7 @@ export const copy = {
     title: 'Audit log',
     filters: {
       category: 'Category',
+      allEvents: 'All events',
       user: 'User ID',
       from: 'From',
       to: 'To',
@@ -186,15 +192,18 @@ export const copy = {
       'user-lifecycle': 'User lifecycle',
       'invitation-lifecycle': 'Invitation lifecycle',
       recovery: 'Recovery',
+      security: 'Security',
       'admin-action': 'Admin action',
     },
     columns: {
       timestamp: 'Timestamp',
+      category: 'Category',
       eventType: 'Event',
       actor: 'Actor',
       subject: 'Subject',
       metadata: 'Metadata',
     },
+    deletedUser: 'deleted',
     expand: 'Expand',
     collapse: 'Collapse',
     empty: 'No matching events. Try a wider time range.',

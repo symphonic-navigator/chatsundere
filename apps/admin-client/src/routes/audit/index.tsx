@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery } from '@tanstack/react-query';
 import { useReducer, useState } from 'react';
+import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
 import { copy } from '../../copy.js';
-import type { AuditEventCategory } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import { listAudit } from '../../data/api.js';
+import type { AuditEventCategory } from '../../data/types.js';
 import { formatRelative } from '../../lib/format.js';
 
 interface AuditFilter {
-  category: AuditEventCategory | 'all';
+  event_type: string; // '' = all
   user_id: string;
   from: string;
   to: string;
@@ -15,7 +16,7 @@ interface AuditFilter {
 }
 
 const initial: AuditFilter = {
-  category: 'all',
+  event_type: '',
   user_id: '',
   from: '',
   to: '',
@@ -23,7 +24,7 @@ const initial: AuditFilter = {
 };
 
 type FilterAction =
-  | { type: 'category'; value: AuditFilter['category'] }
+  | { type: 'event_type'; value: string }
   | { type: 'user_id'; value: string }
   | { type: 'from'; value: string }
   | { type: 'to'; value: string }
@@ -31,8 +32,8 @@ type FilterAction =
 
 function reduce(state: AuditFilter, action: FilterAction): AuditFilter {
   switch (action.type) {
-    case 'category':
-      return { ...state, category: action.value, page: 1 };
+    case 'event_type':
+      return { ...state, event_type: action.value, page: 1 };
     case 'user_id':
       return { ...state, user_id: action.value, page: 1 };
     case 'from':
@@ -44,16 +45,70 @@ function reduce(state: AuditFilter, action: FilterAction): AuditFilter {
   }
 }
 
+const EVENT_TYPE_GROUPS: ReadonlyArray<{
+  category: AuditEventCategory;
+  types: readonly string[];
+}> = [
+  {
+    category: 'auth',
+    types: [
+      'auth.login.success',
+      'auth.login.failed',
+      'auth.logout',
+      'auth.step_up.confirmed',
+      'auth.step_up.failed',
+      'auth_method.added',
+      'auth_method.removed',
+      'auth_method.passphrase_changed',
+    ],
+  },
+  {
+    category: 'user-lifecycle',
+    types: [
+      'user.linked',
+      'user.suspended',
+      'user.unsuspended',
+      'user.deleted_by_admin',
+      'user.self_deleted',
+      'user.role_changed',
+      'user.username_changed',
+    ],
+  },
+  {
+    category: 'invitation-lifecycle',
+    types: [
+      'invitation.created',
+      'invitation.revoked',
+      'invitation.redeemed',
+      'pairing_code.created',
+      'pairing_code.revoked',
+      'pairing_code.redeemed',
+    ],
+  },
+  { category: 'recovery', types: ['recovery_used'] },
+  {
+    category: 'security',
+    types: ['wrapping_invariant_violated', 'refresh_token.reuse_detected'],
+  },
+  { category: 'admin-action', types: ['primary_admin.transferred'] },
+];
+
+/** Deleted users keep their id in old entries; show it truncated and marked. */
+function renderUser(username: string | null, id: string | null): string {
+  if (username) return username;
+  if (id) return `${id.slice(0, 8)}… (${copy.audit.deletedUser})`;
+  return '—';
+}
+
 export function AuditScreen() {
   const [filter, dispatch] = useReducer(reduce, initial);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const api = getAdminApi();
 
-  const { data } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: ['audit', filter],
     queryFn: () =>
-      api.listAudit({
-        ...(filter.category !== 'all' ? { category: filter.category } : {}),
+      listAudit({
+        ...(filter.event_type ? { event_type: filter.event_type } : {}),
         ...(filter.user_id ? { user_id: filter.user_id } : {}),
         ...(filter.from ? { from: filter.from } : {}),
         ...(filter.to ? { to: filter.to } : {}),
@@ -75,20 +130,20 @@ export function AuditScreen() {
 
       <div className="flex flex-wrap gap-2">
         <select
-          value={filter.category}
-          onChange={(e) =>
-            dispatch({ type: 'category', value: e.target.value as AuditFilter['category'] })
-          }
+          value={filter.event_type}
+          onChange={(e) => dispatch({ type: 'event_type', value: e.target.value })}
           className="rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-3 py-2"
         >
-          <option value="all">{copy.audit.categories.all}</option>
-          <option value="auth">{copy.audit.categories.auth}</option>
-          <option value="user-lifecycle">{copy.audit.categories['user-lifecycle']}</option>
-          <option value="invitation-lifecycle">
-            {copy.audit.categories['invitation-lifecycle']}
-          </option>
-          <option value="recovery">{copy.audit.categories.recovery}</option>
-          <option value="admin-action">{copy.audit.categories['admin-action']}</option>
+          <option value="">{copy.audit.filters.allEvents}</option>
+          {EVENT_TYPE_GROUPS.map((group) => (
+            <optgroup key={group.category} label={copy.audit.categories[group.category]}>
+              {group.types.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
         <input
           type="text"
@@ -113,7 +168,9 @@ export function AuditScreen() {
         />
       </div>
 
-      {!data ? (
+      {error ? (
+        <QueryErrorPanel error={error} onRetry={() => void refetch()} />
+      ) : !data ? (
         <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
       ) : data.items.length === 0 ? (
         <p className="text-[var(--color-subtext-0)]">{copy.audit.empty}</p>
@@ -122,6 +179,7 @@ export function AuditScreen() {
           <thead>
             <tr className="text-xs uppercase text-[var(--color-subtext-0)]">
               <th className="py-2">{copy.audit.columns.timestamp}</th>
+              <th className="py-2">{copy.audit.columns.category}</th>
               <th className="py-2">{copy.audit.columns.eventType}</th>
               <th className="py-2">{copy.audit.columns.actor}</th>
               <th className="py-2">{copy.audit.columns.subject}</th>
@@ -133,10 +191,15 @@ export function AuditScreen() {
               const isExpanded = expanded.has(e.id);
               return (
                 <tr key={e.id} className="border-t border-[var(--color-overlay-0)]">
-                  <td className="py-2">{formatRelative(e.timestamp)}</td>
+                  <td className="py-2">{formatRelative(e.created_at)}</td>
+                  <td className="py-2">
+                    <span className="rounded-sm bg-[var(--color-mantle)] px-2 py-0.5 font-mono text-xs">
+                      {copy.audit.categories[e.category]}
+                    </span>
+                  </td>
                   <td className="py-2 font-mono text-xs">{e.event_type}</td>
-                  <td className="py-2">{e.actor_username ?? '—'}</td>
-                  <td className="py-2">{e.subject_username ?? '—'}</td>
+                  <td className="py-2">{renderUser(e.actor_username, e.actor_user_id)}</td>
+                  <td className="py-2">{renderUser(e.user_username, e.user_id)}</td>
                   <td className="py-2">
                     <button
                       type="button"
