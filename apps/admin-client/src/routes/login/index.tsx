@@ -6,7 +6,7 @@ import {
   useSessionStore,
 } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { copy } from '../../copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import {
@@ -31,6 +31,11 @@ type State =
 
 export function LoginScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const notice =
+    typeof (location.state as { notice?: unknown } | null)?.notice === 'string'
+      ? (location.state as { notice: string }).notice
+      : null;
   const [state, setState] = useState<State>({ kind: 'checking' });
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
@@ -120,6 +125,13 @@ export function LoginScreen() {
           }
         }}
       >
+        {notice && (
+          // `<output>` carries an implicit role="status"; Biome's
+          // useSemanticElements rule prefers it over `<p role="status">`.
+          <output className="block rounded-md border border-[var(--color-green)] px-3 py-2 text-sm text-[var(--color-green)]">
+            {notice}
+          </output>
+        )}
         <h1 className="text-2xl font-medium">{copy.login.title}</h1>
         <label className="block">
           <span className="text-sm text-[var(--color-subtext-0)]">

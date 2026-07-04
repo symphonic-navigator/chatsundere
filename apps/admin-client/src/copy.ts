@@ -116,6 +116,15 @@ export const copy = {
       destructiveCta: 'Delete user',
       cancelCta: 'Cancel',
     },
+    transferredNotice: (username: string) =>
+      `Primary role transferred to ${username}. Sign in again — your session now carries the admin role.`,
+    transferConfirm: {
+      title: 'Transfer primary role',
+      body: 'This hands the primary-admin role to this user and demotes you to admin. You will be signed out afterwards.',
+      tokenLabel: "Type the target's username to confirm",
+      cta: 'Transfer and sign out',
+      cancel: 'Cancel',
+    },
   },
   invitations: {
     title: 'Invitations',

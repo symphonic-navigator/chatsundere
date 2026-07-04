@@ -2,6 +2,7 @@
 import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { copy } from '../../copy.js';
 import {
   changeRole,
@@ -20,8 +21,11 @@ interface Props {
 
 export function UserActions({ user, onDeleted }: Props) {
   const session = useSessionStore((s) => s.session);
+  const closeAndForget = useSessionStore((s) => s.closeAndForget);
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmTransferOpen, setConfirmTransferOpen] = useState(false);
 
   // Compute gating predicates exactly once so they are applied consistently
   // across all four action buttons. These are defence-in-depth (H5): the server
@@ -60,8 +64,13 @@ export function UserActions({ user, onDeleted }: Props) {
   const transfer = useMutation({
     mutationFn: () => transferPrimary(user.id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['user', user.id] });
-      qc.invalidateQueries({ queryKey: ['users'] });
+      // The in-memory access token still claims primary_admin; signing out is
+      // the honest state (spec §6.7). The login screen shows the notice.
+      closeAndForget();
+      navigate('/login', {
+        replace: true,
+        state: { notice: copy.userDetail.transferredNotice(user.username) },
+      });
     },
   });
 
@@ -120,7 +129,7 @@ export function UserActions({ user, onDeleted }: Props) {
         onClick={() => {
           // Defence-in-depth: re-check all gating conditions.
           if (isSelf || !sessionIsPrimary || user.role !== 'admin' || transfer.isPending) return;
-          transfer.mutate();
+          setConfirmTransferOpen(true);
         }}
       />
 
@@ -158,6 +167,26 @@ export function UserActions({ user, onDeleted }: Props) {
             return;
           }
           del.mutate();
+        }}
+      />
+
+      <ConfirmTyped
+        open={confirmTransferOpen && !isSelf && sessionIsPrimary && user.role === 'admin'}
+        title={copy.userDetail.transferConfirm.title}
+        body={copy.userDetail.transferConfirm.body}
+        confirmToken={user.username}
+        confirmTokenLabel={copy.userDetail.transferConfirm.tokenLabel}
+        destructiveCta={copy.userDetail.transferConfirm.cta}
+        cancelCta={copy.userDetail.transferConfirm.cancel}
+        busy={transfer.isPending}
+        onCancel={() => setConfirmTransferOpen(false)}
+        onConfirm={() => {
+          // Defence-in-depth: re-check every gate at confirmation time.
+          if (isSelf || !sessionIsPrimary || user.role !== 'admin' || transfer.isPending) {
+            setConfirmTransferOpen(false);
+            return;
+          }
+          transfer.mutate();
         }}
       />
     </div>
