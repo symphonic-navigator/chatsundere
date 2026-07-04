@@ -26,7 +26,12 @@ export const proxyAuthSource: ProxyAuthSource = {
   refreshToken: async () => {
     const baseUrl = useAccountLinkStore.getState().baseUrl;
     if (baseUrl === null) return null;
-    const ok = await refreshAccessToken(baseUrl);
+    // Origin 'background' (§5.2): the proxy is an EGRESS path. A definitive
+    // refusal here must latch auth-degraded and surface the relink affordance,
+    // never `closeAndForget` the local session — losing the whole account
+    // because one LLM/proxy call's token expired (a background title-gen or
+    // memory-extraction job is a common trigger) is never the right outcome.
+    const ok = await refreshAccessToken(baseUrl, 'background');
     return ok ? (useSessionStore.getState().session?.accessToken ?? null) : null;
   },
 };

@@ -186,6 +186,11 @@ describe('close-code 4401 → one refresh per backoff cycle, then degrade', () =
     latestSocket().emitClose(4401);
     await vi.advanceTimersByTimeAsync(0);
     expect(refresh).toHaveBeenCalledTimes(1);
+    // The 4401 close is a BACKGROUND signal (§5.2): the refresh MUST carry the
+    // 'background' origin so a definitive refusal latches auth-degraded rather
+    // than logging the user out. A default ('user') origin here was the CRITICAL
+    // that destroyed the session in the exact "server forgot this client" case.
+    expect(refresh).toHaveBeenCalledWith(expect.any(String), 'background');
 
     // The reconnect fires with a FRESH ticket (a new socket), open never arrives.
     await vi.advanceTimersByTimeAsync(1_000);

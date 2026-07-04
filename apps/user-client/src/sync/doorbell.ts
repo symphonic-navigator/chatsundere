@@ -7,7 +7,7 @@ import {
   useSessionStore,
 } from '@chatsundere/ui-shared';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
-import { apiFetch, joinUrl, refreshAccessToken } from '../lib/fetch.js';
+import { type FetchOrigin, apiFetch, joinUrl, refreshAccessToken } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { scheduleClass1Sync } from './triggers.js';
 import { getSyncState } from './watermark.js';
@@ -53,7 +53,7 @@ const defaultFactory: DoorbellSocketFactory = (url) =>
 
 let factory: DoorbellSocketFactory = defaultFactory;
 let ticketFetcher: (() => Promise<string>) | null = null;
-let refreshFn: ((baseUrl: string) => Promise<boolean>) | null = null;
+let refreshFn: ((baseUrl: string, origin?: FetchOrigin) => Promise<boolean>) | null = null;
 let scheduler: () => void = scheduleClass1Sync;
 
 // ===== Connection state =====
@@ -220,7 +220,11 @@ async function handleClose(code: number): Promise<void> {
     const authBase = useAccountLinkStore.getState().baseUrl;
     if (authBase) {
       const refresh = refreshFn ?? refreshAccessToken;
-      await refresh(authBase);
+      // §5.2: the doorbell 4401 close is a BACKGROUND signal — a definitive
+      // refusal must latch auth-degraded, never `closeAndForget` (logout). This
+      // is the primary "the server forgot this client" trigger the degrade
+      // feature exists to catch, so the origin must be 'background'.
+      await refresh(authBase, 'background');
     }
   }
 
@@ -308,7 +312,9 @@ export function _setTicketFetcher(fn: (() => Promise<string>) | null): void {
   ticketFetcher = fn;
 }
 /** Test seam: inject the token-refresh function (defaults to `refreshAccessToken`). */
-export function _setDoorbellRefresh(fn: ((baseUrl: string) => Promise<boolean>) | null): void {
+export function _setDoorbellRefresh(
+  fn: ((baseUrl: string, origin?: FetchOrigin) => Promise<boolean>) | null,
+): void {
   refreshFn = fn;
 }
 /** Test seam: inject the poke scheduler (defaults to `scheduleClass1Sync`). */

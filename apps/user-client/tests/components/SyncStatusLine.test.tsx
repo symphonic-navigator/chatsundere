@@ -275,9 +275,27 @@ describe('deriveSyncStatus (pure precedence)', () => {
     expect(view.text).toBe('Offline — your upload will pick up where it left off.');
   });
 
-  it('pulling outranks backfill at watermark 0', () => {
+  it('backfill outranks the first-sync heuristic at watermark 0 (it is uploading, not pulling)', () => {
+    // On a first link the drain never advances the watermark, so watermarkRev
+    // stays 0 throughout the upload. The status must read "Uploading…", not
+    // mislabel it as "pulling your data onto this device".
     const state: SyncStateRow = {
       ...BASE_STATE,
+      pulling: null,
+      backfillPending: true,
+      backfillTotal: 500,
+      backfillDone: 0,
+      watermarkRev: 0,
+    };
+    const view = deriveSyncStatus({ state, outboxCount: 0, online: true, recovering: false });
+    expect(view.kind).toBe('backfill');
+    expect(view.text).toBe('Uploading your existing data… 0 of 500');
+  });
+
+  it('an active multi-page pull still outranks backfill', () => {
+    const state: SyncStateRow = {
+      ...BASE_STATE,
+      pulling: { pages: 2, startedAt: 0 },
       backfillPending: true,
       backfillTotal: 500,
       backfillDone: 0,

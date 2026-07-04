@@ -92,16 +92,21 @@ export function GlobalSyncLine(): JSX.Element | null {
   if (view.kind !== 'backfill' && view.kind !== 'attention') return null;
 
   // §5.2 — map the router-free reconnect intent onto a navigate-backed action.
+  // Carry `?return=/app` so the Back arrow on the (guarded) invitation form takes
+  // an already-logged-in user back into the app, not onto the onboarding matrix.
   const action =
     view.action ??
     (view.wantsReconnect
       ? {
           label: syncCopy.actions.reconnect,
-          onClick: () => navigate('/onboarding/invitation'),
+          onClick: () => navigate('/onboarding/invitation?return=/app'),
         }
       : undefined);
 
-  if (collapsed) {
+  // An attention is an error the user must ACT on — never let a prior "collapse
+  // the backfill dot" tuck it away behind a calm dot (it would read as benign
+  // progress and hide the Reconnect affordance). Only backfill is collapsible.
+  if (collapsed && view.kind !== 'attention') {
     return (
       <button
         type="button"

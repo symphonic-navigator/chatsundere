@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getClientDataDb } from '../boot/client-data-db.js';
+import { setAuthDegraded } from '../lib/auth-degrade.js';
 import { getSyncState } from './watermark.js';
 
 /**
@@ -28,4 +29,11 @@ export async function resetEngineStateForNewLink(): Promise<void> {
       backfillDone: null,
     });
   });
+  // Clear the in-memory auth-degraded latch too: this fresh account holds valid
+  // tokens, so a stale latch from a prior account would otherwise keep the engine
+  // gated off (`canRunCycle` returns false) until a full reload. The relink
+  // affordance routes here, so without this the offered recovery never actually
+  // resumes the engine. The transaction above already nulled the persisted
+  // attention, so this only resets the process-local boolean.
+  await setAuthDegraded(false);
 }

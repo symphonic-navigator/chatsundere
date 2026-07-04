@@ -1,5 +1,53 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-04 (morning) — **PRE-TEST STATIC-REVIEW + FIX PASS DONE
+— both audit gates green, ready for Chris's first extensive end-to-end backend
+test.** Ahead of the manual test, a five-agent ultrathink static review swept
+auth + sync (auth-service server, sync-service server, client sync engine +
+blob, 401-degrade, invitation/guard/unlock), each cross-checking the
+client↔server WIRE contract — the surface no prior review covered (Larissa/Laura
+audit against intent, not the actual wire shape). It surfaced **16 real defects,
+all fixed on the branch**, then Larissa (security) + Laura (UX) audited the fix
+diff. **3 CRITICAL** (on the test path): the doorbell 4401-close refreshed with
+the default `'user'` origin → `closeAndForget`/logout in the exact "server forgot
+this client" scenario the degrade feature exists to catch (now `'background'`);
+`link/passkey/finish` parsed the credential under key `response` while the client
+(and shared-types) send `credential`, with an over-strict inner shape that even
+stripped `clientExtensionResults.prf` → every passkey enrolment 400'd and fell
+back to local-only (schema rebuilt with `looseObject`, PRF check now functional);
+pre-link blob rows (bytes, no `blobRef` — write sites mint only once linked)
+backfilled their record but never uploaded the bytes → dangling ref / "image
+unavailable" on every other device (backfill now mints+persists the ref and
+queues the PUT). **4 HIGH**: sync-service 500 + wedge on a `baseRev>0` push
+against an absent row → **resurrect-as-insert** (Chris's call, heals restore
+drift; tombstones are real rows so no deleted-record resurrection); a relink left
+the in-memory auth-degraded latch set so the offered Reconnect silently did
+nothing until reload (`link-reset` clears it); the backfill progress line was
+mislabelled "Pulling…" (watermark stays 0 on a first link) → precedence fixed so
+it reads "Uploading N of M"; an open-redirect via an unvalidated `?return=` sink
+→ one shared `safeReturnPath` for every sink. **MEDIUMs**: invitation-finish
+redemption guard (mirror pairing — no double-redeem/lockout), 413 `body_too_large`
+now terminal, proxy egress refusal → `'background'`, apply.ts establishes a CAS
+base without prior meta (backfill-wedge guard). **Audit-driven adds**: Laura's
+collapse-dot-hides-attention (borderline-hard), Reconnect `?return=/app`, "0 of 0"
+copy; Larissa's second unguarded `?return=` sink (`persona/hub.tsx`) +
+`safeReturnPath` control-char-bypass hardening (`/%09/evil.com`). **Larissa
+verdict: CLEAR TO COMMIT** (no Critical/High, zero-knowledge/OPAQUE-PRF/no-data-
+loss invariants all hold). **Laura: no hard defects.** Verification: 3 packages
+typecheck clean, Biome clean, **user-client 297 sync/component/route/lib tests +
+sync-service 42 store/push/pull/ops/e2e green**, 5 new/updated regression tests
+(doorbell-origin, store resurrect, SyncStatusLine precedence, safe-return unit),
+no NUL/control bytes in source. **Deferred follow-ups (not test-blocking):**
+backfill rate-limit smoothness (needs progress-aware re-arm to avoid a hot-loop),
+cross-tab refresh reuse (two tabs of one browser only — a Web Lock around the
+refresh would close it), a server-side passkey-finish integration test, and
+assorted LOWs (bearerAuth skips the deny-list on logout, dev IP-rate-limit
+collapses to `'unknown'`, re-epoch needs a service restart → runbook,
+`local_account_exists` vs `conflict` naming). Squashed as one unit on
+`full-backend-transition`; master untouched.
+
+Prior entry below.
+
 **Last updated:** 2026-07-04 (night) — **BACKFILL OVERNIGHTER IS SPECCED,
 PLANNED, HARDENED, AND HANDED OFF.** The full pipeline ran in one session:
 brainstorm (6 decisions with Chris) → spec

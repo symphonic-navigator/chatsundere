@@ -325,10 +325,31 @@ async function finishInvitation(c: Context, body: FinishBody): Promise<Response>
         wrapAad: Buffer.from(wrapAadOpaque, 'base64url'),
       });
 
-      await tx
+      // Atomically mark the invitation redeemed under the SAME conditional
+      // guard finishPairing uses (join.ts pairing branch): only one UPDATE wins
+      // the race between two concurrent finishes, and an already-redeemed /
+      // revoked / expired code returns zero rows. Throwing here rolls the whole
+      // transaction back — including the user insert above — so one invitation
+      // can ever mint exactly one account (closes the double-redemption hole).
+      const redemption = await tx
         .update(pendingCodes)
         .set({ redeemedAt: new Date(), redeemedByUserId: user.id })
-        .where(eq(pendingCodes.id, pendingCodeId));
+        .where(
+          and(
+            eq(pendingCodes.id, pendingCodeId),
+            isNull(pendingCodes.redeemedAt),
+            isNull(pendingCodes.revokedAt),
+            gt(pendingCodes.expiresAt, new Date()),
+          ),
+        )
+        .returning({ id: pendingCodes.id });
+      if (redemption.length === 0) {
+        throw new ApiError(
+          410,
+          'code_already_redeemed',
+          'Invitation already redeemed, revoked, or expired',
+        );
+      }
 
       return user;
     });

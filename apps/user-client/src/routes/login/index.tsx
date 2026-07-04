@@ -17,6 +17,7 @@ import { PassphraseField } from '../../components/PassphraseField.js';
 import { useDisplayName } from '../../data/settings.js';
 import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
+import { safeReturnPath } from '../../lib/safe-return.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 
@@ -34,8 +35,7 @@ import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
  * guard: a crafted link must not turn the login into an open redirect.
  */
 export function safeReturnTarget(raw: string | null): string {
-  if (raw?.startsWith('/') && !raw.startsWith('//')) return raw;
-  return '/app';
+  return safeReturnPath(raw, '/app');
 }
 
 export function Login() {

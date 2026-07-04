@@ -363,7 +363,27 @@ export async function drainOutbox(): Promise<DrainResult> {
     const batches = batchByBytes(prepared, maxBatchBytes);
 
     for (const batch of batches) {
-      const response = await push(batch.map((p) => p.record));
+      let response: SyncPushResponse;
+      try {
+        response = await push(batch.map((p) => p.record));
+      } catch (err) {
+        // A 413 `body_too_large` is a whole-request refusal from the body-limit
+        // middleware, not a per-record result. Batches are byte-capped
+        // (DEFAULT_MAX_BATCH_BYTES, 4 MiB) well below the server's 24 MiB body
+        // limit, so only a SINGLE record whose sealed body exceeds it can trigger
+        // this. Mark it terminal — exactly as a per-record `record_too_large`
+        // would be — so it stops wedging the drain on every cycle, and raise the
+        // same attention. Anything else propagates (transient failure retries).
+        if (err instanceof HttpError && err.status === 413 && batch.length === 1) {
+          const only = batch[0];
+          if (only) {
+            await markTerminal(only);
+            await applyError({ code: 'record_too_large' });
+          }
+          continue;
+        }
+        throw err;
+      }
       head = response.head;
       epoch = response.epoch;
 

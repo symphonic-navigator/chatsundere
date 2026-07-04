@@ -48,6 +48,7 @@ import {
   modelBehaviourMeta,
   roleplayMeta,
 } from '../../../lib/persona-hub.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
@@ -67,7 +68,10 @@ export function PersonaHub(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const [search] = useSearchParams();
-  const returnPath = search.get('return') ?? '/app/circle';
+  // Validate `?return=` (it feeds a real `<a href>` below): the shared guard
+  // rejects open-redirect / protocol-relative targets, the same as every other
+  // `?return=` sink.
+  const returnPath = safeReturnPath(search.get('return'), '/app/circle');
   const { onHelp, helpOverlay } = useHelp('persona');
 
   // Present when navigating here from a Chatsundere persona pack import — drives

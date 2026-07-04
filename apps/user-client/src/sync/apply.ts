@@ -564,7 +564,17 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
   // so a subsequent re-push does not re-conflict, and enqueue the re-push when
   // the local row is strictly newer knowledge (repush).
   await db.transaction('rw', db.syncRows, db.syncOutbox, async () => {
-    if (meta) await db.syncRows.update([collection, key], { rev: pulled.rev });
+    if (meta) {
+      await db.syncRows.update([collection, key], { rev: pulled.rev });
+    } else {
+      // No prior CAS base — e.g. a post-link-reset backfill row the server turned
+      // out to already hold (the L-1 "server forgot then remembered" edge). We
+      // MUST establish a base here: otherwise the re-push below pushes baseRev=0
+      // again, re-conflicts, and `backfillPending` never clears (the pump wedges
+      // on "Uploading… N of M" forever). Adopt the server rev; the hash tracks the
+      // pulled ciphertext per the §7.0 echo convention until the repush acks.
+      await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
+    }
     if (resolution.repush) {
       await db.syncOutbox.add({ collection, key, op: 'upsert', enqueuedAt: Date.now() });
     }

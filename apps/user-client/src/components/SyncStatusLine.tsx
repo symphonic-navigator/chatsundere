@@ -108,15 +108,15 @@ export function deriveSyncStatus(input: {
     };
   }
 
-  // 3. Pulling — an active multi-page pull, or the first-ever sync
-  //    (`watermarkRev === 0`). "Synced" is defined to EXCLUDE this.
-  const pulling = state.pulling !== null || (state.watermarkRev === 0 && online);
-  if (pulling) {
+  // 3. Active pull — a genuine multi-page pull is in flight (§6). The first-ever
+  //    -sync heuristic (step 6) is deliberately checked AFTER backfill, so only a
+  //    real in-progress pull wins here.
+  if (state.pulling !== null) {
     return {
       kind: 'pulling',
       tone: 'active',
       text: syncCopy.status.pulling,
-      detail: state.pulling ? syncCopy.status.pullingProgress(state.pulling.pages) : undefined,
+      detail: syncCopy.status.pullingProgress(state.pulling.pages),
     };
   }
 
@@ -128,14 +128,30 @@ export function deriveSyncStatus(input: {
     return { kind: 'offline', tone: 'neutral', text };
   }
 
-  // 5. Backfill — a one-off upload of pre-link data (§3.7). Ranks above waiting,
-  //    below attention, so a quota error is never masked by upload progress (U-5).
+  // 5. Backfill — a one-off upload of pre-link data (§3.7). Checked BEFORE the
+  //    first-ever-sync heuristic (step 6): on a first link the drain never
+  //    advances the watermark (own revs interleave, §6.6), so `watermarkRev === 0`
+  //    stays true throughout the UPLOAD and step 6 would otherwise mislabel it
+  //    "pulling your data onto this device". Ranks above waiting, below attention,
+  //    so a quota error is never masked by upload progress (U-5).
   if (state.backfillPending === true) {
+    const total = state.backfillTotal ?? 0;
     return {
       kind: 'backfill',
       tone: 'active',
-      text: syncCopy.status.backfill(state.backfillDone ?? 0, state.backfillTotal ?? 0),
+      // Until the worker snapshots the total, show the count-free copy — a
+      // transient "0 of 0" reads as "nothing to do", the opposite of reassuring.
+      text:
+        total > 0
+          ? syncCopy.status.backfill(state.backfillDone ?? 0, total)
+          : syncCopy.status.backfillPreparing,
     };
+  }
+
+  // 6. First-ever sync — an empty watermark on a reachable server: the initial
+  //    "pulling your data onto this device". "Synced" is defined to EXCLUDE this.
+  if (state.watermarkRev === 0 && online) {
+    return { kind: 'pulling', tone: 'active', text: syncCopy.status.pulling };
   }
 
   // 6. Waiting — online with pending outbox entries.
@@ -208,12 +224,14 @@ export function SyncStatusLine(): JSX.Element | null {
   });
 
   // §5.2 — map the router-free reconnect intent onto a navigate-backed action.
+  // Carry `?return=/app` so the Back arrow on the (guarded) invitation form takes
+  // an already-logged-in user back into the app, not onto the onboarding matrix.
   const action =
     view.action ??
     (view.wantsReconnect
       ? {
           label: syncCopy.actions.reconnect,
-          onClick: () => navigate('/onboarding/invitation'),
+          onClick: () => navigate('/onboarding/invitation?return=/app'),
         }
       : undefined);
 

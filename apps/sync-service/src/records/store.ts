@@ -172,15 +172,18 @@ export async function applyBatch(
         results.push({ status: 'error', code: 'hash_mismatch' });
         continue;
       }
-      // 7. Compare-and-swap.
-      const isInsert = record.baseRev === 0;
-      const casConflict =
-        isInsert === (current !== undefined) || (current && current.rev !== record.baseRev);
-      if (casConflict) {
-        results.push({
-          status: 'conflict',
-          current: toStored(current as typeof syncRecords.$inferSelect),
-        });
+      // 7. Compare-and-swap. An ABSENT row (current === undefined) is always
+      // accepted as an insert — even when the client presents baseRev > 0. That
+      // signals the server LOST a record the client still holds a CAS base for
+      // (a Postgres restore that left the epoch unchanged, say); resurrecting it
+      // from the client's own ciphertext heals the drift. The prior code hit
+      // this branch and called toStored(undefined) → TypeError → 500, wedging
+      // the drain forever. A tombstone is a REAL row (current !== undefined,
+      // deleted=true), handled at step 1 above, so a deleted record is never
+      // resurrected here. An existing live row always has rev ≥ 1, so a baseRev=0
+      // insert against one still conflicts (rev !== 0).
+      if (current !== undefined && current.rev !== record.baseRev) {
+        results.push({ status: 'conflict', current: toStored(current) });
         continue;
       }
       // 8. Quota.

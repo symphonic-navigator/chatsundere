@@ -37,6 +37,8 @@ export const syncCopy = {
     /** §3.7 — one-off upload of pre-link data; progress numbers are interpolated. */
     backfill: (done: number, total: number): string =>
       `Uploading your existing data… ${done} of ${total}`,
+    /** §3.7 — the one-off total is not yet snapshotted; avoid a misleading "0 of 0". */
+    backfillPreparing: 'Uploading your existing data…',
     /** §3.7 — offline while a backfill is pending; reassure it resumes (U-6). */
     offlineBackfill: 'Offline — your upload will pick up where it left off.',
   },

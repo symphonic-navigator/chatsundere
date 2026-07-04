@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useSearchParams } from 'react-router-dom';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 
-/** Read the ?return= query param; default to /onboarding. */
+/**
+ * Read and VALIDATE the ?return= query param; default to /onboarding. The value
+ * feeds a real `<a href>` (the wizard back arrow), so it must be guarded against
+ * open-redirect exactly like the login unlock target — see {@link safeReturnPath}.
+ */
 export function useReturnUrl(): string {
   const [params] = useSearchParams();
-  return params.get('return') ?? '/onboarding';
+  return safeReturnPath(params.get('return'), '/onboarding');
 }
 
 /**

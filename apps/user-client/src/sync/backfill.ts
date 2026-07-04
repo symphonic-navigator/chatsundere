@@ -3,7 +3,7 @@ import type { SyncCollection } from '@chatsundere/shared-types';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import type { SyncOutboxRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
-import { blobFieldsOf } from './blob-transform.js';
+import { blobFieldsOf, mintBlobRefFor } from './blob-transform.js';
 import { isSyncAvailable } from './gate.js';
 import { isEnginePaused } from './recovery.js';
 import { syncKeyOfRow } from './sync-keys.js';
@@ -221,32 +221,57 @@ export async function runBackfillIfPending(): Promise<void> {
 }
 
 /**
- * Enqueue one chunk in a single `rw` transaction (§3.4): an `upsert` per key,
- * plus — for the blob-bearing collections — a `blob-put` for every persisted ref
- * whose row still holds local bytes (a non-empty `Blob`) and is not the terminal
- * oversize sentinel. Reading each blob row before the transaction keeps the
- * transaction short; the atomic add guarantees a record and its bytes are queued
- * together, never a record without its blob.
+ * Enqueue one chunk (§3.4): an `upsert` per key, plus — for the blob-bearing
+ * collections — a `blob-put` for every blob field whose row holds local bytes and
+ * is not the terminal oversize sentinel.
+ *
+ * A pre-link blob row carries its bytes but NO `blobRef` (write sites mint a ref
+ * only once linked, `data/{artefacts,attachments,persona-avatars}.ts`). So the
+ * pump MINTS the ref here, mirroring a linked write site: it persists the ref to
+ * the local row (so the drain's phase-1 reader `readBlobBytesById` resolves the
+ * bytes and the phase-2 re-seal reuses the same ref for PUT/record stability) and
+ * queues the `blob-put`. Without this the record backfills carrying a fresh
+ * server-side blobId that is NEVER uploaded → a dangling ref that every other
+ * device resolves to "image unavailable". Mint-once is preserved by re-reading the
+ * ref inside the transaction, so a concurrent Class-2 edit that already minted
+ * wins. Non-blob collections take the short outbox-only transaction (and
+ * `vectors` lives in a separate DB whose table this one does not carry, so it must
+ * not enter the tx scope).
  */
 async function enqueueChunk(collection: SyncCollection, keys: string[]): Promise<void> {
   const db = getClientDataDb();
   const now = Date.now();
-  const entries: SyncOutboxRow[] = [];
-  for (const key of keys) {
-    entries.push({ collection, key, op: 'upsert', enqueuedAt: now });
-    if (!BLOB_COLLECTIONS.has(collection)) continue;
-    const row = (await db.table(collection).get(key)) as Record<string, unknown> | undefined;
-    if (!row) continue;
-    for (const spec of blobFieldsOf(collection)) {
-      if (row[spec.oversizedField] === true) continue; // server-terminal — never re-PUT (§4/§7.3)
-      const ref = row[spec.refField] as { blobId?: string } | null | undefined;
-      const bytes = row[spec.bytesField];
-      if (ref?.blobId && bytes instanceof Blob && bytes.size > 0) {
-        entries.push({ collection, key, op: 'blob-put', blobId: ref.blobId, enqueuedAt: now });
+
+  if (!BLOB_COLLECTIONS.has(collection)) {
+    const entries = keys.map(
+      (key): SyncOutboxRow => ({ collection, key, op: 'upsert', enqueuedAt: now }),
+    );
+    await db.transaction('rw', db.syncOutbox, async () => {
+      await db.syncOutbox.bulkAdd(entries);
+    });
+    return;
+  }
+
+  await db.transaction('rw', db.syncOutbox, db.table(collection), async () => {
+    const entries: SyncOutboxRow[] = [];
+    for (const key of keys) {
+      entries.push({ collection, key, op: 'upsert', enqueuedAt: now });
+      const row = (await db.table(collection).get(key)) as Record<string, unknown> | undefined;
+      if (!row) continue;
+      for (const spec of blobFieldsOf(collection)) {
+        if (row[spec.oversizedField] === true) continue; // server-terminal — never re-PUT (§4/§7.3)
+        const bytes = row[spec.bytesField];
+        if (!(bytes instanceof Blob) || bytes.size === 0) continue; // no local bytes to upload
+        const existing = row[spec.refField] as { blobId?: string } | null | undefined;
+        let blobId = existing?.blobId;
+        if (!blobId) {
+          const ref = mintBlobRefFor(bytes);
+          blobId = ref.blobId;
+          await db.table(collection).update(key, { [spec.refField]: ref });
+        }
+        entries.push({ collection, key, op: 'blob-put', blobId, enqueuedAt: now });
       }
     }
-  }
-  await db.transaction('rw', db.syncOutbox, async () => {
     await db.syncOutbox.bulkAdd(entries);
   });
 }

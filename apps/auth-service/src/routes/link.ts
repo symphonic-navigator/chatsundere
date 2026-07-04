@@ -3,7 +3,7 @@
 import type { RegistrationResponseJSON } from '@simplewebauthn/types';
 import { and, eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
-import { object, parse, string } from 'valibot';
+import { looseObject, object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
 import { requireStepUp } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
@@ -88,20 +88,26 @@ export function registerLinkRoutes(app: Hono): void {
   app.post('/api/v1/link/passkey/finish', bearerAuth(), async (c) => {
     const claims = c.get('claims');
 
+    // The `credential` is a WebAuthn RegistrationResponseJSON. We validate only
+    // the fields SimpleWebAuthn's verifyRegistration needs (and the wraps), and
+    // use `looseObject` so optional/extension fields — crucially
+    // `clientExtensionResults.prf`, read below for the ADR-0005 PRF check, plus
+    // `transports` and `authenticatorAttachment` — pass through untouched rather
+    // than being stripped. A stricter object() dropped `prf` and demanded a
+    // `response`/`authenticatorData`/string-`transports` shape a real
+    // registration response never has, so every enrolment 400'd (contract drift
+    // vs shared-types LinkPasskeyFinishRequest.credential).
     const passkeyFinishReq = object({
       session_id: string(),
-      response: object({
+      credential: looseObject({
         id: string(),
         rawId: string(),
-        response: object({
+        type: string(),
+        response: looseObject({
           clientDataJSON: string(),
           attestationObject: string(),
-          authenticatorData: string(),
-          transports: string(),
         }),
-        authenticatorAttachment: string(),
-        clientExtensionResults: object({}),
-        type: string(),
+        clientExtensionResults: looseObject({}),
       }),
       wrapped_mk_passkey: string(),
       wrap_nonce_passkey: string(),
@@ -123,7 +129,7 @@ export function registerLinkRoutes(app: Hono): void {
 
     // The client sends the RegistrationResponseJSON; cast via unknown to satisfy strict types.
     const verification = await verifyRegistration({
-      response: body.response as unknown as RegistrationResponseJSON,
+      response: body.credential as unknown as RegistrationResponseJSON,
       expectedChallenge: state.challenge,
     });
 
@@ -136,7 +142,7 @@ export function registerLinkRoutes(app: Hono): void {
     // clientExtensionResults.prf is not yet in the @simplewebauthn/types DOM typings
     // (v11), so we read it via a cast. A supported PRF authenticator reports
     // { prf: { enabled: true } } in the registration response.
-    const extensions = body.response.clientExtensionResults as Record<string, unknown>;
+    const extensions = body.credential.clientExtensionResults as Record<string, unknown>;
     const prfResult = extensions.prf as { enabled?: boolean } | undefined;
     if (!prfResult?.enabled) {
       metrics.authLinksTotal.inc({ method_type: 'passkey', result: 'fail' });
