@@ -27,6 +27,7 @@ import type {
   TrashRow,
 } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
+import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
@@ -494,6 +495,7 @@ function defaultPush(syncUrl: string, records: SyncPushRecord[]): Promise<SyncPu
     json: { records },
     authMode: 'bearer',
     credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
+    origin: 'background', // §5.2: a refused refresh latches auth-degraded, never logs out
   });
 }
 
@@ -713,6 +715,10 @@ export async function runSyncCycle(): Promise<void> {
 
 /** Cycle preconditions (spec §6): any miss → no-op. */
 function canRunCycle(): boolean {
+  // §5.2: a degraded engine (the auth service definitively refused a background
+  // refresh) does no cycle work at all — no drain, no pull — until a relink
+  // clears the latch. Local edits still enqueue; they drain once auth is restored.
+  if (isAuthDegraded()) return false;
   if (useAccountLinkStore.getState().linkStatus !== 'linked') return false;
   const config = useDiscoveryStore.getState().config;
   if (!config?.syncUrl || !config.features.includes('sync')) return false;
@@ -767,6 +773,7 @@ function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<
     path: `/api/v1/sync/changes?since=${sinceRev}&limit=${limit}`,
     authMode: 'bearer',
     credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
+    origin: 'background', // §5.2: a refused refresh latches auth-degraded, never logs out
   });
 }
 

@@ -5,6 +5,7 @@ import {
   useDiscoveryStore,
   useSessionStore,
 } from '@chatsundere/ui-shared';
+import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { deriveServerGate, useServerGate } from '../lib/server-gate.js';
 import { isRecovering } from './watermark.js';
 
@@ -66,5 +67,7 @@ export function isClass2Allowed(): boolean {
 
   const online = useConnectivityStore.getState().state.kind === 'linked_online';
   const unlocked = useSessionStore.getState().mk !== null;
-  return online && unlocked && !isRecovering();
+  // §5.2: while auth-degraded the engine is stopped — a Class-2 write would only
+  // pile into an outbox that cannot drain, so disable it upstream (disable-over-hide).
+  return online && unlocked && !isRecovering() && !isAuthDegraded();
 }

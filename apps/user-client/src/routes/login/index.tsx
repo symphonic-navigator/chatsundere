@@ -15,6 +15,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { useDisplayName } from '../../data/settings.js';
+import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
@@ -153,6 +154,8 @@ export function Login() {
         const { session, mk } = await loginLocalWithPassphrase({ db, passphrase });
         useSessionStore.getState().setSession(session, mk);
       }
+      // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
+      if (isAuthDegraded()) void setAuthDegraded(false);
       navigate(returnTarget, { replace: true });
     } catch (e) {
       // Spec §5.6: no distinction between wrong passphrase and missing account
@@ -231,6 +234,8 @@ export function Login() {
       });
 
       useSessionStore.getState().setSession(session);
+      // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
+      if (isAuthDegraded()) void setAuthDegraded(false);
       navigate(returnTarget, { replace: true });
     } catch (_e) {
       // All biometric errors map to the same user-facing message regardless of

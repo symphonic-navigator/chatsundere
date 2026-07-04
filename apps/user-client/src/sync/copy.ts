@@ -70,12 +70,18 @@ export const syncCopy = {
       }). Confirm before it uploads.`,
     tamper:
       'Your server sent something that should not be possible. To protect your data, that change was refused — if this keeps happening, tell your operator.',
+    /** §5.2 — the server definitively refused to refresh this session; syncing is
+     *  paused until the account is re-linked. Local work is unaffected. */
+    authDegraded:
+      "This server no longer recognises this device. Your data is safe here — reconnect with a new invitation when you're ready.",
   },
 
   /** Action labels the status line renders alongside retriable attention states. */
   actions: {
     /** The manual affordance behind the `recovery_paused` attention state (§8). */
     retry: 'Try again',
+    /** §5.2 — the relink affordance behind the `auth_degraded` attention state. */
+    reconnect: 'Reconnect',
   },
 
   /** The calm inline breadcrumb shown on the chat surface (§7.3, Laura soft). */

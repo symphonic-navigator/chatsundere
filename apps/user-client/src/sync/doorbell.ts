@@ -6,6 +6,7 @@ import {
   useDiscoveryStore,
   useSessionStore,
 } from '@chatsundere/ui-shared';
+import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { apiFetch, joinUrl, refreshAccessToken } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { scheduleClass1Sync } from './triggers.js';
@@ -73,6 +74,11 @@ let started = false;
 
 /** Connect ONLY while linked + unlocked + document visible + not offline (§9). */
 function gateOpen(): boolean {
+  // §5.2: a degraded engine stays stopped — never (re)connect the doorbell while
+  // the auth service has definitively refused a background refresh; a fresh
+  // ticket fetch would only refuse again. A relink clears the latch and the
+  // lifecycle subscriptions re-evaluate the gate.
+  if (isAuthDegraded()) return false;
   if (useAccountLinkStore.getState().linkStatus !== 'linked') return false;
   if (useSessionStore.getState().mk === null) return false;
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return false;
@@ -232,6 +238,7 @@ async function fetchTicket(syncUrl: string): Promise<string> {
     json: {},
     authMode: 'bearer',
     credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
+    origin: 'background', // §5.2: a refused refresh latches auth-degraded, never logs out
   });
   return res.ticket;
 }

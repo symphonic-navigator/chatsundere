@@ -145,6 +145,7 @@ function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<
     path: `/api/v1/sync/changes?since=${sinceRev}&limit=${limit}`,
     authMode: 'bearer',
     credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
+    origin: 'background', // §5.2: a refused refresh latches auth-degraded, never logs out
   });
 }
 
