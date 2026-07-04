@@ -79,9 +79,11 @@ describe('nanoGptWebSearchAdapter', () => {
 
     expect(captured).not.toBeNull();
     const req = captured as unknown as Request;
-    expect(req.url).toBe('https://proxy.example/web');
+    // Bare-origin proxy target (parseTarget refuses a path); `/api` rides on the
+    // request line so the forward rebuilds `https://nano-gpt.com/api/web`.
+    expect(req.url).toBe('https://proxy.example/api/web');
     expect(req.headers.get('x-chatsundere-authorization')).toBe('Bearer jwt-P');
-    expect(req.headers.get('x-cors-proxy-target')).toBe('https://nano-gpt.com/api');
+    expect(req.headers.get('x-cors-proxy-target')).toBe('https://nano-gpt.com');
   });
 
   it('caps each snippet to bound tool output', async () => {

@@ -10,7 +10,7 @@ const directConfig: ProviderConfig = {
 };
 
 const proxyConfig: ProviderConfig = {
-  baseUrl: 'https://ollama.com/v1',
+  baseUrl: 'https://ollama.com',
   routing: { kind: 'cors-proxy' },
 };
 
@@ -62,6 +62,28 @@ describe('buildRequest', () => {
     expect(req.headers.get('Authorization')).toBe('Bearer upstream-key');
     expect(req.headers.get('x-cors-proxy-api-key')).toBeNull();
     expect(req.redirect).toBe('manual');
+  });
+
+  it('cors-proxy target is a bare origin and the base path rides on the request (path-bearing baseUrl)', () => {
+    // Regression: a `requires-proxy` provider whose baseUrl carries a path (e.g.
+    // xai `https://api.x.ai/v1`, wafer `https://pass.wafer.ai/v1`) must send the
+    // proxy target as a BARE ORIGIN — apps/proxy-service `parseTarget` refuses a
+    // target with a path (400 bad_target). The `/v1` base path instead rides on
+    // the proxied request line so the proxy reconstructs the full upstream URL.
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
+    const req = buildRequest({
+      provider: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'cors-proxy' } },
+      apiKey: 'upstream-key',
+      path: '/chat/completions',
+      method: 'POST',
+      body: {},
+    });
+    expect(req.headers.get('x-cors-proxy-target')).toBe('https://api.x.ai');
+    expect(req.url).toBe('https://proxy.example/v1/chat/completions');
   });
 
   it('cors-proxy routing throws without a registered source or token', () => {

@@ -95,9 +95,17 @@ export function buildRequest(args: BuildRequestArgs): Request {
     if (token === null) {
       throw new Error('transport: cors-proxy routing selected but no account token is available');
     }
-    url = joinUrl(proxyUrl, path);
+    // The proxy target must be a BARE ORIGIN: apps/proxy-service `parseTarget`
+    // refuses a target carrying a path (400 bad_target), and the forward is built
+    // as `target.origin + request-path`. So compute the full upstream URL exactly
+    // as the direct route would (`joinUrl(baseUrl, path)`), then split it — origin
+    // to the target header, path+query onto the proxied request line. This keeps
+    // the proxied forward identical to the direct URL for every provider, whether
+    // the base path lives in `baseUrl` (xai `/v1`) or in `path` (ollama origin).
+    const upstream = new URL(joinUrl(provider.baseUrl, path));
+    url = joinUrl(proxyUrl, `${upstream.pathname}${upstream.search}`);
     headers.set('x-chatsundere-authorization', `Bearer ${token}`);
-    headers.set('x-cors-proxy-target', provider.baseUrl);
+    headers.set('x-cors-proxy-target', upstream.origin);
     // The browser must never chase an upstream redirect off-proxy (spec §5).
     redirect = 'manual';
   }
