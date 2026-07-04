@@ -84,8 +84,8 @@ export async function setPulling(p: { pages: number; startedAt: number } | null)
  * surfaced when a quota-charged op is actually pushed — absence of a re-raise
  * (e.g. an empty-outbox boot cycle while still over quota) does NOT prove it
  * cleared, so it retires only on the POSITIVE signal in `clearQuotaOnAcceptedWrite`.
- * Every other kind is sticky by design (`tamper`, `tombstone_paused`,
- * `auth_degraded`, `recovery_paused`) or clears on its own resolution
+ * Every other kind is sticky by design (`tamper`, `auth_degraded`,
+ * `recovery_paused`) or clears on its own resolution
  * (`tombstone_threshold` via the pulled-tombstone tally, `record_too_large` via
  * the terminal-sentinel sweep in `applyOk`).
  */

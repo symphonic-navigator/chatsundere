@@ -57,9 +57,8 @@ const EAGER_BYTES_FIELDS: Partial<Record<SyncCollection, ReadonlySet<string>>> =
   personaAvatars: new Set(['blob']),
 };
 
-/** §7.3a thresholds: a calm notice, then a panic pause of tombstone application. */
+/** §7.3a threshold: a calm notice once this many tombstones arrive in one cycle. */
 const TOMBSTONE_THRESHOLD = 20;
-const TOMBSTONE_PANIC = 200;
 
 /** The typed outcome of applying one pulled record (never advances the watermark). */
 export type ApplyOutcome =
@@ -68,7 +67,6 @@ export type ApplyOutcome =
   | { kind: 'rejected' } // §7.1 inert rejection (open failed) or no MK
   | { kind: 'skipped' } // §7.2 unhandled collection (vectors — materialised elsewhere)
   | { kind: 'tombstoned' } // §7.3 — row routed to trash (or nothing local to move)
-  | { kind: 'tombstone-paused' } // §7.3a panic pause reached — deferred this cycle
   | { kind: 'tamper' } // §7.4 H-1 — upsert onto a live tombstone anchor, rejected
   | { kind: 'suppressed' } // §7.4 L-3 — pending local delete wins
   | { kind: 'inserted' } // upsert, no local row → inserted
@@ -80,8 +78,6 @@ export type ApplyOutcome =
 let inertRejectionCount = 0;
 /** §7.3a per-cycle pulled-tombstone tally; the pull loop resets it at loop start. */
 let tombstoneCycleCount = 0;
-/** §7.3a: once the panic threshold trips, further tombstone application is paused this cycle. */
-let tombstonePaused = false;
 
 /** §7.3 viewing breadcrumb: the UI (Task 13) registers this; a no-op until then. */
 let onViewedRecordTombstoned: (collection: SyncCollection, key: string) => void = () => undefined;
@@ -93,10 +89,9 @@ export function getInertRejectionCount(): number {
   return inertRejectionCount;
 }
 
-/** Reset the per-cycle tombstone tally + panic flag; the pull loop calls this at loop start. */
+/** Reset the per-cycle tombstone tally; the pull loop calls this at loop start. */
 export function resetTombstoneCounter(): void {
   tombstoneCycleCount = 0;
-  tombstonePaused = false;
 }
 
 /**
@@ -109,13 +104,8 @@ export function resetTombstoneCounter(): void {
  * notice is left in place, preserving the Larissa M-2 visibility intent; only
  * once a cycle stays calm does the notice retire.
  *
- * DELIBERATELY scoped to `tombstone_threshold` only (Larissa): the panic-pause
- * `tombstone_paused` alarm (≥ TOMBSTONE_PANIC removed in one cycle) is the most
- * severe M-2 signal and, per §7.3a, stays "pending user acknowledgement" — it
- * must NOT silently vanish on the next calm cycle. It stays sticky until a real
- * acknowledge affordance retires it (tracked follow-up). Only the calm-notice
- * kind is cleared here — a coexisting quota/tamper/auth/paused notice is never
- * clobbered.
+ * DELIBERATELY scoped to `tombstone_threshold` only: a coexisting quota/tamper/
+ * auth notice is never clobbered.
  */
 export async function settleTombstoneNotice(): Promise<void> {
   if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) return; // re-raised this cycle — keep it
@@ -233,7 +223,6 @@ export function _resetApplyForTests(): void {
   invalidator = defaultInvalidator;
   inertRejectionCount = 0;
   tombstoneCycleCount = 0;
-  tombstonePaused = false;
   onViewedRecordTombstoned = () => undefined;
   onSettingsNote = () => undefined;
   eagerEnqueueFn = enqueueEager;
@@ -419,16 +408,11 @@ export async function applyRecord(pulled: SyncPulledRecord): Promise<ApplyOutcom
 async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<ApplyOutcome> {
   const collection = pulled.collection;
 
-  // §7.3a — count every pulled tombstone; escalate notice → panic pause.
+  // §7.3a — count every pulled tombstone; a calm notice above the threshold.
   tombstoneCycleCount += 1;
-  if (tombstoneCycleCount >= TOMBSTONE_PANIC) {
-    await setAttention({ kind: 'tombstone_paused', count: tombstoneCycleCount });
-    tombstonePaused = true;
-  } else if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) {
+  if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) {
     await setAttention({ kind: 'tombstone_threshold', count: tombstoneCycleCount });
   }
-  // Once paused, defer further tombstone application this cycle (upserts still apply).
-  if (tombstonePaused) return { kind: 'tombstone-paused' };
 
   const db = getClientDataDb();
   const key = await findKeyByBlindId(mk, collection, pulled.blindId);

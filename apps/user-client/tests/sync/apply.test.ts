@@ -293,32 +293,15 @@ describe('applyRecord — §7.4 L-3 pending-delete suppression', () => {
   });
 });
 
-// ===== §7.3a threshold + panic pause =====
+// ===== §7.3a threshold notice =====
 
-describe('applyRecord — §7.3a tombstone threshold + panic pause (Larissa M-2)', () => {
+describe('applyRecord — §7.3a tombstone threshold (Larissa M-2)', () => {
   it('raises the calm notice at the threshold', async () => {
     resetTombstoneCounter();
     for (let i = 0; i < 20; i++) {
       await applyRecord(pulledTombstone('chats', `x${i}`, 1));
     }
     expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
-  });
-
-  it('pauses tombstone application at the panic threshold but still applies upserts', async () => {
-    const db = getClientDataDb();
-    resetTombstoneCounter();
-    let last = await applyRecord(pulledTombstone('chats', 'first', 1));
-    for (let i = 1; i < 200; i++) {
-      last = await applyRecord(pulledTombstone('chats', `x${i}`, 1));
-    }
-    expect(last).toEqual({ kind: 'tombstone-paused' });
-    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_paused', count: 200 });
-
-    // Upserts continue to apply during the pause.
-    openReturns({ id: 'p1', updatedAt: 5 });
-    const upsert = await applyRecord(pulledUpsert('personas', 'p1', new Uint8Array([1]), 5));
-    expect(upsert).toEqual({ kind: 'inserted' });
-    expect(await db.personas.get('p1')).toBeDefined();
   });
 });
 
@@ -455,20 +438,6 @@ describe('runPullLoop — §7.3a tombstone notice retires on a calm cycle (auto-
     expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
     await runPullLoop(); // another 20 this cycle → still latched
     expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
-  });
-
-  it('keeps the panic-pause alarm sticky on a calm cycle (Larissa — pending acknowledgement)', async () => {
-    await setAttention({ kind: 'tombstone_paused', count: 200 });
-    _setPullTransport(
-      async (): Promise<SyncPullResponse> => ({
-        head: 1,
-        epoch: 'E1',
-        more: false,
-        records: [],
-      }),
-    );
-    await runPullLoop();
-    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_paused', count: 200 });
   });
 
   it('never clobbers a coexisting non-tombstone attention on a calm cycle', async () => {

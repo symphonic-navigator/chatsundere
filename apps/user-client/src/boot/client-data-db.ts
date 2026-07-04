@@ -612,7 +612,6 @@ export type SyncAttention =
   | { kind: 'record_too_large' }
   | { kind: 'delete_rate_limited' }
   | { kind: 'tombstone_threshold'; count: number }
-  | { kind: 'tombstone_paused'; count: number }
   | { kind: 'recovery_paused' }
   | { kind: 'blob_reupload_threshold'; bytes: number; count: number }
   | { kind: 'tamper' }
