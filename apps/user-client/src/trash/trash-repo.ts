@@ -26,6 +26,16 @@ export function cardKeyOf(row: TrashRow, byId: ReadonlyMap<string, TrashRow>): s
   return cur.id;
 }
 
+/** §3.7 — retire this device's stale trash card for an entity restored elsewhere.
+ *  Deletes only the exact keyed snapshot; each restored descendant carries its own
+ *  restoredFrom, so peers retire each as they pull. No-op when nothing matches. */
+export async function retireTrashByOriginalKey(
+  collection: SyncCollection,
+  key: string,
+): Promise<void> {
+  await getClientDataDb().trash.delete(`${collection}:${key}`);
+}
+
 /** All trashed rows belonging to one card (by `cardKey`), from a preloaded row set. */
 export function rowsOfCard(cardKey: string, all: readonly TrashRow[]): TrashRow[] {
   const byId = new Map(all.map((r) => [r.id, r] as const));

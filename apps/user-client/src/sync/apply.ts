@@ -13,6 +13,7 @@ import type { SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
 import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from '../data/queryKeys.js';
 import { queryClient } from '../lib/queryClient.js';
+import { retireTrashByOriginalKey } from '../trash/trash-repo.js';
 import { enqueueEager } from './blob-fetch.js';
 import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
 import { applyPulledBlobRow, blobFieldsOf, isBlobCollection } from './blob-transform.js';
@@ -565,6 +566,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
     await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
     await afterApplied(collection, key, row);
     if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
+    await retireRestoredTrash(collection, row);
     return { kind: 'inserted' };
   }
 
@@ -576,6 +578,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
     await applyPulledRow(collection, key, row, pulled.rev, localHash, local);
     await afterApplied(collection, key, row);
     if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
+    await retireRestoredTrash(collection, row);
     return { kind: 'resolved', winner: 'pulled' };
   }
 
@@ -630,6 +633,19 @@ async function applyPulledRow(
     await table.put(toStore as any);
     await db.syncRows.put(meta);
   });
+}
+
+/**
+ * §3.7 cross-device de-dup: when a just-applied upsert carries a `restoredFrom`
+ * provenance marker (an entity restored on another device), retire this device's
+ * stale trash card for that original key so it no longer offers to restore
+ * something already restored. Best-effort, per-key; a no-op when nothing matches.
+ */
+async function retireRestoredTrash(collection: SyncCollection, row: unknown): Promise<void> {
+  const restoredFrom = (row as Record<string, unknown>).restoredFrom;
+  if (typeof restoredFrom === 'string' && restoredFrom.length > 0) {
+    await retireTrashByOriginalKey(collection, restoredFrom);
+  }
 }
 
 /** Post-apply side effects: derived recompute for chats + query invalidation (§7.6). */

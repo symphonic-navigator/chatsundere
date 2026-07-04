@@ -366,6 +366,62 @@ describe('applyRecord — §7.5 conflict resolution', () => {
   });
 });
 
+// ===== §3.7 cross-device de-dup — retire a stale trash card =====
+
+/** A minimal valid TrashRow for a top-level chat card (id = `${collection}:${key}`). */
+function trashRowFor(
+  collection: SyncCollection,
+  key: string,
+): {
+  id: string;
+  collection: SyncCollection;
+  key: string;
+  row: unknown;
+  deletedAt: number;
+  purgeAt: number;
+  entityKind: 'chat';
+  rootGroup: string;
+  parentRef: null;
+} {
+  const now = Date.now();
+  return {
+    id: `${collection}:${key}`,
+    collection,
+    key,
+    row: { id: key, title: 'trashed', createdAt: 1, updatedAt: 1 },
+    deletedAt: now,
+    purgeAt: now + 1000,
+    entityKind: 'chat',
+    rootGroup: `${collection}:${key}`,
+    parentRef: null,
+  };
+}
+
+describe('applyUpsert — §3.7 cross-device de-dup', () => {
+  it("retires this device's stale trash card when a pulled restore carries restoredFrom", async () => {
+    const db = getClientDataDb();
+    await db.trash.put(trashRowFor('chats', 'c1') as never);
+    // The restore lands under a fresh id (c2) and carries the original key as provenance.
+    openReturns({ id: 'c2', title: 'restored', createdAt: 1, updatedAt: 9, restoredFrom: 'c1' });
+
+    const outcome = await applyRecord(pulledUpsert('chats', 'c2', new Uint8Array([2]), 5));
+
+    expect(outcome).toEqual({ kind: 'inserted' });
+    expect(await db.trash.get('chats:c1')).toBeUndefined();
+  });
+
+  it('leaves unrelated trash cards untouched when the pulled row has no restoredFrom', async () => {
+    const db = getClientDataDb();
+    await db.trash.put(trashRowFor('chats', 'c1') as never);
+    openReturns({ id: 'c2', title: 'plain', createdAt: 1, updatedAt: 9 });
+
+    const outcome = await applyRecord(pulledUpsert('chats', 'c2', new Uint8Array([3]), 5));
+
+    expect(outcome).toEqual({ kind: 'inserted' });
+    expect(await db.trash.get('chats:c1')).toBeDefined();
+  });
+});
+
 // ===== Pull loop (spec §6 pull, §7 apply) =====
 
 describe('runPullLoop — watermark + page cap (spec §6, M-7)', () => {
