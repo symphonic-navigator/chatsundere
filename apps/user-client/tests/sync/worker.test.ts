@@ -16,6 +16,7 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { isDeadKey } from '../../src/sync/dead-keys.js';
 import { batchByBytes } from '../../src/sync/seal-batch.js';
 import {
   advanceWatermark,
@@ -220,6 +221,28 @@ describe('drainOutbox — ok (spec §6.4)', () => {
     expect(meta?.ciphertextHash).toBe(toBase64Url(new TextEncoder().encode('hash:personas:p1')));
     expect(await outbox()).toHaveLength(0);
   });
+
+  it('marks the key dead when the server acks a drained delete (§3.9)', async () => {
+    const db = getClientDataDb();
+    await db.syncRows.put({ collection: 'chats', key: 'c1', rev: 3, ciphertextHash: 'h' });
+    await addOutbox('chats', 'c1', 'delete');
+    _setPushTransport(async () => okResponse([4], 4));
+
+    await drainOutbox();
+
+    expect(await isDeadKey('chats', 'c1')).toBe(true);
+  });
+
+  it('does NOT mark the key dead when the server acks a drained upsert (§3.9)', async () => {
+    const db = getClientDataDb();
+    await db.personas.put({ id: 'p1' } as never);
+    await addOutbox('personas', 'p1', 'upsert');
+    _setPushTransport(async () => okResponse([7], 7));
+
+    await drainOutbox();
+
+    expect(await isDeadKey('personas', 'p1')).toBe(false);
+  });
 });
 
 describe('drainOutbox — conflict (spec §6.4, M-1)', () => {
@@ -320,6 +343,32 @@ describe('drainOutbox — tombstoned (spec §6.4, I-1)', () => {
     expect(trash?.purgeAt).toBeGreaterThan(Date.now());
     expect(await db.syncRows.get(['chats', 'c1'])).toBeUndefined();
     expect(await outbox()).toHaveLength(0);
+  });
+
+  it('marks the key dead on a tombstoned ack (§3.9)', async () => {
+    const db = getClientDataDb();
+    await db.chats.put({ id: 'c1', title: 'gone', updatedAt: 1 } as never);
+    await db.syncRows.put({ collection: 'chats', key: 'c1', rev: 2, ciphertextHash: 'h' });
+    await addOutbox('chats', 'c1', 'upsert');
+    _setPushTransport(async () => ({
+      head: 0,
+      epoch: 'E1',
+      results: [
+        {
+          status: 'tombstoned',
+          current: {
+            blindId: toBase64Url(new TextEncoder().encode('bid:chats:c1')),
+            collection: 'chats',
+            rev: 5,
+            deleted: true,
+          },
+        },
+      ],
+    }));
+
+    await drainOutbox();
+
+    expect(await isDeadKey('chats', 'c1')).toBe(true);
   });
 });
 

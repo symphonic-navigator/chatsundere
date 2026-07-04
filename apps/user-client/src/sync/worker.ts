@@ -49,6 +49,7 @@ import {
 } from './blob-repair.js';
 import { readBlobBytesById, resolveBlobFieldById } from './blob-transform.js';
 import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
+import { markDead } from './dead-keys.js';
 import { resetEngineStateForNewLink } from './link-reset.js';
 import {
   type CoalescedEntry,
@@ -566,9 +567,12 @@ async function markTerminal(prep: PreparedRecord): Promise<void> {
 async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
   const db = getClientDataDb();
   let sweptTerminal = 0;
-  await db.transaction('rw', db.syncRows, db.syncOutbox, async () => {
+  await db.transaction('rw', [db.syncRows, db.syncOutbox, db.deadKeys], async () => {
     if (prep.op === 'delete') {
       await db.syncRows.delete([prep.collection, prep.key]);
+      // §3.9: mark the key dead at the server-authoritative ack, never at enqueue —
+      // this lets a fast-Undo before the drain stay identity-preserving (Task 8).
+      await markDead(prep.collection, prep.key);
     } else {
       const meta: SyncRowMeta = {
         collection: prep.collection,
@@ -679,10 +683,7 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
 
   await db.transaction(
     'rw',
-    db.syncRows,
-    db.syncOutbox,
-    db.trash,
-    db.table(prep.collection),
+    [db.syncRows, db.syncOutbox, db.trash, db.deadKeys, db.table(prep.collection)],
     async () => {
       if (local !== undefined && local !== null) {
         const meta = deriveLegacyTrashMeta(prep.collection, prep.key, local);
@@ -701,6 +702,9 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
         await db.table(prep.collection).delete(prep.key);
       }
       await db.syncRows.delete([prep.collection, prep.key]);
+      // §3.9: the key's identity is terminal even with no local row to snapshot,
+      // so mark it dead unconditionally (mirrors apply.ts applyTombstone).
+      await markDead(prep.collection, prep.key);
       await db.syncOutbox.bulkDelete(prep.seqs);
     },
   );
