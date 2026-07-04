@@ -907,8 +907,14 @@ export function ChatPage(): JSX.Element {
         autoFollowRef occasionally snapped the scroll back to the bottom.
         ScrollToEnd (rendered inside ChatStream) handles the "back to
         latest" intent separately.
+
+        Shown whenever the cockpit is closed — including an empty chat with no
+        messages (History "continue" on an unused chat, or a lazy chat whose
+        cockpit was unpinned and dismissed). Gating this on hasMessages stranded
+        those states: no messages means no keyboard Enter hotkey path on touch,
+        so the affordance is the only way back into the composer.
       */}
-      {!isInteractionMode && hasMessages ? (
+      {!isInteractionMode ? (
         <BottomAffordance
           onTap={() => {
             // Tap on the affordance both opens the cockpit and re-anchors
