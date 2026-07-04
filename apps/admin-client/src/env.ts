@@ -10,10 +10,6 @@ const EnvSchema = v.object({
   // correct; in dev the two run on separate ports, so this is the full origin
   // (e.g. http://localhost:3000). Not v.url() — `/` is a valid relative value.
   VITE_USER_CLIENT_URL: v.optional(v.pipe(v.string(), v.minLength(1)), '/'),
-  VITE_ADMIN_API_MODE: v.optional(
-    v.union([v.literal('mock'), v.literal('live'), v.literal('hybrid')]),
-    'hybrid',
-  ),
 });
 
 export const env = v.parse(EnvSchema, import.meta.env);

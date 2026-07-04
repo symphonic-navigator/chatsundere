@@ -20,11 +20,7 @@ The dev server runs at `http://localhost:5174/admin/` (note the path; this match
 
 ## Environment
 
-See `.env.example`. The mode switch `VITE_ADMIN_API_MODE` accepts:
-
-- `mock` — everything stubbed in memory; useful for UI work.
-- `live` — every call goes to the auth-service. Most admin endpoints will throw `not_implemented` until the auth-service squash lands.
-- `hybrid` (default) — login + `/me` are live, admin endpoints fall back to the mock.
+See `.env.example`. Every admin call goes to the auth-service.
 
 ## Manual verification
 
