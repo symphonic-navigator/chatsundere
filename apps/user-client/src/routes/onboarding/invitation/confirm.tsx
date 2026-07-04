@@ -17,6 +17,7 @@ import { httpServerClient } from '../../../lib/server-client.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
 import { runSyncCycle } from '../../../sync/worker.js';
+import { InvitationAccountGuard } from './_account-guard.js';
 import { useNavTarget } from './_return-url.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
@@ -48,8 +49,20 @@ type Screen =
  *
  * Per spec § 2 Decision 9: `kind_mismatch` is constructive — the user is offered
  * a button to switch to the pairing path with the code pre-filled.
+ *
+ * The account-guard (spec §4.1) sits ABOVE the bounce guard so the unlock-first
+ * door wins on the QR deep-link path: a device that already holds a local
+ * account with no unlocked session is routed through the local login first.
  */
 export function InvitationConfirm() {
+  return (
+    <InvitationAccountGuard>
+      <InvitationConfirmGuarded />
+    </InvitationAccountGuard>
+  );
+}
+
+function InvitationConfirmGuarded() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const onboardingState = useOnboardingStore((s) => s.state);
@@ -99,6 +112,32 @@ function InvitationConfirmInner() {
   const localSession = useSessionStore((s) => s.session);
   const localMk = useSessionStore((s) => s.mk);
   const isLateLink = !!localSession && !!localMk;
+
+  // Replace-link guard: an unlocked device that already carries a linked account
+  // must not silently re-point when a new invitation is opened. Read the current
+  // link on mount so we can interpose an explicit acknowledgement naming both
+  // servers before the normal late-link form.
+  const [existingLink, setExistingLink] = useState<Awaited<
+    ReturnType<typeof getLinkedAccount>
+  > | null>(null);
+  const [replaceAcknowledged, setReplaceAcknowledged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await getLinkedAccount(getDb());
+        if (!cancelled) setExistingLink(row);
+      } catch {
+        // Unreadable link store (e.g. the DB is not open yet): treat as no
+        // existing link and fall through to the normal form rather than crash.
+        if (!cancelled) setExistingLink(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ── Submit ────────────────────────────────────────────────────────────────────
 
@@ -246,6 +285,36 @@ function InvitationConfirmInner() {
         >
           Try again
         </Link>
+      </main>
+    );
+  }
+
+  // Replace-link acknowledgement: an unlocked device with an existing link opening
+  // a new invitation must confirm the re-point before the late-link form appears.
+  if (isLateLink && existingLink && !replaceAcknowledged) {
+    return (
+      <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
+        <Link
+          to={navTarget('/onboarding/invitation')}
+          className="text-2xl text-paper-soft"
+          aria-label="Back"
+        >
+          ←
+        </Link>
+        <h1 className="mt-4 font-display text-2xl italic">Replace this device's server?</h1>
+        <p className="mt-2 text-sm text-paper-soft">
+          This device is currently connected to{' '}
+          <span className="font-mono">{existingLink.base_url}</span>. Connecting to{' '}
+          <span className="font-mono">{storeCtx.baseUrl}</span> replaces that link and uploads your
+          data there instead. Your local data is not touched.
+        </p>
+        <button
+          type="button"
+          onClick={() => setReplaceAcknowledged(true)}
+          className="mt-6 w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+        >
+          Replace and connect →
+        </button>
       </main>
     );
   }

@@ -16,6 +16,7 @@ export type CryptoErrorCode =
   | 'db_schema_mismatch'
   | 'staging_inconsistent'
   | 'not_found'
+  | 'local_account_exists'
   | 'invalid_input'
   | 'conflict'
   | 'internal';
