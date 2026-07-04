@@ -7,6 +7,7 @@ import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import { enqueueBlobDelete, enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { patchTouchesSyncedField } from '../sync/strip.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { QK } from './queryKeys.js';
 
 /** List all chat rows ordered by most-recently-active first. */
@@ -201,9 +202,17 @@ export function useToggleBookmark() {
  * enqueue `delete` tombstones so they follow on other devices (the apply pipeline
  * never cascades). Each attachment/artefact's blobs are enqueued as `blob-delete`s
  * (drained LAST) so the server's objects are reclaimed after their records die.
+ *
+ * `opts.intoTrash` (default off → current behaviour byte-identical) additionally
+ * snapshots the chat and its exact cascade descendant set into `db.trash` inside
+ * the same transaction, before the live rows go (build constraint I-2, §3.4).
  */
-export async function deleteChatCascade(chatId: string): Promise<void> {
+export async function deleteChatCascade(
+  chatId: string,
+  opts?: { intoTrash?: boolean },
+): Promise<void> {
   const db = getClientDataDb();
+  const chatRow = await db.chats.get(chatId);
   const msgs = await db.messages.where('chatId').equals(chatId).toArray();
   const msgIds = msgs.map((m) => m.id);
   const pills = msgIds.length > 0 ? await db.pills.where('messageId').anyOf(msgIds).toArray() : [];
@@ -222,11 +231,17 @@ export async function deleteChatCascade(chatId: string): Promise<void> {
     return ids;
   });
 
+  // A chat has exactly one persona, so the whole subtree lifts to that card.
+  const personaOfChat = chatRow ? chatRow.personaId : null;
+  const resolvePersona = (cid: string): string | null => (cid === chatId ? personaOfChat : null);
+
   await mutateSynced({
     collection: 'chats',
     key: chatId,
     op: 'delete',
-    tables: ['chats', 'messages', 'pills', 'attachments', 'artefacts'],
+    tables: opts?.intoTrash
+      ? ['chats', 'messages', 'pills', 'attachments', 'artefacts', 'trash']
+      : ['chats', 'messages', 'pills', 'attachments', 'artefacts'],
     cascade: [
       ...msgIds.map((k) => ({ collection: 'messages' as const, key: k })),
       ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
@@ -234,6 +249,19 @@ export async function deleteChatCascade(chatId: string): Promise<void> {
       ...artefacts.map((a) => ({ collection: 'artefacts' as const, key: a.id })),
     ],
     write: async (tx) => {
+      if (opts?.intoTrash) {
+        // Snapshot the EXACT cascade set (I-2) before the live rows are removed.
+        const now = Date.now();
+        if (chatRow) await snapshotRowIntoTrash(tx, now, 'chats', chatId, chatRow, resolvePersona);
+        for (const m of msgs)
+          await snapshotRowIntoTrash(tx, now, 'messages', m.id, m, resolvePersona);
+        for (const p of pills)
+          await snapshotRowIntoTrash(tx, now, 'pills', p.id, p, resolvePersona);
+        for (const a of attachments)
+          await snapshotRowIntoTrash(tx, now, 'attachments', a.id, a, resolvePersona);
+        for (const a of artefacts)
+          await snapshotRowIntoTrash(tx, now, 'artefacts', a.id, a, resolvePersona);
+      }
       if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
       await tx.table('attachments').where('chatId').equals(chatId).delete();
       await tx.table('artefacts').where('chatId').equals(chatId).delete();

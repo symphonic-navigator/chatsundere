@@ -5,6 +5,7 @@ import { uuidv7 } from 'uuidv7';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import { enqueueBlobDelete, enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
 
@@ -108,9 +109,18 @@ export function useDeletePersona() {
  * one case the avatar IS tombstoned (WS-D §5) — its `personaAvatars` row, with a
  * `blob-delete` for the avatar's bytes. Plain function so the cascade is testable
  * without React; {@link useDeletePersona} wraps it.
+ *
+ * `opts.intoTrash` (default off → current behaviour byte-identical) additionally
+ * snapshots the persona and its exact cascade descendant set (chats, messages,
+ * pills, avatar) into `db.trash` inside the same transaction, before the live
+ * rows go (build constraint I-2, §3.4).
  */
-export async function deletePersonaCascade(id: string): Promise<void> {
+export async function deletePersonaCascade(
+  id: string,
+  opts?: { intoTrash?: boolean },
+): Promise<void> {
   const db = getClientDataDb();
+  const persona = await db.personas.get(id);
   // Enumerate the synced descendants BEFORE the mutation so their tombstones
   // ride the same transaction (spec §7.3a): the apply pipeline never cascades,
   // so a persona tombstone alone would orphan its chats/messages/pills on
@@ -128,11 +138,18 @@ export async function deletePersonaCascade(id: string): Promise<void> {
   const avatar = await db.personaAvatars.get(id);
   const avatarBlobId = avatar?.blobRef?.blobId ?? null;
 
+  // Every deleted chat belongs to this persona, so the whole subtree lifts to
+  // this persona's card.
+  const personaOfChat = new Map(chats.map((c) => [c.id, id]));
+  const resolvePersona = (cid: string): string | null => personaOfChat.get(cid) ?? null;
+
   await mutateSynced({
     collection: 'personas',
     key: id,
     op: 'delete',
-    tables: ['personas', 'chats', 'messages', 'pills', 'personaAvatars'],
+    tables: opts?.intoTrash
+      ? ['personas', 'chats', 'messages', 'pills', 'personaAvatars', 'trash']
+      : ['personas', 'chats', 'messages', 'pills', 'personaAvatars'],
     cascade: [
       ...chatIds.map((k) => ({ collection: 'chats' as const, key: k })),
       ...messageIds.map((k) => ({ collection: 'messages' as const, key: k })),
@@ -140,6 +157,19 @@ export async function deletePersonaCascade(id: string): Promise<void> {
       ...(avatar ? [{ collection: 'personaAvatars' as const, key: id }] : []),
     ],
     write: async (tx) => {
+      if (opts?.intoTrash) {
+        // Snapshot the EXACT cascade set (I-2) before the live rows are removed.
+        const now = Date.now();
+        if (persona) await snapshotRowIntoTrash(tx, now, 'personas', id, persona, resolvePersona);
+        for (const c of chats)
+          await snapshotRowIntoTrash(tx, now, 'chats', c.id, c, resolvePersona);
+        for (const m of messages)
+          await snapshotRowIntoTrash(tx, now, 'messages', m.id, m, resolvePersona);
+        for (const p of pills)
+          await snapshotRowIntoTrash(tx, now, 'pills', p.id, p, resolvePersona);
+        if (avatar)
+          await snapshotRowIntoTrash(tx, now, 'personaAvatars', id, avatar, resolvePersona);
+      }
       if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
       if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
       if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
