@@ -7,7 +7,7 @@ import {
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
 import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
-import { Fingerprint, Info, KeyRound, Link2, Lock, LogOut } from 'lucide-react';
+import { Fingerprint, Info, KeyRound, Link2, Lock, LogOut, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
@@ -187,6 +187,13 @@ export function AccountPage(): JSX.Element {
           label="Recovery Key"
           to="/app/account/recovery"
           meta="your backup code"
+        />
+        <NavTile
+          colour="pink"
+          icon={Trash2}
+          label="Recently deleted"
+          to="/app/account/recently-deleted"
+          meta="restore or purge · 30 days"
         />
         <NavTile
           colour="blue"

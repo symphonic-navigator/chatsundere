@@ -10,6 +10,7 @@ import { AboutPage } from './routes/app/account/about.js';
 import { BiometricPage } from './routes/app/account/biometric.js';
 import { DevToolsPage } from './routes/app/account/devtools.js';
 import { LogoutPage } from './routes/app/account/logout.js';
+import { RecentlyDeletedPage } from './routes/app/account/recently-deleted.js';
 import { RecoveryKeyPage } from './routes/app/account/recovery.js';
 import { ServerLinkingPage } from './routes/app/account/server-linking.js';
 import { ArtefactsPage } from './routes/app/chat/artefacts-page.js';
@@ -177,6 +178,7 @@ export function App() {
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/app/account/biometric" element={<BiometricPage />} />
                   <Route path="/app/account/recovery" element={<RecoveryKeyPage />} />
+                  <Route path="/app/account/recently-deleted" element={<RecentlyDeletedPage />} />
                   <Route path="/app/account/server-linking" element={<ServerLinkingPage />} />
                   <Route path="/app/account/about" element={<AboutPage />} />
                   {import.meta.env.DEV && (
