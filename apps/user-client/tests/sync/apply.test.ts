@@ -23,6 +23,7 @@ import {
   resetTombstoneCounter,
   setInvalidator,
 } from '../../src/sync/apply.js';
+import { isDeadKey, markDead } from '../../src/sync/dead-keys.js';
 import { advanceWatermark, getSyncState, setAttention } from '../../src/sync/watermark.js';
 import { _resetWorkerForTests, _setPullTransport, runPullLoop } from '../../src/sync/worker.js';
 
@@ -255,24 +256,37 @@ describe('applyRecord — §7.3 tombstone', () => {
   });
 });
 
-// ===== §7.4 H-1 trash-anchored terminality =====
+// ===== §7.4 H-1 dead-key-anchored terminality =====
 
-describe('applyRecord — §7.4 H-1 trash-anchored terminality (Larissa H-1, NON-NEGOTIABLE)', () => {
-  it('rejects an upsert onto a live tombstone anchor, keeps trash, raises tamper', async () => {
+describe('applyRecord — §7.4 H-1 dead-key-anchored terminality (Larissa H-1, NON-NEGOTIABLE)', () => {
+  it('rejects an upsert onto a dead-key anchor, keeps it dead, raises tamper', async () => {
     const db = getClientDataDb();
-    // Step 1: a pulled tombstone moves the chat to trash and clears its syncRows.
-    await db.chats.put({ id: 'c1', title: 'real', createdAt: 1, updatedAt: 1 } as never);
-    await db.syncRows.put({ collection: 'chats', key: 'c1', rev: 2, ciphertextHash: 'h' });
-    await applyRecord(pulledTombstone('chats', 'c1', 5));
-    expect(await db.trash.get('chats:c1')).toBeDefined();
+    // Step 1: the key's death is recorded on the durable deadKeys marker (§3.9).
+    await markDead('chats', 'c1');
 
-    // Step 2: the malicious server replays an upsert for the SAME (tombstoned) key.
+    // Step 2: the malicious server replays an upsert for the SAME (dead) key.
     openReturns({ id: 'c1', title: 'resurrected', createdAt: 1, updatedAt: 9 });
     const outcome = await applyRecord(pulledUpsert('chats', 'c1', new Uint8Array([4, 4]), 6));
 
     expect(outcome).toEqual({ kind: 'tamper' });
-    // The anchor stands: trash intact, no row resurrected, tamper attention raised.
-    expect(await db.trash.get('chats:c1')).toBeDefined();
+    // The anchor stands: no row resurrected, key still dead, tamper attention raised.
+    expect(await db.chats.get('c1')).toBeUndefined();
+    expect(await isDeadKey('chats', 'c1')).toBe(true);
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+
+  it('fires with the trash snapshot absent — durability of the dead-key anchor (§3.9)', async () => {
+    const db = getClientDataDb();
+    // Death is recorded, but the 30-day trash snapshot is purged/never present:
+    // the marker alone must still make the identity terminal.
+    await markDead('chats', 'c1');
+    await db.trash.delete('chats:c1');
+    expect(await db.trash.get('chats:c1')).toBeUndefined();
+
+    openReturns({ id: 'c1', title: 'resurrected', createdAt: 1, updatedAt: 9 });
+    const outcome = await applyRecord(pulledUpsert('chats', 'c1', new Uint8Array([4, 4]), 6));
+
+    expect(outcome).toEqual({ kind: 'tamper' });
     expect(await db.chats.get('c1')).toBeUndefined();
     expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
   });

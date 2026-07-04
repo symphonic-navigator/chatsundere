@@ -17,6 +17,7 @@ import { enqueueEager } from './blob-fetch.js';
 import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
 import { applyPulledBlobRow, blobFieldsOf, isBlobCollection } from './blob-transform.js';
 import { putBlob } from './blob-transport.js';
+import { isDeadKey, markDead } from './dead-keys.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
 import { extractKeyFor } from './sync-keys.js';
@@ -445,10 +446,7 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
   // a crash mid-way must never lose the trash safety net.
   await db.transaction(
     'rw',
-    db.syncRows,
-    db.syncOutbox,
-    db.trash,
-    db.table(collection),
+    [db.syncRows, db.syncOutbox, db.trash, db.deadKeys, db.table(collection)],
     async () => {
       if (local !== undefined && local !== null) {
         const now = Date.now();
@@ -473,6 +471,11 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
         .primaryKeys();
       if (seqs.length > 0) await db.syncOutbox.bulkDelete(seqs);
       await db.syncRows.delete([collection, key]);
+      // §3.9 — record the death on the DURABLE anchor, atomically with the trash
+      // move, so H-1 (§7.4) still fires after the 30-day trash snapshot is purged
+      // or the user restores-then-the-server-replays. Written even when no local
+      // row existed: the key's identity is terminal regardless.
+      await markDead(collection, key);
     },
   );
 
@@ -548,11 +551,11 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
   const localHash = await sha256B64(fromBase64Url(pulled.ciphertext));
 
   if (local === undefined || local === null) {
-    // §7.4 H-1 (NON-NEGOTIABLE) — a live pulled-tombstone trash entry is a
-    // terminal anchor; an honest server can never deliver an upsert for a blind
-    // id it tombstoned. Reject inertly, keep the trash row, raise the tamper alarm.
-    const trashRow = await db.trash.get(`${collection}:${key}`);
-    if (trashRow) {
+    // §7.4 H-1 (NON-NEGOTIABLE) — a dead key is a terminal identity anchor; an
+    // honest server can never deliver an upsert for a blind id it tombstoned.
+    // Anchored on the DURABLE deadKeys marker (§3.9), so it survives trash purge
+    // and restore — not the ephemeral 30-day trash snapshot. Raise the tamper alarm.
+    if (await isDeadKey(collection, key)) {
       await setAttention({ kind: 'tamper' });
       return { kind: 'tamper' };
     }
