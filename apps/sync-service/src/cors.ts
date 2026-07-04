@@ -24,7 +24,7 @@ export function corsMiddleware(allowedOrigins: string[]): MiddlewareHandler {
       if (matched) {
         c.header('Access-Control-Allow-Origin', matched);
         c.header('Vary', 'Origin');
-        c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         c.header(
           'Access-Control-Allow-Headers',
           c.req.header('access-control-request-headers') ?? 'Authorization, Content-Type',
