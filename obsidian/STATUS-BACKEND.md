@@ -1,7 +1,31 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-03 — local dev onboarding wired for the first
-end-to-end test (see "Doing now"). Prior, 2026-07-02 (later): **Block 6C blob
+**Last updated:** 2026-07-04 — **Sync-lifecycle hardening squashed onto
+`full-backend-transition`** (`9fe0595e`), plus a separate CORS fix (`b5b2b4a3` —
+allow `PUT` in the sync-service preflight; blob/avatar uploads were blocked, so
+records synced but avatars did not). Four units from the first multi-device test
+(Vivaldi→Chromium): (1) **backfill robustness** — `getSyncState` heals legacy
+`syncState` rows (the diagnosed bug: `backfillPending: undefined` silently
+stranded a whole vault) and arms whenever a linked device holds un-transferred
+rows; (2) **transfer-state reset** on decouple/server-switch
+(`resetEngineStateForLocalOnly` + a `linkedServerUserId` stamp + a cycle-start
+guard); (3) **Decouple-this-device** flow (best-effort `logoutCurrentSession`,
+`decoupleDevice`, Server-linking UI + typed-phrase confirm + a working Retry +
+dynamic badge); (4) **completion-aware all-surface wipe** (`wipeDevice` closes
+ALL THREE IDB handles — incl. the crypto account DB — before deleting, clears
+localStorage/sessionStorage/Cache Storage/SW, and revokes the session). Spec+plan
+under `superpowers/`. **Audits:** whole-branch review clean; **Larissa found +
+cleared a HIGH** (the crypto account DB survived the wipe — `boot/open-db.ts`
+caches its handle; the root-cause investigation's "no retained handle" premise
+was wrong); Laura passed Unit 3 (three soft advisory notes). Gates: `pnpm
+typecheck --force` **14/14** on the integrated tree; user-client vitest baseline-
+only (8 known Node-localStorage); crypto **190/0**. **Open (next window):** Chris's
+on-device §10 verification (the `onblocked` wipe fix needs a real browser — cannot
+be exercised in fake-indexeddb) + his device-test findings ("a few things") +
+three Laura soft notes (destructive button tone for a reversible action; "End
+this link" fold at 380 px; tile-meta "sync & unlink devices" plural ambiguity →
+suggest "unlink this device"). Prior, 2026-07-03 — local dev onboarding wired for
+the first end-to-end test (see "Doing now"). Prior, 2026-07-02 (later): **Block 6C blob
 transport is BUILT** on
 branch `claude/blob-transport-impl-xtpius` (17 `03:` commits; the designated
 remote-run branch — the plan's `feat/backend-03-blobs` name was overridden by the
