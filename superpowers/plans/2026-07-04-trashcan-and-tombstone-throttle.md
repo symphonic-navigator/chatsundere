@@ -18,11 +18,12 @@ You are a context-less Claude executing this plan unattended. You do NOT have th
 repo's CLAUDE.md, the prior session's memory, or a human to ask. Every rule you
 need is in THIS document. These rules are binding and override your defaults.
 
-1. **Branch & isolation.** Work ONLY in this worktree: `worktree-sync-lifecycle`
-   (branch `worktree-sync-lifecycle`), at absolute paths under
-   `/home/chris/workspace/chatsundere/.claude/worktrees/sync-lifecycle`. **Never
-   switch branches. Never merge. Never push.** Never `cd` to the main checkout.
-   Stop at the final hand-off task and report back; the human integrates.
+1. **Branch & isolation.** Work on the branch **`full-backend-transition`** in the
+   checkout you are launched in (do NOT create a new worktree; do NOT switch away
+   from `full-backend-transition`). **Never switch branches. Never merge. Never
+   push. Never touch `master`.** All paths in this plan are repo-relative — resolve
+   them against your checkout root. Stop at the final hand-off task and report
+   back; the human integrates.
 
 2. **Execution model.** Use `superpowers:subagent-driven-development`: one fresh
    implementer subagent per task, then a task reviewer (spec compliance + code
@@ -94,10 +95,10 @@ need is in THIS document. These rules are binding and override your defaults.
     `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
 
 12. **End-of-run STATUS update (Task 15's last step).** Prepend a dated entry to
-    `/home/chris/workspace/chatsundere/.claude/worktrees/sync-lifecycle/STATUS-TRANSITION.md`
-    (the sprint status file; newest entry on top, format: `**Last updated:** 2026-07-05 (overnight) — **HEADLINE.** body…`) summarising what shipped, the
-    verification numbers, and the two owed audits (Larissa, Laura). Commit it with
-    `[skip ci]`.
+    `STATUS-TRANSITION.md` (repo root — the sprint status file; newest entry on
+    top, format: `**Last updated:** 2026-07-05 (overnight) — **HEADLINE.** body…`)
+    summarising what shipped, the verification numbers, and the two owed audits
+    (Larissa, Laura). Commit it with `[skip ci]`.
 
 13. **Hand-off report (final action).** Report to the human: the commit list on
     the branch (`git log --oneline master..HEAD`), the verification numbers (every
@@ -136,7 +137,7 @@ need is in THIS document. These rules are binding and override your defaults.
 - Security-critical paths (`apps/user-client/src/sync/**`, `packages/crypto/**`) ship with tests from day one; Larissa audits Phase-2 sync changes pre-squash.
 - One Dexie version bump for the whole plan: **34** (current tip is 33). Exactly one task owns it (Task 6). No other task adds a `this.version(...)`.
 - Commit style: free-form imperative, capitalised subject; `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`. Code commits do NOT get `[skip ci]`.
-- Subagents never merge, push, or switch branches. Work only in the `worktree-sync-lifecycle` worktree at absolute paths.
+- Subagents never merge, push, or switch branches. Work only on the `full-backend-transition` branch (see Operating Rule #1); all paths are repo-relative.
 - Run all `pnpm` commands from `apps/user-client/` unless stated; typecheck/biome from repo root.
 
 ---
