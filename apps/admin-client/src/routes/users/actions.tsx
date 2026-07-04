@@ -3,7 +3,13 @@ import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { copy } from '../../copy.js';
-import { deleteUser, suspendUser, transferPrimary, unsuspendUser } from '../../data/api.js';
+import {
+  changeRole,
+  deleteUser,
+  suspendUser,
+  transferPrimary,
+  unsuspendUser,
+} from '../../data/api.js';
 import type { UserDetailView } from '../../data/types.js';
 import { type Role, isPrimaryAdmin, isSelfTarget } from '../../lib/self-target.js';
 
@@ -93,21 +99,14 @@ export function UserActions({ user, onDeleted }: Props) {
         />
       )}
 
-      <ActionButton
-        label={copy.userDetail.actions.changeRole}
-        disabled={true}
-        tooltip={copy.userDetail.changeRoleNotYetAvailable}
-        onClick={() => {
-          // Intentional: this button is a UX placeholder until the inline role-
-          // change form lands in a later squash. When that handler is wired,
-          // the implementer MUST preserve the original gating expression and
-          // include `isLastPrimary` to forbid demoting the last primary admin:
-          //   disabled={isSelf || isLastPrimary || !sessionIsPrimary || changeRole.isPending}
-          // and call api.changeRole(user.id, newRole) only after asserting
-          // !isSelfTarget(...) and !isLastPrimary. See Larissa Squash C audit,
-          // finding S1.
-          console.warn('changeRole button clicked before handler is implemented');
-        }}
+      <RoleSection
+        user={user}
+        disabled={isSelf || isLastPrimary || !sessionIsPrimary}
+        tooltip={
+          selfTooltip ??
+          lastPrimaryTooltip ??
+          (sessionIsPrimary ? undefined : copy.userDetail.primaryOnlyTooltip)
+        }
       />
 
       <ActionButton
@@ -194,5 +193,64 @@ function ActionButton({
         <span className="ml-2 block text-xs text-[var(--color-subtext-0)]">{tooltip}</span>
       )}
     </button>
+  );
+}
+
+function RoleSection({
+  user,
+  disabled,
+  tooltip,
+}: {
+  user: UserDetailView;
+  disabled: boolean;
+  tooltip?: string;
+}) {
+  const qc = useQueryClient();
+  // primary_admin is not assignable via this endpoint; transfer-primary owns it.
+  const [nextRole, setNextRole] = useState<'admin' | 'user'>(
+    user.role === 'admin' ? 'user' : 'admin',
+  );
+  const mutation = useMutation({
+    mutationFn: () => changeRole(user.id, nextRole),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user', user.id] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+  const blocked = disabled || mutation.isPending || nextRole === user.role;
+  return (
+    <div className="space-y-1">
+      <label className="block text-sm">
+        {copy.userDetail.actions.changeRole}
+        <select
+          value={nextRole}
+          disabled={disabled}
+          onChange={(e) => setNextRole(e.target.value === 'admin' ? 'admin' : 'user')}
+          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2 disabled:opacity-50"
+        >
+          <option value="user">{copy.userDetail.roleOptions.user}</option>
+          <option value="admin">{copy.userDetail.roleOptions.admin}</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        disabled={blocked}
+        title={tooltip}
+        onClick={() => {
+          // Defence-in-depth (S1): re-check every gate at click time.
+          if (blocked) return;
+          mutation.mutate();
+        }}
+        className="w-full rounded-md bg-[var(--color-mantle)] px-3 py-2 text-left disabled:opacity-50"
+      >
+        {copy.userDetail.applyRole}
+        {tooltip && disabled && (
+          <span className="ml-2 block text-xs text-[var(--color-subtext-0)]">{tooltip}</span>
+        )}
+      </button>
+      {mutation.isError && (
+        <p className="text-xs text-[var(--color-red)]">{copy.userDetail.roleChangeFailed}</p>
+      )}
+    </div>
   );
 }
