@@ -1,20 +1,40 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-05 — **Admin-console overhaul specced + planned +
-hardened for a second overnight remote run** (parallel to the trashcan run, same
-`full-backend-transition` base, disjoint file surface — worker boundary pinned in
-the contract). Spec `superpowers/specs/2026-07-04-admin-console-live-wiring-and-design.md`,
-plan `superpowers/plans/2026-07-04-admin-console-live-wiring-and-design.md`
-(19 TDD tasks + Operating-Rules contract). Scope: mock layer deleted entirely
-(the `hybrid` 501-fallback was why /admin showed demo data), audit endpoint
-enriched server-side (username joins + DESC; plus the users-list `total` bug fix
-and role/status filters), `shared-types/admin.ts` becomes the single wire truth,
-change-role + transfer-primary (typed-phrase + sign-out) + invitation
-suggested_username/note land, and a Catppuccin-Mocha **retrofuturistic
-control-panel restyle** (cassette-futurism base, CRT accents budgeted to three
-spots, synthwave login; dark-only — Latte removed; CLAUDE.md §11 revision + ADR
-in the run). Post-run owed: Larissa on the Unit 1 diff, Chris's spec-§11 manual
-verification, squash into two feature units. Laura consciously skipped (admin
+**Last updated:** 2026-07-05 — **Admin-console overhaul BUILT** on the overnight
+remote branch `claude/admin-console-live-wiring-xwn71o` (from
+`full-backend-transition`; parallel to the trashcan run on
+`claude/trashcan-tombstone-throttle-haqiwv`, disjoint file surface — the two only
+co-touch `shared-types/src/index.ts`, see below). All 19 TDD tasks landed as
+per-task commits (unsquashed, for Larissa + Chris to audit before integration).
+Spec/plan under `superpowers/`. What landed: the admin-client mock layer deleted
+entirely (the `hybrid` 501-fallback was why /admin showed demo data) and every
+screen wired to the live auth-service via one typed `data/api.ts` + `data/types.ts`
+view-model layer; the audit endpoint enriched server-side (username left-joins +
+DESC ordering) and the users-list `total` bug fixed with role/status filters;
+`shared-types/admin.ts` made the single wire truth; change-role, transfer-primary
+(typed-phrase confirm + forced sign-out with a login notice) and invitation
+`suggested_username`/`note` all functional; the reveal-once screen shows code +
+`qr_url`; a constructive `QueryErrorPanel` replaces every eternal spinner; and a
+Catppuccin-Mocha **retrofuturistic control-panel restyle** (cassette-futurism
+base kit, CRT accents budgeted to three spots, synthwave login; dark-only — Latte
+removed; CLAUDE.md §11 revised + [[decisions/0035-retrofuturistic-admin-console|ADR
+0035]]). **Gates on the build host:** `pnpm typecheck --force` **14/14**;
+`pnpm run build` **9/9**; auth-service `bun test` **120 pass / 12 skip / 13 fail**
+(the 13 are the pre-existing OPAQUE-login/recovery/join/bootstrap baseline —
+unchanged; +6 new admin tests all pass); admin-client `pnpm vitest run` **59 pass
+/ 0 fail** (68→59 because Task 12 deleted the 9-test mock suite); Biome clean.
+**Deviation (flagged):** the plan assumed `shared-types/src/index.ts` used a
+wildcard re-export; it uses an explicit named list, so one additive line was
+needed there to export the five new admin types — this is the one file shared
+with the trashcan run (additive on both sides; expect a trivial merge). **Env
+note:** the build host's Docker registry is egress-blocked, so Postgres 16 + Redis
+were provisioned natively (not via compose) to run the auth-service integration
+suite — the integration legs DID run and are green, not owed. **Post-run owed:**
+Larissa audits the Unit 1 diff (auth-service + shared-types + data layer — the
+worker cannot summon her), Chris runs the spec-§11 manual device verification on
+the styled screens, then squash into two feature units (Tasks 1–13 "Wire
+admin-client to live backend"; Tasks 14–19 "Restyle admin console as
+retrofuturistic control panel") and integrate. Laura consciously skipped (admin
 console is not the user-client's mobile surface — Chris's call). Prior entry:
 2026-07-04 — **Sync-lifecycle hardening squashed onto
 `full-backend-transition`** (`9fe0595e`), plus a separate CORS fix (`b5b2b4a3` —

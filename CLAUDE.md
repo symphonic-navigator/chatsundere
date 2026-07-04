@@ -209,7 +209,7 @@ These are not nice-to-haves; they are how Chatsundere differentiates from generi
 - **Inline-marker aesthetic.** Small monospace pills with subtle background, present but non-intrusive.
 - **Organic variation in effects.** Randomise size, rotation, drift, and timing per element. No uniform motion.
 - **User-facing styling:** opulent — Instrument Serif headings, subtle glows, breathing orbs.
-- **Admin styling:** Catppuccin — functional, not opulent.
+- **Admin styling:** Catppuccin Mocha retrofuturistic control panel — dark-only, functional first, flavour budgeted. See the ADR in `obsidian/decisions/`.
 
 ---
 
