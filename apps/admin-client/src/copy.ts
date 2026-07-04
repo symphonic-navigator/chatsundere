@@ -91,6 +91,9 @@ export const copy = {
     createdAt: 'Created',
     lastLogin: 'Last login',
     authMethods: 'Authentication methods',
+    unnamedMethod: 'Unnamed method',
+    methodPassphrase: 'Passphrase',
+    methodPasskey: 'Passkey',
     actions: {
       suspend: 'Suspend',
       unsuspend: 'Unsuspend',

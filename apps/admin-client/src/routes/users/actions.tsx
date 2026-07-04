@@ -3,18 +3,17 @@ import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { copy } from '../../copy.js';
-import type { UserDetail } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import { deleteUser, suspendUser, transferPrimary, unsuspendUser } from '../../data/api.js';
+import type { UserDetailView } from '../../data/types.js';
 import { type Role, isPrimaryAdmin, isSelfTarget } from '../../lib/self-target.js';
 
 interface Props {
-  user: UserDetail;
+  user: UserDetailView;
   onDeleted: () => void;
 }
 
 export function UserActions({ user, onDeleted }: Props) {
   const session = useSessionStore((s) => s.session);
-  const api = getAdminApi();
   const qc = useQueryClient();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -34,18 +33,18 @@ export function UserActions({ user, onDeleted }: Props) {
   // (and a future role-demotion) must be disabled — losing the only primary
   // admin leaves the server unmanageable. The operator has to call
   // `transferPrimary` first. Server-enforced; this is the client mirror.
-  const isLastPrimary = user.is_last_primary_admin === true;
+  const isLastPrimary = user.is_last_primary_admin;
 
   const suspend = useMutation({
-    mutationFn: () => api.suspendUser(user.id),
+    mutationFn: () => suspendUser(user.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['user', user.id] }),
   });
   const unsuspend = useMutation({
-    mutationFn: () => api.unsuspendUser(user.id),
+    mutationFn: () => unsuspendUser(user.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['user', user.id] }),
   });
   const del = useMutation({
-    mutationFn: () => api.deleteUser(user.id),
+    mutationFn: () => deleteUser(user.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       setConfirmDeleteOpen(false);
@@ -53,7 +52,7 @@ export function UserActions({ user, onDeleted }: Props) {
     },
   });
   const transfer = useMutation({
-    mutationFn: () => api.transferPrimary(user.id),
+    mutationFn: () => transferPrimary(user.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user', user.id] });
       qc.invalidateQueries({ queryKey: ['users'] });

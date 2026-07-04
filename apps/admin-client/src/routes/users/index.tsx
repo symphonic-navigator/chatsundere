@@ -2,9 +2,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useReducer } from 'react';
 import { Link } from 'react-router-dom';
+import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
 import { copy } from '../../copy.js';
-import type { UserStatus } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import { listUsers } from '../../data/api.js';
+import type { UserStatus } from '../../data/types.js';
 import { formatRelative } from '../../lib/format.js';
 import type { Role } from '../../lib/self-target.js';
 
@@ -44,10 +45,9 @@ export function reduceListFilter(state: ListFilter, action: ListFilterAction): L
 
 export function UsersListScreen() {
   const [filter, dispatch] = useReducer(reduceListFilter, initialListFilter);
-  const api = getAdminApi();
-  const { data } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: ['users', filter],
-    queryFn: () => api.listUsers(filter),
+    queryFn: () => listUsers(filter),
     placeholderData: (prev) => prev,
   });
 
@@ -94,7 +94,9 @@ export function UsersListScreen() {
         </select>
       </div>
 
-      {!data ? (
+      {error ? (
+        <QueryErrorPanel error={error} onRetry={() => refetch()} />
+      ) : !data ? (
         <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
       ) : data.items.length === 0 && data.total === 0 ? (
         <p className="text-[var(--color-subtext-0)]">{copy.users.empty}</p>
