@@ -1,10 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  /* Catppuccin Mocha (dark, default) */
+  /* Catppuccin Mocha — the console is dark-only (spec §7, ADR pending). */
   --color-base: #1e1e2e;
   --color-mantle: #181825;
   --color-crust: #11111b;
+  --color-surface-0: #313244;
+  --color-surface-1: #45475a;
   --color-text: #cdd6f4;
   --color-subtext-0: #a6adc8;
   --color-overlay-0: #6c7086;
@@ -12,29 +14,39 @@
   --color-red: #f38ba8;
   --color-green: #a6e3a1;
   --color-yellow: #f9e2af;
-}
+  --color-peach: #fab387;
+  --color-teal: #94e2d5;
+  --color-blue: #89b4fa;
+  --color-sapphire: #74c7ec;
+  --color-lavender: #b4befe;
 
-@media (prefers-color-scheme: light) {
-  @theme {
-    /* Catppuccin Latte */
-    --color-base: #eff1f5;
-    --color-mantle: #e6e9ef;
-    --color-crust: #dce0e8;
-    --color-text: #4c4f69;
-    --color-subtext-0: #6c6f85;
-    --color-overlay-0: #9ca0b0;
-    --color-mauve: #8839ef;
-    --color-red: #d20f39;
-    --color-green: #40a02b;
-    --color-yellow: #df8e1d;
-  }
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 :root {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
+  color-scheme: dark;
 }
 
 body {
   background: var(--color-base);
   color: var(--color-text);
+}
+
+/* CRT accent: scanline texture for panel headers that ask for it (spec §7.3). */
+.scanlines {
+  position: relative;
+  overflow: hidden;
+}
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgb(0 0 0 / 0.35) 0 1px,
+    transparent 1px 3px
+  );
 }
