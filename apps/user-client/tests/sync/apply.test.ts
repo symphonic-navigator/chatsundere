@@ -23,7 +23,7 @@ import {
   resetTombstoneCounter,
   setInvalidator,
 } from '../../src/sync/apply.js';
-import { advanceWatermark, getSyncState } from '../../src/sync/watermark.js';
+import { advanceWatermark, getSyncState, setAttention } from '../../src/sync/watermark.js';
 import { _resetWorkerForTests, _setPullTransport, runPullLoop } from '../../src/sync/worker.js';
 
 // ===== Fixtures =====
@@ -409,6 +409,80 @@ describe('runPullLoop — watermark + page cap (spec §6, M-7)', () => {
     await runPullLoop();
     expect(pull).toHaveBeenCalledTimes(128); // continued from rev 64
     expect((await getSyncState()).watermarkRev).toBe(128);
+  });
+});
+
+describe('runPullLoop — §7.3a tombstone notice retires on a calm cycle (auto-clear)', () => {
+  it('clears a latched tombstone notice on the next cycle that stays below the threshold', async () => {
+    // Cycle 1: one page of 20 tombstones → the calm notice latches.
+    const heavy = Array.from({ length: 20 }, (_v, i) => pulledTombstone('chats', `d${i}`, i + 1));
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 20,
+        epoch: 'E1',
+        more: false,
+        records: heavy,
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
+
+    // Cycle 2: a calm pull (no tombstones) → the stale notice retires.
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 21,
+        epoch: 'E1',
+        more: false,
+        records: [],
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).attention).toBeNull();
+  });
+
+  it('keeps the notice while consecutive cycles re-cross the threshold', async () => {
+    _setPullTransport(
+      async (since: number): Promise<SyncPullResponse> => ({
+        head: 10_000,
+        epoch: 'E1',
+        more: false,
+        records: Array.from({ length: 20 }, (_v, i) =>
+          pulledTombstone('chats', `d${since}-${i}`, since + i + 1),
+        ),
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
+    await runPullLoop(); // another 20 this cycle → still latched
+    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
+  });
+
+  it('keeps the panic-pause alarm sticky on a calm cycle (Larissa — pending acknowledgement)', async () => {
+    await setAttention({ kind: 'tombstone_paused', count: 200 });
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 1,
+        epoch: 'E1',
+        more: false,
+        records: [],
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_paused', count: 200 });
+  });
+
+  it('never clobbers a coexisting non-tombstone attention on a calm cycle', async () => {
+    await setAttention({ kind: 'tamper' });
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 1,
+        epoch: 'E1',
+        more: false,
+        records: [],
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
   });
 });
 

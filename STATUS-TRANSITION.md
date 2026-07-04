@@ -1,5 +1,31 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-04 (evening) — **TWO-BROWSER SYNC TEST: stuck
+attention banners fixed.** Chris's cross-device mass-deletion test surfaced the
+"N items were removed by another device — recoverable for 30 days" notice
+sticking forever in both browsers. Root cause: the sync `attention` field is
+persisted (Dexie `syncState`) but was never cleared for any non-auth kind, so a
+one-off event latched it permanently. Fixed with per-kind retirement:
+`tombstone_threshold` clears on a calm pull cycle below the threshold;
+`delete_rate_limited` on a clean drain (genuinely self-re-raising);
+`quota_exceeded` only on a POSITIVE accepted-write signal (a push `ok` / stored
+blob with no quota rejection the same drain — survives an empty-outbox boot cycle
+while still over quota, Larissa R2); `record_too_large` on the terminal-sentinel
+sweep once no oversize item remains; `tamper` / `auth_degraded` /
+`recovery_paused` / `tombstone_paused` stay sticky by design. Larissa audited both
+rounds (**SQUASH WITH DEFERRALS**; her R1 panic-pause MEDIUM + R2 quota MEDIUM +
+multi-oversize LOW all fixed in-round; two LOWs carried as LC-L1/LC-L2). 293 sync
+tests green (9 new), typecheck 14/14, Biome clean. Squashed on-branch (master
+untouched); the two stuck browsers self-heal on their next sync cycle once the
+fix is built. Two pre-existing issues surfaced for triage: deferred-tombstone
+loss at the panic pause (the watermark advances past deferred tombstones, so
+>200-in-a-cycle deletions are dropped not paused-then-resumed), and no
+user-facing trash/recovery surface yet ("recoverable for 30 days" is aspirational
+— `db.trash` is written but read by nothing). Detail in
+[`security-deferrals.md`](obsidian/insights/security-deferrals.md).
+
+---
+
 **Last updated:** 2026-07-04 (afternoon) — **FIRST BACKEND TEST UNDERWAY; three
 issues found and handled live.** Chris ran the first end-to-end backend test and
 hit, in order: (1) recurring "Server auth failed" on sign-in — root-caused to the

@@ -17,7 +17,12 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { batchByBytes } from '../../src/sync/seal-batch.js';
-import { advanceWatermark, checkEpoch, getSyncState } from '../../src/sync/watermark.js';
+import {
+  advanceWatermark,
+  checkEpoch,
+  getSyncState,
+  setAttention,
+} from '../../src/sync/watermark.js';
 import {
   _resetWorkerForTests,
   _setCryptoDeps,
@@ -479,5 +484,104 @@ describe('runSyncCycle (spec §6)', () => {
     await Promise.all([first, second]);
 
     expect(push).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runSyncCycle — §11.3 transient attention auto-clear', () => {
+  it('retires a stale delete_rate_limited banner on a cycle that does not re-raise it', async () => {
+    _setPullLoop(vi.fn(async () => undefined));
+    await setAttention({ kind: 'delete_rate_limited' });
+
+    // A clean cycle (empty outbox → nothing re-raised) retires the stale banner.
+    await runSyncCycle();
+
+    expect((await getSyncState()).attention).toBeNull();
+  });
+
+  it('does NOT clear a persisted quota banner on an empty-outbox cycle (still over quota)', async () => {
+    // Larissa round 2: quota is an account-global fact persisted across reload, not
+    // a per-drain transient. An empty-outbox boot cycle raises nothing, but the
+    // account may still be full — the banner must survive on absence of a re-raise.
+    _setPullLoop(vi.fn(async () => undefined));
+    await setAttention({ kind: 'quota_exceeded', usedBytes: 900, quotaBytes: 1000 });
+
+    await runSyncCycle();
+
+    expect((await getSyncState()).attention).toEqual({
+      kind: 'quota_exceeded',
+      usedBytes: 900,
+      quotaBytes: 1000,
+    });
+  });
+
+  it('keeps the quota banner while the condition persists, clears it once a write is accepted', async () => {
+    const db = getClientDataDb();
+    _setPullLoop(vi.fn(async () => undefined));
+    await db.personas.put({ id: 'p1' } as never);
+    await addOutbox('personas', 'p1', 'upsert');
+
+    // Cycle 1: quota still full → banner raised, entry kept.
+    _setPushTransport(async () => ({
+      head: 0,
+      epoch: 'E1',
+      results: [{ status: 'error', code: 'quota_exceeded', usedBytes: 900, quotaBytes: 1000 }],
+    }));
+    await runSyncCycle();
+    expect((await getSyncState()).attention).toEqual({
+      kind: 'quota_exceeded',
+      usedBytes: 900,
+      quotaBytes: 1000,
+    });
+
+    // Cycle 2: still full → re-raised, so the banner MUST stay (not auto-cleared).
+    await runSyncCycle();
+    expect((await getSyncState()).attention).toEqual({
+      kind: 'quota_exceeded',
+      usedBytes: 900,
+      quotaBytes: 1000,
+    });
+
+    // Cycle 3: space freed → the push acks → the banner retires.
+    _setPushTransport(async () => okResponse([7], 7));
+    await runSyncCycle();
+    expect((await getSyncState()).attention).toBeNull();
+  });
+
+  it('does NOT clear a sticky non-transient banner (tamper) on a clean cycle', async () => {
+    _setPullLoop(vi.fn(async () => undefined));
+    await setAttention({ kind: 'tamper' });
+
+    await runSyncCycle();
+
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+
+  it('does NOT clear record_too_large on a clean cycle — only on a terminal-sentinel sweep', async () => {
+    const db = getClientDataDb();
+    _setPullLoop(vi.fn(async () => undefined));
+    await db.personas.put({ id: 'p1' } as never);
+    await addOutbox('personas', 'p1', 'upsert');
+
+    // Cycle 1: the record is too large → banner raised, its outbox entry marked terminal.
+    _setPushTransport(async () => ({
+      head: 0,
+      epoch: 'E1',
+      results: [{ status: 'error', code: 'record_too_large' }],
+    }));
+    await runSyncCycle();
+    expect((await getSyncState()).attention).toEqual({ kind: 'record_too_large' });
+    expect((await outbox())[0]?.terminal).toBe(true);
+
+    // Cycle 2: an unrelated clean cycle does NOT retire the sticky banner.
+    _setPushTransport(async () => okResponse([], 0));
+    await runSyncCycle();
+    expect((await getSyncState()).attention).toEqual({ kind: 'record_too_large' });
+
+    // Cycle 3: a fresh (smaller) edit for the same key acks → the terminal sentinel
+    // is swept and the banner retires.
+    await addOutbox('personas', 'p1', 'upsert');
+    _setPushTransport(async () => okResponse([9], 9));
+    await runSyncCycle();
+    expect((await getSyncState()).attention).toBeNull();
   });
 });

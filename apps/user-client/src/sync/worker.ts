@@ -32,7 +32,12 @@ import { getDb } from '../boot/open-db.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
-import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
+import {
+  applyRecord,
+  flushInvalidations,
+  resetTombstoneCounter,
+  settleTombstoneNotice,
+} from './apply.js';
 import {
   type BlobFailure,
   type BlobFailureContext,
@@ -55,10 +60,13 @@ import {
 import { extractKeyFor } from './sync-keys.js';
 import {
   advanceWatermark,
+  beginAttentionCycle,
   checkEpoch,
+  clearQuotaOnAcceptedWrite,
   getSyncState,
   setAttention,
   setPulling,
+  settleTransientAttention,
 } from './watermark.js';
 
 /**
@@ -309,11 +317,16 @@ export async function drainOutbox(): Promise<DrainResult> {
     }
   }
 
+  // A server-accepted, quota-charged write this drain (a stored blob or a push
+  // `ok`) is the positive signal that retires a `quota_exceeded` banner (§11.3).
+  let acceptedWrite = false;
+
   // ===== Phase 1: blob-puts (§5) =====
   const blockedKeys = new Set<string>();
   for (const put of blobPuts) {
     if (put.blobId && cancelledIds.has(put.blobId)) continue; // coalesced away
     const disposition = await drainBlobPut(mk, put);
+    if (disposition.accepted) acceptedWrite = true;
     if (disposition.drop && put.seq !== undefined) seqsToDrop.push(put.seq);
     if (disposition.block) blockedKeys.add(keyId(put.collection, put.key));
   }
@@ -397,6 +410,7 @@ export async function drainOutbox(): Promise<DrainResult> {
         ackByKey.set(keyId(prep.collection, prep.key), result.status);
 
         if (result.status === 'ok') {
+          acceptedWrite = true;
           pushedHighestRev = Math.max(pushedHighestRev, result.rev);
           await applyOk(prep, result.rev);
         } else if (result.status === 'conflict') {
@@ -431,6 +445,10 @@ export async function drainOutbox(): Promise<DrainResult> {
 
   if (seqsToDrop.length > 0) await db.syncOutbox.bulkDelete(seqsToDrop);
 
+  // §11.3 — a quota-charged write landed this drain: if no quota rejection was
+  // raised alongside it, the account is back under quota — retire the banner.
+  if (acceptedWrite) await clearQuotaOnAcceptedWrite();
+
   let needsRecovery = false;
   if (epoch !== null && (await checkEpoch(epoch)) === 'mismatch') needsRecovery = true;
 
@@ -454,18 +472,22 @@ export async function drainOutbox(): Promise<DrainResult> {
 async function drainBlobPut(
   mk: MasterKey,
   put: SyncOutboxRow,
-): Promise<{ drop: boolean; block: boolean }> {
-  if (!put.blobId) return { drop: true, block: false }; // malformed entry
+): Promise<{ drop: boolean; block: boolean; accepted: boolean }> {
+  if (!put.blobId) return { drop: true, block: false, accepted: false }; // malformed entry
   const row = await readLocalRow(put.collection, put.key);
   const bytesBlob = row ? readBlobBytesById(put.collection, row, put.blobId) : undefined;
-  if (!bytesBlob) return { drop: true, block: false }; // bytes gone locally — diagnostic drop
+  if (!bytesBlob) return { drop: true, block: false, accepted: false }; // bytes gone — diagnostic drop
 
   const field = resolveBlobFieldById(put.collection, row, put.blobId);
   const bytes = new Uint8Array(await bytesBlob.arrayBuffer());
   const sealed = await activeSealBlob()(mk, put.blobId, bytes);
   const result = await activePutBlob()(put.blobId, sealed.body, toBase64Url(sealed.hash));
 
-  if (result.status === 'created' || result.status === 'ok') return { drop: true, block: false };
+  // A stored blob is a server-accepted, quota-charged write — the positive signal
+  // that retires a `quota_exceeded` banner (§11.3).
+  if (result.status === 'created' || result.status === 'ok') {
+    return { drop: true, block: false, accepted: true };
+  }
 
   const ctx: BlobFailureContext = {
     collection: put.collection,
@@ -477,7 +499,7 @@ async function drainBlobPut(
     mk,
   };
   const disposition = await resolveBlobFailure(putFailureFor(result), ctx, blobRepairDeps());
-  return dispositionToDrain(disposition);
+  return { ...dispositionToDrain(disposition), accepted: false };
 }
 
 /** Map a non-2xx PUT verdict to the §7 repair matrix's failure descriptor. */
@@ -542,6 +564,7 @@ async function markTerminal(prep: PreparedRecord): Promise<void> {
  */
 async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
   const db = getClientDataDb();
+  let sweptTerminal = 0;
   await db.transaction('rw', db.syncRows, db.syncOutbox, async () => {
     if (prep.op === 'delete') {
       await db.syncRows.delete([prep.collection, prep.key]);
@@ -557,12 +580,25 @@ async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
     await db.syncOutbox.bulkDelete(prep.seqs);
     // §3.4: a later smaller edit that acks clears any lingering terminal sentinel
     // for this key. Only terminal rows — a racing live-edit's entry must survive.
-    await db.syncOutbox
+    sweptTerminal = await db.syncOutbox
       .where('[collection+key]')
       .equals([prep.collection, prep.key])
       .and((r) => r.terminal === true)
       .delete();
   });
+  // §11.3 — a swept terminal sentinel means a previously oversize record just
+  // synced under a smaller edit: retire the global `record_too_large` banner (its
+  // durable, per-item signal is the §10 item marker, not this status line). Only
+  // once NO terminal sentinel remains anywhere in the outbox — `record_too_large`
+  // is the sole terminal cause (`markTerminal`), so a leftover means another
+  // oversize item is still unsynced and the banner must stay up (Larissa round 2).
+  if (sweptTerminal > 0) {
+    const remainingTerminal = await db.syncOutbox.filter((r) => r.terminal === true).count();
+    if (remainingTerminal === 0) {
+      const { attention } = await getSyncState();
+      if (attention?.kind === 'record_too_large') await setAttention(null);
+    }
+  }
 }
 
 /**
@@ -735,12 +771,19 @@ export async function runSyncCycle(): Promise<void> {
   await withSingleFlight(async () => {
     await purgeTrash();
     await enforceServerIdentity();
+    // §11.3 — start tracking which attention kinds this cycle raises, so a stale
+    // transient banner (rate-limit / quota) can retire once the cycle stays clean.
+    beginAttentionCycle();
     const result = await drainOutbox();
     if (result.needsRecovery) {
       // Epoch mismatch — Task 9 re-syncs everything; skip the pull this cycle.
+      // Recovery owns the attention state, so we do NOT settle transient banners here.
       await recovery();
       return;
     }
+    // §11.3 — the drain completed without a recovery handoff: retire a stale
+    // `delete_rate_limited` / `quota_exceeded` banner it did not re-raise.
+    await settleTransientAttention();
     if (result.needsPull || result.head === null) {
       // Pull when the drain says so (piggyback L-1 / a conflict owed resolution),
       // OR when nothing was pushed this cycle (`head === null`): a pure-reader
@@ -883,6 +926,11 @@ export async function runPullLoop(): Promise<void> {
 
       more = response.more;
     }
+    // §7.3a — a completed cycle that stayed below the threshold retires a stale
+    // tombstone notice, so a one-off mass deletion no longer sticks forever. The
+    // recovery/bad-since early returns above skip this deliberately (they hand
+    // off to recovery, which owns the attention state).
+    await settleTombstoneNotice();
   } finally {
     await setPulling(null);
   }

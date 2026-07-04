@@ -20,7 +20,7 @@ import { putBlob } from './blob-transport.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
 import { extractKeyFor } from './sync-keys.js';
-import { setAttention } from './watermark.js';
+import { getSyncState, setAttention } from './watermark.js';
 
 /**
  * Pull-side application (spec §7 — the security-critical path). `applyRecord`
@@ -97,6 +97,32 @@ export function getInertRejectionCount(): number {
 export function resetTombstoneCounter(): void {
   tombstoneCycleCount = 0;
   tombstonePaused = false;
+}
+
+/**
+ * §7.3a — retire a latched CALM tombstone notice at the END of a pull cycle that
+ * did not itself re-cross the threshold. A one-off cross-device mass deletion
+ * latches the `tombstone_threshold` notice via `setAttention`; nothing else ever
+ * cleared it, so it stuck on the status line forever — on every device that
+ * pulled the wave. The pull loop calls this once per completed cycle: while
+ * deletions keep arriving (`tombstoneCycleCount` re-crosses the threshold) the
+ * notice is left in place, preserving the Larissa M-2 visibility intent; only
+ * once a cycle stays calm does the notice retire.
+ *
+ * DELIBERATELY scoped to `tombstone_threshold` only (Larissa): the panic-pause
+ * `tombstone_paused` alarm (≥ TOMBSTONE_PANIC removed in one cycle) is the most
+ * severe M-2 signal and, per §7.3a, stays "pending user acknowledgement" — it
+ * must NOT silently vanish on the next calm cycle. It stays sticky until a real
+ * acknowledge affordance retires it (tracked follow-up). Only the calm-notice
+ * kind is cleared here — a coexisting quota/tamper/auth/paused notice is never
+ * clobbered.
+ */
+export async function settleTombstoneNotice(): Promise<void> {
+  if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) return; // re-raised this cycle — keep it
+  const { attention } = await getSyncState();
+  if (attention?.kind === 'tombstone_threshold') {
+    await setAttention(null);
+  }
 }
 
 /** Register the currently-viewing tombstone breadcrumb hook (§7.3, Task 13). */
