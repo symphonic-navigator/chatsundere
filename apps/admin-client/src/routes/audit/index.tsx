@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useReducer, useState } from 'react';
 import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
+import { Panel, SkeletonPanel, StatusLed } from '../../components/console.js';
 import { copy } from '../../copy.js';
 import { listAudit } from '../../data/api.js';
 import type { AuditEventCategory } from '../../data/types.js';
@@ -132,7 +133,7 @@ export function AuditScreen() {
         <select
           value={filter.event_type}
           onChange={(e) => dispatch({ type: 'event_type', value: e.target.value })}
-          className="rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-3 py-2"
+          className="rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono text-sm"
         >
           <option value="">{copy.audit.filters.allEvents}</option>
           {EVENT_TYPE_GROUPS.map((group) => (
@@ -150,75 +151,99 @@ export function AuditScreen() {
           value={filter.user_id}
           onChange={(e) => dispatch({ type: 'user_id', value: e.target.value })}
           placeholder={copy.audit.filters.user}
-          className="rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-3 py-2"
+          className="rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono text-sm"
         />
         <input
           type="date"
           aria-label={copy.audit.filters.from}
           value={filter.from}
           onChange={(e) => dispatch({ type: 'from', value: e.target.value })}
-          className="rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-3 py-2"
+          className="rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono text-sm"
         />
         <input
           type="date"
           aria-label={copy.audit.filters.to}
           value={filter.to}
           onChange={(e) => dispatch({ type: 'to', value: e.target.value })}
-          className="rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-3 py-2"
+          className="rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono text-sm"
         />
       </div>
 
       {error ? (
         <QueryErrorPanel error={error} onRetry={() => void refetch()} />
       ) : !data ? (
-        <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
+        <SkeletonPanel lines={8} />
       ) : data.items.length === 0 ? (
         <p className="text-[var(--color-subtext-0)]">{copy.audit.empty}</p>
       ) : (
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-xs uppercase text-[var(--color-subtext-0)]">
-              <th className="py-2">{copy.audit.columns.timestamp}</th>
-              <th className="py-2">{copy.audit.columns.category}</th>
-              <th className="py-2">{copy.audit.columns.eventType}</th>
-              <th className="py-2">{copy.audit.columns.actor}</th>
-              <th className="py-2">{copy.audit.columns.subject}</th>
-              <th className="py-2">{copy.audit.columns.metadata}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((e) => {
-              const isExpanded = expanded.has(e.id);
-              return (
-                <tr key={e.id} className="border-t border-[var(--color-overlay-0)]">
-                  <td className="py-2">{formatRelative(e.created_at)}</td>
-                  <td className="py-2">
-                    <span className="rounded-sm bg-[var(--color-mantle)] px-2 py-0.5 font-mono text-xs">
-                      {copy.audit.categories[e.category]}
-                    </span>
-                  </td>
-                  <td className="py-2 font-mono text-xs">{e.event_type}</td>
-                  <td className="py-2">{renderUser(e.actor_username, e.actor_user_id)}</td>
-                  <td className="py-2">{renderUser(e.user_username, e.user_id)}</td>
-                  <td className="py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggle(e.id)}
-                      className="text-sm text-[var(--color-mauve)] underline"
-                    >
-                      {isExpanded ? copy.audit.collapse : copy.audit.expand}
-                    </button>
-                    {isExpanded && (
-                      <pre className="mt-1 max-w-xs whitespace-pre-wrap break-words rounded-md bg-[var(--color-mantle)] p-2 text-xs">
-                        {JSON.stringify(e.metadata, null, 2)}
-                      </pre>
-                    )}
-                  </td>
+        <Panel
+          led="yellow"
+          scanlineHeader
+          header={
+            <span className="flex w-full items-center justify-between">
+              {copy.audit.title}
+              <span
+                className="font-mono text-[10px] normal-case tracking-normal text-[var(--color-green)]"
+                style={{ textShadow: '0 0 6px rgb(166 227 161 / 0.6)' }}
+              >
+                {'> tail --live ▎'}
+              </span>
+            </span>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-overlay-0)]">
+                  <th className="py-2">{copy.audit.columns.timestamp}</th>
+                  <th className="py-2">{copy.audit.columns.category}</th>
+                  <th className="py-2">{copy.audit.columns.eventType}</th>
+                  <th className="py-2">{copy.audit.columns.actor}</th>
+                  <th className="py-2">{copy.audit.columns.subject}</th>
+                  <th className="py-2">{copy.audit.columns.metadata}</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="font-mono text-sm">
+                {data.items.map((e) => {
+                  const isExpanded = expanded.has(e.id);
+                  return (
+                    <tr
+                      key={e.id}
+                      className="border-t border-[var(--color-surface-0)] hover:bg-[var(--color-crust)]"
+                    >
+                      <td className="py-2">{formatRelative(e.created_at)}</td>
+                      <td className="py-2">
+                        <span className="flex items-center gap-2">
+                          {e.category === 'security' && <StatusLed tone="red" />}
+                          <span className="rounded-sm bg-[var(--color-crust)] px-2 py-0.5 font-mono text-xs">
+                            {copy.audit.categories[e.category]}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="py-2 font-mono text-xs">{e.event_type}</td>
+                      <td className="py-2">{renderUser(e.actor_username, e.actor_user_id)}</td>
+                      <td className="py-2">{renderUser(e.user_username, e.user_id)}</td>
+                      <td className="py-2">
+                        <button
+                          type="button"
+                          onClick={() => toggle(e.id)}
+                          className="text-sm text-[var(--color-mauve)] underline"
+                        >
+                          {isExpanded ? copy.audit.collapse : copy.audit.expand}
+                        </button>
+                        {isExpanded && (
+                          <pre className="mt-1 max-w-xs whitespace-pre-wrap break-words rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] p-2 text-xs">
+                            {JSON.stringify(e.metadata, null, 2)}
+                          </pre>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
 
       <div className="flex items-center justify-between">

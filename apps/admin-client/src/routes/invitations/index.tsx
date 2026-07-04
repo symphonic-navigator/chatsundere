@@ -6,6 +6,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
+import { ConsoleChip, Panel, SkeletonPanel } from '../../components/console.js';
 import { copy } from '../../copy.js';
 import { listInvitations, revokeInvitation } from '../../data/api.js';
 import { formatRelative } from '../../lib/format.js';
@@ -56,62 +57,75 @@ export function InvitationsScreen() {
       {error ? (
         <QueryErrorPanel error={error} onRetry={() => void refetch()} />
       ) : !data ? (
-        <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
+        <SkeletonPanel lines={6} />
       ) : data.items.length === 0 ? (
         <p className="text-[var(--color-subtext-0)]">{copy.invitations.empty}</p>
       ) : (
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-xs uppercase text-[var(--color-subtext-0)]">
-              <th className="py-2">{copy.invitations.columns.createdAt}</th>
-              <th className="py-2">{copy.invitations.columns.role}</th>
-              <th className="py-2">{copy.invitations.columns.suggestedUsername}</th>
-              <th className="py-2">{copy.invitations.columns.status}</th>
-              <th className="py-2">{copy.invitations.columns.redeemedBy}</th>
-              <th className="py-2">{copy.invitations.columns.expiresAt}</th>
-              <th className="py-2">{copy.invitations.columns.issuerLabel}</th>
-              <th className="py-2">{copy.invitations.columns.note}</th>
-              <th className="py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((inv) => (
-              <tr key={inv.id} className="border-t border-[var(--color-overlay-0)]">
-                <td className="py-2">{formatRelative(inv.created_at)}</td>
-                <td className="py-2">{inv.role}</td>
-                <td className="py-2">{inv.suggested_username ?? '—'}</td>
-                <td className="py-2">{inv.status}</td>
-                <td className="py-2">{inv.redeemed_by_user_id ?? '—'}</td>
-                <td className="py-2">{formatRelative(inv.expires_at)}</td>
-                <td className="py-2 text-[var(--color-subtext-0)]">{inv.issuer_label ?? '—'}</td>
-                <td className="py-2">
-                  {inv.note ? (
-                    <span
-                      title={inv.note}
-                      className="cursor-help text-[var(--color-subtext-0)] underline decoration-dotted"
-                    >
-                      {copy.invitations.columns.noteHover}
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td className="py-2 text-right">
-                  {inv.status === 'pending' && (
-                    <button
-                      type="button"
-                      onClick={() => revoke.mutate(inv.id)}
-                      disabled={revoke.isPending}
-                      className="rounded-md px-2 py-1 text-sm text-[var(--color-red)] disabled:opacity-50"
-                    >
-                      {copy.invitations.revoke}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Panel>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-overlay-0)]">
+                  <th className="py-2">{copy.invitations.columns.createdAt}</th>
+                  <th className="py-2">{copy.invitations.columns.role}</th>
+                  <th className="py-2">{copy.invitations.columns.suggestedUsername}</th>
+                  <th className="py-2">{copy.invitations.columns.status}</th>
+                  <th className="py-2">{copy.invitations.columns.redeemedBy}</th>
+                  <th className="py-2">{copy.invitations.columns.expiresAt}</th>
+                  <th className="py-2">{copy.invitations.columns.issuerLabel}</th>
+                  <th className="py-2">{copy.invitations.columns.note}</th>
+                  <th className="py-2" />
+                </tr>
+              </thead>
+              <tbody className="font-mono text-sm">
+                {data.items.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    className="border-t border-[var(--color-surface-0)] hover:bg-[var(--color-crust)]"
+                  >
+                    <td className="py-2">{formatRelative(inv.created_at)}</td>
+                    <td className="py-2">{inv.role}</td>
+                    <td className="py-2">{inv.suggested_username ?? '—'}</td>
+                    <td className="py-2">
+                      <ConsoleChip tone={inv.status === 'pending' ? 'green' : 'neutral'}>
+                        {inv.status}
+                      </ConsoleChip>
+                    </td>
+                    <td className="py-2">{inv.redeemed_by_user_id ?? '—'}</td>
+                    <td className="py-2">{formatRelative(inv.expires_at)}</td>
+                    <td className="py-2 text-[var(--color-subtext-0)]">
+                      {inv.issuer_label ?? '—'}
+                    </td>
+                    <td className="py-2">
+                      {inv.note ? (
+                        <span
+                          title={inv.note}
+                          className="cursor-help text-[var(--color-subtext-0)] underline decoration-dotted"
+                        >
+                          {copy.invitations.columns.noteHover}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="py-2 text-right">
+                      {inv.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => revoke.mutate(inv.id)}
+                          disabled={revoke.isPending}
+                          className="rounded-md px-2 py-1 text-sm text-[var(--color-red)] disabled:opacity-50"
+                        >
+                          {copy.invitations.revoke}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
 
       {modalOpen && !revealed && (

@@ -2,6 +2,7 @@
 import type { AdminCreateInvitationResponse } from '@chatsundere/shared-types';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { SectionLabel } from '../../components/console.js';
 import { copy } from '../../copy.js';
 import { createInvitation } from '../../data/api.js';
 import type { CreateInvitationInput } from '../../data/types.js';
@@ -38,17 +39,17 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
     <dialog
       open
       aria-labelledby="create-invitation-title"
-      className="space-y-4 rounded-md bg-[var(--color-mantle)] p-6"
+      className="space-y-4 rounded-xl border border-[var(--color-surface-0)] bg-[var(--color-mantle)] p-6"
     >
-      <h2 id="create-invitation-title" className="text-2xl">
-        {copy.invitations.modal.title}
+      <h2 id="create-invitation-title">
+        <SectionLabel>{copy.invitations.modal.title}</SectionLabel>
       </h2>
       <label className="block text-sm">
         {copy.invitations.modal.role}
         <select
           value={role}
           onChange={(e) => setRole(e.target.value as CreateInvitationInput['role'])}
-          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+          className="mt-1 w-full rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono"
         >
           <option value="user">{copy.invitations.modal.roleOptions.user}</option>
           <option value="admin">{copy.invitations.modal.roleOptions.admin}</option>
@@ -59,7 +60,7 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
         <select
           value={expiresIn}
           onChange={(e) => setExpiresIn(Number(e.target.value) as 1 | 7 | 30)}
-          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+          className="mt-1 w-full rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono"
         >
           <option value={1}>{copy.invitations.modal.expiresOptions.day}</option>
           <option value={7}>{copy.invitations.modal.expiresOptions.week}</option>
@@ -71,7 +72,7 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
         <input
           value={issuerLabel}
           onChange={(e) => setIssuerLabel(e.target.value)}
-          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+          className="mt-1 w-full rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono"
         />
         <span className="mt-1 block text-xs text-[var(--color-subtext-0)]">
           {copy.invitations.modal.issuerLabelHint}
@@ -82,7 +83,7 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
         <input
           value={suggestedUsername}
           onChange={(e) => setSuggestedUsername(e.target.value)}
-          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+          className="mt-1 w-full rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono"
         />
       </label>
       <label className="block text-sm">
@@ -91,7 +92,7 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={3}
-          className="mt-1 w-full resize-none rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2"
+          className="mt-1 w-full resize-none rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono"
         />
         <span className="mt-1 block text-xs text-[var(--color-subtext-0)]">
           {copy.invitations.modal.noteHint}
