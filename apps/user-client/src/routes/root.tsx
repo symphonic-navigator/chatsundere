@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';
 import { BackgroundStreamBadge } from '../components/BackgroundStreamBadge.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
+import { GlobalSyncLine } from '../components/GlobalSyncLine.js';
 import NavTransitionOutlet from '../components/NavTransitionOutlet.js';
 import { PersonaAvatar } from '../components/PersonaAvatar.js';
 import { SplashContext } from '../components/SplashContext.js';
@@ -221,6 +222,7 @@ export function Root() {
         <SplashOverlay />
         <ScreenEffectsOverlay />
         <SyncSurfaceHost />
+        <GlobalSyncLine />
         <Toast />
       </div>
     </SplashContext.Provider>

@@ -27,7 +27,7 @@ import type {
   TrashRow,
 } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
-import { apiFetch } from '../lib/fetch.js';
+import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import { applyRecord, flushInvalidations, resetTombstoneCounter } from './apply.js';
 import {
@@ -121,6 +121,8 @@ let maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
 let pullLoop: () => Promise<void> = async () => undefined;
 /** Task 9 registers epoch recovery here; defaults to a no-op until then. */
 let recovery: () => Promise<void> = async () => undefined;
+/** Boot registers the pending-collection backfill here; no-op until then. */
+let backfill: () => Promise<void> = async () => undefined;
 
 /** Test seam: override the crypto used for sealing/blind-id derivation. */
 export function _setCryptoDeps(deps: Partial<SealCryptoDeps> | null): void {
@@ -160,6 +162,10 @@ export function _setPullLoop(fn: () => Promise<void>): void {
 export function _setRecovery(fn: () => Promise<void>): void {
   recovery = fn;
 }
+/** Boot seam: register the backfill the cycle runs at its tail after drain+pull. */
+export function _setBackfill(fn: () => Promise<void>): void {
+  backfill = fn;
+}
 /** Test seam: restore every override to its production default. */
 export function _resetWorkerForTests(): void {
   cryptoOverride = null;
@@ -172,6 +178,7 @@ export function _resetWorkerForTests(): void {
   maxBatchBytes = DEFAULT_MAX_BATCH_BYTES;
   pullLoop = async () => undefined;
   recovery = async () => undefined;
+  backfill = async () => undefined;
   cycleMutex = false;
 }
 
@@ -269,7 +276,9 @@ export async function drainOutbox(): Promise<DrainResult> {
   const syncUrl = effectiveSyncUrl();
   if (!mk || !syncUrl) return emptyDrain();
 
-  const outbox = await db.syncOutbox.orderBy('seq').toArray();
+  // Terminally-refused entries (§3.4) never re-enter a drain phase: excluded
+  // right after the read so they can neither hot-loop nor wedge the drain.
+  const outbox = (await db.syncOutbox.orderBy('seq').toArray()).filter((r) => r.terminal !== true);
   if (outbox.length === 0) return emptyDrain();
 
   resetBlobRepairCycle();
@@ -371,6 +380,7 @@ export async function drainOutbox(): Promise<DrainResult> {
         } else if (result.status === 'tombstoned') {
           await applyTombstoned(prep);
         } else {
+          if (result.code === 'record_too_large') await markTerminal(prep);
           await applyError(result);
         }
       }
@@ -488,6 +498,19 @@ function defaultPush(syncUrl: string, records: SyncPushRecord[]): Promise<SyncPu
 }
 
 /**
+ * §3.4 terminal disposition: a `record_too_large` refusal is permanent for
+ * this payload — mark the covered outbox entries so they stop draining. The
+ * attention state (raised by `applyError`) names the condition; a later
+ * smaller edit enqueues afresh and `applyOk` sweeps the sentinel.
+ */
+async function markTerminal(prep: PreparedRecord): Promise<void> {
+  const db = getClientDataDb();
+  for (const seq of prep.seqs) {
+    await db.syncOutbox.update(seq, { terminal: true as const });
+  }
+}
+
+/**
  * `ok`: adopt the server rev. An upsert records the LOCALLY-computed ciphertext
  * hash for the §7.0 echo shortcut; a delete removes the now-dead `syncRows`
  * entry. Either way the covered outbox seqs are cleared.
@@ -507,6 +530,13 @@ async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
       await db.syncRows.put(meta);
     }
     await db.syncOutbox.bulkDelete(prep.seqs);
+    // §3.4: a later smaller edit that acks clears any lingering terminal sentinel
+    // for this key. Only terminal rows — a racing live-edit's entry must survive.
+    await db.syncOutbox
+      .where('[collection+key]')
+      .equals([prep.collection, prep.key])
+      .and((r) => r.terminal === true)
+      .delete();
   });
 }
 
@@ -673,6 +703,11 @@ export async function runSyncCycle(): Promise<void> {
       // === Task 7 SEAM: the pull loop lands here (registered via _setPullLoop). ===
       await pullLoop();
     }
+    // Backfill handoff (tail of the cycle, inside the single-flight lock, AFTER
+    // drain+pull): registered at boot via `_setBackfill`. Deliberately NOT reached
+    // on a recovery-handoff cycle — recovery returns early above, and recovery
+    // re-syncs everything wholesale, so a backfill on top would be redundant.
+    await backfill();
   });
 }
 
@@ -760,7 +795,20 @@ export async function runPullLoop(): Promise<void> {
     let more = true;
     while (more && pages < PULL_PAGE_CAP) {
       const { watermarkRev } = await getSyncState();
-      const response = await pull(watermarkRev, PULL_PAGE_LIMIT);
+      let response: SyncPullResponse;
+      try {
+        response = await pull(watermarkRev, PULL_PAGE_LIMIT);
+      } catch (err) {
+        // 400 bad_since: the watermark is ahead of this account's head — an
+        // authenticated signal of account-level divergence (a relink or a
+        // server account reset). Same remedy as an epoch mismatch: full
+        // recovery (§3.2, Larissa L-1 defence-in-depth).
+        if (err instanceof HttpError && err.code === 'bad_since') {
+          await recovery();
+          return;
+        }
+        throw err;
+      }
       pages += 1;
       await setPulling({ pages, startedAt });
 

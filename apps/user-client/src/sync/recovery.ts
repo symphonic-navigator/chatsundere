@@ -390,6 +390,9 @@ async function enqueueFullRepush(): Promise<void> {
     }
     const rows = await db.table(collection).toArray();
     for (const row of rows) {
+      // Built-in mindspaces never sync (engine spec §12.5): their uuids are minted
+      // per device, so pushing them seeds cross-device duplicates.
+      if (collection === 'mindspaces' && (row as { builtIn?: boolean }).builtIn === true) continue;
       const key = syncKeyOfRow(collection, row);
       await db.syncOutbox.add({ collection, key, op: 'upsert', enqueuedAt: now });
     }

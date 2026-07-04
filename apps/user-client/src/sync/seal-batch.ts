@@ -13,8 +13,16 @@ import { stripForSeal } from './strip.js';
  * test can control ciphertext sizes without real key material.
  */
 
-/** Target request size (spec §6.3): batch by summed encoded bytes, never by count. */
+/**
+ * Target request size (spec §6.3): batch by summed encoded bytes AND by a hard
+ * record count. A request is flushed whenever adding the next record would
+ * exceed `maxBytes` or the batch already holds `MAX_RECORDS_PER_BATCH` entries —
+ * a dual ceiling, because the server caps both.
+ */
 export const DEFAULT_MAX_BATCH_BYTES = 4 * 1024 * 1024;
+
+/** Server-mirroring per-request record ceiling (sync-service MAX_PUSH_RECORDS). */
+export const MAX_RECORDS_PER_BATCH = 100;
 
 /** The crypto seam the drain consumes (`@chatsundere/crypto` in production). */
 export interface SealCryptoDeps {
@@ -154,20 +162,26 @@ export async function prepareRecord(
 }
 
 /**
- * Greedy byte-batching (spec §6.3): fill a request until adding the next record
- * would exceed `maxBytes`, then start a new one. A single record larger than
+ * Greedy byte-and-count batching (spec §6.3): fill a request until adding the
+ * next record would exceed `maxBytes`, or until the batch already holds
+ * `maxRecords` entries, then start a new one. A single record larger than
  * `maxBytes` still gets its own request (the server rejects it as
- * `record_too_large` — never silently dropped).
+ * `record_too_large` — never silently dropped). The record ceiling mirrors the
+ * server's per-request cap, which rejects a whole push above `maxRecords`.
  */
 export function batchByBytes<T extends { encodedBytes: number }>(
   items: readonly T[],
   maxBytes: number,
+  maxRecords: number = MAX_RECORDS_PER_BATCH,
 ): T[][] {
   const batches: T[][] = [];
   let current: T[] = [];
   let running = 0;
   for (const item of items) {
-    if (current.length > 0 && running + item.encodedBytes > maxBytes) {
+    if (
+      current.length > 0 &&
+      (running + item.encodedBytes > maxBytes || current.length >= maxRecords)
+    ) {
       batches.push(current);
       current = [];
       running = 0;

@@ -32,6 +32,9 @@ describe('getSyncState', () => {
       lastSyncAt: null,
       pulling: null,
       attention: null,
+      backfillPending: false,
+      backfillTotal: null,
+      backfillDone: null,
     });
   });
 

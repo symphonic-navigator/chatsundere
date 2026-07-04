@@ -553,6 +553,13 @@ export interface SyncOutboxRow {
   /** WS-D §5 — set for `blob-put`/`blob-delete` only; the blob the op acts on. */
   blobId?: string;
   enqueuedAt: number;
+  /**
+   * Backfill spec §3.4 (Larissa L-6): the server refused this record terminally
+   * (`record_too_large`). Excluded from every drain phase and from the backfill
+   * remainder, so a doomed record can neither hot-loop nor wedge completion.
+   * Swept by `applyOk` when a later (smaller) edit of the same key lands.
+   */
+  terminal?: true;
 }
 
 /** Per-row CAS metadata: the last server rev seen and the locally computed
@@ -572,6 +579,12 @@ export interface SyncStateRow {
   lastSyncAt: number | null;
   pulling: { pages: number; startedAt: number } | null;
   attention: SyncAttention | null;
+  /** §3.1 — set by the late-link path; the worker hands off to the backfill pump. */
+  backfillPending?: boolean;
+  /** §3.7 — one-off snapshot of rows to upload, counted at first pump run. */
+  backfillTotal?: number | null;
+  /** §3.7 — rows enqueued-and-drained so far. */
+  backfillDone?: number | null;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */

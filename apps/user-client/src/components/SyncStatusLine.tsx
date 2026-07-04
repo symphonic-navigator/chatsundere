@@ -12,10 +12,10 @@ import { getSyncState, isRecovering, subscribeRecovering } from '../sync/waterma
 /**
  * The account/server-linking page's sync status line (spec §11.1). Renders the
  * enriched status vocabulary from the `SyncStateRow` AND the outbox count — never
- * from the outbox count alone. Six states, in descending precedence: Recovery →
- * Attention → Pulling → Offline → Waiting → Synced. "Synced" is defined to
- * EXCLUDE an in-progress pull. Linked accounts only; a local-only user has no
- * sync engine and this line renders nothing.
+ * from the outbox count alone. States, in descending precedence: Recovery →
+ * Attention → Pulling → Offline → Backfill → Waiting → Fetching → Synced.
+ * "Synced" is defined to EXCLUDE an in-progress pull. Linked accounts only; a
+ * local-only user has no sync engine and this line renders nothing.
  */
 
 /** How often the Dexie-backed sync snapshot is re-read (no useLiveQuery in this project). */
@@ -24,7 +24,15 @@ const POLL_MS = 2_000;
 type StatusTone = 'neutral' | 'active' | 'attention';
 
 interface StatusView {
-  kind: 'synced' | 'waiting' | 'offline' | 'pulling' | 'recovery' | 'attention' | 'fetching';
+  kind:
+    | 'synced'
+    | 'waiting'
+    | 'offline'
+    | 'pulling'
+    | 'recovery'
+    | 'attention'
+    | 'fetching'
+    | 'backfill';
   tone: StatusTone;
   text: string;
   detail?: string;
@@ -95,20 +103,35 @@ export function deriveSyncStatus(input: {
     };
   }
 
-  // 4. Offline — linked but the server is unreachable; queued changes wait.
-  if (!online) return { kind: 'offline', tone: 'neutral', text: syncCopy.status.offline };
+  // 4. Offline — linked but the server is unreachable; queued changes wait. A
+  //    paused backfill reassures the user it resumes where it left off (U-6).
+  if (!online) {
+    const text =
+      state.backfillPending === true ? syncCopy.status.offlineBackfill : syncCopy.status.offline;
+    return { kind: 'offline', tone: 'neutral', text };
+  }
 
-  // 5. Waiting — online with pending outbox entries.
+  // 5. Backfill — a one-off upload of pre-link data (§3.7). Ranks above waiting,
+  //    below attention, so a quota error is never masked by upload progress (U-5).
+  if (state.backfillPending === true) {
+    return {
+      kind: 'backfill',
+      tone: 'active',
+      text: syncCopy.status.backfill(state.backfillDone ?? 0, state.backfillTotal ?? 0),
+    };
+  }
+
+  // 6. Waiting — online with pending outbox entries.
   if (outboxCount > 0)
     return { kind: 'waiting', tone: 'active', text: syncCopy.status.waiting(outboxCount) };
 
-  // 6. Fetching images — records are settled, but the eager thumb/avatar queue
+  // 7. Fetching images — records are settled, but the eager thumb/avatar queue
   //    (§6) is still draining. "Synced" is gated until it empties, so the line
   //    never claims completion while pictures are still arriving.
   if (input.fetchingImages)
     return { kind: 'fetching', tone: 'active', text: syncCopy.blob.fetching };
 
-  // 7. Synced — nothing pending, no pull, no attention, no images in flight.
+  // 8. Synced — nothing pending, no pull, no attention, no images in flight.
   const rel = state.lastSyncAt !== null ? ` · ${relativeTimeLabel(state.lastSyncAt, now)}` : '';
   return { kind: 'synced', tone: 'neutral', text: `${syncCopy.status.synced}${rel}` };
 }

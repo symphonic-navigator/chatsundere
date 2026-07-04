@@ -56,6 +56,19 @@ export function getKnowledgeVectorRow(key: string): Promise<VectorRow | undefine
 }
 
 /**
+ * Every persisted vector row's sync key (`` `${documentId}#${chunkIndex}` ``,
+ * the format pinned by `sync-keys.ts`), for the backfill pump's enumeration
+ * (spec §3.6). A `VectorRow`'s primary key IS its sync key, so this is a plain
+ * `scan` of the single knowledge collection mapped to row ids. Kept beside
+ * `getKnowledgeVectorRow` so the sync side never eagerly loads the embeddings
+ * engine — the store is engine-less for scan/upsert/delete.
+ */
+export async function listKnowledgeVectorSyncKeys(): Promise<string[]> {
+  const rows = await getKnowledgeVectorStore().scan({ collection: KNOWLEDGE_COLLECTION });
+  return rows.map((row) => row.id);
+}
+
+/**
  * The shared on-device embedding engine, created once. Surfaces load progress
  * to the model-progress store so the UI can show a one-time download banner.
  */

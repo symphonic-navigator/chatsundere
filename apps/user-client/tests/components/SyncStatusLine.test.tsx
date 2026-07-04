@@ -214,4 +214,67 @@ describe('deriveSyncStatus (pure precedence)', () => {
     });
     expect(view.kind).toBe('pulling');
   });
+
+  it('ranks backfill above waiting but below attention (U-5: quota must not be masked)', () => {
+    const baseState: SyncStateRow = {
+      ...BASE_STATE,
+      backfillPending: true,
+      backfillTotal: 500,
+      backfillDone: 120,
+      watermarkRev: 1,
+    };
+    expect(
+      deriveSyncStatus({ state: baseState, outboxCount: 80, online: true, recovering: false }).kind,
+    ).toBe('backfill');
+    const withAttention: SyncStateRow = {
+      ...baseState,
+      attention: { kind: 'quota_exceeded', usedBytes: 1, quotaBytes: 2 },
+    };
+    expect(
+      deriveSyncStatus({
+        state: withAttention,
+        outboxCount: 80,
+        online: true,
+        recovering: false,
+      }).kind,
+    ).toBe('attention');
+  });
+
+  it('renders progress numbers', () => {
+    const state: SyncStateRow = {
+      ...BASE_STATE,
+      backfillPending: true,
+      backfillTotal: 500,
+      backfillDone: 120,
+      watermarkRev: 1,
+    };
+    const view = deriveSyncStatus({ state, outboxCount: 0, online: true, recovering: false });
+    expect(view.text).toBe('Uploading your existing data… 120 of 500');
+  });
+
+  it('offline during backfill reassures about resumption (U-6)', () => {
+    const state: SyncStateRow = {
+      ...BASE_STATE,
+      backfillPending: true,
+      backfillTotal: 500,
+      backfillDone: 120,
+      watermarkRev: 1,
+    };
+    const view = deriveSyncStatus({ state, outboxCount: 0, online: false, recovering: false });
+    expect(view.kind).toBe('offline');
+    expect(view.text).toBe('Offline — your upload will pick up where it left off.');
+  });
+
+  it('pulling outranks backfill at watermark 0', () => {
+    const state: SyncStateRow = {
+      ...BASE_STATE,
+      backfillPending: true,
+      backfillTotal: 500,
+      backfillDone: 0,
+      watermarkRev: 0,
+    };
+    expect(deriveSyncStatus({ state, outboxCount: 0, online: true, recovering: false }).kind).toBe(
+      'pulling',
+    );
+  });
 });
