@@ -111,17 +111,24 @@ describe('runPullLoop — §2.2 tombstone throttle (lossless)', () => {
     expect((await getSyncState()).watermarkRev).toBe(250);
   });
 
-  it('does not skip a deferred low-rev tombstone under adversarial ordering', async () => {
-    // A page whose LAST record has the lowest rev, past the cap boundary.
+  it('normalises adversarial ordering by sorting, so no record stalls or is skipped', async () => {
+    // A page whose LAST record has the LOWEST rev (adversarial). Without the
+    // client-side sort, the cap-worth of high-rev records would consume the cap
+    // first and the low-rev record would defer every cycle forever (progress
+    // stall). Sorting ascending applies the low rev first → drains cleanly.
     const many = Array.from({ length: 200 }, (_v, i) => pulledTombstone('chats', `h${i}`, i + 10));
-    const low = pulledTombstone('chats', 'low', 5); // rev 5, below the batch, listed last
+    const low = pulledTombstone('chats', 'low', 5); // rev 5, listed LAST
+    let call = 0;
     _setPullTransport(async (since: number): Promise<SyncPullResponse> => {
-      if (since >= 5) return { head: 210, epoch: 'E1', more: false, records: [] };
-      return { head: 210, epoch: 'E1', more: true, records: [...many, low] };
+      call += 1;
+      const all = [...many, low].filter((r) => r.rev > since);
+      if (all.length === 0) return { head: 209, epoch: 'E1', more: false, records: [] };
+      return { head: 209, epoch: 'E1', more: true, records: all };
     });
-    await runPullLoop();
-    // The deferred rev-5 record holds the watermark below 5 → not skipped.
-    expect((await getSyncState()).watermarkRev).toBeLessThan(5);
+    await runPullLoop(); // sorts → applies rev 5 + revs 10..208 (200 under cap), defers rev 209
+    expect((await getSyncState()).watermarkRev).toBe(208); // held at lowestDeferredRev(209) - 1
+    await runPullLoop(); // drains rev 209
+    expect((await getSyncState()).watermarkRev).toBe(209);
   });
 
   it('ignores records with rev <= since', async () => {
@@ -146,14 +153,27 @@ Expected: FAIL (current loop applies all and over-advances the watermark).
 export const TOMBSTONE_CYCLE_CAP = 200;
 ```
 
-- [ ] **Step 4: Rewrite the `runPullLoop` page loop.** Replace the per-page apply block (the `for (const record of response.records)` … `advanceWatermark(Math.max(...))` region, ~L910-928) with:
+- [ ] **Step 4: Rewrite the `runPullLoop` page loop.** The tombstone cap is
+  **per-cycle** (across pages), so `applied` is declared BEFORE the `while` loop;
+  everything else stays per-page. Declare above the `while (more && pages < …)`:
 
 ```ts
-      let applied = 0;
-      let lowestDeferredRev: number | null = null;
-      let highestApplied = watermarkRev;
-      let cappedThisCycle = false;
-      for (const record of response.records) {
+  let applied = 0; // tombstones APPLIED this cycle, across pages — the cap is per-cycle
+```
+
+Then replace the per-page apply block (the `for (const record of response.records)`
+… `advanceWatermark(Math.max(...))` region, ~L910-928) with:
+
+```ts
+      // Normalise ordering client-side (M-7: never trust the server's order).
+      // Ascending rev means deferred tombstones are always the high-rev tail, so
+      // the watermark advances through the applied prefix and progress is
+      // guaranteed even against an adversarial page (no stall, no re-apply waste).
+      const ordered = [...response.records].sort((a, b) => a.rev - b.rev);
+      let lowestDeferredRev: number | null = null; // per PAGE
+      let highestApplied = watermarkRev;            // per PAGE, seeded from this page's since
+      let cappedThisCycle = false;                  // per PAGE (drives this page's `more`)
+      for (const record of ordered) {
         if (record.rev <= watermarkRev) continue; // L-B: honest servers never send these
         if (record.deleted && applied >= TOMBSTONE_CYCLE_CAP) {
           lowestDeferredRev =
@@ -162,7 +182,7 @@ export const TOMBSTONE_CYCLE_CAP = 200;
           continue; // defer this tombstone; keep scanning the page for the true minimum
         }
         await applyRecord(record);
-        if (record.deleted) applied += 1;
+        if (record.deleted) applied += 1; // accumulates across pages (cycle-scoped `applied`)
         if (record.rev > highestApplied) highestApplied = record.rev;
       }
       // Watermark: hold below the lowest deferred rev, else advance to highest applied.
@@ -175,7 +195,12 @@ export const TOMBSTONE_CYCLE_CAP = 200;
       more = cappedThisCycle ? false : response.more;
 ```
 
-Note: `watermarkRev` here is the value read at the top of the loop iteration (the existing loop already reads `const { watermarkRev } = await getSyncState();` per page — keep that; it is the `sinceRev` for the `rev <= watermarkRev` guard and the deferred-hold base).
+Note: `watermarkRev` is the value the existing loop reads per page
+(`const { watermarkRev } = await getSyncState();`) — keep it; it is the `sinceRev`
+for the `rev <= watermarkRev` guard and the deferred-hold base. Because `applied`
+is cycle-scoped, a page that fills the cap without deferring (exactly cap records,
+no 201st) sets no `cappedThisCycle`; the NEXT page then defers its first tombstone
+(`applied` already at cap) and stops — correct per-cycle capping.
 
 - [ ] **Step 5: Run to verify pass.**
 Run: `pnpm vitest run tests/sync/apply.test.ts`
