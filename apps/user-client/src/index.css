@@ -1929,6 +1929,10 @@ h1 {
   flex: 0 0 auto;
   pointer-events: auto;
 }
+.toast-action-secondary {
+  opacity: 0.7;
+  font-weight: 400;
+}
 .toast[data-tone="warn"] {
   border-color: rgba(220, 80, 80, 0.4);
   background: rgba(40, 15, 15, 0.95);

@@ -5,6 +5,8 @@ import { uuidv7 } from 'uuidv7';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
 import { enqueueBlobDelete, enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { type TrashUndoHandle, softDelete } from '../trash/delete-flow.js';
+import { showDeleteToast } from '../trash/delete-toast.js';
 import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
@@ -95,11 +97,16 @@ export function useUpdatePersona() {
  */
 export function useDeletePersona() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.personas });
+    void qc.invalidateQueries({ queryKey: QK.chats });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deletePersonaCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.personas });
-      qc.invalidateQueries({ queryKey: QK.chats });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('personas', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('personas', id, handle, invalidate);
     },
   });
 }

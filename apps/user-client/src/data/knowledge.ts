@@ -12,6 +12,8 @@ import { enqueueDocument } from '../knowledge/start-ingestion.js';
 import { normalisePhrases } from '../lib/treasury-filter.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { type TrashUndoHandle, softDelete } from '../trash/delete-flow.js';
+import { showDeleteToast } from '../trash/delete-toast.js';
 import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { materialiseReferencesForDocument } from './attachments.js';
 import { QK } from './queryKeys.js';
@@ -190,13 +192,18 @@ export function useUpdateLibrary() {
 
 export function useDeleteLibrary() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.libraries });
+    void qc.invalidateQueries({ queryKey: ['documents'] });
+    void qc.invalidateQueries({ queryKey: QK.personas });
+    void qc.invalidateQueries({ queryKey: QK.chats });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deleteLibraryCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.libraries });
-      qc.invalidateQueries({ queryKey: ['documents'] });
-      qc.invalidateQueries({ queryKey: QK.personas });
-      qc.invalidateQueries({ queryKey: QK.chats });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('libraries', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('libraries', id, handle, invalidate);
     },
   });
 }
@@ -354,11 +361,16 @@ export function useUpdateDocument(libraryId: string) {
 
 export function useDeleteDocument(libraryId: string) {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
+    void qc.invalidateQueries({ queryKey: QK.documentCounts });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deleteDocumentCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
-      qc.invalidateQueries({ queryKey: QK.documentCounts });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('documents', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('documents', id, handle, invalidate);
     },
   });
 }

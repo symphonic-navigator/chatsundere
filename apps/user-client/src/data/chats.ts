@@ -7,6 +7,8 @@ import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import { enqueueBlobDelete, enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { patchTouchesSyncedField } from '../sync/strip.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { type TrashUndoHandle, softDelete } from '../trash/delete-flow.js';
+import { showDeleteToast } from '../trash/delete-toast.js';
 import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { QK } from './queryKeys.js';
 
@@ -285,15 +287,20 @@ export async function deleteChatCascade(
  */
 export function useDeleteChat() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.chats });
+    void qc.invalidateQueries({ queryKey: ['artefacts'] });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: async (chatId: string): Promise<void> => {
+    mutationFn: async (chatId: string): Promise<TrashUndoHandle> => {
       // Abort any live stream first so we don't leave a controller dangling.
       await useStreamManagerStore.getState().abortDiscard(chatId);
-      await deleteChatCascade(chatId);
+      return softDelete('chats', chatId);
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: QK.chats });
-      void qc.invalidateQueries({ queryKey: ['artefacts'] });
+    onSuccess: (handle, chatId) => {
+      invalidate();
+      showDeleteToast('chats', chatId, handle, invalidate);
     },
   });
 }
