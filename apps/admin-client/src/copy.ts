@@ -8,6 +8,7 @@
 export const copy = {
   appName: 'Chatsundere Admin',
   signOut: 'Sign out',
+  sysNominal: 'SYS NOMINAL',
   loading: 'Loading…',
   genericError: 'Something went wrong. Please try again.',
   errors: {
@@ -16,6 +17,8 @@ export const copy = {
     retry: 'Retry',
   },
   login: {
+    wordmark: 'ADMIN CONSOLE',
+    tagline: 'chatsundere · operator access',
     title: 'Sign in to Chatsundere Admin',
     passphraseLabel: 'Passphrase',
     submit: 'Sign in',
