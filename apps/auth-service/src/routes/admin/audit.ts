@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { and, asc, count, eq, gte, lte } from 'drizzle-orm';
+import { and, count, desc, eq, gte, lte } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Hono } from 'hono';
 import { createDb } from '../../db/client.js';
-import { auditLog } from '../../db/schema.js';
+import { auditLog, users } from '../../db/schema.js';
 import { bearerAuth } from '../../middleware/auth.js';
 
 export function registerAdminAuditRoutes(app: Hono): void {
@@ -12,6 +13,9 @@ export function registerAdminAuditRoutes(app: Hono): void {
    *
    * Returns paginated audit log entries. All filters are optional and may be combined.
    * Returns { entries, total } where total reflects the filtered count before pagination.
+   * Each entry is enriched with `user_username` and `actor_username` (resolved via left
+   * joins, null when the referenced account no longer exists). Entries are ordered newest
+   * first (createdAt DESC).
    */
   app.get('/api/v1/admin/audit-log', bearerAuth({ minRole: 'admin' }), async (c) => {
     const eventType = c.req.query('event_type');
@@ -42,13 +46,20 @@ export function registerAdminAuditRoutes(app: Hono): void {
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Run count and paginated fetch in parallel.
+    const actorUsers = alias(users, 'actor_users');
     const [countResult, rows] = await Promise.all([
       db.select({ total: count() }).from(auditLog).where(where),
       db
-        .select()
+        .select({
+          entry: auditLog,
+          userUsername: users.username,
+          actorUsername: actorUsers.username,
+        })
         .from(auditLog)
+        .leftJoin(users, eq(auditLog.userId, users.id))
+        .leftJoin(actorUsers, eq(auditLog.actorUserId, actorUsers.id))
         .where(where)
-        .orderBy(asc(auditLog.createdAt))
+        .orderBy(desc(auditLog.createdAt))
         .limit(limit)
         .offset(offset),
     ]);
@@ -57,12 +68,14 @@ export function registerAdminAuditRoutes(app: Hono): void {
 
     return c.json({
       entries: rows.map((r) => ({
-        id: r.id,
-        user_id: r.userId,
-        actor_user_id: r.actorUserId,
-        event_type: r.eventType,
-        metadata: r.metadata as Record<string, unknown>,
-        created_at: r.createdAt.toISOString(),
+        id: r.entry.id,
+        user_id: r.entry.userId,
+        actor_user_id: r.entry.actorUserId,
+        user_username: r.userUsername,
+        actor_username: r.actorUsername,
+        event_type: r.entry.eventType,
+        metadata: r.entry.metadata as Record<string, unknown>,
+        created_at: r.entry.createdAt.toISOString(),
       })),
       total,
     });
