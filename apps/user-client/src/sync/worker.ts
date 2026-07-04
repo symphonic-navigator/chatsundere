@@ -33,6 +33,7 @@ import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import {
+  TOMBSTONE_CYCLE_CAP,
   applyRecord,
   flushInvalidations,
   resetTombstoneCounter,
@@ -890,6 +891,7 @@ export async function runPullLoop(): Promise<void> {
   await setPulling({ pages, startedAt });
   try {
     let more = true;
+    let applied = 0; // tombstones APPLIED this cycle, across pages — the cap is per-cycle
     while (more && pages < PULL_PAGE_CAP) {
       const { watermarkRev } = await getSyncState();
       let response: SyncPullResponse;
@@ -915,16 +917,33 @@ export async function runPullLoop(): Promise<void> {
         return;
       }
 
-      let highestRev = watermarkRev;
-      for (const record of response.records) {
+      // Normalise ordering client-side (M-7: never trust the server's order).
+      // Ascending rev means deferred tombstones are always the high-rev tail, so
+      // the watermark advances through the applied prefix and progress is
+      // guaranteed even against an adversarial page (no stall, no re-apply waste).
+      const ordered = [...response.records].sort((a, b) => a.rev - b.rev);
+      let lowestDeferredRev: number | null = null; // per PAGE
+      let highestApplied = watermarkRev; // per PAGE, seeded from this page's since
+      let cappedThisCycle = false; // per PAGE (drives this page's `more`)
+      for (const record of ordered) {
+        if (record.rev <= watermarkRev) continue; // L-B: honest servers never send these
+        if (record.deleted && applied >= TOMBSTONE_CYCLE_CAP) {
+          lowestDeferredRev =
+            lowestDeferredRev === null ? record.rev : Math.min(lowestDeferredRev, record.rev);
+          cappedThisCycle = true;
+          continue; // defer this tombstone; keep scanning the page for the true minimum
+        }
         await applyRecord(record);
-        if (record.rev > highestRev) highestRev = record.rev;
+        if (record.deleted) applied += 1; // accumulates across pages (cycle-scoped `applied`)
+        if (record.rev > highestApplied) highestApplied = record.rev;
       }
-      // Advance page by page, never ahead of application; monotone by clamp.
-      await advanceWatermark(Math.max(watermarkRev, highestRev));
+      // Watermark: hold below the lowest deferred rev, else advance to highest applied.
+      const nextWatermark = lowestDeferredRev !== null ? lowestDeferredRev - 1 : highestApplied;
+      await advanceWatermark(nextWatermark); // monotone clamp inside
       flushInvalidations();
 
-      more = response.more;
+      // L-A: once the cap trips, stop paging this cycle (the next trigger resumes).
+      more = cappedThisCycle ? false : response.more;
     }
     // §7.3a — a completed cycle that stayed below the threshold retires a stale
     // tombstone notice, so a one-off mass deletion no longer sticks forever. The

@@ -60,6 +60,9 @@ const EAGER_BYTES_FIELDS: Partial<Record<SyncCollection, ReadonlySet<string>>> =
 /** §7.3a threshold: a calm notice once this many tombstones arrive in one cycle. */
 const TOMBSTONE_THRESHOLD = 20;
 
+/** §2.2 — max pulled tombstones APPLIED per cycle; the rest defer to the next cycle (lossless). */
+export const TOMBSTONE_CYCLE_CAP = 200;
+
 /** The typed outcome of applying one pulled record (never advances the watermark). */
 export type ApplyOutcome =
   | { kind: 'echo' } // §7.0 — my own re-delivered write; rev adopted, no data change

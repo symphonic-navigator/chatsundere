@@ -480,3 +480,60 @@ describe('runPullLoop — invalidation coalescing (§7.6, Laura soft)', () => {
     expect(flushedKeys.length).toBeGreaterThan(1);
   });
 });
+
+describe('runPullLoop — §2.2 tombstone throttle (lossless)', () => {
+  it('applies at most the cap per cycle and drains the rest next cycle', async () => {
+    // 250 tombstones on one page, revs 1..250. Cap is 200.
+    const recs = Array.from({ length: 250 }, (_v, i) => pulledTombstone('chats', `d${i}`, i + 1));
+    let call = 0;
+    _setPullTransport(async (since: number): Promise<SyncPullResponse> => {
+      call += 1;
+      // Return only records with rev > since, mimicking the server.
+      const page = recs.filter((r) => r.rev > since).slice(0, 200);
+      return { head: 250, epoch: 'E1', more: page.length > 0, records: page };
+    });
+
+    await runPullLoop();
+    // Cap 200 applied; watermark held at lowestDeferredRev(201) - 1 = 200.
+    expect((await getSyncState()).watermarkRev).toBe(200);
+
+    await runPullLoop();
+    // Remaining 50 applied; watermark reaches head 250.
+    expect((await getSyncState()).watermarkRev).toBe(250);
+    expect(call).toBeGreaterThanOrEqual(2);
+  });
+
+  it('normalises adversarial ordering by sorting, so no record stalls or is skipped', async () => {
+    // A page whose LAST record has the LOWEST rev (adversarial). Without the
+    // client-side sort, the cap-worth of high-rev records would consume the cap
+    // first and the low-rev record would defer every cycle forever (progress
+    // stall). Sorting ascending applies the low rev first -> drains cleanly.
+    const many = Array.from({ length: 200 }, (_v, i) => pulledTombstone('chats', `h${i}`, i + 10));
+    const low = pulledTombstone('chats', 'low', 5); // rev 5, listed LAST
+    let call = 0;
+    _setPullTransport(async (since: number): Promise<SyncPullResponse> => {
+      call += 1;
+      const all = [...many, low].filter((r) => r.rev > since);
+      if (all.length === 0) return { head: 209, epoch: 'E1', more: false, records: [] };
+      return { head: 209, epoch: 'E1', more: true, records: all };
+    });
+    await runPullLoop(); // sorts -> applies rev 5 + revs 10..208 (200 under cap), defers rev 209
+    expect((await getSyncState()).watermarkRev).toBe(208); // held at lowestDeferredRev(209) - 1
+    await runPullLoop(); // drains rev 209
+    expect((await getSyncState()).watermarkRev).toBe(209);
+  });
+
+  it('ignores records with rev <= since', async () => {
+    await advanceWatermark(100);
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 100,
+        epoch: 'E1',
+        more: false,
+        records: [pulledTombstone('chats', 'stale', 50)], // rev 50 <= watermark 100
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).watermarkRev).toBe(100); // unchanged, record ignored
+  });
+});
