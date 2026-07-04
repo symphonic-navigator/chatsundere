@@ -10,6 +10,81 @@
 
 **Tech Stack:** TypeScript strict, Hono + Drizzle + Bun tests (auth-service), React 18 + TanStack Query + Vitest (admin-client), Tailwind v4 CSS-first, Fontsource.
 
+## Operating rules for the overnight worker (READ FIRST)
+
+These rules are binding. They encode this repo's conventions, which you cannot
+otherwise see. Where they conflict with your defaults, the rules win.
+
+1. **STOP-guard — confirm the base before touching anything.** You must be on a
+   branch created from `full-backend-transition`. Verify:
+   `apps/admin-client/src/data/admin-api.live.ts` **exists** and
+   `apps/admin-client/src/data/api.ts` **does not exist**. If either check
+   fails you are on the wrong base — STOP and report instead of improvising.
+2. **Language.** Every artefact you write — code, comments, copy strings, test
+   names, commit messages, ADR, STATUS text — is **British English**
+   (`colour`, `behaviour`, `initialise`). No German, no US spelling, no emoji.
+3. **Parallel-run boundary.** Another overnight run works on this same base
+   branch tonight, in `apps/user-client`, `apps/sync-service`, and
+   `packages/crypto`. Do **not** touch those trees for any reason. Your
+   surface is: `apps/admin-client`, `apps/auth-service`,
+   `packages/shared-types/src/admin.ts`, `CLAUDE.md` (one line),
+   `obsidian/decisions/`, `obsidian/insights/follow-ups-index.md`,
+   `obsidian/STATUS-BACKEND.md`. Nothing else.
+4. **Execution discipline.** Use subagent-driven development: one fresh
+   subagent per task, then a two-stage review (spec-compliance review, then
+   code review) before moving on. Subagents never merge, push, or switch
+   branches — those stay with the coordinating session. After each subagent,
+   verify its commit landed on your branch (`git branch --contains <sha>`).
+5. **TDD per task.** Failing test first, run it and see it fail, minimal
+   implementation, run it green, then commit. Tasks below are structured that
+   way — do not reorder the steps within a task.
+6. **Test environment (auth-service).** Integration tests need PostgreSQL and
+   Redis. Bring them up first:
+   `docker compose -f infra/compose.dev.yml up -d postgres redis`
+   (the init scripts under `infra/postgres/init/` create the test database
+   `auth_test_db`), then run migrations against it:
+   `cd apps/auth-service && DATABASE_URL=postgres://chatsundere:dev@localhost:5432/auth_test_db bun run db:migrate`.
+   The test runner needs **no env file** — `tests/setup.ts` (preloaded via
+   `bunfig.toml`) defaults every variable, pointing at
+   `auth_test_db` and Redis db 15. The test command is plain `bun test`.
+7. **Environment contingency — own it honestly.** If the host has no Docker
+   and you cannot provision Postgres/Redis natively, the auth-service
+   integration tests cannot run. In that case: still write them TDD-style,
+   run what runs, and record **loudly** in your hand-off report and in the
+   STATUS update that the integration legs are unverified and OWED. Never
+   report a pass you did not observe; never delete or weaken a test to make
+   the suite green.
+8. **Known-green baseline.** Before your first change, run
+   `cd apps/auth-service && bun test` and `cd apps/admin-client && pnpm vitest run`
+   once and **record the numbers**. That recorded run is your baseline; only
+   deviations from it are yours. If a pre-existing failure exists, name it in
+   the report — do not fix drive-by, do not hide behind it.
+9. **The gate is typecheck AND build, full-suite, at the end.** Turbo caches
+   aggressively; always gate with `pnpm typecheck --force` (expected:
+   **14 successful, 14 total**) plus `pnpm run build` at the repo root, and
+   the **full** test suites of both touched apps — never only the touched
+   directories.
+10. **Security boundary.** Tasks 1–13 touch `apps/auth-service` — a
+    security-audited path. The audit (Larissa) is run by the coordinating
+    human session **after** your run; you cannot and must not attempt it.
+    Your obligations: keep the Unit 1 diff free of styling noise, keep the
+    audit-relevant changes exactly as specified (no creative additions to
+    auth-service), and flag anything you had to deviate on.
+11. **Branch, push, merge.** Work only on the branch the harness created for
+    you. **Never merge into or push to `full-backend-transition` or
+    `master`.** Do not squash — leave the per-task commits; the human
+    squashes after audit and device-testing.
+12. **Commits.** Free-form imperative subject, capitalised, no
+    Conventional-Commits prefix, no emoji. Every commit ends with:
+    `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
+13. **End of run — hand-off report.** Finish with Task 19 (STATUS update
+    committed), then report back in your final message: the verification
+    numbers (auth-service `bun test`, admin-client `pnpm vitest run`,
+    `pnpm typecheck --force`, `pnpm run build` — against the recorded
+    baseline), the list of commits (`git log --oneline` from the base), every
+    deviation from the plan, and everything OWED (unrun test legs, skipped
+    steps). The human device-tests and integrates in the morning.
+
 ## Global Constraints
 
 - Every text artefact is **British English** (code, comments, copy strings, commit messages, ADRs).
@@ -18,7 +93,7 @@
 - TypeScript `strict: true` + `noUncheckedIndexedAccess: true`; no `any` without an inline justification comment.
 - Tests live under each app's `tests/` tree (`tests/unit/`, `tests/integration/`), never beside sources.
 - auth-service tests run with Bun (`bun test`), admin-client tests with Vitest (`pnpm test` inside `apps/admin-client/`).
-- The auth-service integration tests skip without `DATABASE_URL`/`REDIS_URL`; run them with the dev env loaded: `cd apps/auth-service && bun test --env-file=../../.env.dev` (verify the env file name via `ls ../../.env*` — `dev.sh` loads `.env.dev`).
+- The auth-service test command is plain `bun test` from `apps/auth-service/` — `tests/setup.ts` (preloaded via `bunfig.toml`) defaults every env variable, targeting `auth_test_db` and Redis db 15. Postgres + Redis must be running (Operating rule 6); migrations must have been applied to `auth_test_db` once.
 - Before any commit that touched types or cross-package imports: `pnpm typecheck --force` at the repo root must report **14 successful, 14 total**.
 - New dependencies allowed in this plan: `@fontsource/space-grotesk`, `@fontsource/jetbrains-mono` (admin-client only). Nothing else.
 - Comments explain non-obvious *why*, never *what*. No emoji anywhere in the repo.
@@ -251,7 +326,7 @@ Adjust the imports at the top of the file to include `auditLog` from `../../src/
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd apps/auth-service && bun test tests/integration/admin-audit-log.test.ts --env-file=../../.env.dev`
+Run: `cd apps/auth-service && bun test tests/integration/admin-audit-log.test.ts`
 Expected: FAIL — `user_username`/`actor_username` are `undefined`, and the ordering test fails (currently ASC).
 
 - [ ] **Step 3: Implement the join + ordering**
@@ -308,7 +383,7 @@ Update the route JSDoc to mention the two username fields and DESC ordering (del
 
 - [ ] **Step 4: Run the new tests and the full auth-service suite**
 
-Run: `cd apps/auth-service && bun test --env-file=../../.env.dev`
+Run: `cd apps/auth-service && bun test`
 Expected: new file PASSES; no regressions elsewhere (compare failure count against a pre-change run of the same command — do not trust memory of the baseline).
 
 - [ ] **Step 5: Commit**
@@ -367,7 +442,7 @@ Append to the existing `describe.skipIf(skip)('Admin user endpoints', ...)` bloc
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cd apps/auth-service && bun test tests/integration/admin-users.test.ts --env-file=../../.env.dev`
+Run: `cd apps/auth-service && bun test tests/integration/admin-users.test.ts`
 Expected: the total test FAILS (`total` is 1 — the page length); the role/status tests FAIL with valibot/unfiltered results (params ignored today).
 
 - [ ] **Step 3: Implement**
@@ -415,7 +490,7 @@ Extend the drizzle import at the top of the file: `import { and, asc, count, eq,
 
 - [ ] **Step 4: Run the full auth-service suite**
 
-Run: `cd apps/auth-service && bun test --env-file=../../.env.dev`
+Run: `cd apps/auth-service && bun test`
 Expected: all admin-users tests pass; no new failures anywhere.
 
 - [ ] **Step 5: Commit**
@@ -1355,14 +1430,35 @@ In `apps/admin-client/src/routes/users/index.tsx`:
   });
 ```
 
-- Add the error branch before the loading branch (same pattern as Task 6 step 2.6), importing `QueryErrorPanel`.
+- Add the error branch before the loading branch, importing `QueryErrorPanel` from `../../components/QueryErrorPanel.js`:
+
+```tsx
+      {error ? (
+        <QueryErrorPanel error={error} onRetry={() => void refetch()} />
+      ) : !data ? (
+        <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
+      ) : (
+        ...existing empty/table branches unchanged...
+```
+
 - The row rendering is unchanged (`u.status` still exists — now derived in the data layer).
 
 - [ ] **Step 2: Migrate the detail screen**
 
 In `apps/admin-client/src/routes/users/detail.tsx`:
 
-- Swap `getAdminApi` for `import { getUser } from '../../data/api.js'`; query becomes `queryFn: () => getUser(id)` (plus `error`/`refetch` destructuring and the `QueryErrorPanel` branch).
+- Swap `getAdminApi` for `import { getUser } from '../../data/api.js'`; query becomes `queryFn: () => getUser(id)`. Destructure `error`/`refetch` from `useQuery` and render, before the existing `!data` loading branch:
+
+```tsx
+        {error ? (
+          <QueryErrorPanel error={error} onRetry={() => void refetch()} />
+        ) : !data ? (
+          <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
+        ) : (
+          ...existing detail JSX unchanged...
+```
+
+(import `QueryErrorPanel` from `../../components/QueryErrorPanel.js`).
 - Auth-method rendering: the server sends `method_type` (`'opaque' | 'passkey'`), not `type`, and `label` is nullable. Replace the list item content:
 
 ```tsx
@@ -1648,7 +1744,16 @@ import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
 ```
 
 - State: `useState<AdminInvitationStatus | 'all'>('all')` and `useState<AdminCreateInvitationResponse | null>(null)` for `revealed`.
-- Query/mutation: `queryFn: () => listInvitations({ status: filter })` (destructure `error`, `refetch`; add the `QueryErrorPanel` branch) and `mutationFn: (id: string) => revokeInvitation(id)`.
+- Query/mutation: `queryFn: () => listInvitations({ status: filter })` and `mutationFn: (id: string) => revokeInvitation(id)`. Destructure `error`/`refetch` and render before the loading branch:
+
+```tsx
+      {error ? (
+        <QueryErrorPanel error={error} onRetry={() => void refetch()} />
+      ) : !data ? (
+        <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
+      ) : (
+        ...existing empty/table branches unchanged...
+```
 - Row field rename: `{inv.redeemed_by ?? '—'}` becomes `{inv.redeemed_by_user_id ?? '—'}`. Add a `suggested_username` column right after `role`: header `copy.invitations.columns.suggestedUsername`, cell `{inv.suggested_username ?? '—'}`. Copy addition under `invitations.columns`: `suggestedUsername: 'Suggested username'`.
 
 - [ ] **Step 2: Migrate the create modal**
@@ -1714,7 +1819,13 @@ git commit -m "Wire invitations to the live endpoints with reveal-once code disp
 In `dashboard/index.tsx`:
 
 - Imports: swap `getAdminApi` for `import { getDashboardSummary } from '../../data/api.js';` plus `QueryErrorPanel`.
-- Query: `queryFn: () => getDashboardSummary()` with `error`/`refetch` and the error branch before the loading branch.
+- Query: `queryFn: () => getDashboardSummary()` with `error`/`refetch` destructured. Before the existing `if (!data)` loading return, add:
+
+```tsx
+  if (error) {
+    return <QueryErrorPanel error={error} onRetry={() => void refetch()} />;
+  }
+```
 - Cards row becomes the three-tile layout fed by the new summary shape (the visual kit lands in Unit 2; this task only fixes data):
 
 ```tsx
@@ -1848,7 +1959,7 @@ Run at repo root, in order:
 
 1. `pnpm typecheck --force` → expected **14 successful, 14 total**
 2. `pnpm run build` → expected success
-3. `cd apps/auth-service && bun test --env-file=../../.env.dev` → no failures beyond the documented pre-existing baseline (compare against a master run if unsure)
+3. `cd apps/auth-service && bun test` → no failures beyond the documented pre-existing baseline (compare against a master run if unsure)
 4. `cd apps/admin-client && pnpm vitest run` → all pass
 
 - [ ] **Step 2: Biome check on the changed files**
@@ -2322,7 +2433,27 @@ git commit -m "Restyle dashboard and user screens with the control-panel kit"
 - [ ] **Step 2: Audit screen**
 
 - Filter row: inputs/selects `bg-[var(--color-crust)] font-mono text-sm border-[var(--color-surface-0)]`.
-- Table: Panel wrap with `scanlineHeader` + the `> tail --live ▎` prompt (same header node pattern as Task 17 step 1), category badge cell keeps its pill, `security`-category rows get a `StatusLed tone="red"` before the badge; expanded metadata `<pre>` gets `bg-[var(--color-crust)] border border-[var(--color-surface-0)]`.
+- Table: wrap in `Panel` with `led="yellow"`, `scanlineHeader`, and this header node (the CRT prompt accent):
+
+```tsx
+        <Panel
+          led="yellow"
+          scanlineHeader
+          header={
+            <span className="flex w-full items-center justify-between">
+              {copy.audit.title}
+              <span
+                className="font-mono text-[10px] normal-case tracking-normal text-[var(--color-green)]"
+                style={{ textShadow: '0 0 6px rgb(166 227 161 / 0.6)' }}
+              >
+                {'> tail --live ▎'}
+              </span>
+            </span>
+          }
+        >
+```
+
+  The category badge cell keeps its pill; `security`-category rows get a `StatusLed tone="red"` before the badge; expanded metadata `<pre>` gets `bg-[var(--color-crust)] border border-[var(--color-surface-0)]`.
 - Loading: `SkeletonPanel lines={8}`.
 
 - [ ] **Step 3: Gate + commit**
@@ -2375,7 +2506,7 @@ Update the header block: date, one paragraph — admin-client wired live (mock d
 
 1. `pnpm typecheck --force` → **14 successful, 14 total**
 2. `pnpm run build` → success
-3. `cd apps/auth-service && bun test --env-file=../../.env.dev` → baseline-clean
+3. `cd apps/auth-service && bun test` → baseline-clean
 4. `cd apps/admin-client && pnpm vitest run` → all pass
 
 - [ ] **Step 6: Commit**
@@ -2384,6 +2515,18 @@ Update the header block: date, one paragraph — admin-client wired live (mock d
 git add CLAUDE.md obsidian/decisions obsidian/insights/follow-ups-index.md obsidian/STATUS-BACKEND.md
 git commit -m "Record the control-panel design decision and update status"
 ```
+
+- [ ] **Step 7: Hand-off report (final message of the run)**
+
+Do not push or merge anywhere. Report back, in your final message:
+
+1. Verification numbers vs the baseline you recorded before your first change
+   (Operating rule 8): auth-service `bun test`, admin-client `pnpm vitest run`,
+   `pnpm typecheck --force` (14/14), `pnpm run build`.
+2. `git log --oneline <base>..HEAD` — the full task-commit list.
+3. Every deviation from the plan, with one-line rationale each.
+4. Everything OWED: test legs that could not run (e.g. no Docker → auth-service
+   integration tests unverified), steps skipped, environment caveats.
 
 ---
 
