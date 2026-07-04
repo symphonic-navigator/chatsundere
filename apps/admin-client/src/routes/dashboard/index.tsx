@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
 import { copy } from '../../copy.js';
-import { getAdminApi } from '../../data/index.js';
+import { getDashboardSummary } from '../../data/api.js';
 import { formatRelative } from '../../lib/format.js';
 
 export function DashboardScreen() {
-  const api = getAdminApi();
-  const { data } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: ['dashboard-summary'],
-    queryFn: () => api.getDashboardSummary(),
+    queryFn: () => getDashboardSummary(),
   });
+
+  if (error) {
+    return <QueryErrorPanel error={error} onRetry={() => void refetch()} />;
+  }
 
   if (!data) {
     return <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>;
@@ -20,9 +24,29 @@ export function DashboardScreen() {
     <div className="space-y-6">
       <h1 className="text-3xl font-medium">{copy.dashboard.title}</h1>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card label={copy.dashboard.cards.totalUsers} value={data.total_users} />
-        <Card label={copy.dashboard.cards.pendingInvitations} value={data.pending_invitations} />
-        <Card label={copy.dashboard.cards.suspendedUsers} value={data.suspended_users} />
+        <Card
+          label={copy.dashboard.cards.totalUsers}
+          value={data.total_users}
+          subline={
+            data.suspended_users > 0
+              ? copy.dashboard.cards.suspendedSubline(data.suspended_users)
+              : copy.dashboard.cards.allActive
+          }
+        />
+        <Card
+          label={copy.dashboard.cards.pendingInvitations}
+          value={data.pending_invitations}
+          subline={
+            data.soonest_pending_expiry
+              ? copy.dashboard.cards.expirySubline(formatRelative(data.soonest_pending_expiry))
+              : copy.dashboard.cards.nonePending
+          }
+        />
+        <Card
+          label={copy.dashboard.cards.events24h}
+          value={data.events_24h}
+          subline={copy.dashboard.cards.events24hSubline}
+        />
       </div>
       <section>
         <h2 className="mb-2 text-xl">{copy.dashboard.recentActivity}</h2>
@@ -35,12 +59,12 @@ export function DashboardScreen() {
                 <div className="flex justify-between gap-2 text-sm">
                   <span className="font-mono">{e.event_type}</span>
                   <span className="text-[var(--color-subtext-0)]">
-                    {formatRelative(e.timestamp)}
+                    {formatRelative(e.created_at)}
                   </span>
                 </div>
                 <div className="text-xs text-[var(--color-subtext-0)]">
                   {e.actor_username ?? '—'}
-                  {e.subject_username ? ` → ${e.subject_username}` : ''}
+                  {e.user_username ? ` → ${e.user_username}` : ''}
                 </div>
               </li>
             ))}
@@ -54,11 +78,12 @@ export function DashboardScreen() {
   );
 }
 
-function Card({ label, value }: { label: string; value: number }) {
+function Card({ label, value, subline }: { label: string; value: number; subline: string }) {
   return (
     <div className="rounded-md bg-[var(--color-mantle)] p-4">
       <div className="text-sm text-[var(--color-subtext-0)]">{label}</div>
       <div className="text-3xl">{value}</div>
+      <div className="text-xs text-[var(--color-subtext-0)]">{subline}</div>
     </div>
   );
 }

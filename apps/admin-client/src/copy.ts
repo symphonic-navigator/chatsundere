@@ -56,7 +56,12 @@ export const copy = {
     cards: {
       totalUsers: 'Total users',
       pendingInvitations: 'Pending invitations',
-      suspendedUsers: 'Suspended users',
+      events24h: 'Audit events',
+      events24hSubline: 'in the last 24 hours',
+      allActive: 'all active',
+      suspendedSubline: (n: number) => `${n} suspended`,
+      expirySubline: (rel: string) => `oldest pending expires ${rel}`,
+      nonePending: 'none pending',
     },
     recentActivity: 'Recent activity',
     noActivity: 'No recent activity.',
