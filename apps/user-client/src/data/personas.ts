@@ -112,15 +112,16 @@ export function useDeletePersona() {
 }
 
 /**
- * Delete a persona and cascade-tombstone its chats, messages, pills, and — the
- * one case the avatar IS tombstoned (WS-D §5) — its `personaAvatars` row, with a
- * `blob-delete` for the avatar's bytes. Plain function so the cascade is testable
- * without React; {@link useDeletePersona} wraps it.
+ * Delete a persona and cascade-tombstone its chats, messages, pills, memories
+ * (`memoryJournal` + `memoryBody`), and — the one case the avatar IS tombstoned
+ * (WS-D §5) — its `personaAvatars` row, with a `blob-delete` for the avatar's
+ * bytes. Plain function so the cascade is testable without React;
+ * {@link useDeletePersona} wraps it.
  *
  * `opts.intoTrash` (default off → current behaviour byte-identical) additionally
  * snapshots the persona and its exact cascade descendant set (chats, messages,
- * pills, avatar) into `db.trash` inside the same transaction, before the live
- * rows go (build constraint I-2, §3.4).
+ * pills, avatar, memories) into `db.trash` inside the same transaction, before
+ * the live rows go (build constraint I-2, §3.4).
  */
 export async function deletePersonaCascade(
   id: string,
@@ -145,6 +146,16 @@ export async function deletePersonaCascade(
   const avatar = await db.personaAvatars.get(id);
   const avatarBlobId = avatar?.blobRef?.blobId ?? null;
 
+  // The persona's memories belong to its card (TRASH_HIERARCHY: memoryJournal +
+  // memoryBody hang off the persona). Enumerated BEFORE the mutation so their
+  // tombstones ride the same transaction: the apply pipeline never cascades, so
+  // a persona tombstone alone would strand its memories against a now-dead
+  // personaId — locally and on every peer.
+  const memoryJournals = await db.memoryJournal.where('personaId').equals(id).toArray();
+  const memoryBodies = await db.memoryBody.where('personaId').equals(id).toArray();
+  const memoryJournalIds = memoryJournals.map((m) => m.id);
+  const memoryBodyIds = memoryBodies.map((m) => m.id);
+
   // Every deleted chat belongs to this persona, so the whole subtree lifts to
   // this persona's card.
   const personaOfChat = new Map(chats.map((c) => [c.id, id]));
@@ -155,13 +166,24 @@ export async function deletePersonaCascade(
     key: id,
     op: 'delete',
     tables: opts?.intoTrash
-      ? ['personas', 'chats', 'messages', 'pills', 'personaAvatars', 'trash']
-      : ['personas', 'chats', 'messages', 'pills', 'personaAvatars'],
+      ? [
+          'personas',
+          'chats',
+          'messages',
+          'pills',
+          'personaAvatars',
+          'memoryJournal',
+          'memoryBody',
+          'trash',
+        ]
+      : ['personas', 'chats', 'messages', 'pills', 'personaAvatars', 'memoryJournal', 'memoryBody'],
     cascade: [
       ...chatIds.map((k) => ({ collection: 'chats' as const, key: k })),
       ...messageIds.map((k) => ({ collection: 'messages' as const, key: k })),
       ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
       ...(avatar ? [{ collection: 'personaAvatars' as const, key: id }] : []),
+      ...memoryJournalIds.map((k) => ({ collection: 'memoryJournal' as const, key: k })),
+      ...memoryBodyIds.map((k) => ({ collection: 'memoryBody' as const, key: k })),
     ],
     write: async (tx) => {
       if (opts?.intoTrash) {
@@ -176,10 +198,16 @@ export async function deletePersonaCascade(
           await snapshotRowIntoTrash(tx, now, 'pills', p.id, p, resolvePersona);
         if (avatar)
           await snapshotRowIntoTrash(tx, now, 'personaAvatars', id, avatar, resolvePersona);
+        for (const m of memoryJournals)
+          await snapshotRowIntoTrash(tx, now, 'memoryJournal', m.id, m, resolvePersona);
+        for (const m of memoryBodies)
+          await snapshotRowIntoTrash(tx, now, 'memoryBody', m.id, m, resolvePersona);
       }
       if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
       if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
       if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
+      if (memoryJournalIds.length > 0) await tx.table('memoryJournal').bulkDelete(memoryJournalIds);
+      if (memoryBodyIds.length > 0) await tx.table('memoryBody').bulkDelete(memoryBodyIds);
       await tx.table('personaAvatars').delete(id);
       await tx.table('personas').delete(id);
     },
