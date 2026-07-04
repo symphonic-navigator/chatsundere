@@ -5,6 +5,16 @@ import { deleteChatCascade } from '../data/chats.js';
 import { deleteDocumentCascade, deleteLibraryCascade } from '../data/knowledge.js';
 import { deletePersonaCascade } from '../data/personas.js';
 import { rejectEntry } from '../memory/repo.js';
+import { isDeadKey } from '../sync/dead-keys.js';
+
+/** Thrown when a fast in-place Undo is attempted after the delete has already drained
+ *  (a dead-key marker exists). The caller must fall back to the new-identity restore. */
+export class UndoDrainedError extends Error {
+  constructor() {
+    super('Fast Undo unavailable: the delete has already drained; use the new-identity restore.');
+    this.name = 'UndoDrainedError';
+  }
+}
 
 /** A handle the caller can use to reverse a soft-delete before it drains (Task 8 hardens restore). */
 export interface TrashUndoHandle {
@@ -83,6 +93,14 @@ export async function softDelete(
      * so the identity is preserved and live back-references stay valid.
      */
     async restore(): Promise<void> {
+      // Drain-safety guard (§3.4): the dead-key marker — not raw seq-presence — is the
+      // authoritative "this delete has drained" signal (the drain can complete inside
+      // `mutateSynced` before `softDelete` returns). If ANY snapshot in the set is dead,
+      // the in-place restore would resurrect a tombstoned identity, so refuse and let the
+      // caller fall back to the new-identity restore (§3.5). Checked BEFORE any mutation.
+      for (const snap of snapshots) {
+        if (await isDeadKey(snap.collection, snap.key)) throw new UndoDrainedError();
+      }
       await db.transaction('rw', [...liveTables, 'syncOutbox', 'trash'], async (tx) => {
         // `bulkDelete` ignores any seq already drained — only the still-queued ones go.
         if (coveredSeqs.length > 0) await tx.table('syncOutbox').bulkDelete(coveredSeqs);

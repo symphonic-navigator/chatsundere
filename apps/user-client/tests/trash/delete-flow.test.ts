@@ -16,9 +16,10 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { markDead } from '../../src/sync/dead-keys.js';
 import { setImmediateDrain } from '../../src/sync/enqueue.js';
 import { _resetTriggersForTests, _setTriggerCycle } from '../../src/sync/triggers.js';
-import { permanentDelete, softDelete } from '../../src/trash/delete-flow.js';
+import { UndoDrainedError, permanentDelete, softDelete } from '../../src/trash/delete-flow.js';
 
 // ── Store helpers ────────────────────────────────────────────────────────────
 
@@ -289,5 +290,54 @@ describe('softDelete — the returned handle restores in place before drain', ()
     expect(await db.trash.count()).toBe(0);
     // No dead-key was written, so the identity is preserved.
     expect(await db.deadKeys.count()).toBe(0);
+  });
+});
+
+// ── 5. Task 8: drain-safety guard on the fast Undo (§3.4) ─────────────────────
+
+describe('softDelete restore — drain-safety guard (§3.4)', () => {
+  it('undrained: restores at original ids, cancels the delete, clears the trash', async () => {
+    setOnline();
+    await seedChat('c1', 'p1');
+    await seedMessage('m1', 'c1');
+    await seedMessage('m2', 'c1');
+    await seedPill('pl1', 'm1');
+
+    const handle = await softDelete('chats', 'c1');
+    // No dead-key is written (the harness does not ack the drain).
+    await handle.restore();
+    const db = getClientDataDb();
+
+    // Rows are back at their ORIGINAL ids.
+    expect((await db.chats.get('c1'))?.personaId).toBe('p1');
+    expect(await db.messages.get('m1')).toBeDefined();
+    expect(await db.messages.get('m2')).toBeDefined();
+    expect(await db.pills.get('pl1')).toBeDefined();
+    // The trash is empty and the outbox holds no `delete` entries for the set.
+    expect(await db.trash.count()).toBe(0);
+    expect((await deleteOutboxIdSet()).size).toBe(0);
+    expect(await db.deadKeys.count()).toBe(0);
+  });
+
+  it('drained: rejects with UndoDrainedError and mutates nothing', async () => {
+    setOnline();
+    await seedChat('c1', 'p1');
+    await seedMessage('m1', 'c1');
+
+    const handle = await softDelete('chats', 'c1');
+    // Simulate the drain: the root key's death is now server-confirmed.
+    await markDead('chats', 'c1');
+    const db = getClientDataDb();
+
+    const trashBefore = await trashIdSet();
+    const outboxBefore = stamps(await db.syncOutbox.toArray());
+
+    await expect(handle.restore()).rejects.toThrow(UndoDrainedError);
+
+    // Live tables, trash and outbox are all untouched — the chat is NOT re-inserted.
+    expect(await db.chats.get('c1')).toBeUndefined();
+    expect(await db.messages.count()).toBe(0);
+    expect(await trashIdSet()).toEqual(trashBefore);
+    expect(stamps(await db.syncOutbox.toArray())).toEqual(outboxBefore);
   });
 });
