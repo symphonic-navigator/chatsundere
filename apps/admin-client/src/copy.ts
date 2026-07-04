@@ -94,11 +94,13 @@ export const copy = {
   },
   userDetail: {
     backLink: '← Back to all users',
+    profile: 'Operator file',
     role: 'Role',
     status: 'Status',
     createdAt: 'Created',
     lastLogin: 'Last login',
     authMethods: 'Authentication methods',
+    actionsHeader: 'Actions',
     unnamedMethod: 'Unnamed method',
     methodPassphrase: 'Passphrase',
     methodPasskey: 'Passkey',
