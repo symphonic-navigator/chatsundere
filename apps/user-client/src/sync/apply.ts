@@ -10,7 +10,7 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type { BlobRef, SyncCollection, SyncPulledRecord } from '@chatsundere/shared-types';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import type { SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
-import { getClientDataDb } from '../boot/client-data-db.js';
+import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from '../data/queryKeys.js';
 import { queryClient } from '../lib/queryClient.js';
 import { enqueueEager } from './blob-fetch.js';
@@ -452,6 +452,7 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
     async () => {
       if (local !== undefined && local !== null) {
         const now = Date.now();
+        const meta = deriveLegacyTrashMeta(collection, key, local);
         const trashRow: TrashRow = {
           id: `${collection}:${key}`,
           collection,
@@ -459,6 +460,9 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
           row: local,
           deletedAt: now,
           purgeAt: now + THIRTY_DAYS_MS,
+          entityKind: meta.entityKind,
+          rootGroup: meta.rootGroup,
+          parentRef: meta.parentRef,
         };
         await db.trash.put(trashRow);
         await db.table(collection).delete(key);

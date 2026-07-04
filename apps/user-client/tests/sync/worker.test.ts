@@ -418,6 +418,9 @@ describe('runSyncCycle (spec §6)', () => {
       row: {},
       deletedAt: now - 1,
       purgeAt: now - 1,
+      entityKind: 'chat',
+      rootGroup: 'chats:old',
+      parentRef: null,
     });
     await db.trash.put({
       id: 'chats:fresh',
@@ -426,6 +429,9 @@ describe('runSyncCycle (spec §6)', () => {
       row: {},
       deletedAt: now,
       purgeAt: now + 1_000_000,
+      entityKind: 'chat',
+      rootGroup: 'chats:fresh',
+      parentRef: null,
     });
     _setPushTransport(async () => okResponse([], 0));
 

@@ -27,7 +27,7 @@ import type {
   SyncRowMeta,
   TrashRow,
 } from '../boot/client-data-db.js';
-import { getClientDataDb } from '../boot/client-data-db.js';
+import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
 import { getDb } from '../boot/open-db.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
@@ -685,6 +685,7 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
     db.table(prep.collection),
     async () => {
       if (local !== undefined && local !== null) {
+        const meta = deriveLegacyTrashMeta(prep.collection, prep.key, local);
         const trashRow: TrashRow = {
           id: `${prep.collection}:${prep.key}`,
           collection: prep.collection,
@@ -692,6 +693,9 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
           row: local,
           deletedAt: now,
           purgeAt: now + THIRTY_DAYS_MS,
+          entityKind: meta.entityKind,
+          rootGroup: meta.rootGroup,
+          parentRef: meta.parentRef,
         };
         await db.trash.put(trashRow);
         await db.table(prep.collection).delete(prep.key);

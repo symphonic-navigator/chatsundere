@@ -29,7 +29,7 @@ describe('client-data-db — WS-D blob ref/sentinel row fields (§4)', () => {
   });
 
   it('still opens at verno 33 — no schema bump from the interface additions', () => {
-    expect(getClientDataDb().verno).toBe(33);
+    expect(getClientDataDb().verno).toBe(34);
   });
 
   it('round-trips an artefact carrying both refs and both oversize sentinels', async () => {
