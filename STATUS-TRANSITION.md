@@ -1,5 +1,29 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-04 (afternoon) — **FIRST BACKEND TEST UNDERWAY; three
+issues found and handled live.** Chris ran the first end-to-end backend test and
+hit, in order: (1) recurring "Server auth failed" on sign-in — root-caused to the
+OPAQUE server setup being ephemeral because `pnpm dev` starts the backend WITHOUT
+`--env-file=.env.dev` (use `./dev.sh`; footgun logged in follow-ups); no code
+change. (2) A cockpit dead-end — the "open cockpit" `BottomAffordance` was gated
+on `hasMessages`, stranding empty chats (History "continue" + unpinned lazy chat)
+with no way into the composer on touch; **fixed** (`chat-page.tsx`, gate relaxed
+to `!isInteractionMode`, +TDD regression). (3) `OperationError` on send for 8
+providers — orphaned secrets: the fresh-join silently overwrote the standalone
+MK (the known hazard the fresh-join guard `f8f48586` now prevents going forward),
+so pre-existing provider API keys were sealed under a lost MK; recovery is
+re-entering each key (re-seals under the current MK). Deferred: constructive
+error handling for orphaned-secret decrypt (uncaught `OperationError` today).
+(4) xAI + wafer `400 bad_target` via the CORS proxy — both `requires-proxy` with
+a path in `baseUrl`; the transport sent the full baseUrl as `x-cors-proxy-target`
+but `parseTarget` demands a bare origin; **fixed** (`transport.ts` splits origin
+vs path; also heals proxied web-search; llm-unified 421 + proxy 81 green, Larissa
+CLEAR TO COMMIT). Both code fixes squashed on-branch (master untouched), device-
+verified by Chris. NEXT: two-browser sync test (new session). Detail in
+[`follow-ups-index.md`](obsidian/insights/follow-ups-index.md).
+
+---
+
 **Last updated:** 2026-07-04 (morning) — **PRE-TEST STATIC-REVIEW + FIX PASS DONE
 — both audit gates green, ready for Chris's first extensive end-to-end backend
 test.** Ahead of the manual test, a five-agent ultrathink static review swept
