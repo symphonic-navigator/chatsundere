@@ -4,7 +4,89 @@ import { uuidv7 } from 'uuidv7';
 import { type TrashRow, getClientDataDb } from '../boot/client-data-db.js';
 import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
-import { PARENT_FIELD_COLLECTION } from './trash-model.js';
+import { PARENT_FIELD_COLLECTION, type TrashEntityKind } from './trash-model.js';
+
+/** One grouped restore-unit card in the trashcan surface (§3.3). */
+export interface TrashCard {
+  /** The card's identifier = highest trashed ancestor's trash id (`${collection}:${key}`). */
+  cardKey: string;
+  /** The card ROOT's kind — drives icon + title. */
+  entityKind: TrashEntityKind;
+  title: string;
+  /** Descendant tallies; `items` is always present, the rest only when > 0. */
+  counts: { chats?: number; memories?: number; documents?: number; items: number };
+  deletedAt: number;
+}
+
+/** Read a non-empty string field off an unknown snapshot; absent/empty reads as null. */
+function readStr(row: unknown, field: string): string | null {
+  const record = (row ?? {}) as Record<string, unknown>;
+  const value = record[field];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** Derive a card title from the root's collection + snapshot, per its title field (§3.8). */
+function titleOf(root: TrashRow): string {
+  switch (root.collection) {
+    case 'personas':
+    case 'libraries':
+      return readStr(root.row, 'name') ?? root.key;
+    case 'chats':
+      return readStr(root.row, 'title') ?? 'Untitled chat';
+    case 'documents':
+      return readStr(root.row, 'title') ?? root.key;
+    case 'memoryJournal':
+    case 'memoryBody': {
+      const content = readStr(root.row, 'content');
+      if (content === null) return root.key;
+      const trimmed = content.trim();
+      return trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed;
+    }
+    default:
+      return root.key;
+  }
+}
+
+/**
+ * List the trashcan as grouped restore-unit cards (§3.3): one card per highest
+ * trashed ancestor; descendants fold in as counts. Sorted most-recent first.
+ */
+export async function listTrashCards(): Promise<TrashCard[]> {
+  const db = getClientDataDb();
+  const all = await db.trash.toArray();
+  const byId = new Map(all.map((r) => [r.id, r] as const));
+
+  const groups = new Map<string, TrashRow[]>();
+  for (const r of all) {
+    const cardKey = cardKeyOf(r, byId);
+    const bucket = groups.get(cardKey);
+    if (bucket) bucket.push(r);
+    else groups.set(cardKey, [r]);
+  }
+
+  const cards: TrashCard[] = [];
+  for (const [cardKey, members] of groups) {
+    const root = byId.get(cardKey);
+    if (root === undefined) continue; // defensive — cardKey is always a member id
+    const descendants = members.filter((m) => m.id !== cardKey);
+    const counts: TrashCard['counts'] = { items: descendants.length };
+    const chats = descendants.filter((d) => d.entityKind === 'chat').length;
+    const memories = descendants.filter((d) => d.entityKind === 'memory').length;
+    const documents = descendants.filter((d) => d.entityKind === 'document').length;
+    if (chats > 0) counts.chats = chats;
+    if (memories > 0) counts.memories = memories;
+    if (documents > 0) counts.documents = documents;
+    cards.push({
+      cardKey,
+      entityKind: root.entityKind,
+      title: titleOf(root),
+      counts,
+      deletedAt: root.deletedAt,
+    });
+  }
+
+  return cards.sort((a, b) => b.deletedAt - a.deletedAt);
+}
 
 /**
  * The card a trashed row belongs to: its highest TRASHED ancestor's trash id
