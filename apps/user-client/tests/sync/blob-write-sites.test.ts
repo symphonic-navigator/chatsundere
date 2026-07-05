@@ -397,4 +397,57 @@ describe('persona-delete cascade', () => {
     );
     expect(await getClientDataDb().personaAvatars.get('p1')).toBeUndefined();
   });
+
+  it('cascades attachments and artefacts across every owned chat, tombstoning + blob-deleting their media', async () => {
+    setOnline();
+    await seedPersona('p1');
+    await seedChat('c1', 'p1');
+    const artId = await addGeneratedImageArtefact(imageInput('c1'));
+    const art = await getClientDataDb().artefacts.get(artId);
+    await getClientDataDb().attachments.add({
+      id: 'att-1',
+      chatId: 'c1',
+      messageId: 'm-1',
+      origin: 'upload',
+      kbRef: null,
+      kind: 'image',
+      fileName: 'p.png',
+      mime: 'image/png',
+      order: 0,
+      state: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+      blob: new Blob(['i'], { type: 'image/png' }),
+      blobRef: { blobId: 'att-blob-idaaaaaaaaaa', bytes: 30 },
+      visionDescription: null,
+    } as unknown as AttachmentRow);
+    await getClientDataDb().syncOutbox.clear();
+
+    await deletePersonaCascade('p1', { intoTrash: true });
+
+    const rows = await outbox();
+    expect(stamps(ops(rows, 'delete'))).toEqual(
+      [
+        'personas:p1:delete',
+        'chats:c1:delete',
+        `artefacts:${artId}:delete`,
+        'attachments:att-1:delete',
+      ].sort(),
+    );
+    expect(stamps(ops(rows, 'blob-delete'))).toEqual(
+      [
+        'attachments:att-1:blob-delete:att-blob-idaaaaaaaaaa',
+        `artefacts:${artId}:blob-delete:${art?.blobRef?.blobId}`,
+        `artefacts:${artId}:blob-delete:${art?.thumbBlobRef?.blobId}`,
+      ].sort(),
+    );
+    expect(await getClientDataDb().artefacts.count()).toBe(0);
+    expect(await getClientDataDb().attachments.count()).toBe(0);
+
+    const trash = await getClientDataDb().trash.toArray();
+    const attTrash = trash.find((t) => t.collection === 'attachments' && t.key === 'att-1');
+    const artTrash = trash.find((t) => t.collection === 'artefacts' && t.key === artId);
+    expect(attTrash?.rootGroup).toBe('persona:p1');
+    expect(artTrash?.rootGroup).toBe('persona:p1');
+  });
 });

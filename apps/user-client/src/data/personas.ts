@@ -112,16 +112,18 @@ export function useDeletePersona() {
 }
 
 /**
- * Delete a persona and cascade-tombstone its chats, messages, pills, memories
- * (`memoryJournal` + `memoryBody`), and — the one case the avatar IS tombstoned
- * (WS-D §5) — its `personaAvatars` row, with a `blob-delete` for the avatar's
- * bytes. Plain function so the cascade is testable without React;
+ * Delete a persona and cascade-tombstone its chats, messages, pills,
+ * attachments, artefacts, memories (`memoryJournal` + `memoryBody`), and —
+ * the one case the avatar IS tombstoned (WS-D §5) — its `personaAvatars`
+ * row, with a `blob-delete` for the avatar's bytes plus one per attachment
+ * and artefact blob (attachments carry one; artefacts carry a full blob AND
+ * a thumbnail). Plain function so the cascade is testable without React;
  * {@link useDeletePersona} wraps it.
  *
  * `opts.intoTrash` (default off → current behaviour byte-identical) additionally
  * snapshots the persona and its exact cascade descendant set (chats, messages,
- * pills, avatar, memories) into `db.trash` inside the same transaction, before
- * the live rows go (build constraint I-2, §3.4).
+ * pills, attachments, artefacts, avatar, memories) into `db.trash` inside the
+ * same transaction, before the live rows go (build constraint I-2, §3.4).
  */
 export async function deletePersonaCascade(
   id: string,
@@ -143,6 +145,25 @@ export async function deletePersonaCascade(
   const pills =
     messageIds.length > 0 ? await db.pills.where('messageId').anyOf(messageIds).toArray() : [];
   const pillIds = pills.map((p) => p.id);
+  // A persona owns multiple chats, so this mirrors deleteChatCascade's
+  // enumeration (chats.ts:224-234) but with `.anyOf(chatIds)` instead of
+  // `.equals(chatId)`.
+  const attachments =
+    chatIds.length > 0 ? await db.attachments.where('chatId').anyOf(chatIds).toArray() : [];
+  const artefacts =
+    chatIds.length > 0 ? await db.artefacts.where('chatId').anyOf(chatIds).toArray() : [];
+  const attachmentIds = attachments.map((a) => a.id);
+  const artefactIds = artefacts.map((a) => a.id);
+  // Blob ids: attachments carry one blobRef; artefacts carry blobRef AND thumbBlobRef.
+  const attachmentBlobs = attachments
+    .map((a) => ({ key: a.id, blobId: a.blobRef?.blobId ?? null }))
+    .filter((b): b is { key: string; blobId: string } => b.blobId !== null);
+  const artefactBlobs = artefacts.flatMap((a) => {
+    const ids: { key: string; blobId: string }[] = [];
+    if (a.blobRef) ids.push({ key: a.id, blobId: a.blobRef.blobId });
+    if (a.thumbBlobRef) ids.push({ key: a.id, blobId: a.thumbBlobRef.blobId });
+    return ids;
+  });
   const avatar = await db.personaAvatars.get(id);
   const avatarBlobId = avatar?.blobRef?.blobId ?? null;
 
@@ -171,16 +192,30 @@ export async function deletePersonaCascade(
           'chats',
           'messages',
           'pills',
+          'attachments',
+          'artefacts',
           'personaAvatars',
           'memoryJournal',
           'memoryBody',
           'trash',
         ]
-      : ['personas', 'chats', 'messages', 'pills', 'personaAvatars', 'memoryJournal', 'memoryBody'],
+      : [
+          'personas',
+          'chats',
+          'messages',
+          'pills',
+          'attachments',
+          'artefacts',
+          'personaAvatars',
+          'memoryJournal',
+          'memoryBody',
+        ],
     cascade: [
       ...chatIds.map((k) => ({ collection: 'chats' as const, key: k })),
       ...messageIds.map((k) => ({ collection: 'messages' as const, key: k })),
       ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
+      ...attachments.map((a) => ({ collection: 'attachments' as const, key: a.id })),
+      ...artefacts.map((a) => ({ collection: 'artefacts' as const, key: a.id })),
       ...(avatar ? [{ collection: 'personaAvatars' as const, key: id }] : []),
       ...memoryJournalIds.map((k) => ({ collection: 'memoryJournal' as const, key: k })),
       ...memoryBodyIds.map((k) => ({ collection: 'memoryBody' as const, key: k })),
@@ -196,6 +231,10 @@ export async function deletePersonaCascade(
           await snapshotRowIntoTrash(tx, now, 'messages', m.id, m, resolvePersona);
         for (const p of pills)
           await snapshotRowIntoTrash(tx, now, 'pills', p.id, p, resolvePersona);
+        for (const a of attachments)
+          await snapshotRowIntoTrash(tx, now, 'attachments', a.id, a, resolvePersona);
+        for (const a of artefacts)
+          await snapshotRowIntoTrash(tx, now, 'artefacts', a.id, a, resolvePersona);
         if (avatar)
           await snapshotRowIntoTrash(tx, now, 'personaAvatars', id, avatar, resolvePersona);
         for (const m of memoryJournals)
@@ -204,6 +243,8 @@ export async function deletePersonaCascade(
           await snapshotRowIntoTrash(tx, now, 'memoryBody', m.id, m, resolvePersona);
       }
       if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
+      if (attachmentIds.length > 0) await tx.table('attachments').bulkDelete(attachmentIds);
+      if (artefactIds.length > 0) await tx.table('artefacts').bulkDelete(artefactIds);
       if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
       if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
       if (memoryJournalIds.length > 0) await tx.table('memoryJournal').bulkDelete(memoryJournalIds);
@@ -212,6 +253,8 @@ export async function deletePersonaCascade(
       await tx.table('personas').delete(id);
     },
     blobOps: (tx) => {
+      for (const b of attachmentBlobs) enqueueBlobDelete(tx, 'attachments', b.key, b.blobId);
+      for (const b of artefactBlobs) enqueueBlobDelete(tx, 'artefacts', b.key, b.blobId);
       if (avatarBlobId) enqueueBlobDelete(tx, 'personaAvatars', id, avatarBlobId);
     },
   });
