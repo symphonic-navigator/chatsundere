@@ -148,6 +148,24 @@ type RefreshOutcome = 'ok' | 'refused' | 'unreachable';
 let refreshInFlight: Promise<RefreshOutcome> | null = null;
 
 /**
+ * Serialise the refresh round-trip across all same-origin tabs. Two tabs
+ * refreshing concurrently present the same refresh token to the server, which
+ * reads that as reuse and revokes the whole family (F3). An exclusive, blocking
+ * Web Lock makes the second tab wait, so each refresh presents the current
+ * (already-rotated) cookie — no concurrent reuse. Falls back to a direct call
+ * where navigator.locks is unavailable (jsdom, older engines); the module-local
+ * refreshInFlight guard still collapses a within-tab 401 storm.
+ */
+async function withRefreshLock(fn: () => Promise<RefreshOutcome>): Promise<RefreshOutcome> {
+  const locks = globalThis.navigator?.locks;
+  if (locks && typeof locks.request === 'function') {
+    // Exclusive (default mode), blocking — the second tab waits, it does not skip.
+    return locks.request('chatsundere-token-refresh', fn);
+  }
+  return fn();
+}
+
+/**
  * Perform one refresh round-trip and classify it. On success the new access
  * token is applied to the session store here (once, shared by all awaiters); the
  * refused/unreachable decision on what to do about it is left to
@@ -195,7 +213,7 @@ export async function refreshAccessToken(
   baseUrl: string,
   origin: FetchOrigin = 'user',
 ): Promise<boolean> {
-  refreshInFlight ??= classifyRefresh(baseUrl).finally(() => {
+  refreshInFlight ??= withRefreshLock(() => classifyRefresh(baseUrl)).finally(() => {
     refreshInFlight = null;
   });
   const outcome = await refreshInFlight;
