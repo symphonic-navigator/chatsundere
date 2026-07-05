@@ -1,6 +1,43 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-05 (later still) — **Onboarding/auth hardening LANDED on
+**Last updated:** 2026-07-05 (later still, II) — **My Account Admin-tile & dashboard
+reorg LANDED on `full-backend-transition`** (two squashed feature units, ahead of
+the v0.2.0 go-live). Chris asked for a gold, admin-only "Admin" launcher on the My
+Account page plus a tidy-up of the tile grid. **Unit 1 — backend discovery
+(`530ac2d2`):** the auth-service's public `GET /api/v1/config` now advertises an
+optional `adminUrl` (new optional env `ADMIN_PUBLIC_URL`, strict-https, gated exactly
+like `proxyUrl`/`syncUrl`, plus an `'admin'` feature flag); `adminUrl` is carried
+through the `ServerConfig` wire type and the client discovery parser
+(`parseServerConfig`, same https/loopback guard). **Unit 2 — client feature
+(`08832d54`):** a gold, full-width Admin `NavTile` on the dashboard, gated on
+`useAccountLinkStore().role ∈ {admin, primary_admin}` **AND**
+`useDiscoveryStore().config.adminUrl` present, opening the admin-client in a new tab
+(`window.open(url, '_blank', 'noopener,noreferrer')`; the admin-client has its own
+5-branch login — pure launcher, server still enforces `minRole`). Deliberately
+hidden-not-disabled for non-admins (spec §4.2 exception to CLAUDE.md §11, Laura-
+confirmed). The two sign-in-security tiles merged into one **"Passphrase &
+Biometrics"** hub (the biometric screen gains a Change-passphrase section, now
+reachable in every load state — a final-review reachability fix); Recovery Key
+re-homed to the bottom row and recoloured pink→purple; the 2×3 grid given a coherent
+device(pink)/server(blue)/exit(purple) colour scheme. Built spec→**Laura spec-pass
+PASS** (SOFT-1 tile-legibility + SOFT-2 "opens the admin console" meta folded in)→
+plan→**subagent-driven (5 TDD tasks + 1 plan-gap test-fix + 1 final-fix)**→**opus
+whole-branch READY** + **Larissa CLEAR TO SQUASH** (auth-service diff: no
+info-disclosure/SSRF, validation parity exact, zero-knowledge untouched). Gates: `pnpm
+typecheck --force` **14/14**; user-client vitest at the **8** Node-localStorage
+baseline (account-page 14/14 + account-biometric 5/5, incl. 5 new page-level admin-tile
+gating tests); auth-service `config.test.ts` **10/10**, full suite baseline unchanged
+(14 pre-existing DB-integration fails, none config/env). **Plan gap caught at the
+integrated gate:** two pre-existing test files under `apps/user-client/tests/routes/`
+(planning searched `src/routes/` only) encoded the old grid/crumb and broke; fixed +
+extended with admin-gating coverage. **NOT pushed (Chris pushes after device-verifying
+spec §11: the role-state matrix — regular user, local-only, admin+adminUrl, admin
+without adminUrl — only checkable on a real backend).** Deferred Minors (non-blocking):
+3rd conditional-spread repetition in `server-config.ts` (revisit at a 4th field);
+inert `colour="blue"` on the gold tile (required prop, `gold` overrides). Spec/plan:
+[[../superpowers/specs/2026-07-05-account-admin-tile-and-reorg-design]],
+[[../superpowers/plans/2026-07-05-account-admin-tile-and-reorg]]. Prior entry:
+2026-07-05 (later still) — **Onboarding/auth hardening LANDED on
 `full-backend-transition`** (two feature units, ahead of the v0.2.0 go-live).
 **Unit A — F3 (`ab30e903`):** the client token-refresh round-trip is now serialised
 across tabs by an exclusive `navigator.locks` lock (`chatsundere-token-refresh`),
