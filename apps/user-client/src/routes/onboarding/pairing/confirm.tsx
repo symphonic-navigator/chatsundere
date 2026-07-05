@@ -6,7 +6,12 @@ import {
   setBiometricPromptDue,
   startJoinByPairing,
 } from '@chatsundere/crypto';
-import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import {
+  maybeProbeLinkedServer,
+  useAccountLinkStore,
+  useConnectivityStore,
+  useSessionStore,
+} from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
@@ -108,6 +113,11 @@ function PairingConfirmInner() {
       await setBiometricPromptDue(getDb());
       const linkedRow = await getLinkedAccount(getDb());
       if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+      // The device is now linked, so this probe (unlike any earlier onboarding
+      // probe) actually populates the discovery store — the sync engine's
+      // canRunCycle() would otherwise no-op until a reload or connectivity
+      // event happens to fire, leaving a freshly-paired device in an empty vault.
+      maybeProbeLinkedServer();
       navigate('/app', { replace: true });
     } catch (err) {
       const mapped = mapError(err);

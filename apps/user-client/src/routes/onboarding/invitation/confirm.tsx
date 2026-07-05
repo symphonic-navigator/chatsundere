@@ -7,7 +7,12 @@ import {
   setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
-import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import {
+  maybeProbeLinkedServer,
+  useAccountLinkStore,
+  useConnectivityStore,
+  useSessionStore,
+} from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
@@ -176,6 +181,10 @@ function InvitationConfirmInner() {
         await setBiometricPromptDue(getDb());
         const linkedRow = await getLinkedAccount(getDb());
         if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+        // The device is now linked, so this probe actually populates the
+        // discovery store (unlike any earlier onboarding probe) — kick it
+        // before the sync cycle so canRunCycle() has a config to read.
+        maybeProbeLinkedServer();
         // A fresh link seeds the engine state for this server, then kicks a first
         // sync cycle so the local vault backfills onto the newly-linked account.
         await resetEngineStateForNewLink();
@@ -212,6 +221,9 @@ function InvitationConfirmInner() {
         await setBiometricPromptDue(getDb());
         const linkedRow = await getLinkedAccount(getDb());
         if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+        // Kick the probe early so discovery is populated by the time the user
+        // finishes the recovery reveal and lands in /app.
+        maybeProbeLinkedServer();
         navigate(navTarget('/onboarding/invitation/recovery'), { replace: true });
       }
     } catch (err) {

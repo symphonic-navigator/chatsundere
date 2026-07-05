@@ -6,6 +6,7 @@ import {
   setBiometricPromptDue,
 } from '@chatsundere/crypto';
 import {
+  maybeProbeLinkedServer,
   probeServer,
   useAccountLinkStore,
   useConnectivityStore,
@@ -81,6 +82,11 @@ export function OnboardingRecovery() {
       await setBiometricPromptDue(getDb());
       const linkedRow = await getLinkedAccount(getDb());
       if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+      // The device is now linked, so this probe actually populates the
+      // discovery store — the sync engine's canRunCycle() would otherwise
+      // no-op until a reload or connectivity event happens to fire, leaving a
+      // freshly-recovered device in an empty vault.
+      maybeProbeLinkedServer();
       navigate('/app', { replace: true });
     } catch (err) {
       if (err instanceof CryptoError && err.code === 'conflict') {
