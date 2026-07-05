@@ -38,7 +38,7 @@ export const copy = {
     },
     recoveryStep: {
       title: 'Save your recovery key.',
-      body: 'This is the only way back if you forget your passphrase. We cannot see it and we cannot recover it — once you leave this screen it is gone. Copy it now and store it somewhere safe: on paper, in a password manager, anywhere only you can reach.',
+      body: 'This is your only way back in if you ever lose every device or forget your passphrase. We cannot see it and we cannot recover it — once you leave this screen, it is gone. Save it in your password manager (Bitwarden, Proton Pass, …); their notes field is made for exactly this.',
       confirmLabel: "I've saved my recovery key somewhere safe.",
       finishCta: 'Open Chatsundere',
       copyLabel: 'Copy to clipboard',
