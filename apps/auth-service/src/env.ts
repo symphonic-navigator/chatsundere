@@ -15,6 +15,24 @@ import {
   transform,
 } from 'valibot';
 
+/**
+ * Mirrors the client discovery parser's acceptance rule (`isAcceptableUrl` in
+ * ui-shared `server-config.ts`): https on any host, or http only on a loopback
+ * host. Keep the two in sync — they define the same "valid public URL" contract
+ * on opposite ends of the wire.
+ */
+function isHttpsOrLoopbackHttp(raw: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === 'https:') return true;
+  if (parsed.protocol !== 'http:') return false;
+  return ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+}
+
 const envSchema = object({
   NODE_ENV: string(),
   PORT: pipe(
@@ -47,9 +65,9 @@ const envSchema = object({
     array(string()),
   ),
   // Public URLs surfaced by GET /api/v1/config so the client never hard-codes
-  // topology. Each of proxy, sync, and admin is an OPTIONAL absolute https URL,
-  // independently configurable — an operator may run any subset; the client
-  // drives "disabled over hidden" from the features array (spec §7 / sync spec §11).
+  // topology. Each is OPTIONAL and independently configurable — an operator may
+  // run any subset; the client drives "disabled over hidden" from the features
+  // array (spec §7 / sync spec §11). Proxy and sync require absolute https.
   PROXY_PUBLIC_URL: optional(
     pipe(
       string(),
@@ -64,11 +82,19 @@ const envSchema = object({
       check((u) => u.startsWith('https://'), 'SYNC_PUBLIC_URL must be an absolute https URL'),
     ),
   ),
+  // Admin tolerates http on a loopback host as well as https, mirroring the
+  // client parser's own rule (isHttpsOrLoopbackHttp). Unlike proxy/sync — which
+  // the client reaches via fetch transports — the client OPENS adminUrl in a new
+  // tab (a real browser navigation), so a dev admin-client served over
+  // http://localhost must be advertisable. Non-loopback http is still refused.
   ADMIN_PUBLIC_URL: optional(
     pipe(
       string(),
       url(),
-      check((u) => u.startsWith('https://'), 'ADMIN_PUBLIC_URL must be an absolute https URL'),
+      check(
+        isHttpsOrLoopbackHttp,
+        'ADMIN_PUBLIC_URL must be an https URL, or http on a loopback host',
+      ),
     ),
   ),
   // Mirrors the sync-service's S3 presence for the /api/v1/config "blobs" flag

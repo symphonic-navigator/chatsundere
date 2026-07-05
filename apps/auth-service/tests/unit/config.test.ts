@@ -90,8 +90,23 @@ describe('GET /api/v1/config', () => {
     expect(body.features).not.toContain('admin');
   });
 
-  test('a non-https ADMIN_PUBLIC_URL fails env-load', async () => {
+  test('a non-loopback http ADMIN_PUBLIC_URL fails env-load', async () => {
     process.env.ADMIN_PUBLIC_URL = 'http://insecure.example';
+    expect(() => createServer()).toThrow();
+  });
+
+  test('accepts and emits an http ADMIN_PUBLIC_URL on a loopback host (dev)', async () => {
+    process.env.ADMIN_PUBLIC_URL = 'http://localhost:5174/admin/';
+    const res = await createServer().request('/api/v1/config');
+    const body = (await res.json()) as { adminUrl?: string; features: string[] };
+    expect(body.adminUrl).toBe('http://localhost:5174/admin/');
+    expect(body.features).toContain('admin');
+  });
+
+  test('rejects a non-loopback host masquerading as loopback', async () => {
+    // The loopback allow-list matches on the parsed hostname, so a suffix like
+    // localhost.evil.com does not slip through as http.
+    process.env.ADMIN_PUBLIC_URL = 'http://localhost.evil.com/admin/';
     expect(() => createServer()).toThrow();
   });
 });
