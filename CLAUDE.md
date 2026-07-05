@@ -290,7 +290,7 @@ Load these when their topic comes up. Do not preload.
 
 Orientation across sessions lives in two files, split by side: `obsidian/STATUS-CLIENT-ONLY.md` (client/standalone-mode work) and `obsidian/STATUS-BACKEND.md` (server-side work). Each carries three things: what is done, what is briefed-but-not-yet-implemented, and what we agreed to do next. Anything more detailed lives in [`follow-ups-index.md`](obsidian/insights/follow-ups-index.md), ADRs, briefs, or git history.
 
-**Start of every session:** read both STATUS files before anything else. Synthesise them in two sentences to Chris so we both agree on where we are before we touch a file. If the synthesis surprises Chris, the file is stale — pause and update it before continuing.
+**Start of every session:** read both STATUS files before anything else. Synthesise them in two sentences to Chris so we both agree on where we are before we touch a file. If the synthesis surprises Chris, the file is stale — pause and update it before continuing. Then skim [`obsidian/insights/follow-ups-index.md`](obsidian/insights/follow-ups-index.md) — the live ledger of every deferred item across the project (security, design, implementation, hygiene). It is the standing reminder that open work exists; check whether anything there has become directly actionable given where we now are.
 
 **End of every session:** update the relevant STATUS file to reflect what changed. Move items between the "Done", "Briefed", and "Doing now" sections. Refresh the "Next session" block. Update the `Last updated:` line. Commit the change alongside or just after the squash it summarises.
 
