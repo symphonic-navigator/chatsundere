@@ -300,6 +300,62 @@ describe('failed put blocks only its own record (WS-D §5)', () => {
   });
 });
 
+describe('seal-time-minted blobs are healed + uploaded, not dropped (WS-D §5 Option A)', () => {
+  it('holds the record back cycle 1 (heal + enqueue put), pushes it with a stable ref cycle 2', async () => {
+    const db = getClientDataDb();
+    // A local-only-era attachment restored after linking: bytes present, but NO
+    // blobRef — the seal-time mint fallback fires (blob-transform.ts:211-216).
+    await db.attachments.put({
+      id: 'att1',
+      chatId: 'c1',
+      messageId: 'm1',
+      blob: new Blob(['hello']),
+    } as never);
+    await db.syncRows.put({ collection: 'attachments', key: 'att1', rev: 4, ciphertextHash: 'h' });
+    await addRecord('attachments', 'att1', 'upsert');
+
+    const uploaded: string[] = [];
+    installBlobTransport({
+      putBlob: async (blobId) => {
+        uploaded.push(blobId);
+        return { status: 'created' };
+      },
+    });
+    const push = vi.fn(async (records: SyncPushRecord[]) =>
+      okResponse(
+        records.map(() => 6),
+        6,
+      ),
+    );
+    _setPushTransport(push);
+
+    // ===== Cycle 1: heal the live row + enqueue the put, DO NOT push =====
+    await drainOutbox();
+
+    expect(push).not.toHaveBeenCalled(); // record held back — its bytes are not up yet
+    const healed = await db.attachments.get('att1');
+    const ref = (healed as unknown as { blobRef?: BlobRef }).blobRef;
+    expect(ref).toBeDefined();
+    if (!ref) throw new Error('expected the heal to write a blobRef onto the live row');
+    const mintedId = ref.blobId;
+    const rows1 = await outbox();
+    // The blob-put was enqueued for the minted id...
+    expect(rows1.some((r) => r.op === 'blob-put' && r.blobId === mintedId)).toBe(true);
+    // ...and the record upsert is still queued (it re-seals next cycle).
+    expect(rows1.some((r) => r.op === 'upsert' && r.key === 'att1')).toBe(true);
+
+    // ===== Cycle 2: upload the blob (phase 1) THEN push the record =====
+    await drainOutbox();
+
+    expect(uploaded).toContain(mintedId); // bytes uploaded BEFORE the record push (§11.5)
+    expect(push).toHaveBeenCalledTimes(1);
+    // The id is stable across cycles — no re-mint churn.
+    const after = await db.attachments.get('att1');
+    expect((after as unknown as { blobRef?: BlobRef }).blobRef?.blobId).toBe(mintedId);
+    expect(await outbox()).toHaveLength(0);
+  });
+});
+
 describe('coalescing + live-row-only reads (WS-D §5, Larissa L-1)', () => {
   it('cancels a blob-put + blob-delete for the same never-pushed blobId to nothing', async () => {
     const B1 = id22('coa1');

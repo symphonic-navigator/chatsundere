@@ -47,9 +47,15 @@ import {
   resetBlobRepairCycle,
   resolveBlobFailure,
 } from './blob-repair.js';
-import { readBlobBytesById, resolveBlobFieldById } from './blob-transform.js';
+import {
+  type NewBlob,
+  isBlobRef,
+  readBlobBytesById,
+  resolveBlobFieldById,
+} from './blob-transform.js';
 import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
 import { markDead } from './dead-keys.js';
+import { enqueueBlobPut } from './enqueue.js';
 import { resetEngineStateForNewLink } from './link-reset.js';
 import {
   type CoalescedEntry,
@@ -366,7 +372,17 @@ export async function drainOutbox(): Promise<DrainResult> {
       continue;
     }
     const entry: CoalescedEntry = { ...group, row, baseRev };
-    prepared.push(await prepareRecord(crypto, mk, entry));
+    const prep = await prepareRecord(crypto, mk, entry);
+    if (prep.newBlobs.length > 0) {
+      // Seal-time mint fallback (WS-D §5, Option A): heal the live row with the
+      // minted refs + enqueue their PUTs, then HOLD this record back this cycle
+      // (keep its outbox entry). It re-seals next cycle with the now-stable ref
+      // (no re-mint), and Phase 1 uploads the blob BEFORE the record is pushed
+      // (§11.5). Never push a record carrying a ref whose bytes are not uploaded.
+      await healSealMintedBlobs(group.collection, group.key, prep.newBlobs);
+      continue;
+    }
+    prepared.push(prep);
   }
 
   let head: number | null = null;
@@ -502,6 +518,33 @@ async function drainBlobPut(
   };
   const disposition = await resolveBlobFailure(putFailureFor(result), ctx, blobRepairDeps());
   return { ...dispositionToDrain(disposition), accepted: false };
+}
+
+/**
+ * Consume the seal-time mint fallback (WS-D §5, Option A): write each minted
+ * `BlobRef` back onto the live row and enqueue its `blob-put`, both in ONE
+ * transaction. The caller holds the record back this cycle (keeps its outbox
+ * entry) so Phase 1 uploads the blob before the record is ever pushed (§11.5),
+ * and the stable ref means the next re-seal takes the ref-reuse branch — no id
+ * churn. Guarded so a ref a concurrent write-site mint may already have set is
+ * never clobbered (and no orphan blob-put is queued for an id the row no longer
+ * names).
+ */
+async function healSealMintedBlobs(
+  collection: SyncCollection,
+  key: string,
+  newBlobs: NewBlob[],
+): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', [db.table(collection), db.syncOutbox], async (tx) => {
+    const row = await tx.table(collection).get(key);
+    if (!row) return; // row gone — the held record drops next cycle
+    for (const nb of newBlobs) {
+      if (isBlobRef((row as Record<string, unknown>)[nb.refField])) continue;
+      await tx.table(collection).update(key, { [nb.refField]: nb.ref });
+      enqueueBlobPut(tx, collection, key, nb.blobId);
+    }
+  });
 }
 
 /** Map a non-2xx PUT verdict to the §7 repair matrix's failure descriptor. */

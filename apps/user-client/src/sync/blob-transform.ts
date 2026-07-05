@@ -79,6 +79,10 @@ export interface NewBlob {
   blobId: string;
   /** The plaintext `Blob` to seal + PUT (named `bytes` per the WS-D §4 contract). */
   bytes: Blob;
+  /** The persisted `BlobRef` field this blob belongs to (drain write-back). */
+  refField: string;
+  /** The ref to persist onto the live row (drain write-back). */
+  ref: BlobRef;
 }
 
 /** The seal-side result: the wire row (no bytes) plus any newly-minted puts. */
@@ -171,7 +175,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isBlobRef(value: unknown): value is BlobRef {
+/** Whether a value is a persisted `BlobRef` (blobId + size). */
+export function isBlobRef(value: unknown): value is BlobRef {
   return isRecord(value) && typeof value.blobId === 'string' && typeof value.bytes === 'number';
 }
 
@@ -212,7 +217,7 @@ export function stripBlobsForSeal(collection: SyncCollection, row: unknown): Str
         const blobId = mintBlobId();
         const ref: BlobRef = { blobId, bytes: bytes.size + SEALED_BLOB_OVERHEAD_BYTES };
         wireRow[spec.ref] = ref;
-        newBlobs.push({ blobId, bytes });
+        newBlobs.push({ blobId, bytes, refField: spec.ref, ref });
       }
     } else if (spec.nullableRef) {
       // Avatar removal — a first-class "no avatar" ref, NEVER a tombstone (§4).
