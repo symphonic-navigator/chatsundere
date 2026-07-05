@@ -58,6 +58,7 @@ export function UsersListScreen() {
         <h1 className="text-3xl font-medium">{copy.users.title}</h1>
         <Link
           to="/invitations"
+          state={{ openCreate: true }}
           className="rounded-md bg-[var(--color-mauve)] px-4 py-2 text-[var(--color-base)]"
         >
           {copy.users.createInvitation}

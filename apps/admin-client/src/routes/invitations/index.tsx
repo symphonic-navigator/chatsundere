@@ -4,7 +4,8 @@ import type {
   AdminInvitationStatus,
 } from '@chatsundere/shared-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
 import { ConsoleChip, Panel, SkeletonPanel } from '../../components/console.js';
 import { copy } from '../../copy.js';
@@ -13,11 +14,29 @@ import { formatRelative } from '../../lib/format.js';
 import { InvitationCreateModal } from './create-modal.js';
 import { InvitationRevealScreen } from './reveal-screen.js';
 
+interface InvitationsNavState {
+  openCreate?: boolean;
+}
+
 export function InvitationsScreen() {
   const qc = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<AdminInvitationStatus | 'all'>('all');
-  const [modalOpen, setModalOpen] = useState(false);
+  // The Users-page "Create invitation" button navigates here with an
+  // openCreate flag so the create flow opens directly instead of forcing a
+  // second click. Read once, then consume the flag so a refresh does not
+  // reopen the modal.
+  const [modalOpen, setModalOpen] = useState(
+    () => (location.state as InvitationsNavState | null)?.openCreate === true,
+  );
   const [revealed, setRevealed] = useState<AdminCreateInvitationResponse | null>(null);
+
+  useEffect(() => {
+    if ((location.state as InvitationsNavState | null)?.openCreate) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location, navigate]);
 
   const { data, error, refetch } = useQuery({
     queryKey: ['invitations', filter],
