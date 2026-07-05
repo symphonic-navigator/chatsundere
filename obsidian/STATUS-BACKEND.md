@@ -1,6 +1,42 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-05 — **Admin-console overhaul BUILT** on the overnight
+**Last updated:** 2026-07-05 (later) — **Frontend↔backend integration audited,
+deviceless-recovery analysed, recovery-key safety communication SHIPPED** (commit
+`e184413`, client-only copy) — ahead of a planned **v0.2.0 whole-backend go-live in
+~48 h** (Chris, from ~10:00 CEST). **(1) Integration audit (two read-only sweeps of
+the real code, not the docs):** the user-client on `full-backend-transition` is
+**fully wired against all three services + blob transport** — no missing frontend
+code, no stubs. Sync engine (`apps/user-client/src/sync/`, 43 files, Dexie **v34**,
+push/pull/doorbell/outbox live at boot); proxy client (header-swap
+`x-chatsundere-authorization` + `GET /api/v1/config` discovery); onboarding
+QR/manual/local all on the **new** `POST /api/v1/join/{start,finish}` (the old
+`linkOpaque` is gone); step-up 401-interceptor + `<StepUpModal>`; blob
+put/get/delete + eager-fetch. **Blobs are live locally** (Chris syncs images via
+`./dev.sh` + MinIO). Remaining work is **server scharfschalten + live verification**
+(smoke-test the three onboarding paths, doorbell WSS, step-up tier mapping,
+discovery feature-flag consistency), not client code. **(2) Deviceless recovery —
+verdict:** **YES via the recovery key**, NO via passphrase alone. The full chain
+works: onboarding matrix "I lost my devices" → `recoverFromScratch` unwraps
+`users.wrapped_mk_recovery` after a recovery-HMAC proof → OPAQUE re-register under a
+new passphrase → fresh device is fully linked → pull-loop `since=0` backfills the
+whole ciphertext vault. **No bridge device needed.** The gap: a passphrase-only
+fresh-device flow does **not** exist even though the passphrase-wrapped MK sits
+server-side — and **Chris's decision is C: keep it that way.** Rationale: it
+preserves an out-of-the-box 2FA property (credentials + *either* a device *or* the
+recovery key); opening a passphrase path would make the passphrase a single point of
+failure. Instead we **communicate recovery-key care better** rather than soften the
+guarantee (empower, don't infantilise). Known silent-loss trap: login can succeed
+into an *empty* vault if the corpus was never synced. **(3) Shipped:** recovery-key
+safety copy — reveal `body` reworked (`lib/copy.ts:41`, covers both onboarding
+reveals via shared `StepRecoveryReveal`) now names the "lose every device" case + a
+password-manager (Bitwarden/Proton Pass) recommendation; a quiet always-on note in
+`routes/app/account/recovery.tsx`; and a Discord-ready **user safety guide**
+(`obsidian/guides/safety.md`) explaining zero-knowledge ("the admin *cannot* help —
+the server only sees ciphertext") + the PM-notes recommendation, for the SCAI
+channel. Gates: `pnpm typecheck --force` **14/14**, Biome clean. Not a Larissa path
+(client-only, no crypto/auth/sync/proxy change); Laura consciously skipped (copy on
+existing screens, no new flow). **Next (fresh context window): the tests.** Prior
+entry: 2026-07-05 (earlier) — **Admin-console overhaul BUILT** on the overnight
 remote branch `claude/admin-console-live-wiring-xwn71o` (from
 `full-backend-transition`; parallel to the trashcan run on
 `claude/trashcan-tombstone-throttle-haqiwv`, disjoint file surface — the two only
