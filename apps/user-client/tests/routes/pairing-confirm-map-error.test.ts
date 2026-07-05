@@ -46,3 +46,70 @@ describe('PairingConfirm mapError — wrong passphrase surfaces inline (Task 2)'
     expect(JoinError.OpaqueAuthenticationFailed).toBe('opaque_authentication_failed');
   });
 });
+
+describe('PairingConfirm mapError — join lifecycle codes (F4/F5)', () => {
+  it('maps code_expired to a specific fatal screen', () => {
+    expect(mapError(new HttpError(410, 'code_expired', 'gone'))).toEqual({
+      kind: 'screen',
+      screen: {
+        kind: 'fatal',
+        message:
+          'This pairing code has expired. Generate a fresh one on your other device and enter it here.',
+      },
+    });
+  });
+
+  it('maps code_already_redeemed to a specific fatal screen', () => {
+    expect(mapError(new HttpError(410, 'code_already_redeemed', 'gone'))).toEqual({
+      kind: 'screen',
+      screen: {
+        kind: 'fatal',
+        message:
+          'This pairing code has already been used. Generate a new one on your other device.',
+      },
+    });
+  });
+
+  it('maps code_attempts_exhausted to a specific fatal screen', () => {
+    expect(mapError(new HttpError(429, 'code_attempts_exhausted', 'locked'))).toEqual({
+      kind: 'screen',
+      screen: {
+        kind: 'fatal',
+        message:
+          'Too many tries — this code is now locked for safety. Generate a new one on your other device.',
+      },
+    });
+  });
+
+  it('maps rate_limited to the wait-a-minute fatal screen', () => {
+    expect(mapError(new HttpError(429, 'rate_limited', 'slow down'))).toEqual({
+      kind: 'screen',
+      screen: {
+        kind: 'fatal',
+        message: 'Too many attempts. Please wait a minute, then try again.',
+      },
+    });
+  });
+
+  it('maps session_expired to the start-again fatal screen', () => {
+    expect(mapError(new HttpError(410, 'session_expired', 'expired'))).toEqual({
+      kind: 'screen',
+      screen: {
+        kind: 'fatal',
+        message:
+          'This took a little too long and the secure session timed out. Please start again.',
+      },
+    });
+  });
+
+  // Drift guards — pin the new constants to the exact strings the server emits.
+  // Sources span two files: code_expired / code_already_redeemed /
+  // code_attempts_exhausted from apps/auth-service/src/codes/rate-limit.ts, and
+  // rate_limited from apps/auth-service/src/middleware/rate-limit.ts.
+  it('keeps the new JoinError constants aligned with the wire strings', () => {
+    expect(JoinError.RateLimited).toBe('rate_limited');
+    expect(JoinError.CodeExpired).toBe('code_expired');
+    expect(JoinError.CodeAlreadyRedeemed).toBe('code_already_redeemed');
+    expect(JoinError.CodeAttemptsExhausted).toBe('code_attempts_exhausted');
+  });
+});

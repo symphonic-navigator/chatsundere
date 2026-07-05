@@ -70,9 +70,12 @@ export const JoinError = {
   InvalidCodeFormat: 'invalid_code_format',
   KindMismatch: 'kind_mismatch',
   CodeNotFoundOrExpired: 'code_not_found_or_expired',
+  CodeExpired: 'code_expired',
+  CodeAlreadyRedeemed: 'code_already_redeemed',
+  CodeAttemptsExhausted: 'code_attempts_exhausted',
+  RateLimited: 'rate_limited',
   UsernameTaken: 'username_taken',
   OpaqueAuthenticationFailed: 'opaque_authentication_failed',
-  RateLimitExceeded: 'rate_limit_exceeded',
   SessionExpired: 'session_expired',
   WrappingInvariantViolated: 'wrapping_invariant_violated',
 } as const;

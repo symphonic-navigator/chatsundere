@@ -7,6 +7,7 @@ import {
   setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
+import { JoinError } from '@chatsundere/shared-types';
 import {
   maybeProbeLinkedServer,
   useAccountLinkStore,
@@ -423,7 +424,7 @@ type SubmitMapped =
   | { kind: 'passphrase_inline'; message: string }
   | { kind: 'screen'; screen: Extract<Screen, { kind: 'kind_mismatch' | 'fatal' }> };
 
-function mapSubmitError(err: unknown): SubmitMapped {
+export function mapSubmitError(err: unknown): SubmitMapped {
   if (err instanceof CryptoError) {
     if (err.code === 'conflict') {
       return {
@@ -459,16 +460,52 @@ function mapSubmitError(err: unknown): SubmitMapped {
         },
       };
     }
-    if (err.code === 'rate_limit_exceeded') {
+    if (err.code === JoinError.CodeExpired) {
       return {
         kind: 'screen',
-        screen: { kind: 'fatal', message: 'Too many attempts. Please wait a minute.' },
+        screen: {
+          kind: 'fatal',
+          message: 'This invitation has expired. Ask the person who invited you for a fresh code.',
+        },
       };
     }
-    if (err.code === 'session_expired') {
+    if (err.code === JoinError.CodeAlreadyRedeemed) {
       return {
         kind: 'screen',
-        screen: { kind: 'fatal', message: 'Your session timed out. Please start again.' },
+        screen: {
+          kind: 'fatal',
+          message:
+            'This invitation has already been used. Ask the person who invited you for a new one.',
+        },
+      };
+    }
+    if (err.code === JoinError.CodeAttemptsExhausted) {
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'Too many tries — this invitation is now locked for safety. Ask the person who invited you for a new one.',
+        },
+      };
+    }
+    if (err.code === JoinError.RateLimited) {
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message: 'Too many attempts. Please wait a minute, then try again.',
+        },
+      };
+    }
+    if (err.code === JoinError.SessionExpired) {
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'This took a little too long and the secure session timed out. Please start again.',
+        },
       };
     }
     if (err.status >= 500 || err.status === 0) {

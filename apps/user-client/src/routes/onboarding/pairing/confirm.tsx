@@ -255,10 +255,49 @@ export function mapError(err: unknown): Mapped {
           message: 'Code not recognised. It may have expired, been used, or contain a typo.',
         },
       };
-    if (err.code === 'rate_limit_exceeded')
+    if (err.code === JoinError.CodeExpired)
       return {
         kind: 'screen',
-        screen: { kind: 'fatal', message: 'Too many attempts. Please wait a minute.' },
+        screen: {
+          kind: 'fatal',
+          message:
+            'This pairing code has expired. Generate a fresh one on your other device and enter it here.',
+        },
+      };
+    if (err.code === JoinError.CodeAlreadyRedeemed)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'This pairing code has already been used. Generate a new one on your other device.',
+        },
+      };
+    if (err.code === JoinError.CodeAttemptsExhausted)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'Too many tries — this code is now locked for safety. Generate a new one on your other device.',
+        },
+      };
+    if (err.code === JoinError.RateLimited)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message: 'Too many attempts. Please wait a minute, then try again.',
+        },
+      };
+    if (err.code === JoinError.SessionExpired)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'This took a little too long and the secure session timed out. Please start again.',
+        },
       };
     if (err.code === 'wrapping_invariant_violated')
       return {
