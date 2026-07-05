@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InlineEditRow } from '../../src/routes/app/account/InlineEditRow.js';
 
 // ─── Module mocks for AccountPage ────────────────────────────────────────────
 // These must come before the dynamic import below.
+
+const stores = vi.hoisted(() => ({
+  role: null as 'primary_admin' | 'admin' | 'user' | null,
+  adminUrl: undefined as string | undefined,
+}));
 
 vi.mock('@chatsundere/crypto', () => ({
   CryptoError: class CryptoError extends Error {
@@ -31,8 +36,13 @@ vi.mock('@chatsundere/ui-shared', () => ({
     ),
     { getState: () => ({ session: { username: 'navigator' }, mk: null }) },
   ),
-  useAccountLinkStore: vi.fn((selector: (s: { linkStatus: string }) => unknown) =>
-    selector({ linkStatus: 'local-only' }),
+  useAccountLinkStore: vi.fn(
+    (selector: (s: { linkStatus: string; role: string | null }) => unknown) =>
+      selector({ linkStatus: 'local-only', role: stores.role }),
+  ),
+  useDiscoveryStore: vi.fn(
+    (selector: (s: { config: { adminUrl?: string; features: string[] } | null }) => unknown) =>
+      selector({ config: stores.adminUrl ? { adminUrl: stores.adminUrl, features: [] } : null }),
   ),
 }));
 
@@ -153,16 +163,67 @@ describe('InlineEditRow', () => {
 // ─── AccountPage render tests ─────────────────────────────────────────────────
 
 describe('AccountPage', () => {
+  beforeEach(() => {
+    stores.role = null;
+    stores.adminUrl = undefined;
+    mockNavigate.mockClear();
+  });
+
   it('renders all six matrix tiles with the correct destinations', async () => {
     renderPage();
     // NavTile renders as role="button" with aria-label matching the label prop.
     const tile = (label: string) => screen.getByRole('button', { name: label });
-    expect(tile('Biometric')).toBeInTheDocument();
-    expect(tile('Recovery Key')).toBeInTheDocument();
+    expect(tile('Passphrase & Biometrics')).toBeInTheDocument();
+    expect(tile('Recently deleted')).toBeInTheDocument();
     expect(tile('Server linking')).toBeInTheDocument();
     expect(tile('About')).toBeInTheDocument();
-    expect(tile('Change passphrase')).toBeInTheDocument();
+    expect(tile('Recovery Key')).toBeInTheDocument();
     expect(tile('Logout')).toBeInTheDocument();
+  });
+
+  it('hides the Admin tile for a local-only user (no role)', async () => {
+    stores.role = null;
+    stores.adminUrl = 'https://admin.example';
+    renderPage();
+    await screen.findByRole('button', { name: 'Logout' });
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
+  });
+
+  it('hides the Admin tile for a regular user even when a URL is configured', async () => {
+    stores.role = 'user';
+    stores.adminUrl = 'https://admin.example';
+    renderPage();
+    await screen.findByRole('button', { name: 'Logout' });
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
+  });
+
+  it('hides the Admin tile for an admin when no admin URL is configured', async () => {
+    stores.role = 'admin';
+    stores.adminUrl = undefined;
+    renderPage();
+    await screen.findByRole('button', { name: 'Logout' });
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
+  });
+
+  it('shows the gold Admin tile for an admin on a backend that advertises one', async () => {
+    stores.role = 'admin';
+    stores.adminUrl = 'https://admin.example';
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Admin' })).toBeInTheDocument();
+    expect(screen.getByText('opens the admin console')).toBeInTheDocument();
+  });
+
+  it('opens the admin console in a new tab when the Admin tile is activated', async () => {
+    stores.role = 'primary_admin';
+    stores.adminUrl = 'https://admin.example';
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderPage();
+    const adminTile = await screen.findByRole('button', { name: 'Admin' });
+    fireEvent.click(adminTile);
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith('https://admin.example', '_blank', 'noopener,noreferrer'),
+    );
+    open.mockRestore();
   });
 
   it('Logout tile carries the discoverability meta text', async () => {

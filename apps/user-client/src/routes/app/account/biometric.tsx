@@ -7,6 +7,7 @@ import {
 } from '@chatsundere/crypto';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
 import { Button } from '../../../components/ui/Button.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
@@ -62,6 +63,7 @@ function credKey(id: Uint8Array): string {
  */
 export function BiometricPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('biometric');
+  const navigate = useNavigate();
 
   const session = useSessionStore((s) => s.session);
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
@@ -215,7 +217,7 @@ export function BiometricPage(): JSX.Element {
   return (
     <PageScaffold
       back="/app/account"
-      crumbs={[{ label: 'My Account', to: '/app/account' }, { label: 'Biometric' }]}
+      crumbs={[{ label: 'My Account', to: '/app/account' }, { label: 'Passphrase & Biometrics' }]}
       onHelp={onHelp}
     >
       {helpOverlay}
@@ -354,6 +356,19 @@ export function BiometricPage(): JSX.Element {
             </div>
           </>
         )}
+
+        {/* Change passphrase — the second half of sign-in security (spec §5).
+            Rendered in every load state: it depends only on `navigate`, never
+            on the passkey list, so it must not vanish if listing fails. */}
+        <div className="space-y-2 border-t border-aurora-700/20 pt-6">
+          <p className="font-display text-base text-paper">Passphrase</p>
+          <p className="text-sm text-paper-soft">
+            Change the passphrase you use to unlock Chatsundere on this device.
+          </p>
+          <Button tone="primary" onClick={() => navigate('/change-passphrase')} className="w-full">
+            Change passphrase
+          </Button>
+        </div>
       </div>
 
       {/* Remove biometric confirm */}

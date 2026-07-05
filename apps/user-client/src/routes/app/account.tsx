@@ -6,8 +6,8 @@ import {
   getLocalAccount,
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
-import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
-import { Fingerprint, Info, KeyRound, Link2, Lock, LogOut, Trash2 } from 'lucide-react';
+import { useAccountLinkStore, useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
+import { Fingerprint, Info, KeyRound, Link2, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
@@ -19,6 +19,7 @@ import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { copy } from '../../lib/copy.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { InlineEditRow } from './account/InlineEditRow.js';
+import { SECURITY_TILE_LABEL, adminLaunchUrl, openAdminConsole } from './account/admin-tile.js';
 
 type AccountLoadState =
   | { kind: 'loading' }
@@ -49,6 +50,9 @@ export function AccountPage(): JSX.Element {
   // session is closed/refreshed.
   const sessionUsername = useSessionStore((s) => s.session?.username ?? '');
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
+  const role = useAccountLinkStore((s) => s.role);
+  const adminUrl = useDiscoveryStore((s) => s.config?.adminUrl);
+  const adminHref = adminLaunchUrl(role, adminUrl);
 
   const [accountState, setAccountState] = useState<AccountLoadState>({ kind: 'loading' });
   const [biometricState, setBiometricState] = useState<BiometricLoadState>({ kind: 'loading' });
@@ -172,21 +176,25 @@ export function AccountPage(): JSX.Element {
         </div>
       </div>
 
-      {/* ── 2×3 Navigation matrix ─────────────────────────────────────────── */}
+      {/* ── Navigation matrix — optional gold Admin row + 2×3 (spec §3/§4) ── */}
       <div className="grid grid-cols-2 gap-3 px-4 pb-8">
+        {adminHref && (
+          <NavTile
+            colour="blue"
+            gold
+            wide
+            icon={ShieldCheck}
+            label="Admin"
+            meta="opens the admin console"
+            onActivate={() => openAdminConsole(adminHref)}
+          />
+        )}
         <NavTile
           colour="pink"
           icon={Fingerprint}
-          label="Biometric"
+          label={SECURITY_TILE_LABEL}
           to="/app/account/biometric"
-          meta="unlock on this device"
-        />
-        <NavTile
-          colour="pink"
-          icon={KeyRound}
-          label="Recovery Key"
-          to="/app/account/recovery"
-          meta="your backup code"
+          meta="unlock & passphrase"
         />
         <NavTile
           colour="pink"
@@ -211,10 +219,10 @@ export function AccountPage(): JSX.Element {
         />
         <NavTile
           colour="purple"
-          icon={Lock}
-          label="Change passphrase"
-          to="/change-passphrase"
-          meta="set a new passphrase"
+          icon={KeyRound}
+          label="Recovery Key"
+          to="/app/account/recovery"
+          meta="your backup code"
         />
         <NavTile
           colour="purple"
