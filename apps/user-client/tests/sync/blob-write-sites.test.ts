@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type {
   AttachmentRow,
   ChatRow,
+  CompactionCheckpointRow,
   PersonaRow,
   SyncOutboxRow,
 } from '../../src/boot/client-data-db.js';
@@ -83,6 +84,22 @@ async function seedChat(id: string, personaId = 'p1'): Promise<void> {
     draftInput: '',
     libraryIds: [],
   } as unknown as ChatRow);
+}
+async function seedCheckpoint(id: string, chatId: string): Promise<void> {
+  await getClientDataDb().compactionCheckpoints.add({
+    id,
+    chatId,
+    createdAt: 1,
+    modelId: 'm',
+    summaryMarkdown: '## Topic & Goal\n_(none)_',
+    lastMessageIdBefore: 'a',
+    tailStartMessageId: 'b',
+    tokensBefore: 100,
+    tokensAfter: 10,
+    tailTokenCount: 20,
+    prevCheckpointId: null,
+    trigger: 'manual',
+  } as unknown as CompactionCheckpointRow);
 }
 function imageInput(chatId: string) {
   return {
@@ -374,6 +391,28 @@ describe('chat-delete cascade', () => {
     expect(await getClientDataDb().artefacts.count()).toBe(0);
     expect(await getClientDataDb().attachments.count()).toBe(0);
   });
+
+  it('cascades a compaction checkpoint: tombstoned locally, enqueued, and snapshotted under the persona card', async () => {
+    setOnline();
+    await seedPersona('p1');
+    await seedChat('c1', 'p1');
+    await seedCheckpoint('cp-1', 'c1');
+    await getClientDataDb().syncOutbox.clear();
+
+    await deleteChatCascade('c1', { intoTrash: true });
+
+    const rows = await outbox();
+    expect(stamps(ops(rows, 'delete'))).toContain('compactionCheckpoints:cp-1:delete');
+    // No blob-delete for a checkpoint — it carries no blobs.
+    expect(ops(rows, 'blob-delete').some((r) => r.collection === 'compactionCheckpoints')).toBe(
+      false,
+    );
+    expect(await getClientDataDb().compactionCheckpoints.get('cp-1')).toBeUndefined();
+
+    const trash = await getClientDataDb().trash.toArray();
+    const cpTrash = trash.find((t) => t.collection === 'compactionCheckpoints' && t.key === 'cp-1');
+    expect(cpTrash?.rootGroup).toBe('persona:p1');
+  });
 });
 
 describe('persona-delete cascade', () => {
@@ -449,5 +488,26 @@ describe('persona-delete cascade', () => {
     const artTrash = trash.find((t) => t.collection === 'artefacts' && t.key === artId);
     expect(attTrash?.rootGroup).toBe('persona:p1');
     expect(artTrash?.rootGroup).toBe('persona:p1');
+  });
+
+  it('cascades a compaction checkpoint on an owned chat: tombstoned, enqueued, and snapshotted under the persona card', async () => {
+    setOnline();
+    await seedPersona('p1');
+    await seedChat('c1', 'p1');
+    await seedCheckpoint('cp-1', 'c1');
+    await getClientDataDb().syncOutbox.clear();
+
+    await deletePersonaCascade('p1', { intoTrash: true });
+
+    const rows = await outbox();
+    expect(stamps(ops(rows, 'delete'))).toContain('compactionCheckpoints:cp-1:delete');
+    expect(ops(rows, 'blob-delete').some((r) => r.collection === 'compactionCheckpoints')).toBe(
+      false,
+    );
+    expect(await getClientDataDb().compactionCheckpoints.get('cp-1')).toBeUndefined();
+
+    const trash = await getClientDataDb().trash.toArray();
+    const cpTrash = trash.find((t) => t.collection === 'compactionCheckpoints' && t.key === 'cp-1');
+    expect(cpTrash?.rootGroup).toBe('persona:p1');
   });
 });

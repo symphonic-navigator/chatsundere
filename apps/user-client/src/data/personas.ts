@@ -113,12 +113,13 @@ export function useDeletePersona() {
 
 /**
  * Delete a persona and cascade-tombstone its chats, messages, pills,
- * attachments, artefacts, memories (`memoryJournal` + `memoryBody`), and —
- * the one case the avatar IS tombstoned (WS-D §5) — its `personaAvatars`
- * row, with a `blob-delete` for the avatar's bytes plus one per attachment
- * and artefact blob (attachments carry one; artefacts carry a full blob AND
- * a thumbnail). Plain function so the cascade is testable without React;
- * {@link useDeletePersona} wraps it.
+ * attachments, artefacts, compaction checkpoints, memories (`memoryJournal` +
+ * `memoryBody`), and — the one case the avatar IS tombstoned (WS-D §5) — its
+ * `personaAvatars` row, with a `blob-delete` for the avatar's bytes plus one
+ * per attachment and artefact blob (attachments carry one; artefacts carry a
+ * full blob AND a thumbnail; compaction checkpoints carry none). Plain
+ * function so the cascade is testable without React; {@link useDeletePersona}
+ * wraps it.
  *
  * `opts.intoTrash` (default off → current behaviour byte-identical) additionally
  * snapshots the persona and its exact cascade descendant set (chats, messages,
@@ -152,8 +153,13 @@ export async function deletePersonaCascade(
     chatIds.length > 0 ? await db.attachments.where('chatId').anyOf(chatIds).toArray() : [];
   const artefacts =
     chatIds.length > 0 ? await db.artefacts.where('chatId').anyOf(chatIds).toArray() : [];
+  const checkpoints =
+    chatIds.length > 0
+      ? await db.compactionCheckpoints.where('chatId').anyOf(chatIds).toArray()
+      : [];
   const attachmentIds = attachments.map((a) => a.id);
   const artefactIds = artefacts.map((a) => a.id);
+  const checkpointIds = checkpoints.map((c) => c.id);
   // Blob ids: attachments carry one blobRef; artefacts carry blobRef AND thumbBlobRef.
   const attachmentBlobs = attachments
     .map((a) => ({ key: a.id, blobId: a.blobRef?.blobId ?? null }))
@@ -194,6 +200,7 @@ export async function deletePersonaCascade(
           'pills',
           'attachments',
           'artefacts',
+          'compactionCheckpoints',
           'personaAvatars',
           'memoryJournal',
           'memoryBody',
@@ -206,6 +213,7 @@ export async function deletePersonaCascade(
           'pills',
           'attachments',
           'artefacts',
+          'compactionCheckpoints',
           'personaAvatars',
           'memoryJournal',
           'memoryBody',
@@ -216,6 +224,7 @@ export async function deletePersonaCascade(
       ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
       ...attachments.map((a) => ({ collection: 'attachments' as const, key: a.id })),
       ...artefacts.map((a) => ({ collection: 'artefacts' as const, key: a.id })),
+      ...checkpoints.map((c) => ({ collection: 'compactionCheckpoints' as const, key: c.id })),
       ...(avatar ? [{ collection: 'personaAvatars' as const, key: id }] : []),
       ...memoryJournalIds.map((k) => ({ collection: 'memoryJournal' as const, key: k })),
       ...memoryBodyIds.map((k) => ({ collection: 'memoryBody' as const, key: k })),
@@ -235,6 +244,8 @@ export async function deletePersonaCascade(
           await snapshotRowIntoTrash(tx, now, 'attachments', a.id, a, resolvePersona);
         for (const a of artefacts)
           await snapshotRowIntoTrash(tx, now, 'artefacts', a.id, a, resolvePersona);
+        for (const c of checkpoints)
+          await snapshotRowIntoTrash(tx, now, 'compactionCheckpoints', c.id, c, resolvePersona);
         if (avatar)
           await snapshotRowIntoTrash(tx, now, 'personaAvatars', id, avatar, resolvePersona);
         for (const m of memoryJournals)
@@ -246,6 +257,8 @@ export async function deletePersonaCascade(
       if (attachmentIds.length > 0) await tx.table('attachments').bulkDelete(attachmentIds);
       if (artefactIds.length > 0) await tx.table('artefacts').bulkDelete(artefactIds);
       if (messageIds.length > 0) await tx.table('messages').bulkDelete(messageIds);
+      if (checkpointIds.length > 0)
+        await tx.table('compactionCheckpoints').bulkDelete(checkpointIds);
       if (chatIds.length > 0) await tx.table('chats').bulkDelete(chatIds);
       if (memoryJournalIds.length > 0) await tx.table('memoryJournal').bulkDelete(memoryJournalIds);
       if (memoryBodyIds.length > 0) await tx.table('memoryBody').bulkDelete(memoryBodyIds);

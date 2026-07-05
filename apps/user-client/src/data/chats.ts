@@ -198,12 +198,14 @@ export function useToggleBookmark() {
 }
 
 /**
- * Delete a chat and everything it owns (messages, pills, attachments, artefacts).
- * A shame-delete (spec §5): the local rows go immediately, and the chat plus its
- * synced children (messages, pills, and — WS-D §5 — attachments and artefacts)
- * enqueue `delete` tombstones so they follow on other devices (the apply pipeline
+ * Delete a chat and everything it owns (messages, pills, attachments, artefacts,
+ * compaction checkpoints). A shame-delete (spec §5): the local rows go
+ * immediately, and the chat plus its synced children (messages, pills,
+ * compaction checkpoints, and — WS-D §5 — attachments and artefacts) enqueue
+ * `delete` tombstones so they follow on other devices (the apply pipeline
  * never cascades). Each attachment/artefact's blobs are enqueued as `blob-delete`s
  * (drained LAST) so the server's objects are reclaimed after their records die.
+ * Checkpoints carry no blobs, so no `blobOps` entry is needed for them.
  *
  * `opts.intoTrash` (default off → current behaviour byte-identical) additionally
  * snapshots the chat and its exact cascade descendant set into `db.trash` inside
@@ -223,6 +225,8 @@ export async function deleteChatCascade(
   // the same transaction and their blob ids survive for the deferred deletes.
   const attachments = await db.attachments.where('chatId').equals(chatId).toArray();
   const artefacts = await db.artefacts.where('chatId').equals(chatId).toArray();
+  const checkpoints = await db.compactionCheckpoints.where('chatId').equals(chatId).toArray();
+  const checkpointIds = checkpoints.map((c) => c.id);
   const attachmentBlobs = attachments
     .map((a) => ({ key: a.id, blobId: a.blobRef?.blobId ?? null }))
     .filter((b): b is { key: string; blobId: string } => b.blobId !== null);
@@ -242,13 +246,14 @@ export async function deleteChatCascade(
     key: chatId,
     op: 'delete',
     tables: opts?.intoTrash
-      ? ['chats', 'messages', 'pills', 'attachments', 'artefacts', 'trash']
-      : ['chats', 'messages', 'pills', 'attachments', 'artefacts'],
+      ? ['chats', 'messages', 'pills', 'attachments', 'artefacts', 'compactionCheckpoints', 'trash']
+      : ['chats', 'messages', 'pills', 'attachments', 'artefacts', 'compactionCheckpoints'],
     cascade: [
       ...msgIds.map((k) => ({ collection: 'messages' as const, key: k })),
       ...pillIds.map((k) => ({ collection: 'pills' as const, key: k })),
       ...attachments.map((a) => ({ collection: 'attachments' as const, key: a.id })),
       ...artefacts.map((a) => ({ collection: 'artefacts' as const, key: a.id })),
+      ...checkpoints.map((c) => ({ collection: 'compactionCheckpoints' as const, key: c.id })),
     ],
     write: async (tx) => {
       if (opts?.intoTrash) {
@@ -263,11 +268,15 @@ export async function deleteChatCascade(
           await snapshotRowIntoTrash(tx, now, 'attachments', a.id, a, resolvePersona);
         for (const a of artefacts)
           await snapshotRowIntoTrash(tx, now, 'artefacts', a.id, a, resolvePersona);
+        for (const c of checkpoints)
+          await snapshotRowIntoTrash(tx, now, 'compactionCheckpoints', c.id, c, resolvePersona);
       }
       if (pillIds.length > 0) await tx.table('pills').bulkDelete(pillIds);
       await tx.table('attachments').where('chatId').equals(chatId).delete();
       await tx.table('artefacts').where('chatId').equals(chatId).delete();
       if (msgIds.length > 0) await tx.table('messages').bulkDelete(msgIds);
+      if (checkpointIds.length > 0)
+        await tx.table('compactionCheckpoints').bulkDelete(checkpointIds);
       await tx.table('chats').delete(chatId);
     },
     blobOps: (tx) => {
