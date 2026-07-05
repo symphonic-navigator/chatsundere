@@ -30,6 +30,7 @@ Canonical source: [[security-deferrals]]
 | — | `passkey-management.ts` belongs in `packages/crypto` not user-client | Before v0.1.0 (own small squash, Larissa-audited) | — |
 | L-3 (2026-05-21) | `refresh-on-401` triggers `closeAndForget` on *any* non-ok refresh response, not just reuse_detected | Coordinated with "Refresh-reuse user-facing notification" (above) — phase-1 sync-service real-time channel | Low |
 | L-4 (2026-05-21) | `change-passphrase.tsx` `capturedMk` comment slightly stale post-Shape-A | Opportunistic next time the file is touched | Low |
+| — (2026-07-04) | Role change / transfer-primary do not deny-list still-valid access tokens; the old role claim survives until token expiry (only suspension writes the deny-list). Candidate hardening: write `denySub` on role transitions. Source: admin live-wiring spec §10 | Low |
 
 ## Active — Design (Lyra-brief candidates)
 

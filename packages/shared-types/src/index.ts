@@ -58,6 +58,11 @@ export type {
   AdminUserDetail,
   AdminCreateInvitationRequest,
   AdminCreateInvitationResponse,
+  AdminInvitationStatus,
+  AdminInvitationSummary,
+  AdminInvitationListResponse,
+  AdminChangeRoleRequest,
+  AdminTransferPrimaryRequest,
   AdminAuditLogEntry,
   AdminAuditLogResponse,
 } from './admin.js';

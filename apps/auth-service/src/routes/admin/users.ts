@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { asc, eq, ilike, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, picklist, string } from 'valibot';
 import { writeAudit } from '../../audit/log.js';
@@ -19,23 +19,35 @@ const transferPrimaryReq = object({ target_user_id: string() });
 
 export function registerAdminUserRoutes(app: Hono): void {
   /**
-   * GET /api/v1/admin/users[?q=&limit=&offset=]
+   * GET /api/v1/admin/users[?q=&role=&status=&limit=&offset=]
    *
-   * Lists all users, optionally filtered by username substring. Paginated.
+   * Lists all users, optionally filtered by username substring (`q=`), role
+   * (`role=user|admin|primary_admin`), and suspension status
+   * (`status=suspended|active`). Paginated; `total` is the filtered row count,
+   * not the length of the returned page.
    */
   app.get('/api/v1/admin/users', bearerAuth({ minRole: 'admin' }), async (c) => {
     const q = c.req.query('q');
+    const role = c.req.query('role');
+    const status = c.req.query('status');
     const limit = Math.min(100, Number.parseInt(c.req.query('limit') ?? '20', 10) || 20);
     const offset = Number.parseInt(c.req.query('offset') ?? '0', 10) || 0;
     const { db } = createDb();
-    const where = q ? ilike(users.username, `%${q}%`) : undefined;
-    const rows = await db
-      .select()
-      .from(users)
-      .where(where)
-      .limit(limit)
-      .offset(offset)
-      .orderBy(asc(users.username));
+
+    const conditions = [];
+    if (q) conditions.push(ilike(users.username, `%${q}%`));
+    if (role === 'user' || role === 'admin' || role === 'primary_admin') {
+      conditions.push(eq(users.role, role));
+    }
+    if (status === 'suspended') conditions.push(isNotNull(users.suspendedAt));
+    if (status === 'active') conditions.push(isNull(users.suspendedAt));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [countResult, rows] = await Promise.all([
+      db.select({ total: count() }).from(users).where(where),
+      db.select().from(users).where(where).limit(limit).offset(offset).orderBy(asc(users.username)),
+    ]);
+
     return c.json({
       users: rows.map((r) => ({
         id: r.id,
@@ -45,7 +57,7 @@ export function registerAdminUserRoutes(app: Hono): void {
         created_at: r.createdAt.toISOString(),
         last_login_at: r.lastLoginAt?.toISOString() ?? null,
       })),
-      total: rows.length,
+      total: countResult[0]?.total ?? 0,
     });
   });
 

@@ -2,9 +2,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useReducer } from 'react';
 import { Link } from 'react-router-dom';
+import { QueryErrorPanel } from '../../components/QueryErrorPanel.js';
+import { ConsoleChip, Panel, SkeletonPanel } from '../../components/console.js';
 import { copy } from '../../copy.js';
-import type { UserStatus } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import { listUsers } from '../../data/api.js';
+import type { UserStatus } from '../../data/types.js';
 import { formatRelative } from '../../lib/format.js';
 import type { Role } from '../../lib/self-target.js';
 
@@ -44,10 +46,9 @@ export function reduceListFilter(state: ListFilter, action: ListFilterAction): L
 
 export function UsersListScreen() {
   const [filter, dispatch] = useReducer(reduceListFilter, initialListFilter);
-  const api = getAdminApi();
-  const { data } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: ['users', filter],
-    queryFn: () => api.listUsers(filter),
+    queryFn: () => listUsers(filter),
     placeholderData: (prev) => prev,
   });
 
@@ -94,38 +95,51 @@ export function UsersListScreen() {
         </select>
       </div>
 
-      {!data ? (
-        <p className="text-[var(--color-subtext-0)]">{copy.loading}</p>
+      {error ? (
+        <QueryErrorPanel error={error} onRetry={() => refetch()} />
+      ) : !data ? (
+        <SkeletonPanel lines={6} />
       ) : data.items.length === 0 && data.total === 0 ? (
         <p className="text-[var(--color-subtext-0)]">{copy.users.empty}</p>
       ) : (
         <>
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-xs uppercase text-[var(--color-subtext-0)]">
-                <th className="py-2">{copy.users.columns.username}</th>
-                <th className="py-2">{copy.users.columns.role}</th>
-                <th className="py-2">{copy.users.columns.status}</th>
-                <th className="py-2">{copy.users.columns.createdAt}</th>
-                <th className="py-2">{copy.users.columns.lastLogin}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((u) => (
-                <tr key={u.id} className="border-t border-[var(--color-overlay-0)]">
-                  <td className="py-2">
-                    <Link to={`/users/${u.id}`} className="text-[var(--color-mauve)] underline">
-                      {u.username}
-                    </Link>
-                  </td>
-                  <td className="py-2">{u.role}</td>
-                  <td className="py-2">{u.status}</td>
-                  <td className="py-2">{formatRelative(u.created_at)}</td>
-                  <td className="py-2">{formatRelative(u.last_login_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Panel>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-overlay-0)]">
+                    <th className="py-2">{copy.users.columns.username}</th>
+                    <th className="py-2">{copy.users.columns.role}</th>
+                    <th className="py-2">{copy.users.columns.status}</th>
+                    <th className="py-2">{copy.users.columns.createdAt}</th>
+                    <th className="py-2">{copy.users.columns.lastLogin}</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono text-sm">
+                  {data.items.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="border-t border-[var(--color-surface-0)] hover:bg-[var(--color-crust)]"
+                    >
+                      <td className="py-2">
+                        <Link to={`/users/${u.id}`} className="text-[var(--color-mauve)] underline">
+                          {u.username}
+                        </Link>
+                      </td>
+                      <td className="py-2">{u.role}</td>
+                      <td className="py-2">
+                        <ConsoleChip tone={u.status === 'active' ? 'green' : 'neutral'}>
+                          {u.status}
+                        </ConsoleChip>
+                      </td>
+                      <td className="py-2">{formatRelative(u.created_at)}</td>
+                      <td className="py-2">{formatRelative(u.last_login_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
 
           <div className="flex items-center justify-between">
             <button
