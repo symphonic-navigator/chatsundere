@@ -6,15 +6,18 @@ import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { denySub, nowSeconds } from '../auth/deny-list.js';
 import { seedStepUpKey } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods, users } from '../db/schema.js';
 import { loadEnv } from '../env.js';
 import { issueTokens, refreshCookieFor } from '../jwt/issue.js';
+import { revokeAllForUser } from '../jwt/refresh.js';
 import { metrics } from '../metrics.js';
 import { ApiError } from '../middleware/error-envelope.js';
 import { ensureOpaqueReady, getServerSetup } from '../opaque/server.js';
 import { consumeNonce, storeNonce } from '../recovery/nonce.js';
+import { createRedis } from '../redis/client.js';
 import { applyLoginRateLimit } from './_rate-limit-helpers.js';
 
 const startReqSchema = object({
@@ -171,6 +174,15 @@ export function registerRecoveryRoutes(app: Hono): void {
       metrics.authRecoveryAttemptsTotal.inc({ result: 'bad_proof' });
       throw new ApiError(401, 'unauthorized', 'Invalid recovery proof');
     }
+
+    // Recovery is the compromise-response tool (no forgot-password model): evict
+    // every existing session. Revoke BEFORE issuing the new tokens so the pre-existing
+    // refresh families die and pre-existing access tokens (iat < cutoff) are denied,
+    // while the freshly-issued session — new refresh family, access iat >= cutoff —
+    // survives. Runs before the auth-swap tx so a failed swap still evicts (fail-safe).
+    const revokeCutoff = nowSeconds();
+    await revokeAllForUser(user.id);
+    await denySub(createRedis(), user.id, revokeCutoff);
 
     // Atomic: delete all existing auth_methods, insert new opaque method, update user wraps.
     const tokens = await db.transaction(async (tx) => {
