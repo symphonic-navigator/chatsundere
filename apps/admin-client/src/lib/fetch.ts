@@ -8,7 +8,8 @@ import { joinUrl } from './joinUrl.js';
  * failures (DNS, connection refused, CORS reject) bypass this class and
  * surface as plain Error — callers must check `instanceof HttpError` before
  * reading `.status` or `.code`. Admin-client deliberately does not implement
- * silent refresh; on 401 the route guard redirects to login.
+ * silent refresh (spec 2026-07-04 §3); instead, apiFetch clears the expired
+ * session on a bearer 401 so the route guard redirects to login.
  */
 export class HttpError extends Error {
   constructor(
@@ -47,6 +48,14 @@ export async function apiFetch<T>(opts: ApiFetchOptions): Promise<T> {
         res = await fetch(url, buildInit(opts));
       }
     }
+  }
+  // No silent refresh here (spec 2026-07-04 §3). A 401 on a bearer call means
+  // the access token has expired: clear the stale session so the route guard
+  // stops seeing a present-but-dead token and redirects to /login, instead of
+  // leaving the operator stuck behind a wall of 401s. `authMode === 'none'`
+  // calls (login probes) carry no token — a 401 there is not our session dying.
+  if (res.status === 401 && opts.authMode === 'bearer') {
+    useSessionStore.getState().closeAndForget();
   }
   if (!res.ok) {
     const envelope = await safeReadError(res);
