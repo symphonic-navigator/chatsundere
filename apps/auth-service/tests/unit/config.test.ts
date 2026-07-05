@@ -6,11 +6,14 @@ import { createServer } from '../../src/server.js';
 // SYNC_PUBLIC_URL=https://sync.example.
 const savedSync = process.env.SYNC_PUBLIC_URL;
 const savedBlobs = process.env.SYNC_BLOBS_ENABLED;
+const savedAdmin = process.env.ADMIN_PUBLIC_URL;
 afterEach(() => {
   if (savedSync === undefined) Reflect.deleteProperty(process.env, 'SYNC_PUBLIC_URL');
   else process.env.SYNC_PUBLIC_URL = savedSync;
   if (savedBlobs === undefined) Reflect.deleteProperty(process.env, 'SYNC_BLOBS_ENABLED');
   else process.env.SYNC_BLOBS_ENABLED = savedBlobs;
+  if (savedAdmin === undefined) Reflect.deleteProperty(process.env, 'ADMIN_PUBLIC_URL');
+  else process.env.ADMIN_PUBLIC_URL = savedAdmin;
 });
 
 describe('GET /api/v1/config', () => {
@@ -20,14 +23,19 @@ describe('GET /api/v1/config', () => {
     expect(await res.json()).toEqual({
       proxyUrl: 'https://proxy.example',
       syncUrl: 'https://sync.example',
-      features: ['proxy', 'sync'],
+      adminUrl: 'https://admin.example',
+      features: ['proxy', 'sync', 'admin'],
     });
   });
 
   test('omits syncUrl and the sync feature when SYNC_PUBLIC_URL is unset', async () => {
     Reflect.deleteProperty(process.env, 'SYNC_PUBLIC_URL');
     const res = await createServer().request('/api/v1/config');
-    expect(await res.json()).toEqual({ proxyUrl: 'https://proxy.example', features: ['proxy'] });
+    expect(await res.json()).toEqual({
+      proxyUrl: 'https://proxy.example',
+      adminUrl: 'https://admin.example',
+      features: ['proxy', 'admin'],
+    });
   });
 
   test('is served with app-origin CORS headers (fetched cross-origin pre-login)', async () => {
@@ -47,7 +55,7 @@ describe('GET /api/v1/config', () => {
     process.env.SYNC_BLOBS_ENABLED = 'true';
     const res = await createServer().request('/api/v1/config');
     const body = (await res.json()) as { features: string[] };
-    expect(body.features).toEqual(['proxy', 'sync', 'blobs']);
+    expect(body.features).toEqual(['proxy', 'sync', 'blobs', 'admin']);
   });
 
   test('omits "blobs" when SYNC_BLOBS_ENABLED is unset', async () => {
@@ -64,5 +72,26 @@ describe('GET /api/v1/config', () => {
     const body = (await res.json()) as { features: string[] };
     expect(body.features).not.toContain('blobs');
     expect(body.features).not.toContain('sync');
+  });
+
+  test('includes adminUrl and the "admin" feature when ADMIN_PUBLIC_URL is set', async () => {
+    process.env.ADMIN_PUBLIC_URL = 'https://admin.example';
+    const res = await createServer().request('/api/v1/config');
+    const body = (await res.json()) as { adminUrl?: string; features: string[] };
+    expect(body.adminUrl).toBe('https://admin.example');
+    expect(body.features).toContain('admin');
+  });
+
+  test('omits adminUrl and the "admin" feature when ADMIN_PUBLIC_URL is unset', async () => {
+    Reflect.deleteProperty(process.env, 'ADMIN_PUBLIC_URL');
+    const res = await createServer().request('/api/v1/config');
+    const body = (await res.json()) as { adminUrl?: string; features: string[] };
+    expect(body.adminUrl).toBeUndefined();
+    expect(body.features).not.toContain('admin');
+  });
+
+  test('a non-https ADMIN_PUBLIC_URL fails env-load', async () => {
+    process.env.ADMIN_PUBLIC_URL = 'http://insecure.example';
+    expect(() => createServer()).toThrow();
   });
 });

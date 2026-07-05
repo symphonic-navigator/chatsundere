@@ -22,6 +22,7 @@ const AcceptableUrl = v.pipe(v.string(), v.check(isAcceptableUrl));
 const ServerConfigSchema = v.looseObject({
   proxyUrl: v.optional(AcceptableUrl),
   syncUrl: v.optional(AcceptableUrl),
+  adminUrl: v.optional(AcceptableUrl),
   features: v.array(v.string()),
 });
 
@@ -29,10 +30,11 @@ const ServerConfigSchema = v.looseObject({
 export function parseServerConfig(value: unknown): ServerConfig | null {
   const result = v.safeParse(ServerConfigSchema, value);
   if (!result.success) return null;
-  const { proxyUrl, syncUrl, features } = result.output;
+  const { proxyUrl, syncUrl, adminUrl, features } = result.output;
   return {
     ...(proxyUrl === undefined ? {} : { proxyUrl }),
     ...(syncUrl === undefined ? {} : { syncUrl }),
+    ...(adminUrl === undefined ? {} : { adminUrl }),
     features,
   };
 }

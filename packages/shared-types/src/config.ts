@@ -4,9 +4,10 @@
 export interface ServerConfig {
   proxyUrl?: string;
   syncUrl?: string;
+  adminUrl?: string;
   /** Feature flags; servers may send strings this client does not know yet. */
   features: string[];
 }
 
 /** Feature flags the client understands today. */
-export type KnownServerFeature = 'proxy' | 'sync' | 'blobs';
+export type KnownServerFeature = 'proxy' | 'sync' | 'blobs' | 'admin';

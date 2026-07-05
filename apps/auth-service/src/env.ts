@@ -47,9 +47,9 @@ const envSchema = object({
     array(string()),
   ),
   // Public URLs surfaced by GET /api/v1/config so the client never hard-codes
-  // topology. Both are OPTIONAL absolute https URLs — an operator may run any
-  // subset (auth+proxy, auth+sync, or all three); the client drives "disabled
-  // over hidden" from the features array (spec §7 / sync spec §11).
+  // topology. Each of proxy, sync, and admin is an OPTIONAL absolute https URL,
+  // independently configurable — an operator may run any subset; the client
+  // drives "disabled over hidden" from the features array (spec §7 / sync spec §11).
   PROXY_PUBLIC_URL: optional(
     pipe(
       string(),
@@ -62,6 +62,13 @@ const envSchema = object({
       string(),
       url(),
       check((u) => u.startsWith('https://'), 'SYNC_PUBLIC_URL must be an absolute https URL'),
+    ),
+  ),
+  ADMIN_PUBLIC_URL: optional(
+    pipe(
+      string(),
+      url(),
+      check((u) => u.startsWith('https://'), 'ADMIN_PUBLIC_URL must be an absolute https URL'),
     ),
   ),
   // Mirrors the sync-service's S3 presence for the /api/v1/config "blobs" flag
@@ -94,6 +101,7 @@ export function loadEnv(): {
   CORS_ALLOWED_ORIGINS: string[];
   PROXY_PUBLIC_URL?: string;
   SYNC_PUBLIC_URL?: string;
+  ADMIN_PUBLIC_URL?: string;
   SYNC_BLOBS_ENABLED: boolean;
 } {
   return parse(envSchema, {
@@ -112,6 +120,7 @@ export function loadEnv(): {
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ?? '',
     PROXY_PUBLIC_URL: process.env.PROXY_PUBLIC_URL,
     SYNC_PUBLIC_URL: process.env.SYNC_PUBLIC_URL,
+    ADMIN_PUBLIC_URL: process.env.ADMIN_PUBLIC_URL,
     SYNC_BLOBS_ENABLED: process.env.SYNC_BLOBS_ENABLED,
   });
 }
