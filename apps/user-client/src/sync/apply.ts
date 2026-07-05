@@ -19,6 +19,7 @@ import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
 import { applyPulledBlobRow, blobFieldsOf, isBlobCollection } from './blob-transform.js';
 import { putBlob } from './blob-transport.js';
 import { isDeadKey, markDead } from './dead-keys.js';
+import { enqueueBlobPut } from './enqueue.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
 import { extractKeyFor } from './sync-keys.js';
@@ -566,7 +567,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
     await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
     await afterApplied(collection, key, row);
     if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
-    await retireRestoredTrash(collection, row);
+    await retireRestoredTrash(collection, key, row);
     return { kind: 'inserted' };
   }
 
@@ -578,7 +579,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
     await applyPulledRow(collection, key, row, pulled.rev, localHash, local);
     await afterApplied(collection, key, row);
     if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
-    await retireRestoredTrash(collection, row);
+    await retireRestoredTrash(collection, key, row);
     return { kind: 'resolved', winner: 'pulled' };
   }
 
@@ -640,12 +641,54 @@ async function applyPulledRow(
  * provenance marker (an entity restored on another device), retire this device's
  * stale trash card for that original key so it no longer offers to restore
  * something already restored. Best-effort, per-key; a no-op when nothing matches.
+ *
+ * HIGH-1: for a blob-bearing collection the snapshot about to be retired may be
+ * the LAST copy of the bytes (this device deleted the media, its drain deleted
+ * the server blob, and the restored live row is a placeholder — its bytes are
+ * absent). Before retiring, heal every blob field whose bytes the snapshot holds
+ * but the live row lacks: copy the bytes onto the live row and enqueue a repair
+ * blob-put under the SAME blobId (the one `restoreCard` preserved) so the server
+ * object is recreated and peers can fetch it. Atomic with the retire.
  */
-async function retireRestoredTrash(collection: SyncCollection, row: unknown): Promise<void> {
+async function retireRestoredTrash(
+  collection: SyncCollection,
+  key: string,
+  row: unknown,
+): Promise<void> {
   const restoredFrom = (row as Record<string, unknown>).restoredFrom;
-  if (typeof restoredFrom === 'string' && restoredFrom.length > 0) {
+  if (!(typeof restoredFrom === 'string' && restoredFrom.length > 0)) return;
+
+  // Non-blob collections: the existing plain retire (delete the stale snapshot).
+  if (!isBlobCollection(collection)) {
     await retireTrashByOriginalKey(collection, restoredFrom);
+    return;
   }
+
+  const db = getClientDataDb();
+  await db.transaction('rw', [db.table(collection), db.trash, db.syncOutbox], async (tx) => {
+    const snapshot = (await tx.table('trash').get(`${collection}:${restoredFrom}`)) as
+      | { row?: unknown }
+      | undefined;
+    const liveRow = await tx.table(collection).get(key);
+    if (snapshot && liveRow) {
+      const snapRow = (snapshot.row ?? {}) as Record<string, unknown>;
+      const live = liveRow as Record<string, unknown>;
+      for (const spec of blobFieldsOf(collection)) {
+        const ref = live[spec.refField];
+        const liveBytes = live[spec.bytesField];
+        const snapBytes = snapRow[spec.bytesField];
+        const liveHasBytes = liveBytes instanceof Blob && liveBytes.size > 0;
+        const snapHasBytes = snapBytes instanceof Blob && snapBytes.size > 0;
+        // Only heal a field the snapshot can supply and the live row lacks; never
+        // clobber existing live bytes (a no-op for a single-device restore).
+        if (isBlobRefValue(ref) && !liveHasBytes && snapHasBytes) {
+          await tx.table(collection).update(key, { [spec.bytesField]: snapBytes });
+          enqueueBlobPut(tx, collection, key, ref.blobId);
+        }
+      }
+    }
+    await tx.table('trash').delete(`${collection}:${restoredFrom}`);
+  });
 }
 
 /** Post-apply side effects: derived recompute for chats + query invalidation (§7.6). */
