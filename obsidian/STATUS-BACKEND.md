@@ -1,6 +1,33 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-05 (later) — **Frontend↔backend integration audited,
+**Last updated:** 2026-07-05 (later still) — **Onboarding/auth hardening LANDED on
+`full-backend-transition`** (two feature units, ahead of the v0.2.0 go-live).
+**Unit A — F3 (`ab30e903`):** the client token-refresh round-trip is now serialised
+across tabs by an exclusive `navigator.locks` lock (`chatsundere-token-refresh`),
+closing the multi-tab bug where two tabs refreshing concurrently tripped the
+server's refresh-token reuse-detection and hard-logged-out both. The module-local
+`refreshInFlight` guard is kept as the within-tab collapse; jsdom fallback
+preserved. Not a Larissa path. **Unit B — F4/F5 (`a918e3b4`):** five join lifecycle
+codes (`code_expired`, `code_already_redeemed`, `code_attempts_exhausted`,
+`rate_limited`, `session_expired`) now map to specific, flow-tailored constructive
+messages in both onboarding confirm handlers instead of the generic "Something went
+wrong"; `shared-types` `JoinError` is reconciled with what the auth-service emits
+(phantom `rate_limit_exceeded` removed, four real codes added); and the server's
+`code_already_redeemed` is unified to **410 Gone** (was split 409/410) with a new
+integration test on the previously-untested guard. Built spec→(Laura skipped: copy
+on existing screens)→plan→**subagent-driven (4 tasks, per-task spec+quality
+review)**→**opus whole-branch READY** + **Larissa CLEAR TO SQUASH** (no
+Critical/High/Medium; the refresh lock verified deadlock-free). Gates: `pnpm
+typecheck --force` **14/14** on the integrated tree; user-client vitest at the 8
+Node-localStorage baseline; auth-service `bun test` **127 pass** (no new failures
+beyond the pre-existing OPAQUE-setup baseline). Two follow-ups logged
+([[insights/follow-ups-index]]): `recovery.tsx` phantom-literal cleanup, and a
+refresh-fetch `AbortController` timeout. **NOT pushed (Chris pushes after
+device-verifying spec §7 against the live backend — needs the join error states
+triggered).** Spec/plan:
+[[../superpowers/specs/2026-07-05-onboarding-auth-hardening-design]],
+[[../superpowers/plans/2026-07-05-onboarding-auth-hardening]]. Prior entry:
+2026-07-05 (later) — **Frontend↔backend integration audited,
 deviceless-recovery analysed, recovery-key safety communication SHIPPED** (commit
 `e184413`, client-only copy) — ahead of a planned **v0.2.0 whole-backend go-live in
 ~48 h** (Chris, from ~10:00 CEST). **(1) Integration audit (two read-only sweeps of
