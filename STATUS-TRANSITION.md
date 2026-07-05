@@ -1,5 +1,50 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-05 (later) — **v0.2.0 PRE-RELEASE BLOCKERS FIXED +
+INTEGRATED onto `full-backend-transition` (fast-forward → `9b224df2`).** The
+2026-07-05 three-way deep-audit's six release-blockers (+ one MEDIUM-2 rider +
+one security close-out) landed as **8 commits, one per fix**, each TDD
+(RED→GREEN) with a per-task spec+quality review, then integrated by
+**fast-forward** (no squash — each commit is its own blocker unit; ff preserved
+Chris's in-flight uncommitted `follow-ups-index.md` edit + the plan file). Tree
+confirmed at **Dexie v34** — the "diverged to v32" note in the overnight entry
+below is **stale/superseded** (integration has happened). Commits
+`3394f4d..9b224df2`: (1) probe the linked server after onboarding so a fresh
+device pulls its vault instead of an empty-vault limbo; (2) inline "Wrong
+passphrase." on pairing (constructive-error) + align the
+`opaque_authentication_failed` wire constant at its single source (client-only —
+crypto/invitation deliberately untouched); (3) cascade attachments+artefacts on
+persona-delete (permanent server-orphan/quota leak); (4) consume seal-time-minted
+`newBlobs` in the drain — **Option A** heal (write ref back + enqueue blob-put +
+hold the record back one cycle → PUT-before-record); (5) **HIGH-1** preserve blob
+bytes on cross-device restore de-dup — retire-time heal + re-PUT under the
+preserved blobId (irreversible byte-loss closed); (6) recovery revokes existing
+sessions — **revoke-before-issue** (fail-safe; iat-aware `denySub` keeps the new
+session alive while all older tokens die); (7) MEDIUM-2 rider — cascade
+`compactionCheckpoints`; (8) **`bearerAuth` now consults the deny-list** (jti +
+iat-aware sub, mirroring sync-service) — closes Larissa's MEDIUM (a stolen access
+token no longer survives recovery/logout on auth-service for ~15 min; also closes
+the pre-existing "bearerAuth skips the deny-list" LOW). **Audits (absolute
+worktree paths):** Larissa **CLEAR TO SQUASH** (commits 3–7 + re-audit of 8), no
+Critical/High, zero-knowledge boundary holds everywhere; Laura **NO HARD
+DEFECTS** (commits 1–2); opus whole-branch **READY TO MERGE** (cross-commit
+interactions 3+5+7 / 4+5 / 6 all verified clean). **Gates on the integrated tip:**
+`pnpm typecheck --force` **14/14**, `pnpm run build` **9/9**, full user-client
+vitest **2714 / 8 Node-localStorage baseline**, auth-service `bun test`
+baseline-identical (+ new revocation/heal tests green). Spec/brief
+`superpowers/plans/2026-07-05-pre-release-blocker-fixes.md`; per-commit ledger in
+`.superpowers/sdd/progress.md` (git-ignored). **NEXT — Chris device-verifies on
+`full-backend-transition`:** fresh-device pull (no reload) · wrong-passphrase
+inline + code-not-burned · two-browser delete→restore→**image survives** ·
+persona-delete frees server row/blob count · recovery kills the old session
+(now also on auth-service, not just after 15 min). New follow-ups (Laura's
+"Syncing your account…" onboarding line, the crypto `isEvidenceInvalidError`
+dead-branch cleanup, the pre-existing `recovery.test.ts` serverId bug) in
+[[insights/follow-ups-index]]; the deferred tier (MEDIUM-1/3, pairing F4/F5/F7)
+is unchanged there.
+
+---
+
 **Last updated:** 2026-07-05 (overnight) — **TOMBSTONE THROTTLE + UNIVERSAL
 TRASHCAN BUILT (Phases 1–2, 15 tasks, subagent-driven TDD).** Closes the two
 triage items the 2026-07-04 two-browser test surfaced: the panic-pause
