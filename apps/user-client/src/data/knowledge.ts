@@ -12,6 +12,9 @@ import { enqueueDocument } from '../knowledge/start-ingestion.js';
 import { normalisePhrases } from '../lib/treasury-filter.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { type TrashUndoHandle, softDelete } from '../trash/delete-flow.js';
+import { showDeleteToast } from '../trash/delete-toast.js';
+import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { materialiseReferencesForDocument } from './attachments.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
@@ -65,10 +68,13 @@ export async function deleteDocumentVectors(
   });
 }
 
-/** Delete a document row and its vectors, materialising any pending references first. */
+/** Delete a document row and its vectors, materialising any pending references
+ *  first. `opts.intoTrash` (default off → current behaviour byte-identical)
+ *  snapshots the document into `db.trash` before the row goes (§3.4). */
 export async function deleteDocumentCascade(
   id: string,
   store: VectorStoreLike = getKnowledgeVectorStore(),
+  opts?: { intoTrash?: boolean },
 ): Promise<void> {
   const doc = await getClientDataDb().documents.get(id);
   if (doc) await materialiseReferencesForDocument(id, doc.content);
@@ -81,20 +87,26 @@ export async function deleteDocumentCascade(
     collection: 'documents',
     key: id,
     op: 'delete',
-    tables: ['documents'],
+    tables: opts?.intoTrash ? ['documents', 'trash'] : ['documents'],
     write: async (tx) => {
+      if (opts?.intoTrash && doc) await snapshotRowIntoTrash(tx, Date.now(), 'documents', id, doc);
       await tx.table('documents').delete(id);
     },
   });
 }
 
 /** Delete a library, all its documents and vectors, and prune the id from every
- *  persona and chat that referenced it. */
+ *  persona and chat that referenced it. `opts.intoTrash` (default off → current
+ *  behaviour byte-identical) snapshots the library and its documents into
+ *  `db.trash` before the live rows go (build constraint I-2, §3.4). The persona/
+ *  chat `libraryIds` prune is a live reference cleanup — never snapshotted. */
 export async function deleteLibraryCascade(
   id: string,
   store: VectorStoreLike = getKnowledgeVectorStore(),
+  opts?: { intoTrash?: boolean },
 ): Promise<void> {
   const db = getClientDataDb();
+  const library = await db.libraries.get(id);
   const docs = await db.documents.where('libraryId').equals(id).toArray();
   const docIds = docs.map((d) => d.id);
   // Pre-work touches other databases/collections (attachment materialisation,
@@ -111,9 +123,17 @@ export async function deleteLibraryCascade(
     collection: 'libraries',
     key: id,
     op: 'delete',
-    tables: ['libraries', 'documents', 'personas', 'chats'],
+    tables: opts?.intoTrash
+      ? ['libraries', 'documents', 'personas', 'chats', 'trash']
+      : ['libraries', 'documents', 'personas', 'chats'],
     cascade: docIds.map((k) => ({ collection: 'documents' as const, key: k })),
     write: async (tx) => {
+      if (opts?.intoTrash) {
+        // Snapshot the EXACT cascade set (I-2) before the live rows are removed.
+        const now = Date.now();
+        if (library) await snapshotRowIntoTrash(tx, now, 'libraries', id, library);
+        for (const d of docs) await snapshotRowIntoTrash(tx, now, 'documents', d.id, d);
+      }
       if (docIds.length > 0) await tx.table('documents').bulkDelete(docIds);
       await tx.table('libraries').delete(id);
       await tx
@@ -172,13 +192,18 @@ export function useUpdateLibrary() {
 
 export function useDeleteLibrary() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.libraries });
+    void qc.invalidateQueries({ queryKey: ['documents'] });
+    void qc.invalidateQueries({ queryKey: QK.personas });
+    void qc.invalidateQueries({ queryKey: QK.chats });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deleteLibraryCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.libraries });
-      qc.invalidateQueries({ queryKey: ['documents'] });
-      qc.invalidateQueries({ queryKey: QK.personas });
-      qc.invalidateQueries({ queryKey: QK.chats });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('libraries', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('libraries', id, handle, invalidate);
     },
   });
 }
@@ -336,11 +361,16 @@ export function useUpdateDocument(libraryId: string) {
 
 export function useDeleteDocument(libraryId: string) {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
+    void qc.invalidateQueries({ queryKey: QK.documentCounts });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deleteDocumentCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
-      qc.invalidateQueries({ queryKey: QK.documentCounts });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('documents', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('documents', id, handle, invalidate);
     },
   });
 }

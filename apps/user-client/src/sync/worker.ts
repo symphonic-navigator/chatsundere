@@ -27,12 +27,13 @@ import type {
   SyncRowMeta,
   TrashRow,
 } from '../boot/client-data-db.js';
-import { getClientDataDb } from '../boot/client-data-db.js';
+import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
 import { getDb } from '../boot/open-db.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
 import {
+  TOMBSTONE_CYCLE_CAP,
   applyRecord,
   flushInvalidations,
   resetTombstoneCounter,
@@ -48,6 +49,7 @@ import {
 } from './blob-repair.js';
 import { readBlobBytesById, resolveBlobFieldById } from './blob-transform.js';
 import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
+import { markDead } from './dead-keys.js';
 import { resetEngineStateForNewLink } from './link-reset.js';
 import {
   type CoalescedEntry,
@@ -565,9 +567,12 @@ async function markTerminal(prep: PreparedRecord): Promise<void> {
 async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
   const db = getClientDataDb();
   let sweptTerminal = 0;
-  await db.transaction('rw', db.syncRows, db.syncOutbox, async () => {
+  await db.transaction('rw', [db.syncRows, db.syncOutbox, db.deadKeys], async () => {
     if (prep.op === 'delete') {
       await db.syncRows.delete([prep.collection, prep.key]);
+      // §3.9: mark the key dead at the server-authoritative ack, never at enqueue —
+      // this lets a fast-Undo before the drain stay identity-preserving (Task 8).
+      await markDead(prep.collection, prep.key);
     } else {
       const meta: SyncRowMeta = {
         collection: prep.collection,
@@ -678,12 +683,10 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
 
   await db.transaction(
     'rw',
-    db.syncRows,
-    db.syncOutbox,
-    db.trash,
-    db.table(prep.collection),
+    [db.syncRows, db.syncOutbox, db.trash, db.deadKeys, db.table(prep.collection)],
     async () => {
       if (local !== undefined && local !== null) {
+        const meta = deriveLegacyTrashMeta(prep.collection, prep.key, local);
         const trashRow: TrashRow = {
           id: `${prep.collection}:${prep.key}`,
           collection: prep.collection,
@@ -691,11 +694,17 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
           row: local,
           deletedAt: now,
           purgeAt: now + THIRTY_DAYS_MS,
+          entityKind: meta.entityKind,
+          rootGroup: meta.rootGroup,
+          parentRef: meta.parentRef,
         };
         await db.trash.put(trashRow);
         await db.table(prep.collection).delete(prep.key);
       }
       await db.syncRows.delete([prep.collection, prep.key]);
+      // §3.9: the key's identity is terminal even with no local row to snapshot,
+      // so mark it dead unconditionally (mirrors apply.ts applyTombstone).
+      await markDead(prep.collection, prep.key);
       await db.syncOutbox.bulkDelete(prep.seqs);
     },
   );
@@ -890,6 +899,7 @@ export async function runPullLoop(): Promise<void> {
   await setPulling({ pages, startedAt });
   try {
     let more = true;
+    let applied = 0; // tombstones APPLIED this cycle, across pages — the cap is per-cycle
     while (more && pages < PULL_PAGE_CAP) {
       const { watermarkRev } = await getSyncState();
       let response: SyncPullResponse;
@@ -915,16 +925,33 @@ export async function runPullLoop(): Promise<void> {
         return;
       }
 
-      let highestRev = watermarkRev;
-      for (const record of response.records) {
+      // Normalise ordering client-side (M-7: never trust the server's order).
+      // Ascending rev means deferred tombstones are always the high-rev tail, so
+      // the watermark advances through the applied prefix and progress is
+      // guaranteed even against an adversarial page (no stall, no re-apply waste).
+      const ordered = [...response.records].sort((a, b) => a.rev - b.rev);
+      let lowestDeferredRev: number | null = null; // per PAGE
+      let highestApplied = watermarkRev; // per PAGE, seeded from this page's since
+      let cappedThisCycle = false; // per PAGE (drives this page's `more`)
+      for (const record of ordered) {
+        if (record.rev <= watermarkRev) continue; // L-B: honest servers never send these
+        if (record.deleted && applied >= TOMBSTONE_CYCLE_CAP) {
+          lowestDeferredRev =
+            lowestDeferredRev === null ? record.rev : Math.min(lowestDeferredRev, record.rev);
+          cappedThisCycle = true;
+          continue; // defer this tombstone; keep scanning the page for the true minimum
+        }
         await applyRecord(record);
-        if (record.rev > highestRev) highestRev = record.rev;
+        if (record.deleted) applied += 1; // accumulates across pages (cycle-scoped `applied`)
+        if (record.rev > highestApplied) highestApplied = record.rev;
       }
-      // Advance page by page, never ahead of application; monotone by clamp.
-      await advanceWatermark(Math.max(watermarkRev, highestRev));
+      // Watermark: hold below the lowest deferred rev, else advance to highest applied.
+      const nextWatermark = lowestDeferredRev !== null ? lowestDeferredRev - 1 : highestApplied;
+      await advanceWatermark(nextWatermark); // monotone clamp inside
       flushInvalidations();
 
-      more = response.more;
+      // L-A: once the cap trips, stop paging this cycle (the next trigger resumes).
+      more = cappedThisCycle ? false : response.more;
     }
     // §7.3a — a completed cycle that stayed below the threshold retires a stale
     // tombstone notice, so a one-off mass deletion no longer sticks forever. The

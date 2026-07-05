@@ -23,6 +23,7 @@ import {
   resetTombstoneCounter,
   setInvalidator,
 } from '../../src/sync/apply.js';
+import { isDeadKey, markDead } from '../../src/sync/dead-keys.js';
 import { advanceWatermark, getSyncState, setAttention } from '../../src/sync/watermark.js';
 import { _resetWorkerForTests, _setPullTransport, runPullLoop } from '../../src/sync/worker.js';
 
@@ -255,24 +256,37 @@ describe('applyRecord — §7.3 tombstone', () => {
   });
 });
 
-// ===== §7.4 H-1 trash-anchored terminality =====
+// ===== §7.4 H-1 dead-key-anchored terminality =====
 
-describe('applyRecord — §7.4 H-1 trash-anchored terminality (Larissa H-1, NON-NEGOTIABLE)', () => {
-  it('rejects an upsert onto a live tombstone anchor, keeps trash, raises tamper', async () => {
+describe('applyRecord — §7.4 H-1 dead-key-anchored terminality (Larissa H-1, NON-NEGOTIABLE)', () => {
+  it('rejects an upsert onto a dead-key anchor, keeps it dead, raises tamper', async () => {
     const db = getClientDataDb();
-    // Step 1: a pulled tombstone moves the chat to trash and clears its syncRows.
-    await db.chats.put({ id: 'c1', title: 'real', createdAt: 1, updatedAt: 1 } as never);
-    await db.syncRows.put({ collection: 'chats', key: 'c1', rev: 2, ciphertextHash: 'h' });
-    await applyRecord(pulledTombstone('chats', 'c1', 5));
-    expect(await db.trash.get('chats:c1')).toBeDefined();
+    // Step 1: the key's death is recorded on the durable deadKeys marker (§3.9).
+    await markDead('chats', 'c1');
 
-    // Step 2: the malicious server replays an upsert for the SAME (tombstoned) key.
+    // Step 2: the malicious server replays an upsert for the SAME (dead) key.
     openReturns({ id: 'c1', title: 'resurrected', createdAt: 1, updatedAt: 9 });
     const outcome = await applyRecord(pulledUpsert('chats', 'c1', new Uint8Array([4, 4]), 6));
 
     expect(outcome).toEqual({ kind: 'tamper' });
-    // The anchor stands: trash intact, no row resurrected, tamper attention raised.
-    expect(await db.trash.get('chats:c1')).toBeDefined();
+    // The anchor stands: no row resurrected, key still dead, tamper attention raised.
+    expect(await db.chats.get('c1')).toBeUndefined();
+    expect(await isDeadKey('chats', 'c1')).toBe(true);
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+
+  it('fires with the trash snapshot absent — durability of the dead-key anchor (§3.9)', async () => {
+    const db = getClientDataDb();
+    // Death is recorded, but the 30-day trash snapshot is purged/never present:
+    // the marker alone must still make the identity terminal.
+    await markDead('chats', 'c1');
+    await db.trash.delete('chats:c1');
+    expect(await db.trash.get('chats:c1')).toBeUndefined();
+
+    openReturns({ id: 'c1', title: 'resurrected', createdAt: 1, updatedAt: 9 });
+    const outcome = await applyRecord(pulledUpsert('chats', 'c1', new Uint8Array([4, 4]), 6));
+
+    expect(outcome).toEqual({ kind: 'tamper' });
     expect(await db.chats.get('c1')).toBeUndefined();
     expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
   });
@@ -293,32 +307,15 @@ describe('applyRecord — §7.4 L-3 pending-delete suppression', () => {
   });
 });
 
-// ===== §7.3a threshold + panic pause =====
+// ===== §7.3a threshold notice =====
 
-describe('applyRecord — §7.3a tombstone threshold + panic pause (Larissa M-2)', () => {
+describe('applyRecord — §7.3a tombstone threshold (Larissa M-2)', () => {
   it('raises the calm notice at the threshold', async () => {
     resetTombstoneCounter();
     for (let i = 0; i < 20; i++) {
       await applyRecord(pulledTombstone('chats', `x${i}`, 1));
     }
     expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
-  });
-
-  it('pauses tombstone application at the panic threshold but still applies upserts', async () => {
-    const db = getClientDataDb();
-    resetTombstoneCounter();
-    let last = await applyRecord(pulledTombstone('chats', 'first', 1));
-    for (let i = 1; i < 200; i++) {
-      last = await applyRecord(pulledTombstone('chats', `x${i}`, 1));
-    }
-    expect(last).toEqual({ kind: 'tombstone-paused' });
-    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_paused', count: 200 });
-
-    // Upserts continue to apply during the pause.
-    openReturns({ id: 'p1', updatedAt: 5 });
-    const upsert = await applyRecord(pulledUpsert('personas', 'p1', new Uint8Array([1]), 5));
-    expect(upsert).toEqual({ kind: 'inserted' });
-    expect(await db.personas.get('p1')).toBeDefined();
   });
 });
 
@@ -366,6 +363,62 @@ describe('applyRecord — §7.5 conflict resolution', () => {
     expect(outcome).toEqual({ kind: 'inserted' });
     expect((await db.personas.get('p1')) as { name: string }).toMatchObject({ name: 'fresh' });
     expect((await db.syncRows.get(['personas', 'p1']))?.rev).toBe(4);
+  });
+});
+
+// ===== §3.7 cross-device de-dup — retire a stale trash card =====
+
+/** A minimal valid TrashRow for a top-level chat card (id = `${collection}:${key}`). */
+function trashRowFor(
+  collection: SyncCollection,
+  key: string,
+): {
+  id: string;
+  collection: SyncCollection;
+  key: string;
+  row: unknown;
+  deletedAt: number;
+  purgeAt: number;
+  entityKind: 'chat';
+  rootGroup: string;
+  parentRef: null;
+} {
+  const now = Date.now();
+  return {
+    id: `${collection}:${key}`,
+    collection,
+    key,
+    row: { id: key, title: 'trashed', createdAt: 1, updatedAt: 1 },
+    deletedAt: now,
+    purgeAt: now + 1000,
+    entityKind: 'chat',
+    rootGroup: `${collection}:${key}`,
+    parentRef: null,
+  };
+}
+
+describe('applyUpsert — §3.7 cross-device de-dup', () => {
+  it("retires this device's stale trash card when a pulled restore carries restoredFrom", async () => {
+    const db = getClientDataDb();
+    await db.trash.put(trashRowFor('chats', 'c1') as never);
+    // The restore lands under a fresh id (c2) and carries the original key as provenance.
+    openReturns({ id: 'c2', title: 'restored', createdAt: 1, updatedAt: 9, restoredFrom: 'c1' });
+
+    const outcome = await applyRecord(pulledUpsert('chats', 'c2', new Uint8Array([2]), 5));
+
+    expect(outcome).toEqual({ kind: 'inserted' });
+    expect(await db.trash.get('chats:c1')).toBeUndefined();
+  });
+
+  it('leaves unrelated trash cards untouched when the pulled row has no restoredFrom', async () => {
+    const db = getClientDataDb();
+    await db.trash.put(trashRowFor('chats', 'c1') as never);
+    openReturns({ id: 'c2', title: 'plain', createdAt: 1, updatedAt: 9 });
+
+    const outcome = await applyRecord(pulledUpsert('chats', 'c2', new Uint8Array([3]), 5));
+
+    expect(outcome).toEqual({ kind: 'inserted' });
+    expect(await db.trash.get('chats:c1')).toBeDefined();
   });
 });
 
@@ -457,20 +510,6 @@ describe('runPullLoop — §7.3a tombstone notice retires on a calm cycle (auto-
     expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
   });
 
-  it('keeps the panic-pause alarm sticky on a calm cycle (Larissa — pending acknowledgement)', async () => {
-    await setAttention({ kind: 'tombstone_paused', count: 200 });
-    _setPullTransport(
-      async (): Promise<SyncPullResponse> => ({
-        head: 1,
-        epoch: 'E1',
-        more: false,
-        records: [],
-      }),
-    );
-    await runPullLoop();
-    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_paused', count: 200 });
-  });
-
   it('never clobbers a coexisting non-tombstone attention on a calm cycle', async () => {
     await setAttention({ kind: 'tamper' });
     _setPullTransport(
@@ -509,5 +548,62 @@ describe('runPullLoop — invalidation coalescing (§7.6, Laura soft)', () => {
     expect(invalidate).toHaveBeenCalledTimes(1); // one flush per page, not per record
     const flushedKeys = invalidate.mock.calls[0]?.[0] as readonly unknown[][];
     expect(flushedKeys.length).toBeGreaterThan(1);
+  });
+});
+
+describe('runPullLoop — §2.2 tombstone throttle (lossless)', () => {
+  it('applies at most the cap per cycle and drains the rest next cycle', async () => {
+    // 250 tombstones on one page, revs 1..250. Cap is 200.
+    const recs = Array.from({ length: 250 }, (_v, i) => pulledTombstone('chats', `d${i}`, i + 1));
+    let call = 0;
+    _setPullTransport(async (since: number): Promise<SyncPullResponse> => {
+      call += 1;
+      // Return only records with rev > since, mimicking the server.
+      const page = recs.filter((r) => r.rev > since).slice(0, 200);
+      return { head: 250, epoch: 'E1', more: page.length > 0, records: page };
+    });
+
+    await runPullLoop();
+    // Cap 200 applied; watermark held at lowestDeferredRev(201) - 1 = 200.
+    expect((await getSyncState()).watermarkRev).toBe(200);
+
+    await runPullLoop();
+    // Remaining 50 applied; watermark reaches head 250.
+    expect((await getSyncState()).watermarkRev).toBe(250);
+    expect(call).toBeGreaterThanOrEqual(2);
+  });
+
+  it('normalises adversarial ordering by sorting, so no record stalls or is skipped', async () => {
+    // A page whose LAST record has the LOWEST rev (adversarial). Without the
+    // client-side sort, the cap-worth of high-rev records would consume the cap
+    // first and the low-rev record would defer every cycle forever (progress
+    // stall). Sorting ascending applies the low rev first -> drains cleanly.
+    const many = Array.from({ length: 200 }, (_v, i) => pulledTombstone('chats', `h${i}`, i + 10));
+    const low = pulledTombstone('chats', 'low', 5); // rev 5, listed LAST
+    let call = 0;
+    _setPullTransport(async (since: number): Promise<SyncPullResponse> => {
+      call += 1;
+      const all = [...many, low].filter((r) => r.rev > since);
+      if (all.length === 0) return { head: 209, epoch: 'E1', more: false, records: [] };
+      return { head: 209, epoch: 'E1', more: true, records: all };
+    });
+    await runPullLoop(); // sorts -> applies rev 5 + revs 10..208 (200 under cap), defers rev 209
+    expect((await getSyncState()).watermarkRev).toBe(208); // held at lowestDeferredRev(209) - 1
+    await runPullLoop(); // drains rev 209
+    expect((await getSyncState()).watermarkRev).toBe(209);
+  });
+
+  it('ignores records with rev <= since', async () => {
+    await advanceWatermark(100);
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 100,
+        epoch: 'E1',
+        more: false,
+        records: [pulledTombstone('chats', 'stale', 50)], // rev 50 <= watermark 100
+      }),
+    );
+    await runPullLoop();
+    expect((await getSyncState()).watermarkRev).toBe(100); // unchanged, record ignored
   });
 });

@@ -24,6 +24,7 @@ import personaMindspace from './persona-mindspace.md?raw';
 import personaModel from './persona-model.md?raw';
 import personaRoleplay from './persona-roleplay.md?raw';
 import persona from './persona.md?raw';
+import recentlyDeleted from './recently-deleted.md?raw';
 import recovery from './recovery.md?raw';
 import serverLinking from './server-linking.md?raw';
 import settingsExpert from './settings-expert.md?raw';
@@ -40,6 +41,7 @@ export type HelpKey =
   | 'my-account'
   | 'biometric'
   | 'recovery'
+  | 'recently-deleted'
   | 'server-linking'
   | 'about'
   | 'change-passphrase'
@@ -76,6 +78,7 @@ export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
   'my-account': { title: 'My Account — help', markdown: myAccount },
   biometric: { title: 'Biometric — help', markdown: biometric },
   recovery: { title: 'Recovery Key — help', markdown: recovery },
+  'recently-deleted': { title: 'Recently deleted — help', markdown: recentlyDeleted },
   'server-linking': { title: 'Server linking — help', markdown: serverLinking },
   about: { title: 'About — help', markdown: about },
   'change-passphrase': { title: 'Change passphrase — help', markdown: changePassphrase },

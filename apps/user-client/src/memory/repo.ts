@@ -11,6 +11,7 @@ import { estimateTokens } from '../lib/token-estimator.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { isClass2Allowed } from '../sync/gate.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
+import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { assembleMemoryContext } from './assembly.js';
 import { MAX_BODY_VERSIONS, MEMORY_INJECTION_MAX_TOKENS } from './config.js';
 import type { ExtractedEntry } from './extraction-parse.js';
@@ -234,14 +235,19 @@ export async function commitEntry(id: string): Promise<void> {
   });
 }
 
-/** Reject (delete) one journal entry (user action). Class-2 delete. */
-export async function rejectEntry(id: string): Promise<void> {
+/** Reject (delete) one journal entry (user action). Class-2 delete. `opts.intoTrash`
+ *  (default off → current behaviour byte-identical) snapshots the entry into
+ *  `db.trash` before the row goes (§3.4). */
+export async function rejectEntry(id: string, opts?: { intoTrash?: boolean }): Promise<void> {
+  const entry = opts?.intoTrash ? await getClientDataDb().memoryJournal.get(id) : undefined;
   await mutateSynced({
     collection: 'memoryJournal',
     key: id,
     op: 'delete',
-    tables: ['memoryJournal'],
+    tables: opts?.intoTrash ? ['memoryJournal', 'trash'] : ['memoryJournal'],
     write: async (tx) => {
+      if (opts?.intoTrash && entry)
+        await snapshotRowIntoTrash(tx, Date.now(), 'memoryJournal', id, entry);
       await tx.table('memoryJournal').delete(id);
     },
   });

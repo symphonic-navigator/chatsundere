@@ -604,6 +604,89 @@ export interface TrashRow {
   row: unknown;
   deletedAt: number;
   purgeAt: number;
+  // §3.3 — grouping metadata that decides which card this row displays under.
+  entityKind: 'persona' | 'chat' | 'memory' | 'library' | 'document' | 'chatChild';
+  rootGroup: string; // `persona:<id>` | `library:<id>` | `<collection>:<key>` fallback
+  parentRef: { field: string; id: string } | null; // e.g. {field:'personaId', id:<originalId>}
+}
+
+/** §3.9 — a durable, server-authoritative record that a key's identity is dead (the permanent H-1 anchor). */
+export interface DeadKeyRow {
+  id: string;
+  collection: SyncCollection;
+  key: string;
+  diedAt: number;
+}
+
+/**
+ * §3.10 L-C — minimal grouping-metadata derivation from a collection + its row
+ * snapshot: parent ref from the snapshot's own foreign key, rootGroup from it when
+ * present, else a top-level `<collection>:<key>` fallback (ungrouped card).
+ */
+export function deriveLegacyTrashMeta(
+  collection: SyncCollection,
+  key: string,
+  snapshot: unknown,
+): {
+  entityKind: TrashRow['entityKind'];
+  rootGroup: string;
+  parentRef: { field: string; id: string } | null;
+} {
+  const s = (snapshot ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  switch (collection) {
+    case 'personas':
+      return { entityKind: 'persona', rootGroup: `persona:${key}`, parentRef: null };
+    case 'chats': {
+      const pid = str(s.personaId);
+      return pid
+        ? {
+            entityKind: 'chat',
+            rootGroup: `persona:${pid}`,
+            parentRef: { field: 'personaId', id: pid },
+          }
+        : { entityKind: 'chat', rootGroup: `chats:${key}`, parentRef: null };
+    }
+    case 'memoryJournal':
+    case 'memoryBody': {
+      const pid = str(s.personaId);
+      return pid
+        ? {
+            entityKind: 'memory',
+            rootGroup: `persona:${pid}`,
+            parentRef: { field: 'personaId', id: pid },
+          }
+        : { entityKind: 'memory', rootGroup: `${collection}:${key}`, parentRef: null };
+    }
+    case 'libraries':
+      return { entityKind: 'library', rootGroup: `library:${key}`, parentRef: null };
+    case 'documents': {
+      const lid = str(s.libraryId);
+      return lid
+        ? {
+            entityKind: 'document',
+            rootGroup: `library:${lid}`,
+            parentRef: { field: 'libraryId', id: lid },
+          }
+        : { entityKind: 'document', rootGroup: `documents:${key}`, parentRef: null };
+    }
+    case 'messages':
+    case 'pills':
+    case 'compactionCheckpoints': {
+      const cid = str(s.chatId);
+      return cid
+        ? {
+            entityKind: 'chatChild',
+            rootGroup: `chats:${cid}`,
+            parentRef: { field: 'chatId', id: cid },
+          }
+        : { entityKind: 'chatChild', rootGroup: `${collection}:${key}`, parentRef: null };
+    }
+    default:
+      // Only the four trashable families + their children ever reach trash; a
+      // truly unexpected collection gets an ungrouped top-level card.
+      return { entityKind: 'chatChild', rootGroup: `${collection}:${key}`, parentRef: null };
+  }
 }
 
 /** Engine attention state (spec §11.1/§11.3). Downstream tasks consume this union. */
@@ -612,7 +695,6 @@ export type SyncAttention =
   | { kind: 'record_too_large' }
   | { kind: 'delete_rate_limited' }
   | { kind: 'tombstone_threshold'; count: number }
-  | { kind: 'tombstone_paused'; count: number }
   | { kind: 'recovery_paused' }
   | { kind: 'blob_reupload_threshold'; bytes: number; count: number }
   | { kind: 'tamper' }
@@ -643,6 +725,7 @@ class ClientDataDb extends Dexie {
   syncRows!: Table<SyncRowMeta, [string, string]>;
   syncState!: Table<SyncStateRow, string>;
   trash!: Table<TrashRow, string>;
+  deadKeys!: Table<DeadKeyRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -1223,6 +1306,35 @@ class ClientDataDb extends Dexie {
             .modify((row: Record<string, unknown>) => {
               if (typeof row.updatedAt !== 'number') row.updatedAt = now;
             });
+        }
+      });
+
+    // Version 34 — universal trashcan: grouping metadata on trash rows (+ a
+    // rootGroup index for grouped queries) and a durable deadKeys store (the
+    // permanent H-1 anchor). Backfill existing trash rows and seed deadKeys.
+    this.version(34)
+      .stores({ trash: 'id, purgeAt, rootGroup', deadKeys: 'id, collection' })
+      .upgrade(async (tx) => {
+        const trash = tx.table('trash');
+        const dead = tx.table('deadKeys');
+        await trash.toCollection().modify((t: Record<string, unknown>) => {
+          const meta = deriveLegacyTrashMeta(
+            t.collection as SyncCollection,
+            t.key as string,
+            t.row,
+          );
+          t.entityKind = meta.entityKind;
+          t.rootGroup = meta.rootGroup;
+          t.parentRef = meta.parentRef;
+        });
+        // Seed dead-key markers from existing trash keys — their death is
+        // server-authoritative and must outlive the 30-day snapshot (§3.9).
+        const rows = await trash.toArray();
+        for (const t of rows as Array<Record<string, unknown>>) {
+          const collection = t.collection as SyncCollection;
+          const key = t.key as string;
+          const deletedAt = typeof t.deletedAt === 'number' ? t.deletedAt : 0;
+          await dead.put({ id: `${collection}:${key}`, collection, key, diedAt: deletedAt });
         }
       });
   }

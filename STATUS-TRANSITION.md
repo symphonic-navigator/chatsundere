@@ -1,5 +1,101 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-05 (overnight) — **TOMBSTONE THROTTLE + UNIVERSAL
+TRASHCAN BUILT (Phases 1–2, 15 tasks, subagent-driven TDD).** Closes the two
+triage items the 2026-07-04 two-browser test surfaced: the panic-pause
+deferred-tombstone **data loss**, and the missing user-facing trash surface
+("recoverable for 30 days" was aspirational). Built on branch
+`claude/trashcan-tombstone-throttle-haqiwv`; **not pushed, master/base untouched
+— the human integrates, device-tests, and runs the two owed audits.**
+
+**Phase 1 — throttle (independently shippable).** Removed the `TOMBSTONE_PANIC` /
+`tombstone_paused` panic pause entirely (that was the data-loss path: the
+watermark advanced past deferred tombstones). `runPullLoop` now applies at most
+`TOMBSTONE_CYCLE_CAP` (200) pulled tombstones per cycle, holds the watermark at
+`min(lowestDeferredRev) − 1`, sorts each page ascending (M-7-safe against
+adversarial ordering), breaks the page loop at the cap, and ignores `rev ≤ since`
+— lossless, deferred tombstones re-pull next cycle, nothing dropped.
+
+**Phase 2 — universal trashcan.** Dexie **v34** (TrashRow grouping fields
+`entityKind`/`rootGroup`/`parentRef` + a durable `deadKeys` store + a backfill;
+verno sweep 33→34 across 31 assertions). **H-1 re-anchored** on the durable
+`deadKeys` marker (written at server-authoritative ack — pulled-tombstone apply,
+`applyOk` delete, `applyTombstoned` — never at enqueue, so fast-Undo before drain
+keeps identity), surviving purge/restore/30-day auto-purge (Larissa M-A). Local
+deletes for the four families (persona / chat / library+document / memory) route
+through `softDelete` → snapshot the **exact `mutateSynced` cascade set** into
+`db.trash` (build-constraint I-2) + enqueue the synced delete (peers route the
+tombstones into their own trash). Fast identity-preserving **Undo** before drain
+(→ new-identity `restoreCard` fallback once `isDeadKey` shows it drained).
+**Restore** = new-identity cascade re-materialisation (H-1 forces fresh ids),
+remapping parent refs + pill/kbRef references + a sealed `restoredFrom` provenance
+marker, one transaction (I-4), dead-key markers retained. **Grouped cards** by
+parent-chain (a card = the highest trashed ancestor's subtree; a chat deleted
+separately folds into its persona card once the persona is also deleted).
+Cross-device **de-dup** (a pulled upsert carrying `restoredFrom` retires the
+peer's matching card). Local-only **purge** (leaves `syncOutbox` I-3 + `deadKeys`
+intact). The **Recently deleted** account surface (tile beside Recovery Key) + an
+Undo / Delete-permanently delete-time toast.
+
+**Verification (independently re-checked on the final tree):** `pnpm typecheck
+--force` **14/14**; `pnpm run build` **9/9**; full user-client vitest **2709
+passed / 1 failed** — the 1 is the pre-existing `stream-manager-store` parallel-
+load flake (passes 36/36 in isolation), the 8 known Node-`localStorage` baseline
+failures did not manifest this run (the runner had `localStorage`), doorbell
+green; **no trash/sync regression** (the `tests/trash` suite is 37/37, all
+`tests/sync` green). Biome clean on every changed file (one pre-existing
+`index.css` `.blob-marker` quote nit, from an earlier branch commit, left
+untouched).
+
+**Integration caught a real bug (fixed):** `deletePersonaCascade` never cascaded
+`memoryJournal`/`memoryBody`, so deleting a persona stranded its memories against
+a dead `personaId` — inconsistent with the trash model (which folds memory under
+the persona card). Now enumerated, snapshotted, live-deleted, and tombstoned with
+the rest; backward-compatible (existing persona-delete tests seed no memories).
+
+**TWO AUDITS OWED (human-triggered — the overnight worker cannot summon them):**
+- **Larissa (security):** the whole `apps/user-client/src/sync/**` + trash diff —
+  the H-1 dead-key durability change (a NON-NEGOTIABLE path), the `restoredFrom`
+  zero-knowledge boundary, the single-transaction restore, purge-leaves-outbox.
+- **Laura (UX):** the Recently deleted surface + the delete-time Undo/permanent
+  toast (new user-reachable flows across chat/persona/library/document/memory).
+
+**Deviations from the plan (all toward the spec/tests — flag for the audit):**
+(1) the snapshot set is driven by the **real cascade collectors**, not the plan's
+`TRASH_HIERARCHY` sketch, which under-counted (it would have lost
+attachments/artefacts on chat delete → I-2 violation / data loss); `TRASH_HIERARCHY`
+kept as a descriptive constant. (2) Card grouping uses the **parentRef chain**,
+not the stored `rootGroup` hint (required for the "delete chat then persona folds"
+scenario and independent-deletes-under-a-live-persona); `cardKey` = the ancestor's
+trash id `${collection}:${key}`, not the plan's `persona:<id>` format. (3) Undo's
+drained-discriminator is **`isDeadKey`** (spec §3.4), not raw seq-presence (the
+drain can complete inside `mutateSynced` before `softDelete` returns). (4) the
+toast's "Delete permanently" calls **`purgeCard`**, not `permanentDelete` (the
+rows are already soft-deleted; permanent = drop the recoverable snapshot).
+
+**Known v1 limitations (for `security-deferrals.md` / `ux-deferrals.md`):** live
+back-references into a restored entity are not remapped (§3.5 — e.g. a live chat
+still points at the dead persona id; only trashed descendants remap); blob
+re-hydration on restore is not done (blobRefs kept, bytes may be reclaimed);
+`deadKeys` grows unbounded (one small row per dead key — §3.9, bound deferred);
+`restoredFrom` persists on the local restored row after first sync (harmless).
+
+**Branch note (integration):** the plan/kickoff named `full-backend-transition`,
+but the harness launched on `claude/trashcan-tombstone-throttle-haqiwv`, which is
+the branch that actually carries this plan + Dexie **v33** + the panic logic the
+plan edits. The current `full-backend-transition` has **diverged** (Dexie v32, no
+plan file, no shared merge-base) — so this work was built on the correct lineage
+under a different name. Integrate these 15 commits onto whichever branch is the
+live backend-transition tip, re-checking the Dexie version owns **34** and the
+verno sweep. Commits are unsigned (`noreply@anthropic.com` author + `Co-Authored-By:
+Liz`) — sign at integration if required.
+
+15 commits `8ff8f17..929c9b2`. Spec
+`superpowers/specs/2026-07-04-trashcan-and-tombstone-throttle-design.md`, plan
+`superpowers/plans/2026-07-04-trashcan-and-tombstone-throttle.md`.
+
+---
+
 **Last updated:** 2026-07-04 (evening) — **TWO-BROWSER SYNC TEST: stuck
 attention banners fixed.** Chris's cross-device mass-deletion test surfaced the
 "N items were removed by another device — recoverable for 30 days" notice

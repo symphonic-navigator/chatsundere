@@ -62,8 +62,6 @@ function attentionView(a: SyncAttention): {
       return { text: syncCopy.attention.deleteRateLimited };
     case 'tombstone_threshold':
       return { text: syncCopy.attention.tombstoneThreshold(a.count) };
-    case 'tombstone_paused':
-      return { text: syncCopy.attention.tombstonePaused(a.count) };
     case 'recovery_paused':
       return {
         text: syncCopy.attention.recoveryPaused,

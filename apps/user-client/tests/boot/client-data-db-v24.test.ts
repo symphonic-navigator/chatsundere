@@ -75,7 +75,7 @@ describe('client-data-db v24 (auto-read-aloud fields)', () => {
   it('opens at verno 26 on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(33);
+    expect(db.verno).toBe(34);
   });
 
   it('seeds autoReadAloud=false and voiceStopHintSeen=false', async () => {
@@ -91,7 +91,7 @@ describe('client-data-db v24 (auto-read-aloud fields)', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(33);
+    expect(db.verno).toBe(34);
 
     const settings = await db.settings.get(1);
     expect(settings?.autoReadAloud).toBe(false);
