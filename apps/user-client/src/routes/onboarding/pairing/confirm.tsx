@@ -6,6 +6,7 @@ import {
   setBiometricPromptDue,
   startJoinByPairing,
 } from '@chatsundere/crypto';
+import { JoinError } from '@chatsundere/shared-types';
 import {
   maybeProbeLinkedServer,
   useAccountLinkStore,
@@ -237,14 +238,14 @@ function PairingConfirmInner() {
 
 // ── Error mapping ─────────────────────────────────────────────────────────────
 
-type Mapped =
+export type Mapped =
   | { kind: 'passphrase_inline'; message: string }
   | { kind: 'screen'; screen: Extract<Screen, { kind: 'kind_mismatch' | 'fatal' }> };
 
-function mapError(err: unknown): Mapped {
+export function mapError(err: unknown): Mapped {
   if (err instanceof HttpError) {
     if (err.code === 'kind_mismatch') return { kind: 'screen', screen: { kind: 'kind_mismatch' } };
-    if (err.code === 'opaque_evidence_invalid')
+    if (err.code === JoinError.OpaqueAuthenticationFailed)
       return { kind: 'passphrase_inline', message: 'Wrong passphrase.' };
     if (err.code === 'code_not_found_or_expired')
       return {
@@ -272,6 +273,9 @@ function mapError(err: unknown): Mapped {
         kind: 'screen',
         screen: { kind: 'fatal', message: 'Server unreachable. Check your connection.' },
       };
+  }
+  if (err instanceof CryptoError && err.code === 'wrong_passphrase') {
+    return { kind: 'passphrase_inline', message: 'Wrong passphrase.' };
   }
   if (err instanceof CryptoError && err.code === 'conflict') {
     return {

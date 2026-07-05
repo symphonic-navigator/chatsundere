@@ -71,7 +71,7 @@ export const JoinError = {
   KindMismatch: 'kind_mismatch',
   CodeNotFoundOrExpired: 'code_not_found_or_expired',
   UsernameTaken: 'username_taken',
-  OpaqueEvidenceInvalid: 'opaque_evidence_invalid',
+  OpaqueAuthenticationFailed: 'opaque_authentication_failed',
   RateLimitExceeded: 'rate_limit_exceeded',
   SessionExpired: 'session_expired',
   WrappingInvariantViolated: 'wrapping_invariant_violated',
