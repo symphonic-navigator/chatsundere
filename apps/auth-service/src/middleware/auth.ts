@@ -2,6 +2,7 @@
 
 import { and, eq, isNull } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
+import { isTokenRevoked } from '../auth/deny-list.js';
 import { createDb } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { type AccessClaims, verifyAccessToken } from '../jwt/verify.js';
@@ -21,9 +22,12 @@ interface BearerOptions {
  *
  * 1. Extracts the Bearer token from the Authorization header.
  * 2. Verifies the token signature and claims via jose (EdDSA).
- * 3. Checks that the user exists and is not suspended — cached in Redis for 30 s.
- * 4. Optionally enforces a minimum role (admin or primary_admin).
- * 5. Stores the typed claims in `c.var.claims` for downstream handlers.
+ * 3. Rejects the token if its session (`jti`) or subject (`sub`) has been revoked
+ *    on the deny-list — so recovery and single-device logout take immediate effect
+ *    here too, not just on the sync-service. Fails closed on a Redis error.
+ * 4. Checks that the user exists and is not suspended — cached in Redis for 30 s.
+ * 5. Optionally enforces a minimum role (admin or primary_admin).
+ * 6. Stores the typed claims in `c.var.claims` for downstream handlers.
  */
 export function bearerAuth(options: BearerOptions = {}): MiddlewareHandler {
   return async (c, next) => {
@@ -38,6 +42,13 @@ export function bearerAuth(options: BearerOptions = {}): MiddlewareHandler {
       claims = await verifyAccessToken(token);
     } catch {
       throw new ApiError(401, 'unauthorized', 'Invalid bearer token');
+    }
+
+    // Reject a revoked session/subject before any DB work. A Redis error
+    // propagates and the request is denied (fail closed) — auth-service already
+    // hard-depends on Redis via userExistsAndActive, so this adds no new coupling.
+    if (await isTokenRevoked(createRedis(), claims)) {
+      throw new ApiError(401, 'unauthorized', 'Token revoked');
     }
 
     if (!(await userExistsAndActive(claims.sub))) {

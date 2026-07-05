@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { opaqueServerIdentity, revokedSubKey } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
 import { closeDb, createDb } from '../../src/db/client.js';
 import { pendingCodes, refreshTokens, users } from '../../src/db/schema.js';
@@ -248,5 +248,15 @@ describe.skipIf(skip)('Recovery severs pre-existing sessions', () => {
     // (c) The freshly issued access token survives: its iat is at or after the
     //     cutoff (revoke ran BEFORE issuance), so the deny-list does not evict it.
     expect(iatOf(finishBody.access_token)).toBeGreaterThanOrEqual(cutoff);
+
+    // (d) The NEW refresh family survives — revoke ran BEFORE issuance, so exactly
+    //     one non-revoked family exists for the subject. This catches a
+    //     revoke-AFTER-issue regression that would kill the new family too (which
+    //     (a)-(c) would stay green under, since they only inspect the old family).
+    const liveFamilies = await db
+      .select({ id: refreshTokens.id })
+      .from(refreshTokens)
+      .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+    expect(liveFamilies.length).toBe(1);
   });
 });
