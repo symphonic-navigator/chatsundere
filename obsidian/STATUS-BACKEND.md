@@ -30,9 +30,20 @@ gating tests); auth-service `config.test.ts` **10/10**, full suite baseline unch
 (14 pre-existing DB-integration fails, none config/env). **Plan gap caught at the
 integrated gate:** two pre-existing test files under `apps/user-client/tests/routes/`
 (planning searched `src/routes/` only) encoded the old grid/crumb and broke; fixed +
-extended with admin-gating coverage. **NOT pushed (Chris pushes after device-verifying
-spec §11: the role-state matrix — regular user, local-only, admin+adminUrl, admin
-without adminUrl — only checkable on a real backend).** Deferred Minors (non-blocking):
+extended with admin-gating coverage. **DEVICE-VERIFIED
+on the dev stack (2026-07-05):** the gold tile appears for an admin and opens the
+admin-client in a new tab; Chris logged in. Two things surfaced and were fixed
+(follow-up commit `2134016b`, Larissa re-audited the env change CLEAR): **(1)** the
+server env `ADMIN_PUBLIC_URL` was strict-https like proxy/sync, but the dev
+admin-client is http-served and the client OPENS the URL (real navigation, no VITE
+override) — relaxed to accept loopback-http too, mirroring the client parser's
+`isAcceptableUrl` (non-loopback http still refused; proxy/sync unchanged). **(2)**
+the admin-client must be **same-origin** as the user-client to see its account
+IndexedDB ("No account on this device" otherwise) — so the dev URL is
+`http://localhost:3000/admin/` (user-client Vite reverse-proxies `/admin/`→`:5174`,
+as Traefik does in prod), with the trailing slash the admin `base` needs. Spec §6.1
+records both amendments; `.env.example` documents the same-origin rule for
+self-hosters. **Still NOT pushed (Chris pushes).** Deferred Minors (non-blocking):
 3rd conditional-spread repetition in `server-config.ts` (revisit at a 4th field);
 inert `colour="blue"` on the gold tile (required prop, `gold` overrides). Spec/plan:
 [[../superpowers/specs/2026-07-05-account-admin-tile-and-reorg-design]],

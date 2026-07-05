@@ -224,6 +224,30 @@ configures an **absolute** admin-client URL (a relative `/admin/` would fail
 `new URL()` and be dropped — acceptable, since discovery is explicitly the chosen
 mechanism over a relative link).
 
+### 6.1 Amendments (2026-07-05, from device verification)
+
+Two things surfaced when Chris first exercised the launcher on the dev stack and
+were folded in (Larissa re-audited the env change, CLEAR):
+
+- **Server env accepts loopback http, not just https.** The spec above implied
+  the server `ADMIN_PUBLIC_URL` would be strict-https like `PROXY_PUBLIC_URL` /
+  `SYNC_PUBLIC_URL`. It is deliberately looser: it mirrors the *client* parser's
+  own rule (`isHttpsOrLoopbackHttp` in `env.ts` ≡ `isAcceptableUrl`) — https on
+  any host, or http on a loopback host. Unlike proxy/sync (which the client
+  reaches via fetch transports with a dev VITE override), the client *opens*
+  `adminUrl` as a real browser navigation, so a dev admin-client served over
+  `http://localhost` must be advertisable without a placeholder-scheme fudge.
+  Non-loopback http is still refused (server won't boot). Proxy/sync are
+  unchanged.
+- **The admin-client must be same-origin as the user-client.** It shares the
+  account stored in that origin's IndexedDB; on a different origin it shows "No
+  account on this device". So `ADMIN_PUBLIC_URL` points at the admin-client
+  *behind the user-client's origin* (prod: `https://app.example/admin/`, routed
+  by Traefik; dev: `http://localhost:3000/admin/`, where the user-client's Vite
+  server reverse-proxies `/admin/*` to the admin-client on `:5174`), **with the
+  trailing slash** the admin-client's `base` requires. Documented in
+  `.env.example` for self-hosters.
+
 ---
 
 ## 7. Touched files
