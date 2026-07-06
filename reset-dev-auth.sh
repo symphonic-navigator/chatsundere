@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# Reset the local dev auth database to a clean slate.
+# Reset the local dev backend to a clean slate.
 #
 # Truncates every auth-service table so ./bootstrap-admin.sh can mint a fresh
-# primary_admin. Use after an incompatible schema or crypto change leaves the
-# existing account unusable (e.g. an OPAQUE-identity convention change bakes a
-# now-stale identifier into the credential record).
+# primary_admin, AND wipes the sync-service store (sync_db + the MinIO blob
+# bucket). Use after an incompatible schema or crypto change leaves the existing
+# account unusable (e.g. an OPAQUE-identity convention change bakes a now-stale
+# identifier into the credential record).
 #
-# Dev only — it targets the Docker-Compose Postgres on localhost. Never point
-# it at a real database.
+# The sync wipe matters: auth_db and sync_db are SEPARATE databases, and a fresh
+# bootstrap mints a brand-new random accountId. Clearing only auth_db therefore
+# stranded every previous account's records and blobs in sync_db as undeletable
+# orphans (found live 2026-07-06: three orphan accounts, ~2.6k records, 24 MB of
+# MinIO objects). A full reset must clear BOTH sides.
+#
+# Dev only — it targets the Docker-Compose Postgres and MinIO on localhost.
+# Never point it at a real database.
 #
 # This clears the SERVER side only. The client keeps its account in the
 # browser's IndexedDB, so after running this also clear site data for the
@@ -37,6 +44,37 @@ RESTART IDENTITY CASCADE;
 SQL
 
 echo "✓ auth_db cleared."
+
+echo "▸ Resetting sync_db (records, blobs, accounts) and re-minting the epoch…"
+docker compose -f "$COMPOSE" exec -T postgres \
+  psql -U chatsundere -d sync_db -v ON_ERROR_STOP=1 <<'SQL'
+TRUNCATE TABLE
+  sync_records,
+  sync_blobs,
+  sync_accounts
+RESTART IDENTITY CASCADE;
+-- Re-mint the instance epoch so any client still holding an old watermark does a
+-- clean re-sync against the wiped store (mirrors reEpoch(), db/epoch.ts). The
+-- __drizzle_migrations table is deliberately left intact.
+DELETE FROM sync_meta;
+INSERT INTO sync_meta DEFAULT VALUES;
+SQL
+
+echo "✓ sync_db cleared and re-epoched."
+
+# Empty the MinIO blob bucket. The bucket is auto-created by the sync-service at
+# boot, so removing every object is enough; the bucket itself may stay.
+if docker compose -f "$COMPOSE" ps minio >/dev/null 2>&1; then
+  echo "▸ Emptying the MinIO blob bucket (chatsundere-blobs)…"
+  docker compose -f "$COMPOSE" exec -T minio sh -c '
+    mc alias set local http://localhost:9000 chatsundere-dev chatsundere-dev-secret >/dev/null 2>&1
+    mc rm --recursive --force local/chatsundere-blobs/ >/dev/null 2>&1 || true
+  '
+  echo "✓ MinIO bucket emptied."
+else
+  echo "⚠ MinIO container not found — skipping blob wipe (blobs may linger)." >&2
+fi
+
 echo
 echo "  Next:"
 echo "    1. Clear site data for http://localhost:3000 and http://localhost:5174"
