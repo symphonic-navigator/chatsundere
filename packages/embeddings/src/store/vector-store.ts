@@ -152,17 +152,24 @@ export function createVectorStore(config: VectorStoreConfig): VectorStore {
       });
     },
 
-    /** Mutate numeric/metadata without re-embedding. Recomputes the stored byte size; bypasses the storage budget. */
+    /** Mutate numeric/metadata without re-embedding. Recomputes the stored byte size and enforces the storage budget on the resulting byte delta. */
     async update(id, patch) {
       const existing = await table.get(id);
       if (!existing) return;
       const numeric = patch.numeric ?? existing.numeric;
       const metadata = patch.metadata !== undefined ? patch.metadata : existing.metadata;
-      await table.update(id, {
+      const updated: VectorRow = {
+        ...existing,
         numeric,
         metadata,
         bytes: rowBytes(existing.tags, numeric, metadata),
-      });
+      };
+      // Enforce the budget on the byte delta, exactly as upsert does — a large
+      // metadata/numeric update could otherwise grow a row past maxBytes. The
+      // id already exists, so enforceBudget counts only the net byte change (no
+      // count change), and a shrinking update is always allowed.
+      await enforceBudget([updated]);
+      await table.update(id, { numeric, metadata, bytes: updated.bytes });
     },
 
     async delete(ids) {

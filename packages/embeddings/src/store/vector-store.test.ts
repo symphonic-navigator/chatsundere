@@ -129,6 +129,45 @@ describe('storage budget', () => {
     expect(await store.scan({ collection: 'memory' })).toHaveLength(2);
   });
 
+  it('update rejects a metadata grow past maxBytes', async () => {
+    const base = createVectorStore({ db, table: db.vectors });
+    await base.upsert([input('a', [1, 0])]);
+    const baseline = (await base.usage()).bytes;
+    // Budget leaves only 20 bytes of head-room over the current row.
+    const store = createVectorStore({ db, table: db.vectors, budget: { maxBytes: baseline + 20 } });
+    await expect(store.update('a', { metadata: { note: 'x'.repeat(200) } })).rejects.toBeInstanceOf(
+      BudgetExceededError,
+    );
+  });
+
+  it('update within the budget succeeds', async () => {
+    const store = createVectorStore({ db, table: db.vectors, budget: { maxBytes: 100_000 } });
+    await store.upsert([input('a', [1, 0], {}, { salience: 1 })]);
+    await expect(store.update('a', { numeric: { salience: 2 } })).resolves.toBeUndefined();
+    expect((await store.scan({ collection: 'memory' }))[0]?.numeric.salience).toBe(2);
+  });
+
+  it('update invokes the eviction hook when over budget instead of rejecting', async () => {
+    const evicted: string[] = [];
+    const base = createVectorStore({ db, table: db.vectors });
+    await base.upsert([input('a', [1, 0]), input('filler', [0, 1])]);
+    const baseline = (await base.usage()).bytes;
+    const store = createVectorStore({
+      db,
+      table: db.vectors,
+      budget: {
+        maxBytes: baseline + 20,
+        onFull: async ({ table }) => {
+          await table.delete('filler');
+          evicted.push('filler');
+        },
+      },
+    });
+    await store.update('a', { metadata: { note: 'x'.repeat(200) } });
+    expect(evicted).toEqual(['filler']);
+    expect((await store.scan({ collection: 'memory' })).find((r) => r.id === 'a')).toBeDefined();
+  });
+
   it('invokes the eviction hook instead of rejecting when provided', async () => {
     const evicted: string[] = [];
     const store = createVectorStore({
