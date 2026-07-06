@@ -6,6 +6,7 @@
 //   DELETE — revoke (404 if not owned, 409 if already revoked)
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { and, eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -66,7 +67,7 @@ describe.skipIf(skip)('/api/v1/me/pairing-codes', () => {
       registrationResponse: linkStartBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
     const zero32 = Buffer.alloc(32).toString('base64url');
@@ -111,7 +112,7 @@ describe.skipIf(skip)('/api/v1/me/pairing-codes', () => {
       password,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
     if (!finishResult) throw new Error('test setup: OPAQUE finishLogin returned undefined');

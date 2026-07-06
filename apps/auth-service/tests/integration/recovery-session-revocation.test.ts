@@ -137,7 +137,7 @@ describe.skipIf(skip)('Recovery severs pre-existing sessions', () => {
       registrationResponse: startBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
 
@@ -202,7 +202,7 @@ describe.skipIf(skip)('Recovery severs pre-existing sessions', () => {
       registrationResponse: startBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
 

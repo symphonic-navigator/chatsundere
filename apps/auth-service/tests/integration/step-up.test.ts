@@ -10,7 +10,7 @@
 // 2026-05-22 testing decision (virtual authenticator out of scope).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { revokedJtiKey, revokedSubKey } from '@chatsundere/shared-types';
+import { opaqueServerIdentity, revokedJtiKey, revokedSubKey } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { and, desc, eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -73,7 +73,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
       registrationResponse: linkStartBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
 
@@ -119,7 +119,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
       password,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
     if (!finishResult) throw new Error('test setup: OPAQUE finishLogin returned undefined');
@@ -324,7 +324,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
         password,
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');
@@ -362,7 +362,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
         password,
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');
@@ -396,7 +396,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
         password: 'definitely-not-the-right-one',
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       // OPAQUE's client.finishLogin returns undefined when the loginResponse
@@ -508,7 +508,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
         password,
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');
@@ -557,7 +557,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
           // not retroactively change what the client computed.
           identifiers: {
             client: username,
-            server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+            server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
           },
         });
         if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');
@@ -587,7 +587,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
         password: 'wrong-password-here',
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       const evidence = wrongFinish?.finishLoginRequest ?? 'AAAAAAAA';
@@ -627,7 +627,7 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
         password,
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');

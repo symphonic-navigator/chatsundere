@@ -5,6 +5,7 @@
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -31,7 +32,10 @@ async function buildProof(
   username: string,
   verifierKeyB64: string,
 ): Promise<string> {
-  const serverId = `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`;
+  // Must match the server's derivation in routes/recovery.ts — origin-only via
+  // opaqueServerIdentity, not the legacy `<base>/v1` form (fixture bug that
+  // left recovery/finish without green coverage).
+  const serverId = opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth');
 
   const nonceBytes = new Uint8Array(Buffer.from(nonceB64, 'base64url'));
   const usernameBytes = new TextEncoder().encode(username);
@@ -135,7 +139,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       registrationResponse: startBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
 
@@ -246,7 +250,7 @@ describe.skipIf(skip)('Recovery challenge-response round-trip', () => {
       registrationResponse: startBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
 

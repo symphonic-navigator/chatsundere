@@ -4,6 +4,7 @@
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -57,7 +58,7 @@ async function registerUser(
     registrationResponse: startBody.registration_response,
     identifiers: {
       client: opts.username,
-      server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
     },
   });
 
