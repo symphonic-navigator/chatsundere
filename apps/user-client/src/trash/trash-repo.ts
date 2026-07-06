@@ -2,7 +2,8 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 import { uuidv7 } from 'uuidv7';
 import { type TrashRow, getClientDataDb } from '../boot/client-data-db.js';
-import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
+import { blobFieldsOf, isBlobRef } from '../sync/blob-transform.js';
+import { enqueueBlobPut, enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { PARENT_FIELD_COLLECTION, type TrashEntityKind } from './trash-model.js';
 
@@ -253,7 +254,35 @@ export async function restoreCard(cardKey: string): Promise<void> {
       clone.restoredFrom = m.key;
 
       await tx.table(m.collection).put(clone);
-      if (linked) enqueueSync(tx, m.collection as SyncCollection, newId, 'upsert');
+      if (linked) {
+        enqueueSync(tx, m.collection as SyncCollection, newId, 'upsert');
+
+        // Audit #6 — re-establish the blob channel for every revived ref. A
+        // delete → drain → restore otherwise leaves the restored record pointing
+        // at a destroyed server object forever (irreversible byte loss).
+        for (const spec of blobFieldsOf(m.collection as SyncCollection)) {
+          const ref = clone[spec.refField];
+          if (!isBlobRef(ref)) continue;
+
+          // Audit #6a: cancel any queued blob-delete that raced this restore —
+          // the revived reference is authoritative, the delete must lose.
+          const pendingDeletes = (await tx
+            .table('syncOutbox')
+            .filter((r) => r.op === 'blob-delete' && r.blobId === ref.blobId)
+            .primaryKeys()) as number[];
+          if (pendingDeletes.length > 0) await tx.table('syncOutbox').bulkDelete(pendingDeletes);
+
+          // Audit #6b: the server object may already be gone (delete drained
+          // before the restore). Re-establish it with an idempotent repair PUT
+          // under the PRESERVED id — the deterministic SIV re-seal makes a
+          // duplicate PUT a byte-identical 200, so enqueueing unconditionally is
+          // safe. Only when this device still holds the bytes to seal.
+          const bytes = clone[spec.bytesField];
+          if (bytes instanceof Blob && bytes.size > 0) {
+            enqueueBlobPut(tx, m.collection as SyncCollection, newId, ref.blobId);
+          }
+        }
+      }
     }
 
     // Retire the snapshots; leave the dead-key markers intact forever (§3.9).
