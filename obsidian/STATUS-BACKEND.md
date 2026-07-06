@@ -1,6 +1,38 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-06 — **USERNAME-UNIQUENESS across the server link fixed
+**Last updated:** 2026-07-06 — **EXTERNAL-REVIEW BACKEND HARDENING squashed to
+`master`** (`672e72e5`, one feature unit). Four defects from an external code
+review (Codex, run by a tester) — each verified against the real code before
+touching it. **(1) Refresh-token rotation race (was Critical)** — `refresh.ts`
+did read-then-write without atomicity, so two concurrent presents of the same
+still-valid token both minted a successor → two live tokens in one family,
+defeating re-use detection. **Reproduced empirically: 39/40 concurrent pairs
+double-minted before, 0/40 after.** Fix: **revoke-first** — an atomic conditional
+claim (`UPDATE … WHERE id = ? AND revoked_at IS NULL RETURNING id`) before
+issuing the successor; the race loser is denied (`reuse_detected`, no family
+nuke — a benign multi-tab race is indistinguishable from theft at claim time and
+the winning rotation is intact). Pinned with a looping race test (needs live PG).
+**(2) Redis limiter immortal buckets (sync + proxy, was Medium)** — INCR then a
+separate EXPIRE could leave a TTL-less bucket on a mid-op fault; now one atomic
+constant Lua script. **(3) Doorbell subscribe (was Medium)** — a failed SUBSCRIBE
+left a socket counted healthy that never receives pokes; a failed subscribe now
+tears the account's sockets down (client reconnects + re-subscribes). **(4) Proxy
+dropped explicit target port (was Low)** — `https://host:8443` connected on 443;
+`Target` now splits `hostname` (DNS + SNI) / `host` (Host header, with port) /
+`port` (pinned connection). **No SSRF change — the blocked-range check still
+governs the pinned IP** (Larissa verified). Gates: `pnpm typecheck --force`
+**14/14**; proxy `bun test` **84/0**; sync `bun test` **131 pass** (1 pre-existing
+`ops.test` CORS fail, confirmed identical on master — environmental); auth rotation
+test **6/0** vs `auth_db_test`; auth no-DB fail-set **identical to master** (my
+change adds zero regressions); Biome clean. **Larissa CLEAR-TO-SQUASH** (no
+Crit/High/Med/Low; two informational notes, both already commented). **NOT pushed**
+— master is 3 commits ahead of origin (this + username-uniqueness + the Codex
+deferrals doc). Codex #4/#6 (embeddings byte-budget bypass + `rowBytes` throw)
+were **Low/client-local** — logged in `follow-ups-index.md`, deferred.
+
+---
+
+**Prior — 2026-07-06:** **USERNAME-UNIQUENESS across the server link fixed
 on `full-backend-transition`** (one squashed feature unit, ahead of the v0.2.0
 go-live). Two defects Chris found in a multi-device test, one root cause: the
 client did not enforce username uniqueness across the local↔server boundary.
