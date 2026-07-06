@@ -70,7 +70,10 @@ export const TOMBSTONE_CYCLE_CAP = 200;
 export type ApplyOutcome =
   | { kind: 'echo' } // §7.0 — my own re-delivered write; rev adopted, no data change
   | { kind: 'stale' } // rev ≤ syncRows.rev — ignored
-  | { kind: 'rejected' } // §7.1 inert rejection (open failed) or no MK
+  | { kind: 'rejected' } // §7.1 inert rejection (open failed) — mutates nothing
+  // Engine-availability failure (no MK): NOT poison — the pull loop must abort and
+  // hold the watermark (audit finding #1).
+  | { kind: 'unavailable' }
   | { kind: 'skipped' } // §7.2 unhandled collection (vectors — materialised elsewhere)
   | { kind: 'tombstoned' } // §7.3 — row routed to trash (or nothing local to move)
   | { kind: 'tamper' } // §7.4 H-1 — upsert onto a live tombstone anchor, rejected
@@ -395,7 +398,12 @@ async function findKeyByBlindId(
  */
 export async function applyRecord(pulled: SyncPulledRecord): Promise<ApplyOutcome> {
   const mk = useSessionStore.getState().mk;
-  if (!mk) return { kind: 'rejected' };
+  // Engine loss (locked/forgotten session) is NOT a per-record rejection: the MK
+  // may have vanished mid-page (a concurrent `closeAndForget()`), so the pull loop
+  // must ABORT and hold the watermark rather than advance past the unapplied tail
+  // (audit finding #1). The server only serves rev > since, so a wrongly-advanced
+  // watermark is permanent data loss.
+  if (!mk) return { kind: 'unavailable' };
 
   const collection = pulled.collection;
 
