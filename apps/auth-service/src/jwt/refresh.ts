@@ -16,8 +16,11 @@ export interface RotateResult {
 /**
  * Rotates a refresh token, implementing RFC-style token rotation with re-use detection.
  *
- * Happy path: presented token is valid and not revoked → issue new tokens, mark
- * the prior row revoked with rotated_to_id set to the new token's id.
+ * Happy path: presented token is valid and not revoked → atomically claim
+ * (revoke) the presented row, then issue new tokens and link rotated_to_id to
+ * the successor. The claim is conditional on the row still being unrevoked, so
+ * two requests racing with the same still-valid token cannot both succeed —
+ * the family never ends up with two live successor tokens.
  *
  * Re-use signal: presented token's row is already revoked *and* has rotated_to_id set,
  * meaning it was previously rotated legitimately. This indicates a stolen token;
@@ -75,6 +78,25 @@ export async function rotateRefreshToken(args: {
     return { outcome: 'user_gone' };
   }
 
+  // Atomically claim the presented token before issuing its successor. The
+  // conditional `revoked_at IS NULL` guard means that when two requests race
+  // with the same still-valid token, exactly one UPDATE matches a row; the
+  // loser matches zero and is denied below, so the family can never end up with
+  // two live successor tokens (which would silently defeat re-use detection).
+  // Revoking before issuing is also fail-safe: a crash between the two steps
+  // leaves the old token dead rather than leaving both tokens live.
+  const claimed = await db
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(refreshTokens.id, row.id), isNull(refreshTokens.revokedAt)))
+    .returning({ id: refreshTokens.id });
+  if (claimed.length !== 1) {
+    // A concurrent request already rotated this exact token. Deny the duplicate
+    // without revoking the family: we cannot distinguish a benign client race
+    // (multi-tab / retry) from theft here, and the winning rotation is intact.
+    return { outcome: 'reuse_detected' };
+  }
+
   const tokens = await issueTokens({
     userId: user.id,
     role: user.role,
@@ -82,9 +104,11 @@ export async function rotateRefreshToken(args: {
     userAgent: args.userAgent,
   });
 
+  // Link the now-revoked row to its successor so that a later re-present of the
+  // old token trips the family-wide re-use revocation above.
   await db
     .update(refreshTokens)
-    .set({ revokedAt: new Date(), rotatedToId: tokens.refreshTokenId })
+    .set({ rotatedToId: tokens.refreshTokenId })
     .where(eq(refreshTokens.id, row.id));
 
   return { outcome: 'ok', tokens };

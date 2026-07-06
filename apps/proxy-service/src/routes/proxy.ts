@@ -38,7 +38,7 @@ const activeConnections = new Map<string, number>();
 
 /** The real forward: resolve every A/AAAA record, block private ranges, connect to the pinned IP. */
 async function defaultPinnedFetch(forward: Request, target: Target): Promise<Response> {
-  const ip = await resolveAndPin(target.host);
+  const ip = await resolveAndPin(target.hostname);
   const reqUrl = new URL(forward.url);
   return pinnedFetch(ip, target, reqUrl, forward.method, forward.headers, forward.body);
 }
@@ -169,7 +169,7 @@ export function registerProxyRoute(app: Hono, deps: ProxyDeps): void {
     const kind: 'llm' | 'mcp' = c.req.header('x-cors-proxy-kind') === 'mcp' ? 'mcp' : 'llm';
     const llmOutcome = (o: 'ok' | 'upstream_error') =>
       kind === 'llm'
-        ? recordLlmRequest({ host: normaliseLlmHost(target.host), outcome: o })
+        ? recordLlmRequest({ host: normaliseLlmHost(target.hostname), outcome: o })
         : undefined;
 
     // Content-Length fast-path for the size ceiling (streamed enforcement below).

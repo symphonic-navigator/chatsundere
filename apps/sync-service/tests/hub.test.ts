@@ -93,6 +93,28 @@ describe('doorbell hub', () => {
     expect(subscribed.has('sync:acc')).toBe(false);
   });
 
+  test('tears down the account sockets when the Redis subscription fails', async () => {
+    const em = new EventEmitter();
+    const redis = Object.assign(em, {
+      subscribe: async () => {
+        throw new Error('redis down');
+      },
+      unsubscribe: async () => 0,
+    }) as unknown as Redis;
+    const hub = createDoorbellHub(redis, { maxSocketsPerAccount: 8, pingIntervalMs: 100_000 });
+    stopFns.push(() => hub.stop());
+    const s = fakeSocket('acc', 9e12);
+
+    // add() reports connected synchronously while the SUBSCRIBE is in flight…
+    expect(hub.add(s.ws)).toBe(true);
+    // …but once the subscription rejects, the socket must be closed and dropped
+    // rather than left held as an apparently-healthy connection that never
+    // receives a poke.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(s.closed?.code).toBe(4500);
+    expect(hub.size('acc')).toBe(0);
+  });
+
   test('pings live sockets and closes expired ones on each tick', async () => {
     const { redis } = fakeSubscriber();
     const clock = 1_000_000;

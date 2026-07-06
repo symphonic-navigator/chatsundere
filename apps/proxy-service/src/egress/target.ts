@@ -6,7 +6,12 @@ import { isBlockedIp } from './blocked-ranges.js';
 /** A parsed, shape-validated forward target. */
 export interface Target {
   origin: string;
+  /** Authority for the forwarded Host header — hostname plus any non-default port. */
   host: string;
+  /** Hostname only (no port) — used for DNS resolution and TLS SNI. */
+  hostname: string;
+  /** Explicit port, or '' when the scheme default (443/80) applies. */
+  port: string;
   protocol: 'https:' | 'http:';
 }
 
@@ -36,7 +41,17 @@ export function parseTarget(raw: string): Target {
   if ((url.pathname && url.pathname !== '/') || url.search) {
     throw new TargetError('Target must be an origin, without path or query', 400);
   }
-  return { origin: url.origin, host: url.hostname, protocol: url.protocol };
+  // `url.host` carries the port only when it is non-default for the scheme, so
+  // the Host header stays clean (`example.com`) for default ports and explicit
+  // (`example.com:8443`) otherwise. `hostname`/`port` are split out for DNS+SNI
+  // and the pinned-connection URL respectively.
+  return {
+    origin: url.origin,
+    host: url.host,
+    hostname: url.hostname,
+    port: url.port,
+    protocol: url.protocol,
+  };
 }
 
 /**
@@ -75,16 +90,21 @@ export function pinnedFetch(
   body: RequestInit['body'],
 ): Promise<Response> {
   const hostForUrl = ip.includes(':') ? `[${ip}]` : ip;
-  const connectUrl = `${target.protocol}//${hostForUrl}${requestUrl.pathname}${requestUrl.search}`;
+  // Pin to the checked IP but preserve the target's explicit port, so a target
+  // like `https://example.com:8443` connects on 8443 rather than silently on the
+  // scheme default. `target.port` is '' for default ports, adding no suffix.
+  const portSuffix = target.port ? `:${target.port}` : '';
+  const connectUrl = `${target.protocol}//${hostForUrl}${portSuffix}${requestUrl.pathname}${requestUrl.search}`;
   // Bun's fetch accepts `tls.serverName`; typed loosely here since the standard
-  // RequestInit lacks it. SNI is only meaningful for the TLS (https) path.
+  // RequestInit lacks it. SNI carries the bare hostname (never a port) and is
+  // only meaningful for the TLS (https) path.
   const init: RequestInit & { tls?: { serverName: string } } = {
     method,
     headers,
     body,
     redirect: 'manual',
     ...(method === 'GET' || method === 'HEAD' ? {} : { duplex: 'half' as const }),
-    ...(target.protocol === 'https:' ? { tls: { serverName: target.host } } : {}),
+    ...(target.protocol === 'https:' ? { tls: { serverName: target.hostname } } : {}),
   };
   return fetch(connectUrl, init as RequestInit);
 }

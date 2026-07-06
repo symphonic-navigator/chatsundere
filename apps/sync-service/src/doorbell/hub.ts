@@ -71,7 +71,21 @@ export function createDoorbellHub(subscriber: Redis, opts: HubOptions): Doorbell
       if (!set) {
         set = new Set();
         sockets.set(accountId, set);
-        void subscriber.subscribe(doorbellChannel(accountId));
+        // SUBSCRIBE for this account's first socket. If it rejects, every socket
+        // for the account would silently never receive a poke, so we must not
+        // leave them held as apparently-healthy: tear the account's sockets down
+        // (the client reconnects and re-subscribes from a clean slate) rather
+        // than ignore the failure. Subsequent sockets that joined this same set
+        // before the rejection depend on the same subscription, so they go too.
+        subscriber.subscribe(doorbellChannel(accountId)).catch(() => {
+          const dead = sockets.get(accountId);
+          if (!dead) return;
+          sockets.delete(accountId);
+          for (const s of dead) {
+            doorbellDisconnected();
+            s.close(4500, 'doorbell subscription failed');
+          }
+        });
       }
       set.add(ws);
       doorbellConnected();

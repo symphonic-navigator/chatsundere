@@ -5,9 +5,9 @@
 // DATABASE_URL is not set, so `bun test` (unit-only) remains self-contained.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { users } from '../../src/db/schema.js';
+import { refreshTokens, users } from '../../src/db/schema.js';
 import { issueTokens } from '../../src/jwt/issue.js';
 import { rotateRefreshToken } from '../../src/jwt/refresh.js';
 import { verifyAccessToken } from '../../src/jwt/verify.js';
@@ -104,5 +104,39 @@ describe.skipIf(skip)('Refresh-token rotation + re-use detection', () => {
   it('returns invalid for an unknown token', async () => {
     const result = await rotateRefreshToken({ presentedToken: 'not-a-real-token' });
     expect(result.outcome).toBe('invalid');
+  });
+
+  it('never mints two live successors when the same token is rotated concurrently', async () => {
+    const { db } = createDb();
+
+    // Race two rotations of the same still-valid token, repeatedly. Most
+    // iterations land truly simultaneous (both SELECT the un-revoked row before
+    // either UPDATEs), which is precisely where the pre-fix code let *both*
+    // requests mint a successor — leaving two live tokens in one family and
+    // silently defeating re-use detection. The atomic conditional claim
+    // (`revoked_at IS NULL`) guarantees exactly one winner. A minority of
+    // iterations land staggered (the second read sees an already-rotated token)
+    // and legitimately trip family-wide re-use revocation — also safe. The loop
+    // makes the simultaneous case near-certain to be exercised.
+    for (let i = 0; i < 12; i++) {
+      const t1 = await issueTokens({ userId, role: 'user' });
+      const [a, b] = await Promise.all([
+        rotateRefreshToken({ presentedToken: t1.refreshToken }),
+        rotateRefreshToken({ presentedToken: t1.refreshToken }),
+      ]);
+
+      // Exactly one rotation succeeds; the duplicate is denied and mints nothing.
+      const oks = [a, b].filter((r) => r.outcome === 'ok');
+      expect(oks).toHaveLength(1);
+      expect([a, b].find((r) => r.outcome !== 'ok')?.tokens).toBeUndefined();
+
+      // The security invariant, whatever the interleaving: the family never
+      // holds two live successor tokens (simultaneous → 1 live; staggered → 0).
+      const live = await db
+        .select({ id: refreshTokens.id })
+        .from(refreshTokens)
+        .where(and(eq(refreshTokens.familyId, t1.familyId), isNull(refreshTokens.revokedAt)));
+      expect(live.length).toBeLessThanOrEqual(1);
+    }
   });
 });
