@@ -1,6 +1,47 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-05 (later still, II) — **My Account Admin-tile & dashboard
+**Last updated:** 2026-07-06 — **ARTEFACT EXPERT landed on `full-backend-transition`**
+(squashed feature unit `59fd45dd`, ahead of the v0.2.0 go-live). Second member of
+the **"expert"** delegation family after `ask_expert` — Chris's deliberate umbrella
+term for the delegation features to come. Lets the user nominate a dedicated model to
+build artefacts (`create_artefact`) instead of the persona's own: strong upstream for
+the privacy-light heavy lifting (SPAs, sims, boards) while the persona can stay small/
+local. **Omakase:** off by default; when a global expert is set it is **on by default
+per chat with a persisted per-chat opt-out**. Surfaces: (1) a global **"Artefact
+expert"** slot under *My Settings › "Ask an Expert"* (`settings.artefactExpertModel`)
+with an **honest, distinct privacy note** — the brief is persona-authored and can carry
+conversation-derived detail, deliberately NOT the `ask_expert` "only the sanitised
+question leaves" line; (2) a per-chat **cockpit toggle** (`ChatRow.useArtefactExpertModel`,
+a synced Class-2 write — deliberately unlike the transient `askExpert`), shown only when
+a global expert is set, with **scope sub-labels** on both expert toggles ("for this turn"
+vs "for this chat", Laura #1). `create_artefact` resolves the **expert offering's own**
+provider/target/reasoning (never the persona's); when the chat wants the expert but it is
+unreachable **pre-flight** (removed offering / missing key), it **errors honestly with a
+constructive next-step and NO silent fallback** (Chris's call), and the failure is
+surfaced **inline in the cockpit** (`role="alert"` + route to the expert settings),
+**independent of the persona relaying it** (Laura #4) — cleared on next send, on dismiss,
+and on chat switch. **No Dexie bump** (both fields pre-scaffolded, non-indexed;
+`useArtefactExpertModel` syncs by deny-list omission — no `strip.ts` touch, no collision
+with the parallel sync-hardening). Built spec→**Laura spec-pass PASS** (2 soft findings
+folded: sub-labels + persona-independent note; 2 future-watch logged to `ux-deferrals`)→
+plan→**subagent-driven (6 TDD tasks + 1 final-fix wave)**→**opus whole-branch READY TO
+MERGE**→**Laura pre-squash CLEAN**. **Larissa NOT required** (client-only: no
+auth/sync/proxy/crypto service). Gates (controller-run on the tip): `pnpm typecheck
+--force` **14/14**; user-client vitest at the **8** Node-localStorage baseline (no
+artefact-expert failures; new coverage: `resolve-artefact-expert` 5/5, expert-vs-persona
+key selection + discriminant, CockpitMenu chip semantics, store hold/clear/reset).
+Deferred non-blocking Minors: inline note covers pre-flight only, not a runtime
+proxy-down `author()` failure (conscious §3.4 narrowing — no silent fallback, relies on
+persona relay for that sub-case; logged in `ux-deferrals`); note visible only once the
+cockpit is open (mirrors the dictation note, Laura soft); test-helper duplication. **Still
+NOT pushed — OWED: Chris device-verify (Plan §Manual verification, needs `./dev.sh` +
+a configured expert model) then push.** Spec/plan:
+[[../superpowers/specs/2026-07-06-artefact-expert-design]],
+[[../superpowers/plans/2026-07-06-artefact-expert]].
+
+---
+
+**Prior — 2026-07-05 (later still, II):** **My Account Admin-tile & dashboard
 reorg LANDED on `full-backend-transition`** (two squashed feature units, ahead of
 the v0.2.0 go-live). Chris asked for a gold, admin-only "Admin" launcher on the My
 Account page plus a tidy-up of the tile grid. **Unit 1 — backend discovery

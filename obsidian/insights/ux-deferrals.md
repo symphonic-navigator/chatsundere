@@ -413,3 +413,30 @@ line rather than a silent absorb.
   [[project_expert_umbrella_strategy]].
 - **Chris sign-off:** Not blocking (soft/advisory, taste + future findability);
   logged for the holistic sweep when the family adds its third member.
+
+---
+
+## 2026-07-06 — Artefact Expert: inline failure note covers pre-flight only (spec §3.4 narrowing)
+
+- **Context:** The persona-independent inline cockpit note (spec §3.4) fires from
+  the `create_artefact` `meta.artefactExpertUnavailable` discriminant, which is set
+  only on PRE-FLIGHT unavailability — the expert offering is unresolvable (removed
+  from catalogue) or its key is missing (locked master key / no provider key).
+- **Deferred:** a RUNTIME expert failure — the offering resolves and the key is
+  present, but `author()` fails at request time (notably a `requires-proxy`
+  provider when the proxy is down; `defaultResolveBase` sets `routing: cors-proxy`
+  without a pre-flight `isProxyAvailable()` check) — returns a plain error with NO
+  discriminant, so the inline note does not fire and the next-step falls back to
+  the persona relay for that sub-case. Spec §3.4 listed "provider needs a proxy
+  that is unavailable" among the intended note cases, so this is a conscious
+  narrowing (documented in the plan, Task 2 Step 5).
+- **Rationale:** the "no silent fallback" invariant STILL holds — a configured
+  expert that fails at runtime still errors and never quietly builds with the
+  persona model; only the *surfacing channel* degrades from the guaranteed inline
+  note to the (usually-reliable) persona relay. Pre-flight covers the common cases
+  (locked key, removed offering). Full coverage needs either a pre-flight
+  `isProxyAvailable()` gate in the artefact tool or classifying runtime author
+  failures on the expert path as the discriminant.
+- **Chris sign-off:** Not blocking (Minor at whole-branch review; no dead-end, no
+  silent downgrade). Logged for a later hardening pass. See
+  [[project_expert_umbrella_strategy]].
