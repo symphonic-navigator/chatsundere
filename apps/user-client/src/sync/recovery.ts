@@ -238,7 +238,7 @@ async function performRecovery(): Promise<void> {
   // so the pull starts from `since=0`.
   await db.syncRows.clear();
   await getSyncState();
-  await db.syncState.update(STATE_ID, { watermarkRev: 0 });
+  await db.syncState.update(STATE_ID, { watermarkRev: 0, suppressedRevs: {} });
 
   // Step 3 — pull-all from 0 under §7's rules. Captures the new epoch from the
   // authenticated responses but does NOT compare/persist it (that is step 5).

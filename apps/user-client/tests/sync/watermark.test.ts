@@ -35,6 +35,7 @@ describe('getSyncState', () => {
       backfillPending: false,
       backfillTotal: null,
       backfillDone: null,
+      suppressedRevs: {},
     });
   });
 

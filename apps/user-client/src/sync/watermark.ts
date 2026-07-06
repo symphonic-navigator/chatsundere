@@ -22,7 +22,49 @@ function defaultState(): SyncStateRow {
     backfillPending: false,
     backfillTotal: null,
     backfillDone: null,
+    suppressedRevs: {},
   };
+}
+
+/** Record a suppressed pulled rev so a fast Undo can rewind below it (audit #5). */
+export async function recordSuppressedRev(
+  collection: string,
+  key: string,
+  rev: number,
+): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.syncState, async () => {
+    const state = await getSyncState();
+    const map = { ...(state.suppressedRevs ?? {}) };
+    const id = `${collection}:${key}`;
+    map[id] = Math.max(map[id] ?? 0, rev);
+    await db.syncState.update(STATE_ID, { suppressedRevs: map });
+  });
+}
+
+/**
+ * Consume (read + delete) the suppressed revs for the given pairs; returns the
+ * minimum, or null when none were recorded.
+ */
+export async function takeSuppressedRevs(
+  pairs: Array<{ collection: string; key: string }>,
+): Promise<number | null> {
+  const db = getClientDataDb();
+  let min: number | null = null;
+  await db.transaction('rw', db.syncState, async () => {
+    const state = await getSyncState();
+    const map = { ...(state.suppressedRevs ?? {}) };
+    for (const p of pairs) {
+      const id = `${p.collection}:${p.key}`;
+      const rev = map[id];
+      if (rev !== undefined) {
+        min = min === null ? rev : Math.min(min, rev);
+        delete map[id];
+      }
+    }
+    await db.syncState.update(STATE_ID, { suppressedRevs: map });
+  });
+  return min;
 }
 
 /**

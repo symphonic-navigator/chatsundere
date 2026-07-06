@@ -23,7 +23,7 @@ import { enqueueBlobPut } from './enqueue.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
 import { extractKeyFor } from './sync-keys.js';
-import { getSyncState, setAttention } from './watermark.js';
+import { getSyncState, recordSuppressedRev, setAttention } from './watermark.js';
 
 /**
  * Pull-side application (spec §7 — the security-critical path). `applyRecord`
@@ -570,7 +570,14 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
       return { kind: 'tamper' };
     }
     // §7.4 L-3 — a pending local delete wins locally too; suppress the insert.
-    if (await hasPendingDelete(collection, key)) return { kind: 'suppressed' };
+    // Audit #3/#5: establish the CAS base (so a recovery drain still finds meta and
+    // mints the tombstone, and a post-Undo edit pushes a correct baseRev) and record
+    // the suppressed rev (so an Undo can rewind the watermark below it).
+    if (await hasPendingDelete(collection, key)) {
+      await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
+      await recordSuppressedRev(collection, key, pulled.rev);
+      return { kind: 'suppressed' };
+    }
 
     await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
     await afterApplied(collection, key, row);

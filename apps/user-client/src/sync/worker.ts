@@ -75,6 +75,7 @@ import {
   setAttention,
   setPulling,
   settleTransientAttention,
+  takeSuppressedRevs,
 } from './watermark.js';
 
 /**
@@ -634,6 +635,12 @@ async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
       .and((r) => r.terminal === true)
       .delete();
   });
+  // Audit #5: the server-authoritative delete ack is terminal for this key — clear
+  // any suppressed-rev the Undo rewind would have consumed (its own transaction, so
+  // called OUTSIDE the scope above, which does not include `syncState`).
+  if (prep.op === 'delete') {
+    await takeSuppressedRevs([{ collection: prep.collection, key: prep.key }]);
+  }
   // §11.3 — a swept terminal sentinel means a previously oversize record just
   // synced under a smaller edit: retire the global `record_too_large` banner (its
   // durable, per-item signal is the §10 item marker, not this status line). Only
@@ -751,6 +758,10 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
       await db.syncOutbox.bulkDelete(prep.seqs);
     },
   );
+  // Audit #5: a server tombstone is terminal for this key — clear any suppressed-rev
+  // the Undo rewind would have consumed (its own transaction, called OUTSIDE the
+  // scope above, which does not include `syncState`).
+  await takeSuppressedRevs([{ collection: prep.collection, key: prep.key }]);
 }
 
 /**
