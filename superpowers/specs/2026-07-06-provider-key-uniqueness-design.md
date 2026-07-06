@@ -50,9 +50,10 @@ to be solved where the collections meet — the sync key.
 
 ## 3. Decision
 
-**Make `templateId` the identity of a provider row: one row per provider template, the
-row's primary key *is* its `templateId`.** (Chosen over a `uuid` PK + unique index +
-sync-apply reconciliation.)
+**Make `templateId` the identity of a provider row: one row per provider template, a
+provider row's `id` value *is* its `templateId`** (the Dexie keyPath stays `id`; only the
+value written to it changes — see §5.1). Chosen over a `uuid` PK + unique index +
+sync-apply reconciliation.
 
 Rationale: the sync key for a collection is its local primary key (`listLocalKeys` returns
 `primaryKeys()`; `blindId` is derived from `(mk, collection, key)`). If the provider's sync
@@ -94,23 +95,29 @@ possible.
 
 ## 5. Design
 
-### 5.1 Schema — `providers` primary key `uuid` → `templateId`
+### 5.1 Identity — a provider row's `id` value **is** its `templateId` (keyPath unchanged)
 
-`client-data-db.ts` currently declares `providers: 'id, templateId, enabled'`. The target
-is `providers: 'templateId, enabled'` with `keySlot` carried as unindexed data and the
-`id` field dropped (or retained equal to `templateId` for consumer compatibility — see
-§5.4).
+We do **not** change the Dexie keyPath. The store stays `providers: 'id, templateId,
+enabled'`; what changes is the **value** written to `id`: instead of `uuidv7()`, a new
+provider row is created with `id = templateId`.
 
-> **Crux risk — verify empirically before building (empirical-truth-over-docs).** Dexie
-> does **not** support changing a store's primary key in place via `.stores()`. The
-> baseline mechanism is the temp-store copy: create `providers` afresh under the new key
-> by copying+deduping rows out of the old store, because Dexie cannot rename a store. The
-> plan's **first task must be a throwaway prototype** proving the exact Dexie sequence
-> (temp store → copy+dedup → swap) round-trips real rows, including the `keySlot`
-> preservation. If the prototype shows the PK change is disproportionately fragile, the
-> documented fallback is **Weg 2b** (§8): keep the `uuid` PK but override the *sync key*
-> for the `providers` collection to `templateId`, achieving the same convergence without a
-> local PK migration. Chris decides between them at plan time, informed by the prototype.
+This is the pivotal simplification. The sync key for providers is already `row.id`
+(`sync-keys.ts:40`, `syncKeyOfRow` → the "every other collection → the row's `id`"
+branch). So once `id === templateId`:
+
+- **Forward cross-device convergence is automatic.** Two devices creating `nano-gpt` both
+  write `id = 'nano-gpt'` → identical sync key → identical `blindId` → the existing
+  last-writer-wins merge collapses them. No sync re-key choreography.
+- **Local uniqueness is the primary key itself.** `db.providers.put({ id: templateId, … })`
+  upserts by `id`; a second `nano-gpt` cannot exist.
+- **No Dexie keyPath change**, so none of the Dexie "can't change the primary key"
+  fragility applies. Only the row `id` *values* change — a plain data migration (§5.2).
+
+`extractKeyFor('providers')` (the decrypt-time re-derivation that rejects a key mismatch)
+also returns `row.id`, so it agrees by construction after migration.
+
+`templateId` is retained as its own (now-redundant but harmless) indexed field so the many
+`.where('templateId')` call-sites keep working unchanged.
 
 ### 5.2 Local dedup during migration
 
@@ -122,29 +129,33 @@ same winner and they converge, not oscillate):
 2. else the higher `updatedAt` wins;
 3. else lexicographic tiebreak on the old `id` (fully deterministic).
 
-The survivor keeps its sealed `apiKey` and takes `keySlot = <its old id>`. Losers are
-dropped locally **and** their sync deletion is enqueued (§5.3).
+Each survivor is **re-inserted under `id = templateId`** with `keySlot = <its old id>`
+(preserving its sealed `apiKey` verbatim), and every old-`id` row in the group (survivor's
+old uuid + losers) is deleted from the store. Idempotent: a row already keyed by its
+`templateId` is left untouched, so a re-run is a no-op.
 
 The migration reads only metadata (`enabled`, `updatedAt`, `id`) — it cannot and must not
-try to decrypt, so it can run without the MK.
+try to decrypt, so it runs without the MK, entirely inside the Dexie `v(N).upgrade()`
+transaction (a data rewrite, no keyPath change).
 
-### 5.3 Sync re-key choreography
+### 5.3 Sync — nothing to republish (pre-alpha), forward-automatic thereafter
 
-After rekeying, a provider's sync key changes from `<old uuid>` to `<templateId>`. The
-device must:
+The encrypted backend is **pre-alpha and dev-only** (goes live at v0.3.0 / Block 6; the
+current work is the 0.2.0 sprint). There are **no real accounts with provider rows already
+synced to a server**, so there is no pre-existing server-side duplicate to migrate:
 
-- enqueue an **upsert** for the new key `<templateId>` (publishes the row under its new
-  blindId), and
-- enqueue a **delete** (tombstone) for each old key it is retiring (`<old uuid>`, and any
-  deduped loser ids), so the old blind entries do not resurrect.
+- **Dev** accounts are reset via the (now sync-aware) `reset-dev-auth.sh`, which wipes
+  `sync_db` outright.
+- **Going forward**, every write already uses `id = templateId` as its sync key, so
+  cross-device creation converges automatically (§5.1) with no explicit republish.
 
-Convergence argument: every device applies the same deterministic dedup, and the
-old-key deletes + new-key upsert propagate through the normal outbox. A device that has
-not yet migrated receives the new `templateId` row and the old-uuid delete, converging to
-the single row; when it later runs its own migration the step is a no-op. There is a
-transient window in which a lagging device holds both rows; this is eventually consistent
-and acceptable for a one-shot migration. **This choreography is the second risk area and
-is covered by the two-device convergence test (§7).**
+A linked *dev* account carried across the migration without a reset would keep an orphaned
+old-uuid blind on the server (the local rewrite does not enqueue anything). That orphan is
+harmless (dev-only) and clears on the next reset; the first subsequent edit republishes the
+row under `templateId`. **This assumption — no real synced users pre-alpha — is
+load-bearing for dropping the republish; confirm it before executing.** If it ever becomes
+false, the follow-up is a one-shot post-link republish (enqueue `upsert templateId` +
+`delete <old uuid>`), not part of this plan.
 
 ### 5.4 Write-path & consumer simplification
 
@@ -181,24 +192,25 @@ path, seal-context decoupling) and the client-side sync outbox/apply interaction
 
 - **Unit — dedup rule:** the total order (enabled > updatedAt > id) picks a stable winner
   for every input permutation; idempotent on already-single groups.
-- **Migration idempotency:** running the migration twice is a no-op the second time;
-  `keySlot` is preserved and the sealed key still opens under `provider/${keySlot}/api-key`
-  (round-trip a *real* sealed blob — full fidelity, not a text stub).
-- **Integration — two-device convergence (the load-bearing test):** simulate device A and
-  device B each creating a `nano-gpt` row, cross-apply their outboxes, and assert both
-  converge to exactly one row under key `nano-gpt` with a deterministic survivor and the
-  loser tombstoned (no resurrection on a second sync cycle).
-- **Prototype gate:** the Dexie PK-change prototype (§5.1) must pass before the real
-  migration is written.
+- **Migration — real Dexie upgrade (fake-indexeddb):** seed a store at the prior version
+  with (a) two `nano-gpt` rows (uuid ids, one enabled) plus a singleton `openrouter` row,
+  (b) open at the new version, (c) assert exactly one `nano-gpt` row keyed by `id ===
+  'nano-gpt'` with `keySlot` equal to the surviving old uuid, the `openrouter` row rekeyed
+  to `id === 'openrouter'`, and the losing uuid rows gone. Round-trip a *real* sealed blob
+  (full fidelity, not a text stub): after migration `openSecret(row.apiKey, mk,
+  \`provider/${row.keySlot}/api-key\`)` returns the original plaintext. Re-running the
+  upgrade is a no-op.
+- **Unit — sync-key identity:** `syncKeyOfRow('providers', { id: 'nano-gpt', … }) ===
+  'nano-gpt'`, the property that makes cross-device creation converge for free (§5.1). No
+  two-device harness needed: convergence reduces to "same `id` ⇒ same sync key", which the
+  existing sync engine already merges.
 
-## 8. Weg 2b — documented fallback
+## 8. On the earlier "Weg 2b" fallback
 
-If the PK-change prototype is too fragile: keep `providers: 'id, ...'` (uuid PK) but make
-the sync layer use `templateId` as the collection's sync key (override `keyFor('providers')`
-and the local-key listing). Convergence is identical (same sync key → existing LWW merge);
-the cost moves from a local schema migration to a small, well-contained local-uniqueness
-guard so two local uuid rows never map to one sync key. This keeps the structural
-convergence property while sidestepping the Dexie sharp edge.
+The spec originally carried a Dexie-keyPath-change risk and a "Weg 2b" sync-key-override
+fallback. Both are **obsolete**: keeping the keyPath as `id` and setting `id === templateId`
+(§5.1) delivers the identical convergence property with neither a keyPath migration nor a
+sync-layer override. There is no remaining Dexie sharp edge to hedge against.
 
 ## 9. Audit
 
