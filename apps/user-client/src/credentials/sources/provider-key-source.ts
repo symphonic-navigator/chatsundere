@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MasterKey } from '@chatsundere/crypto';
 import { type ProviderRow, getClientDataDb } from '../../boot/client-data-db.js';
+import { providerApiKeySlot } from '../../data/providers.js';
 import { openSecret } from '../../lib/secrets.js';
 import type { CredentialId, CredentialSource } from '../types.js';
 
@@ -37,6 +38,6 @@ export const providerKeySource: CredentialSource = {
   async get(id: CredentialId, mk: MasterKey): Promise<string | null> {
     const row = await findEnabledRow(id);
     if (!row) return null;
-    return await openSecret(row.apiKey, mk, `provider/${row.id}/api-key`);
+    return await openSecret(row.apiKey, mk, providerApiKeySlot(row));
   },
 };

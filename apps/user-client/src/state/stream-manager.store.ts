@@ -34,6 +34,7 @@ import {
   listMessageAttachments,
   snapshotPendingDocumentReferences,
 } from '../data/attachments.js';
+import { providerApiKeySlot } from '../data/providers.js';
 import { QK } from '../data/queryKeys.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
@@ -313,7 +314,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const offering = getOffering(provider.templateId, persona.modelId);
     if (!offering) throw new Error(`compactNow: no offering for "${persona.modelId}"`);
 
-    const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
+    const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
 
     const providerConfig: import('@chatsundere/llm-unified').ProviderConfig = {
       baseUrl: providerDef.baseUrl,

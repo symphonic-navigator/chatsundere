@@ -71,7 +71,7 @@ describe('client-data-db v34 — trash grouping metadata + deadKeys', () => {
   it('opens at version 34 on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(34);
+    expect(db.verno).toBe(35);
   });
 
   it('backfills grouping metadata onto legacy trash rows from the snapshot foreign key', async () => {
@@ -80,7 +80,7 @@ describe('client-data-db v34 — trash grouping metadata + deadKeys', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(34);
+    expect(db.verno).toBe(35);
 
     const migrated = await db.trash.get('chats:c1');
     expect(migrated?.entityKind).toBe('chat');

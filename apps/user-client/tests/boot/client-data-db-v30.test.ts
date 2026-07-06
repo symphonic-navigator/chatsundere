@@ -77,7 +77,7 @@ describe('client-data-db v30 — MCP local-network routing', () => {
   it('opens at version 30 on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(34);
+    expect(db.verno).toBe(35);
   });
 
   it('round-trips an mcpServers row carrying allowDirect', async () => {
@@ -112,7 +112,7 @@ describe('client-data-db v30 — MCP local-network routing', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(34);
+    expect(db.verno).toBe(35);
 
     // routing === 'direct' → the server was already going direct; preserve that intent
     const direct = await db.mcpServers.get('srv-direct');

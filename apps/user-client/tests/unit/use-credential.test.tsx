@@ -46,6 +46,7 @@ describe('useCredential', () => {
         templateId: 'nano-gpt',
         apiKey: DUMMY_BLOB,
         enabled: true,
+        keySlot: 'nano-gpt',
       });
       id = r.id;
     });
@@ -67,6 +68,7 @@ describe('useCredential', () => {
         templateId: 'nano-gpt',
         apiKey: DUMMY_BLOB,
         enabled: false,
+        keySlot: 'nano-gpt',
       });
     });
     await waitFor(() => expect(cred.result.current.isLoading).toBe(false));

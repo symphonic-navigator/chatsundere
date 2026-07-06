@@ -58,6 +58,17 @@ vi.mock('../../src/data/providers.js', () => ({
   useProviders: () => ({ data: [] }),
   useUpsertProvider: () => ({ mutateAsync: upsertMock }),
   useDeleteProvider: () => ({ mutateAsync: vi.fn() }),
+  providerApiKeySlot: (row: { id: string; keySlot?: string }) =>
+    `provider/${row.keySlot ?? row.id}/api-key`,
+}));
+
+// `onSave` reads the stored row fresh from the DB (rather than trusting the
+// cached `useProviders` list) to derive the seal slot — see Larissa M-1. No row
+// is ever stored in these tests, mirroring the always-empty `useProviders` mock.
+vi.mock('../../src/boot/client-data-db.js', () => ({
+  getClientDataDb: () => ({
+    providers: { get: async (_id: string) => undefined },
+  }),
 }));
 
 vi.mock('../../src/lib/server-gate.js', () => ({

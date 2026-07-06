@@ -4,6 +4,7 @@ import type { ImageModelConfig } from '@chatsundere/llm-unified';
 import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
+import { pickProviderSurvivor } from '../data/provider-dedup.js';
 import type { EncryptedBlob } from '../lib/secrets.js';
 import type { TtsHighpassSetting } from '../lib/voice/voice-filter.js';
 import type { WebBackendSetting } from '../lib/web-backends.js';
@@ -93,6 +94,11 @@ export interface ProviderRow {
   displayName: string;
   baseUrl: string;
   apiKey: EncryptedBlob;
+  /** The AAD slot the `apiKey` blob is sealed under: `provider/<keySlot>/api-key`.
+   *  Decoupled from `id` so the v35 id→templateId rekey preserves existing sealed
+   *  blobs without a re-seal (spec §4). Absent on pre-v35 rows → callers fall back
+   *  to `id`. Non-indexed (schemaless) — no Dexie version bump of its own. */
+  keySlot?: string;
   routing: { kind: 'direct' } | { kind: 'cors-proxy' };
   enabled: boolean;
   createdAt: number;
@@ -1357,6 +1363,53 @@ class ClientDataDb extends Dexie {
           const key = t.key as string;
           const deletedAt = typeof t.deletedAt === 'number' ? t.deletedAt : 0;
           await dead.put({ id: `${collection}:${key}`, collection, key, diedAt: deletedAt });
+        }
+      });
+
+    // Version 35 — provider identity: a provider row's `id` value becomes its
+    // `templateId` so cross-device sync converges on one row per template (spec
+    // §5). Dedup each templateId group to a deterministic survivor, re-insert it
+    // under `id = templateId`, and stash its old id as `keySlot` so the sealed
+    // apiKey (bound to `provider/<old id>/api-key`) opens unchanged — no re-seal,
+    // no MasterKey needed. Idempotent: a row already keyed by its templateId is
+    // simply re-put with its keySlot preserved. Stores are unchanged; the bump
+    // exists only to run this data rewrite.
+    //
+    // `PersonaRow.providerId` holds a provider row id too (historically a uuid),
+    // and it is the only other table referencing one — the rekey below deletes
+    // every old-uuid row, so every persona pointing at one must be remapped to
+    // its new templateId here, in the same transaction.
+    this.version(35)
+      .stores({ providers: 'id, templateId, enabled' })
+      .upgrade(async (tx) => {
+        const table = tx.table('providers');
+        const rows = (await table.toArray()) as ProviderRow[];
+        // Total map over every pre-migration row (both winners and losers of the
+        // dedup below) — a persona may point at either, and both collapse to the
+        // same templateId.
+        const oldIdToTemplate = new Map<string, string>();
+        for (const r of rows) oldIdToTemplate.set(r.id, r.templateId);
+        const byTemplate = new Map<string, ProviderRow[]>();
+        for (const r of rows) {
+          const group = byTemplate.get(r.templateId) ?? [];
+          group.push(r);
+          byTemplate.set(r.templateId, group);
+        }
+        for (const [templateId, group] of byTemplate) {
+          const survivor = pickProviderSurvivor(group);
+          for (const r of group) await table.delete(r.id);
+          await table.put({
+            ...survivor,
+            id: templateId,
+            keySlot: survivor.keySlot ?? survivor.id,
+          });
+        }
+        const personas = (await tx.table('personas').toArray()) as PersonaRow[];
+        for (const p of personas) {
+          const mapped = oldIdToTemplate.get(p.providerId);
+          if (mapped && mapped !== p.providerId) {
+            await tx.table('personas').update(p.id, { providerId: mapped });
+          }
         }
       });
   }

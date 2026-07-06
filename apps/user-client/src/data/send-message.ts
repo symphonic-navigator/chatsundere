@@ -55,6 +55,7 @@ import {
   computeNsfwParamAllowed,
 } from '../tools/generate-image.js';
 import { addGeneratedImageArtefact } from './artefacts.js';
+import { providerApiKeySlot } from './providers.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // lastCompanionText — lorebook companion-scan helper
@@ -149,7 +150,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
       `${who}: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
     );
 
-  const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
+  const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
 
   const allProviders = await db.providers.toArray();
   const hasProxy = isProxyAvailable();
@@ -246,7 +247,7 @@ async function resolveSubstituteVision(
 
   let apiKey: string;
   try {
-    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+    apiKey = await openSecret(providerRow.apiKey, mk, providerApiKeySlot(providerRow));
   } catch {
     // Corrupt ciphertext (e.g. AES-GCM auth-tag failure) — degrade to no substitute
     // so a text-only send is never blocked by a broken substitute-vision key.
@@ -300,7 +301,7 @@ async function resolveImageSlot(
 
   let apiKey: string;
   try {
-    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+    apiKey = await openSecret(providerRow.apiKey, mk, providerApiKeySlot(providerRow));
   } catch {
     console.warn('resolveImageSlot: failed to decrypt api-key — slot unavailable');
     return null;
@@ -411,7 +412,7 @@ export async function resolveExpert(
 
   let apiKey: string;
   try {
-    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+    apiKey = await openSecret(providerRow.apiKey, mk, providerApiKeySlot(providerRow));
   } catch {
     console.warn('resolveExpert: failed to decrypt api-key — falling back to null');
     return null;

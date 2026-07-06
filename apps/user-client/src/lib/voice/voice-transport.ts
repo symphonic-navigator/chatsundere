@@ -3,6 +3,7 @@
 import { getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import type { ProviderRow } from '../../boot/client-data-db.js';
+import { providerApiKeySlot } from '../../data/providers.js';
 import { openSecret } from '../secrets.js';
 import type { SelectedOffering } from './select-offering.js';
 
@@ -45,7 +46,7 @@ export async function resolveVoiceTransportMaterial(
 
   let apiKey: string;
   try {
-    apiKey = await openSecret(providerRow.apiKey, mk, `provider/${providerRow.id}/api-key`);
+    apiKey = await openSecret(providerRow.apiKey, mk, providerApiKeySlot(providerRow));
   } catch {
     console.warn(`${logLabel}: failed to decrypt api-key — falling back to no-provider`);
     return null;

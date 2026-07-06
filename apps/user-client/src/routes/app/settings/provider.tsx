@@ -9,6 +9,7 @@ import {
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
 import {
   MODEL_DEBUG_TIMEOUT_MS,
@@ -18,7 +19,12 @@ import { Badge } from '../../../components/ui/Badge.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
-import { useDeleteProvider, useProviders, useUpsertProvider } from '../../../data/providers.js';
+import {
+  providerApiKeySlot,
+  useDeleteProvider,
+  useProviders,
+  useUpsertProvider,
+} from '../../../data/providers.js';
 import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
 import { useServerGate } from '../../../lib/server-gate.js';
@@ -88,55 +94,32 @@ export function SettingsProviderPage(): JSX.Element {
     setSaving(true);
     setStatus({ kind: 'probing' });
     try {
-      const rowId = existing?.id ?? 'pending';
-      const apiKeySlotId = `provider/${rowId}/api-key`;
-      const sealedKey = apiKey ? await sealSecret(apiKey, mk, apiKeySlotId) : existing?.apiKey;
+      // Read the stored row FRESH rather than trusting the (possibly stale)
+      // cached `existing` — the seal slot and the persisted `keySlot` must come
+      // from the same read or a cache/DB disagreement seals the key under a slot
+      // that doesn't match the stored AAD, silently bricking it (Larissa M-1).
+      const freshExisting = await getClientDataDb().providers.get(templateId);
+      const keySlot = freshExisting?.keySlot ?? templateId;
+      const slotId = providerApiKeySlot({ id: templateId, keySlot });
+      const sealedKey = apiKey ? await sealSecret(apiKey, mk, slotId) : freshExisting?.apiKey;
       if (!sealedKey) {
         setSaving(false);
         return;
       }
-      const row = await upsert.mutateAsync({
-        id: existing?.id,
-        templateId,
-        apiKey: sealedKey,
-        enabled: false,
-      });
+      await upsert.mutateAsync({ templateId, apiKey: sealedKey, enabled: false, keySlot });
 
-      const stableSlotId = `provider/${row.id}/api-key`;
-      const stableSealedKey =
-        apiKey && !existing ? await sealSecret(apiKey, mk, stableSlotId) : sealedKey;
-
-      if (apiKey && !existing) {
-        await upsert.mutateAsync({
-          id: row.id,
-          templateId,
-          apiKey: stableSealedKey,
-          enabled: false,
-        });
-      }
-
-      // Proxy-required providers route through the account's authenticated
-      // proxy, which is read late (at request-build time) from the registered
-      // proxy auth source — nothing proxy-related is sealed or written here.
-      const decryptedKey = await openSecret(stableSealedKey, mk, stableSlotId);
+      // Proxy-required providers route through the account's authenticated proxy,
+      // read late at request-build time — nothing proxy-related is sealed here.
+      const decryptedKey = await openSecret(sealedKey, mk, slotId);
 
       const config = {
         baseUrl: definition.baseUrl,
         routing: requiresProxy ? ({ kind: 'cors-proxy' } as const) : ({ kind: 'direct' } as const),
       };
-      const result = await probeProvider({
-        definition,
-        config,
-        apiKey: decryptedKey,
-      });
+      const result = await probeProvider({ definition, config, apiKey: decryptedKey });
 
       if (result.ok) {
-        await upsert.mutateAsync({
-          id: row.id,
-          templateId,
-          apiKey: stableSealedKey,
-          enabled: true,
-        });
+        await upsert.mutateAsync({ templateId, apiKey: sealedKey, enabled: true, keySlot });
         setStatus({ kind: 'ok' });
         back();
       } else {
@@ -156,7 +139,7 @@ export function SettingsProviderPage(): JSX.Element {
     if (requiresProxy && !proxyGate.enabled) {
       throw new Error(proxyGate.tooltip ?? 'Link a server to relay this provider');
     }
-    const apiKeyPlain = await openSecret(existing.apiKey, mk, `provider/${existing.id}/api-key`);
+    const apiKeyPlain = await openSecret(existing.apiKey, mk, providerApiKeySlot(existing));
     const proxyUrl = requiresProxy ? (getProxyAuthSource()?.getUrl() ?? null) : null;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), MODEL_DEBUG_TIMEOUT_MS);

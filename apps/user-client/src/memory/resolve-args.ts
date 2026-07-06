@@ -2,6 +2,7 @@
 import { getOffering, getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { getClientDataDb } from '../boot/client-data-db.js';
+import { providerApiKeySlot } from '../data/providers.js';
 import { openSecret } from '../lib/secrets.js';
 import type { MemoryPipelineArgs } from './pipeline.js';
 
@@ -42,7 +43,7 @@ export async function resolveMemoryPipelineArgs(
       `${who}: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
     );
 
-  const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
+  const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
 
   return {
     persona,

@@ -40,6 +40,7 @@ describe('useProviders + upsert/delete', () => {
         templateId: 'nano-gpt',
         apiKey: { ciphertext: new Uint8Array([1]), nonce: new Uint8Array([2]), version: 1 },
         enabled: true,
+        keySlot: 'nano-gpt',
       });
       id = r.id;
     });

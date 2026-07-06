@@ -73,7 +73,7 @@ describe('client-data-db v23 (voice offering slots)', () => {
   it('opens at current head verno on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(34);
+    expect(db.verno).toBe(35);
   });
 
   it('seeds both voice slot refs as null on a fresh settings row', async () => {
@@ -89,7 +89,7 @@ describe('client-data-db v23 (voice offering slots)', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(34);
+    expect(db.verno).toBe(35);
 
     const settings = await db.settings.get(1);
     expect(settings?.ttsOffering).toBeNull();
