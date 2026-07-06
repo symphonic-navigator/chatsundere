@@ -8,6 +8,26 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-06 — **PROVIDER ROWS UNIQUE PER TEMPLATE (duplicate-provider fix).**
+Landed on master as one squash (`fc8b3f4b`), **awaiting Chris's device-verify + push**
+(manual steps in [`superpowers/specs/2026-07-06-provider-key-uniqueness-design.md`](../superpowers/specs/2026-07-06-provider-key-uniqueness-design.md) §10).
+Root cause of the "two `nano-gpt` rows on one primary-admin" report (2026-07-06): cross-device
+convergence — each device minted its own `uuidv7()` provider id, so the sync engine (which keys
+providers by `row.id`) never deduped them. Fix: a provider row's `id` value **is** its
+`templateId` (Dexie keyPath unchanged), so identical ids across devices merge under one blindId
+automatically; a new `keySlot` field decouples the API-key seal AAD from `id` (no re-seal, no MK
+in the migration); a Dexie **v35** data migration dedups (enabled > newest `updatedAt` > id),
+rekeys `id`→`templateId`, and **remaps `persona.providerId`** back-references (a CRITICAL the
+whole-branch review caught — else every pre-existing persona would break). Built subagent-driven
+(4 tasks, per-task + whole-branch review); **Larissa CLEAR** (one MEDIUM cache/DB seal-slot race
+fixed via a single `keySlot` source). Also this session: `reset-dev-auth.sh` now wipes `sync_db`
++ MinIO blobs (it stranded orphan accounts before — 3 found live), and those orphans were purged
+from the dev store.
+> **Follow-up (Minor, non-blocking):** no test pins a genuine `keySlot`-divergence scenario
+> (migrated row with `keySlot = legacy-uuid` then an in-place upsert) — add one if the provider
+> write path is touched again. Optional: a light Laura UX pass was not run (pure internals — no
+> user-reachable flow changed).
+
 > **Status correction (2026-06-30):** every "NOT pushed / awaiting Chris's
 > device-verify" note in the entries below is **superseded** — all of this work
 > is **device-verified, pushed, and live at `v0.1.3`**. The client side is
