@@ -60,6 +60,7 @@ describe('deleteServerAccount', () => {
         throw new Error('nope');
       },
       async patchMe() {},
+      async updateRecovery() {},
       async deleteMe() {
         deleteMeCalled = true;
       },

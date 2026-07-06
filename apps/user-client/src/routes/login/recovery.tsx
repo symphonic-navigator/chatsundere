@@ -205,8 +205,11 @@ export function Recovery() {
       // Always re-wrap the local passphrase slot under the new passphrase.
       await changePassphraseLocalOnly({ db, session, mk, newPassphrase });
 
-      if (regenerate) {
-        // Generate a fresh recovery key and move to the reveal step.
+      if (regenerate && isLinked === false) {
+        // Generate a fresh recovery key and move to the reveal step. Linked
+        // accounts never reach this branch (the checkbox is disabled): the new
+        // key must be registered with the server under an authenticated
+        // session, which My Account → Recovery Key owns.
         const { recoveryKeyString } = await regenerateRecoveryKey({ db, mk });
         setStep({ kind: 'step3', newKeyString: recoveryKeyString });
       } else {
@@ -331,18 +334,35 @@ export function Recovery() {
               autoComplete="new-password"
             />
 
-            {/* Optional: generate a new recovery key */}
+            {/* Optional: generate a new recovery key. Disabled for linked
+                accounts: the new key must be registered with the server too,
+                which needs an authenticated session — offering it here would
+                silently desynchronise deviceless recovery. Disabled over
+                hidden, with the constructive path named. */}
             <div className="space-y-1">
-              <label className="flex cursor-pointer items-start gap-3">
+              <label
+                className={
+                  isLinked
+                    ? 'flex cursor-not-allowed items-start gap-3 opacity-60'
+                    : 'flex cursor-pointer items-start gap-3'
+                }
+              >
                 <input
                   type="checkbox"
-                  checked={regenerate}
+                  checked={regenerate && isLinked === false}
+                  // `null` (link detection still resolving) fails SAFE to
+                  // disabled: a tick during that window on a linked account
+                  // would rotate locally-only — the exact desync this guards.
+                  disabled={isLinked !== false}
                   onChange={(e) => setRegenerate(e.target.checked)}
                   className="mt-0.5 h-4 w-4 shrink-0 accent-aurora-500"
                 />
                 <span className="text-sm text-paper-soft">{c.regenerateLabel}</span>
               </label>
-              {regenerate && <p className="pl-7 text-xs text-paper-soft">{c.regenerateHint}</p>}
+              {isLinked && <p className="pl-7 text-xs text-paper-soft">{c.regenerateLinkedHint}</p>}
+              {isLinked === false && regenerate && (
+                <p className="pl-7 text-xs text-paper-soft">{c.regenerateHint}</p>
+              )}
             </div>
 
             {error && (

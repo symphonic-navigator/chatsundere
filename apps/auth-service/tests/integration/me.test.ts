@@ -4,6 +4,7 @@
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -53,7 +54,7 @@ async function registerUser(
     registrationResponse: startBody.registration_response,
     identifiers: {
       client: opts.username,
-      server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
     },
   });
 
@@ -215,6 +216,108 @@ describe.skipIf(skip)('/api/v1/me — self-management endpoints', () => {
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('conflict');
+  });
+
+  it('POST /api/v1/me/recovery replaces the recovery material', async () => {
+    // Tier-1 gated: a join seeds Tier 1, but seed explicitly so the test does
+    // not depend on the grace window's TTL.
+    const jtiPayload = accessToken.split('.')[1];
+    if (!jtiPayload) throw new Error('malformed access token');
+    const { jti } = JSON.parse(Buffer.from(jtiPayload, 'base64url').toString('utf-8')) as {
+      jti: string;
+    };
+    await createRedis().set(`step_up:${jti}:t1`, String(Date.now()), 'EX', 10);
+
+    const newVerifier = Buffer.alloc(32, 1).toString('base64url');
+    const newWrapped = Buffer.alloc(48, 2).toString('base64url');
+    const newNonce = Buffer.alloc(24, 3).toString('base64url');
+    const newAad = Buffer.alloc(16, 4).toString('base64url');
+    const res = await app.request('/api/v1/me/recovery', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Origin: 'http://localhost:3000',
+      },
+      body: JSON.stringify({
+        new_recovery_verifier_key: newVerifier,
+        new_wrapped_mk_recovery: newWrapped,
+        new_wrap_nonce_recovery: newNonce,
+        new_wrap_aad_recovery: newAad,
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    // The users row must now carry exactly the pushed material — this is what
+    // /api/v1/recovery/start hands to a deviceless-recovery client.
+    const { db } = createDb();
+    const row = (
+      await db
+        .select({
+          recoveryVerifierKey: users.recoveryVerifierKey,
+          wrappedMkRecovery: users.wrappedMkRecovery,
+          wrapNonceRecovery: users.wrapNonceRecovery,
+          wrapAadRecovery: users.wrapAadRecovery,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+    )[0];
+    expect(Buffer.from(row?.recoveryVerifierKey ?? []).toString('base64url')).toBe(newVerifier);
+    expect(Buffer.from(row?.wrappedMkRecovery ?? []).toString('base64url')).toBe(newWrapped);
+    expect(Buffer.from(row?.wrapNonceRecovery ?? []).toString('base64url')).toBe(newNonce);
+    expect(Buffer.from(row?.wrapAadRecovery ?? []).toString('base64url')).toBe(newAad);
+  });
+
+  it('POST /api/v1/me/recovery rejects a malformed verifier key', async () => {
+    const jtiPayload = accessToken.split('.')[1];
+    if (!jtiPayload) throw new Error('malformed access token');
+    const { jti } = JSON.parse(Buffer.from(jtiPayload, 'base64url').toString('utf-8')) as {
+      jti: string;
+    };
+    await createRedis().set(`step_up:${jti}:t1`, String(Date.now()), 'EX', 10);
+
+    const res = await app.request('/api/v1/me/recovery', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Origin: 'http://localhost:3000',
+      },
+      body: JSON.stringify({
+        new_recovery_verifier_key: Buffer.alloc(8).toString('base64url'),
+        new_wrapped_mk_recovery: Buffer.alloc(48).toString('base64url'),
+        new_wrap_nonce_recovery: Buffer.alloc(24).toString('base64url'),
+        new_wrap_aad_recovery: Buffer.alloc(16).toString('base64url'),
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('DELETE /api/v1/me refuses the primary admin (no step-up ceremony needed)', async () => {
+    const { db } = createDb();
+    // Promote this user to primary_admin directly (no other primary exists in
+    // this test run — mirrors the admin-users suite's promotion trick).
+    await db.update(users).set({ role: 'primary_admin' }).where(eq(users.id, userId));
+    try {
+      const res = await app.request('/api/v1/me', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Origin: 'http://localhost:3000',
+        },
+      });
+      // 403 without any Tier-3 seed: the role guard must run BEFORE the
+      // step-up gate so the user is not asked to re-authenticate for a
+      // request that will be refused anyway.
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('forbidden');
+      // The user row survives.
+      const remaining = await db.select({ id: users.id }).from(users).where(eq(users.id, userId));
+      expect(remaining.length).toBe(1);
+    } finally {
+      await db.update(users).set({ role: 'user' }).where(eq(users.id, userId));
+    }
   });
 
   it('DELETE /api/v1/me removes the user and cascades auth_methods', async () => {

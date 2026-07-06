@@ -187,6 +187,12 @@ export function registerAdminUserRoutes(app: Hono): void {
       throw new ApiError(403, 'forbidden', 'Cannot change your own role; use transfer-primary');
     }
     await db.update(users).set({ role: body.role }).where(eq(users.id, id));
+    // A role change must not leave stale-role tokens alive: a demoted admin
+    // would keep admin access for the remaining access-token TTL (~15 min).
+    // Revoke exactly as suspend does; the subject re-authenticates and their
+    // fresh tokens carry the new role.
+    await revokeAllForUser(id);
+    await denySub(createRedis(), id, nowSeconds());
     await invalidateUserExistsCache(id);
     await writeAudit({
       db,
@@ -236,6 +242,16 @@ export function registerAdminUserRoutes(app: Hono): void {
           .set({ role: 'primary_admin' })
           .where(eq(users.id, body.target_user_id));
       });
+      // Both sides change role, so both sides' tokens are stale: the demoted
+      // actor's tokens still claim primary_admin (an escalation window), and
+      // the promoted target's tokens still claim admin. Revoke both; each
+      // re-authenticates into their new role (the admin console already
+      // forces the actor's sign-out after a transfer).
+      const redis = createRedis();
+      await revokeAllForUser(claims.sub);
+      await denySub(redis, claims.sub, nowSeconds());
+      await revokeAllForUser(body.target_user_id);
+      await denySub(redis, body.target_user_id, nowSeconds());
       await writeAudit({
         db,
         eventType: 'primary_admin.transferred',

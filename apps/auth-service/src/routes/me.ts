@@ -40,6 +40,13 @@ const passphraseChangeFinishReq = object({
   wrap_aad_opaque: string(),
 });
 
+const recoveryUpdateReq = object({
+  new_recovery_verifier_key: string(),
+  new_wrapped_mk_recovery: string(),
+  new_wrap_nonce_recovery: string(),
+  new_wrap_aad_recovery: string(),
+});
+
 export function registerMeRoutes(app: Hono): void {
   /**
    * GET /api/v1/me
@@ -109,8 +116,23 @@ export function registerMeRoutes(app: Hono): void {
   app.delete('/api/v1/me', bearerAuth(), async (c) => {
     const claims = c.get('claims') as AccessClaims;
     const sessionId = c.get('sessionId') as string;
-    await requireStepUp({ sessionId, tier: 3 });
     const { db } = createDb();
+    // The DB index enforces at most one primary_admin, not at least one: a
+    // self-deleting primary_admin would leave the instance ownerless with no
+    // in-band path to a new one (bootstrap refuses once auth methods exist).
+    // Mirror the admin-route guard and require transfer-primary first. Checked
+    // before the step-up so the user is not asked to re-authenticate for a
+    // request that will be refused anyway.
+    const self = (await db.select().from(users).where(eq(users.id, claims.sub)).limit(1))[0];
+    if (!self) throw new ApiError(401, 'unauthorized', 'User gone');
+    if (self.role === 'primary_admin') {
+      throw new ApiError(
+        403,
+        'forbidden',
+        'Cannot delete the primary admin without transferring the role first',
+      );
+    }
+    await requireStepUp({ sessionId, tier: 3 });
     await db.transaction(async (tx) => {
       // pending_codes.redeemed_by_user_id has no ON DELETE CASCADE, so NULL it out first.
       await tx
@@ -132,6 +154,56 @@ export function registerMeRoutes(app: Hono): void {
       'Set-Cookie',
       'refresh_token=; HttpOnly; SameSite=Lax; Path=/api/v1/token/refresh; Max-Age=0',
     );
+    return c.json({ ok: true });
+  });
+
+  /**
+   * POST /api/v1/me/recovery
+   *
+   * Replaces the account's recovery material after a client-side recovery-key
+   * regeneration: the HMAC verifier key and the master key re-wrapped under the
+   * new recovery key. Without this update, deviceless recovery would keep
+   * demanding the OLD key while the client tells the user it is invalidated —
+   * a data-loss trap on a no-forgot-password platform. Tier-1 step-up gated,
+   * mirroring the passphrase-change credential rotation.
+   */
+  app.post('/api/v1/me/recovery', bearerAuth(), async (c) => {
+    const claims = c.get('claims') as AccessClaims;
+    await requireStepUp({ sessionId: c.get('sessionId') as string, tier: 1 });
+    const body = parse(recoveryUpdateReq, await c.req.json());
+
+    const verifierKey = Buffer.from(body.new_recovery_verifier_key, 'base64url');
+    const wrappedMk = Buffer.from(body.new_wrapped_mk_recovery, 'base64url');
+    const wrapNonce = Buffer.from(body.new_wrap_nonce_recovery, 'base64url');
+    const wrapAad = Buffer.from(body.new_wrap_aad_recovery, 'base64url');
+    // Defence in depth: a malformed update would silently brick deviceless
+    // recovery for this account. The verifier is a fixed 32-byte HMAC key; the
+    // wrap fields are opaque but must not be empty.
+    if (
+      verifierKey.length !== 32 ||
+      wrappedMk.length === 0 ||
+      wrapNonce.length === 0 ||
+      wrapAad.length === 0
+    ) {
+      throw new ApiError(400, 'invalid_input', 'Malformed recovery material');
+    }
+
+    const { db } = createDb();
+    await db
+      .update(users)
+      .set({
+        recoveryVerifierKey: verifierKey,
+        wrappedMkRecovery: wrappedMk,
+        wrapNonceRecovery: wrapNonce,
+        wrapAadRecovery: wrapAad,
+      })
+      .where(eq(users.id, claims.sub));
+    await writeAudit({
+      db,
+      eventType: 'recovery_key.regenerated',
+      userId: claims.sub,
+      actorUserId: claims.sub,
+    });
     return c.json({ ok: true });
   });
 

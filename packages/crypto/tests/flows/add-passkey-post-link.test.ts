@@ -50,6 +50,7 @@ function makeFakeClient(): ServerClient {
       throw new Error('unexpected');
     },
     async patchMe() {},
+    async updateRecovery() {},
     async deleteMe() {
       throw new Error('unexpected');
     },

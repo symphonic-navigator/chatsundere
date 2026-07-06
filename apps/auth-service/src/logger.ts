@@ -23,6 +23,15 @@ const REDACT_PATHS: string[] = [
   '*.proof',
   '*.verifier_key',
   '*.recovery_verifier_key',
+  // Wire-field names of the recovery-material rotation (POST /api/v1/me/recovery)
+  // and recovery/finish — the verifier key alone lets an attacker forge the
+  // recovery proof, so these must never survive into a future body-logging
+  // middleware. pino's `*.` glob matches exact leaf names only.
+  '*.new_recovery_verifier_key',
+  '*.new_wrapped_mk_recovery',
+  '*.new_wrap_nonce_recovery',
+  '*.wrapped_mk_recovery',
+  '*.wrap_nonce_recovery',
   '*.access_token',
   '*.refresh_token',
   '*.cookie',

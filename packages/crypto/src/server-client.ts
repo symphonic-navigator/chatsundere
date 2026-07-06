@@ -22,6 +22,7 @@ import type {
   RecoveryFinishResponse,
   RecoveryStartRequest,
   RecoveryStartResponse,
+  RecoveryUpdateRequest,
   StepUpFinishRequest,
   StepUpFinishResponse,
   StepUpStartRequest,
@@ -55,6 +56,12 @@ export interface ServerClient {
   ): Promise<OpaqueLoginFinishResponse>;
   recoveryStart(req: RecoveryStartRequest, baseUrl: string): Promise<RecoveryStartResponse>;
   recoveryFinish(req: RecoveryFinishRequest, baseUrl: string): Promise<RecoveryFinishResponse>;
+  /**
+   * Push freshly regenerated recovery material (verifier key + re-wrapped MK)
+   * to the server via `POST /api/v1/me/recovery`, so deviceless recovery keeps
+   * matching the key the user holds after a rotation.
+   */
+  updateRecovery(req: RecoveryUpdateRequest, baseUrl: string, accessToken: string): Promise<void>;
   deleteMe(baseUrl: string, accessToken: string): Promise<void>;
   /**
    * Rename the authenticated user via `PATCH /api/v1/me`. Rejects with an error
