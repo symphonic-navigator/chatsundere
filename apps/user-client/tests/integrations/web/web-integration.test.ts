@@ -32,6 +32,7 @@ function ctx(over: Partial<IntegrationContext>): IntegrationContext {
     webFetch: null,
     useProxy: false,
     webSearchTierId: null,
+    artefactExpert: null,
     getKey: async () => 'secret-key',
     chatId: '',
     personaId: '',

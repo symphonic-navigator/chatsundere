@@ -96,6 +96,7 @@ export function ChatPage(): JSX.Element {
   const setReasoning = useCurrentChatStore((s) => s.setReasoning);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
   const setAskExpert = useCurrentChatStore((s) => s.setAskExpert);
+  const setArtefactExpertError = useCurrentChatStore((s) => s.setArtefactExpertError);
   const isLiveVoice = useCurrentChatStore((s) => s.isLiveVoice);
   const setLiveVoice = useCurrentChatStore((s) => s.setLiveVoice);
 
@@ -269,6 +270,13 @@ export function ChatPage(): JSX.Element {
   useEffect(() => {
     if (effectivePersona) setAskExpert(effectivePersona.askExpertDefault);
   }, [effectivePersona, setAskExpert]);
+
+  // Clear the artefact-expert failure note on chat switch — it belongs to the
+  // chat where the failure happened (mirrors the per-chat askExpert reset).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger — setArtefactExpertError is a stable Zustand reference
+  useEffect(() => {
+    setArtefactExpertError(null);
+  }, [activeChatId, setArtefactExpertError]);
 
   // Settings (for displayName and token estimate).
   const settingsQuery = useQuery({

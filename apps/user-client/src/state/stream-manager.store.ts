@@ -92,6 +92,9 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   webInterfacing?: { search: OfferingRef | null; fetch: OfferingRef | null };
   /** Global substitute-vision model ref "providerTemplateId:upstreamSlug"; null = none. */
   substituteVisionModel?: string | null;
+  /** Pre-resolved artefact-expert offering (from settings + per-chat opt-out),
+   *  or null to build artefacts with the persona model. */
+  artefactExpert?: OfferingRef | null;
   /**
    * The substitute model's resolved one-shot call context (provider, decrypted
    * api-key, target). Resolved in the send path because it needs the MasterKey,
@@ -736,6 +739,9 @@ async function runIntoDraft(
     return { streams: m };
   });
 
+  // A new attempt supersedes any prior artefact-expert failure note.
+  useCurrentChatStore.getState().setArtefactExpertError(null);
+
   // Vision pills emitted during the live describe phase (fresh send only).
   // Declared here so the .then finalise path can close over them and persist
   // them alongside lore and tool-call pills.
@@ -820,6 +826,7 @@ async function runIntoDraft(
         providerId: args.offering.providerId,
         upstreamSlug: args.offering.upstreamSlug,
       },
+      artefactExpert: args.artefactExpert ?? null,
     },
   );
   const knowledge = args.knowledge ?? null;
@@ -895,8 +902,15 @@ async function runIntoDraft(
   runToolLoop({
     toolDefs: activeToolDefs,
     maxRounds: MAX_TOOL_ROUNDS,
-    dispatch: (name, toolArgs, signal, onProgress) =>
-      dispatchTool(activeTools, name, toolArgs, signal, onProgress),
+    dispatch: async (name, toolArgs, signal, onProgress) => {
+      const r = await dispatchTool(activeTools, name, toolArgs, signal, onProgress);
+      if (name === 'create_artefact' && r.meta?.artefactExpertUnavailable === true) {
+        useCurrentChatStore
+          .getState()
+          .setArtefactExpertError(r.error ?? 'Artefact expert unavailable.');
+      }
+      return r;
+    },
     signal: controller.signal,
     streamOnce: (toolExchange, tools) =>
       runStreamEngine({

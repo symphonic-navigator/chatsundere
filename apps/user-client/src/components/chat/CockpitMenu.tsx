@@ -13,6 +13,9 @@ interface Props {
   askExpertAvailable?: boolean;
   askExpert?: boolean;
   onAskExpertChange?: (on: boolean) => void;
+  artefactExpertAvailable?: boolean;
+  artefactExpertOn?: boolean;
+  onArtefactExpertChange?: (on: boolean) => void;
 }
 
 export function CockpitMenu(p: Props): JSX.Element | null {
@@ -22,7 +25,8 @@ export function CockpitMenu(p: Props): JSX.Element | null {
   // Highlight the stored tier, or fall back to the default when the stored id
   // belongs to a different backend (the id is global, not per-backend).
   const activeTierId = tiers.some((t) => t.id === p.searchTierId) ? p.searchTierId : tiers[0]?.id;
-  if (!hasReasoning && !hasDepth && !p.askExpertAvailable) return null;
+  if (!hasReasoning && !hasDepth && !p.askExpertAvailable && !p.artefactExpertAvailable)
+    return null;
 
   return (
     <div className="cockpit-menu" role="menu">
@@ -48,9 +52,24 @@ export function CockpitMenu(p: Props): JSX.Element | null {
       {p.askExpertAvailable ? (
         <div className="cockpit-menu-section" data-section="ask-expert">
           <div className="cockpit-menu-label">Ask expert</div>
+          <div className="cockpit-menu-sublabel">for this turn</div>
           <div className="cockpit-menu-chips">
             {chip('On', p.askExpert === true, { onClick: () => p.onAskExpertChange?.(true) })}
             {chip('Off', p.askExpert !== true, { onClick: () => p.onAskExpertChange?.(false) })}
+          </div>
+        </div>
+      ) : null}
+      {p.artefactExpertAvailable ? (
+        <div className="cockpit-menu-section" data-section="artefact-expert">
+          <div className="cockpit-menu-label">Artefact expert</div>
+          <div className="cockpit-menu-sublabel">for this chat</div>
+          <div className="cockpit-menu-chips">
+            {chip('On', p.artefactExpertOn !== false, {
+              onClick: () => p.onArtefactExpertChange?.(true),
+            })}
+            {chip('Off', p.artefactExpertOn === false, {
+              onClick: () => p.onArtefactExpertChange?.(false),
+            })}
           </div>
         </div>
       ) : null}

@@ -87,3 +87,31 @@ describe('buildIntegrationContext', () => {
     expect(getKeyFn).not.toHaveBeenCalled();
   });
 });
+
+describe('buildIntegrationContext — artefactExpert', () => {
+  const persona = { adultPersona: false };
+  const web = { search: null, fetch: null };
+  const route = { useProxy: false, webSearchTierId: null };
+  const personaOffering = { providerId: 'p', upstreamSlug: 'm' };
+
+  it('copies a provided artefactExpert onto the context', () => {
+    const expert = { providerId: 'anthropic', upstreamSlug: 'opus-4-8' };
+    const ctx = buildIntegrationContext(persona, web, null, route, {
+      chatId: 'c1',
+      personaId: 'per1',
+      personaOffering,
+      artefactExpert: expert,
+    });
+    expect(ctx.artefactExpert).toEqual(expert);
+  });
+
+  it('is null when none is configured', () => {
+    const ctx = buildIntegrationContext(persona, web, null, route, {
+      chatId: 'c1',
+      personaId: 'per1',
+      personaOffering,
+      artefactExpert: null,
+    });
+    expect(ctx.artefactExpert).toBeNull();
+  });
+});

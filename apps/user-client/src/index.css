@@ -1668,6 +1668,13 @@ h1 {
   letter-spacing: 0.1em;
   margin-bottom: 0.4rem;
 }
+.cockpit-menu-sublabel {
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  opacity: 0.35;
+  margin-top: -0.25rem;
+  margin-bottom: 0.4rem;
+}
 .cockpit-menu-chips {
   display: flex;
   gap: 0.25rem;
@@ -3351,6 +3358,29 @@ h1 {
 }
 
 .cockpit-dictation-note button:hover {
+  color: color-mix(in oklab, var(--color-aurora-500) 75%, white);
+}
+
+.cockpit-artefact-note {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: rgba(232, 230, 245, 0.65);
+  padding: 0.2rem 0.4rem;
+}
+.cockpit-artefact-note button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-aurora-500);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cockpit-artefact-note button:hover {
   color: color-mix(in oklab, var(--color-aurora-500) 75%, white);
 }
 

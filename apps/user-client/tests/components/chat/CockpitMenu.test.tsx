@@ -123,6 +123,117 @@ describe('CockpitMenu — ask expert section', () => {
     expect(container.firstChild).toBeNull();
     expect(screen.queryByText('Ask expert')).toBeNull();
   });
+
+  it('shows the Artefact expert section with a per-chat sublabel when available', () => {
+    render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        artefactExpertAvailable
+        artefactExpertOn
+        onArtefactExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('Artefact expert')).toBeInTheDocument();
+    expect(screen.getByText('for this chat')).toBeInTheDocument();
+  });
+
+  it('hides the Artefact expert section when unavailable', () => {
+    const { container } = render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(container.querySelector('[data-section="artefact-expert"]')).toBeNull();
+  });
+
+  it('marks the artefact-expert On chip as active when artefactExpertOn is true', () => {
+    render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        artefactExpertAvailable
+        artefactExpertOn={true}
+        onArtefactExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBe('true');
+    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBeNull();
+  });
+
+  it('marks the artefact-expert On chip as active by default when artefactExpertOn is omitted (absent means On)', () => {
+    render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        artefactExpertAvailable
+        onArtefactExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBe('true');
+    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBeNull();
+  });
+
+  it('marks the artefact-expert Off chip as active when artefactExpertOn is false', () => {
+    render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        artefactExpertAvailable
+        artefactExpertOn={false}
+        onArtefactExpertChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBe('true');
+    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBeNull();
+  });
+
+  it('clicking the artefact-expert On chip calls onArtefactExpertChange(true)', () => {
+    const onChange = vi.fn();
+    render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        artefactExpertAvailable
+        artefactExpertOn={false}
+        onArtefactExpertChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('clicking the artefact-expert Off chip calls onArtefactExpertChange(false)', () => {
+    const onChange = vi.fn();
+    render(
+      <CockpitMenu
+        control={{ mode: 'none' }}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        artefactExpertAvailable
+        artefactExpertOn={true}
+        onArtefactExpertChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(false);
+  });
 });
 
 describe('CockpitMenu — web depth section', () => {

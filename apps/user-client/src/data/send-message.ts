@@ -36,6 +36,7 @@ import { isContextMessage } from '../lib/content-blocks.js';
 import { thumbnailFromBlob } from '../lib/image-thumbnail.js';
 import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
+import { resolveArtefactExpert } from '../lib/resolve-artefact-expert.js';
 import { type ResolvedExpertWeb, resolveExpertWeb } from '../lib/resolve-expert-web.js';
 import { openSecret } from '../lib/secrets.js';
 import { usableTemplateIds } from '../lib/usable-providers.js';
@@ -110,6 +111,7 @@ interface PersonaContext {
   expertModelLabel: string | null;
   expertReasoning: ReasoningIntent | null;
   expertWeb: ResolvedExpertWeb | null;
+  artefactExpert: OfferingRef | null;
   mcp: McpToolContext | null;
   images: ImageToolContext;
 }
@@ -201,6 +203,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     expertModelLabel: expert?.modelLabel ?? null,
     expertReasoning: expert?.reasoning ?? null,
     expertWeb: expertWeb ?? null,
+    artefactExpert: resolveArtefactExpert(settings.artefactExpertModel ?? null, chat),
     mcp,
     images,
   };
@@ -599,6 +602,7 @@ export function useSendMessage() {
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,
         expertWeb: ctx.expertWeb ?? null,
+        artefactExpert: ctx.artefactExpert,
         mcp: ctx.mcp ?? null,
         images: ctx.images,
       });
@@ -738,6 +742,7 @@ export function useRegenerate() {
         expertModelLabel: ctx.expertModelLabel ?? undefined,
         expertReasoning: ctx.expertReasoning ?? undefined,
         expertWeb: ctx.expertWeb ?? null,
+        artefactExpert: ctx.artefactExpert,
         mcp: ctx.mcp ?? null,
         images: ctx.images,
       });

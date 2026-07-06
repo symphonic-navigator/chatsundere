@@ -43,3 +43,14 @@ describe('web-search tier-id slice', () => {
     expect(useCurrentChatStore.getState().webSearchTierId).toBeNull();
   });
 });
+
+it('holds and clears the artefact-expert error note', () => {
+  const s = useCurrentChatStore.getState();
+  s.setArtefactExpertError('nope');
+  expect(useCurrentChatStore.getState().artefactExpertError).toBe('nope');
+  s.setArtefactExpertError(null);
+  expect(useCurrentChatStore.getState().artefactExpertError).toBeNull();
+  s.setArtefactExpertError('again');
+  useCurrentChatStore.getState().reset();
+  expect(useCurrentChatStore.getState().artefactExpertError).toBeNull();
+});

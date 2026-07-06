@@ -28,6 +28,10 @@ export interface ArtefactTarget {
   chatId: string;
   personaId: string;
   personaOffering: OfferingRef;
+  /** Pre-resolved artefact-expert offering, or null/absent to use the persona
+   *  model. Optional at the boundary; the context always carries an explicit
+   *  `OfferingRef | null` (defaulted below). */
+  artefactExpert?: OfferingRef | null;
 }
 
 /**
@@ -54,6 +58,7 @@ export function buildIntegrationContext(
     chatId: artefact.chatId,
     personaId: artefact.personaId,
     personaOffering: artefact.personaOffering,
+    artefactExpert: artefact.artefactExpert ?? null,
     getKey: (id) => (mk ? getKeyFn(id, mk) : Promise.resolve(null)),
   };
 }

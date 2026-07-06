@@ -11,6 +11,7 @@ const dormantCtx: IntegrationContext = {
   webFetch: null,
   useProxy: false,
   webSearchTierId: null,
+  artefactExpert: null,
   getKey: async () => null,
   chatId: '',
   personaId: '',

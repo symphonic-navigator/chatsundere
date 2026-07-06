@@ -34,6 +34,10 @@ export interface IntegrationContext {
   personaId: string;
   /** The persona's LLM offering — the model the author subagent runs. */
   personaOffering: OfferingRef;
+  /** The artefact-expert offering to build artefacts with, or null to use the
+   *  persona model. Pre-resolved per send: set when a global artefact expert is
+   *  configured AND this chat has not opted out; null otherwise. */
+  artefactExpert: OfferingRef | null;
 }
 
 /** A dynamic, credential-gated capability unit — the counterpart to a static

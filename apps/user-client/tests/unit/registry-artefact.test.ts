@@ -11,6 +11,7 @@ test('create_artefact is among the active tools', () => {
     webFetch: null,
     useProxy: false,
     webSearchTierId: null,
+    artefactExpert: null,
     chatId: 'c1',
     personaId: 'p1',
     personaOffering: { providerId: 'nano-gpt', upstreamSlug: 'glm-5.1' },

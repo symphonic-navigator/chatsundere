@@ -38,6 +38,7 @@ export function SettingsExpertPage(): JSX.Element {
   const hasProxy = useServerGate('proxy').enabled;
   const configuredTemplateIds = usableTemplateIds(rows, hasProxy);
   const current = parseModelRef(settings?.expertModel);
+  const currentArtefact = parseModelRef(settings?.artefactExpertModel);
   const hasWeb = aggregateServiceKinds(usable).includes('web');
   const options = webBackendOptions(usable, hasProxy);
 
@@ -136,6 +137,34 @@ export function SettingsExpertPage(): JSX.Element {
         <section className="flex flex-col gap-2">
           <h2 className="font-display text-sm text-paper">Expert web access</h2>
           {expertWebBody}
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-display text-sm text-paper">Artefact expert</h2>
+          <p className="text-[11px] text-paper-soft">
+            This model builds your artefacts — interactive pages, widgets, demos — instead of your
+            persona&apos;s own model. One global choice, applied across all personas; each chat can
+            opt out.
+          </p>
+          <p className="text-[11px] text-paper-soft">
+            Unlike &quot;Ask an expert&quot;, building an artefact sends a brief written by your
+            persona, which can include detail drawn from your conversation. Choose a model
+            you&apos;re comfortable sharing that with.
+          </p>
+          <ModelSlotPicker
+            label="Artefact expert"
+            emptyLabel="None — pick an artefact-expert model"
+            filter="all"
+            providers={rows}
+            configuredTemplateIds={configuredTemplateIds}
+            current={currentArtefact}
+            onSelect={(sel) =>
+              update.mutate({
+                artefactExpertModel: `${sel.providerTemplateId}:${sel.upstreamSlug}`,
+              })
+            }
+            onClear={() => update.mutate({ artefactExpertModel: null })}
+          />
         </section>
       </div>
     </PageScaffold>
