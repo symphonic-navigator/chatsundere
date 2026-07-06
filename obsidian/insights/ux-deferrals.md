@@ -388,3 +388,28 @@ line rather than a silent absorb.
 - **Chris sign-off:** Not a blocking hard defect (no dead-end, no data loss, no
   active misdirection — controls visibly do not change offline); logged for Laura's
   pre-squash walk.
+
+---
+
+## 2026-07-06 — Artefact Expert: two Laura soft findings deferred to when the "expert" family grows
+
+- **Context:** Artefact Expert is the second member of the "expert" delegation
+  family (after `ask_expert`). Laura's spec-pass (spec
+  `superpowers/specs/2026-07-06-artefact-expert-design.md`) was clean — no hard
+  defects. Two of her four soft findings are trajectory notes that do not bite at
+  two members; folding them in now would be premature. The other two (micro-
+  sublabels, persona-independent inline failure surface) were folded into the spec.
+- **Deferred (both trigger at the third "expert" family member):**
+  1. **Cockpit menu density at 380 px.** With a reasoning model + web + both
+     experts, the cockpit `⋯` popover stacks four On/Off sections, two of them
+     near-identical. When the family grows past two, group the experts under a
+     single "Experts" sub-heading rather than N parallel sections.
+  2. **"Ask an Expert" settings page outgrowing its name.** The page is named for
+     one feature while becoming the home of the umbrella family; cold-discovery of
+     "which model builds my artefacts?" is the only gap (already-configured
+     reachability is fine). At the third member, rename the page to "Experts".
+- **Rationale:** Both are emergent-decay-at-scale notes, not present defects; the
+  current two-member surface is consistent and least-astonishing. See
+  [[project_expert_umbrella_strategy]].
+- **Chris sign-off:** Not blocking (soft/advisory, taste + future findability);
+  logged for the holistic sweep when the family adds its third member.

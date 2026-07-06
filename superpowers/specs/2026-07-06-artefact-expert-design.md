@@ -3,7 +3,7 @@
 **Date:** 2026-07-06
 **Author:** Liz (with Chris)
 **Branch:** `full-backend-transition`
-**Status:** Draft — awaiting Chris review, then Laura spec-pass
+**Status:** Approved by Chris; Laura spec-pass clean (2026-07-06) — ready for plan
 
 ---
 
@@ -153,6 +153,19 @@ identical to the *Ask expert* section (On/Off chips):
   store): the artefact toggle is a standing preference, so it goes to the DB and
   invalidates the chat query.
 
+**Micro-sublabels (Laura #1).** The two On/Off sections are otherwise
+pixel-identical yet carry different persistence semantics — *Ask expert* is a
+per-turn transient intent, *Artefact expert* a standing per-chat preference.
+Nothing in the visual distinguishes them, which is exactly the adjacent-lookalike
+astonishment the rubric names. Add a faint sub-label line under each section
+title (a new `cockpit-menu-sublabel` element under `cockpit-menu-label`):
+
+- *Ask expert* → **`for this turn`**
+- *Artefact expert* → **`for this chat`**
+
+Lowercase, muted, non-intrusive — an inline-marker whisper, not a paragraph. This
+touches the existing *Ask expert* section too (a small, deliberate retrofit).
+
 `Cockpit.tsx` reads the chat row (already available via `useChat`) and settings,
 computes `artefactExpertAvailable` and the current value, and passes the new
 props down to `CockpitMenu`.
@@ -202,6 +215,26 @@ The error message names the configured expert and points at the exact settings
 location. Where the specific cause is known (locked key vs missing provider), the
 message says which; otherwise it gives the generic "isn't reachable" line.
 
+**Persona-independent inline surface (Laura #4).** The constructive next-step
+must not depend solely on the persona faithfully relaying a `ToolResult` string —
+a smaller or quirky persona model may soften, truncate, or drop it. So the
+expert-unavailable failure is *also* surfaced inline, independent of the relay:
+
+- The failing `create_artefact` returns
+  `meta: { artefactExpertUnavailable: true }` alongside the constructive `error`
+  string — a discriminant that marks this specific case (distinct from an
+  ordinary artefact-build failure).
+- The stream-manager, seeing that discriminant on the tool outcome, drives an
+  inline cockpit alert (a `role="alert"` note in the `cockpit-*-note` family,
+  mirroring the dictation-failed note at `Cockpit.tsx:537`) carrying the
+  constructive message **and a direct route** to *My Settings › "Ask an Expert"*,
+  plus a dismiss. Transient state on the current-chat store; cleared on dismiss
+  or on the next send.
+
+Thus the user gets the actionable next-step even if the persona says nothing
+useful. The persona relay remains (it is still natural for the model to comment),
+but the guarantee no longer rests on it.
+
 ### 3.5 What we are NOT building (YAGNI)
 
 - No per-persona artefact-expert default (unlike `askExpertDefault`) — the
@@ -222,14 +255,20 @@ Backend/unit (Bun runner where the logic is framework-free, Vitest for React):
   for the expert's provider); with it `null`, the persona offering, exactly as
   today.
 - **Error path** — expert set but `getKey` returns `null` (or offering
-  unresolvable) yields a constructive `ToolResult` error, **not** a persona
-  fallback and **not** a thrown exception.
+  unresolvable) yields a constructive `ToolResult` error carrying
+  `meta.artefactExpertUnavailable === true`, **not** a persona fallback and
+  **not** a thrown exception.
+- **Inline failure surface** — given a tool outcome with
+  `meta.artefactExpertUnavailable`, the cockpit renders the alert note with the
+  constructive message and a route to the expert settings; it is absent
+  otherwise.
 - **Stream-manager gating** — `artefactExpert` is `null` when no global expert,
   `null` when the chat has `useArtefactExpertModel === false`, and the parsed
   `OfferingRef` when a global expert is set and the chat has not opted out
   (including the absent ⇒ true case).
 - **Cockpit** — the Artefact expert section renders only when a global expert is
-  set; toggling writes `useArtefactExpertModel` to the chat row.
+  set; toggling writes `useArtefactExpertModel` to the chat row; both toggle
+  sections show their sub-labels (`for this turn` / `for this chat`).
 
 ## 5. Manual verification (Chris, on device)
 
@@ -241,14 +280,21 @@ Backend/unit (Bun runner where the logic is framework-free, Vitest for React):
 3. Toggle it Off in one chat → that chat builds artefacts with the persona
    model; a different chat still uses the expert (per-chat, persisted).
 4. Lock the master key (or remove the expert provider's key) → ask for an
-   artefact → the persona relays the constructive "expert isn't reachable" error;
-   no artefact is produced, no silent downgrade.
+   artefact → an inline cockpit note shows the constructive "expert isn't
+   reachable" next-step with a route to the expert settings, **independent of
+   whatever the persona says**; no artefact is produced, no silent downgrade.
 5. "Use none" clears the global expert → the cockpit section disappears again.
 
 ## 6. Gates
 
-- **Laura spec-pass** (her main lever) — this adds a user-reachable flow (a new
-  cockpit toggle and a new settings slot). Run before the implementation plan.
+- **Laura spec-pass** (her main lever) — **done, 2026-07-06: no hard defects.**
+  She affirmed both flagged choices (hide-when-no-global-expert is *more*
+  consistent than disable-with-tooltip here; the no-silent-fallback error path is
+  an honest next-step, not a dead-end). Two soft findings are folded in above
+  (§3.2 micro-sublabels, §3.4 persona-independent inline surface). Two are logged
+  as future-watch for when the "expert" family grows past two members
+  (`obsidian/insights/ux-deferrals.md`): menu density at 380 px, and renaming the
+  "Ask an Expert" settings page to "Experts".
 - **Larissa** — not required. Client-only; no `auth-service`, `sync-service`,
   `proxy-service`, or `packages/crypto` change. The one privacy-relevant surface
   (the brief reaching a new upstream) is addressed by the honest settings copy in
