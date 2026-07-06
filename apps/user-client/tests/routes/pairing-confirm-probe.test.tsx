@@ -32,6 +32,15 @@ vi.mock('../../src/boot/open-db.js', () => ({
   getDb: vi.fn(() => ({}) as unknown as IDBDatabase),
 }));
 
+// The session-activation guard (client-data identity isolation) has its own
+// tests; here it is a no-op so `activateSession` reduces to `setSession` for a
+// mocked session that carries no real `deriveDek`.
+vi.mock('../../src/boot/client-data-identity.js', () => ({
+  enforceClientDataIdentity: vi.fn(async () => undefined),
+  wipeClientDataForFreshOnboarding: vi.fn(async () => undefined),
+  CLIENT_DATA_IDENTITY_CONTEXT: 'client-data/identity-binding-v1',
+}));
+
 // Spy on maybeProbeLinkedServer while keeping every other ui-shared export
 // (the real Zustand stores) live — this is the regression the task fixes:
 // a freshly-paired device must probe the now-linked server so the sync

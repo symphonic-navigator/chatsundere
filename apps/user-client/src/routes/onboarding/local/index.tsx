@@ -3,6 +3,8 @@ import { CryptoError, createLocalAccount } from '@chatsundere/crypto';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { activateSession } from '../../../boot/activate-session.js';
+import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { copy } from '../../../lib/copy.js';
 import { StepPassphrase } from './step-passphrase.js';
@@ -25,8 +27,12 @@ export function CreateAccount() {
   async function generate() {
     setCreateError(null);
     try {
+      // New identity: wipe any previous identity's local data BEFORE persisting
+      // the new crypto account, so an interrupted onboarding leaves no adoptable
+      // orphan rows (Larissa LOW-1).
+      await wipeClientDataForFreshOnboarding(getDb());
       const result = await createLocalAccount({ db: getDb(), username, passphrase });
-      useSessionStore.getState().setSession(result.session, result.mk);
+      await activateSession(result.session, result.mk);
       setRecoveryKey(result.recoveryKeyString);
       setStep(3);
     } catch (err) {

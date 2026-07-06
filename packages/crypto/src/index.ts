@@ -49,6 +49,7 @@ export {
   verifyRecoveryProof,
 } from './recovery.js';
 export { deriveDek } from './dek.js';
+export { deriveIdentityTag, identityTagFromDek } from './identity-tag.js';
 export {
   opaqueRegistrationStart,
   opaqueRegistrationFinish,

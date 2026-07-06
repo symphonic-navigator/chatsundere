@@ -17,6 +17,8 @@ import {
 } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { activateSession } from '../../../boot/activate-session.js';
+import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
 import { HttpError } from '../../../lib/fetch.js';
@@ -234,6 +236,11 @@ function InvitationConfirmInner() {
           passphrase,
         });
 
+        // New identity (fresh-PWA join): wipe any previous identity's local data
+        // BEFORE persisting the joined crypto account, so an interrupted join
+        // leaves no adoptable orphan rows (Larissa LOW-1). The late-link branch
+        // above keeps the same identity and is deliberately NOT wiped.
+        await wipeClientDataForFreshOnboarding(getDb());
         const result = await finishJoinByInvitation({
           db: getDb(),
           serverClient: httpServerClient,
@@ -245,7 +252,7 @@ function InvitationConfirmInner() {
         });
 
         useConnectivityStore.getState().onServerOk();
-        useSessionStore.getState().setSession(result.session, result.mk);
+        await activateSession(result.session, result.mk);
         setOnboardingState({
           kind: 'invitation_recovery',
           userId: result.session.userId,

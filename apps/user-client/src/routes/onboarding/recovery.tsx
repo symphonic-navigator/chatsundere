@@ -14,6 +14,8 @@ import {
 } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { activateSession } from '../../boot/activate-session.js';
+import { wipeClientDataForFreshOnboarding } from '../../boot/client-data-identity.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { copy } from '../../lib/copy.js';
@@ -69,6 +71,10 @@ export function OnboardingRecovery() {
     }
 
     try {
+      // New identity: wipe any previous identity's local data BEFORE persisting
+      // the recovered crypto account, so an interrupted recovery leaves no
+      // adoptable orphan rows (Larissa LOW-1).
+      await wipeClientDataForFreshOnboarding(getDb());
       const result = await recoverFromScratch({
         db: getDb(),
         serverClient: httpServerClient,
@@ -78,7 +84,7 @@ export function OnboardingRecovery() {
         newPassphrase: passphrase,
       });
       useConnectivityStore.getState().onServerOk();
-      useSessionStore.getState().setSession(result.session, result.mk);
+      await activateSession(result.session, result.mk);
       await setBiometricPromptDue(getDb());
       const linkedRow = await getLinkedAccount(getDb());
       if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);

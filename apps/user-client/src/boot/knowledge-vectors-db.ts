@@ -16,7 +16,7 @@ export const KNOWLEDGE_COLLECTION = 'knowledge';
 /** The subset of VectorStore the knowledge data layer + queue depend on. */
 export type VectorStoreLike = Pick<VectorStore, 'upsert' | 'deleteWhere' | 'scan'>;
 
-const VECTORS_DB_NAME = 'chatsundere-knowledge-vectors';
+export const VECTORS_DB_NAME = 'chatsundere-knowledge-vectors';
 
 class KnowledgeVectorsDb extends Dexie {
   vectors!: Table<VectorRow, string>;

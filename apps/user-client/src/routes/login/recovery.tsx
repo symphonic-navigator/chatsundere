@@ -14,6 +14,7 @@ import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as v from 'valibot';
+import { activateSession } from '../../boot/activate-session.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { RecoveryKeyInput } from '../../components/RecoveryKeyInput.js';
@@ -186,13 +187,13 @@ export function Recovery() {
         }
 
         // Mark the server connection as established.
-        useSessionStore.getState().setSession(session, mk);
+        await activateSession(session, mk);
         useConnectivityStore.getState().onServerOk();
       } else if (step.kind === 'step2-local') {
         // Local-only path: session and mk already present from step 1.
         session = step.session;
         mk = step.mk;
-        useSessionStore.getState().setSession(session, mk);
+        await activateSession(session, mk);
       } else {
         // step2-deferred without isLinked is unreachable under the spec
         // (deferred only ever set in the full-recovery branch which requires

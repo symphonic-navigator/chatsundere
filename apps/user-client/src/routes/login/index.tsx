@@ -12,6 +12,7 @@ import {
 import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { activateSession } from '../../boot/activate-session.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { useDisplayName } from '../../data/settings.js';
@@ -134,7 +135,7 @@ export function Login() {
         });
         // setSession before connectivity transitions per Task 4 reviewer note.
         // mk passed as explicit second arg per Task 7 store refactor.
-        useSessionStore.getState().setSession(session, mk);
+        await activateSession(session, mk);
         switch (serverOutcome.kind) {
           case 'ok':
             useConnectivityStore.getState().onServerOk();
@@ -152,7 +153,7 @@ export function Login() {
       } else {
         // Local-only account.
         const { session, mk } = await loginLocalWithPassphrase({ db, passphrase });
-        useSessionStore.getState().setSession(session, mk);
+        await activateSession(session, mk);
       }
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
@@ -233,7 +234,7 @@ export function Login() {
         origin: window.location.origin,
       });
 
-      useSessionStore.getState().setSession(session);
+      await activateSession(session);
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
       navigate(returnTarget, { replace: true });

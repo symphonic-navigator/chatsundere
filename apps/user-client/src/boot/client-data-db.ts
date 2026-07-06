@@ -9,7 +9,7 @@ import type { TtsHighpassSetting } from '../lib/voice/voice-filter.js';
 import type { WebBackendSetting } from '../lib/web-backends.js';
 import type { McpToolDefinition } from '../mcp/types.js';
 
-const DB_NAME = 'chatsundere_client_data';
+export const DB_NAME = 'chatsundere_client_data';
 
 // ===== Row types =====
 
@@ -37,6 +37,11 @@ export interface SettingsRow {
    *  model unless the chat opts out (`ChatRow.useArtefactExpertModel`).
    *  Non-indexed (schemaless) — no Dexie version bump. */
   artefactExpertModel?: string | null;
+  /** Identity-binding tag (non-secret, one-way `deriveIdentityTag` of the owning
+   *  MasterKey). Bound at boot by `enforceClientDataIdentity`; a mismatch means
+   *  this store belongs to a different identity and is wiped. Non-indexed
+   *  (schemaless) — no Dexie version bump. */
+  identityTag?: string;
   /** Global image-generation models. `ref` = "providerTemplateId:upstreamSlug".
    *  `primary` drives generate_image; `nsfw` is the NSFW-capable second slot
    *  (spec 2026-06-09 §6). Both null until the user picks. */
