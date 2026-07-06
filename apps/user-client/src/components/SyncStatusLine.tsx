@@ -7,7 +7,7 @@ import { getClientDataDb } from '../boot/client-data-db.js';
 import { relativeTimeLabel } from '../lib/relative-time.js';
 import { useEagerQueueActive } from '../sync/blob-fetch.js';
 import { syncCopy } from '../sync/copy.js';
-import { retryRecovery } from '../sync/recovery.js';
+import { confirmBlobReupload, retryRecovery } from '../sync/recovery.js';
 import { getSyncState, isRecovering, subscribeRecovering } from '../sync/watermark.js';
 
 /**
@@ -68,7 +68,10 @@ function attentionView(a: SyncAttention): {
         action: { label: syncCopy.actions.retry, onClick: () => void retryRecovery() },
       };
     case 'blob_reupload_threshold':
-      return { text: syncCopy.attention.blobReuploadThreshold(a) };
+      return {
+        text: syncCopy.attention.blobReuploadThreshold(a),
+        action: { label: syncCopy.actions.uploadNow, onClick: () => void confirmBlobReupload() },
+      };
     case 'tamper':
       return { text: syncCopy.attention.tamper };
     case 'auth_degraded':

@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-shared';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The status line's action affordances call into the recovery module; mock it so
+// activating the `blob_reupload_threshold` action is observable without running
+// the real answer path (which would need the whole sync engine wired up).
+vi.mock('../../src/sync/recovery.js', () => ({
+  retryRecovery: vi.fn(),
+  confirmBlobReupload: vi.fn(),
+}));
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
@@ -16,6 +24,7 @@ import {
   _setBlobFetchDeps,
   enqueueEager,
 } from '../../src/sync/blob-fetch.js';
+import { confirmBlobReupload } from '../../src/sync/recovery.js';
 import { setRecovering } from '../../src/sync/watermark.js';
 
 const BASE_STATE: SyncStateRow = {
@@ -147,6 +156,20 @@ describe('SyncStatusLine', () => {
       await screen.findByText('Your server is behaving inconsistently — syncing is paused.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('Attention: blob_reupload_threshold shows an "Upload them now" action that confirms the re-upload', async () => {
+    linkOnline();
+    const attention: SyncAttention = {
+      kind: 'blob_reupload_threshold',
+      bytes: 600 * 1024 * 1024,
+      count: 2,
+    };
+    await seedState({ watermarkRev: 10, attention });
+    renderLine();
+    const button = await screen.findByRole('button', { name: 'Upload them now' });
+    fireEvent.click(button);
+    expect(confirmBlobReupload).toHaveBeenCalledTimes(1);
   });
 
   it('"Fetching images…" gates "Synced" while the eager queue drains (§6)', async () => {
