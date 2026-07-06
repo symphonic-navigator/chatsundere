@@ -65,9 +65,9 @@ export const syncCopy = {
     recoveryPaused: 'Your server is behaving inconsistently — syncing is paused.',
     /** §8 — epoch recovery would re-upload a large amount; ask before it does. */
     blobReuploadThreshold: ({ bytes, count }: { bytes: number; count: number }): string =>
-      `Re-syncing this device would re-upload ${formatBytes(bytes)} of images (${count} ${
+      `Your server is missing ${count} ${
         count === 1 ? 'image' : 'images'
-      }). Confirm before it uploads.`,
+      } (${formatBytes(bytes)}) that this device still holds.`,
     tamper:
       'Your server sent something that should not be possible. To protect your data, that change was refused — if this keeps happening, tell your operator.',
     /** §5.2 — the server definitively refused to refresh this session; syncing is
@@ -82,6 +82,8 @@ export const syncCopy = {
     retry: 'Try again',
     /** §5.2 — the relink affordance behind the `auth_degraded` attention state. */
     reconnect: 'Reconnect',
+    /** §8 — the answer path behind the `blob_reupload_threshold` attention state. */
+    uploadNow: 'Upload them now',
   },
 
   /** The calm inline breadcrumb shown on the chat surface (§7.3, Laura soft). */

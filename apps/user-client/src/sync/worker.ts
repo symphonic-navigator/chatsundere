@@ -882,6 +882,27 @@ function canRunCycle(): boolean {
   return true;
 }
 
+/** The cross-tab sync Web Lock name (spec §6). Shared by the single-flight cycle
+ *  and the blocking `withSyncLock` (user-initiated work that must wait, not skip). */
+export const SYNC_LOCK_NAME = 'chatsundere-sync';
+
+/**
+ * Acquire the sync Web Lock and BLOCK until it is free, then run `fn` (jsdom /
+ * no-Web-Locks fallback: run inline). Unlike `withSingleFlight` — which SKIPS when
+ * the lock is held — this waits, for user-initiated work (e.g. the blob re-upload
+ * confirmation) that must never silently no-op behind a running cycle.
+ */
+export async function withSyncLock(fn: () => Promise<void>): Promise<void> {
+  const locks = globalThis.navigator?.locks;
+  if (locks && typeof locks.request === 'function') {
+    await locks.request(SYNC_LOCK_NAME, async () => {
+      await fn();
+    });
+    return;
+  }
+  await fn();
+}
+
 /**
  * Single-flight via the Web Locks API for cross-tab correctness (a PWA with two
  * tabs); `ifAvailable` skips the cycle when another tab holds the lock. Falls
@@ -890,7 +911,7 @@ function canRunCycle(): boolean {
 async function withSingleFlight(fn: () => Promise<void>): Promise<void> {
   const locks = globalThis.navigator?.locks;
   if (locks && typeof locks.request === 'function') {
-    await locks.request('chatsundere-sync', { ifAvailable: true }, async (lock) => {
+    await locks.request(SYNC_LOCK_NAME, { ifAvailable: true }, async (lock) => {
       if (!lock) return; // held by another tab — skip this cycle
       await fn();
     });

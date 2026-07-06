@@ -19,7 +19,7 @@ import {
   setPulling,
   setRecovering,
 } from './watermark.js';
-import { drainOutbox } from './worker.js';
+import { drainOutbox, withSyncLock } from './worker.js';
 
 /**
  * Epoch recovery (spec §8) — SECURITY-RELEVANT. A server restore/reset mints a
@@ -227,6 +227,21 @@ export function isEnginePaused(): boolean {
   return enginePaused;
 }
 
+/**
+ * The answer path for the `blob_reupload_threshold` ask (audit #7): re-run the
+ * inventory diff and upload regardless of size, under the sync Web Lock so it
+ * never interleaves with a drain's blob phases. Clears the attention only after
+ * every missing blob has uploaded; a failed upload rejects and leaves the
+ * attention in place.
+ */
+export async function confirmBlobReupload(): Promise<void> {
+  await withSyncLock(async () => {
+    await recoverBlobs({ force: true });
+    const { attention } = await getSyncState();
+    if (attention?.kind === 'blob_reupload_threshold') await setAttention(null);
+  });
+}
+
 /** Steps 2–5 of §8, in order. The epoch persist is unconditionally last. */
 async function performRecovery(): Promise<void> {
   const db = getClientDataDb();
@@ -284,9 +299,10 @@ function isBlobRef(value: unknown): value is BlobRef {
  * re-upload rounds by M-4's recovery flap-stop — `runRecovery` halts the engine
  * with `recovery_paused` on the third recovery within the hour, so this never
  * becomes an unbounded re-upload loop (Larissa L-5). Above the per-recovery
- * threshold the attention state asks before uploading.
+ * threshold the attention state asks before uploading — unless `force` is set,
+ * the answer path (`confirmBlobReupload`) which uploads regardless of size.
  */
-async function recoverBlobs(): Promise<void> {
+async function recoverBlobs(opts: { force?: boolean } = {}): Promise<void> {
   const mk = useSessionStore.getState().mk;
   if (!mk) return;
   const db = getClientDataDb();
@@ -323,7 +339,7 @@ async function recoverBlobs(): Promise<void> {
   if (missing.length === 0) return;
 
   const totalBytes = missing.reduce((sum, m) => sum + m.bytes.size, 0);
-  if (totalBytes > reuploadThreshold) {
+  if (!opts.force && totalBytes > reuploadThreshold) {
     // Above the per-recovery threshold — ASK before uploading (§8), upload nothing.
     await setAttention({
       kind: 'blob_reupload_threshold',
