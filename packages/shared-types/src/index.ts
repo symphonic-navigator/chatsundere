@@ -72,6 +72,8 @@ export type {
   PassphraseChangeStartResponse,
   PassphraseChangeFinishRequest,
   PassphraseChangeFinishResponse,
+  PatchMeRequest,
+  PatchMeResponse,
 } from './me.js';
 
 export type { ServerConfig, KnownServerFeature } from './config.js';

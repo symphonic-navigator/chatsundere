@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { CryptoError } from '@chatsundere/crypto';
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '../../src/lib/fetch.js';
 import { mapSubmitError } from '../../src/routes/onboarding/invitation/confirm.js';
@@ -61,6 +62,29 @@ describe('InvitationConfirm mapSubmitError — join lifecycle codes (F4/F5)', ()
     expect(mapSubmitError(new Error('boom'))).toEqual({
       kind: 'screen',
       screen: { kind: 'fatal', message: 'Something went wrong. Please try again.' },
+    });
+  });
+});
+
+describe('InvitationConfirm mapSubmitError — username conflict (Defect A)', () => {
+  it('maps a CryptoError conflict (late-link linkToServer) to an inline username error', () => {
+    expect(mapSubmitError(new CryptoError('conflict', 'taken'))).toEqual({
+      kind: 'username_inline',
+      message: 'This username is taken on this server. Choose another.',
+    });
+  });
+
+  it('maps an HttpError username_taken (fresh-PWA join) to an inline username error', () => {
+    expect(mapSubmitError(new HttpError(409, 'username_taken', 'conflict'))).toEqual({
+      kind: 'username_inline',
+      message: 'This username is taken on this server. Choose another.',
+    });
+  });
+
+  it('maps a CryptoError invalid_input (rename-mode malformed name) to an inline error', () => {
+    expect(mapSubmitError(new CryptoError('invalid_input', 'bad'))).toEqual({
+      kind: 'username_inline',
+      message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
     });
   });
 });

@@ -10,6 +10,8 @@ import { InlineEditRow } from '../../src/routes/app/account/InlineEditRow.js';
 const stores = vi.hoisted(() => ({
   role: null as 'primary_admin' | 'admin' | 'user' | null,
   adminUrl: undefined as string | undefined,
+  linkStatus: 'local-only' as 'unknown' | 'local-only' | 'linked',
+  baseUrl: null as string | null,
 }));
 
 vi.mock('@chatsundere/crypto', () => ({
@@ -37,8 +39,13 @@ vi.mock('@chatsundere/ui-shared', () => ({
     { getState: () => ({ session: { username: 'navigator' }, mk: null }) },
   ),
   useAccountLinkStore: vi.fn(
-    (selector: (s: { linkStatus: string; role: string | null }) => unknown) =>
-      selector({ linkStatus: 'local-only', role: stores.role }),
+    (
+      selector: (s: {
+        linkStatus: string;
+        baseUrl: string | null;
+        role: string | null;
+      }) => unknown,
+    ) => selector({ linkStatus: stores.linkStatus, baseUrl: stores.baseUrl, role: stores.role }),
   ),
   useDiscoveryStore: vi.fn(
     (selector: (s: { config: { adminUrl?: string; features: string[] } | null }) => unknown) =>
@@ -47,6 +54,10 @@ vi.mock('@chatsundere/ui-shared', () => ({
 }));
 
 vi.mock('../../src/boot/open-db.js', () => ({ getDb: () => ({}) }));
+
+vi.mock('../../src/lib/server-client.js', () => ({
+  httpServerClient: { patchMe: vi.fn() },
+}));
 
 vi.mock('../../src/data/settings.js', () => ({
   useSettings: vi.fn(() => ({ data: { displayName: '' } })),
@@ -67,7 +78,13 @@ vi.mock('react-router-dom', async (orig) => ({
   useNavigate: () => mockNavigate,
 }));
 
+import { changeUsername } from '@chatsundere/crypto';
+import { HttpError } from '../../src/lib/fetch.js';
+import { httpServerClient } from '../../src/lib/server-client.js';
 import { AccountPage } from '../../src/routes/app/account.js';
+
+const changeUsernameMock = vi.mocked(changeUsername);
+const patchMeMock = vi.mocked(httpServerClient.patchMe);
 
 function renderPage() {
   return render(
@@ -158,6 +175,30 @@ describe('InlineEditRow', () => {
     // The draft must be preserved — focus guard must have blocked the re-sync.
     expect(input).toHaveValue('New Draft');
   });
+
+  it('surfaces the thrown Error message so callers can be specific (Laura HARD #2)', async () => {
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('That username is already taken on this server. Choose another.'),
+      );
+    render(<InlineEditRow label="Username" value="nav" onSave={onSave} />);
+    const input = screen.getByLabelText('Username');
+    fireEvent.change(input, { target: { value: 'taken' } });
+    fireEvent.blur(input);
+    expect(
+      await screen.findByText('That username is already taken on this server. Choose another.'),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the generic message when the thrown error carries none', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error(''));
+    render(<InlineEditRow label="Username" value="nav" onSave={onSave} />);
+    const input = screen.getByLabelText('Username');
+    fireEvent.change(input, { target: { value: 'other' } });
+    fireEvent.blur(input);
+    expect(await screen.findByText('Could not save. Please try again.')).toBeInTheDocument();
+  });
 });
 
 // ─── AccountPage render tests ─────────────────────────────────────────────────
@@ -240,5 +281,88 @@ describe('AccountPage', () => {
     renderPage();
     // listPasskeyCredentials mock returns 1 row — expect "Configured (1)"
     expect(await screen.findByText('Configured (1)')).toBeInTheDocument();
+  });
+});
+
+// ─── Username rename across the server link (Defect B) ────────────────────────
+
+describe('AccountPage — username rename across the server link (Defect B)', () => {
+  beforeEach(() => {
+    stores.role = null;
+    stores.adminUrl = undefined;
+    stores.linkStatus = 'local-only';
+    stores.baseUrl = null;
+    changeUsernameMock.mockReset();
+    patchMeMock.mockReset();
+    // Mirror the real flow: changeUsername runs serverPatch FIRST (server-first),
+    // so a rejecting serverPatch aborts before any local write.
+    changeUsernameMock.mockImplementation(async ({ serverPatch, newUsername }) => {
+      if (serverPatch) await serverPatch(newUsername);
+    });
+  });
+
+  async function renameUsernameTo(next: string): Promise<void> {
+    renderPage();
+    const input = await screen.findByLabelText('Username');
+    fireEvent.change(input, { target: { value: next } });
+    fireEvent.blur(input);
+  }
+
+  it('unlinked: renames locally, with no serverPatch and no PATCH /me', async () => {
+    stores.linkStatus = 'local-only';
+    await renameUsernameTo('navigator2');
+    await waitFor(() => expect(changeUsernameMock).toHaveBeenCalled());
+    const arg = changeUsernameMock.mock.calls.at(-1)?.[0];
+    expect(arg?.newUsername).toBe('navigator2');
+    expect(arg?.serverPatch).toBeUndefined();
+    expect(patchMeMock).not.toHaveBeenCalled();
+  });
+
+  it('linked: PATCHes /me server-first with the chosen name', async () => {
+    stores.linkStatus = 'linked';
+    stores.baseUrl = 'https://server.example';
+    patchMeMock.mockResolvedValue(undefined);
+    await renameUsernameTo('navigator2');
+    await waitFor(() => expect(patchMeMock).toHaveBeenCalled());
+    expect(patchMeMock).toHaveBeenCalledWith(
+      { username: 'navigator2' },
+      'https://server.example',
+      '',
+    );
+  });
+
+  it('linked: a 409 surfaces the "already taken" copy (leaves the local name unchanged)', async () => {
+    stores.linkStatus = 'linked';
+    stores.baseUrl = 'https://server.example';
+    patchMeMock.mockRejectedValue(new HttpError(409, 'username_taken', 'conflict'));
+    await renameUsernameTo('taken');
+    expect(
+      await screen.findByText('That username is already taken on this server. Choose another.'),
+    ).toBeInTheDocument();
+  });
+
+  it('linked: a network failure surfaces the offline "wasn\'t changed" copy', async () => {
+    stores.linkStatus = 'linked';
+    stores.baseUrl = 'https://server.example';
+    // A network failure rejects fetch with a TypeError, not an HttpError.
+    patchMeMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    await renameUsernameTo('offline');
+    expect(
+      await screen.findByText(
+        "Couldn't reach the server, so your name wasn't changed. Try again when you're back online.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('unknown link state: refuses the rename until it resolves (Larissa LOW-2)', async () => {
+    stores.linkStatus = 'unknown';
+    await renameUsernameTo('navigator2');
+    expect(
+      await screen.findByText(
+        'One moment — still checking your server connection. Try again in a second.',
+      ),
+    ).toBeInTheDocument();
+    expect(changeUsernameMock).not.toHaveBeenCalled();
+    expect(patchMeMock).not.toHaveBeenCalled();
   });
 });

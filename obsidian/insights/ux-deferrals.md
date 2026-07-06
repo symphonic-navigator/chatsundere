@@ -440,3 +440,39 @@ line rather than a silent absorb.
 - **Chris sign-off:** Not blocking (Minor at whole-branch review; no dead-end, no
   silent downgrade). Logged for a later hardening pass. See
   [[project_expert_umbrella_strategy]].
+
+---
+
+## 2026-07-06 — Username-uniqueness across the server link: two accepted soft notes
+
+**Context:** Defect A (late-link username conflict → rename-and-retry inline) and
+Defect B (My Account rename → server-first). Spec
+[[../../superpowers/specs/2026-07-06-username-uniqueness-across-link-design]].
+
+### SOFT-1 — late-link rename "sticks" after a failed retry (Laura spec-pass SOFT #2 / Larissa LOW-3)
+
+- **Deferred:** in the late-link rename mode (`confirm.tsx`), `changeUsername`
+  commits the local rename A→B *before* retrying `linkToServer`. If that retry
+  fails for a *transient* (non-conflict) reason, the local account is left
+  renamed to B while still unlinked — invisibly, if the user then navigates away.
+- **Rationale:** benign. The user typed and submitted B themselves (not silent);
+  the field surfaces it; a later retry links under B, which is what they chose.
+  Making the rename post-link would need a `linkToServer` username-override
+  parameter (a `packages/crypto` API widening) — disproportionate. Larissa
+  confirmed no crypto/identity hole (session store isn't updated until link
+  success, so `local_account` stays self-consistent).
+- **Chris sign-off:** consciously accepted at spec-pass. Revisit only if a
+  device-test shows users getting stuck.
+
+### SOFT-2 — async 409/offline rename error loses field focus (Laura pre-squash SOFT)
+
+- **Deferred:** `InlineEditRow` commits on blur, so by the time a thrown 409 /
+  offline message renders on the My Account rename, the input has already blurred
+  and lost focus. The draft value IS retained (editable on re-click), satisfying
+  "input preserved" — but the user must re-click to correct.
+- **Rationale:** pre-existing property of the blur-commit pattern, not introduced
+  by this change; does not obstruct or mislead. A re-focus-on-error touch is a
+  shared-component change affecting every `InlineEditRow` use — out of this
+  feature's scope.
+- **Chris sign-off:** advisory; Chris's call. Logged for a possible later polish
+  pass on `InlineEditRow`. Tracked in [[follow-ups-index]].

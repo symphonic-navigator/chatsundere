@@ -158,6 +158,7 @@ function makeServerClient(opts: MockOpts): ServerClient {
     async loginOpaqueFinish() {
       throw new Error('not used');
     },
+    async patchMe() {},
     async deleteMe() {
       throw new Error('not used');
     },

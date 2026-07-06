@@ -18,6 +18,7 @@ import type {
   PassphraseChangeFinishResponse,
   PassphraseChangeStartRequest,
   PassphraseChangeStartResponse,
+  PatchMeRequest,
   RecoveryFinishRequest,
   RecoveryFinishResponse,
   RecoveryStartRequest,
@@ -88,6 +89,14 @@ export const httpServerClient: ServerClient = {
     }),
   deleteMe: (baseUrl: string, _accessToken: string) =>
     apiFetch<void>({ baseUrl, path: '/api/v1/me', method: 'DELETE', authMode: 'bearer' }),
+  patchMe: (req: PatchMeRequest, baseUrl: string, _accessToken: string) =>
+    apiFetch<void>({
+      baseUrl,
+      path: '/api/v1/me',
+      method: 'PATCH',
+      json: req,
+      authMode: 'bearer',
+    }),
   passphraseChangeStart: (
     req: PassphraseChangeStartRequest,
     baseUrl: string,

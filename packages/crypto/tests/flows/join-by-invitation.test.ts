@@ -68,6 +68,7 @@ function makeServerClient(opts: {
     async recoveryFinish() {
       throw new Error('not used');
     },
+    async patchMe() {},
     async deleteMe() {
       throw new Error('not used');
     },

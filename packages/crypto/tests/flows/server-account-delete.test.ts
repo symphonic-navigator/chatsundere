@@ -59,6 +59,7 @@ describe('deleteServerAccount', () => {
       async recoveryFinish() {
         throw new Error('nope');
       },
+      async patchMe() {},
       async deleteMe() {
         deleteMeCalled = true;
       },

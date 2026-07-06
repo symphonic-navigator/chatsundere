@@ -50,6 +50,9 @@ export const httpServerClient: ServerClient = {
   deleteMe: () => {
     throw new Error('not used in admin-client');
   },
+  patchMe: () => {
+    throw new Error('not used in admin-client');
+  },
   passphraseChangeStart: () => {
     throw new Error('not used in admin-client');
   },

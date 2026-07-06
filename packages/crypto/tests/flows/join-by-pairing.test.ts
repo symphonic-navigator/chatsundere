@@ -211,6 +211,7 @@ function makeServerClient(opts: MockClientOpts): ServerClient {
     async recoveryFinish() {
       throw new Error('not used');
     },
+    async patchMe() {},
     async deleteMe() {
       throw new Error('not used');
     },

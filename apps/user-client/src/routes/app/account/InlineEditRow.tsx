@@ -60,8 +60,11 @@ export function InlineEditRow({
       await onSave(draft);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
-    } catch {
-      setError('Could not save. Please try again.');
+    } catch (e) {
+      // Surface the thrown message so callers can give a constructive, specific
+      // reason (e.g. "already taken on this server"); fall back to the generic
+      // line when no message is carried.
+      setError(e instanceof Error && e.message ? e.message : 'Could not save. Please try again.');
     } finally {
       savingRef.current = false;
     }

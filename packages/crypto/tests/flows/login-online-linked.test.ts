@@ -54,6 +54,7 @@ function makeServerClient(behaviour: 'ok' | '401' | '500'): ServerClient {
     async recoveryFinish() {
       throw new Error('unexpected');
     },
+    async patchMe() {},
     async deleteMe() {
       throw new Error('unexpected');
     },

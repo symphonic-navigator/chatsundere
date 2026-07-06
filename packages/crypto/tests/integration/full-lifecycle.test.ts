@@ -166,6 +166,7 @@ function makeFakeServer(serverSetup: string, userId: string): ServerClient {
     async recoveryFinish(_req, _baseUrl) {
       throw new Error('not in test');
     },
+    async patchMe() {},
     async deleteMe(_baseUrl, _accessToken) {
       /* no-op */
     },

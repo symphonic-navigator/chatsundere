@@ -24,3 +24,13 @@ export interface PassphraseChangeFinishRequest {
 export interface PassphraseChangeFinishResponse {
   ok: boolean;
 }
+
+/** Request body for `PATCH /api/v1/me` — rename the authenticated user. */
+export interface PatchMeRequest {
+  username: string;
+}
+
+/** Response body for `PATCH /api/v1/me`. */
+export interface PatchMeResponse {
+  ok: boolean;
+}

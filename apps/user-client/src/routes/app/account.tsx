@@ -17,6 +17,8 @@ import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { copy } from '../../lib/copy.js';
+import { HttpError } from '../../lib/fetch.js';
+import { httpServerClient } from '../../lib/server-client.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { InlineEditRow } from './account/InlineEditRow.js';
 import { SECURITY_TILE_LABEL, adminLaunchUrl, openAdminConsole } from './account/admin-tile.js';
@@ -50,6 +52,7 @@ export function AccountPage(): JSX.Element {
   // session is closed/refreshed.
   const sessionUsername = useSessionStore((s) => s.session?.username ?? '');
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
+  const linkedBaseUrl = useAccountLinkStore((s) => s.baseUrl);
   const role = useAccountLinkStore((s) => s.role);
   const adminUrl = useDiscoveryStore((s) => s.config?.adminUrl);
   const adminHref = adminLaunchUrl(role, adminUrl);
@@ -102,8 +105,41 @@ export function AccountPage(): JSX.Element {
   const effectiveName = rawDisplayName.trim() || username;
 
   async function handleSaveUsername(next: string): Promise<void> {
+    // Refuse while the link state is still resolving (cold-boot race): defaulting
+    // an 'unknown' link status into the not-linked branch would let a genuinely
+    // linked account rename locally-only and re-open Defect B. Fail safe, not fast
+    // (Larissa LOW-2).
+    if (linkStatus === 'unknown') {
+      throw new Error('One moment — still checking your server connection. Try again in a second.');
+    }
+    // When linked, the rename is a sync-critical edit: the server enforces
+    // uniqueness FIRST (server-first, offline-refuse). `changeUsername` runs
+    // `serverPatch` before touching IndexedDB, so a 409 or a network failure
+    // leaves the local name unchanged. When not linked there is no server to
+    // consult and the rename stays purely local.
+    const serverPatch =
+      linkStatus === 'linked' && linkedBaseUrl
+        ? async (newUsername: string): Promise<void> => {
+            try {
+              await httpServerClient.patchMe({ username: newUsername }, linkedBaseUrl, '');
+            } catch (e) {
+              if (e instanceof HttpError && e.status === 409) {
+                throw new Error('That username is already taken on this server. Choose another.');
+              }
+              // A network reject surfaces as a TypeError (not an HttpError); a
+              // server-side failure as a 5xx. Either way the rename did not
+              // commit — say so honestly and leave the local name untouched.
+              if (!(e instanceof HttpError) || e.status >= 500) {
+                throw new Error(
+                  "Couldn't reach the server, so your name wasn't changed. Try again when you're back online.",
+                );
+              }
+              throw e;
+            }
+          }
+        : undefined;
     try {
-      await changeUsername({ db: getDb(), newUsername: next });
+      await changeUsername({ db: getDb(), newUsername: next, serverPatch });
       setAccountState({ kind: 'ready', username: next });
     } catch (e) {
       if (e instanceof CryptoError && e.code === 'invalid_input') {

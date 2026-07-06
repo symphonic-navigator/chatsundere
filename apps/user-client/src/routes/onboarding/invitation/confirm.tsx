@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
   CryptoError,
+  changeUsername,
   finishJoinByInvitation,
   getLinkedAccount,
   linkToServer,
@@ -14,7 +15,7 @@ import {
   useConnectivityStore,
   useSessionStore,
 } from '@chatsundere/ui-shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
@@ -115,6 +116,13 @@ function InvitationConfirmInner() {
   const [passphraseError, setPassphraseError] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: 'ready' });
 
+  // Late-link "choose a different name" mode: entered when a late-link submit
+  // hits a username conflict. It REVEALS the username field (otherwise hidden in
+  // the late-link path) so the user can pick a free name; submitting renames the
+  // local account and retries the link. See spec §3.5.
+  const [latelinkRename, setLatelinkRename] = useState(false);
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+
   const localSession = useSessionStore((s) => s.session);
   const localMk = useSessionStore((s) => s.mk);
   const isLateLink = !!localSession && !!localMk;
@@ -145,13 +153,22 @@ function InvitationConfirmInner() {
     };
   }, []);
 
+  // When rename mode opens, focus the pre-filled (taken) name and select it, so
+  // an unchanged resubmit is not the path of least resistance (Laura SOFT #4).
+  useEffect(() => {
+    if (latelinkRename) usernameInputRef.current?.select();
+  }, [latelinkRename]);
+
   // ── Submit ────────────────────────────────────────────────────────────────────
 
   async function handleContinue() {
     setUsernameError(null);
     setPassphraseError(null);
 
-    if (!isLateLink && username.trim().length === 0) {
+    // The username field is shown for a fresh PWA and, in the late-link path,
+    // once rename mode has opened on a conflict.
+    const usernameShown = !isLateLink || latelinkRename;
+    if (usernameShown && username.trim().length === 0) {
       setUsernameError('Pick a username.');
       return;
     }
@@ -165,6 +182,17 @@ function InvitationConfirmInner() {
     try {
       if (isLateLink) {
         // Late-link: the local account already has an MK and recovery key.
+        // In rename mode, first rename the local account to the chosen free
+        // name — local-only, since the device is not yet linked; the link
+        // attempt below is the uniqueness check. `linkToServer` reads the
+        // username from the local account, so no other threading is needed.
+        const renamed =
+          latelinkRename &&
+          username.trim().length > 0 &&
+          username.trim() !== localSession?.username;
+        if (renamed) {
+          await changeUsername({ db: getDb(), newUsername: username.trim() });
+        }
         // `linkToServer` runs its own OPAQUE round internally.
         await linkToServer({
           db: getDb(),
@@ -176,8 +204,13 @@ function InvitationConfirmInner() {
           mk: localMk,
         });
         useConnectivityStore.getState().onServerOk();
-        // Preserve the existing MK by omitting the second argument.
-        useSessionStore.getState().setSession({ ...localSession, mode: 'linked' });
+        // Preserve the existing MK by omitting the second argument; carry the
+        // renamed username so the session reflects the new local identity.
+        useSessionStore.getState().setSession({
+          ...localSession,
+          username: renamed ? username.trim() : (localSession?.username ?? ''),
+          mode: 'linked',
+        });
         useOnboardingStore.getState().reset();
         await setBiometricPromptDue(getDb());
         const linkedRow = await getLinkedAccount(getDb());
@@ -230,7 +263,17 @@ function InvitationConfirmInner() {
     } catch (err) {
       const mapped = mapSubmitError(err);
       if (mapped.kind === 'username_inline') {
-        setUsernameError(mapped.message);
+        // Late-link, first conflict: no username field is visible yet — open
+        // rename mode to REVEAL it, pre-filled with the current local name.
+        // Setting the error without revealing would land it in a hidden field
+        // (the v1 HARD #1 failure mode), so mode-entry comes first (spec §3.5).
+        if (isLateLink && !latelinkRename) {
+          setLatelinkRename(true);
+          setUsername(localSession?.username ?? '');
+          setScreen({ kind: 'ready' });
+          return;
+        }
+        setUsernameError(isLateLink ? "That name's taken here too. Try another." : mapped.message);
         setScreen({ kind: 'ready' });
         return;
       }
@@ -340,7 +383,9 @@ function InvitationConfirmInner() {
       <Link to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
         ←
       </Link>
-      <h1 className="mt-4 font-display text-3xl italic">Join this server</h1>
+      <h1 className="mt-4 font-display text-3xl italic">
+        {latelinkRename ? "That name's already taken here" : 'Join this server'}
+      </h1>
 
       <dl className="mt-4 rounded-[var(--radius-card)] bg-ink-soft px-4 py-3 ring-1 ring-inset ring-aurora-700/20">
         <div className="flex justify-between gap-4">
@@ -349,6 +394,13 @@ function InvitationConfirmInner() {
         </div>
       </dl>
 
+      {latelinkRename && (
+        <p className="mt-3 text-sm text-paper-soft">
+          «{localSession?.username}» is already taken on this server. Pick a different name to join
+          under — you'll join as a new, separate account with that name.
+        </p>
+      )}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -356,7 +408,7 @@ function InvitationConfirmInner() {
         }}
         className="mt-4"
       >
-        {!isLateLink && (
+        {(!isLateLink || latelinkRename) && (
           <div className="mb-4">
             <label
               htmlFor="confirm-username"
@@ -366,6 +418,7 @@ function InvitationConfirmInner() {
             </label>
             <input
               id="confirm-username"
+              ref={usernameInputRef}
               type="text"
               autoComplete="username"
               spellCheck={false}
@@ -410,7 +463,13 @@ function InvitationConfirmInner() {
           disabled={submitting}
           className="mt-6 w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {submitting ? 'Working…' : isLateLink ? 'Connect this device' : 'Continue'}
+          {submitting
+            ? 'Working…'
+            : latelinkRename
+              ? 'Join with this name'
+              : isLateLink
+                ? 'Connect this device'
+                : 'Continue'}
         </button>
       </form>
     </main>
@@ -430,6 +489,13 @@ export function mapSubmitError(err: unknown): SubmitMapped {
       return {
         kind: 'username_inline',
         message: 'This username is taken on this server. Choose another.',
+      };
+    }
+    if (err.code === 'invalid_input') {
+      // Raised by `changeUsername` in late-link rename mode for a malformed name.
+      return {
+        kind: 'username_inline',
+        message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
       };
     }
     if (err.code === 'opaque_protocol_error') {

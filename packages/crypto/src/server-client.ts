@@ -17,6 +17,7 @@ import type {
   PassphraseChangeFinishResponse,
   PassphraseChangeStartRequest,
   PassphraseChangeStartResponse,
+  PatchMeRequest,
   RecoveryFinishRequest,
   RecoveryFinishResponse,
   RecoveryStartRequest,
@@ -55,6 +56,12 @@ export interface ServerClient {
   recoveryStart(req: RecoveryStartRequest, baseUrl: string): Promise<RecoveryStartResponse>;
   recoveryFinish(req: RecoveryFinishRequest, baseUrl: string): Promise<RecoveryFinishResponse>;
   deleteMe(baseUrl: string, accessToken: string): Promise<void>;
+  /**
+   * Rename the authenticated user via `PATCH /api/v1/me`. Rejects with an error
+   * carrying `.status === 409` / `.code === 'username_taken'` when the new name
+   * is already registered on the server; the caller surfaces that to the user.
+   */
+  patchMe(req: PatchMeRequest, baseUrl: string, accessToken: string): Promise<void>;
   passphraseChangeStart(
     req: PassphraseChangeStartRequest,
     baseUrl: string,

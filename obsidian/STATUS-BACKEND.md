@@ -1,6 +1,44 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-06 — **ARTEFACT EXPERT landed on `full-backend-transition`**
+**Last updated:** 2026-07-06 — **USERNAME-UNIQUENESS across the server link fixed
+on `full-backend-transition`** (one squashed feature unit, ahead of the v0.2.0
+go-live). Two defects Chris found in a multi-device test, one root cause: the
+client did not enforce username uniqueness across the local↔server boundary.
+**Defect A** — a late-link username conflict was silent: in the late-link path
+(`confirm.tsx`) no username field is rendered, so the correctly-set inline error
+landed in a hidden field. Fix: on a late-link `409 username_taken` /
+`CryptoError('conflict')` the screen now enters a **rename-and-retry mode** —
+reveals the username field pre-filled with the local name, `changeUsername`
+local-only (device not yet linked) then retries `linkToServer`; a repeat conflict
+renders inline. (Laura spec-pass v1 killed the original pairing-CTA remedy as a
+structural dead-end — `finishJoinByPairing` refuses any device with a local
+account — so the CTA was replaced by the rename-and-retry Chris used manually.)
+**Defect B** (the dangerous one) — "My Account" rename called `changeUsername`
+**without** a `serverPatch`, so a **linked** account renamed locally-only,
+bypassing the server unique constraint (local/server username divergence → OPAQUE
+online-login sends the wrong identity). Fix: `account.tsx` now wires
+`serverPatch` → `PATCH /api/v1/me` **server-first, offline-refuse** only when
+linked (409 → "already taken" copy; network/5xx → "wasn't changed" copy; unlinked
+stays local-only; `'unknown'` link state refuses — Larissa LOW-2). New wire types
+`PatchMe{Request,Response}`, a `patchMe` method on the `ServerClient` interface
+(+ HTTP adapter, admin-client stub, 8 crypto test-mocks), and `InlineEditRow` now
+**surfaces the thrown `Error.message`** (Laura HARD #2 — it previously swallowed
+every message). Server `me.ts` unchanged (already correct). Built spec→**Laura
+spec-pass v1 (2 HARD, both fixed)→v2 CLEAN**→TDD build→**Larissa CLEAR** (no
+Crit/High/Med; LOW-2 fixed inline; LOW-1 residual-TOCTOU + LOW-3 sticky-rename
+logged in `security-`/`ux-deferrals`)→**Laura pre-squash CLEAN** (1 soft focus
+note logged). Gates: `pnpm typecheck --force` **14/14**; crypto `bun test`
+**190/0**; user-client vitest at the **8** Node-localStorage baseline + new
+coverage (mapSubmitError conflict/invalid_input, InlineEditRow message-surfacing,
+account rename linked/unlinked/409/offline/unknown, late-link rename-mode entry).
+No Dexie bump. **NOT pushed — OWED: Chris device-verify (spec §7: two browsers
+same name → rename-and-retry; linked rename 409; offline rename; free rename +
+admin console; unlinked local rename) then push.** Spec
+[[../superpowers/specs/2026-07-06-username-uniqueness-across-link-design]].
+
+---
+
+**Prior — 2026-07-06:** **ARTEFACT EXPERT landed on `full-backend-transition`**
 (squashed feature unit `59fd45dd`, ahead of the v0.2.0 go-live). Second member of
 the **"expert"** delegation family after `ask_expert` — Chris's deliberate umbrella
 term for the delegation features to come. Lets the user nominate a dedicated model to
