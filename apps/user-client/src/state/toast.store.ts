@@ -14,6 +14,7 @@ export interface ToastEntry {
   tone: ToastTone;
   durationMs: number;
   action?: ToastAction;
+  secondaryAction?: ToastAction;
 }
 
 interface ToastStoreState {
@@ -23,6 +24,7 @@ interface ToastStoreState {
     tone: ToastTone;
     durationMs: number;
     action?: ToastAction;
+    secondaryAction?: ToastAction;
   }) => void;
   dismiss: (id: number) => void;
   clear: () => void;
@@ -50,6 +52,7 @@ export const toastStore = {
     tone: ToastTone;
     durationMs: number;
     action?: ToastAction;
+    secondaryAction?: ToastAction;
   }): void => {
     useToastStoreInternal.getState().show(entry);
   },

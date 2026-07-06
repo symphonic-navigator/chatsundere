@@ -1668,6 +1668,13 @@ h1 {
   letter-spacing: 0.1em;
   margin-bottom: 0.4rem;
 }
+.cockpit-menu-sublabel {
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  opacity: 0.35;
+  margin-top: -0.25rem;
+  margin-bottom: 0.4rem;
+}
 .cockpit-menu-chips {
   display: flex;
   gap: 0.25rem;
@@ -1928,6 +1935,10 @@ h1 {
 .toast-action {
   flex: 0 0 auto;
   pointer-events: auto;
+}
+.toast-action-secondary {
+  opacity: 0.7;
+  font-weight: 400;
 }
 .toast[data-tone="warn"] {
   border-color: rgba(220, 80, 80, 0.4);
@@ -3347,6 +3358,29 @@ h1 {
 }
 
 .cockpit-dictation-note button:hover {
+  color: color-mix(in oklab, var(--color-aurora-500) 75%, white);
+}
+
+.cockpit-artefact-note {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: rgba(232, 230, 245, 0.65);
+  padding: 0.2rem 0.4rem;
+}
+.cockpit-artefact-note button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-aurora-500);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cockpit-artefact-note button:hover {
   color: color-mix(in oklab, var(--color-aurora-500) 75%, white);
 }
 
@@ -5364,4 +5398,88 @@ h1 {
 }
 .cs-picker-field-chevron {
   color: var(--color-paper-soft, #b9b4c7);
+}
+
+/*
+ * WS-D §10 — the per-item blob sync marker. A small, calm, inspectable pill worn
+ * by an artefact/attachment item whose blob will never reach the server (too
+ * large) or is waiting on quota. Non-intrusive: subtle background, no motion.
+ */
+.blob-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-paper-soft, #b9b4c7);
+  white-space: nowrap;
+}
+.blob-marker[data-blob-marker='storage-full'] {
+  color: var(--color-warning, #f0c674);
+  border-color: rgba(240, 198, 116, 0.25);
+}
+.blob-marker-dot {
+  opacity: 0.7;
+}
+
+/*
+ * WS-D §10 — the neutral placeholder frame the lazy image path renders while a
+ * blob is loading, pending a retry, or terminal. A calm file-type glyph over a
+ * subtle surface; the ring is an indeterminate affordance, never a trap.
+ */
+.blob-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  color: var(--color-paper-soft, #b9b4c7);
+  font-size: 11px;
+  text-align: center;
+}
+.blob-frame-glyph {
+  font-size: 24px;
+  opacity: 0.6;
+}
+.blob-frame-ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--color-aurora-200, #b8a6ff);
+  animation: blob-frame-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .blob-frame-ring {
+    animation: none;
+  }
+}
+@keyframes blob-frame-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.blob-frame-retry {
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--color-paper-soft, #b9b4c7);
+  font-size: 11px;
+  cursor: pointer;
+}
+.blob-frame-retry:hover {
+  color: var(--color-paper, #efeaff);
+  border-color: rgba(255, 255, 255, 0.3);
 }

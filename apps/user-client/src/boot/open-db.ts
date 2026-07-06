@@ -21,3 +21,18 @@ export function getDb(): IDBDatabase {
   if (!dbHandle) throw new Error('IDB not opened — call openDb() during boot first');
   return dbHandle;
 }
+
+/**
+ * Release the boot-retained raw crypto `IDBDatabase` handle without deleting any
+ * data. Used by the complete-wipe (`wipeDevice`) so the subsequent
+ * `indexedDB.deleteDatabase(CRYPTO_DB_NAME)` sees no open connection and can run
+ * to completion instead of tripping the browser's `onblocked` path — the same
+ * close-before-delete guarantee `closeClientDataDb` provides for the Dexie DBs.
+ * Clearing `pending` too prevents an in-flight `openDb()` from resurrecting the
+ * handle after we have closed it.
+ */
+export function closeDb(): void {
+  dbHandle?.close();
+  dbHandle = null;
+  pending = null;
+}

@@ -14,8 +14,6 @@ const base = {
   provider: {} as never,
   providerConfig: {} as never,
   apiKey: 'k',
-  corsProxyUrl: null,
-  corsProxyKey: null,
   target: { slug: 'm' } as never,
 };
 

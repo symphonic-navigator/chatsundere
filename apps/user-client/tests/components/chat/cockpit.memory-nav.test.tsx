@@ -33,6 +33,7 @@ vi.mock('../../../src/data/knowledge.js', () => ({
 vi.mock('../../../src/data/chats.js', () => ({
   useChat: () => ({ data: undefined }),
   useSetChatLibraries: () => ({ mutate: vi.fn() }),
+  useUpdateChat: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('../../../src/data/settings.js', () => ({

@@ -24,6 +24,7 @@ function personaMsg(over: Partial<MessageRow> = {}): MessageRow {
     role: 'persona',
     contentBlocks: [{ type: 'text', text: 'A thoughtful reply.' }],
     createdAt: 2,
+    updatedAt: 2,
     bookmarked: false,
     streamingState: 'complete',
     ...over,

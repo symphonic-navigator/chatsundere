@@ -1,10 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { CryptoError, recoverFromScratch, setBiometricPromptDue } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import {
+  CryptoError,
+  getLinkedAccount,
+  recoverFromScratch,
+  setBiometricPromptDue,
+} from '@chatsundere/crypto';
+import {
+  maybeProbeLinkedServer,
+  probeServer,
+  useAccountLinkStore,
+  useConnectivityStore,
+  useSessionStore,
+} from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
+import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isValidServerUrl } from '../../lib/server-url.js';
@@ -26,6 +38,7 @@ export function OnboardingRecovery() {
   const [recoveryKey, setRecoveryKey] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [passphraseConfirm, setPassphraseConfirm] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [recoveryKeyError, setRecoveryKeyError] = useState<string | null>(null);
   const [passphraseError, setPassphraseError] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: 'ready' });
@@ -37,10 +50,23 @@ export function OnboardingRecovery() {
   const continueEnabled = urlValid && usernameValid && recoveryKeyValid && passphrasesMatch;
 
   async function handleContinue() {
+    setUrlError(null);
     setRecoveryKeyError(null);
     setPassphraseError(null);
     if (!continueEnabled) return;
     setScreen({ kind: 'submitting' });
+
+    const probe = await probeServer(baseUrl);
+    if (probe.kind !== 'ok') {
+      setScreen({ kind: 'ready' });
+      setRecoveryKeyError(null);
+      setUrlError(
+        probe.kind === 'unreachable'
+          ? copy.onboardingProbe.unreachable
+          : copy.onboardingProbe.invalid,
+      );
+      return;
+    }
 
     try {
       const result = await recoverFromScratch({
@@ -54,6 +80,13 @@ export function OnboardingRecovery() {
       useConnectivityStore.getState().onServerOk();
       useSessionStore.getState().setSession(result.session, result.mk);
       await setBiometricPromptDue(getDb());
+      const linkedRow = await getLinkedAccount(getDb());
+      if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+      // The device is now linked, so this probe actually populates the
+      // discovery store — the sync engine's canRunCycle() would otherwise
+      // no-op until a reload or connectivity event happens to fire, leaving a
+      // freshly-recovered device in an empty vault.
+      maybeProbeLinkedServer();
       navigate('/app', { replace: true });
     } catch (err) {
       if (err instanceof CryptoError && err.code === 'conflict') {
@@ -139,10 +172,18 @@ export function OnboardingRecovery() {
             autoComplete="off"
             spellCheck={false}
             value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
+              if (urlError) setUrlError(null);
+            }}
             placeholder="https://chatsundere.me/"
             className="mt-1 w-full rounded-[var(--radius-input)] bg-ink-soft px-3 py-2 ring-1 ring-inset ring-aurora-700/30 focus:outline-none focus:ring-aurora-500"
           />
+          {urlError && (
+            <p role="alert" className="mt-1 text-sm text-danger">
+              {urlError}
+            </p>
+          )}
         </div>
 
         <div>

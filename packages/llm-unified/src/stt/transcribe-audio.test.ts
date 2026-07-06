@@ -12,8 +12,6 @@ function args(fetchFn: typeof fetch, mimeType = 'audio/webm;codecs=opus') {
   return {
     providerConfig: provider,
     apiKey: 'k',
-    corsProxyUrl: null,
-    corsProxyKey: null,
     upstreamSlug: 'voxtral-mini-latest',
     transport: 'openai-transcriptions' as const,
     blob: new Blob([new Uint8Array([1, 2, 3])], { type: mimeType }),
@@ -94,8 +92,6 @@ describe('transcribeAudio', () => {
     const result = await transcribeAudio({
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'grok-stt',
       transport: 'xai-native',
       blob: new Blob([new Uint8Array([1])], { type: 'audio/wav' }),
@@ -122,8 +118,6 @@ describe('transcribeAudio', () => {
     await transcribeAudio({
       providerConfig: { baseUrl: 'https://nano-gpt.com/api/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'xai/speech-to-text/v1',
       transport: 'openai-transcriptions',
       spoofWebmAsMatroska: true,
@@ -154,8 +148,6 @@ describe('transcribeAudio', () => {
     await transcribeAudio({
       providerConfig: { baseUrl: 'https://nano-gpt.com/api/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       upstreamSlug: 'xai/speech-to-text/v1',
       transport: 'openai-transcriptions',
       spoofWebmAsMatroska: true,

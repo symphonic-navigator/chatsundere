@@ -127,6 +127,7 @@ describe('ChatPage regenerate wiring', () => {
       title: 'kept',
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 3,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -139,6 +140,7 @@ describe('ChatPage regenerate wiring', () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'tell me a joke' }],
       createdAt: 2,
+      updatedAt: 2,
       bookmarked: false,
       streamingState: 'complete',
     });
@@ -149,6 +151,7 @@ describe('ChatPage regenerate wiring', () => {
       role: 'persona',
       contentBlocks: [{ type: 'text', text: 'old answer' }],
       createdAt: 3,
+      updatedAt: 3,
       bookmarked: false,
       streamingState: 'complete',
     });
@@ -271,6 +274,7 @@ describe('ChatPage opener trigger', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -365,6 +369,7 @@ describe('ChatPage opener trigger', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 2,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -378,6 +383,7 @@ describe('ChatPage opener trigger', () => {
       kind: 'opener',
       contentBlocks: [{ type: 'text', text: 'partial gree' }],
       createdAt: 2,
+      updatedAt: 2,
       bookmarked: false,
       streamingState: 'incomplete',
     });

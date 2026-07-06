@@ -37,6 +37,7 @@ describe('runCompaction', () => {
       title: null,
       resolvedMindspaceId: 'm',
       createdAt: now,
+      updatedAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -50,6 +51,7 @@ describe('runCompaction', () => {
         role: i % 2 === 0 ? 'user' : 'persona',
         contentBlocks: [{ type: 'text', text: `message ${i} with enough words to count` }] as never,
         createdAt: now + i,
+        updatedAt: now + i,
         bookmarked: false,
         streamingState: 'complete',
       });
@@ -62,8 +64,6 @@ describe('runCompaction', () => {
       provider: {} as never,
       providerConfig: {} as never,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       // Small window so the tail algorithm carves a source slice from the 20 messages.
       // 512-token window → tokenTarget=102; 12 tail messages × ~9 tokens ≈ 108 ≥ 102 → tailStart=8.
       // upstreamSlug + adapter are required by offeringToTarget (called inside runner).

@@ -39,8 +39,6 @@ describe('listTtsVoices', () => {
     const voices = await listTtsVoices({
       providerConfig: XAI_PROVIDER,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       endpoint: 'xai-flat',
       fetchFn,
     });
@@ -61,8 +59,6 @@ describe('listTtsVoices', () => {
       await listTtsVoices({
         providerConfig: XAI_PROVIDER,
         apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         endpoint: 'xai-flat',
         fetchFn,
       });
@@ -81,8 +77,6 @@ describe('listTtsVoices', () => {
       await listTtsVoices({
         providerConfig: XAI_PROVIDER,
         apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         endpoint: 'xai-flat',
         fetchFn,
       });
@@ -103,8 +97,6 @@ describe('listTtsVoices', () => {
     const voices = await listTtsVoices({
       providerConfig: MISTRAL_PROVIDER,
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       endpoint: 'mistral-paginated',
       fetchFn,
     });

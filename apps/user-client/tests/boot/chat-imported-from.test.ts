@@ -25,6 +25,7 @@ describe('ChatRow.importedFrom', () => {
       title: null,
       resolvedMindspaceId: 'm1',
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 1,
       bookmarkedMessageCount: 0,
       draftInput: '',

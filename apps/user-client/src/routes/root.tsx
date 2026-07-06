@@ -6,10 +6,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';
 import { BackgroundStreamBadge } from '../components/BackgroundStreamBadge.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
+import { GlobalSyncLine } from '../components/GlobalSyncLine.js';
 import NavTransitionOutlet from '../components/NavTransitionOutlet.js';
 import { PersonaAvatar } from '../components/PersonaAvatar.js';
 import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
+import { SyncSurfaceHost } from '../components/SyncSurfaceHost.js';
 import { Toast } from '../components/Toast.js';
 import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay.js';
 import { copy } from '../lib/copy.js';
@@ -186,7 +188,7 @@ export function Root() {
           <div className="flex min-w-0 items-center gap-2 lg:gap-3">
             {isReadingChat && chatHeader ? (
               <span
-                className="max-w-[140px] truncate text-xs text-paper-soft"
+                className="min-w-0 max-w-[140px] truncate text-xs text-paper-soft"
                 title={chatHeader.title}
               >
                 {chatHeader.title}
@@ -199,7 +201,7 @@ export function Root() {
                 {session.username}
               </span>
             )}
-            {!isChatRoute && <ConnectivityBadge />}
+            {isChatRoute ? <ConnectivityBadge minimal /> : <ConnectivityBadge />}
           </div>
         </header>
         {showRolledBackBanner && (
@@ -219,6 +221,8 @@ export function Root() {
         </main>
         <SplashOverlay />
         <ScreenEffectsOverlay />
+        <SyncSurfaceHost />
+        <GlobalSyncLine />
         <Toast />
       </div>
     </SplashContext.Provider>

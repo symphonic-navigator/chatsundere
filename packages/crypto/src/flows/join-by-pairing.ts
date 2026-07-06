@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { deriveLocalAmk, deriveOpaqueAmk, deriveRecoveryAmk } from '../amk.js';
 import { putLocalAndLinkedAccount } from '../db/account-pair.js';
 import { getLocalAccount } from '../db/local-account.js';
@@ -155,7 +156,7 @@ export async function finishJoinByPairing(
     );
   }
 
-  const serverId = `${args.baseUrl}/auth/v1`;
+  const serverId = opaqueServerIdentity(args.baseUrl);
   const { username } = args.joinState;
 
   // --- Finish OPAQUE login to obtain the export-key ----------------------------

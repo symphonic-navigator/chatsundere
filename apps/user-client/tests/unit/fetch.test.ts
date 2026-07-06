@@ -12,10 +12,17 @@ vi.mock('@chatsundere/ui-shared', () => ({
     })),
     setState: vi.fn(),
   },
+  // apiFetch resolves the auth origin for refresh via the account-link store.
+  // A `baseUrl` of undefined makes it fall back to the call's own baseUrl,
+  // which is what these tests assert against.
+  useAccountLinkStore: {
+    getState: vi.fn(() => ({ baseUrl: undefined })),
+  },
+  requestStepUp: vi.fn(async () => false),
 }));
 
 // Import the mock after vi.mock so we can introspect it.
-const { useSessionStore } = await import('@chatsundere/ui-shared');
+const { useSessionStore, useAccountLinkStore } = await import('@chatsundere/ui-shared');
 
 const BASE_URL = 'https://api.example.com';
 
@@ -45,6 +52,11 @@ beforeEach(() => {
     updateAccessToken: vi.fn(),
     closeAndForget: vi.fn(),
   } as unknown as ReturnType<typeof useSessionStore.getState>);
+  // resetAllMocks wipes the factory implementation, so re-arm the account-link
+  // store to fall back to each call's own baseUrl (baseUrl: undefined).
+  vi.mocked(useAccountLinkStore.getState).mockReturnValue({
+    baseUrl: undefined,
+  } as unknown as ReturnType<typeof useAccountLinkStore.getState>);
 });
 
 afterEach(() => {
@@ -127,8 +139,10 @@ describe('apiFetch — 401 with bearer auth', () => {
     const spy = makeFetchSpy();
     // original → 401
     spy.mockResolvedValueOnce(makeJsonResponse({ error: { code: 'token_expired' } }, 401));
-    // refresh → 401 (reuse_detected or expired)
-    spy.mockResolvedValueOnce(makeJsonResponse({ error: { code: 'refresh_invalid' } }, 401));
+    // refresh → 401 with the definitive `unauthorized` envelope. This is a
+    // user-origin call, so the classifier treats a definitive refusal as a
+    // logout (close-and-forget).
+    spy.mockResolvedValueOnce(makeJsonResponse({ error: { code: 'unauthorized' } }, 401));
 
     await expect(
       apiFetch({ baseUrl: BASE_URL, path: '/v1/secure', authMode: 'bearer' }),

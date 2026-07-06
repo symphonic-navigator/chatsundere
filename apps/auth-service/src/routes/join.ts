@@ -2,11 +2,13 @@
 
 import { unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { server as opaqueServer } from '@serenity-kit/opaque';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { Context, Hono } from 'hono';
 import { object, optional, parse, picklist, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { seedStepUpKey } from '../auth/step-up.js';
 import { assertOpaqueWrappingPresent } from '../auth/wrapping-integrity.js';
 import { consumePendingCodeAttempt } from '../codes/rate-limit.js';
 import { hashCode, isValidCodeFormat } from '../codes/token.js';
@@ -116,6 +118,7 @@ export function registerJoinRoutes(app: Hono): void {
       });
 
       return c.json({
+        kind: 'invitation' as const,
         session_id: sessionId,
         registration_response: registrationResponse,
         suggested_username: row.suggestedUsername,
@@ -177,7 +180,7 @@ export function registerJoinRoutes(app: Hono): void {
       userIdentifier: owner.opaqueUserIdentifier,
       identifiers: {
         client: owner.opaqueClientIdentifier,
-        server: `${env.API_BASE_URL}/v1`,
+        server: opaqueServerIdentity(env.API_BASE_URL),
       },
     });
 
@@ -194,6 +197,7 @@ export function registerJoinRoutes(app: Hono): void {
     });
 
     return c.json({
+      kind: 'pairing' as const,
       session_id: sessionId,
       login_response: loginResponse,
       username: owner.username,
@@ -321,10 +325,31 @@ async function finishInvitation(c: Context, body: FinishBody): Promise<Response>
         wrapAad: Buffer.from(wrapAadOpaque, 'base64url'),
       });
 
-      await tx
+      // Atomically mark the invitation redeemed under the SAME conditional
+      // guard finishPairing uses (join.ts pairing branch): only one UPDATE wins
+      // the race between two concurrent finishes, and an already-redeemed /
+      // revoked / expired code returns zero rows. Throwing here rolls the whole
+      // transaction back — including the user insert above — so one invitation
+      // can ever mint exactly one account (closes the double-redemption hole).
+      const redemption = await tx
         .update(pendingCodes)
         .set({ redeemedAt: new Date(), redeemedByUserId: user.id })
-        .where(eq(pendingCodes.id, pendingCodeId));
+        .where(
+          and(
+            eq(pendingCodes.id, pendingCodeId),
+            isNull(pendingCodes.redeemedAt),
+            isNull(pendingCodes.revokedAt),
+            gt(pendingCodes.expiresAt, new Date()),
+          ),
+        )
+        .returning({ id: pendingCodes.id });
+      if (redemption.length === 0) {
+        throw new ApiError(
+          410,
+          'code_already_redeemed',
+          'Invitation already redeemed, revoked, or expired',
+        );
+      }
 
       return user;
     });
@@ -334,6 +359,9 @@ async function finishInvitation(c: Context, body: FinishBody): Promise<Response>
       role: result.role,
       userAgent: c.req.header('User-Agent') ?? undefined,
     });
+
+    // Fresh OPAQUE evidence seeds the Tier-1 grace window (spec §4.1).
+    await seedStepUpKey(tokens.sessionId, 1);
 
     await writeAudit({
       db,
@@ -365,6 +393,7 @@ async function finishInvitation(c: Context, body: FinishBody): Promise<Response>
 
     c.header('Set-Cookie', refreshCookieFor(tokens.refreshToken));
     return c.json({
+      kind: 'invitation' as const,
       user_id: result.id,
       username,
       role: result.role,
@@ -465,6 +494,9 @@ async function finishPairing(c: Context, body: FinishBody): Promise<Response> {
     userAgent: c.req.header('User-Agent') ?? undefined,
   });
 
+  // Fresh OPAQUE evidence seeds the Tier-1 grace window (spec §4.1).
+  await seedStepUpKey(tokens.sessionId, 1);
+
   await writeAudit({
     db,
     eventType: 'pairing_code.redeemed',
@@ -477,6 +509,7 @@ async function finishPairing(c: Context, body: FinishBody): Promise<Response> {
 
   c.header('Set-Cookie', refreshCookieFor(tokens.refreshToken));
   return c.json({
+    kind: 'pairing' as const,
     user_id: userId,
     username,
     role: ownerRole,

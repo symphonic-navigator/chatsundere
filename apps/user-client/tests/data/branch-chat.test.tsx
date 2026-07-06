@@ -28,6 +28,7 @@ beforeEach(async () => {
     title: 'Source',
     resolvedMindspaceId: 'm1',
     createdAt: 100,
+    updatedAt: 100,
     lastMessageAt: 300,
     bookmarkedMessageCount: 1,
     draftInput: 'half typed',
@@ -39,6 +40,7 @@ beforeEach(async () => {
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'question' }],
     createdAt: 100,
+    updatedAt: 100,
     bookmarked: true,
     streamingState: 'complete',
   });
@@ -51,6 +53,7 @@ beforeEach(async () => {
       { type: 'pill', pillId: 'pl1' },
     ],
     createdAt: 200,
+    updatedAt: 200,
     bookmarked: false,
     streamingState: 'complete',
   });
@@ -60,6 +63,7 @@ beforeEach(async () => {
     role: 'user',
     contentBlocks: [{ type: 'text', text: 'later' }],
     createdAt: 300,
+    updatedAt: 300,
     bookmarked: false,
     streamingState: 'complete',
   });

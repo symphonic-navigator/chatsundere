@@ -3,6 +3,7 @@ import type { ArtefactRow } from '../../boot/client-data-db.js';
 import { formatGlyph } from '../../lib/artefact-sections.js';
 import { relativeTimeLabel } from '../../lib/relative-time.js';
 import { artefactSize, formatBytes } from '../../lib/treasury-filter.js';
+import { BlobSyncMarker } from '../blob/BlobSyncMarker.js';
 
 interface Props {
   row: ArtefactRow;
@@ -52,6 +53,10 @@ export function TreasuryRow(p: Props): JSX.Element {
             {' · '}
             {relativeTimeLabel(p.row.createdAt)}
           </span>
+          <BlobSyncMarker
+            oversized={p.row.blobOversized === true}
+            hasUnsyncedBlob={p.row.blob !== undefined && p.row.blobRef === undefined}
+          />
         </span>
       </button>
       {!p.selectMode ? (

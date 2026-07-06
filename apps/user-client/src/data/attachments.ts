@@ -9,6 +9,14 @@ import {
   type DocumentRow,
   getClientDataDb,
 } from '../boot/client-data-db.js';
+import { mintBlobRefFor } from '../sync/blob-transform.js';
+import {
+  enqueueBlobDelete,
+  enqueueBlobPut,
+  enqueueSync,
+  isLinkedForSync,
+  mutateSynced,
+} from '../sync/enqueue.js';
 import { QK } from './queryKeys.js';
 
 export interface AddAttachmentInput {
@@ -47,6 +55,7 @@ export async function addAttachment(input: AddAttachmentInput): Promise<string> 
       order,
       state: 'active',
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       blob: input.blob,
       text: input.text,
       width: input.width,
@@ -152,9 +161,33 @@ export async function loadPendingDocumentContents(
   return map;
 }
 
-/** Permanently delete an attachment record from the local database by its ID. */
+/**
+ * Remove an attachment (WS-D §5). A PENDING attachment (no `messageId`) never
+ * left this device — a plain local delete, no outbox row. A SENT attachment is
+ * soft-deleted (`state: 'deleted'`, a Class-2 record edit) so the removal syncs
+ * without losing the row's LWW identity, and its blob id is enqueued as a
+ * `blob-delete`.
+ */
 export async function removeAttachment(id: string): Promise<void> {
-  await getClientDataDb().attachments.delete(id);
+  const db = getClientDataDb();
+  const row = await db.attachments.get(id);
+  if (!row || row.messageId === null) {
+    // Pending compose-tray attachment — device-local, enqueue nothing.
+    await db.attachments.delete(id);
+    return;
+  }
+  const oldBlobId = row.blobRef?.blobId ?? null;
+  await mutateSynced({
+    collection: 'attachments',
+    key: id,
+    tables: ['attachments'],
+    write: async (tx) => {
+      await tx.table('attachments').update(id, { state: 'deleted', updatedAt: Date.now() });
+    },
+    blobOps: (tx) => {
+      if (oldBlobId) enqueueBlobDelete(tx, 'attachments', id, oldBlobId);
+    },
+  });
 }
 
 /** Update the file name of an existing attachment without altering any other field. */
@@ -185,16 +218,34 @@ export async function listMessageAttachments(messageId: string): Promise<Attachm
   return rows.sort((a, b) => a.order - b.order);
 }
 
-/** Bind all pending attachments for a chat to a sent message, clearing their pending state. */
+/**
+ * Bind all pending attachments for a chat to a sent message, clearing their
+ * pending state. This is the moment an attachment becomes syncable (WS-D §5): a
+ * pending compose-tray attachment is device-local, but once its `messageId` is
+ * set it belongs to a real sent message. Linked → each bound attachment enqueues
+ * a record `upsert`, and an image attachment additionally mints a `blobRef` (set
+ * on the row) and enqueues a `blob-put`, all atomically with the bind. Runs
+ * inside the send transaction (which scopes `attachments` + `syncOutbox`); the
+ * caller kicks the debounced Class-1 drain.
+ */
 export async function attachPendingToMessage(chatId: string, messageId: string): Promise<void> {
   const db = getClientDataDb();
-  await db.transaction('rw', db.attachments, async () => {
+  const linked = isLinkedForSync();
+  await db.transaction('rw', [db.attachments, db.syncOutbox], async (tx) => {
     const pending = await db.attachments
       .where('chatId')
       .equals(chatId)
       .filter((a) => a.messageId === null)
       .toArray();
-    await Promise.all(pending.map((a) => db.attachments.update(a.id, { messageId })));
+    for (const a of pending) {
+      // An image attachment with bytes mints a ref set on the row so the drain's
+      // phase-1 reader resolves the queued blobId back to its bytes.
+      const blobRef = linked && a.kind === 'image' && a.blob ? mintBlobRefFor(a.blob) : null;
+      await tx.table('attachments').update(a.id, { messageId, ...(blobRef ? { blobRef } : {}) });
+      if (!linked) continue;
+      if (blobRef) enqueueBlobPut(tx, 'attachments', a.id, blobRef.blobId);
+      enqueueSync(tx, 'attachments', a.id, 'upsert');
+    }
   });
 }
 

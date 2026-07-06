@@ -45,8 +45,7 @@ interface ResolveArgs {
   expertWeb: { search: WebBackendSetting; fetch: WebBackendSetting; searchTierId: string | null };
   options: WebBackendOption[];
   nsfwAllowed: boolean;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
+  useProxy: boolean;
 }
 
 /** Resolve the expert's web backends into a ResolvedExpertWeb. Returns null when
@@ -57,8 +56,7 @@ export function resolveExpertWeb(args: ResolveArgs): ResolvedExpertWeb | null {
   const ctx: WebContext = {
     nsfwAllowed: args.nsfwAllowed,
     location: null,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
+    useProxy: args.useProxy,
   };
 
   const resolveOne = (
@@ -73,7 +71,7 @@ export function resolveExpertWeb(args: ResolveArgs): ResolvedExpertWeb | null {
     if (!ref) return null;
     const offering = getOffering(ref.providerId, ref.upstreamSlug);
     if (!offering || offering.serviceKind !== 'web' || !offering.web) return null;
-    if (offering.web.requiresProxy && !args.corsProxyUrl) return null;
+    if (offering.web.requiresProxy && !args.useProxy) return null;
     if (offering.adapter.kind !== 'catalogue') return null;
     const provider = resolveWebAdapter(offering.adapter.adapterId);
     if (!provider) return null;

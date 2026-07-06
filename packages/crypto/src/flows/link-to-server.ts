@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { deriveOpaqueAmk } from '../amk.js';
 import { putLinkedAccount } from '../db/linked-account.js';
 import { getLocalAccount, requireLocalAccount } from '../db/local-account.js';
@@ -34,7 +35,7 @@ export interface LinkToServerArgs {
 export async function linkToServer(args: LinkToServerArgs): Promise<void> {
   const local = requireLocalAccount(await getLocalAccount(args.db));
   const username = local.username;
-  const serverId = `${args.baseUrl}/auth/v1`;
+  const serverId = opaqueServerIdentity(args.baseUrl);
 
   const { clientRegistrationState, registrationRequest } = await opaqueRegistrationStart(
     args.passphrase,

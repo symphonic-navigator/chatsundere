@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { setProxyAuthSource } from '@chatsundere/llm-unified';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   __resetMcpSessions,
@@ -11,7 +12,6 @@ import type { McpEndpoint } from '../../src/mcp/types.js';
 const directEndpoint: McpEndpoint = {
   url: 'https://mcp.example.com/mcp',
   routing: 'direct',
-  corsProxy: null,
   auth: { header: 'Authorization', value: 'Bearer k' },
 };
 
@@ -109,14 +109,21 @@ describe('mcpToolsCall', () => {
   });
 });
 
+const proxyEndpoint: McpEndpoint = {
+  url: 'https://mcp.example.com/mcp',
+  routing: 'proxy',
+  auth: { header: 'Authorization', value: 'Bearer k' },
+};
+
 describe('proxy routing', () => {
-  it('targets the proxy URL with the cors-proxy headers and forwards the path', async () => {
-    const proxyEndpoint: McpEndpoint = {
-      url: 'https://mcp.example.com/mcp',
-      routing: 'proxy',
-      corsProxy: { url: 'https://cors-proxy.tidesson.net', key: 'pk' },
-      auth: { header: 'Authorization', value: 'Bearer k' },
-    };
+  afterEach(() => setProxyAuthSource(null));
+
+  it('targets the proxy URL with the account JWT + target and no shared key, redirect manual', async () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
@@ -127,9 +134,66 @@ describe('proxy routing', () => {
     await mcpToolsList(proxyEndpoint);
     // biome-ignore lint/style/noNonNullAssertion: mock call array is under our control
     const initReq = fetchMock.mock.calls[0]![0] as Request;
-    expect(initReq.url).toBe('https://cors-proxy.tidesson.net/mcp');
+    expect(initReq.url).toBe('https://proxy.example/mcp');
     expect(initReq.headers.get('x-cors-proxy-target')).toBe('https://mcp.example.com');
-    expect(initReq.headers.get('x-cors-proxy-api-key')).toBe('pk');
+    expect(initReq.headers.get('x-chatsundere-authorization')).toBe('Bearer jwt-abc');
+    expect(initReq.headers.get('x-cors-proxy-api-key')).toBeNull();
     expect(initReq.headers.get('authorization')).toBe('Bearer k');
+    expect(initReq.redirect).toBe('manual');
+  });
+
+  it('refreshes once on a 401 and retries with the new token; Mcp-Session-Id survives', async () => {
+    let token = 'old';
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => token,
+      refreshToken: async () => {
+        token = 'new';
+        return 'new';
+      },
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ jsonrpc: '2.0', id: 1, result: {} }, { 'mcp-session-id': 'sess-9' }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          jsonrpc: '2.0',
+          id: 2,
+          result: { content: [{ type: 'text', text: 'ok' }] },
+        }),
+      );
+    const r = await mcpToolsCall(proxyEndpoint, 'search', { q: 'x' });
+    expect(r).toEqual({ stdout: 'ok', error: null });
+    // biome-ignore lint/style/noNonNullAssertion: mock call array is under our control
+    const firstCall = fetchMock.mock.calls[2]![0] as Request;
+    // biome-ignore lint/style/noNonNullAssertion: mock call array is under our control
+    const retryCall = fetchMock.mock.calls[3]![0] as Request;
+    expect(firstCall.headers.get('x-chatsundere-authorization')).toBe('Bearer old');
+    expect(retryCall.headers.get('x-chatsundere-authorization')).toBe('Bearer new');
+    expect(retryCall.headers.get('mcp-session-id')).toBe('sess-9');
+  });
+
+  it('never attaches the account JWT to a direct endpoint', async () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ jsonrpc: '2.0', id: 1, result: {} }, { 'mcp-session-id': 's' }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(jsonResponse({ jsonrpc: '2.0', id: 2, result: { tools: [] } }));
+    await mcpToolsList(directEndpoint);
+    // biome-ignore lint/style/noNonNullAssertion: mock call array is under our control
+    const initReq = fetchMock.mock.calls[0]![0] as Request;
+    expect(initReq.headers.get('x-chatsundere-authorization')).toBeNull();
+    expect(initReq.url).toBe('https://mcp.example.com/mcp');
   });
 });

@@ -5,6 +5,7 @@ import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 
 function parseModelRef(
@@ -22,7 +23,8 @@ export function SettingsImagesPage(): JSX.Element {
   const update = useUpdateSettings();
   const { data: providerRows } = useProviders();
   const rows = providerRows ?? [];
-  const configuredTemplateIds = usableTemplateIds(rows, !!settings?.corsProxy);
+  const hasProxy = useServerGate('proxy').enabled;
+  const configuredTemplateIds = usableTemplateIds(rows, hasProxy);
   const current = parseModelRef(settings?.substituteVisionModel);
 
   return (

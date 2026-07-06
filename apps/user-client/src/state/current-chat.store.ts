@@ -33,6 +33,10 @@ interface CurrentChatStore {
   reasoning: ReasoningState;
   webSearchTierId: string | null;
   askExpert: boolean;
+  /** Constructive message shown inline when a configured artefact expert was
+   *  unreachable for the last artefact attempt; null = no note. Surfaced
+   *  independent of the persona's own relay (spec §3.4). */
+  artefactExpertError: string | null;
   /** Artefact lightbox: the id of the artefact currently open, or null. */
   openArtefactId: string | null;
 
@@ -56,6 +60,7 @@ interface CurrentChatStore {
   setReasoning: (r: ReasoningState) => void;
   setWebSearchTierId: (id: string | null) => void;
   setAskExpert: (on: boolean) => void;
+  setArtefactExpertError: (message: string | null) => void;
   /** Open an artefact in the lightbox. */
   openArtefact: (id: string) => void;
   /** Close the artefact lightbox. */
@@ -80,6 +85,7 @@ type InitialState = Omit<
   | 'setReasoning'
   | 'setWebSearchTierId'
   | 'setAskExpert'
+  | 'setArtefactExpertError'
   | 'openArtefact'
   | 'closeArtefact'
   | 'reset'
@@ -99,6 +105,7 @@ const initial: InitialState = {
   reasoning: { kind: 'off' },
   webSearchTierId: null,
   askExpert: false,
+  artefactExpertError: null,
   openArtefactId: null,
 };
 
@@ -131,6 +138,7 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   setReasoning: (r) => set({ reasoning: r }),
   setWebSearchTierId: (id) => set({ webSearchTierId: id }),
   setAskExpert: (on) => set({ askExpert: on }),
+  setArtefactExpertError: (message) => set({ artefactExpertError: message }),
   openArtefact: (id) => set({ openArtefactId: id }),
   closeArtefact: () => set({ openArtefactId: null }),
   reset: () => set({ ...initial }),

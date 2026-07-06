@@ -161,8 +161,6 @@ const BASE: Omit<RunStreamingTestArgs, '_streamFn' | 'signal'> = {
   } as RunStreamingTestArgs['provider'],
   providerConfig: { baseUrl: 'https://api.nano-gpt.com', routing: { kind: 'cors-proxy' } },
   apiKey: 'sk-supersecret',
-  corsProxyUrl: 'https://proxy',
-  corsProxyKey: 'proxy-secret',
   offering: OFFERING,
   proxyHost: 'proxy',
 };

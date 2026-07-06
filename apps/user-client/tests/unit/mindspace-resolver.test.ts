@@ -28,6 +28,7 @@ function makeMindspace(id: string, displayName: string): MindspaceRow {
     texture: 'cloudy',
     builtIn: true,
     createdAt: 0,
+    updatedAt: 0,
   };
 }
 
@@ -106,6 +107,7 @@ describe('mindspace-resolver — texture priority', () => {
     texture,
     builtIn: true,
     createdAt: 0,
+    updatedAt: 0,
   });
 
   it('returns persona.textureOverride if set', () => {

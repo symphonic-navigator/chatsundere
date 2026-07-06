@@ -9,11 +9,13 @@ const {
   sealSecretMock,
   openSecretMock,
   upsertMock,
-  settingsStore,
+  proxyGate,
 } = vi.hoisted(() => {
-  // Mutated in beforeEach / per-test to drive the global-proxy branches.
-  const settingsStore: { corsProxy: { url: string; sharedKey: unknown } | null } = {
-    corsProxy: null,
+  // Mutated in beforeEach / per-test to drive the proxy-gate branches.
+  const proxyGate: { enabled: boolean; reason: string | null; tooltip: string | null } = {
+    enabled: true,
+    reason: null,
+    tooltip: null,
   };
   return {
     getProviderMock: vi.fn((id: string) =>
@@ -25,7 +27,7 @@ const {
     sealSecretMock: vi.fn(async (..._a: unknown[]) => ({ blob: 'sealed' })),
     openSecretMock: vi.fn(async (..._a: unknown[]) => 'decrypted-secret'),
     upsertMock: vi.fn(async (row: { id?: string }) => ({ id: row.id ?? 'r-new' })),
-    settingsStore,
+    proxyGate,
   };
 });
 
@@ -36,11 +38,20 @@ vi.mock('@chatsundere/llm-unified', () => ({
   getProvider: (id: string) => getProviderMock(id),
   providerServiceKinds: () => [],
   probeProvider: (args: unknown) => probeProviderMock(args),
+  getProxyAuthSource: () => ({
+    getUrl: () => 'https://proxy.test',
+    getToken: () => 'jwt',
+    refreshToken: async () => null,
+  }),
 }));
 
 vi.mock('@chatsundere/ui-shared', () => ({
   useSessionStore: (selector: (s: { mk: CryptoKey }) => unknown) =>
     selector({ mk: {} as CryptoKey }),
+  // The Class-2 sync gate (Remove provider) reads the link status directly;
+  // local-only means the affordance is never gated for these provider tests.
+  useAccountLinkStore: (selector: (s: { linkStatus: string }) => unknown) =>
+    selector({ linkStatus: 'local-only' }),
 }));
 
 vi.mock('../../src/data/providers.js', () => ({
@@ -49,8 +60,8 @@ vi.mock('../../src/data/providers.js', () => ({
   useDeleteProvider: () => ({ mutateAsync: vi.fn() }),
 }));
 
-vi.mock('../../src/data/settings.js', () => ({
-  useSettings: () => ({ data: settingsStore }),
+vi.mock('../../src/lib/server-gate.js', () => ({
+  useServerGate: () => proxyGate,
 }));
 
 vi.mock('../../src/content/help/use-help.js', () => ({
@@ -105,7 +116,9 @@ describe('SettingsProviderPage', () => {
     sealSecretMock.mockImplementation(async (..._a: unknown[]) => ({ blob: 'sealed' }));
     openSecretMock.mockImplementation(async (..._a: unknown[]) => 'decrypted-secret');
     upsertMock.mockImplementation(async (row: { id?: string }) => ({ id: row.id ?? 'r-new' }));
-    settingsStore.corsProxy = null;
+    proxyGate.enabled = true;
+    proxyGate.reason = null;
+    proxyGate.tooltip = null;
   });
 
   // ── Existing render tests ─────────────────────────────────────────────────
@@ -131,8 +144,10 @@ describe('SettingsProviderPage', () => {
     expect(input).toHaveAttribute('data-lpignore', 'true');
   });
 
-  it('blocks save for a requires-proxy provider when no global CORS proxy is set', async () => {
-    settingsStore.corsProxy = null;
+  it('blocks save for a requires-proxy provider when the account relay is unavailable', async () => {
+    proxyGate.enabled = false;
+    proxyGate.reason = 'local-only';
+    proxyGate.tooltip = 'Link a server to relay this provider';
     getProviderMock.mockReturnValue({
       displayName: 'Ollama Cloud',
       baseUrl: 'https://ollama.com/v1',
@@ -141,11 +156,11 @@ describe('SettingsProviderPage', () => {
     wrapAt('/app/settings/providers/ollama-cloud');
     fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
     fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
-    expect(await screen.findByText(/set a cors proxy first/i)).toBeInTheDocument();
+    expect(await screen.findByText(/link a server to relay this provider/i)).toBeInTheDocument();
     expect(probeProviderMock).not.toHaveBeenCalled();
   });
 
-  it('seals the api key and calls probeProvider with corsProxyUrl=null and corsProxyKey=null for a direct provider', async () => {
+  it('seals the api key and calls probeProvider without any proxy fields for a direct provider', async () => {
     probeProviderMock.mockResolvedValue({ ok: true, status: 200 });
     getProviderMock.mockReturnValue({
       displayName: 'Chutes',
@@ -159,20 +174,17 @@ describe('SettingsProviderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
     await waitFor(() => expect(probeProviderMock).toHaveBeenCalledTimes(1));
     expect(sealSecretMock).toHaveBeenCalled();
-    const arg = probeProviderMock.mock.calls[0]?.[0] as {
-      corsProxyUrl: unknown;
-      corsProxyKey: unknown;
-    };
-    expect(arg.corsProxyUrl).toBeNull();
-    expect(arg.corsProxyKey).toBeNull();
+    const arg = probeProviderMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty('corsProxyUrl');
+    expect(arg).not.toHaveProperty('corsProxyKey');
     // Verify the successful probe causes an upsert with enabled: true.
     await waitFor(() =>
       expect(upsertMock).toHaveBeenCalledWith(expect.objectContaining({ enabled: true })),
     );
   });
 
-  it('decrypts the shared proxy key and forwards corsProxyUrl + corsProxyKey to probeProvider for a requires-proxy provider', async () => {
-    settingsStore.corsProxy = { url: 'https://proxy.test', sharedKey: { blob: 'sealed' } };
+  it('probes a requires-proxy provider (no proxy key threading) when the relay is available', async () => {
+    proxyGate.enabled = true;
     probeProviderMock.mockResolvedValue({ ok: true, status: 200 });
     getProviderMock.mockReturnValue({
       displayName: 'Ollama Cloud',
@@ -185,12 +197,10 @@ describe('SettingsProviderPage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
     await waitFor(() => expect(probeProviderMock).toHaveBeenCalledTimes(1));
-    const arg = probeProviderMock.mock.calls[0]?.[0] as {
-      corsProxyUrl: unknown;
-      corsProxyKey: unknown;
-    };
-    expect(arg.corsProxyUrl).toBe('https://proxy.test');
-    expect(arg.corsProxyKey).toBe('decrypted-secret');
+    const arg = probeProviderMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty('corsProxyUrl');
+    expect(arg).not.toHaveProperty('corsProxyKey');
+    expect(arg.config).toMatchObject({ routing: { kind: 'cors-proxy' } });
   });
 
   it('shows a passive Unsaved badge once an API key is typed', async () => {

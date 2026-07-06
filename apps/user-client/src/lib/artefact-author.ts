@@ -54,8 +54,6 @@ export async function authorArtefact(args: AuthorArtefactArgs): Promise<string> 
     provider: args.base.provider,
     providerConfig: args.base.providerConfig,
     apiKey: args.base.apiKey,
-    corsProxyUrl: args.base.corsProxyUrl,
-    corsProxyKey: args.base.corsProxyKey,
     target: args.base.target,
     messages,
     bodyExtras: {

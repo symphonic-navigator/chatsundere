@@ -50,6 +50,7 @@ describe('MindspaceLayer', () => {
           texture: 'cloudy',
           builtIn: true,
           createdAt: 0,
+          updatedAt: 0,
         },
       ],
     });

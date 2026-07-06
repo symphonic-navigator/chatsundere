@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { ready as opaqueReady, server as opaqueServer } from '@serenity-kit/opaque';
+import { loadEnv } from '../env.js';
 import { createRedis } from '../redis/client.js';
 
 let serverSetupCache: string | null = null;
@@ -15,13 +16,26 @@ export async function ensureOpaqueReady(): Promise<void> {
 /**
  * Returns the OPAQUE server setup string.
  *
- * Phase-0 limitation: this generates a fresh setup on first call and caches it for the process
- * lifetime. A restart produces a new setup, which invalidates all in-flight OPAQUE sessions.
- * In a multi-replica deployment this is also broken — every replica would have a different
- * setup. See obsidian/insights/security-deferrals.md for the deferral entry.
+ * The setup is the server's long-term OPAQUE key material: every registration
+ * record is cryptographically bound to it, so it MUST be stable across
+ * restarts and identical on every replica. It comes from `OPAQUE_SERVER_SETUP`
+ * (generate once with `bun run generate-opaque-setup`). When the variable is
+ * unset — tests and throwaway runs only — a per-process setup is generated and
+ * a loud warning is printed, because every restart then permanently
+ * invalidates all registered accounts' passphrase auth.
  */
 export function getServerSetup(): string {
   if (serverSetupCache) return serverSetupCache;
+  const configured = loadEnv().OPAQUE_SERVER_SETUP;
+  if (configured) {
+    serverSetupCache = configured;
+    return serverSetupCache;
+  }
+  console.warn(
+    'OPAQUE_SERVER_SETUP is not set — using an ephemeral per-process setup. ' +
+      'Every restart will permanently invalidate all registered accounts. ' +
+      'Generate one with `bun run generate-opaque-setup` and set it in the environment.',
+  );
   serverSetupCache = opaqueServer.createSetup();
   return serverSetupCache;
 }

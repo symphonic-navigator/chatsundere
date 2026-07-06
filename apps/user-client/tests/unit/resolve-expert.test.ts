@@ -46,32 +46,32 @@ describe('resolveExpert', () => {
 
   it('returns null when ref is null', async () => {
     const mk = asMasterKey(getRandomBytes(32));
-    const result = await resolveExpert(null, mk, null, null);
+    const result = await resolveExpert(null, mk);
     expect(result).toBeNull();
   });
 
   it('returns null when ref has no colon separator', async () => {
     const mk = asMasterKey(getRandomBytes(32));
-    const result = await resolveExpert('nocolon', mk, null, null);
+    const result = await resolveExpert('nocolon', mk);
     expect(result).toBeNull();
   });
 
   it('returns null for an unknown provider template id', async () => {
     const mk = asMasterKey(getRandomBytes(32));
-    const result = await resolveExpert('no-such-provider:some-slug', mk, null, null);
+    const result = await resolveExpert('no-such-provider:some-slug', mk);
     expect(result).toBeNull();
   });
 
   it('returns null for a known provider but unknown upstream slug', async () => {
     const mk = asMasterKey(getRandomBytes(32));
-    const result = await resolveExpert('nano-gpt:no-such-slug', mk, null, null);
+    const result = await resolveExpert('nano-gpt:no-such-slug', mk);
     expect(result).toBeNull();
   });
 
   it('returns null when no enabled provider row exists for the template', async () => {
     const mk = asMasterKey(getRandomBytes(32));
     // No provider row added — DB is empty after reset.
-    const result = await resolveExpert(REF, mk, null, null);
+    const result = await resolveExpert(REF, mk);
     expect(result).toBeNull();
   });
 
@@ -79,15 +79,13 @@ describe('resolveExpert', () => {
     const mk = asMasterKey(getRandomBytes(32));
     await seedProvider(mk);
 
-    const result = await resolveExpert(REF, mk, 'https://proxy.example', 'proxy-key');
+    const result = await resolveExpert(REF, mk);
 
     expect(result).not.toBeNull();
 
     // base fields
     expect(result?.base.provider.id).toBe('nano-gpt');
     expect(result?.base.apiKey).toBe('test-key-value');
-    expect(result?.base.corsProxyUrl).toBe('https://proxy.example');
-    expect(result?.base.corsProxyKey).toBe('proxy-key');
     expect(result?.base.target).toBeDefined();
 
     // routing: nano-gpt corsHint is 'inofficial' → direct
@@ -107,7 +105,7 @@ describe('resolveExpert', () => {
     const mk = asMasterKey(getRandomBytes(32));
     await seedProvider(mk);
 
-    const result = await resolveExpert(REF, mk, null, null);
+    const result = await resolveExpert(REF, mk);
     expect(result?.base.apiKey).toBe('test-key-value');
   });
 });

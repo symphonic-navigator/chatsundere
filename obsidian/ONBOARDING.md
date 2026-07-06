@@ -67,12 +67,31 @@ The subnet `172.28.0.0/24` is pinned in `infra/compose.dev.yml` exactly so this 
 After `pnpm dev`:
 
 - `http://localhost:3000` — user-client
-- `http://localhost:3010` — admin-client
+- `http://localhost:5174/admin/` — admin-client
 - `http://localhost:3100` — auth-service (`/healthz`, `/readyz`, `/metrics`)
 - `http://localhost:3200` — sync-service
 - `http://localhost:3300` — proxy-service
 - `http://localhost:9090` — Prometheus
 - `http://localhost:3001` — Grafana (admin/admin on first login)
+
+## Create the first owner
+
+There is no admin sign-up: the admin-client shares the same identity primitives
+as everyone else, so the first `primary_admin` is minted from the CLI (this is
+the only way to break the invitation chicken-and-egg). From the repo root, with
+the stack running:
+
+```bash
+./bootstrap-admin.sh
+```
+
+It prints a one-time join URL (`http://localhost:3100/join#<CODE>`, valid 24h).
+Paste that into the user-client (`http://localhost:3000`), register — that
+account **is** the `primary_admin` — then sign in to the admin-client at
+`http://localhost:5174/admin/` with the same passphrase. From there, every
+further user or admin is onboarded through **Invitations → Create**. The CLI
+refuses to run once a `primary_admin` exists; reset the auth database to
+bootstrap again.
 
 ## Workflow
 

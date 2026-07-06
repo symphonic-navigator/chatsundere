@@ -36,9 +36,10 @@ function defaultResolveBase(ctx: IntegrationContext): {
   base: SubagentBase;
   reasoning: ReasoningIntent;
 } {
-  const providerDef = getProvider(ctx.personaOffering.providerId);
-  const offering = getOffering(ctx.personaOffering.providerId, ctx.personaOffering.upstreamSlug);
-  if (!providerDef || !offering) throw new Error('Artefact author: persona model not resolvable');
+  const ref = ctx.artefactExpert ?? ctx.personaOffering;
+  const providerDef = getProvider(ref.providerId);
+  const offering = getOffering(ref.providerId, ref.upstreamSlug);
+  if (!providerDef || !offering) throw new Error('Artefact author: model not resolvable');
   const control = offering.profile.reasoning;
   const reasoning = (resolveReasoningBodyExtras(control, initialReasoningState(control))
     .reasoning as ReasoningIntent | undefined) ?? { enabled: false };
@@ -51,11 +52,27 @@ function defaultResolveBase(ctx: IntegrationContext): {
           providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
       },
       apiKey: '', // filled by execute (async key fetch)
-      corsProxyUrl: ctx.corsProxyUrl,
-      corsProxyKey: ctx.corsProxyKey,
       target: offeringToTarget(offering),
     },
     reasoning,
+  };
+}
+
+/** The constructive "artefact expert unreachable" result. Carries the
+ *  `artefactExpertUnavailable` discriminant so the stream-manager can raise an
+ *  inline note independent of the persona's relay (spec §3.4). Names the model
+ *  when the offering still resolves (e.g. a locked key), else stays generic. */
+function artefactExpertUnavailableResult(ctx: IntegrationContext): ToolResult {
+  const ref = ctx.artefactExpert;
+  const offering = ref ? getOffering(ref.providerId, ref.upstreamSlug) : null;
+  const name = offering
+    ? `Your artefact expert (${offering.upstreamSlug})`
+    : 'Your artefact expert';
+  return {
+    ok: false,
+    output: '',
+    error: `${name} isn't reachable right now — unlock its key, or pick a different model under My Settings › "Ask an Expert".`,
+    meta: { artefactExpertUnavailable: true },
   };
 }
 
@@ -89,10 +106,20 @@ export function makeArtefactTool(ctx: IntegrationContext, deps: ArtefactToolDeps
         return { ok: false, output: '', error: 'create_artefact needs a title and a brief.' };
       }
       try {
-        const key = await ctx.getKey(ctx.personaOffering.providerId);
-        if (!key)
+        const usingExpert = ctx.artefactExpert != null;
+        let resolved: { base: SubagentBase; reasoning: ReasoningIntent };
+        try {
+          resolved = resolveBase(ctx);
+        } catch {
+          if (usingExpert) return artefactExpertUnavailableResult(ctx);
+          return { ok: false, output: '', error: 'Artefact author: model not resolvable.' };
+        }
+        const providerId = (ctx.artefactExpert ?? ctx.personaOffering).providerId;
+        const key = await ctx.getKey(providerId);
+        if (!key) {
+          if (usingExpert) return artefactExpertUnavailableResult(ctx);
           return { ok: false, output: '', error: 'No API key for the artefact author model.' };
-        const resolved = resolveBase(ctx);
+        }
         const base = { ...resolved.base, apiKey: key };
         const content = await author({
           base,

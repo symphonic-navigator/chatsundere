@@ -16,8 +16,6 @@ const providerConfig: ProviderConfig = {
 const base = {
   providerConfig,
   apiKey: 'k',
-  corsProxyUrl: null,
-  corsProxyKey: null,
 };
 
 function jsonResponse(body: unknown, status = 200): Response {

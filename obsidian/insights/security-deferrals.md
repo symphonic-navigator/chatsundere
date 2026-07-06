@@ -608,3 +608,78 @@ squash. The items below were consciously deferred.
 - **Severity:** low (Larissa's classification; missing coverage on a defensive timer, not a functional defect).
 - **Rationale for deferral:** A meaningful test needs a genuinely stalled producer against a live server socket; in the in-process fake harness the options are timer-mocking that tests the mock, or real multi-second sleeps that make the suite flaky — the brittle-retry-test lesson applies. The watchdog path is short and was reviewed line-by-line in the audit.
 - **Follow-up commitment:** Exercise on the VPS dry-run alongside the L6C-L3 probe (a rate-limited `curl --limit-rate` upload that stalls mid-body must be aborted and answered per spec). If that probe motivates a code change (see the audit's 503-vs-400 note), add the structural test with it. Before v0.3.0.
+
+## 2026-07-03 — Full Backend Transition — deferred Larissa findings
+
+Larissa audited the integrated `full-backend-transition` diff vs master
+(merge-base `7081a4d`) across `packages/crypto`, the three services, and the
+client zero-knowledge boundary. **Verdict: CLEAR TO MERGE — no Critical, no
+High.** The blob/token/SSRF/sync-integrity/step-up crown-jewel checks all
+passed. Three Lows; the committed `.env.dev` Low is a deliberate, documented
+dev-only decision (loopback creds, prod uses scoped keys) and is not deferred.
+The two below are consciously carried.
+
+### LT-L1 — Step-up store coalesces concurrent requests of different tiers
+
+- **Affected paths:** `packages/ui-shared/src/state/step-up.store.ts`
+- **Finding (Larissa's summary):** Concurrent `requestStepUp` calls of *different* tiers coalesce onto one pending resolution, so a caller can be resolved by a different tier's confirmation. This is **not** a privilege escalation: the auth-service seeds and checks *per-tier* step-up keys with no hierarchy, so a mismatched caller simply receives a fresh `403 step_up_required` and re-prompts.
+- **Severity:** low (Larissa's classification; degrades to a redundant re-prompt, never an auth bypass).
+- **Rationale for deferral:** No reachable security defect. The only Tier-3 operation now reachable (account deletion, `me.ts`) degrades to a redundant prompt. Re-keying the pending map by tier is a small change, but it is best designed against the real multi-tier user-client UI when that lands, not speculatively.
+- **Follow-up commitment:** Re-key the pending step-up resolution by tier before the Tier-3 user-client UI ships. Tracked in [[follow-ups-index]].
+
+### LT-L2 — `PATCH /api/v1/me` username change carries no step-up gate
+
+- **Affected paths:** `apps/auth-service/src/routes/me.ts`
+- **Finding (Larissa's summary):** Username change via `PATCH /api/v1/me` has no step-up gate, unlike passkey-add / passphrase-change / account-delete. A live-session holder can rename the account.
+- **Severity:** low (Larissa's classification; non-destructive — recovery survives via the frozen `opaque_client_identifier`; the account is not lost or taken over).
+- **Rationale for deferral:** Likely intentional — ADR 0027 does not list username change among the Tier-1 sensitive operations. Flagged for a **conscious Chris confirmation** against the WS-B+E spec rather than a silent acceptance.
+- **Follow-up commitment:** Chris confirms against ADR 0027 / the WS-B+E spec whether username change should be step-up-gated. If yes, add the tier gate on `me.ts`; if no, record as intended and close. Before merge-to-master hardening.
+
+### LT-L3 — OPAQUE/recovery server identity is origin-only, and the convention is frozen at backend go-live
+
+- **Affected paths:** `packages/shared-types/src/opaque-identity.ts` (+ 12 call-sites across `packages/crypto` flows, `apps/user-client/src/routes/change-passphrase.tsx`, and the `login`/`step-up`/`join`/`recovery` auth-service routes)
+- **Finding (Larissa's summary):** The new `opaqueServerIdentity` helper derives the OPAQUE `server` identifier (and the recovery-HMAC `serverId`) from a URL's **origin only**, dropping any path. Two conscious boundaries: **(a)** it assumes **one auth realm per origin** — two auth-services co-hosted under the same origin on different path prefixes would collapse to the same identity; **(b)** it **freezes the identity convention** — once the encrypted backend is live, changing `opaqueServerIdentity` is a breaking migration requiring every user to re-register (the string is baked into each credential record and recovery verifier).
+- **Severity:** low / info (Larissa's classification; **no reachable defect pre-live**).
+- **Rationale for deferral:** No action needed now. On (a), real operator isolation rests on each instance's OPAQUE server secret key and each account's recovery verifier, not this contextual string; the documented topology is one auth-service per origin, and multi-tenant-same-origin is unsupported. On (b), this is the deploy-free `full-backend-transition` sprint (v0.3.0 / Block 6 gate not yet cut) — there are no persisted records to migrate, so freezing the convention now is free.
+- **Follow-up commitment:** (a) If a co-hosting/multi-realm-per-origin topology is ever considered, revisit the helper before adopting it. (b) Treat the identity string as **frozen from backend go-live**; any later change to `opaqueServerIdentity` is a breaking migration and must ship with a re-registration/migration path. Both recorded here so the boundary is a written decision, not tribal knowledge.
+
+## 2026-07-04 — Sync attention-notice auto-clear (tombstone + sibling states) — deferred Larissa findings
+
+Larissa audited (two rounds) the fix that retires latched sync `attention` banners that previously stuck forever — the reported bug being the §7.3a "N items were removed by another device" tombstone notice never clearing after a cross-device mass deletion, then extended at Chris's request to the sibling states with the same never-cleared gap. Files: `apps/user-client/src/sync/apply.ts` (`settleTombstoneNotice`), `watermark.ts` (`settleTransientAttention`, `clearQuotaOnAcceptedWrite`, cycle-scoped `raisedThisCycle`), `worker.ts` (cycle wiring, `applyOk` `record_too_large` sweep, `drainOutbox` positive quota signal).
+
+**Verdict (both rounds): SQUASH WITH NOTED DEFERRALS — no Critical, no High.** Three of her findings were **fixed in-round, not deferred**:
+- **R1 MEDIUM** — auto-clearing the panic-pause `tombstone_paused` alarm contradicts §7.3a's "pending user acknowledgement": guard narrowed to `tombstone_threshold` only; the catastrophic-deletion alarm stays sticky.
+- **R2 MEDIUM** — `quota_exceeded` is an account-global fact (persisted across reload), NOT a per-drain transient, so clearing on absence-of-re-raise wrongly dropped it on an empty-outbox boot cycle while still over quota: removed from the cycle-clearable set; it now retires only on a POSITIVE signal (a server-accepted quota-charged write — a push `ok` / a stored blob — with no quota rejection the same drain).
+- **R2 LOW** — multi-oversize summary imprecision: the `record_too_large` clear is gated on "no terminal sentinel remains anywhere in the outbox" (terminal ⟺ oversize), so a second unsynced oversize item keeps the banner up.
+
+The clearing model per kind: `delete_rate_limited` retires on a clean cycle (genuinely self-re-raising); `quota_exceeded` on a positive accepted-write; `record_too_large` on the terminal-sentinel sweep once none remain; `tamper` / `auth_degraded` / `recovery_paused` / `tombstone_paused` stay sticky by design. Two items are consciously carried.
+
+### LC-L1 — Tombstone-notice visibility residual: no minimum dwell, adversary controls clear timing
+
+- **Affected paths:** `apps/user-client/src/sync/apply.ts` (`settleTombstoneNotice`)
+- **Finding (Larissa's summary):** The calm `tombstone_threshold` notice now auto-clears on the next pull cycle that stays below the threshold. There is **no guaranteed minimum on-screen dwell**: a malicious/compromised server can `raise (cycle 1) → doorbell-poke → clear (cycle 2)` ~3 s apart (the doorbell that triggers the clearing cycle is server-controlled), or raise-then-clear across the 10-min coarse timer while the tab is backgrounded. A user who is away can return to silently-vanished data with the explanatory notice already gone. The 2 s status-line poll means it *flashes* at least once for an active on-screen user, so it is not "never seen", but it is not durably seen either. Compounded by two **pre-existing** gaps Larissa surfaced: (i) the §7.3a threshold is implemented **per-cycle only**, not "per rolling day", so a server stays permanently invisible at 19 tombstones/cycle; (ii) **no user-facing trash/recovery surface exists** — `db.trash` is written by the engine but read by nothing, so "recoverable for 30 days" is currently aspirational.
+- **Severity:** medium (Larissa's classification; a weakening of M-2 *over-visibility*, not an exposure — no data is destroyed that was not already deleted on another device, and the 30-day trash grace still holds the rows).
+- **Rationale for deferral:** **Chris's consciously-chosen tradeoff.** Presented three clearing mechanisms (acknowledge affordance / auto-clear-on-calm / clear-on-trash-visit); he chose auto-clear-on-calm knowing it is the M-2-weaker option, because the "sticks forever" bug is the concrete user-facing harm and a durable acknowledge affordance is a separate UX piece (Laura territory) requiring the trash-recovery surface to exist first.
+- **Follow-up commitment:** When the trash/recovery UI surface lands, revisit the clearing model — an acknowledge affordance that clears the notice *and* opens the recoverable items is the spec-faithful endpoint (§7.3a "pending user acknowledgement"). Consider at that point: a minimum-dwell latch (don't clear a notice younger than N seconds / until a foreground view) and the per-rolling-day threshold the spec actually specifies. Tracked in [[follow-ups-index]].
+
+### LC-L2 — the guarded attention clears are non-atomic read-then-write (pre-existing pattern, now in three clearers)
+
+- **Affected paths:** `apps/user-client/src/sync/apply.ts` (`settleTombstoneNotice`), `watermark.ts` (`settleTransientAttention`, `clearQuotaOnAcceptedWrite`), `worker.ts` (`applyOk` `record_too_large` clear)
+- **Finding (Larissa's summary):** Each clearer does `getSyncState()` → guard-on-kind → `setAttention(null)` non-transactionally. A writer *outside* the single-flight sync lock — realistically a doorbell-triggered `setAuthDegraded(true)` — can set a more-severe attention between the read and the null-write and get clobbered. Impact is bounded (the in-memory degraded latch survives; only the persisted banner is lost and is re-armable), and this is the **same non-atomic pattern the codebase already uses** for `setAuthDegraded(false)` and in `recovery.ts` — the diff introduces no new race *class*, only more instances of it. The `applyOk` variant is marginally sharper because `record_too_large` does not self-re-raise (terminal-excluded), so a wrongly-nulled victim that also does not recur stays lost until re-armed.
+- **Severity:** low (Larissa's classification; bounded, re-armable, no new race class).
+- **Rationale for deferral:** Not worth a bespoke transaction per call site while the identical pre-existing `setAuthDegraded(false)` clear stays non-atomic; fixing piecemeal is a half-measure.
+- **Follow-up commitment:** Consolidate into one shared `clearAttentionIfKind(kinds)` helper that re-reads and nulls inside a `db.transaction('rw', db.syncState, …)` (mirroring `advanceWatermark`), covering all three new clearers plus the pre-existing `setAuthDegraded(false)` race. Tracked in [[follow-ups-index]].
+
+### Pre-existing, surfaced-not-introduced (flagged for Chris, not this diff's to fix)
+
+- **Deferred-tombstone loss at the panic pause:** in `runPullLoop` (`worker.ts`), a tombstone deferred by the panic pause still advances `highestRev`, so `advanceWatermark` moves the watermark past it — the deferred tombstones are **neither applied (rows stay live) nor ever re-pulled**. The panic pause therefore never actually spans cycles, and >200 deletions are silently dropped rather than paused-then-resumed. Real correctness/data-integrity issue, orthogonal to this notice fix. To be triaged separately — [[follow-ups-index]].
+
+---
+
+## 2026-07-05 — HIGH-1 cross-device restore byte-loss now FIXED (was an implied-open v1 limitation)
+
+- **Affected paths:** `apps/user-client/src/sync/apply.ts` (`retireRestoredTrash`), `apps/user-client/src/sync/blob-transform.ts`, `worker.ts`.
+- **Finding (previously implied open):** The known v1 limitation "blob re-hydration on restore is not done (blobRefs kept, bytes may be reclaimed)" concealed an **irreversible** variant (HIGH-1): device A soft-deletes a media chat (its trash snapshot the last copy of the bytes, its drain deletes the server blob) → device B restores the card cross-device (clones the old `blobRef`, re-uploads no bytes) → A pulls B's `restoredFrom` upsert, materialises a placeholder live row, then retires its own snapshot — the originals then existed **nowhere** (A placeholder, A trash gone, B thumbs only, server deleted). No repair path could heal it.
+- **Status:** **FIXED** in the v0.2.0 pre-release blocker run (commit `33b54612`; Larissa re-audit **CLEAR**, zero-knowledge boundary preserved — bytes only move device-locally, then flow through the normal sealed `blob-put`). `retireRestoredTrash` now, before deleting the snapshot, copies the snapshot's bytes onto the placeholder live row and enqueues a repair `blob-put` under the **preserved** blobId (the id peers fetch), atomically with the retire; guarded to no-op when the live row already holds bytes. Companion fix (commit `cde3e861`) makes the drain consume seal-time-minted `newBlobs` so a restored-then-re-sealed row never dangles. So the deferral log **no longer implies the byte-loss variant is open** — it is closed.
+- **Residual (still an accepted v1 limitation, low):** single-device blob re-hydration on a purely local restore is still not proactively done for LAZY originals whose bytes this device never fetched — the `blobRef` is kept and the bytes are re-fetchable from the server *while it still holds them*; only the cross-device delete→drain→restore de-dup path (which destroyed the server copy) needed the retire-time heal. No irreversible loss remains on the audited path.
+- **Follow-up commitment:** None required for the fixed variant. Broader "always re-hydrate on restore" hardening stays optional; revisit only if a device-test surfaces a lazy-original gap. Tracked in [[follow-ups-index]].

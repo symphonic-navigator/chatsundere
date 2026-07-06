@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, it, test } from 'bun:test';
-import { buildRequest } from './transport.js';
+import { afterEach, describe, expect, it, test } from 'bun:test';
+import { setProxyAuthSource } from './proxy-auth.js';
+import { buildRequest, redactRequestHeaders } from './transport.js';
 import type { ProviderConfig } from './types.js';
 
 const directConfig: ProviderConfig = {
@@ -9,32 +10,30 @@ const directConfig: ProviderConfig = {
 };
 
 const proxyConfig: ProviderConfig = {
-  baseUrl: 'https://ollama.com/v1',
+  baseUrl: 'https://ollama.com',
   routing: { kind: 'cors-proxy' },
 };
+
+afterEach(() => setProxyAuthSource(null));
 
 describe('buildRequest', () => {
   it('builds a direct GET request with Bearer auth', () => {
     const req = buildRequest({
       provider: directConfig,
       apiKey: 'sk-abc',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: '/models',
       method: 'GET',
     });
     expect(req.url).toBe('https://nano-gpt.com/api/v1/models');
     expect(req.method).toBe('GET');
     expect(req.headers.get('Authorization')).toBe('Bearer sk-abc');
-    expect(req.headers.get('x-cors-proxy-api-key')).toBeNull();
+    expect(req.headers.get('x-chatsundere-authorization')).toBeNull();
   });
 
   it('builds a direct POST request with JSON body', async () => {
     const req = buildRequest({
       provider: directConfig,
       apiKey: 'sk-abc',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: '/chat/completions',
       method: 'POST',
       body: { model: 'm', messages: [] },
@@ -44,55 +43,87 @@ describe('buildRequest', () => {
     expect(await req.json()).toEqual({ model: 'm', messages: [] });
   });
 
-  it('builds a via-cors-proxy request with rewritten URL and proxy headers', () => {
+  it('cors-proxy routing attaches the account token and target', () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
     const req = buildRequest({
       provider: proxyConfig,
-      apiKey: 'sk-xyz',
-      corsProxyUrl: 'https://cors-proxy.tidesson.net',
-      corsProxyKey: 'proxy-secret',
+      apiKey: 'upstream-key',
+      path: '/v1/chat/completions',
+      method: 'POST',
+      body: {},
+    });
+    expect(req.url).toBe('https://proxy.example/v1/chat/completions');
+    expect(req.headers.get('x-chatsundere-authorization')).toBe('Bearer jwt-abc');
+    expect(req.headers.get('x-cors-proxy-target')).toBe(proxyConfig.baseUrl);
+    expect(req.headers.get('Authorization')).toBe('Bearer upstream-key');
+    expect(req.headers.get('x-cors-proxy-api-key')).toBeNull();
+    expect(req.redirect).toBe('manual');
+  });
+
+  it('cors-proxy target is a bare origin and the base path rides on the request (path-bearing baseUrl)', () => {
+    // Regression: a `requires-proxy` provider whose baseUrl carries a path (e.g.
+    // xai `https://api.x.ai/v1`, wafer `https://pass.wafer.ai/v1`) must send the
+    // proxy target as a BARE ORIGIN — apps/proxy-service `parseTarget` refuses a
+    // target with a path (400 bad_target). The `/v1` base path instead rides on
+    // the proxied request line so the proxy reconstructs the full upstream URL.
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
+    const req = buildRequest({
+      provider: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'cors-proxy' } },
+      apiKey: 'upstream-key',
       path: '/chat/completions',
       method: 'POST',
       body: {},
     });
-    expect(req.url).toBe('https://cors-proxy.tidesson.net/chat/completions');
-    expect(req.headers.get('x-cors-proxy-api-key')).toBe('proxy-secret');
-    expect(req.headers.get('x-cors-proxy-target')).toBe('https://ollama.com/v1');
-    expect(req.headers.get('Authorization')).toBe('Bearer sk-xyz');
-    expect(req.headers.get('Content-Type')).toBe('application/json');
+    expect(req.headers.get('x-cors-proxy-target')).toBe('https://api.x.ai');
+    expect(req.url).toBe('https://proxy.example/v1/chat/completions');
   });
 
-  it('throws when cors-proxy routing is selected but proxy URL is missing', () => {
+  it('cors-proxy routing throws without a registered source or token', () => {
+    setProxyAuthSource(null);
     expect(() =>
-      buildRequest({
-        provider: proxyConfig,
-        apiKey: 'sk-xyz',
-        corsProxyUrl: null,
-        corsProxyKey: 'k',
-        path: '/x',
-        method: 'GET',
-      }),
-    ).toThrow(/cors-proxy URL/);
+      buildRequest({ provider: proxyConfig, apiKey: 'k', path: '/p', method: 'GET' }),
+    ).toThrow(/no proxy is available/);
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => null,
+      refreshToken: async () => null,
+    });
+    expect(() =>
+      buildRequest({ provider: proxyConfig, apiKey: 'k', path: '/p', method: 'GET' }),
+    ).toThrow(/no account token/);
   });
 
-  it('throws when cors-proxy routing is selected but proxy key is missing', () => {
-    expect(() =>
-      buildRequest({
-        provider: proxyConfig,
-        apiKey: 'sk-xyz',
-        corsProxyUrl: 'https://cors-proxy.tidesson.net',
-        corsProxyKey: null,
-        path: '/x',
-        method: 'GET',
-      }),
-    ).toThrow(/cors-proxy key/);
+  it('redactRequestHeaders strips x-chatsundere-authorization', () => {
+    const headers = new Headers({
+      'x-chatsundere-authorization': 'Bearer secret',
+      'content-type': 'application/json',
+    });
+    expect('x-chatsundere-authorization' in redactRequestHeaders(headers)).toBe(false);
+  });
+
+  it('direct routing never consults the proxy source', () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt',
+      refreshToken: async () => null,
+    });
+    const req = buildRequest({ provider: directConfig, apiKey: 'k', path: '/p', method: 'GET' });
+    expect(req.headers.get('x-chatsundere-authorization')).toBeNull();
+    expect(req.redirect).toBe('follow');
   });
 
   it('joins baseUrl + path correctly when baseUrl has trailing slash', () => {
     const req = buildRequest({
       provider: { baseUrl: 'https://nano-gpt.com/api/v1/', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: '/models',
       method: 'GET',
     });
@@ -103,8 +134,6 @@ describe('buildRequest', () => {
     const req = buildRequest({
       provider: { baseUrl: 'https://nano-gpt.com/api/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: 'models',
       method: 'GET',
     });
@@ -117,8 +146,6 @@ describe('buildRequest bodies', () => {
     const req = buildRequest({
       provider: { baseUrl: 'https://api.example.test/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: '/chat/completions',
       method: 'POST',
       body: { a: 1 },
@@ -133,8 +160,6 @@ describe('buildRequest bodies', () => {
     const req = buildRequest({
       provider: { baseUrl: 'https://api.example.test/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       path: '/audio/transcriptions',
       method: 'POST',
       body: form,

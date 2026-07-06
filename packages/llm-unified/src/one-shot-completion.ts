@@ -3,6 +3,7 @@ import { type ProviderId, applyReasoningToBody } from './_reasoning-body.js';
 import type { CanonicalRequest } from './adapter-contract.js';
 import { getAdapter } from './adapter-registry.js';
 import type { CompletionTarget } from './catalogue/target.js';
+import { fetchWithProxyAuth } from './proxy-fetch.js';
 import { type OnRetry, parseRetryAfter, shouldRetryStatus, withRetry } from './retry.js';
 import { buildRequest } from './transport.js';
 import type { ProviderConfig, ProviderDefinition, ReasoningIntent, WireMessage } from './types.js';
@@ -13,8 +14,6 @@ export interface OneShotArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   target: CompletionTarget;
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
@@ -93,17 +92,19 @@ export async function runOneShotCompletionWithSleep(
       if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
       // Fresh Request each attempt: a Request's body is consumed on first fetch,
       // so reusing it on retry throws ERR_BODY_ALREADY_USED. buildRequest is pure.
-      const request = buildRequest({
-        provider: args.providerConfig,
-        apiKey: args.apiKey,
-        corsProxyUrl: args.corsProxyUrl,
-        corsProxyKey: args.corsProxyKey,
-        path: '/chat/completions',
-        method: 'POST',
-        body,
-        extraHeaders: headers,
-      });
-      const response = await fetch(request, { signal });
+      const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+      const response = await fetchWithProxyAuth(
+        () =>
+          buildRequest({
+            provider: args.providerConfig,
+            apiKey: args.apiKey,
+            path: '/chat/completions',
+            method: 'POST',
+            body,
+            extraHeaders: headers,
+          }),
+        { proxied, signal },
+      );
       if (!response.ok) {
         const err = new Error(`one-shot upstream returned ${response.status}`) as Error & {
           status?: number;

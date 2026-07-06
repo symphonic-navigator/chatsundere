@@ -52,6 +52,7 @@ const SHOWCASE_MINDSPACES = [
     texture: 'aurora' as const,
     builtIn: true,
     createdAt: 0,
+    updatedAt: 0,
   },
   {
     id: 'm2',
@@ -60,6 +61,7 @@ const SHOWCASE_MINDSPACES = [
     texture: 'grain' as const,
     builtIn: true,
     createdAt: 0,
+    updatedAt: 0,
   },
 ];
 

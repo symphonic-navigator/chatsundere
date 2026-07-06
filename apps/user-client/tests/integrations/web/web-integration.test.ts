@@ -30,9 +30,9 @@ function ctx(over: Partial<IntegrationContext>): IntegrationContext {
     location: null,
     webSearch: null,
     webFetch: null,
-    corsProxyUrl: null,
-    corsProxyKey: null,
+    useProxy: false,
     webSearchTierId: null,
+    artefactExpert: null,
     getKey: async () => 'secret-key',
     chatId: '',
     personaId: '',
@@ -95,7 +95,7 @@ describe('web-integration', () => {
     // No tiers on the offering → opts defaults to {}; no tier id selected
     expect(search).toHaveBeenCalledWith(
       'cats',
-      { nsfwAllowed: false, location: null, corsProxyUrl: null, corsProxyKey: null },
+      { nsfwAllowed: false, location: null, useProxy: false },
       'secret-key',
       {},
       undefined,
@@ -125,7 +125,7 @@ describe('web-integration', () => {
     await tool.execute({ query: 'dogs' });
     expect(search).toHaveBeenCalledWith(
       'dogs',
-      { nsfwAllowed: false, location: null, corsProxyUrl: null, corsProxyKey: null },
+      { nsfwAllowed: false, location: null, useProxy: false },
       'secret-key',
       { depth: 'advanced', numResults: 20 },
       undefined,
@@ -165,7 +165,7 @@ describe('web-integration', () => {
     expect(getKey).toHaveBeenCalledWith('nano-gpt');
     expect(fetch).toHaveBeenCalledWith(
       'https://e.x/page',
-      { nsfwAllowed: false, location: null, corsProxyUrl: null, corsProxyKey: null },
+      { nsfwAllowed: false, location: null, useProxy: false },
       'secret-key',
       undefined,
     );
@@ -188,7 +188,7 @@ describe('web-integration', () => {
   });
 
   describe('proxy gate', () => {
-    it('does NOT contribute web_search when offering requiresProxy but no corsProxyUrl is set', () => {
+    it('does NOT contribute web_search when offering requiresProxy but proxy is unavailable', () => {
       const provider: WebInterfacingProvider = {
         search: async (q) => ({ query: q, hits: [] }),
       };
@@ -202,12 +202,12 @@ describe('web-integration', () => {
           }),
         resolveWebAdapter: () => provider,
       });
-      // corsProxyUrl defaults to null in ctx()
+      // useProxy defaults to false in ctx()
       const tools = integ.contributesTools(ctx({ webSearch: REF }));
       expect(tools).toEqual([]);
     });
 
-    it('DOES contribute web_search when offering requiresProxy and corsProxyUrl is provided', () => {
+    it('DOES contribute web_search when offering requiresProxy and the proxy is available', () => {
       const provider: WebInterfacingProvider = {
         search: async (q) => ({ query: q, hits: [] }),
       };
@@ -221,13 +221,11 @@ describe('web-integration', () => {
           }),
         resolveWebAdapter: () => provider,
       });
-      const tools = integ.contributesTools(
-        ctx({ webSearch: REF, corsProxyUrl: 'https://proxy.example.com', corsProxyKey: 'pk' }),
-      );
+      const tools = integ.contributesTools(ctx({ webSearch: REF, useProxy: true }));
       expect(tools.map((t) => t.name)).toEqual(['web_search']);
     });
 
-    it('does NOT contribute web_fetch when offering requiresProxy but no corsProxyUrl is set', () => {
+    it('does NOT contribute web_fetch when offering requiresProxy but proxy is unavailable', () => {
       const provider: WebInterfacingProvider = {
         fetch: async (url) => ({ url, content: '' }),
       };
@@ -245,7 +243,7 @@ describe('web-integration', () => {
       expect(tools).toEqual([]);
     });
 
-    it('DOES contribute web_fetch when offering requiresProxy and corsProxyUrl is provided', () => {
+    it('DOES contribute web_fetch when offering requiresProxy and the proxy is available', () => {
       const provider: WebInterfacingProvider = {
         fetch: async (url) => ({ url, content: '' }),
       };
@@ -259,13 +257,11 @@ describe('web-integration', () => {
           }),
         resolveWebAdapter: () => provider,
       });
-      const tools = integ.contributesTools(
-        ctx({ webFetch: REF, corsProxyUrl: 'https://proxy.example.com', corsProxyKey: 'pk' }),
-      );
+      const tools = integ.contributesTools(ctx({ webFetch: REF, useProxy: true }));
       expect(tools.map((t) => t.name)).toEqual(['web_fetch']);
     });
 
-    it('threads corsProxyUrl + corsProxyKey through the WebContext on execution', async () => {
+    it('threads useProxy through the WebContext on execution', async () => {
       const search = vi.fn(async (q: string) => ({ query: q, hits: [] }));
       const integ = createWebIntegration({
         getOffering: () =>
@@ -277,23 +273,12 @@ describe('web-integration', () => {
           }),
         resolveWebAdapter: () => ({ search }),
       });
-      const [tool] = integ.contributesTools(
-        ctx({
-          webSearch: REF,
-          corsProxyUrl: 'https://proxy.example.com',
-          corsProxyKey: 'pk-secret',
-        }),
-      );
+      const [tool] = integ.contributesTools(ctx({ webSearch: REF, useProxy: true }));
       if (!tool) throw new Error('expected web_search to be contributed');
       await tool.execute({ query: 'test' });
       expect(search).toHaveBeenCalledWith(
         'test',
-        {
-          nsfwAllowed: false,
-          location: null,
-          corsProxyUrl: 'https://proxy.example.com',
-          corsProxyKey: 'pk-secret',
-        },
+        { nsfwAllowed: false, location: null, useProxy: true },
         'secret-key',
         {},
         undefined,

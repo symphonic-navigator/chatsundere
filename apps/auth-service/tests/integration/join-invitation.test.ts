@@ -241,6 +241,33 @@ describe.skipIf(skip)('POST /api/v1/join (kind=invitation)', () => {
     expect(body.error.code).toBe('rate_limited');
   });
 
+  it('returns 410 code_already_redeemed when the code was already redeemed', async () => {
+    // A redeemed one-time code is terminally spent, not a conflict — the
+    // consume guard must surface 410 Gone (parity with code_expired and the
+    // atomic-CAS redemption path in routes/join.ts). Seed the beforeEach row
+    // as already-redeemed but neither revoked nor expired, so the /start
+    // consume routes straight to the redeemedAt !== null branch.
+    const { db } = createDb();
+    await db
+      .update(pendingCodes)
+      .set({ redeemedAt: new Date(Date.now() - 60 * 1000) })
+      .where(eq(pendingCodes.id, invitationId));
+
+    const { registrationRequest } = opaqueClient.startRegistration({ password: 'x' });
+    const res = await app.request('/api/v1/join/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
+      body: JSON.stringify({
+        kind: 'invitation',
+        code: invitationCode,
+        registration_request: registrationRequest,
+      }),
+    });
+    expect(res.status).toBe(410);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('code_already_redeemed');
+  });
+
   it('returns 400 kind_mismatch without bumping the attempt counter', async () => {
     // Larissa β M1: a wrong-kind submission must NOT count against the
     // 4-attempt cap. Otherwise an attacker who saw the plaintext code

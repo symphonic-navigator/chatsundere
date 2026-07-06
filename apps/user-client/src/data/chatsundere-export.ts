@@ -120,6 +120,7 @@ export async function exportPersona(personaId: string, opts: PersonaExportOption
           order: att.order,
           state: 'active',
           createdAt: att.createdAt,
+          updatedAt: att.updatedAt,
           text: IMAGE_PLACEHOLDER_TEXT,
         };
         attachments.push(placeholder);
@@ -164,7 +165,9 @@ export async function exportPersona(personaId: string, opts: PersonaExportOption
   // --- Avatar (always travels) ---
   const avatarRow = await db.personaAvatars.get(personaId);
   let avatar: PersonaPackPayload['avatar'] = null;
-  if (avatarRow) {
+  // A removed avatar (WS-D §4) keeps its row with the bytes cleared — export
+  // nothing for it (the pack simply carries no avatar).
+  if (avatarRow?.blob) {
     avatar = {
       bytes: new Uint8Array(await avatarRow.blob.arrayBuffer()),
       mime: avatarRow.mime,

@@ -1,18 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { probeServer } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { JoinFormFields } from '../../../components/JoinFormFields.js';
 import { isValidCode } from '../../../lib/code-input.js';
+import { copy } from '../../../lib/copy.js';
 import { isValidServerUrl } from '../../../lib/server-url.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { InvitationAccountGuard } from './_account-guard.js';
 import { useNavTarget, useReturnUrl } from './_return-url.js';
 
 /**
  * `/onboarding/invitation` — form screen for the invitation join path.
  * Variant C per spec § 2 Decision 3: URL + Code fields first, with Scan QR
  * as a visually-separated alternative below the primary "Continue" CTA.
+ *
+ * Wrapped in the account-guard (spec §4.1): a device that already holds a
+ * local account with no unlocked session is routed through the local login
+ * first, so the join becomes a late-link rather than minting a fresh MK.
  */
 export function InvitationForm() {
+  return (
+    <InvitationAccountGuard>
+      <InvitationFormInner />
+    </InvitationAccountGuard>
+  );
+}
+
+function InvitationFormInner() {
   const navigate = useNavigate();
   const returnUrl = useReturnUrl();
   const navTarget = useNavTarget();
@@ -31,14 +46,32 @@ export function InvitationForm() {
     return s.kind === 'invitation_input' || s.kind === 'invitation_confirm' ? s.code : '';
   });
 
+  const [probing, setProbing] = useState(false);
+  const [probeError, setProbeError] = useState<string | null>(null);
+
   const urlValid = isValidServerUrl(baseUrl);
   const codeValid = isValidCode(code);
   const continueEnabled = urlValid && codeValid;
 
-  function handleContinue() {
-    if (!continueEnabled) return;
-    setOnboardingState({ kind: 'invitation_input', baseUrl, code });
-    navigate(navTarget('/onboarding/invitation/confirm'));
+  async function handleContinue() {
+    if (!continueEnabled || probing) return;
+    setProbeError(null);
+    setProbing(true);
+    try {
+      const probe = await probeServer(baseUrl);
+      if (probe.kind === 'unreachable') {
+        setProbeError(copy.onboardingProbe.unreachable);
+        return;
+      }
+      if (probe.kind === 'invalid') {
+        setProbeError(copy.onboardingProbe.invalid);
+        return;
+      }
+      setOnboardingState({ kind: 'invitation_input', baseUrl, code });
+      navigate(navTarget('/onboarding/invitation/confirm'));
+    } finally {
+      setProbing(false);
+    }
   }
 
   return (
@@ -55,7 +88,7 @@ export function InvitationForm() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          handleContinue();
+          void handleContinue();
         }}
         className="mt-6"
       >
@@ -66,12 +99,18 @@ export function InvitationForm() {
           onCodeChange={setCode}
         />
 
+        {probeError && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            {probeError}
+          </p>
+        )}
+
         <button
           type="submit"
-          disabled={!continueEnabled}
+          disabled={!continueEnabled || probing}
           className="mt-6 w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Continue
+          {probing ? copy.onboardingProbe.checking : 'Continue'}
         </button>
       </form>
 

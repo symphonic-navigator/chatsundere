@@ -5,7 +5,40 @@ import { uuidv7 } from 'uuidv7';
 import { type ArtefactRow, getClientDataDb } from '../boot/client-data-db.js';
 import { fenceToArtefactMeta } from '../lib/fence-to-artefact.js';
 import { normaliseTags } from '../lib/treasury-filter.js';
+import { mintBlobRefFor } from '../sync/blob-transform.js';
+import {
+  enqueueBlobDelete,
+  enqueueBlobPut,
+  enqueueSync,
+  isLinkedForSync,
+  mutateSynced,
+} from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
+
+/** The blobIds an artefact row references (WS-D §5 cascade/delete blob-deletes). */
+function blobIdsOfArtefact(row: ArtefactRow): string[] {
+  const ids: string[] = [];
+  if (row.blobRef) ids.push(row.blobRef.blobId);
+  if (row.thumbBlobRef) ids.push(row.thumbBlobRef.blobId);
+  return ids;
+}
+
+/**
+ * Class-1 creation-insert for a blob-less artefact (WS-D §5): the row and its
+ * `upsert` outbox entry commit atomically; local-only writes the row with no
+ * outbox row. Image artefacts mint refs + `blob-put`s instead (see
+ * {@link addGeneratedImageArtefact}).
+ */
+async function insertArtefactClass1(row: ArtefactRow): Promise<void> {
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  await db.transaction('rw', [db.artefacts, db.syncOutbox], async (tx) => {
+    await db.artefacts.add(row);
+    if (linked) enqueueSync(tx, 'artefacts', row.id, 'upsert');
+  });
+  if (linked) scheduleClass1Sync();
+}
 
 /** Convert a human title into a URL/filename-safe slug. */
 export function slugify(title: string): string {
@@ -44,7 +77,7 @@ export async function addGeneratedArtefact(input: AddGeneratedArtefactInput): Pr
     createdAt: now,
     updatedAt: now,
   };
-  await getClientDataDb().artefacts.add(row);
+  await insertArtefactClass1(row);
   return id;
 }
 
@@ -79,6 +112,15 @@ export async function addGeneratedImageArtefact(
   const id = uuidv7();
   const now = Date.now();
   const title = titleFromPrompt(input.prompt);
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  // Class-1 creation with bytes (WS-D §5): linked → mint a ref for each of the
+  // full image and its thumbnail, set them on the row (so the drain's phase-1
+  // reader resolves each queued blobId back to its bytes), and enqueue a
+  // `blob-put` per blob + the record upsert in one transaction. Local-only stores
+  // the bytes with no refs and no outbox rows.
+  const blobRef = linked ? mintBlobRefFor(input.bytes) : null;
+  const thumbBlobRef = linked ? mintBlobRefFor(input.thumbBlob) : null;
   const row: ArtefactRow = {
     id,
     chatId: input.chatId,
@@ -97,6 +139,8 @@ export async function addGeneratedImageArtefact(
     updatedAt: now,
     blob: input.bytes,
     thumbBlob: input.thumbBlob,
+    ...(blobRef ? { blobRef } : {}),
+    ...(thumbBlobRef ? { thumbBlobRef } : {}),
     width: input.width,
     height: input.height,
     genMeta: {
@@ -106,7 +150,13 @@ export async function addGeneratedImageArtefact(
       configSnapshot: input.configSnapshot,
     },
   };
-  await getClientDataDb().artefacts.add(row);
+  await db.transaction('rw', [db.artefacts, db.syncOutbox], async (tx) => {
+    await db.artefacts.add(row);
+    if (blobRef) enqueueBlobPut(tx, 'artefacts', id, blobRef.blobId);
+    if (thumbBlobRef) enqueueBlobPut(tx, 'artefacts', id, thumbBlobRef.blobId);
+    if (linked) enqueueSync(tx, 'artefacts', id, 'upsert');
+  });
+  if (linked) scheduleClass1Sync();
   return id;
 }
 
@@ -141,7 +191,7 @@ export async function addSavedMessageArtefact(
     createdAt: now,
     updatedAt: now,
   };
-  await getClientDataDb().artefacts.add(row);
+  await insertArtefactClass1(row);
   return id;
 }
 
@@ -179,11 +229,11 @@ export async function addSavedCodeBlockArtefact(
     createdAt: now,
     updatedAt: now,
   };
-  await getClientDataDb().artefacts.add(row);
+  await insertArtefactClass1(row);
   return id;
 }
 
-/** Update the title and/or fileName of an artefact. */
+/** Update the title and/or fileName of an artefact (Class-2 record edit, §5). */
 export async function renameArtefact(
   id: string,
   patch: { title?: string; fileName?: string },
@@ -191,22 +241,60 @@ export async function renameArtefact(
   const changes: Partial<ArtefactRow> = { updatedAt: Date.now() };
   if (patch.title !== undefined) changes.title = patch.title;
   if (patch.fileName !== undefined) changes.fileName = patch.fileName;
-  await getClientDataDb().artefacts.update(id, changes);
+  await mutateSynced({
+    collection: 'artefacts',
+    key: id,
+    tables: ['artefacts'],
+    write: async (tx) => {
+      await tx.table('artefacts').update(id, changes);
+    },
+  });
 }
 
-/** Replace the full text content of an artefact. */
+/** Replace the full text content of an artefact (Class-2 record edit, §5). */
 export async function updateArtefactContent(id: string, content: string): Promise<void> {
-  await getClientDataDb().artefacts.update(id, { content, updatedAt: Date.now() });
+  await mutateSynced({
+    collection: 'artefacts',
+    key: id,
+    tables: ['artefacts'],
+    write: async (tx) => {
+      await tx.table('artefacts').update(id, { content, updatedAt: Date.now() });
+    },
+  });
 }
 
-/** Toggle the favourite flag on an artefact. */
+/** Toggle the favourite flag on an artefact (Class-2 record edit, §5). */
 export async function setArtefactFavourite(id: string, favourite: boolean): Promise<void> {
-  await getClientDataDb().artefacts.update(id, { favourite, updatedAt: Date.now() });
+  await mutateSynced({
+    collection: 'artefacts',
+    key: id,
+    tables: ['artefacts'],
+    write: async (tx) => {
+      await tx.table('artefacts').update(id, { favourite, updatedAt: Date.now() });
+    },
+  });
 }
 
-/** Permanently delete an artefact by id. */
+/**
+ * Delete an artefact (WS-D §5): a Class-2 record tombstone plus a `blob-delete`
+ * for each blob it references (drained LAST, after the tombstone). Local-only
+ * removes the row with no outbox rows.
+ */
 export async function deleteArtefact(id: string): Promise<void> {
-  await getClientDataDb().artefacts.delete(id);
+  const row = await getClientDataDb().artefacts.get(id);
+  const blobIds = row ? blobIdsOfArtefact(row) : [];
+  await mutateSynced({
+    collection: 'artefacts',
+    key: id,
+    op: 'delete',
+    tables: ['artefacts'],
+    write: async (tx) => {
+      await tx.table('artefacts').delete(id);
+    },
+    blobOps: (tx) => {
+      for (const blobId of blobIds) enqueueBlobDelete(tx, 'artefacts', id, blobId);
+    },
+  });
 }
 
 /** Count of artefacts a chat owns — for the delete-confirmation warning. */
@@ -240,32 +328,43 @@ export async function countAllArtefacts(): Promise<number> {
   return getClientDataDb().artefacts.count();
 }
 
-/** Replace an artefact's tags with a normalised set. */
+/** Replace an artefact's tags with a normalised set (Class-2 record edit, §5). */
 export async function setArtefactTags(id: string, tags: string[]): Promise<void> {
-  await getClientDataDb().artefacts.update(id, {
-    tags: normaliseTags(tags),
-    updatedAt: Date.now(),
+  await mutateSynced({
+    collection: 'artefacts',
+    key: id,
+    tables: ['artefacts'],
+    write: async (tx) => {
+      await tx.table('artefacts').update(id, { tags: normaliseTags(tags), updatedAt: Date.now() });
+    },
   });
 }
 
-/** Union `tags` into each listed artefact's existing tags (normalised, no dupes). */
+/** Union `tags` into each listed artefact's existing tags (normalised, no dupes).
+ *  Each artefact is a Class-2 record edit synced on its own (§5). */
 export async function addTagsToArtefacts(ids: string[], tags: string[]): Promise<void> {
   const add = normaliseTags(tags);
   if (ids.length === 0 || add.length === 0) return;
-  const db = getClientDataDb();
   const now = Date.now();
-  await db.transaction('rw', db.artefacts, async () => {
-    for (const id of ids) {
-      const row = await db.artefacts.get(id);
-      if (!row) continue;
-      await db.artefacts.update(id, { tags: normaliseTags([...row.tags, ...add]), updatedAt: now });
-    }
-  });
+  for (const id of ids) {
+    await mutateSynced({
+      collection: 'artefacts',
+      key: id,
+      tables: ['artefacts'],
+      write: async (tx) => {
+        const row = (await tx.table('artefacts').get(id)) as ArtefactRow | undefined;
+        if (!row) return;
+        await tx
+          .table('artefacts')
+          .update(id, { tags: normaliseTags([...row.tags, ...add]), updatedAt: now });
+      },
+    });
+  }
 }
 
-/** Delete many artefacts at once. */
+/** Delete many artefacts at once — each a Class-2 tombstone + blob-deletes (§5). */
 export async function deleteArtefacts(ids: string[]): Promise<void> {
-  await getClientDataDb().artefacts.bulkDelete(ids);
+  for (const id of ids) await deleteArtefact(id);
 }
 
 // ---- React hooks ----

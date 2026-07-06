@@ -45,6 +45,11 @@ describe('persona avatars', () => {
 
     const rem = renderHook(() => useRemovePersonaAvatar(), { wrapper });
     await rem.result.current.mutateAsync('p1');
-    expect(await getClientDataDb().personaAvatars.get('p1')).toBeUndefined();
+    // WS-D §4 terminality trap: removal keeps the row (bytes cleared, blobRef
+    // null), never deletes it — so avatar sync for this personaId is never bricked.
+    const removed = await getClientDataDb().personaAvatars.get('p1');
+    expect(removed).toBeDefined();
+    expect(removed?.blob).toBeUndefined();
+    expect(removed?.blobRef).toBeNull();
   });
 });

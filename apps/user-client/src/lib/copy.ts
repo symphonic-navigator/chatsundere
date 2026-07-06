@@ -5,6 +5,21 @@
  * strings into components. Keeps the language audit tractable.
  */
 export const copy = {
+  serverGate: {
+    localOnly:
+      'This comes alive once you link an account. Link one under Account → Server linking.',
+    localOnlyWithInvite:
+      'This comes alive once you link an account. Link one under Account → Server linking — or request an invitation.',
+    offline:
+      "Your server isn't reachable right now. This wakes up again the moment the connection returns.",
+    authAction:
+      'The server stopped recognising this session. Sync your passphrase under Account → Server linking to restore the link.',
+    serverOdd:
+      'Your server is answering unexpectedly. This usually resolves itself — if it keeps happening, your operator will want to know.',
+    featureMissing:
+      "Your server doesn't offer this yet. Operators can enable it — nothing is missing on your side.",
+    checking: 'Checking what your server offers…',
+  },
   create: {
     usernameStep: {
       title: 'Pick a username.',
@@ -23,7 +38,7 @@ export const copy = {
     },
     recoveryStep: {
       title: 'Save your recovery key.',
-      body: 'This is the only way back if you forget your passphrase. We cannot see it and we cannot recover it — once you leave this screen it is gone. Copy it now and store it somewhere safe: on paper, in a password manager, anywhere only you can reach.',
+      body: 'This is your only way back in if you ever lose every device or forget your passphrase. We cannot see it and we cannot recover it — once you leave this screen, it is gone. Save it in your password manager (Bitwarden, Proton Pass, …); their notes field is made for exactly this.',
       confirmLabel: "I've saved my recovery key somewhere safe.",
       finishCta: 'Open Chatsundere',
       copyLabel: 'Copy to clipboard',
@@ -111,6 +126,15 @@ export const copy = {
       confirmLockoutTitle: 'This is your only remaining unlock method.',
       confirmLockoutBody:
         'Removing this leaves the recovery key as your only way in. If you lose both, the account on this device is gone forever.',
+      syncedMarker: 'Synced with your server',
+      localOnlyMarker: 'On this device only',
+      syncedCaption:
+        'This passkey is registered with your server and can confirm actions on your account.',
+      localOnlyCaption:
+        'Passkeys can’t be copied between devices, so this one only works here. To get one that follows your account, register a new passkey.',
+      markerInfoAria: 'What does this mean?',
+      localFallbackNotice:
+        'Saved on this device, but couldn’t be synced with your server just now.',
     },
     serverLinking: {
       title: 'Server linking',
@@ -242,5 +266,78 @@ export const copy = {
       'This authenticator does not support the PRF extension. A PRF-capable passkey is required to protect your master key. Try a different authenticator.',
     genericError: 'Could not add biometric. Please try again.',
     defaultLabel: 'This device',
+    startUnreachable:
+      'Couldn’t reach your server just now — you can add this any time under Account → Biometric unlock.',
+    localFallback:
+      'Your passkey is set up on this device, but couldn’t be synced with your server. It still unlocks Chatsundere here — Account → Biometric unlock shows its status.',
+    fallbackOkCta: 'Got it',
+  },
+  onboardingProbe: {
+    unreachable: 'That server isn’t answering. Check the address, or try again in a moment.',
+    invalid:
+      'That address doesn’t look like a Chatsundere server. Check it with whoever invited you.',
+    checking: 'Checking…',
+  },
+  addDevice: {
+    heading: 'Add a device',
+    body: 'Create a pairing code, then choose “Add this device” on your other device and scan or type it.',
+    createCta: 'Add a device',
+    creating: 'Creating…',
+    shownOnce:
+      'You won’t see this code again — the server keeps only a fingerprint. Your other device needs it now.',
+    codeLabel: 'Or type this code',
+    expiresPrefix: 'Expires',
+    doneCta: 'Done',
+    standingNote:
+      'Codes are shown once, when created. Lost one? Add a device to create a fresh one.',
+    listHeading: 'Active codes',
+    emptyList: 'No active codes. Add a device to create one.',
+    createdPrefix: 'Created',
+    revokeCta: 'Revoke',
+    listError: 'Couldn’t load your active codes. They reappear when your server does.',
+    createError: 'Couldn’t create a code right now. Try again in a moment.',
+  },
+  serverLinking: {
+    checking: 'Checking…',
+    statusLabel: 'Status',
+    localOnlyTitle: 'Local-only mode',
+    localOnlyBody:
+      'Link this device to a server to enable cross-device sync. You can run Chatsundere entirely on this device, without ever talking to a server.',
+    linkCta: 'Link to server',
+    linkedBadge: 'Linked',
+    linkedToPrefix: 'Linked to',
+    operatorTerm: 'Operator',
+    roleTerm: 'Role',
+    linkedSinceTerm: 'Linked since',
+    rolePrimaryAdmin: 'Primary admin',
+    roleAdmin: 'Admin',
+    roleUser: 'User',
+    endLinkHeading: 'End this link',
+    decoupleCta: 'Decouple this device',
+    decoupleBusyCta: 'Decoupling…',
+    decoupleConfirmToken: 'decouple',
+    decoupleConfirmLabel: 'Type decouple to confirm',
+    decoupleConfirmBody:
+      "This is different from signing out — it ends this device's link to the server. Your data stays on this device. Syncing stops. Your other devices keep their copies, and you can reconnect any time.",
+    decoupleSuccessBody:
+      'Your data is still here. Your other devices still have their copies. Link again any time.',
+    decoupleSessionNotRevokedBody:
+      "We couldn't reach the server to end this device's session — it will expire on its own. You can retry.",
+    decoupleRetryCta: 'Retry',
+    decoupleRetryBusyCta: 'Retrying…',
+  },
+  stepUp: {
+    title: 'Confirm it’s you',
+    bodyBoth: 'A quick re-check keeps your account safe.',
+    bodyPassphraseOnly: 'Re-enter your passphrase to continue.',
+    usePasskeyCta: 'Use passkey',
+    usePassphraseCta: 'Use passphrase instead',
+    passphraseLabel: 'Passphrase',
+    confirmCta: 'Confirm',
+    cancelCta: 'Cancel',
+    passkeyFailed: 'Couldn’t verify with passkey. Try your passphrase.',
+    wrongPassphrase: 'Wrong passphrase. Try again.',
+    genericError: 'Something went wrong. Please try again.',
+    busy: 'Checking…',
   },
 } as const;

@@ -44,11 +44,28 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
 
 let listenersAttached = false;
 
-export function attachConnectivityListeners(): void {
+export interface ConnectivityListenerOptions {
+  /**
+   * Invoked once per regain event — window 'online' and document
+   * visibility→visible (spec §7: exactly one probe per regain event; the
+   * probe itself is single-flight, so double events are harmless). The
+   * callback is injected so this module never imports the discovery or
+   * account-link stores.
+   */
+  onRegain?: () => void;
+}
+
+export function attachConnectivityListeners(opts: ConnectivityListenerOptions = {}): void {
   if (typeof window === 'undefined') return;
   if (listenersAttached) return;
   listenersAttached = true;
-  window.addEventListener('online', () => useConnectivityStore.getState().onNetworkOnline());
+  window.addEventListener('online', () => {
+    useConnectivityStore.getState().onNetworkOnline();
+    opts.onRegain?.();
+  });
   window.addEventListener('offline', () => useConnectivityStore.getState().onNetworkOffline());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') opts.onRegain?.();
+  });
   if (!navigator.onLine) useConnectivityStore.getState().onNetworkOffline();
 }

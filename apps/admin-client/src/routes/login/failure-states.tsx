@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { copy } from '../../copy.js';
+import { env } from '../../env.js';
+
+/** Send the operator to the user-client (its own port in dev, `/` in prod). */
+function openUserClient() {
+  window.location.href = env.VITE_USER_CLIENT_URL;
+}
 
 interface FailureProps {
   title: string;
@@ -28,30 +34,12 @@ function Failure({ title, body, cta, onCta }: FailureProps) {
 
 export function NoAccountFailure() {
   const c = copy.login.failures.noAccount;
-  return (
-    <Failure
-      title={c.title}
-      body={c.body}
-      cta={c.cta}
-      onCta={() => {
-        window.location.href = '/';
-      }}
-    />
-  );
+  return <Failure title={c.title} body={c.body} cta={c.cta} onCta={openUserClient} />;
 }
 
 export function NoLinkFailure() {
   const c = copy.login.failures.noLink;
-  return (
-    <Failure
-      title={c.title}
-      body={c.body}
-      cta={c.cta}
-      onCta={() => {
-        window.location.href = '/';
-      }}
-    />
-  );
+  return <Failure title={c.title} body={c.body} cta={c.cta} onCta={openUserClient} />;
 }
 
 export function OfflineFailure({ onRetry }: { onRetry: () => void }) {
@@ -61,14 +49,5 @@ export function OfflineFailure({ onRetry }: { onRetry: () => void }) {
 
 export function NotAdminFailure() {
   const c = copy.login.failures.notAdmin;
-  return (
-    <Failure
-      title={c.title}
-      body={c.body}
-      cta={c.cta}
-      onCta={() => {
-        window.location.href = '/';
-      }}
-    />
-  );
+  return <Failure title={c.title} body={c.body} cta={c.cta} onCta={openUserClient} />;
 }

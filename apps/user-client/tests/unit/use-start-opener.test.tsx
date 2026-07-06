@@ -83,6 +83,7 @@ async function seed() {
     title: null,
     resolvedMindspaceId: settings.defaultMindspaceId ?? 'm1',
     createdAt: 1,
+    updatedAt: 1,
     lastMessageAt: 1,
     bookmarkedMessageCount: 0,
     draftInput: '',
@@ -133,10 +134,6 @@ describe('useStartOpener', () => {
 
     // Reasoning forwarded from args.
     expect(arg.reasoning).toEqual({ kind: 'on' });
-
-    // CORS proxy absent in this seed — both null.
-    expect(arg.corsProxyUrl).toBeNull();
-    expect(arg.corsProxyKey).toBeNull();
 
     // Global instructions default to empty string.
     expect(arg.globalInstructions).toBe('');

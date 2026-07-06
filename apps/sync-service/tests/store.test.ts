@@ -65,6 +65,23 @@ describe('applyBatch CAS matrix', () => {
     expect((results[0] as { current: { rev: number } }).current.rev).toBe(1);
   });
 
+  test('baseRev>0 on an absent blindId → resurrect as insert (no crash, heals lost-record drift)', async () => {
+    // The client still holds a CAS base (baseRev>0) for a blindId the server has
+    // no row for — e.g. a Postgres restore that left the epoch unchanged. The old
+    // code hit this as a conflict and called toStored(undefined) → TypeError →
+    // HTTP 500, wedging the drain forever. It must now accept the write as a fresh
+    // insert, re-establishing the client's data.
+    const { head, results, accepted } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(7, { baseRev: 5 })],
+      allow,
+    );
+    expect(results[0]).toEqual({ status: 'ok', rev: 1 });
+    expect(head).toBe(1);
+    expect(accepted).toBe(true);
+  });
+
   test('update matching baseRev → ok; stale → conflict', async () => {
     await applyBatch(t.db, ACC, [await rec(1)], allow); // rev 1
     const ok = await applyBatch(t.db, ACC, [await rec(1, { baseRev: 1 })], allow);

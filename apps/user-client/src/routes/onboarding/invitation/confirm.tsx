@@ -2,11 +2,18 @@
 import {
   CryptoError,
   finishJoinByInvitation,
+  getLinkedAccount,
   linkToServer,
   setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import { JoinError } from '@chatsundere/shared-types';
+import {
+  maybeProbeLinkedServer,
+  useAccountLinkStore,
+  useConnectivityStore,
+  useSessionStore,
+} from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
@@ -14,6 +21,9 @@ import { PassphraseField } from '../../../components/PassphraseField.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
+import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
+import { runSyncCycle } from '../../../sync/worker.js';
+import { InvitationAccountGuard } from './_account-guard.js';
 import { useNavTarget } from './_return-url.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
@@ -45,8 +55,20 @@ type Screen =
  *
  * Per spec § 2 Decision 9: `kind_mismatch` is constructive — the user is offered
  * a button to switch to the pairing path with the code pre-filled.
+ *
+ * The account-guard (spec §4.1) sits ABOVE the bounce guard so the unlock-first
+ * door wins on the QR deep-link path: a device that already holds a local
+ * account with no unlocked session is routed through the local login first.
  */
 export function InvitationConfirm() {
+  return (
+    <InvitationAccountGuard>
+      <InvitationConfirmGuarded />
+    </InvitationAccountGuard>
+  );
+}
+
+function InvitationConfirmGuarded() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const onboardingState = useOnboardingStore((s) => s.state);
@@ -97,6 +119,32 @@ function InvitationConfirmInner() {
   const localMk = useSessionStore((s) => s.mk);
   const isLateLink = !!localSession && !!localMk;
 
+  // Replace-link guard: an unlocked device that already carries a linked account
+  // must not silently re-point when a new invitation is opened. Read the current
+  // link on mount so we can interpose an explicit acknowledgement naming both
+  // servers before the normal late-link form.
+  const [existingLink, setExistingLink] = useState<Awaited<
+    ReturnType<typeof getLinkedAccount>
+  > | null>(null);
+  const [replaceAcknowledged, setReplaceAcknowledged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await getLinkedAccount(getDb());
+        if (!cancelled) setExistingLink(row);
+      } catch {
+        // Unreadable link store (e.g. the DB is not open yet): treat as no
+        // existing link and fall through to the normal form rather than crash.
+        if (!cancelled) setExistingLink(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ── Submit ────────────────────────────────────────────────────────────────────
 
   async function handleContinue() {
@@ -132,6 +180,16 @@ function InvitationConfirmInner() {
         useSessionStore.getState().setSession({ ...localSession, mode: 'linked' });
         useOnboardingStore.getState().reset();
         await setBiometricPromptDue(getDb());
+        const linkedRow = await getLinkedAccount(getDb());
+        if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+        // The device is now linked, so this probe actually populates the
+        // discovery store (unlike any earlier onboarding probe) — kick it
+        // before the sync cycle so canRunCycle() has a config to read.
+        maybeProbeLinkedServer();
+        // A fresh link seeds the engine state for this server, then kicks a first
+        // sync cycle so the local vault backfills onto the newly-linked account.
+        await resetEngineStateForNewLink();
+        void runSyncCycle();
         navigate('/app', { replace: true });
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is
@@ -162,6 +220,11 @@ function InvitationConfirmInner() {
           recoveryKeyString: result.recoveryKeyString,
         });
         await setBiometricPromptDue(getDb());
+        const linkedRow = await getLinkedAccount(getDb());
+        if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+        // Kick the probe early so discovery is populated by the time the user
+        // finishes the recovery reveal and lands in /app.
+        maybeProbeLinkedServer();
         navigate(navTarget('/onboarding/invitation/recovery'), { replace: true });
       }
     } catch (err) {
@@ -235,6 +298,36 @@ function InvitationConfirmInner() {
         >
           Try again
         </Link>
+      </main>
+    );
+  }
+
+  // Replace-link acknowledgement: an unlocked device with an existing link opening
+  // a new invitation must confirm the re-point before the late-link form appears.
+  if (isLateLink && existingLink && !replaceAcknowledged) {
+    return (
+      <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
+        <Link
+          to={navTarget('/onboarding/invitation')}
+          className="text-2xl text-paper-soft"
+          aria-label="Back"
+        >
+          ←
+        </Link>
+        <h1 className="mt-4 font-display text-2xl italic">Replace this device's server?</h1>
+        <p className="mt-2 text-sm text-paper-soft">
+          This device is currently connected to{' '}
+          <span className="font-mono">{existingLink.base_url}</span>. Connecting to{' '}
+          <span className="font-mono">{storeCtx.baseUrl}</span> replaces that link and uploads your
+          data there instead. Your local data is not touched.
+        </p>
+        <button
+          type="button"
+          onClick={() => setReplaceAcknowledged(true)}
+          className="mt-6 w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+        >
+          Replace and connect →
+        </button>
       </main>
     );
   }
@@ -331,7 +424,7 @@ type SubmitMapped =
   | { kind: 'passphrase_inline'; message: string }
   | { kind: 'screen'; screen: Extract<Screen, { kind: 'kind_mismatch' | 'fatal' }> };
 
-function mapSubmitError(err: unknown): SubmitMapped {
+export function mapSubmitError(err: unknown): SubmitMapped {
   if (err instanceof CryptoError) {
     if (err.code === 'conflict') {
       return {
@@ -367,16 +460,52 @@ function mapSubmitError(err: unknown): SubmitMapped {
         },
       };
     }
-    if (err.code === 'rate_limit_exceeded') {
+    if (err.code === JoinError.CodeExpired) {
       return {
         kind: 'screen',
-        screen: { kind: 'fatal', message: 'Too many attempts. Please wait a minute.' },
+        screen: {
+          kind: 'fatal',
+          message: 'This invitation has expired. Ask the person who invited you for a fresh code.',
+        },
       };
     }
-    if (err.code === 'session_expired') {
+    if (err.code === JoinError.CodeAlreadyRedeemed) {
       return {
         kind: 'screen',
-        screen: { kind: 'fatal', message: 'Your session timed out. Please start again.' },
+        screen: {
+          kind: 'fatal',
+          message:
+            'This invitation has already been used. Ask the person who invited you for a new one.',
+        },
+      };
+    }
+    if (err.code === JoinError.CodeAttemptsExhausted) {
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'Too many tries — this invitation is now locked for safety. Ask the person who invited you for a new one.',
+        },
+      };
+    }
+    if (err.code === JoinError.RateLimited) {
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message: 'Too many attempts. Please wait a minute, then try again.',
+        },
+      };
+    }
+    if (err.code === JoinError.SessionExpired) {
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'This took a little too long and the secure session timed out. Please start again.',
+        },
       };
     }
     if (err.status >= 500 || err.status === 0) {

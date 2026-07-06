@@ -1,6 +1,220 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-02 (later) — **Block 6C blob transport is BUILT** on
+**Last updated:** 2026-07-06 — **ARTEFACT EXPERT landed on `full-backend-transition`**
+(squashed feature unit `59fd45dd`, ahead of the v0.2.0 go-live). Second member of
+the **"expert"** delegation family after `ask_expert` — Chris's deliberate umbrella
+term for the delegation features to come. Lets the user nominate a dedicated model to
+build artefacts (`create_artefact`) instead of the persona's own: strong upstream for
+the privacy-light heavy lifting (SPAs, sims, boards) while the persona can stay small/
+local. **Omakase:** off by default; when a global expert is set it is **on by default
+per chat with a persisted per-chat opt-out**. Surfaces: (1) a global **"Artefact
+expert"** slot under *My Settings › "Ask an Expert"* (`settings.artefactExpertModel`)
+with an **honest, distinct privacy note** — the brief is persona-authored and can carry
+conversation-derived detail, deliberately NOT the `ask_expert` "only the sanitised
+question leaves" line; (2) a per-chat **cockpit toggle** (`ChatRow.useArtefactExpertModel`,
+a synced Class-2 write — deliberately unlike the transient `askExpert`), shown only when
+a global expert is set, with **scope sub-labels** on both expert toggles ("for this turn"
+vs "for this chat", Laura #1). `create_artefact` resolves the **expert offering's own**
+provider/target/reasoning (never the persona's); when the chat wants the expert but it is
+unreachable **pre-flight** (removed offering / missing key), it **errors honestly with a
+constructive next-step and NO silent fallback** (Chris's call), and the failure is
+surfaced **inline in the cockpit** (`role="alert"` + route to the expert settings),
+**independent of the persona relaying it** (Laura #4) — cleared on next send, on dismiss,
+and on chat switch. **No Dexie bump** (both fields pre-scaffolded, non-indexed;
+`useArtefactExpertModel` syncs by deny-list omission — no `strip.ts` touch, no collision
+with the parallel sync-hardening). Built spec→**Laura spec-pass PASS** (2 soft findings
+folded: sub-labels + persona-independent note; 2 future-watch logged to `ux-deferrals`)→
+plan→**subagent-driven (6 TDD tasks + 1 final-fix wave)**→**opus whole-branch READY TO
+MERGE**→**Laura pre-squash CLEAN**. **Larissa NOT required** (client-only: no
+auth/sync/proxy/crypto service). Gates (controller-run on the tip): `pnpm typecheck
+--force` **14/14**; user-client vitest at the **8** Node-localStorage baseline (no
+artefact-expert failures; new coverage: `resolve-artefact-expert` 5/5, expert-vs-persona
+key selection + discriminant, CockpitMenu chip semantics, store hold/clear/reset).
+Deferred non-blocking Minors: inline note covers pre-flight only, not a runtime
+proxy-down `author()` failure (conscious §3.4 narrowing — no silent fallback, relies on
+persona relay for that sub-case; logged in `ux-deferrals`); note visible only once the
+cockpit is open (mirrors the dictation note, Laura soft); test-helper duplication. **Still
+NOT pushed — OWED: Chris device-verify (Plan §Manual verification, needs `./dev.sh` +
+a configured expert model) then push.** Spec/plan:
+[[../superpowers/specs/2026-07-06-artefact-expert-design]],
+[[../superpowers/plans/2026-07-06-artefact-expert]].
+
+---
+
+**Prior — 2026-07-05 (later still, II):** **My Account Admin-tile & dashboard
+reorg LANDED on `full-backend-transition`** (two squashed feature units, ahead of
+the v0.2.0 go-live). Chris asked for a gold, admin-only "Admin" launcher on the My
+Account page plus a tidy-up of the tile grid. **Unit 1 — backend discovery
+(`530ac2d2`):** the auth-service's public `GET /api/v1/config` now advertises an
+optional `adminUrl` (new optional env `ADMIN_PUBLIC_URL`, strict-https, gated exactly
+like `proxyUrl`/`syncUrl`, plus an `'admin'` feature flag); `adminUrl` is carried
+through the `ServerConfig` wire type and the client discovery parser
+(`parseServerConfig`, same https/loopback guard). **Unit 2 — client feature
+(`08832d54`):** a gold, full-width Admin `NavTile` on the dashboard, gated on
+`useAccountLinkStore().role ∈ {admin, primary_admin}` **AND**
+`useDiscoveryStore().config.adminUrl` present, opening the admin-client in a new tab
+(`window.open(url, '_blank', 'noopener,noreferrer')`; the admin-client has its own
+5-branch login — pure launcher, server still enforces `minRole`). Deliberately
+hidden-not-disabled for non-admins (spec §4.2 exception to CLAUDE.md §11, Laura-
+confirmed). The two sign-in-security tiles merged into one **"Passphrase &
+Biometrics"** hub (the biometric screen gains a Change-passphrase section, now
+reachable in every load state — a final-review reachability fix); Recovery Key
+re-homed to the bottom row and recoloured pink→purple; the 2×3 grid given a coherent
+device(pink)/server(blue)/exit(purple) colour scheme. Built spec→**Laura spec-pass
+PASS** (SOFT-1 tile-legibility + SOFT-2 "opens the admin console" meta folded in)→
+plan→**subagent-driven (5 TDD tasks + 1 plan-gap test-fix + 1 final-fix)**→**opus
+whole-branch READY** + **Larissa CLEAR TO SQUASH** (auth-service diff: no
+info-disclosure/SSRF, validation parity exact, zero-knowledge untouched). Gates: `pnpm
+typecheck --force` **14/14**; user-client vitest at the **8** Node-localStorage
+baseline (account-page 14/14 + account-biometric 5/5, incl. 5 new page-level admin-tile
+gating tests); auth-service `config.test.ts` **10/10**, full suite baseline unchanged
+(14 pre-existing DB-integration fails, none config/env). **Plan gap caught at the
+integrated gate:** two pre-existing test files under `apps/user-client/tests/routes/`
+(planning searched `src/routes/` only) encoded the old grid/crumb and broke; fixed +
+extended with admin-gating coverage. **DEVICE-VERIFIED
+on the dev stack (2026-07-05):** the gold tile appears for an admin and opens the
+admin-client in a new tab; Chris logged in. Two things surfaced and were fixed
+(follow-up commit `2134016b`, Larissa re-audited the env change CLEAR): **(1)** the
+server env `ADMIN_PUBLIC_URL` was strict-https like proxy/sync, but the dev
+admin-client is http-served and the client OPENS the URL (real navigation, no VITE
+override) — relaxed to accept loopback-http too, mirroring the client parser's
+`isAcceptableUrl` (non-loopback http still refused; proxy/sync unchanged). **(2)**
+the admin-client must be **same-origin** as the user-client to see its account
+IndexedDB ("No account on this device" otherwise) — so the dev URL is
+`http://localhost:3000/admin/` (user-client Vite reverse-proxies `/admin/`→`:5174`,
+as Traefik does in prod), with the trailing slash the admin `base` needs. Spec §6.1
+records both amendments; `.env.example` documents the same-origin rule for
+self-hosters. **Still NOT pushed (Chris pushes).** Deferred Minors (non-blocking):
+3rd conditional-spread repetition in `server-config.ts` (revisit at a 4th field);
+inert `colour="blue"` on the gold tile (required prop, `gold` overrides). Spec/plan:
+[[../superpowers/specs/2026-07-05-account-admin-tile-and-reorg-design]],
+[[../superpowers/plans/2026-07-05-account-admin-tile-and-reorg]]. Prior entry:
+2026-07-05 (later still) — **Onboarding/auth hardening LANDED on
+`full-backend-transition`** (two feature units, ahead of the v0.2.0 go-live).
+**Unit A — F3 (`ab30e903`):** the client token-refresh round-trip is now serialised
+across tabs by an exclusive `navigator.locks` lock (`chatsundere-token-refresh`),
+closing the multi-tab bug where two tabs refreshing concurrently tripped the
+server's refresh-token reuse-detection and hard-logged-out both. The module-local
+`refreshInFlight` guard is kept as the within-tab collapse; jsdom fallback
+preserved. Not a Larissa path. **Unit B — F4/F5 (`a918e3b4`):** five join lifecycle
+codes (`code_expired`, `code_already_redeemed`, `code_attempts_exhausted`,
+`rate_limited`, `session_expired`) now map to specific, flow-tailored constructive
+messages in both onboarding confirm handlers instead of the generic "Something went
+wrong"; `shared-types` `JoinError` is reconciled with what the auth-service emits
+(phantom `rate_limit_exceeded` removed, four real codes added); and the server's
+`code_already_redeemed` is unified to **410 Gone** (was split 409/410) with a new
+integration test on the previously-untested guard. Built spec→(Laura skipped: copy
+on existing screens)→plan→**subagent-driven (4 tasks, per-task spec+quality
+review)**→**opus whole-branch READY** + **Larissa CLEAR TO SQUASH** (no
+Critical/High/Medium; the refresh lock verified deadlock-free). Gates: `pnpm
+typecheck --force` **14/14** on the integrated tree; user-client vitest at the 8
+Node-localStorage baseline; auth-service `bun test` **127 pass** (no new failures
+beyond the pre-existing OPAQUE-setup baseline). Two follow-ups logged
+([[insights/follow-ups-index]]): `recovery.tsx` phantom-literal cleanup, and a
+refresh-fetch `AbortController` timeout. **NOT pushed (Chris pushes after
+device-verifying spec §7 against the live backend — needs the join error states
+triggered).** Spec/plan:
+[[../superpowers/specs/2026-07-05-onboarding-auth-hardening-design]],
+[[../superpowers/plans/2026-07-05-onboarding-auth-hardening]]. Prior entry:
+2026-07-05 (later) — **Frontend↔backend integration audited,
+deviceless-recovery analysed, recovery-key safety communication SHIPPED** (commit
+`e184413`, client-only copy) — ahead of a planned **v0.2.0 whole-backend go-live in
+~48 h** (Chris, from ~10:00 CEST). **(1) Integration audit (two read-only sweeps of
+the real code, not the docs):** the user-client on `full-backend-transition` is
+**fully wired against all three services + blob transport** — no missing frontend
+code, no stubs. Sync engine (`apps/user-client/src/sync/`, 43 files, Dexie **v34**,
+push/pull/doorbell/outbox live at boot); proxy client (header-swap
+`x-chatsundere-authorization` + `GET /api/v1/config` discovery); onboarding
+QR/manual/local all on the **new** `POST /api/v1/join/{start,finish}` (the old
+`linkOpaque` is gone); step-up 401-interceptor + `<StepUpModal>`; blob
+put/get/delete + eager-fetch. **Blobs are live locally** (Chris syncs images via
+`./dev.sh` + MinIO). Remaining work is **server scharfschalten + live verification**
+(smoke-test the three onboarding paths, doorbell WSS, step-up tier mapping,
+discovery feature-flag consistency), not client code. **(2) Deviceless recovery —
+verdict:** **YES via the recovery key**, NO via passphrase alone. The full chain
+works: onboarding matrix "I lost my devices" → `recoverFromScratch` unwraps
+`users.wrapped_mk_recovery` after a recovery-HMAC proof → OPAQUE re-register under a
+new passphrase → fresh device is fully linked → pull-loop `since=0` backfills the
+whole ciphertext vault. **No bridge device needed.** The gap: a passphrase-only
+fresh-device flow does **not** exist even though the passphrase-wrapped MK sits
+server-side — and **Chris's decision is C: keep it that way.** Rationale: it
+preserves an out-of-the-box 2FA property (credentials + *either* a device *or* the
+recovery key); opening a passphrase path would make the passphrase a single point of
+failure. Instead we **communicate recovery-key care better** rather than soften the
+guarantee (empower, don't infantilise). Known silent-loss trap: login can succeed
+into an *empty* vault if the corpus was never synced. **(3) Shipped:** recovery-key
+safety copy — reveal `body` reworked (`lib/copy.ts:41`, covers both onboarding
+reveals via shared `StepRecoveryReveal`) now names the "lose every device" case + a
+password-manager (Bitwarden/Proton Pass) recommendation; a quiet always-on note in
+`routes/app/account/recovery.tsx`; and a Discord-ready **user safety guide**
+(`obsidian/guides/safety.md`) explaining zero-knowledge ("the admin *cannot* help —
+the server only sees ciphertext") + the PM-notes recommendation, for the SCAI
+channel. Gates: `pnpm typecheck --force` **14/14**, Biome clean. Not a Larissa path
+(client-only, no crypto/auth/sync/proxy change); Laura consciously skipped (copy on
+existing screens, no new flow). **Next (fresh context window): the tests.** Prior
+entry: 2026-07-05 (earlier) — **Admin-console overhaul BUILT** on the overnight
+remote branch `claude/admin-console-live-wiring-xwn71o` (from
+`full-backend-transition`; parallel to the trashcan run on
+`claude/trashcan-tombstone-throttle-haqiwv`, disjoint file surface — the two only
+co-touch `shared-types/src/index.ts`, see below). All 19 TDD tasks landed as
+per-task commits (unsquashed, for Larissa + Chris to audit before integration).
+Spec/plan under `superpowers/`. What landed: the admin-client mock layer deleted
+entirely (the `hybrid` 501-fallback was why /admin showed demo data) and every
+screen wired to the live auth-service via one typed `data/api.ts` + `data/types.ts`
+view-model layer; the audit endpoint enriched server-side (username left-joins +
+DESC ordering) and the users-list `total` bug fixed with role/status filters;
+`shared-types/admin.ts` made the single wire truth; change-role, transfer-primary
+(typed-phrase confirm + forced sign-out with a login notice) and invitation
+`suggested_username`/`note` all functional; the reveal-once screen shows code +
+`qr_url`; a constructive `QueryErrorPanel` replaces every eternal spinner; and a
+Catppuccin-Mocha **retrofuturistic control-panel restyle** (cassette-futurism
+base kit, CRT accents budgeted to three spots, synthwave login; dark-only — Latte
+removed; CLAUDE.md §11 revised + [[decisions/0035-retrofuturistic-admin-console|ADR
+0035]]). **Gates on the build host:** `pnpm typecheck --force` **14/14**;
+`pnpm run build` **9/9**; auth-service `bun test` **120 pass / 12 skip / 13 fail**
+(the 13 are the pre-existing OPAQUE-login/recovery/join/bootstrap baseline —
+unchanged; +6 new admin tests all pass); admin-client `pnpm vitest run` **59 pass
+/ 0 fail** (68→59 because Task 12 deleted the 9-test mock suite); Biome clean.
+**Deviation (flagged):** the plan assumed `shared-types/src/index.ts` used a
+wildcard re-export; it uses an explicit named list, so one additive line was
+needed there to export the five new admin types — this is the one file shared
+with the trashcan run (additive on both sides; expect a trivial merge). **Env
+note:** the build host's Docker registry is egress-blocked, so Postgres 16 + Redis
+were provisioned natively (not via compose) to run the auth-service integration
+suite — the integration legs DID run and are green, not owed. **Post-run owed:**
+Larissa audits the Unit 1 diff (auth-service + shared-types + data layer — the
+worker cannot summon her), Chris runs the spec-§11 manual device verification on
+the styled screens, then squash into two feature units (Tasks 1–13 "Wire
+admin-client to live backend"; Tasks 14–19 "Restyle admin console as
+retrofuturistic control panel") and integrate. Laura consciously skipped (admin
+console is not the user-client's mobile surface — Chris's call). Prior entry:
+2026-07-04 — **Sync-lifecycle hardening squashed onto
+`full-backend-transition`** (`9fe0595e`), plus a separate CORS fix (`b5b2b4a3` —
+allow `PUT` in the sync-service preflight; blob/avatar uploads were blocked, so
+records synced but avatars did not). Four units from the first multi-device test
+(Vivaldi→Chromium): (1) **backfill robustness** — `getSyncState` heals legacy
+`syncState` rows (the diagnosed bug: `backfillPending: undefined` silently
+stranded a whole vault) and arms whenever a linked device holds un-transferred
+rows; (2) **transfer-state reset** on decouple/server-switch
+(`resetEngineStateForLocalOnly` + a `linkedServerUserId` stamp + a cycle-start
+guard); (3) **Decouple-this-device** flow (best-effort `logoutCurrentSession`,
+`decoupleDevice`, Server-linking UI + typed-phrase confirm + a working Retry +
+dynamic badge); (4) **completion-aware all-surface wipe** (`wipeDevice` closes
+ALL THREE IDB handles — incl. the crypto account DB — before deleting, clears
+localStorage/sessionStorage/Cache Storage/SW, and revokes the session). Spec+plan
+under `superpowers/`. **Audits:** whole-branch review clean; **Larissa found +
+cleared a HIGH** (the crypto account DB survived the wipe — `boot/open-db.ts`
+caches its handle; the root-cause investigation's "no retained handle" premise
+was wrong); Laura passed Unit 3 (three soft advisory notes). Gates: `pnpm
+typecheck --force` **14/14** on the integrated tree; user-client vitest baseline-
+only (8 known Node-localStorage); crypto **190/0**. **Open (next window):** Chris's
+on-device §10 verification (the `onblocked` wipe fix needs a real browser — cannot
+be exercised in fake-indexeddb) + his device-test findings ("a few things") +
+three Laura soft notes (destructive button tone for a reversible action; "End
+this link" fold at 380 px; tile-meta "sync & unlink devices" plural ambiguity →
+suggest "unlink this device"). Prior, 2026-07-03 — local dev onboarding wired for
+the first end-to-end test (see "Doing now"). Prior, 2026-07-02 (later): **Block 6C blob
+transport is BUILT** on
 branch `claude/blob-transport-impl-xtpius` (17 `03:` commits; the designated
 remote-run branch — the plan's `feat/backend-03-blobs` name was overridden by the
 harness). All 16 plan tasks landed TDD-style: the deterministic blob envelope
@@ -298,6 +512,23 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
   carried by the 30 s ping; recorded in `apps/sync-service/src/env.ts`.
 - **Block 6C — blobs (S3/MinIO) + deployment docs: SPECCED + PLANNED +
   HARDENED (2026-07-02).** Remote run next, on `feat/backend-03-blobs`.
+- **Local dev onboarding wired for the first end-to-end test (2026-07-03).**
+  `dev.sh` now launches the admin-client (`:5174/admin/`) and the auth CORS
+  allow-list points at `:5174`; the admin "Open user-client" CTA follows
+  `VITE_USER_CLIENT_URL` (dev `:3000`, prod `/`); and `./bootstrap-admin.sh`
+  mints the first `primary_admin` with the dev env loaded. First-owner steps
+  are in `obsidian/ONBOARDING.md` ("Create the first owner").
+- **First local end-to-end run — AUTH GREEN (2026-07-03 evening).** Registration
+  → login works on the dev stack. Four blockers fixed inline (full account in
+  `STATUS-TRANSITION.md`): join `kind` discriminator (`b55a52a2`),
+  biometric-prompt overlap (`06bbd286`), and the big one — the **OPAQUE
+  server-identity dev/prod divergence**, fixed with an origin-only shared helper
+  `opaqueServerIdentity` across 12 call-sites, Larissa CLEAN (`dc1fff00`, LT-L3
+  frozen-at-go-live); dev auth-reset tool (`540fccf8`). Admin-client loads (still
+  demo data); biometric verified to the PRF step (device test deferred to
+  2026-07-04). **Next: the still-owed sync/blob manual verification** — the
+  engine is built + merged + audited but never run end-to-end; `sync_db` is
+  empty. A bring-up + verify task, not a build.
 
 ---
 

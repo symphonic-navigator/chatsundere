@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { getProxyAuthSource } from './proxy-auth.js';
 import type { ProviderConfig } from './types.js';
 
 /** Callback interface for observing resolved request and response data without re-implementing transport. */
@@ -12,7 +13,7 @@ const SECRET_REQUEST_HEADERS = new Set([
   'proxy-authorization',
   'x-api-key',
   'api-key',
-  'x-cors-proxy-api-key',
+  'x-chatsundere-authorization',
 ]);
 
 /** Returns a plain object copy of `headers` with all secret-bearing headers removed. */
@@ -50,8 +51,6 @@ export function pickResponseHeaders(headers: Headers): Record<string, string> {
 export interface BuildRequestArgs {
   provider: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   path: string;
   method: 'GET' | 'POST';
   body?: unknown;
@@ -68,12 +67,14 @@ export interface BuildRequestArgs {
 /**
  * Build a fetch-ready Request for the given provider. The Request's URL
  * and headers reflect the routing choice — direct fetch hits the upstream
- * with a Bearer Authorization header; via-cors-proxy routes through
- * Chris's generic CORS forwarder (`../cors-proxy/README.md` § Client
- * usage) with the proxy headers in place.
+ * with a Bearer Authorization header; via-cors-proxy routes through the
+ * account's authenticated proxy, attaching the current account JWT (read
+ * at build time from the registered ProxyAuthSource, spec §3) in
+ * `x-chatsundere-authorization` while the forwarded upstream key stays in
+ * `Authorization`.
  */
 export function buildRequest(args: BuildRequestArgs): Request {
-  const { provider, apiKey, corsProxyUrl, corsProxyKey, path, method, body, extraHeaders } = args;
+  const { provider, apiKey, path, method, body, extraHeaders } = args;
   const headers = new Headers({ Authorization: `Bearer ${apiKey}` });
   // FormData carries its own multipart boundary — setting Content-Type here
   // would destroy it. Only JSON bodies get the explicit header.
@@ -81,18 +82,32 @@ export function buildRequest(args: BuildRequestArgs): Request {
   if (method === 'POST' && !isForm) headers.set('Content-Type', 'application/json');
 
   let url: string;
+  let redirect: RequestInit['redirect'] = 'follow';
   if (provider.routing.kind === 'direct') {
     url = joinUrl(provider.baseUrl, path);
   } else {
-    if (!corsProxyUrl) {
-      throw new Error('transport: cors-proxy routing selected but cors-proxy URL is missing');
+    const source = getProxyAuthSource();
+    const proxyUrl = source?.getUrl() ?? null;
+    const token = source?.getToken() ?? null;
+    if (proxyUrl === null) {
+      throw new Error('transport: cors-proxy routing selected but no proxy is available');
     }
-    if (!corsProxyKey) {
-      throw new Error('transport: cors-proxy routing selected but cors-proxy key is missing');
+    if (token === null) {
+      throw new Error('transport: cors-proxy routing selected but no account token is available');
     }
-    url = joinUrl(corsProxyUrl, path);
-    headers.set('x-cors-proxy-api-key', corsProxyKey);
-    headers.set('x-cors-proxy-target', provider.baseUrl);
+    // The proxy target must be a BARE ORIGIN: apps/proxy-service `parseTarget`
+    // refuses a target carrying a path (400 bad_target), and the forward is built
+    // as `target.origin + request-path`. So compute the full upstream URL exactly
+    // as the direct route would (`joinUrl(baseUrl, path)`), then split it — origin
+    // to the target header, path+query onto the proxied request line. This keeps
+    // the proxied forward identical to the direct URL for every provider, whether
+    // the base path lives in `baseUrl` (xai `/v1`) or in `path` (ollama origin).
+    const upstream = new URL(joinUrl(provider.baseUrl, path));
+    url = joinUrl(proxyUrl, `${upstream.pathname}${upstream.search}`);
+    headers.set('x-chatsundere-authorization', `Bearer ${token}`);
+    headers.set('x-cors-proxy-target', upstream.origin);
+    // The browser must never chase an upstream redirect off-proxy (spec §5).
+    redirect = 'manual';
   }
 
   // Adapter-supplied headers sit on top of the base/cors-proxy headers.
@@ -103,6 +118,7 @@ export function buildRequest(args: BuildRequestArgs): Request {
   const request = new Request(url, {
     method,
     headers,
+    redirect,
     body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
   args.onDiagnostics?.onRequest({ method, url, headers: redactRequestHeaders(headers) });

@@ -4,6 +4,8 @@ import type { CanonicalRequest, ModelAdapter, ToolDef } from './adapter-contract
 import { getAdapter } from './adapter-registry.js';
 import { parseWithAdapter, parseWithAdapterNdjson } from './adapter-stream.js';
 import type { CompletionTarget } from './catalogue/target.js';
+import { getProxyAuthSource } from './proxy-auth.js';
+import { ProxyRedirectError, isOpaqueRedirect } from './proxy-fetch.js';
 import { type OnRetry, withStreamingRetry } from './retry.js';
 import { parseOpenAiSseStream } from './streaming.js';
 import { type StreamDiagnosticsSink, buildRequest, pickResponseHeaders } from './transport.js';
@@ -19,8 +21,6 @@ export interface StreamCompletionArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   target: CompletionTarget;
   messages: WireMessage[];
   bodyExtras: Record<string, unknown>;
@@ -77,14 +77,13 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
     body = buildBody(args);
   }
   const timeoutMs = args.initialResponseTimeoutMs ?? DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS;
+  const proxied = args.providerConfig.routing.kind === 'cors-proxy';
 
   const response = await withStreamingRetry({
     buildRequest: () =>
       buildRequest({
         provider: args.providerConfig,
         apiKey: args.apiKey,
-        corsProxyUrl: args.corsProxyUrl,
-        corsProxyKey: args.corsProxyKey,
         path,
         method: 'POST',
         body,
@@ -95,7 +94,17 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
     initialResponseTimeoutMs: timeoutMs,
     signal: args.signal,
     onRetry: args.onRetry,
+    onUnauthorised: proxied
+      ? async () => {
+          const token = await getProxyAuthSource()?.refreshToken();
+          return token !== null && token !== undefined;
+        }
+      : undefined,
   });
+
+  // A proxied upstream 3xx surfaces as an opaque husk (redirect: 'manual');
+  // the browser cannot expose its Location, so this is terminal (spec §5).
+  if (isOpaqueRedirect(response)) throw new ProxyRedirectError();
 
   args.onDiagnostics?.onResponse({
     status: response.status,

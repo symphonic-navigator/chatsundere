@@ -48,6 +48,7 @@ export const MINDSPACE_FALLBACK: ResolvedMindspace = {
   texture: 'grain',
   builtIn: true,
   createdAt: 0,
+  updatedAt: 0,
 };
 import { DateSeparator } from './DateSeparator.js';
 import { MessageBlock } from './MessageBlock.js';

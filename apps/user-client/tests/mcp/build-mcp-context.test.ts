@@ -33,8 +33,6 @@ describe('buildMcpContext', () => {
       servers: [server({ enabled: false })],
       overrides: {},
       hasProxy: true,
-      corsProxyUrl: 'p',
-      corsProxyKey: 'k',
       mk: {} as unknown as never,
       requestApproval: async () => true,
     });
@@ -46,8 +44,6 @@ describe('buildMcpContext', () => {
       servers: [server({})],
       overrides: {},
       hasProxy: true,
-      corsProxyUrl: 'p',
-      corsProxyKey: 'k',
       mk: {} as unknown as never,
       requestApproval: async () => true,
     });

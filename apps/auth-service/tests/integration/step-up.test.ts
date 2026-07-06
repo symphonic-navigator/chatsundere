@@ -10,6 +10,7 @@
 // 2026-05-22 testing decision (virtual authenticator out of scope).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { revokedJtiKey, revokedSubKey } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { and, desc, eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -151,6 +152,11 @@ describe.skipIf(skip)('Step-up endpoint pair', () => {
     // per-session and per-IP counters do not bleed into one another.
     const rlKeys = await redis.keys('rl:step_up_*');
     if (rlKeys.length) await redis.del(...rlKeys);
+    // The `logout clears step_up keys` test deny-lists this shared session's jti
+    // (and revokeAll denies the subject). bearerAuth now enforces that deny-list,
+    // so clear it between tests to keep the shared session usable for the tests
+    // that follow — they all reuse `accessToken`.
+    await redis.del(revokedJtiKey(sessionId), revokedSubKey(userId));
   });
 
   afterAll(async () => {

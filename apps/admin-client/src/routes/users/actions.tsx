@@ -2,21 +2,30 @@
 import { ConfirmTyped, useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { copy } from '../../copy.js';
-import type { UserDetail } from '../../data/admin-api.js';
-import { getAdminApi } from '../../data/index.js';
+import {
+  changeRole,
+  deleteUser,
+  suspendUser,
+  transferPrimary,
+  unsuspendUser,
+} from '../../data/api.js';
+import type { UserDetailView } from '../../data/types.js';
 import { type Role, isPrimaryAdmin, isSelfTarget } from '../../lib/self-target.js';
 
 interface Props {
-  user: UserDetail;
+  user: UserDetailView;
   onDeleted: () => void;
 }
 
 export function UserActions({ user, onDeleted }: Props) {
   const session = useSessionStore((s) => s.session);
-  const api = getAdminApi();
+  const closeAndForget = useSessionStore((s) => s.closeAndForget);
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmTransferOpen, setConfirmTransferOpen] = useState(false);
 
   // Compute gating predicates exactly once so they are applied consistently
   // across all four action buttons. These are defence-in-depth (H5): the server
@@ -34,18 +43,18 @@ export function UserActions({ user, onDeleted }: Props) {
   // (and a future role-demotion) must be disabled — losing the only primary
   // admin leaves the server unmanageable. The operator has to call
   // `transferPrimary` first. Server-enforced; this is the client mirror.
-  const isLastPrimary = user.is_last_primary_admin === true;
+  const isLastPrimary = user.is_last_primary_admin;
 
   const suspend = useMutation({
-    mutationFn: () => api.suspendUser(user.id),
+    mutationFn: () => suspendUser(user.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['user', user.id] }),
   });
   const unsuspend = useMutation({
-    mutationFn: () => api.unsuspendUser(user.id),
+    mutationFn: () => unsuspendUser(user.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['user', user.id] }),
   });
   const del = useMutation({
-    mutationFn: () => api.deleteUser(user.id),
+    mutationFn: () => deleteUser(user.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       setConfirmDeleteOpen(false);
@@ -53,10 +62,15 @@ export function UserActions({ user, onDeleted }: Props) {
     },
   });
   const transfer = useMutation({
-    mutationFn: () => api.transferPrimary(user.id),
+    mutationFn: () => transferPrimary(user.id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['user', user.id] });
-      qc.invalidateQueries({ queryKey: ['users'] });
+      // The in-memory access token still claims primary_admin; signing out is
+      // the honest state (spec §6.7). The login screen shows the notice.
+      closeAndForget();
+      navigate('/login', {
+        replace: true,
+        state: { notice: copy.userDetail.transferredNotice(user.username) },
+      });
     },
   });
 
@@ -94,21 +108,14 @@ export function UserActions({ user, onDeleted }: Props) {
         />
       )}
 
-      <ActionButton
-        label={copy.userDetail.actions.changeRole}
-        disabled={true}
-        tooltip={copy.userDetail.changeRoleNotYetAvailable}
-        onClick={() => {
-          // Intentional: this button is a UX placeholder until the inline role-
-          // change form lands in a later squash. When that handler is wired,
-          // the implementer MUST preserve the original gating expression and
-          // include `isLastPrimary` to forbid demoting the last primary admin:
-          //   disabled={isSelf || isLastPrimary || !sessionIsPrimary || changeRole.isPending}
-          // and call api.changeRole(user.id, newRole) only after asserting
-          // !isSelfTarget(...) and !isLastPrimary. See Larissa Squash C audit,
-          // finding S1.
-          console.warn('changeRole button clicked before handler is implemented');
-        }}
+      <RoleSection
+        user={user}
+        disabled={isSelf || isLastPrimary || !sessionIsPrimary}
+        tooltip={
+          selfTooltip ??
+          lastPrimaryTooltip ??
+          (sessionIsPrimary ? undefined : copy.userDetail.primaryOnlyTooltip)
+        }
       />
 
       <ActionButton
@@ -122,7 +129,7 @@ export function UserActions({ user, onDeleted }: Props) {
         onClick={() => {
           // Defence-in-depth: re-check all gating conditions.
           if (isSelf || !sessionIsPrimary || user.role !== 'admin' || transfer.isPending) return;
-          transfer.mutate();
+          setConfirmTransferOpen(true);
         }}
       />
 
@@ -162,6 +169,26 @@ export function UserActions({ user, onDeleted }: Props) {
           del.mutate();
         }}
       />
+
+      <ConfirmTyped
+        open={confirmTransferOpen && !isSelf && sessionIsPrimary && user.role === 'admin'}
+        title={copy.userDetail.transferConfirm.title}
+        body={copy.userDetail.transferConfirm.body}
+        confirmToken={user.username}
+        confirmTokenLabel={copy.userDetail.transferConfirm.tokenLabel}
+        destructiveCta={copy.userDetail.transferConfirm.cta}
+        cancelCta={copy.userDetail.transferConfirm.cancel}
+        busy={transfer.isPending}
+        onCancel={() => setConfirmTransferOpen(false)}
+        onConfirm={() => {
+          // Defence-in-depth: re-check every gate at confirmation time.
+          if (isSelf || !sessionIsPrimary || user.role !== 'admin' || transfer.isPending) {
+            setConfirmTransferOpen(false);
+            return;
+          }
+          transfer.mutate();
+        }}
+      />
     </div>
   );
 }
@@ -195,5 +222,64 @@ function ActionButton({
         <span className="ml-2 block text-xs text-[var(--color-subtext-0)]">{tooltip}</span>
       )}
     </button>
+  );
+}
+
+function RoleSection({
+  user,
+  disabled,
+  tooltip,
+}: {
+  user: UserDetailView;
+  disabled: boolean;
+  tooltip?: string;
+}) {
+  const qc = useQueryClient();
+  // primary_admin is not assignable via this endpoint; transfer-primary owns it.
+  const [nextRole, setNextRole] = useState<'admin' | 'user'>(
+    user.role === 'admin' ? 'user' : 'admin',
+  );
+  const mutation = useMutation({
+    mutationFn: () => changeRole(user.id, nextRole),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user', user.id] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+  const blocked = disabled || mutation.isPending || nextRole === user.role;
+  return (
+    <div className="space-y-1">
+      <label className="block text-sm">
+        {copy.userDetail.actions.changeRole}
+        <select
+          value={nextRole}
+          disabled={disabled}
+          onChange={(e) => setNextRole(e.target.value === 'admin' ? 'admin' : 'user')}
+          className="mt-1 w-full rounded-md border border-[var(--color-overlay-0)] bg-[var(--color-base)] px-3 py-2 disabled:opacity-50"
+        >
+          <option value="user">{copy.userDetail.roleOptions.user}</option>
+          <option value="admin">{copy.userDetail.roleOptions.admin}</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        disabled={blocked}
+        title={tooltip}
+        onClick={() => {
+          // Defence-in-depth (S1): re-check every gate at click time.
+          if (blocked) return;
+          mutation.mutate();
+        }}
+        className="w-full rounded-md bg-[var(--color-mantle)] px-3 py-2 text-left disabled:opacity-50"
+      >
+        {copy.userDetail.applyRole}
+        {tooltip && disabled && (
+          <span className="ml-2 block text-xs text-[var(--color-subtext-0)]">{tooltip}</span>
+        )}
+      </button>
+      {mutation.isError && (
+        <p className="text-xs text-[var(--color-red)]">{copy.userDetail.roleChangeFailed}</p>
+      )}
+    </div>
   );
 }

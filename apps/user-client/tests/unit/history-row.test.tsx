@@ -42,6 +42,7 @@ const chat: ChatRow = {
   title: 'Topic here',
   resolvedMindspaceId: 'm1',
   createdAt: new Date('2026-05-26T10:00:00').getTime(),
+  updatedAt: new Date('2026-05-26T10:00:00').getTime(),
   lastMessageAt: new Date('2026-05-26T11:55:00').getTime(),
   bookmarkedMessageCount: 0,
   draftInput: '',

@@ -34,7 +34,7 @@ describe('ask_expert tool', () => {
         tierParams: {},
       },
       fetch: null,
-      ctx: { nsfwAllowed: true, location: null, corsProxyUrl: 'p', corsProxyKey: null },
+      ctx: { nsfwAllowed: true, location: null, useProxy: true },
       getKey: async () => 'k',
     });
 

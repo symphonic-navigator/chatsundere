@@ -332,3 +332,111 @@ line rather than a silent absorb.
      report friction setting per-server defaults; otherwise the depth stands.
    - Chris sign-off: ✅ Chris, 2026-06-25 — accepted the deferral at spec review
      (set-once default seed; live lever is the per-persona override section).
+
+## 2026-07-02 — Model picker folds ungated proxy providers into the anonymous hidden-count (WS-A spec §10)
+
+- **Affected flow / surface:** The model picker (`ModelPickerOverlay`) and any
+  provider-model list that hides offerings whose provider needs the relay when the
+  proxy gate is disabled (local-only / offline / server without the `proxy`
+  feature).
+- **Finding (Laura's summary):** A model whose provider is `requires-proxy` and
+  currently ungated is counted into the picker's anonymous `hiddenCount` alongside
+  NSFW-filtered and otherwise-unavailable models, rather than being surfaced as a
+  distinct, actionable "needs a linked account / relay" bucket the user could act on.
+- **Mode:** spec-pass.
+- **Criterion:** Disabled-over-hidden / "name the destination"; a hidden capability
+  the user could unlock is not individually reachable.
+- **Rationale for deferral:** The relay-availability story already has a first-class,
+  reachable home — `ServerRelayStatus` on the provider settings surface and the
+  gate-driven provider status copy both name the "link an account" next step. The
+  model picker's anonymous count is an acceptable interim: no function is
+  *unreachable*, only its per-model reason is generic at the picker altitude. A
+  dedicated "needs linking" model bucket is additive polish, not a hard defect.
+- **Follow-up commitment:** Revisit when the sync/blob workstreams land the fuller
+  linked-account UX; if alpha testers with local-only installs report confusion
+  about missing models, promote the bucket to a distinct, tappable picker row that
+  routes to server linking. Otherwise the anonymous count stands.
+- **Chris sign-off:** Not a blocking hard defect — logged per the spec §10 mandate;
+  no sign-off required.
+
+---
+
+## 2026-07-02 — WS-C Task 12: dense auto-save editors gate at the container, not per-field
+
+- **Context:** The Class-2 offline sweep (spec §11.2) requires every mutating
+  affordance on a synced record to disable (never hide) when a linked account is
+  offline. All discrete/destructive affordances are gated per-control with a
+  touch-reachable reason: persona delete (Circle), chat rename + delete (History
+  row and in-chat topbar), message bookmark (gentle copy), provider remove, MCP
+  server edits, document/library delete, seed-template delete, the persona Memory
+  buttons (commit/edit/delete/save-body/rollback), and the interrupted-stream
+  Retry (which tombstones a synced message).
+- **Deferred:** The two DENSE auto-save editors — the persona editor (8 sub-screens,
+  dozens of `patch()` field calls via `usePersonaEditing`) and the synced-settings
+  toggles/inline-edits (you/web/expert/images) — are NOT greyed field-by-field.
+  Instead: `usePersonaEditing.patch` is a guarded no-op offline (no doomed writes),
+  the persona hub shows an offline notice, `useUpdateSettings`/`useUpdateChat`
+  field-split so device-local edits (adultMode, draftInput, …) stay editable
+  offline, and any synced-field write that slips through is caught by React Query
+  (mutation error) — never a crash. The ambient `ConnectivityBadge` carries the
+  system-level framing.
+- **Rationale:** Per-field greying across ~13 files is a large, low-risk surface
+  (edits, not destructive actions); the container notice + guard + ambient badge
+  cover correctness and framing for the alpha.
+- **Follow-up:** Thread a shared "edit disabled" state through the persona-editor
+  field components and the synced-settings controls for full per-control greying.
+- **Chris sign-off:** Not a blocking hard defect (no dead-end, no data loss, no
+  active misdirection — controls visibly do not change offline); logged for Laura's
+  pre-squash walk.
+
+---
+
+## 2026-07-06 — Artefact Expert: two Laura soft findings deferred to when the "expert" family grows
+
+- **Context:** Artefact Expert is the second member of the "expert" delegation
+  family (after `ask_expert`). Laura's spec-pass (spec
+  `superpowers/specs/2026-07-06-artefact-expert-design.md`) was clean — no hard
+  defects. Two of her four soft findings are trajectory notes that do not bite at
+  two members; folding them in now would be premature. The other two (micro-
+  sublabels, persona-independent inline failure surface) were folded into the spec.
+- **Deferred (both trigger at the third "expert" family member):**
+  1. **Cockpit menu density at 380 px.** With a reasoning model + web + both
+     experts, the cockpit `⋯` popover stacks four On/Off sections, two of them
+     near-identical. When the family grows past two, group the experts under a
+     single "Experts" sub-heading rather than N parallel sections.
+  2. **"Ask an Expert" settings page outgrowing its name.** The page is named for
+     one feature while becoming the home of the umbrella family; cold-discovery of
+     "which model builds my artefacts?" is the only gap (already-configured
+     reachability is fine). At the third member, rename the page to "Experts".
+- **Rationale:** Both are emergent-decay-at-scale notes, not present defects; the
+  current two-member surface is consistent and least-astonishing. See
+  [[project_expert_umbrella_strategy]].
+- **Chris sign-off:** Not blocking (soft/advisory, taste + future findability);
+  logged for the holistic sweep when the family adds its third member.
+
+---
+
+## 2026-07-06 — Artefact Expert: inline failure note covers pre-flight only (spec §3.4 narrowing)
+
+- **Context:** The persona-independent inline cockpit note (spec §3.4) fires from
+  the `create_artefact` `meta.artefactExpertUnavailable` discriminant, which is set
+  only on PRE-FLIGHT unavailability — the expert offering is unresolvable (removed
+  from catalogue) or its key is missing (locked master key / no provider key).
+- **Deferred:** a RUNTIME expert failure — the offering resolves and the key is
+  present, but `author()` fails at request time (notably a `requires-proxy`
+  provider when the proxy is down; `defaultResolveBase` sets `routing: cors-proxy`
+  without a pre-flight `isProxyAvailable()` check) — returns a plain error with NO
+  discriminant, so the inline note does not fire and the next-step falls back to
+  the persona relay for that sub-case. Spec §3.4 listed "provider needs a proxy
+  that is unavailable" among the intended note cases, so this is a conscious
+  narrowing (documented in the plan, Task 2 Step 5).
+- **Rationale:** the "no silent fallback" invariant STILL holds — a configured
+  expert that fails at runtime still errors and never quietly builds with the
+  persona model; only the *surfacing channel* degrades from the guaranteed inline
+  note to the (usually-reliable) persona relay. Pre-flight covers the common cases
+  (locked key, removed offering). Full coverage needs either a pre-flight
+  `isProxyAvailable()` gate in the artefact tool or classifying runtime author
+  failures on the expert path as the discriminant.
+- **Chris sign-off:** Not blocking (Minor at whole-branch review; no dead-end, no
+  silent downgrade). Logged for a later hardening pass. See
+  [[project_expert_umbrella_strategy]].

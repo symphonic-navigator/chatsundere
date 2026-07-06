@@ -21,6 +21,18 @@ export function Toast(): JSX.Element {
               {t.action.label}
             </button>
           ) : null}
+          {t.secondaryAction ? (
+            <button
+              type="button"
+              className="toast-action toast-action-secondary"
+              onClick={() => {
+                t.secondaryAction?.onClick();
+                toastStore.dismiss(t.id);
+              }}
+            >
+              {t.secondaryAction.label}
+            </button>
+          ) : null}
         </div>
       ))}
     </output>

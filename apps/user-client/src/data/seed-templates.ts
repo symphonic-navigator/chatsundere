@@ -2,6 +2,8 @@
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type SeedTemplateRow, getClientDataDb } from '../boot/client-data-db.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
 
@@ -23,21 +25,43 @@ export async function createSeedTemplate(
 ): Promise<string> {
   const now = Date.now();
   const row: SeedTemplateRow = { id: uuidv7(), createdAt: now, updatedAt: now, ...input };
-  await getClientDataDb().seedTemplates.add(row);
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  // Class-1 creation-insert (spec §5): the row and its outbox row are atomic.
+  await db.transaction('rw', [db.seedTemplates, db.syncOutbox], async (tx) => {
+    await db.seedTemplates.add(row);
+    if (linked) enqueueSync(tx, 'seedTemplates', row.id, 'upsert');
+  });
+  if (linked) scheduleClass1Sync();
   return row.id;
 }
 
-/** Patch a seed template by id, bumping `updatedAt`. */
+/** Patch a seed template by id, bumping `updatedAt`. Class-2 edit (spec §5). */
 export async function updateSeedTemplate(
   id: string,
   patch: Partial<Omit<SeedTemplateRow, 'id' | 'createdAt'>>,
 ): Promise<void> {
-  await getClientDataDb().seedTemplates.update(id, { ...patch, updatedAt: Date.now() });
+  await mutateSynced({
+    collection: 'seedTemplates',
+    key: id,
+    tables: ['seedTemplates'],
+    write: async (tx) => {
+      await tx.table('seedTemplates').update(id, { ...patch, updatedAt: Date.now() });
+    },
+  });
 }
 
-/** Delete a seed template by id. */
+/** Delete a seed template by id. Class-2 delete (spec §5). */
 export async function deleteSeedTemplate(id: string): Promise<void> {
-  await getClientDataDb().seedTemplates.delete(id);
+  await mutateSynced({
+    collection: 'seedTemplates',
+    key: id,
+    op: 'delete',
+    tables: ['seedTemplates'],
+    write: async (tx) => {
+      await tx.table('seedTemplates').delete(id);
+    },
+  });
 }
 
 // ---- React-Query hooks ----

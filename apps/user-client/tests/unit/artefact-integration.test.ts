@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { listChatArtefacts } from '../../src/data/artefacts.js';
 import { QK } from '../../src/data/queryKeys.js';
@@ -22,9 +22,9 @@ function ctx(over: Partial<IntegrationContext> = {}): IntegrationContext {
     location: null,
     webSearch: null,
     webFetch: null,
-    corsProxyUrl: null,
-    corsProxyKey: null,
+    useProxy: false,
     webSearchTierId: null,
+    artefactExpert: null,
     chatId: 'c1',
     personaId: 'p1',
     personaOffering: { providerId: 'nano-gpt', upstreamSlug: 'glm-5.1' },
@@ -46,8 +46,6 @@ test('execute authors a file, persists it, returns the id via meta + progress', 
         provider: {} as never,
         providerConfig: {} as never,
         apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         target: { slug: 'glm-5.1' } as never,
       },
       reasoning: { enabled: false },
@@ -73,8 +71,6 @@ test('invalidates the chat artefacts query so the lightbox sees the new row', as
         provider: {} as never,
         providerConfig: {} as never,
         apiKey: 'k',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         target: { slug: 'glm-5.1' } as never,
       },
       reasoning: { enabled: false },
@@ -93,8 +89,6 @@ test('missing key → failed result, nothing persisted', async () => {
         provider: {} as never,
         providerConfig: {} as never,
         apiKey: '',
-        corsProxyUrl: null,
-        corsProxyKey: null,
         target: {} as never,
       },
       reasoning: { enabled: false },
@@ -103,4 +97,80 @@ test('missing key → failed result, nothing persisted', async () => {
   const r = await tool.execute({ title: 'A', brief: 'b' });
   expect(r.ok).toBe(false);
   expect(await listChatArtefacts('c1')).toHaveLength(0);
+});
+
+function baseCtx(over: Partial<IntegrationContext> = {}): IntegrationContext {
+  return {
+    nsfwAllowed: false,
+    location: null,
+    webSearch: null,
+    webFetch: null,
+    useProxy: false,
+    webSearchTierId: null,
+    getKey: vi.fn(async () => 'k'),
+    chatId: 'c1',
+    personaId: 'per1',
+    personaOffering: { providerId: 'persona-prov', upstreamSlug: 'persona-model' },
+    artefactExpert: null,
+    ...over,
+  };
+}
+
+const stubResolve = () =>
+  ({
+    base: {
+      provider: { id: 'x', baseUrl: 'https://x' },
+      providerConfig: { baseUrl: 'https://x', routing: { kind: 'direct' } },
+      apiKey: '',
+      target: {},
+    },
+    reasoning: { enabled: false },
+  }) as never;
+
+describe('create_artefact — expert selection', () => {
+  it('fetches the key for the expert provider when an expert is set', async () => {
+    const getKey = vi.fn(async () => 'expert-key');
+    const author = vi.fn(async () => '<html></html>');
+    const ctx = baseCtx({
+      getKey,
+      artefactExpert: { providerId: 'anthropic', upstreamSlug: 'opus-4-8' },
+    });
+    const tool = makeArtefactTool(ctx, { author, resolveBase: stubResolve });
+    // execute()'s own try/catch always resolves a ToolResult (never rejects),
+    // so no .catch is needed here — the write reliably succeeds against the
+    // fake-indexeddb DB opened in beforeEach.
+    await tool.execute({ title: 'T', brief: 'B' }, undefined, undefined);
+    expect(getKey).toHaveBeenCalledWith('anthropic');
+    expect(author).toHaveBeenCalled();
+  });
+
+  it('fetches the persona key when no expert is set', async () => {
+    const getKey = vi.fn(async () => 'persona-key');
+    const author = vi.fn(async () => '<html></html>');
+    const ctx = baseCtx({ getKey, artefactExpert: null });
+    const tool = makeArtefactTool(ctx, { author, resolveBase: stubResolve });
+    await tool.execute({ title: 'T', brief: 'B' }, undefined, undefined);
+    expect(getKey).toHaveBeenCalledWith('persona-prov');
+  });
+
+  it('returns the discriminant error (no fallback) when the expert key is missing', async () => {
+    const ctx = baseCtx({
+      getKey: vi.fn(async () => null),
+      artefactExpert: { providerId: 'anthropic', upstreamSlug: 'opus-4-8' },
+    });
+    const author = vi.fn(async () => '<html></html>');
+    const tool = makeArtefactTool(ctx, { author, resolveBase: stubResolve });
+    const r = await tool.execute({ title: 'T', brief: 'B' }, undefined, undefined);
+    expect(r.ok).toBe(false);
+    expect(r.meta?.artefactExpertUnavailable).toBe(true);
+    expect(author).not.toHaveBeenCalled();
+  });
+
+  it('gives a plain error (no discriminant) when the persona key is missing', async () => {
+    const ctx = baseCtx({ getKey: vi.fn(async () => null), artefactExpert: null });
+    const tool = makeArtefactTool(ctx, { resolveBase: stubResolve });
+    const r = await tool.execute({ title: 'T', brief: 'B' }, undefined, undefined);
+    expect(r.ok).toBe(false);
+    expect(r.meta?.artefactExpertUnavailable).toBeUndefined();
+  });
 });

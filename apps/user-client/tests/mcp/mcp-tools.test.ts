@@ -28,8 +28,6 @@ function ctx(over: Partial<McpToolContext> = {}): McpToolContext {
         hiddenTools: ['secret'],
       },
     ],
-    corsProxyUrl: null,
-    corsProxyKey: null,
     getServerKey: async () => 'tok',
     requestApproval: async () => true,
     ...over,

@@ -407,4 +407,37 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/v1/admin/users — real total + role/status filters
+  // ---------------------------------------------------------------------------
+
+  it('returns the filtered total, not the page length', async () => {
+    const res = await app.request('/api/v1/admin/users?limit=1', {
+      headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
+    });
+    const body = (await res.json()) as { users: unknown[]; total: number };
+    expect(body.users.length).toBe(1);
+    expect(body.total).toBeGreaterThanOrEqual(3);
+  });
+
+  it('filters by role', async () => {
+    const res = await app.request('/api/v1/admin/users?role=primary_admin', {
+      headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
+    });
+    const body = (await res.json()) as { users: Array<{ role: string }>; total: number };
+    expect(body.users.every((u) => u.role === 'primary_admin')).toBe(true);
+    expect(body.total).toBe(body.users.length <= 20 ? body.users.length : body.total);
+  });
+
+  it('filters by suspension status', async () => {
+    const res = await app.request('/api/v1/admin/users?status=suspended', {
+      headers: { Authorization: `Bearer ${adminToken}`, ...ORIGIN },
+    });
+    const body = (await res.json()) as {
+      users: Array<{ suspended_at: string | null }>;
+      total: number;
+    };
+    expect(body.users.every((u) => u.suspended_at !== null)).toBe(true);
+  });
 });

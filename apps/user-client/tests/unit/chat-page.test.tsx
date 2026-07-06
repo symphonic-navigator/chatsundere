@@ -143,6 +143,7 @@ describe('ChatPage', () => {
       title: 'Stale',
       resolvedMindspaceId: firstMs.id,
       createdAt: 0,
+      updatedAt: 0,
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -194,6 +195,7 @@ describe('ChatPage', () => {
       title: null,
       resolvedMindspaceId: firstMs.id,
       createdAt: 0,
+      updatedAt: 0,
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -278,6 +280,7 @@ describe('ChatPage', () => {
       title: null,
       resolvedMindspaceId: firstMs.id,
       createdAt: 1,
+      updatedAt: 1,
       lastMessageAt: 2,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -289,6 +292,7 @@ describe('ChatPage', () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'hello' }],
       createdAt: 2,
+      updatedAt: 2,
       bookmarked: false,
       streamingState: 'complete',
     });
@@ -400,6 +404,7 @@ describe('ChatPage cleanup', () => {
       title: 'Seeded',
       resolvedMindspaceId: mindspaceId,
       createdAt: 0,
+      updatedAt: 0,
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -432,6 +437,7 @@ describe('ChatPage — seed templates', () => {
       title: 'Empty',
       resolvedMindspaceId: firstMs.id,
       createdAt: 0,
+      updatedAt: 0,
       lastMessageAt: 0,
       bookmarkedMessageCount: 0,
       draftInput: '',
@@ -481,6 +487,7 @@ describe('ChatPage — seed templates', () => {
         role: 'persona',
         contentBlocks: [{ type: 'text', text: 'primer line' }],
         createdAt: 1,
+        updatedAt: 1,
         bookmarked: false,
         kind: 'seed',
         seedRole: 'body',
@@ -492,6 +499,7 @@ describe('ChatPage — seed templates', () => {
         role: 'user',
         contentBlocks: [{ type: 'text', text: 'a real message' }],
         createdAt: 2,
+        updatedAt: 2,
         bookmarked: false,
         streamingState: 'complete',
       },
@@ -505,5 +513,45 @@ describe('ChatPage — seed templates', () => {
     );
     // The never-applied "Seed from template" affordance is gone once a chat begins.
     expect(screen.queryByText('Seed from template')).toBeNull();
+  });
+});
+
+describe('ChatPage — cockpit stays reopenable (no dead-end)', () => {
+  async function seedEmptyPersistedChat() {
+    const { db, personaId } = await seedPersonaWithMindspace();
+    const ms = await db.mindspaces.toArray();
+    const firstMs = ms[0];
+    if (!firstMs) throw new Error('No mindspace seeded');
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: 'Empty',
+      resolvedMindspaceId: firstMs.id,
+      createdAt: 0,
+      updatedAt: 0,
+      lastMessageAt: 0,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    return { db, personaId, chatId };
+  }
+
+  it('renders the open-cockpit affordance in an empty, closed-cockpit chat', async () => {
+    // An empty persisted chat (opened from the History "continue" button) takes
+    // the chatId branch of the mount effect, so the cockpit is NOT auto-opened.
+    // With no messages and no keyboard Enter hotkey on touch, the person would be
+    // stranded with no way to compose the first message — a hard dead-end. The
+    // BottomAffordance must be present whenever the cockpit is closed.
+    const { chatId } = await seedEmptyPersistedChat();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<ChatPage />, {
+      wrapper: makeWrapper(qc, `/app/chat/${chatId}`),
+    });
+
+    await waitFor(() => expect(container.querySelector('.persona-greeting')).not.toBeNull());
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
+    expect(container.querySelector('.bottom-affordance')).not.toBeNull();
   });
 });

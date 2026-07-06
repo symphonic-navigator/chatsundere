@@ -20,8 +20,6 @@ export interface LiveBindingArgs {
   offeringRef: string;
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl?: string | null;
-  corsProxyKey?: string | null;
   adapter: ModelAdapter;
   tools?: ToolDef[];
   /** Injectable for key-free unit tests; defaults to global fetch. */
@@ -55,8 +53,6 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
           buildRequest({
             provider: args.providerConfig,
             apiKey: args.apiKey,
-            corsProxyUrl: args.corsProxyUrl ?? null,
-            corsProxyKey: args.corsProxyKey ?? null,
             path: wire.path ?? '/chat/completions',
             method: 'POST',
             body: wire.body,
@@ -117,8 +113,6 @@ export function makeGenericLiveBinding(args: GenericBindingArgs): RunnerBinding 
         provider: args.provider,
         providerConfig: args.providerConfig,
         apiKey: args.apiKey,
-        corsProxyUrl: null,
-        corsProxyKey: null,
         target: { slug: args.target },
         messages,
         bodyExtras: { reasoning },
@@ -130,8 +124,6 @@ export function makeGenericLiveBinding(args: GenericBindingArgs): RunnerBinding 
           buildRequest({
             provider: args.providerConfig,
             apiKey: args.apiKey,
-            corsProxyUrl: null,
-            corsProxyKey: null,
             path: '/chat/completions',
             method: 'POST',
             body,

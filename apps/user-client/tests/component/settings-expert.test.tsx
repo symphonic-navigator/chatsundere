@@ -57,4 +57,16 @@ describe('SettingsExpertPage', () => {
     expect(await screen.findByText(/Expert model/i)).toBeInTheDocument();
     expect(screen.getByText(/only the sanitised question/i)).toBeInTheDocument();
   });
+
+  it('shows the Artefact expert slot', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <SettingsExpertPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: /Artefact expert/i })).toBeInTheDocument();
+  });
 });

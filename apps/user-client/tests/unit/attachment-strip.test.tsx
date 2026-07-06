@@ -16,6 +16,7 @@ function row(over: Partial<AttachmentRow>): AttachmentRow {
     order: 0,
     state: 'active',
     createdAt: 0,
+    updatedAt: 0,
     blob: new Blob(['x']),
     width: 1,
     height: 1,

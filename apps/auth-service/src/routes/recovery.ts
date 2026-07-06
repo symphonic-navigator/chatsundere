@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { server as opaqueServer } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { object, parse, string } from 'valibot';
 import { writeAudit } from '../audit/log.js';
+import { denySub, nowSeconds } from '../auth/deny-list.js';
+import { seedStepUpKey } from '../auth/step-up.js';
 import { createDb } from '../db/client.js';
 import { authMethods, users } from '../db/schema.js';
 import { loadEnv } from '../env.js';
 import { issueTokens, refreshCookieFor } from '../jwt/issue.js';
+import { revokeAllForUser } from '../jwt/refresh.js';
 import { metrics } from '../metrics.js';
 import { ApiError } from '../middleware/error-envelope.js';
 import { ensureOpaqueReady, getServerSetup } from '../opaque/server.js';
 import { consumeNonce, storeNonce } from '../recovery/nonce.js';
+import { createRedis } from '../redis/client.js';
 import { applyLoginRateLimit } from './_rate-limit-helpers.js';
 
 const startReqSchema = object({
@@ -148,7 +153,7 @@ export function registerRecoveryRoutes(app: Hono): void {
       ['verify'],
     );
     const env = loadEnv();
-    const serverId = `${env.API_BASE_URL}/v1`;
+    const serverId = opaqueServerIdentity(env.API_BASE_URL);
     const message = concat(
       nonceBytes,
       new TextEncoder().encode(body.username),
@@ -170,6 +175,15 @@ export function registerRecoveryRoutes(app: Hono): void {
       throw new ApiError(401, 'unauthorized', 'Invalid recovery proof');
     }
 
+    // Recovery is the compromise-response tool (no forgot-password model): evict
+    // every existing session. Revoke BEFORE issuing the new tokens so the pre-existing
+    // refresh families die and pre-existing access tokens (iat < cutoff) are denied,
+    // while the freshly-issued session — new refresh family, access iat >= cutoff —
+    // survives. Runs before the auth-swap tx so a failed swap still evicts (fail-safe).
+    const revokeCutoff = nowSeconds();
+    await revokeAllForUser(user.id);
+    await denySub(createRedis(), user.id, revokeCutoff);
+
     // Atomic: delete all existing auth_methods, insert new opaque method, update user wraps.
     const tokens = await db.transaction(async (tx) => {
       await tx.delete(authMethods).where(eq(authMethods.userId, user.id));
@@ -179,6 +193,10 @@ export function registerRecoveryRoutes(app: Hono): void {
         methodType: 'opaque',
         // Re-use the same OPAQUE userIdentifier (user.id) for the fresh registration.
         opaqueUserIdentifier: user.id,
+        // Freeze the registration-time username so post-recovery OPAQUE
+        // login and step-up keep working after a later rename (mirrors the
+        // join path; without it step-up /start returns 400 no_opaque).
+        opaqueClientIdentifier: body.username,
         opaqueCredential: Buffer.from(body.registration_record, 'base64url'),
         wrappedMasterKey: Buffer.from(body.new_wrapped_mk_opaque, 'base64url'),
         wrapNonce: Buffer.from(body.new_wrap_nonce_opaque, 'base64url'),
@@ -201,6 +219,9 @@ export function registerRecoveryRoutes(app: Hono): void {
         userAgent: c.req.header('User-Agent') ?? undefined,
       });
     });
+
+    // Fresh recovery-key evidence seeds the Tier-1 grace window (spec §4.1).
+    await seedStepUpKey(tokens.sessionId, 1);
 
     await writeAudit({
       db,

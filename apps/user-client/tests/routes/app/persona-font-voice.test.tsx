@@ -227,8 +227,6 @@ describe('PersonaFontVoice — Voice picker (TTS provider present)', () => {
     resolveTtsTransportMock.mockResolvedValue({
       providerConfig: { baseUrl: 'https://example.com', routing: { kind: 'direct' as const } },
       apiKey: 'key',
-      corsProxyUrl: null,
-      corsProxyKey: null,
       offering: { providerId: 'xai', upstreamSlug: 'grok-tts' },
       ttsMeta: { displayName: 'Grok TTS', voices: { kind: 'static', list: [] } },
     });

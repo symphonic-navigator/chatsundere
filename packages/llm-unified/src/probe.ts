@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
+import { fetchWithProxyAuth } from './proxy-fetch.js';
 import { buildRequest } from './transport.js';
 import type { ProbeResult, ProviderConfig, ProviderDefinition } from './types.js';
 
@@ -7,8 +8,6 @@ export interface ProbeArgs {
   definition: ProviderDefinition;
   config: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   fetchFn?: typeof fetch;
 }
 
@@ -20,18 +19,20 @@ export interface ProbeArgs {
  */
 export async function probeProvider(args: ProbeArgs): Promise<ProbeResult> {
   const fetchFn = args.fetchFn ?? globalThis.fetch.bind(globalThis);
-  const request = buildRequest({
-    provider: args.config,
-    apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
-    path: args.definition.probe.path,
-    method: args.definition.probe.method,
-  });
+  const proxied = args.config.routing.kind === 'cors-proxy';
 
   let response: Response;
   try {
-    response = await fetchFn(request);
+    response = await fetchWithProxyAuth(
+      () =>
+        buildRequest({
+          provider: args.config,
+          apiKey: args.apiKey,
+          path: args.definition.probe.path,
+          method: args.definition.probe.method,
+        }),
+      { proxied, doFetch: fetchFn },
+    );
   } catch (e) {
     return { ok: false, status: 0, reason: (e as Error).message };
   }

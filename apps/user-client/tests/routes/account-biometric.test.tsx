@@ -54,10 +54,10 @@ function renderPage() {
 }
 
 describe('BiometricPage', () => {
-  it('renders the PageBar with My Account / Biometric crumbs', async () => {
+  it('renders the PageBar with My Account / Passphrase & Biometrics crumbs', async () => {
     renderPage();
     expect(await screen.findByText('My Account')).toBeInTheDocument();
-    expect(await screen.findByText('Biometric')).toBeInTheDocument();
+    expect(await screen.findByText('Passphrase & Biometrics')).toBeInTheDocument();
   });
 
   it('renders the existing biometric label in a row', async () => {

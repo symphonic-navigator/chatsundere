@@ -2,10 +2,17 @@
 import {
   CryptoError,
   finishJoinByPairing,
+  getLinkedAccount,
   setBiometricPromptDue,
   startJoinByPairing,
 } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import { JoinError } from '@chatsundere/shared-types';
+import {
+  maybeProbeLinkedServer,
+  useAccountLinkStore,
+  useConnectivityStore,
+  useSessionStore,
+} from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
@@ -30,8 +37,9 @@ type Screen =
  * reveal afterwards (recovery already exists). On Continue, runs OPAQUE
  * login start + finish back-to-back and lands the user in /app.
  *
- * No late-link branch for pairing — Phase 0 accepts the local-data
- * replacement per spec § 2 Decision 7.
+ * No late-link branch for pairing — the crypto layer refuses to overwrite an
+ * existing local account: `finishJoinByPairing` (join-by-pairing.ts:152) throws
+ * before any server call when a `local_account` row already exists.
  */
 export function PairingConfirm() {
   const navigate = useNavigate();
@@ -104,6 +112,13 @@ function PairingConfirmInner() {
       useSessionStore.getState().setSession(result.session, result.mk);
       useOnboardingStore.getState().reset();
       await setBiometricPromptDue(getDb());
+      const linkedRow = await getLinkedAccount(getDb());
+      if (linkedRow) useAccountLinkStore.getState().setLinked(linkedRow);
+      // The device is now linked, so this probe (unlike any earlier onboarding
+      // probe) actually populates the discovery store — the sync engine's
+      // canRunCycle() would otherwise no-op until a reload or connectivity
+      // event happens to fire, leaving a freshly-paired device in an empty vault.
+      maybeProbeLinkedServer();
       navigate('/app', { replace: true });
     } catch (err) {
       const mapped = mapError(err);
@@ -223,14 +238,14 @@ function PairingConfirmInner() {
 
 // ── Error mapping ─────────────────────────────────────────────────────────────
 
-type Mapped =
+export type Mapped =
   | { kind: 'passphrase_inline'; message: string }
   | { kind: 'screen'; screen: Extract<Screen, { kind: 'kind_mismatch' | 'fatal' }> };
 
-function mapError(err: unknown): Mapped {
+export function mapError(err: unknown): Mapped {
   if (err instanceof HttpError) {
     if (err.code === 'kind_mismatch') return { kind: 'screen', screen: { kind: 'kind_mismatch' } };
-    if (err.code === 'opaque_evidence_invalid')
+    if (err.code === JoinError.OpaqueAuthenticationFailed)
       return { kind: 'passphrase_inline', message: 'Wrong passphrase.' };
     if (err.code === 'code_not_found_or_expired')
       return {
@@ -240,10 +255,49 @@ function mapError(err: unknown): Mapped {
           message: 'Code not recognised. It may have expired, been used, or contain a typo.',
         },
       };
-    if (err.code === 'rate_limit_exceeded')
+    if (err.code === JoinError.CodeExpired)
       return {
         kind: 'screen',
-        screen: { kind: 'fatal', message: 'Too many attempts. Please wait a minute.' },
+        screen: {
+          kind: 'fatal',
+          message:
+            'This pairing code has expired. Generate a fresh one on your other device and enter it here.',
+        },
+      };
+    if (err.code === JoinError.CodeAlreadyRedeemed)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'This pairing code has already been used. Generate a new one on your other device.',
+        },
+      };
+    if (err.code === JoinError.CodeAttemptsExhausted)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'Too many tries — this code is now locked for safety. Generate a new one on your other device.',
+        },
+      };
+    if (err.code === JoinError.RateLimited)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message: 'Too many attempts. Please wait a minute, then try again.',
+        },
+      };
+    if (err.code === JoinError.SessionExpired)
+      return {
+        kind: 'screen',
+        screen: {
+          kind: 'fatal',
+          message:
+            'This took a little too long and the secure session timed out. Please start again.',
+        },
       };
     if (err.code === 'wrapping_invariant_violated')
       return {
@@ -258,6 +312,9 @@ function mapError(err: unknown): Mapped {
         kind: 'screen',
         screen: { kind: 'fatal', message: 'Server unreachable. Check your connection.' },
       };
+  }
+  if (err instanceof CryptoError && err.code === 'wrong_passphrase') {
+    return { kind: 'passphrase_inline', message: 'Wrong passphrase.' };
   }
   if (err instanceof CryptoError && err.code === 'conflict') {
     return {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { b64ToBlob } from '../b64.js';
+import { fetchWithProxyAuth } from '../proxy-fetch.js';
 import { buildRequest } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 import type { ImageModelConfig } from './config.js';
@@ -20,8 +21,6 @@ const URL_FETCH_TIMEOUT_MS = 60_000;
 export interface ImageRequestBase {
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
 }
 
 export interface GenerateImagesArgs extends ImageRequestBase {
@@ -77,16 +76,18 @@ export async function generateImages(args: GenerateImagesArgs): Promise<Generate
   const timeoutSignal = AbortSignal.timeout(POST_TIMEOUT_MS[args.config.groupId]);
   const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
 
-  const request = buildRequest({
-    provider: args.providerConfig,
-    apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
-    path: '/images/generations',
-    method: 'POST',
-    body,
-  });
-  const response = await fetchFn(request, { signal });
+  const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+  const response = await fetchWithProxyAuth(
+    () =>
+      buildRequest({
+        provider: args.providerConfig,
+        apiKey: args.apiKey,
+        path: '/images/generations',
+        method: 'POST',
+        body,
+      }),
+    { proxied, signal, doFetch: fetchFn },
+  );
   let json: unknown;
   try {
     json = await response.json();

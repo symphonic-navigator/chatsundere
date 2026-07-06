@@ -5,16 +5,18 @@ import { loadEnv } from '../env.js';
 
 /**
  * Public, unauthenticated backend self-description (spec §7, sync spec §11). The
- * client learns the proxy/sync URLs rather than hard-coding them, so self-hosting
- * is first-class. Each URL and its feature flag appear only when configured, so
- * an operator running any subset of the services emits a coherent topology. No
- * state, no secret, no DB read.
+ * client learns the proxy/sync/admin URLs rather than hard-coding them, so
+ * self-hosting is first-class. Each URL and its feature flag appear only when
+ * configured, so an operator running any subset of the services emits a
+ * coherent topology. No state, no secret, no DB read.
  */
 export function registerConfigRoute(app: Hono): void {
   app.get('/api/v1/config', (c) => {
     const env = loadEnv();
     const features: string[] = [];
-    const body: { proxyUrl?: string; syncUrl?: string; features: string[] } = { features };
+    const body: { proxyUrl?: string; syncUrl?: string; adminUrl?: string; features: string[] } = {
+      features,
+    };
     if (env.PROXY_PUBLIC_URL) {
       body.proxyUrl = env.PROXY_PUBLIC_URL;
       features.push('proxy');
@@ -24,6 +26,10 @@ export function registerConfigRoute(app: Hono): void {
       features.push('sync');
       // Blobs are meaningless without sync, so gate on both (blob spec §10).
       if (env.SYNC_BLOBS_ENABLED) features.push('blobs');
+    }
+    if (env.ADMIN_PUBLIC_URL) {
+      body.adminUrl = env.ADMIN_PUBLIC_URL;
+      features.push('admin');
     }
     return c.json(body);
   });

@@ -22,8 +22,8 @@ afterEach(async () => {
 });
 
 describe('seedTemplates CRUD', () => {
-  it('opens at version 32 on a fresh install', () => {
-    expect(getClientDataDb().verno).toBe(32);
+  it('opens at version 33 on a fresh install', () => {
+    expect(getClientDataDb().verno).toBe(34);
   });
 
   it('creates and reads back a template with greeting + body', async () => {

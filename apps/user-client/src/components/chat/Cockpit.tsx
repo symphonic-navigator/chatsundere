@@ -15,7 +15,7 @@ import {
   useRenameAttachment,
   useUpdateAttachmentText,
 } from '../../data/attachments.js';
-import { useChat } from '../../data/chats.js';
+import { useChat, useUpdateChat } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
 import { useCurrentBody, useUncommittedCount } from '../../data/memory.js';
 import { usePersona } from '../../data/personas.js';
@@ -116,6 +116,8 @@ export function Cockpit(p: Props): JSX.Element {
   const setSearchTierId = useCurrentChatStore((s) => s.setWebSearchTierId);
   const askExpert = useCurrentChatStore((s) => s.askExpert);
   const setAskExpert = useCurrentChatStore((s) => s.setAskExpert);
+  const artefactExpertError = useCurrentChatStore((s) => s.artefactExpertError);
+  const setArtefactExpertError = useCurrentChatStore((s) => s.setArtefactExpertError);
   const settings = useSettings();
 
   // Attachments: the pending set for this chat, plus the mutation hooks the
@@ -180,6 +182,7 @@ export function Cockpit(p: Props): JSX.Element {
   };
 
   const askExpertAvailable = settings.data?.expertModel != null;
+  const artefactExpertAvailable = settings.data?.artefactExpertModel != null;
 
   // Send affordances (ADR/CLAUDE.md §4: 1024px is the single desktop boundary):
   //   - Desktop: plain Enter sends, Shift+Enter inserts a newline.
@@ -237,6 +240,16 @@ export function Cockpit(p: Props): JSX.Element {
     allLibraries,
     p.persona.adultPersona,
   ).length;
+
+  // Artefact expert opt-out (absent ⇒ on): unlike askExpert (transient,
+  // per-turn), this is a persisted per-chat preference — a synced Class-2
+  // chat patch, exactly like a title rename.
+  const updateChat = useUpdateChat();
+  const artefactExpertOn = chatData?.chat.useArtefactExpertModel !== false;
+  const onArtefactExpertChange = (on: boolean): void => {
+    void updateChat.mutateAsync({ id: p.chatId, patch: { useArtefactExpertModel: on } });
+    setMenuOpen(false);
+  };
 
   // Live content for copy-on-write document references (preview before send), plus a
   // provenance label sourced from the (already NSFW-filtered) library list.
@@ -406,6 +419,9 @@ export function Cockpit(p: Props): JSX.Element {
               askExpertAvailable={askExpertAvailable}
               askExpert={askExpert}
               onAskExpertChange={onAskExpertChange}
+              artefactExpertAvailable={artefactExpertAvailable}
+              artefactExpertOn={artefactExpertOn}
+              onArtefactExpertChange={onArtefactExpertChange}
             />
           ) : null}
         </div>
@@ -558,6 +574,17 @@ export function Cockpit(p: Props): JSX.Element {
         <div className="cockpit-dictation-note" role="alert">
           The microphone could not be started. Check it is connected and not in use, then tap the
           mic to try again.
+        </div>
+      ) : null}
+      {artefactExpertError ? (
+        <div className="cockpit-artefact-note" role="alert">
+          <span>{artefactExpertError}</span>
+          <button type="button" onClick={() => navigate('/app/settings/expert')}>
+            Settings
+          </button>
+          <button type="button" onClick={() => setArtefactExpertError(null)}>
+            Dismiss
+          </button>
         </div>
       ) : null}
       {voiceNote && p.voiceUnavailable ? (

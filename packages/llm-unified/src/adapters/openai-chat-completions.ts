@@ -6,8 +6,6 @@ import type { ProviderConfig, StreamChunk, WireMessage } from '../types.js';
 export interface StreamCompletionArgs {
   provider: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   messages: WireMessage[];
   modelId: string;
   signal?: AbortSignal;
@@ -27,8 +25,6 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
   const request = buildRequest({
     provider: args.provider,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     path: '/chat/completions',
     method: 'POST',
     body: {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { b64ToBlob } from '../b64.js';
 import type { TtsTransportKind } from '../catalogue/types.js';
+import { fetchWithProxyAuth } from '../proxy-fetch.js';
 import { stripTeal } from '../teal/teal.js';
 import { buildRequest } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
@@ -22,8 +23,6 @@ export class SpeechSynthesisError extends Error {
 export interface SynthesiseSpeechArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   upstreamSlug: string;
   teal: 'strip' | 'passthrough';
   /** Wire shape of the synthesis request (path, body, response encoding). */
@@ -89,16 +88,18 @@ export async function synthesiseSpeech(
   const timeoutSignal = AbortSignal.timeout(POST_TIMEOUT_MS);
   const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
   const wire = wireFor(args, input);
-  const request = buildRequest({
-    provider: args.providerConfig,
-    apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
-    path: wire.path,
-    method: 'POST',
-    body: wire.body,
-  });
-  const response = await fetchFn(request, { signal });
+  const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+  const response = await fetchWithProxyAuth(
+    () =>
+      buildRequest({
+        provider: args.providerConfig,
+        apiKey: args.apiKey,
+        path: wire.path,
+        method: 'POST',
+        body: wire.body,
+      }),
+    { proxied, signal, doFetch: fetchFn },
+  );
   if (!response.ok) {
     throw new SpeechSynthesisError(`TTS upstream ${response.status}`, response.status);
   }

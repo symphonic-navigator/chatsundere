@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import type { WebContext } from '../integrations/web-interfacing.js';
+import { setProxyAuthSource } from '../proxy-auth.js';
 import { ollamaWebFetchAdapter, ollamaWebSearchAdapter } from './ollama-web.js';
 
 const directCtx: WebContext = {
   nsfwAllowed: false,
   location: null,
-  corsProxyUrl: null,
-  corsProxyKey: null,
+  useProxy: false,
 };
+
+afterEach(() => setProxyAuthSource(null));
 
 describe('ollamaWebSearchAdapter', () => {
   it('maps results[] to hits and sends {query, max_results} with Bearer auth (direct)', async () => {
@@ -62,17 +64,20 @@ describe('ollamaWebSearchAdapter', () => {
       captured = req;
       return new Response(JSON.stringify({ results: [] }), { status: 200 });
     };
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-P',
+      refreshToken: async () => null,
+    });
     const adapter = ollamaWebSearchAdapter(fakeFetch as typeof fetch);
-    await adapter.search?.(
-      'q',
-      { ...directCtx, corsProxyUrl: 'https://proxy.example', corsProxyKey: 'P' },
-      'KEY',
-      {},
-    );
+    await adapter.search?.('q', { ...directCtx, useProxy: true }, 'KEY', {});
     const req = captured as unknown as Request;
-    expect(req.url).toBe('https://proxy.example/web_search');
-    expect(req.headers.get('x-cors-proxy-api-key')).toBe('P');
-    expect(req.headers.get('x-cors-proxy-target')).toBe('https://ollama.com/api');
+    // The proxy target is a bare origin (parseTarget refuses a path); the `/api`
+    // base path rides on the request line so the forward reconstructs the full
+    // `https://ollama.com/api/web_search` upstream URL — identical to the direct route.
+    expect(req.url).toBe('https://proxy.example/api/web_search');
+    expect(req.headers.get('x-chatsundere-authorization')).toBe('Bearer jwt-P');
+    expect(req.headers.get('x-cors-proxy-target')).toBe('https://ollama.com');
   });
 
   it('caps each snippet to bound tool output', async () => {

@@ -23,6 +23,8 @@ export type {
 
 export { JoinError } from './join.js';
 
+export { opaqueServerIdentity } from './opaque-identity.js';
+
 export type {
   JoinStartRequest,
   JoinStartResponse,
@@ -56,6 +58,11 @@ export type {
   AdminUserDetail,
   AdminCreateInvitationRequest,
   AdminCreateInvitationResponse,
+  AdminInvitationStatus,
+  AdminInvitationSummary,
+  AdminInvitationListResponse,
+  AdminChangeRoleRequest,
+  AdminTransferPrimaryRequest,
   AdminAuditLogEntry,
   AdminAuditLogResponse,
 } from './admin.js';
@@ -66,6 +73,8 @@ export type {
   PassphraseChangeFinishRequest,
   PassphraseChangeFinishResponse,
 } from './me.js';
+
+export type { ServerConfig, KnownServerFeature } from './config.js';
 
 export { SYNC_COLLECTIONS, revokedJtiKey, revokedSubKey } from './sync.js';
 export type {
@@ -85,3 +94,14 @@ export type {
   BlobListResponse,
   BlobErrorBody,
 } from './sync.js';
+
+export type {
+  StepUpTier,
+  StepUpMechanism,
+  StepUpStartRequest,
+  StepUpStartWebAuthnResponse,
+  StepUpStartOpaqueResponse,
+  StepUpStartResponse,
+  StepUpFinishRequest,
+  StepUpFinishResponse,
+} from './step-up.js';

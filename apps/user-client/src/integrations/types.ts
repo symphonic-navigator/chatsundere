@@ -20,9 +20,9 @@ export interface IntegrationContext {
   webSearch: OfferingRef | null;
   /** Selected web fetch backend, independently chosen, or null. */
   webFetch: OfferingRef | null;
-  /** Call-time CORS proxy (the LLM path's decrypted corsProxy), or null. */
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
+  /** True when web calls should route through the account's authenticated
+   *  proxy (mirrors the server 'proxy' gate); false when they go direct. */
+  useProxy: boolean;
   /** The cockpit-selected search tier id, or null (→ the offering's default). */
   webSearchTierId: string | null;
   /** Retrieve a provider's plaintext key at call time — credential-bus,
@@ -34,6 +34,10 @@ export interface IntegrationContext {
   personaId: string;
   /** The persona's LLM offering — the model the author subagent runs. */
   personaOffering: OfferingRef;
+  /** The artefact-expert offering to build artefacts with, or null to use the
+   *  persona model. Pre-resolved per send: set when a global artefact expert is
+   *  configured AND this chat has not opted out; null otherwise. */
+  artefactExpert: OfferingRef | null;
 }
 
 /** A dynamic, credential-gated capability unit — the counterpart to a static

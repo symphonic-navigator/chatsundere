@@ -22,7 +22,7 @@ const MAX_ATTEMPTS = 3;
  * Status codes by failure mode:
  *  - 400 `kind_mismatch`             — code's type does not match expectedType
  *  - 404 `code_not_found_or_expired` — no row, or row already revoked
- *  - 409 `code_already_redeemed`     — row was already redeemed
+ *  - 410 `code_already_redeemed`     — row was already redeemed
  *  - 410 `code_expired`              — row's expires_at is in the past
  *  - 429 `code_attempts_exhausted`   — attempt cap hit; row is now revoked
  */
@@ -62,7 +62,10 @@ export async function consumePendingCodeAttempt(
   const row = updated[0];
   if (!row) throw new ApiError(404, 'code_not_found_or_expired', 'Code not found or revoked');
   if (row.redeemedAt !== null) {
-    throw new ApiError(409, 'code_already_redeemed', 'Code already redeemed');
+    // 410 Gone (was 409): a redeemed one-time code is terminally spent, not a
+    // conflict — aligns with code_expired (410) and the atomic-CAS path in
+    // routes/join.ts, which already emits 410 for the same code.
+    throw new ApiError(410, 'code_already_redeemed', 'Code already redeemed');
   }
   if (row.expiresAt < new Date()) {
     throw new ApiError(410, 'code_expired', 'Code expired');

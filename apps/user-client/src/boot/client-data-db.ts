@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ImageModelConfig } from '@chatsundere/llm-unified';
+import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { uuidv7 } from 'uuidv7';
 import type { EncryptedBlob } from '../lib/secrets.js';
@@ -31,6 +32,11 @@ export interface SettingsRow {
   /** Global expert model — an offering ref "templateId:upstreamSlug"; null = none.
    *  Forwards a single sanitised question via the ask_expert tool. */
   expertModel: string | null;
+  /** Global artefact-expert model — an offering ref "templateId:upstreamSlug";
+   *  absent ⇒ null = none. When set, chats delegate artefact creation to this
+   *  model unless the chat opts out (`ChatRow.useArtefactExpertModel`).
+   *  Non-indexed (schemaless) — no Dexie version bump. */
+  artefactExpertModel?: string | null;
   /** Global image-generation models. `ref` = "providerTemplateId:upstreamSlug".
    *  `primary` drives generate_image; `nsfw` is the NSFW-capable second slot
    *  (spec 2026-06-09 §6). Both null until the user picks. */
@@ -139,6 +145,9 @@ export interface MindspaceRow {
   texture: MindspaceTexture;
   builtIn: boolean;
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; written on every mutation thereafter. */
+  updatedAt: number;
 }
 
 export interface PersonaRow {
@@ -200,6 +209,10 @@ export interface ChatRow {
   title: string | null;
   resolvedMindspaceId: string;
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; written on every mutation thereafter.
+   *  Distinct from the derived `lastMessageAt` (never synced). */
+  updatedAt: number;
   lastMessageAt: number;
   bookmarkedMessageCount: number;
   draftInput: string; // NEW — Phase 3 cockpit autosave
@@ -224,6 +237,11 @@ export interface ChatRow {
   activeCompactionId?: string | null;
   /** Once-per-chat flag: the 80 % "compact?" toast has been shown. */
   compactionToastShown?: boolean;
+  /** Per-chat opt-out for the global artefact expert (`SettingsRow.
+   *  artefactExpertModel`): absent ⇒ true (use the expert when one is set).
+   *  Only meaningful while a global artefact expert is configured.
+   *  Non-indexed (schemaless) — no Dexie version bump. */
+  useArtefactExpertModel?: boolean;
 }
 
 export type ContentBlock =
@@ -237,6 +255,9 @@ export interface MessageRow {
   role: 'user' | 'persona' | 'system';
   contentBlocks: ContentBlock[];
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; written on every mutation thereafter. */
+  updatedAt: number;
   bookmarked: boolean;
   /** Custom bookmark name. `null`/absent ⇒ derive the default snippet from
    *  the message text. Non-indexed: Dexie stores it schemalessly, so adding
@@ -323,6 +344,16 @@ export interface ArtefactRow {
   blob?: Blob;
   /** kind === 'image' — downscaled JPEG for the chat stream + Treasury. */
   thumbBlob?: Blob;
+  /** WS-D §4 — persisted ref for the sealed `blob` (present once pushed; the
+   *  wire row carries this, never the bytes). Non-indexed, no Dexie bump. */
+  blobRef?: BlobRef;
+  /** WS-D §4 — persisted ref for the sealed `thumbBlob`. */
+  thumbBlobRef?: BlobRef;
+  /** WS-D §4/§7.3 — durable "this blob is permanently too large for the server"
+   *  sentinel, set on a `413` and synced inside the sealed record. */
+  blobOversized?: true;
+  /** WS-D §4 — the same terminal sentinel for the thumbnail blob. */
+  thumbBlobOversized?: true;
   /** kind === 'image' — measured via createImageBitmap after fetch. */
   width?: number;
   height?: number;
@@ -348,8 +379,18 @@ export interface AttachmentRow {
   order: number;
   state: AttachmentState;
   createdAt: number;
+  /** LWW clock for sync conflict resolution (§7.5). Stamped by the v33
+   *  migration on pre-existing rows; full blob-bearing handling arrives with
+   *  WS-D, but the clock lands here so WS-D needs no further migration. */
+  updatedAt: number;
   /** kind === 'image' — the NORMALISED JPEG (see image-normalise.ts), the only stored copy. */
   blob?: Blob;
+  /** WS-D §4 — persisted ref for the sealed `blob`; the wire row carries this,
+   *  never the bytes. Non-indexed, no Dexie bump. */
+  blobRef?: BlobRef;
+  /** WS-D §4/§7.3 — durable oversize sentinel, set on a `413` and synced inside
+   *  the sealed record so every device learns the blob is server-terminal. */
+  blobOversized?: true;
   /** kind === 'text' — editable via the lightbox Source view while pending. */
   text?: string;
   /** kind === 'image' — post-normalisation dimensions. */
@@ -373,12 +414,23 @@ export interface AvatarCrop {
 
 export interface PersonaAvatarRow {
   personaId: string; // PK, 1:1 with a persona
-  blob: Blob; // downscaled FULL image (not pre-cropped)
+  /** Downscaled FULL image (not pre-cropped). Optional (WS-D §4): absent in the
+   *  placeholder state (a pulled avatar whose bytes have not hydrated yet) and
+   *  after removal (`blobRef: null`, the row survives so avatar sync is never
+   *  bricked — the persona falls back to the monogram). */
+  blob?: Blob;
   mime: string;
   width: number; // natural width of the stored image
   height: number; // natural height of the stored image
   crop: AvatarCrop;
   updatedAt: number;
+  /** WS-D §4 — persisted ref for the sealed `blob`. `null` after avatar removal
+   *  (the wire row carries `blobRef: null`, NEVER a tombstone — a tombstone
+   *  would brick avatar sync for this personaId forever). Absent on pre-WS-D
+   *  rows until the first push mints one. */
+  blobRef?: BlobRef | null;
+  /** WS-D §4/§7.3 — durable oversize sentinel, set on a `413`. */
+  blobOversized?: true;
 }
 
 // ===== Voice audio cache (v21) =====
@@ -495,6 +547,176 @@ export interface CompactionCheckpointRow {
   trigger: CompactionTrigger;
 }
 
+// ===== Sync engine rows (v33, WS-C — spec §4) =====
+
+/** An outbound change awaiting seal + push. No payload — sealing reads the
+ *  live row at drain time, so queued edits of one key coalesce for free.
+ *
+ *  WS-D §5: the op union gains `blob-put`/`blob-delete` for the binary channel.
+ *  A blob op carries the owning record's sync `key` (so cascades and coalescing
+ *  group with the record naturally) plus the specific `blobId` it acts on. */
+export interface SyncOutboxRow {
+  seq?: number;
+  collection: SyncCollection;
+  key: string;
+  op: 'upsert' | 'delete' | 'blob-put' | 'blob-delete';
+  /** WS-D §5 — set for `blob-put`/`blob-delete` only; the blob the op acts on. */
+  blobId?: string;
+  enqueuedAt: number;
+  /**
+   * Backfill spec §3.4 (Larissa L-6): the server refused this record terminally
+   * (`record_too_large`). Excluded from every drain phase and from the backfill
+   * remainder, so a doomed record can neither hot-loop nor wedge completion.
+   * Swept by `applyOk` when a later (smaller) edit of the same key lands.
+   */
+  terminal?: true;
+}
+
+/** Per-row CAS metadata: the last server rev seen and the locally computed
+ *  hash of the last sealed ciphertext (§7.0 echo shortcut). */
+export interface SyncRowMeta {
+  collection: SyncCollection;
+  key: string;
+  rev: number;
+  ciphertextHash: string;
+}
+
+/** The singleton sync-engine state row. */
+export interface SyncStateRow {
+  id: 'state';
+  epoch: string | null;
+  watermarkRev: number;
+  lastSyncAt: number | null;
+  pulling: { pages: number; startedAt: number } | null;
+  attention: SyncAttention | null;
+  /** §3.1 — set by the late-link path; the worker hands off to the backfill pump. */
+  backfillPending?: boolean;
+  /** §3.7 — one-off snapshot of rows to upload, counted at first pump run. */
+  backfillTotal?: number | null;
+  /** §3.7 — rows enqueued-and-drained so far. */
+  backfillDone?: number | null;
+  /**
+   * The linked account's `server_user_id`, stamped by `resetEngineStateForNewLink`
+   * at link time. Compared against the currently linked account at cycle start
+   * (Task 4) to force a deterministic reset on a server switch, rather than
+   * relying solely on the runtime epoch mismatch. Non-indexed — no `stores()`
+   * change, no Dexie version bump; absent on legacy rows (`undefined` reads as
+   * "unknown identity", never as a mismatch).
+   */
+  linkedServerUserId?: string;
+  /** Highest pulled-but-suppressed rev per `collection:key` (audit #5): consumed
+   *  by the fast-Undo watermark rewind, cleared on drain-ack/recovery/relink. */
+  suppressedRevs?: Record<string, number>;
+  /** The per-link engine generation (audit #8): bumped by every engine reset so
+   *  an in-flight drain/pull from the previous link can be recognised and its
+   *  write-backs discarded. Non-indexed; absent on legacy rows (reads as 0). */
+  linkGeneration?: number;
+}
+
+/** A pulled-tombstone row held for its 30-day grace window (§7.3). */
+export interface TrashRow {
+  id: string;
+  collection: SyncCollection;
+  key: string;
+  row: unknown;
+  deletedAt: number;
+  purgeAt: number;
+  // §3.3 — grouping metadata that decides which card this row displays under.
+  entityKind: 'persona' | 'chat' | 'memory' | 'library' | 'document' | 'chatChild';
+  rootGroup: string; // `persona:<id>` | `library:<id>` | `<collection>:<key>` fallback
+  parentRef: { field: string; id: string } | null; // e.g. {field:'personaId', id:<originalId>}
+}
+
+/** §3.9 — a durable, server-authoritative record that a key's identity is dead (the permanent H-1 anchor). */
+export interface DeadKeyRow {
+  id: string;
+  collection: SyncCollection;
+  key: string;
+  diedAt: number;
+}
+
+/**
+ * §3.10 L-C — minimal grouping-metadata derivation from a collection + its row
+ * snapshot: parent ref from the snapshot's own foreign key, rootGroup from it when
+ * present, else a top-level `<collection>:<key>` fallback (ungrouped card).
+ */
+export function deriveLegacyTrashMeta(
+  collection: SyncCollection,
+  key: string,
+  snapshot: unknown,
+): {
+  entityKind: TrashRow['entityKind'];
+  rootGroup: string;
+  parentRef: { field: string; id: string } | null;
+} {
+  const s = (snapshot ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  switch (collection) {
+    case 'personas':
+      return { entityKind: 'persona', rootGroup: `persona:${key}`, parentRef: null };
+    case 'chats': {
+      const pid = str(s.personaId);
+      return pid
+        ? {
+            entityKind: 'chat',
+            rootGroup: `persona:${pid}`,
+            parentRef: { field: 'personaId', id: pid },
+          }
+        : { entityKind: 'chat', rootGroup: `chats:${key}`, parentRef: null };
+    }
+    case 'memoryJournal':
+    case 'memoryBody': {
+      const pid = str(s.personaId);
+      return pid
+        ? {
+            entityKind: 'memory',
+            rootGroup: `persona:${pid}`,
+            parentRef: { field: 'personaId', id: pid },
+          }
+        : { entityKind: 'memory', rootGroup: `${collection}:${key}`, parentRef: null };
+    }
+    case 'libraries':
+      return { entityKind: 'library', rootGroup: `library:${key}`, parentRef: null };
+    case 'documents': {
+      const lid = str(s.libraryId);
+      return lid
+        ? {
+            entityKind: 'document',
+            rootGroup: `library:${lid}`,
+            parentRef: { field: 'libraryId', id: lid },
+          }
+        : { entityKind: 'document', rootGroup: `documents:${key}`, parentRef: null };
+    }
+    case 'messages':
+    case 'pills':
+    case 'compactionCheckpoints': {
+      const cid = str(s.chatId);
+      return cid
+        ? {
+            entityKind: 'chatChild',
+            rootGroup: `chats:${cid}`,
+            parentRef: { field: 'chatId', id: cid },
+          }
+        : { entityKind: 'chatChild', rootGroup: `${collection}:${key}`, parentRef: null };
+    }
+    default:
+      // Only the four trashable families + their children ever reach trash; a
+      // truly unexpected collection gets an ungrouped top-level card.
+      return { entityKind: 'chatChild', rootGroup: `${collection}:${key}`, parentRef: null };
+  }
+}
+
+/** Engine attention state (spec §11.1/§11.3). Downstream tasks consume this union. */
+export type SyncAttention =
+  | { kind: 'quota_exceeded'; usedBytes: number; quotaBytes: number }
+  | { kind: 'record_too_large' }
+  | { kind: 'delete_rate_limited' }
+  | { kind: 'tombstone_threshold'; count: number }
+  | { kind: 'recovery_paused' }
+  | { kind: 'blob_reupload_threshold'; bytes: number; count: number }
+  | { kind: 'tamper' }
+  | { kind: 'auth_degraded' };
+
 // ===== Dexie subclass =====
 
 class ClientDataDb extends Dexie {
@@ -516,6 +738,11 @@ class ClientDataDb extends Dexie {
   memoryBody!: Table<MemoryBodyRow, string>;
   compactionCheckpoints!: Table<CompactionCheckpointRow, string>;
   seedTemplates!: Table<SeedTemplateRow, string>;
+  syncOutbox!: Table<SyncOutboxRow, number>;
+  syncRows!: Table<SyncRowMeta, [string, string]>;
+  syncState!: Table<SyncStateRow, string>;
+  trash!: Table<TrashRow, string>;
+  deadKeys!: Table<DeadKeyRow, string>;
 
   constructor() {
     super(DB_NAME);
@@ -1076,6 +1303,57 @@ class ClientDataDb extends Dexie {
     // MessageRow.kind 'seed' / seedRole additions are non-indexed JSON fields,
     // so they need no migration.
     this.version(32).stores({ seedTemplates: 'id, createdAt, nsfw' });
+
+    // Version 33 — sync engine (this version is RESERVED for WS-C). Four new
+    // tables; the upgrade stamps updatedAt on the LWW-keyed rows lacking it so
+    // WS-D needs no further migration.
+    this.version(33)
+      .stores({
+        syncOutbox: '++seq, [collection+key]',
+        syncRows: '[collection+key]',
+        syncState: 'id',
+        trash: 'id, purgeAt',
+      })
+      .upgrade(async (tx) => {
+        const now = Date.now();
+        for (const table of ['chats', 'messages', 'mindspaces', 'attachments'] as const) {
+          await tx
+            .table(table)
+            .toCollection()
+            .modify((row: Record<string, unknown>) => {
+              if (typeof row.updatedAt !== 'number') row.updatedAt = now;
+            });
+        }
+      });
+
+    // Version 34 — universal trashcan: grouping metadata on trash rows (+ a
+    // rootGroup index for grouped queries) and a durable deadKeys store (the
+    // permanent H-1 anchor). Backfill existing trash rows and seed deadKeys.
+    this.version(34)
+      .stores({ trash: 'id, purgeAt, rootGroup', deadKeys: 'id, collection' })
+      .upgrade(async (tx) => {
+        const trash = tx.table('trash');
+        const dead = tx.table('deadKeys');
+        await trash.toCollection().modify((t: Record<string, unknown>) => {
+          const meta = deriveLegacyTrashMeta(
+            t.collection as SyncCollection,
+            t.key as string,
+            t.row,
+          );
+          t.entityKind = meta.entityKind;
+          t.rootGroup = meta.rootGroup;
+          t.parentRef = meta.parentRef;
+        });
+        // Seed dead-key markers from existing trash keys — their death is
+        // server-authoritative and must outlive the 30-day snapshot (§3.9).
+        const rows = await trash.toArray();
+        for (const t of rows as Array<Record<string, unknown>>) {
+          const collection = t.collection as SyncCollection;
+          const key = t.key as string;
+          const deletedAt = typeof t.deletedAt === 'number' ? t.deletedAt : 0;
+          await dead.put({ id: `${collection}:${key}`, collection, key, diedAt: deletedAt });
+        }
+      });
   }
 }
 
@@ -1109,6 +1387,20 @@ export function getClientDataDb(): ClientDataDb {
   if (!dbHandle)
     throw new Error('client-data DB not opened — call openClientDataDb() during boot first');
   return dbHandle;
+}
+
+/**
+ * Release the permanent module-level Dexie handle without deleting any data.
+ * Used by the complete-wipe (`wipeDevice`) so the subsequent
+ * `Dexie.delete(DB_NAME)` sees no open connection and can run to completion
+ * instead of tripping the browser's `onblocked` path. Clearing `pending` too
+ * prevents an in-flight `openClientDataDb()` from resurrecting the handle after
+ * we have closed it.
+ */
+export function closeClientDataDb(): void {
+  dbHandle?.close();
+  dbHandle = null;
+  pending = null;
 }
 
 /**
@@ -1188,6 +1480,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         expertWeb: { search: null, fetch: null, searchTierId: null },
         substituteVisionModel: null,
         expertModel: null,
+        artefactExpertModel: null,
         imageGeneration: { primary: null, nsfw: null },
         voiceMode: 'paragraph',
         dictationSensitivity: 'medium',
@@ -1241,6 +1534,7 @@ function buildMindspace(
     texture: 'cloudy',
     builtIn: true,
     createdAt: now,
+    updatedAt: now,
   };
 }
 

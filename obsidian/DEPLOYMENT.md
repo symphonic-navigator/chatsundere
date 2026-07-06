@@ -136,6 +136,7 @@ the variables documented here.
 | `DATABASE_URL` | `postgres://…/auth_db` | **yes** | |
 | `REDIS_URL` | `redis://…` | maybe | MUST be the SAME Redis as sync/proxy (deny-list) |
 | `AUTH_JWT_PRIVATE_KEY` | base64url, ≥40 chars | **yes** | EdDSA signing key |
+| `OPAQUE_SERVER_SETUP` | opaque string, ≥40 | **yes** | long-term OPAQUE key material — generate ONCE (`bun run generate-opaque-setup`), back it up, never rotate: losing it permanently bricks every account's passphrase auth |
 | `INVITATION_HMAC_KEY` | base64url, ≥40 | **yes** | |
 | `REFRESH_TOKEN_HMAC_KEY` | base64url, ≥40 | **yes** | |
 | `HMAC_KEY_PENDING_CODES` | base64url, ≥40 | **yes** | leak-domain-isolated |

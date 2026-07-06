@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { StepUpModalHost } from '../components/StepUpModalHost.js';
+import { ConsoleChip, StatusLed } from '../components/console.js';
 import { copy } from '../copy.js';
+
+const NAV_TABS = [
+  { to: '/dashboard', index: '01', label: copy.nav.dashboard },
+  { to: '/users', index: '02', label: copy.nav.users },
+  { to: '/invitations', index: '03', label: copy.nav.invitations },
+  { to: '/audit', index: '04', label: copy.nav.audit },
+];
 
 export function RootLayout() {
   const session = useSessionStore((s) => s.session);
@@ -15,38 +24,45 @@ export function RootLayout() {
 
   return (
     <div className="min-h-dvh">
-      <header className="flex items-center justify-between border-b border-[var(--color-overlay-0)] bg-[var(--color-mantle)] px-4 py-3">
-        <div className="flex items-center gap-6">
-          <span className="text-lg">{copy.appName}</span>
-          <nav className="flex gap-4 text-sm">
-            <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'underline' : '')}>
-              {copy.nav.dashboard}
-            </NavLink>
-            <NavLink to="/users" className={({ isActive }) => (isActive ? 'underline' : '')}>
-              {copy.nav.users}
-            </NavLink>
-            <NavLink to="/invitations" className={({ isActive }) => (isActive ? 'underline' : '')}>
-              {copy.nav.invitations}
-            </NavLink>
-            <NavLink to="/audit" className={({ isActive }) => (isActive ? 'underline' : '')}>
-              {copy.nav.audit}
-            </NavLink>
-          </nav>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          {session?.userId && (
-            <>
-              <span className="text-[var(--color-subtext-0)]">{session.userId.slice(0, 8)}…</span>
+      <StepUpModalHost />
+      <header className="border-b border-[var(--color-surface-0)] bg-[var(--color-mantle)] px-4 py-3">
+        <div className="mx-auto flex max-w-5xl items-center gap-3">
+          <StatusLed tone="green" />
+          <span className="text-sm font-bold tracking-[0.25em]">
+            CHATSUNDERE <span className="text-[var(--color-overlay-0)]">{'//'}</span>{' '}
+            <span className="text-[var(--color-mauve)]">ADMIN CONSOLE</span>
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <ConsoleChip tone="green">{copy.sysNominal}</ConsoleChip>
+            {session?.username && session?.role && (
+              <ConsoleChip>{`${session.username} · ${session.role}`}</ConsoleChip>
+            )}
+            {session?.userId && (
               <button
                 type="button"
                 onClick={signOut}
-                className="rounded-md bg-[var(--color-base)] px-3 py-1"
+                className="rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-1 font-mono text-xs"
               >
                 {copy.signOut}
               </button>
-            </>
-          )}
+            )}
+          </div>
         </div>
+        <nav className="mx-auto mt-3 flex max-w-5xl gap-1 overflow-x-auto font-mono text-xs">
+          {NAV_TABS.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) =>
+                isActive
+                  ? 'rounded-t border border-b-2 border-[var(--color-surface-1)] border-b-[var(--color-mauve)] bg-[var(--color-crust)] px-3 py-1.5'
+                  : 'border-b border-[var(--color-surface-0)] px-3 py-1.5 text-[var(--color-overlay-0)]'
+              }
+            >
+              {tab.index} {tab.label}
+            </NavLink>
+          ))}
+        </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
         <Outlet />

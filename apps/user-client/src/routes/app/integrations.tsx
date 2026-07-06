@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/Badge.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
-import { useSettings } from '../../data/settings.js';
+import { useServerGate } from '../../lib/server-gate.js';
 
 /** Row status string used in the integrations list. */
 function statusOf(row: McpServerRow, hasProxy: boolean): string {
@@ -27,10 +27,9 @@ export function Integrations(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
   const servers = useMcpServers();
-  const settings = useSettings();
+  const hasProxy = useServerGate('proxy').enabled;
 
   const rows = servers.data ?? [];
-  const hasProxy = settings.data?.corsProxy != null;
 
   return (
     <PageScaffold crumbs={[{ label: 'My Integrations' }]} back="/app" onHelp={onHelp}>

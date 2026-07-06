@@ -10,12 +10,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AddProviderPicker } from '../../../components/AddProviderPicker.js';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
-import { CorsProxyBlock } from '../../../components/CorsProxyBlock.js';
+import { ServerRelayStatus } from '../../../components/ServerRelayStatus.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
-import { useSettings } from '../../../data/settings.js';
 import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../../lib/built-in-providers.js';
+import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 
 /** My Settings › AI Providers — proxy, capability summary, provider list, add. */
@@ -23,11 +23,11 @@ export function SettingsProvidersPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings-providers');
   const navigate = useNavigate();
   const providers = useProviders();
-  const settings = useSettings();
+  const proxyGate = useServerGate('proxy');
   const [picking, setPicking] = useState(false);
 
   const rows = providers.data ?? [];
-  const hasProxy = !!settings.data?.corsProxy;
+  const hasProxy = proxyGate.enabled;
   const usable = usableTemplateIds(rows, hasProxy);
   const lit = aggregateServiceKinds(usable);
 
@@ -43,7 +43,18 @@ export function SettingsProvidersPage(): JSX.Element {
   function statusOf(row: { templateId: string; enabled: boolean }): string {
     if (!row.enabled) return '✗ Not connected';
     const needsProxy = getProvider(row.templateId)?.corsHint === 'requires-proxy';
-    if (needsProxy && !hasProxy) return '✗ Needs proxy';
+    if (needsProxy && !hasProxy) {
+      switch (proxyGate.reason) {
+        case 'local-only':
+          return '✗ Needs a linked account';
+        case 'offline':
+          return '✗ Server unreachable';
+        case 'feature-missing':
+          return '✗ Server has no relay';
+        default:
+          return '✗ Unavailable';
+      }
+    }
     return '● Connected';
   }
 
@@ -55,7 +66,7 @@ export function SettingsProvidersPage(): JSX.Element {
     >
       {helpOverlay}
       <div className="flex flex-col gap-3 px-4 pb-8 pt-2">
-        <CorsProxyBlock />
+        <ServerRelayStatus />
 
         <div>
           <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">
@@ -112,7 +123,6 @@ export function SettingsProvidersPage(): JSX.Element {
               setPicking(false);
               navigate(`/app/settings/providers/${id}`);
             }}
-            onNeedProxy={() => setPicking(false)}
             onClose={() => setPicking(false)}
           />
         ) : null}

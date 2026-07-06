@@ -150,6 +150,7 @@ describe('Entrance Hall filter (adult mode)', () => {
       title: 'A chat',
       resolvedMindspaceId: 'ms-1',
       createdAt: now,
+      updatedAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',

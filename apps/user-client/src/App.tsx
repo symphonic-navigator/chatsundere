@@ -3,12 +3,14 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ErrorScreen } from './components/ErrorScreen.js';
 import { MindspaceLayer } from './components/MindspaceLayer.js';
+import { StepUpModalHost } from './components/StepUpModalHost.js';
 import { queryClient } from './lib/queryClient.js';
 import { AccountPage } from './routes/app/account.js';
 import { AboutPage } from './routes/app/account/about.js';
 import { BiometricPage } from './routes/app/account/biometric.js';
 import { DevToolsPage } from './routes/app/account/devtools.js';
 import { LogoutPage } from './routes/app/account/logout.js';
+import { RecentlyDeletedPage } from './routes/app/account/recently-deleted.js';
 import { RecoveryKeyPage } from './routes/app/account/recovery.js';
 import { ServerLinkingPage } from './routes/app/account/server-linking.js';
 import { ArtefactsPage } from './routes/app/chat/artefacts-page.js';
@@ -49,6 +51,7 @@ import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
 import { Login } from './routes/login/index.js';
 import { Recovery } from './routes/login/recovery.js';
+import { StartOver } from './routes/login/start-over.js';
 import { InvitationConfirm } from './routes/onboarding/invitation/confirm.js';
 import { InvitationForm } from './routes/onboarding/invitation/form.js';
 import { InvitationRecoveryReveal } from './routes/onboarding/invitation/recovery-reveal.js';
@@ -99,6 +102,7 @@ export function App() {
       return (
         <QueryClientProvider client={queryClient}>
           <MindspaceLayer />
+          <StepUpModalHost />
           <BrowserRouter>
             <Routes>
               <Route element={<Root />}>
@@ -119,6 +123,7 @@ export function App() {
                 <Route path="/onboarding/local" element={<LocalCreateAccount />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/recovery" element={<Recovery />} />
+                <Route path="/login/start-over" element={<StartOver />} />
                 {/* Internal dev showcase of UI primitives — no session required (presentational only) */}
                 <Route path="/app/ui-showcase" element={<UiShowcase />} />
                 {/* Session-required */}
@@ -173,6 +178,7 @@ export function App() {
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/app/account/biometric" element={<BiometricPage />} />
                   <Route path="/app/account/recovery" element={<RecoveryKeyPage />} />
+                  <Route path="/app/account/recently-deleted" element={<RecentlyDeletedPage />} />
                   <Route path="/app/account/server-linking" element={<ServerLinkingPage />} />
                   <Route path="/app/account/about" element={<AboutPage />} />
                   {import.meta.env.DEV && (

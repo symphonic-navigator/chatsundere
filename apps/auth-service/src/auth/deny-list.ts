@@ -30,3 +30,26 @@ export async function denySub(redis: Redis, sub: string, nowSeconds: number): Pr
 export function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
+
+/**
+ * True when the token's session (`jti`) or subject (`sub`, iat-aware) was revoked
+ * (spec §9). Mirrors the sync-service check so both services enforce the same
+ * deny-list: a `jti` hit revokes unconditionally; a `sub` entry stores the
+ * revocation unix-seconds and refuses only tokens with `iat` before it (strict
+ * `<`), so a user who logs out everywhere and immediately logs back in is not
+ * locked out by their own deny entry. A Redis error propagates — bearerAuth fails
+ * closed (the request is denied), matching auth-service's existing hard Redis
+ * dependency.
+ */
+export async function isTokenRevoked(
+  redis: Redis,
+  claims: { sub: string; jti: string; iat: number },
+): Promise<boolean> {
+  const [jtiHit, subRevokedAt] = await redis.mget(
+    revokedJtiKey(claims.jti),
+    revokedSubKey(claims.sub),
+  );
+  if (jtiHit != null) return true;
+  if (subRevokedAt != null && claims.iat < Number(subRevokedAt)) return true;
+  return false;
+}

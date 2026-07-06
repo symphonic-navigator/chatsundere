@@ -7,6 +7,7 @@ import {
   getCanonical,
   getOffering,
   getProvider,
+  getProxyAuthSource,
   runOneShotCompletion,
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
@@ -46,6 +47,7 @@ import {
   createDiagnosticsCollector,
 } from '../lib/model-debug.js';
 import { buildOpenerInstruction } from '../lib/opener.js';
+import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { queryClient } from '../lib/queryClient.js';
 import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
@@ -54,6 +56,8 @@ import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
 import { loadMemoryContext } from '../memory/repo.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
 import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
 import {
   dispatch as dispatchTool,
@@ -88,10 +92,13 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   webInterfacing?: { search: OfferingRef | null; fetch: OfferingRef | null };
   /** Global substitute-vision model ref "providerTemplateId:upstreamSlug"; null = none. */
   substituteVisionModel?: string | null;
+  /** Pre-resolved artefact-expert offering (from settings + per-chat opt-out),
+   *  or null to build artefacts with the persona model. */
+  artefactExpert?: OfferingRef | null;
   /**
    * The substitute model's resolved one-shot call context (provider, decrypted
-   * api-key, CORS proxy, target). Resolved in the send path because it needs the
-   * MasterKey, which the store never touches. Absent when no substitute is set.
+   * api-key, target). Resolved in the send path because it needs the MasterKey,
+   * which the store never touches. Absent when no substitute is set.
    */
   substituteOneShotBase?: Omit<OneShotArgs, 'messages' | 'bodyExtras'>;
   /**
@@ -133,8 +140,6 @@ export type OpenerArgs = {
   provider: import('@chatsundere/llm-unified').ProviderDefinition;
   providerConfig: import('@chatsundere/llm-unified').ProviderConfig;
   apiKey: string;
-  corsProxyUrl: string | null;
-  corsProxyKey: string | null;
   offering: import('@chatsundere/llm-unified').Offering;
   reasoning: import('../lib/reasoning-resolver.js').ReasoningState;
   globalInstructions: string;
@@ -183,8 +188,6 @@ function compactionArgsFrom(args: StartArgs): Omit<CompactionArgs, 'trigger'> {
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     offering: args.offering,
   };
 }
@@ -215,8 +218,6 @@ function fireMemoryPipeline(args: StartArgs): void {
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     offering: args.offering,
   })
     .then(async () => {
@@ -261,8 +262,6 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
       provider: args.provider,
       providerConfig: args.providerConfig,
       apiKey: args.apiKey,
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
       offering: args.offering,
       firstUserMessage: args.userText,
       firstPersonaResponse,
@@ -307,9 +306,6 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const provider = await db.providers.get(persona.providerId);
     if (!provider) throw new Error('compactNow: provider not found');
 
-    const settings = await db.settings.get(1);
-    if (!settings) throw new Error('compactNow: settings row missing');
-
     const providerDef = getProvider(provider.templateId);
     if (!providerDef)
       throw new Error(`compactNow: unknown provider template "${provider.templateId}"`);
@@ -318,10 +314,6 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     if (!offering) throw new Error(`compactNow: no offering for "${persona.modelId}"`);
 
     const apiKey = await openSecret(provider.apiKey, mk, `provider/${provider.id}/api-key`);
-    const corsProxyUrl = settings.corsProxy?.url ?? null;
-    const corsProxyKey = settings.corsProxy
-      ? await openSecret(settings.corsProxy.sharedKey, mk, 'cors-proxy/shared-key')
-      : null;
 
     const providerConfig: import('@chatsundere/llm-unified').ProviderConfig = {
       baseUrl: providerDef.baseUrl,
@@ -335,8 +327,6 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       provider: providerDef,
       providerConfig,
       apiKey,
-      corsProxyUrl,
-      corsProxyKey,
       offering,
       trigger: 'manual',
     };
@@ -404,25 +394,31 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const userMessageId = uuidv7();
     const draftMessageId = uuidv7();
 
+    const linked = isLinkedForSync();
     await db.transaction(
       'rw',
-      [db.messages, db.chats, db.attachments, db.documents, db.personas],
-      async () => {
+      [db.messages, db.chats, db.attachments, db.documents, db.personas, db.syncOutbox],
+      async (tx) => {
         await db.messages.add({
           id: userMessageId,
           chatId: args.chatId,
           role: 'user',
           contentBlocks: [{ type: 'text', text: args.userText }],
           createdAt: now,
+          updatedAt: now,
           bookmarked: false,
           streamingState: 'complete',
         });
+        // Class-1: the user message is already complete on insert → enqueue it.
+        // The persona draft below is incomplete and is enqueued at completion.
+        if (linked) enqueueSync(tx, 'messages', userMessageId, 'upsert');
         await db.messages.add({
           id: draftMessageId,
           chatId: args.chatId,
           role: 'persona',
           contentBlocks: [],
           createdAt: now + 1,
+          updatedAt: now + 1,
           bookmarked: false,
           streamingState: 'incomplete',
         });
@@ -454,6 +450,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         await db.personas.update(args.persona.id, { lastInteractionAt: now + 1 });
       },
     );
+    if (linked) scheduleClass1Sync();
     void queryClient.invalidateQueries({ queryKey: QK.personas });
 
     // The persona response goes live immediately; runIntoDraft resolves the user
@@ -501,6 +498,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         kind: 'opener',
         contentBlocks: [],
         createdAt: now,
+        updatedAt: now,
         bookmarked: false,
         streamingState: 'incomplete',
       });
@@ -655,7 +653,20 @@ async function resolveUserContent(
         });
       },
       cacheDescription: async (id, model, text) => {
-        await db.attachments.update(id, { visionDescription: { model, text } });
+        // Class-2 record edit on a sent attachment (WS-D §5). A background job
+        // (substitute-vision) — offline-defer so a describe never throws or
+        // loses its cache; it converges on the next online edit / recovery.
+        await mutateSynced({
+          collection: 'attachments',
+          key: id,
+          tables: ['attachments'],
+          deferWhenOffline: true,
+          write: async (tx) => {
+            await tx
+              .table('attachments')
+              .update(id, { visionDescription: { model, text }, updatedAt: Date.now() });
+          },
+        });
       },
       onDescribeStart: callbacks.onDescribeStart,
       onDescribeEnd: callbacks.onDescribeEnd,
@@ -727,6 +738,9 @@ async function runIntoDraft(
     m.set(args.chatId, handle);
     return { streams: m };
   });
+
+  // A new attempt supersedes any prior artefact-expert failure note.
+  useCurrentChatStore.getState().setArtefactExpertError(null);
 
   // Vision pills emitted during the live describe phase (fresh send only).
   // Declared here so the .then finalise path can close over them and persist
@@ -802,8 +816,7 @@ async function runIntoDraft(
     args.webInterfacing ?? { search: null, fetch: null },
     useSessionStore.getState().mk,
     {
-      corsProxyUrl: args.corsProxyUrl,
-      corsProxyKey: args.corsProxyKey,
+      useProxy: isProxyAvailable(),
       webSearchTierId: useCurrentChatStore.getState().webSearchTierId,
     },
     {
@@ -813,6 +826,7 @@ async function runIntoDraft(
         providerId: args.offering.providerId,
         upstreamSlug: args.offering.upstreamSlug,
       },
+      artefactExpert: args.artefactExpert ?? null,
     },
   );
   const knowledge = args.knowledge ?? null;
@@ -888,8 +902,15 @@ async function runIntoDraft(
   runToolLoop({
     toolDefs: activeToolDefs,
     maxRounds: MAX_TOOL_ROUNDS,
-    dispatch: (name, toolArgs, signal, onProgress) =>
-      dispatchTool(activeTools, name, toolArgs, signal, onProgress),
+    dispatch: async (name, toolArgs, signal, onProgress) => {
+      const r = await dispatchTool(activeTools, name, toolArgs, signal, onProgress);
+      if (name === 'create_artefact' && r.meta?.artefactExpertUnavailable === true) {
+        useCurrentChatStore
+          .getState()
+          .setArtefactExpertError(r.error ?? 'Artefact expert unavailable.');
+      }
+      return r;
+    },
     signal: controller.signal,
     streamOnce: (toolExchange, tools) =>
       runStreamEngine({
@@ -954,14 +975,22 @@ async function runIntoDraft(
         ...result.finalContentBlocks,
       ];
 
-      await db.transaction('rw', db.messages, db.pills, db.chats, async () => {
+      const linked = isLinkedForSync();
+      await db.transaction('rw', [db.messages, db.pills, db.chats, db.syncOutbox], async (tx) => {
         await db.messages.update(draftMessageId, {
           contentBlocks: finalContentBlocks,
           streamingState: 'complete',
         });
         if (pillsWithMessageId.length) await db.pills.bulkAdd(pillsWithMessageId);
+        // Class-1: the persona message is now complete, and its pills are terminal.
+        // chats.lastMessageAt is a device-local derived recompute (§5), not enqueued.
+        if (linked) {
+          enqueueSync(tx, 'messages', draftMessageId, 'upsert');
+          for (const p of pillsWithMessageId) enqueueSync(tx, 'pills', p.id, 'upsert');
+        }
         await db.chats.update(args.chatId, { lastMessageAt: Date.now() });
       });
+      if (linked) scheduleClass1Sync();
 
       // TanStack-Query has no idea the underlying Dexie rows just changed.
       // Invalidate both the single-chat key (for the active ChatPage) and
@@ -1055,17 +1084,16 @@ async function runIntoDraft(
               return args.provider.baseUrl;
             }
           })(),
-          ...(routing === 'cors-proxy' && args.corsProxyUrl
-            ? {
-                proxyHost: (() => {
-                  try {
-                    return new URL(args.corsProxyUrl as string).host;
-                  } catch {
-                    return args.corsProxyUrl as string;
-                  }
-                })(),
-              }
-            : {}),
+          ...(() => {
+            if (routing !== 'cors-proxy') return {};
+            const proxyUrl = getProxyAuthSource()?.getUrl() ?? null;
+            if (proxyUrl === null) return {};
+            try {
+              return { proxyHost: new URL(proxyUrl).host };
+            } catch {
+              return { proxyHost: proxyUrl };
+            }
+          })(),
         },
         model: args.offering.upstreamSlug,
         whenIso: new Date().toISOString(),
@@ -1160,8 +1188,6 @@ async function runOpenerStream(
     provider: args.provider,
     providerConfig: args.providerConfig,
     apiKey: args.apiKey,
-    corsProxyUrl: args.corsProxyUrl,
-    corsProxyKey: args.corsProxyKey,
     offering: args.offering,
     priorMessages: [],
     userMessageText: buildOpenerInstruction(args.persona.greetingInstructions),
@@ -1187,16 +1213,21 @@ async function runOpenerStream(
         return { streams: m };
       });
 
-      await db.transaction('rw', db.messages, db.chats, async () => {
+      const linked = isLinkedForSync();
+      await db.transaction('rw', [db.messages, db.chats, db.syncOutbox], async (tx) => {
         await db.messages.update(draftMessageId, {
           contentBlocks: result.finalContentBlocks,
           streamingState: 'complete',
         });
+        // Class-1: the opener message is now complete → enqueue it. The chats
+        // lastMessageAt/openerPending writes are device-local (§5), not enqueued.
+        if (linked) enqueueSync(tx, 'messages', draftMessageId, 'upsert');
         await db.chats.update(args.chatId, {
           lastMessageAt: Date.now(),
           openerPending: false,
         });
       });
+      if (linked) scheduleClass1Sync();
 
       void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
       void queryClient.invalidateQueries({ queryKey: ['chats'] });

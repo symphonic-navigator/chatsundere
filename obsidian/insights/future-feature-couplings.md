@@ -22,6 +22,70 @@ edited checkpoint must survive re-compaction (it folds into the next
 Spicy-Writer (story generation). Both are post-alpha, demand-driven (feature-
 inclusion filter). Spec: `superpowers/specs/2026-06-21-compact-and-continue-design.md` §10.
 
+### Sync engine (WS-C) follow-up couplings — OPEN 2026-07-03
+
+Registered from the WS-C sync engine build (spec
+`superpowers/specs/2026-07-02-ws-c-sync-engine-design.md` §13).
+
+- **Trash restore UI.** The sync engine keeps *pulled* tombstones in a `trash`
+  table for 30 days (Larissa M-3 tombstone-flood bound). v1 has NO restore
+  surface — trash is internal-only (Chris's call). **When a restore UI is
+  built**, it reads `trash` (id `${collection}:${key}`, the plaintext `row`,
+  `deletedAt`/`purgeAt`) and re-inserts as a *fresh* uuid (the old key is dead —
+  an honest server tombstoned it, and the H-1 trash-anchored terminality guard
+  will inertly reject any upsert onto the dead key). Do NOT resurrect under the
+  old key.
+
+- **Offline bookmarking — post-alpha revisit (decision 5).** Message
+  bookmarking is Class-2 and disabled offline with the gentlest catalogue copy
+  (`syncCopy` offline-bookmark). **If alpha testers report friction**, revisit
+  making bookmarks a local-first Class-1 append that reconciles on reconnect —
+  a deliberate exception to the two-class discipline, weighed against its
+  convergence cost. Spec §11.2 / decision 5.
+
+- **Uplevelling MUST re-seal `EncryptedBlob` secrets (Larissa, verified-clean).**
+  Provider `apiKey` and MCP-server keys are `EncryptedBlob`s sealed under the
+  LOCAL master key's secrets DEK. Sync ships those rows to other devices as
+  ciphertext. **When local→linked uplevelling (foreign-MK adoption) is built**,
+  every synced `EncryptedBlob` secret MUST be re-sealed under the account MK's
+  secrets DEK in the dual-MK join window — a local→linked MK change WITHOUT the
+  re-seal silently kills every synced provider/MCP key on every other device
+  (they cannot decrypt a blob sealed under the origin device's key). This is the
+  single most dangerous uplevelling coupling; it has no runtime guard yet.
+
+- **Strip-list checklist (§10 named property).** New fields on non-`settings`
+  synced collections **sync by default** (deny-list polarity). Adding a
+  device-local/secret/derived field to any synced collection (`chats`,
+  `mcpServers`, …) REQUIRES a conscious entry in
+  `apps/user-client/src/sync/strip.ts`'s `DENY_LISTS` (or the
+  `SETTINGS_SYNC_ALLOWLIST` for `settings`, which is allowlist polarity). Forget
+  it and the field leaks to other devices. Treat a new synced-collection field
+  as a strip-list review trigger.
+
+### Blob client (WS-D) follow-up couplings — OPEN 2026-07-03
+
+Registered from the WS-D blob client build (spec
+`superpowers/specs/2026-07-02-ws-d-blob-client-design.md` §8, §11.3).
+
+- **Orphaned-blob sweep must not delete before pull convergence (Larissa I-2).**
+  The server-side orphaned-blob sweep (server spec §19) reclaims blob objects no
+  record references. **When that sweep is built**, it MUST NOT delete an
+  unreferenced inventory id before a client has fully converged its pull — a
+  lying or merely slow server would otherwise turn the sweep into self-harm
+  (delete a blob whose referencing record is still in flight to another device).
+  The client's epoch-recovery blob re-upload (`recovery.ts` `recoverBlobs`) is
+  the counterpart that heals a wrongly-swept blob, but only for the byte-holding
+  device — the sweep itself must be convergence-gated on the server side.
+
+- **One blobId ↔ exactly one (row, field), forever (Larissa I-1).** A blobId is
+  minted per `(row, field)` and the deferred `blob-delete`-of-replaced-id
+  depends on this uniqueness. **Any future row-copy / forward / duplicate
+  feature** (e.g. "send this artefact to another chat", "duplicate persona")
+  MUST mint FRESH blobIds and re-seal — never share or copy a `BlobRef` across
+  rows. Sharing a ref would make one device's delete brick another row's image,
+  and would open a content-equality oracle. This is an invariant, not a
+  preference.
+
 ## Closed couplings
 
 ### Memory system ⇒ Chatsune importer memory import — CLOSED 2026-06-20

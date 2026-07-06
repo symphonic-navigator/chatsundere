@@ -123,6 +123,7 @@ describe('Circle route', () => {
       title: 'first chat',
       resolvedMindspaceId: mindspaces[0]?.id ?? '',
       createdAt: now,
+      updatedAt: now,
       lastMessageAt: now,
       bookmarkedMessageCount: 0,
       draftInput: '',

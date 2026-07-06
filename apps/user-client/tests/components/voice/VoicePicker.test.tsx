@@ -22,8 +22,6 @@ vi.mock('@chatsundere/llm-unified', () => ({
 const STUB_TRANSPORT = {
   providerConfig: { baseUrl: 'https://api.mistral.ai/v1', routing: { kind: 'direct' } as const },
   apiKey: 'test-key',
-  corsProxyUrl: null,
-  corsProxyKey: null,
   offering: { providerId: 'mistral', upstreamSlug: 'voxtral-tts' },
   ttsMeta: {
     displayName: 'Voxtral Mini TTS',

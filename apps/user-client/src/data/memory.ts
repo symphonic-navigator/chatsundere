@@ -9,11 +9,12 @@ import {
   getCurrentBody,
   listBodyVersions,
   listJournal,
-  rejectEntry,
   rollbackBody,
   saveBody,
   updateEntryContent,
 } from '../memory/repo.js';
+import { type TrashUndoHandle, softDelete } from '../trash/delete-flow.js';
+import { showDeleteToast } from '../trash/delete-toast.js';
 import { QK } from './queryKeys.js';
 
 export function useUncommittedCount(personaId: string) {
@@ -74,7 +75,18 @@ export function useCommitEntry(personaId: string) {
 }
 
 export function useRejectEntry(personaId: string) {
-  return useMemoryMutation<string>(personaId, (id) => rejectEntry(id));
+  const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.memory(personaId) });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
+  return useMutation({
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('memoryJournal', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('memoryJournal', id, handle, invalidate);
+    },
+  });
 }
 
 export function useUpdateEntry(personaId: string) {

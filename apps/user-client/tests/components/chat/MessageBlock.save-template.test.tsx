@@ -52,6 +52,7 @@ const personaMsg: MessageRow = {
   role: 'persona',
   contentBlocks: [{ type: 'text', text: 'how are you' }],
   createdAt: 2,
+  updatedAt: 2,
   bookmarked: false,
   streamingState: 'complete',
 };
@@ -65,6 +66,7 @@ beforeEach(async () => {
       role: 'persona',
       contentBlocks: [{ type: 'text', text: 'Hello darling' }],
       createdAt: 0,
+      updatedAt: 0,
       bookmarked: false,
       kind: 'opener',
       streamingState: 'complete',
@@ -75,6 +77,7 @@ beforeEach(async () => {
       role: 'user',
       contentBlocks: [{ type: 'text', text: 'hi' }],
       createdAt: 1,
+      updatedAt: 1,
       bookmarked: false,
       streamingState: 'complete',
     },

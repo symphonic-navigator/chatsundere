@@ -10,6 +10,11 @@ import {
 } from '../boot/knowledge-vectors-db.js';
 import { enqueueDocument } from '../knowledge/start-ingestion.js';
 import { normalisePhrases } from '../lib/treasury-filter.js';
+import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
+import { type TrashUndoHandle, softDelete } from '../trash/delete-flow.js';
+import { showDeleteToast } from '../trash/delete-toast.js';
+import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import { materialiseReferencesForDocument } from './attachments.js';
 import { QK } from './queryKeys.js';
 import { useAdultMode } from './settings.js';
@@ -26,7 +31,14 @@ export async function createLibrary(
 ): Promise<LibraryRow> {
   const now = Date.now();
   const row: LibraryRow = { id: uuidv7(), createdAt: now, updatedAt: now, ...input };
-  await getClientDataDb().libraries.add(row);
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  // Class-1 creation-insert: the library row and its outbox row are atomic.
+  await db.transaction('rw', [db.libraries, db.syncOutbox], async (tx) => {
+    await db.libraries.add(row);
+    if (linked) enqueueSync(tx, 'libraries', row.id, 'upsert');
+  });
+  if (linked) scheduleClass1Sync();
   return row;
 }
 
@@ -34,7 +46,15 @@ export async function updateLibrary(
   id: string,
   patch: Partial<Omit<LibraryRow, 'id' | 'createdAt'>>,
 ): Promise<void> {
-  await getClientDataDb().libraries.update(id, { ...patch, updatedAt: Date.now() });
+  // Class-2 edit (spec §5): gated write-through with the awaited drain.
+  await mutateSynced({
+    collection: 'libraries',
+    key: id,
+    tables: ['libraries'],
+    write: async (tx) => {
+      await tx.table('libraries').update(id, { ...patch, updatedAt: Date.now() });
+    },
+  });
 }
 
 /** Delete every vector belonging to a document. */
@@ -48,42 +68,88 @@ export async function deleteDocumentVectors(
   });
 }
 
-/** Delete a document row and its vectors, materialising any pending references first. */
+/** Delete a document row and its vectors, materialising any pending references
+ *  first. `opts.intoTrash` (default off → current behaviour byte-identical)
+ *  snapshots the document into `db.trash` before the row goes (§3.4). */
 export async function deleteDocumentCascade(
   id: string,
   store: VectorStoreLike = getKnowledgeVectorStore(),
+  opts?: { intoTrash?: boolean },
 ): Promise<void> {
   const doc = await getClientDataDb().documents.get(id);
   if (doc) await materialiseReferencesForDocument(id, doc.content);
+  // Vectors ride the document's lifecycle (spec §7.5/§10): removed from the
+  // separate knowledge database locally, never tombstoned individually — the
+  // document tombstone is the signal.
   await deleteDocumentVectors(id, store);
-  await getClientDataDb().documents.delete(id);
+  // Class-2 delete (spec §5): enqueue the document tombstone.
+  await mutateSynced({
+    collection: 'documents',
+    key: id,
+    op: 'delete',
+    tables: opts?.intoTrash ? ['documents', 'trash'] : ['documents'],
+    write: async (tx) => {
+      if (opts?.intoTrash && doc) await snapshotRowIntoTrash(tx, Date.now(), 'documents', id, doc);
+      await tx.table('documents').delete(id);
+    },
+  });
 }
 
 /** Delete a library, all its documents and vectors, and prune the id from every
- *  persona and chat that referenced it. */
+ *  persona and chat that referenced it. `opts.intoTrash` (default off → current
+ *  behaviour byte-identical) snapshots the library and its documents into
+ *  `db.trash` before the live rows go (build constraint I-2, §3.4). The persona/
+ *  chat `libraryIds` prune is a live reference cleanup — never snapshotted. */
 export async function deleteLibraryCascade(
   id: string,
   store: VectorStoreLike = getKnowledgeVectorStore(),
+  opts?: { intoTrash?: boolean },
 ): Promise<void> {
   const db = getClientDataDb();
+  const library = await db.libraries.get(id);
   const docs = await db.documents.where('libraryId').equals(id).toArray();
+  const docIds = docs.map((d) => d.id);
+  // Pre-work touches other databases/collections (attachment materialisation,
+  // the separate vector store) — done outside the synced transaction.
   for (const doc of docs) {
     await materialiseReferencesForDocument(doc.id, doc.content);
     await deleteDocumentVectors(doc.id, store);
   }
-  await db.documents.where('libraryId').equals(id).delete();
-  await db.libraries.delete(id);
-  // Prune dangling bindings.
-  await db.personas
-    .filter((p) => p.libraryIds.includes(id))
-    .modify((p) => {
-      p.libraryIds = p.libraryIds.filter((l) => l !== id);
-    });
-  await db.chats
-    .filter((c) => c.libraryIds.includes(id))
-    .modify((c) => {
-      c.libraryIds = c.libraryIds.filter((l) => l !== id);
-    });
+  // Class-2 delete (spec §5) with cascade tombstones for the synced documents.
+  // The persona/chat binding prune is a LOCAL cleanup only: a dangling
+  // `libraryId` on another device is filtered at read time, so it is not synced
+  // (avoids turning a library delete into a fan-out of persona/chat edits).
+  await mutateSynced({
+    collection: 'libraries',
+    key: id,
+    op: 'delete',
+    tables: opts?.intoTrash
+      ? ['libraries', 'documents', 'personas', 'chats', 'trash']
+      : ['libraries', 'documents', 'personas', 'chats'],
+    cascade: docIds.map((k) => ({ collection: 'documents' as const, key: k })),
+    write: async (tx) => {
+      if (opts?.intoTrash) {
+        // Snapshot the EXACT cascade set (I-2) before the live rows are removed.
+        const now = Date.now();
+        if (library) await snapshotRowIntoTrash(tx, now, 'libraries', id, library);
+        for (const d of docs) await snapshotRowIntoTrash(tx, now, 'documents', d.id, d);
+      }
+      if (docIds.length > 0) await tx.table('documents').bulkDelete(docIds);
+      await tx.table('libraries').delete(id);
+      await tx
+        .table('personas')
+        .filter((p: { libraryIds: string[] }) => p.libraryIds.includes(id))
+        .modify((p: { libraryIds: string[] }) => {
+          p.libraryIds = p.libraryIds.filter((l) => l !== id);
+        });
+      await tx
+        .table('chats')
+        .filter((c: { libraryIds: string[] }) => c.libraryIds.includes(id))
+        .modify((c: { libraryIds: string[] }) => {
+          c.libraryIds = c.libraryIds.filter((l) => l !== id);
+        });
+    },
+  });
 }
 
 // ---- Libraries: React-Query hooks ----
@@ -126,13 +192,18 @@ export function useUpdateLibrary() {
 
 export function useDeleteLibrary() {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.libraries });
+    void qc.invalidateQueries({ queryKey: ['documents'] });
+    void qc.invalidateQueries({ queryKey: QK.personas });
+    void qc.invalidateQueries({ queryKey: QK.chats });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deleteLibraryCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.libraries });
-      qc.invalidateQueries({ queryKey: ['documents'] });
-      qc.invalidateQueries({ queryKey: QK.personas });
-      qc.invalidateQueries({ queryKey: QK.chats });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('libraries', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('libraries', id, handle, invalidate);
     },
   });
 }
@@ -187,8 +258,16 @@ export async function addDocuments(
     });
   }
   if (rows.length === 0) return [];
-  await getClientDataDb().documents.bulkAdd(rows);
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  // Class-1 creation-inserts (knowledge ingestion): rows + outbox rows are atomic.
+  await db.transaction('rw', [db.documents, db.syncOutbox], async (tx) => {
+    await db.documents.bulkAdd(rows);
+    if (linked) for (const row of rows) enqueueSync(tx, 'documents', row.id, 'upsert');
+  });
+  // Embedding queue (device-local) is a separate concern from sync.
   for (const row of rows) enqueueDocument(row.id);
+  if (linked) scheduleClass1Sync();
   return rows.map((r) => r.id);
 }
 
@@ -204,23 +283,31 @@ export async function updateDocument(
     triggerOnCompanion?: boolean;
   },
 ): Promise<void> {
-  const db = getClientDataDb();
   const now = Date.now();
   const normalised =
     patch.triggerPhrases !== undefined
       ? { ...patch, triggerPhrases: normalisePhrases(patch.triggerPhrases) }
       : patch;
-  if (normalised.content !== undefined) {
-    await db.documents.update(id, {
-      ...normalised,
-      embeddingStatus: 'pending',
-      embeddingError: null,
-      updatedAt: now,
-    });
-    enqueueDocument(id);
-  } else {
-    await db.documents.update(id, { ...normalised, updatedAt: now });
-  }
+  const contentChanged = normalised.content !== undefined;
+  // Class-2 edit (spec §5). A content change also resets the LOCAL embedding
+  // pipeline (device-local status fields, re-embedded per device); the row still
+  // syncs its content, and other devices re-embed on receipt.
+  await mutateSynced({
+    collection: 'documents',
+    key: id,
+    tables: ['documents'],
+    write: async (tx) => {
+      await tx
+        .table('documents')
+        .update(
+          id,
+          contentChanged
+            ? { ...normalised, embeddingStatus: 'pending', embeddingError: null, updatedAt: now }
+            : { ...normalised, updatedAt: now },
+        );
+    },
+  });
+  if (contentChanged) enqueueDocument(id);
 }
 
 // ---- Documents: React-Query hooks ----
@@ -274,11 +361,16 @@ export function useUpdateDocument(libraryId: string) {
 
 export function useDeleteDocument(libraryId: string) {
   const qc = useQueryClient();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
+    void qc.invalidateQueries({ queryKey: QK.documentCounts });
+    void qc.invalidateQueries({ queryKey: ['trash-cards'] });
+  };
   return useMutation({
-    mutationFn: (id: string) => deleteDocumentCascade(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.documents(libraryId) });
-      qc.invalidateQueries({ queryKey: QK.documentCounts });
+    mutationFn: (id: string): Promise<TrashUndoHandle> => softDelete('documents', id),
+    onSuccess: (handle, id) => {
+      invalidate();
+      showDeleteToast('documents', id, handle, invalidate);
     },
   });
 }

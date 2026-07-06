@@ -3,20 +3,21 @@ import {
   CryptoError,
   PRF_INPUT_SALT,
   type PasskeyCredentialRow,
-  getLinkedAccount,
   getLocalAccount,
   listLocalBiometric,
   loginLocalWithPassphrase,
   loginOnlineLinked,
   loginWithLocalBiometric,
 } from '@chatsundere/crypto';
-import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { useDisplayName } from '../../data/settings.js';
+import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
+import { safeReturnPath } from '../../lib/safe-return.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 
@@ -28,12 +29,27 @@ import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
  * the passphrase field collapsed below. "Forgot passphrase?" is always
  * visible. Gate widened to any WebAuthn-capable device per ADR 0022.
  */
+/**
+ * Validate a ?return= target (spec §4.1): only a same-origin relative path may
+ * round-trip through the unlock — anything else falls back to /app. Guards the
+ * guard: a crafted link must not turn the login into an open redirect.
+ */
+export function safeReturnTarget(raw: string | null): string {
+  return safeReturnPath(raw, '/app');
+}
+
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTarget = safeReturnTarget(searchParams.get('return'));
 
   const [username, setUsername] = useState<string | null>(null);
-  // Whether a linked account exists — drives which login flow to call.
-  const [hasLinked, setHasLinked] = useState(false);
+  // Whether a linked account exists — drives which login flow to call. Sourced
+  // from the account-link store (WS-0 boot populates it before this screen).
+  const hasLinked = useAccountLinkStore((s) => s.linkStatus === 'linked');
+  // 'unknown' means the boot-time read has not resolved yet — treat it as
+  // loading, exactly as a not-yet-loaded username is treated below.
+  const linkStatusKnown = useAccountLinkStore((s) => s.linkStatus !== 'unknown');
   const [passkeys, setPasskeys] = useState<PasskeyCredentialRow[]>([]);
   const [webAuthnAvailable] = useState(() => isWebAuthnAvailable());
 
@@ -80,11 +96,7 @@ export function Login() {
 
     void (async () => {
       const db = getDb();
-      const [local, linked, creds] = await Promise.all([
-        getLocalAccount(db),
-        getLinkedAccount(db),
-        listLocalBiometric(db),
-      ]);
+      const [local, creds] = await Promise.all([getLocalAccount(db), listLocalBiometric(db)]);
 
       if (cancelled) return;
 
@@ -95,7 +107,6 @@ export function Login() {
       }
 
       setUsername(local.username);
-      setHasLinked(linked !== null);
       setPasskeys(creds);
     })();
 
@@ -143,7 +154,9 @@ export function Login() {
         const { session, mk } = await loginLocalWithPassphrase({ db, passphrase });
         useSessionStore.getState().setSession(session, mk);
       }
-      navigate('/app', { replace: true });
+      // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
+      if (isAuthDegraded()) void setAuthDegraded(false);
+      navigate(returnTarget, { replace: true });
     } catch (e) {
       // Spec §5.6: no distinction between wrong passphrase and missing account
       // to prevent information leakage.
@@ -221,7 +234,9 @@ export function Login() {
       });
 
       useSessionStore.getState().setSession(session);
-      navigate('/app', { replace: true });
+      // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
+      if (isAuthDegraded()) void setAuthDegraded(false);
+      navigate(returnTarget, { replace: true });
     } catch (_e) {
       // All biometric errors map to the same user-facing message regardless of
       // the underlying cause — no detail that could aid an attacker.
@@ -231,8 +246,8 @@ export function Login() {
     }
   }
 
-  // Show nothing while username is still loading.
-  if (username === null) {
+  // Show nothing while the username or the link status is still loading.
+  if (username === null || !linkStatusKnown) {
     return <p className="mt-12 text-center text-paper-soft">Loading…</p>;
   }
 
@@ -290,13 +305,20 @@ export function Login() {
           </form>
 
           {/* Forgot passphrase — always visible */}
-          <div className="text-center">
+          <div className="space-y-2 text-center">
             <button
               type="button"
               onClick={() => navigate('/login/recovery')}
               className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
             >
               {copy.login.forgotLink}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login/start-over')}
+              className="block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+            >
+              Start over on this device
             </button>
           </div>
         </div>

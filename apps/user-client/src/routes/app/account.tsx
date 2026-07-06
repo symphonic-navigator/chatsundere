@@ -6,8 +6,8 @@ import {
   getLocalAccount,
   listPasskeyCredentials,
 } from '@chatsundere/crypto';
-import { useSessionStore } from '@chatsundere/ui-shared';
-import { Fingerprint, Info, KeyRound, Link2, Lock, LogOut } from 'lucide-react';
+import { useAccountLinkStore, useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
+import { Fingerprint, Info, KeyRound, Link2, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../../boot/open-db.js';
@@ -19,6 +19,7 @@ import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { copy } from '../../lib/copy.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { InlineEditRow } from './account/InlineEditRow.js';
+import { SECURITY_TILE_LABEL, adminLaunchUrl, openAdminConsole } from './account/admin-tile.js';
 
 type AccountLoadState =
   | { kind: 'loading' }
@@ -48,6 +49,10 @@ export function AccountPage(): JSX.Element {
   // IndexedDB (same pattern as account-section.tsx) to stay correct if the
   // session is closed/refreshed.
   const sessionUsername = useSessionStore((s) => s.session?.username ?? '');
+  const linkStatus = useAccountLinkStore((s) => s.linkStatus);
+  const role = useAccountLinkStore((s) => s.role);
+  const adminUrl = useDiscoveryStore((s) => s.config?.adminUrl);
+  const adminHref = adminLaunchUrl(role, adminUrl);
 
   const [accountState, setAccountState] = useState<AccountLoadState>({ kind: 'loading' });
   const [biometricState, setBiometricState] = useState<BiometricLoadState>({ kind: 'loading' });
@@ -155,8 +160,14 @@ export function AccountPage(): JSX.Element {
             )
           ) : null}
 
-          {/* Server link — Block 1: always local-only */}
-          <Badge tone="neutral">Local-only mode</Badge>
+          {/* Server link — dynamic, reflects the account-link store (spec: sync-lifecycle hardening) */}
+          {linkStatus === 'linked' && (
+            <Badge tone="success">{copy.serverLinking.linkedBadge}</Badge>
+          )}
+          {linkStatus === 'local-only' && (
+            <Badge tone="neutral">{copy.serverLinking.localOnlyTitle}</Badge>
+          )}
+          {linkStatus === 'unknown' && <Badge tone="neutral">{copy.serverLinking.checking}</Badge>}
 
           {/* Version */}
           <span className="font-mono text-xs text-paper-soft">
@@ -165,28 +176,39 @@ export function AccountPage(): JSX.Element {
         </div>
       </div>
 
-      {/* ── 2×3 Navigation matrix ─────────────────────────────────────────── */}
+      {/* ── Navigation matrix — optional gold Admin row + 2×3 (spec §3/§4) ── */}
       <div className="grid grid-cols-2 gap-3 px-4 pb-8">
+        {adminHref && (
+          <NavTile
+            colour="blue"
+            gold
+            wide
+            icon={ShieldCheck}
+            label="Admin"
+            meta="opens the admin console"
+            onActivate={() => openAdminConsole(adminHref)}
+          />
+        )}
         <NavTile
           colour="pink"
           icon={Fingerprint}
-          label="Biometric"
+          label={SECURITY_TILE_LABEL}
           to="/app/account/biometric"
-          meta="unlock on this device"
+          meta="unlock & passphrase"
         />
         <NavTile
           colour="pink"
-          icon={KeyRound}
-          label="Recovery Key"
-          to="/app/account/recovery"
-          meta="your backup code"
+          icon={Trash2}
+          label="Recently deleted"
+          to="/app/account/recently-deleted"
+          meta="restore or purge · 30 days"
         />
         <NavTile
           colour="blue"
           icon={Link2}
           label="Server linking"
           to="/app/account/server-linking"
-          meta="sync across devices"
+          meta="sync & unlink devices"
         />
         <NavTile
           colour="blue"
@@ -197,10 +219,10 @@ export function AccountPage(): JSX.Element {
         />
         <NavTile
           colour="purple"
-          icon={Lock}
-          label="Change passphrase"
-          to="/change-passphrase"
-          meta="set a new passphrase"
+          icon={KeyRound}
+          label="Recovery Key"
+          to="/app/account/recovery"
+          meta="your backup code"
         />
         <NavTile
           colour="purple"

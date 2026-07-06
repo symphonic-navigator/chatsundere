@@ -64,6 +64,12 @@ export function RecoveryKeyPage(): JSX.Element {
       {helpOverlay}
 
       <div className="space-y-6 px-4 pb-8 pt-2">
+        <p className="text-sm text-paper-soft">
+          Keep your recovery key where you won't lose it. A note in your password manager —
+          Bitwarden, Proton Pass — is ideal: it's the one thing that brings your data back if you
+          lose every device, and we can't recover it for you.
+        </p>
+
         <div className="space-y-2">
           <Button
             tone="destructive"
@@ -85,7 +91,8 @@ export function RecoveryKeyPage(): JSX.Element {
         {regenState.kind === 'done' && (
           <div className="space-y-4 rounded-[var(--radius-card)] bg-ink-soft p-5 ring-1 ring-inset ring-aurora-700/40">
             <p className="text-sm font-medium text-paper">
-              Your new recovery key. Store it somewhere safe — you will not see it again.
+              Your new recovery key. Save it in your password manager now — you will not see it
+              again.
             </p>
             <RecoveryKeyReveal value={regenState.key} />
             <button

@@ -276,42 +276,6 @@ describe('resolveStt', () => {
     });
   });
 
-  describe('(f) corrupt CORS proxy key on direct routing', () => {
-    it('proceeds with a null proxy key and warns', async () => {
-      await seedProvider('mistral');
-      const db = await openClientDataDb();
-      await db.settings.update(1, {
-        corsProxy: {
-          url: 'https://proxy.example.com',
-          sharedKey: { version: 1, nonce: new Uint8Array(12), ciphertext: new Uint8Array(16) },
-        },
-      });
-
-      // api-key succeeds; proxy-key fails — non-fatal on direct routing.
-      openSecretMock
-        .mockResolvedValueOnce('test-api-key')
-        .mockRejectedValueOnce(new DOMException('AES-GCM auth tag failure'));
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      const resolution = await resolveStt();
-      expect(resolution.ok).toBe(true);
-      expect(warnSpy).toHaveBeenCalledOnce();
-      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/cors-proxy/);
-
-      if (!resolution.ok) return;
-      await resolution.transcribe(
-        new Blob(['audio'], { type: 'audio/webm' }),
-        'audio/webm',
-        new AbortController().signal,
-      );
-      const callArgs = transcribeAudioMock.mock.calls[0]?.[0];
-      expect(callArgs?.corsProxyKey).toBeNull();
-
-      warnSpy.mockRestore();
-    });
-  });
-
   describe('(c) decrypt failure → no-provider', () => {
     it('returns no-provider and warns when openSecret throws', async () => {
       await seedProvider();
