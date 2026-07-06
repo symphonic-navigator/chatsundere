@@ -29,6 +29,22 @@ const SONNET5_STEPS: ReasoningControl = {
   defaultStep: 'medium',
 };
 
+// OpenAI (ChatGPT) on OpenRouter. The GPT-5 family reasons with a genuinely
+// steerable effort surface (probed live 2026-07-06: `reasoning:{enabled:false}`
+// is a real off with 0 reasoning tokens, effort low ≈ 4 reasoning tokens, high
+// ≈ 165), so a steps control with a real off — same shape as Sonnet 5. The
+// reasoning SUMMARY only surfaces behind the top-level `include_reasoning` flag
+// (without it the `reasoning` channel is empty even at high effort — unlike
+// DeepSeek/GLM, which OpenRouter forwards unprompted); the adapter emits it for
+// these offerings. gpt-4o/4.1 have no reasoning at all.
+const OPENAI_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
+const OPENAI_NONE: ReasoningControl = { mode: 'none' };
+
 interface OpenRouterOfferingArgs {
   vision: boolean;
   reasoning: ReasoningControl;
@@ -40,6 +56,11 @@ interface OpenRouterOfferingArgs {
    * and records `trust.zdr: true`. Default false — the honest OpenRouter
    * baseline (no project-wide ZDR). */
   zdr?: boolean;
+  /** Confidence in the measured behaviour. Defaults to `verified` (a clean live
+   * suite run). Set `partial` where a live caveat survives (e.g. an OpenAI route
+   * that 404s under our data policy, or a reasoning summary OpenRouter surfaces
+   * only stochastically) so the catalogue does not overstate the evidence. */
+  confidence?: Offering['confidence'];
 }
 
 function openRouterOffering(
@@ -70,7 +91,7 @@ function openRouterOffering(
     // verbatim and adds no censorship layer of its own.
     freedomOrientedDeployment: true,
     source: 'curated',
-    confidence: 'verified',
+    confidence: args.confidence ?? 'verified',
     serviceKind: 'llm',
   };
 }
@@ -168,6 +189,66 @@ const offerings: Offering[] = [
     recommended: 200_000,
     max: 1_000_000,
   }),
+  // OpenAI (ChatGPT) family via OpenRouter (US router). Onboarded 2026-07-06 on
+  // explicit user request; censored at source → CENSORED badge. gpt-4o/4.1 are
+  // non-reasoning; the GPT-5 family reasons (steps). Context `max` is OpenRouter's
+  // reported ceiling; `recommended` follows our 200k sweet-spot where they differ.
+  // The `include_reasoning` flag is bound in registerOpenRouter (OpenRouter gates
+  // OpenAI's reasoning summary behind it). No ZDR (honest US-router baseline).
+  //
+  // Verified live 2026-07-06 (suite): gpt-4o and gpt-4.1 fully green. Two caveats
+  // survive on OpenRouter, both kept at Chris's call (both-providers coverage)
+  // with `confidence: 'partial'` and documented in the Model Curation Records:
+  //   - gpt-4o-2024-11-20 → HTTP 404 under our key's data policy: this pinned
+  //     checkpoint has a single OpenAI endpoint that fails OpenRouter's privacy
+  //     guardrail. Needs the account's data policy relaxed to route (base gpt-4o,
+  //     with multiple endpoints, passes). Verify on the user's own key/settings.
+  //   - GPT-5 family → reasoning HAPPENS (reasoning_tokens, tools, vision, usage
+  //     all green) but OpenRouter surfaces OpenAI's reasoning SUMMARY only
+  //     stochastically, so the visible chain-of-thought is unreliable here (it is
+  //     reliable on nano-gpt, which streams the summary natively).
+  openRouterOffering('chatgpt-4o', 'openai/gpt-4o', {
+    vision: true,
+    reasoning: OPENAI_NONE,
+    recommended: 128_000,
+  }),
+  openRouterOffering('chatgpt-4o-2024-11-20', 'openai/gpt-4o-2024-11-20', {
+    vision: true,
+    reasoning: OPENAI_NONE,
+    recommended: 128_000,
+    // 404s under our data policy (single OpenAI endpoint fails the guardrail);
+    // route once the account's data policy is relaxed. Verify on the user's key.
+    confidence: 'partial',
+  }),
+  openRouterOffering('chatgpt-4.1', 'openai/gpt-4.1', {
+    vision: true,
+    reasoning: OPENAI_NONE,
+    recommended: 200_000,
+    max: 1_047_576,
+  }),
+  // GPT-5 family: 'partial' — reasoning works but the visible summary is
+  // stochastic on OpenRouter (reliable on nano-gpt). See the Curation Records.
+  openRouterOffering('chatgpt-5', 'openai/gpt-5.1', {
+    vision: true,
+    reasoning: OPENAI_STEPS,
+    recommended: 200_000,
+    max: 400_000,
+    confidence: 'partial',
+  }),
+  openRouterOffering('chatgpt-5.4', 'openai/gpt-5.4', {
+    vision: true,
+    reasoning: OPENAI_STEPS,
+    recommended: 200_000,
+    max: 1_050_000,
+    confidence: 'partial',
+  }),
+  openRouterOffering('chatgpt-5.5', 'openai/gpt-5.5', {
+    vision: true,
+    reasoning: OPENAI_STEPS,
+    recommended: 200_000,
+    max: 1_050_000,
+    confidence: 'partial',
+  }),
 ];
 
 export const openrouter: ProviderDefinition = {
@@ -213,6 +294,9 @@ export function registerOpenRouter(): void {
           // Enforce ZDR on the wire for any offering that claims it, so the
           // privacy posture is honoured rather than merely asserted.
           zdr: o.trust.zdr,
+          // OpenAI gates its reasoning summary behind include_reasoning; other
+          // routes stream it unprompted. Opt in only for the ChatGPT family.
+          includeReasoning: o.canonicalRef?.startsWith('chatgpt-') ?? false,
         });
     registerAdapter(o.adapter.adapterId, adapter);
   }

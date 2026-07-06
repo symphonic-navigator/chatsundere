@@ -27,10 +27,10 @@ afterAll(() => {
 });
 
 describe('canonical-registry', () => {
-  test('lists twenty-five canonicals with unique ids', () => {
+  test('lists thirty-one canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(25);
-    expect(new Set(ids).size).toBe(25);
+    expect(ids).toHaveLength(31);
+    expect(new Set(ids).size).toBe(31);
     expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('grok-4.3');
     expect(ids).toContain('grok-4.20');
@@ -48,6 +48,13 @@ describe('canonical-registry', () => {
     expect(ids).toContain('claude-sonnet-4.6');
     expect(ids).toContain('claude-opus-4.8');
     expect(ids).toContain('claude-fable-5');
+    // ChatGPT (OpenAI) family — censored, CENSORED badge (2026-07-06)
+    expect(ids).toContain('chatgpt-4o');
+    expect(ids).toContain('chatgpt-4o-2024-11-20');
+    expect(ids).toContain('chatgpt-4.1');
+    expect(ids).toContain('chatgpt-5');
+    expect(ids).toContain('chatgpt-5.4');
+    expect(ids).toContain('chatgpt-5.5');
   });
 
   test('getCanonical returns by id and undefined for unknown', () => {

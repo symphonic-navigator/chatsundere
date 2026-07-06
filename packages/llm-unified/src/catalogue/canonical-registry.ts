@@ -234,6 +234,85 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote:
       'Anthropic aligns/censors the model at source → not freedom-oriented. SM-Bench run 2adbdf74 (2026-06-09): NSFW (System Prompt) 98.62% clears the canary, but Overfit 34.43%, EQ Boundaries 53.65% and Adversarial (Hostile Logic) 79.51% all miss the 90% bar. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
   },
+  // --- ChatGPT (OpenAI) — censored at source → not freedom-oriented; surfaced
+  // with the CENSORED badge. Onboarded 2026-07-06 on explicit user request
+  // (people asked for OpenAI models by name); the badge is the honest signal of
+  // what they are opting into. Curated on BOTH nano-gpt (the anonymising router)
+  // and OpenRouter (US router) — both route verbatim and add no censorship of
+  // their own, so effectiveFreedom is driven purely by the model being censored
+  // at source. gpt-4o/4.1 are non-reasoning; the GPT-5 family reasons with a
+  // steerable effort surface (probed live 2026-07-06). ---
+  {
+    id: 'chatgpt-4o',
+    displayName: 'ChatGPT 4o',
+    family: 'chatgpt',
+    // The floating `openai/gpt-4o` alias — OpenAI silently repoints it, so which
+    // checkpoint it resolves to on any given day is undisclosed (the "unclarified"
+    // checkpoint). Non-reasoning; vision + tools.
+    requiredCaps: { tools: true, reasoning: false, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
+  {
+    id: 'chatgpt-4o-2024-11-20',
+    displayName: 'ChatGPT 4o 11/24',
+    family: 'chatgpt',
+    // The pinned November 2024 checkpoint — tonally the closest available to the
+    // scene-beloved "GG" 4o (the ~6-month "adult mode" era), which OpenAI does
+    // not expose via the API. Non-reasoning; vision + tools.
+    requiredCaps: { tools: true, reasoning: false, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
+  {
+    id: 'chatgpt-4.1',
+    displayName: 'ChatGPT 4.1',
+    family: 'chatgpt',
+    // Non-reasoning flagship; vision + tools. 1M-token window upstream
+    // (recommended capped at our 200k sweet-spot — measured per provider).
+    requiredCaps: { tools: true, reasoning: false, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
+  {
+    id: 'chatgpt-5',
+    displayName: 'ChatGPT 5',
+    family: 'chatgpt',
+    // The marketed "GPT-5" is served by the `openai/gpt-5.1` endpoint (Chris's
+    // mapping). Reasoning model: effort genuinely modulates the trace on
+    // OpenRouter (low ~4 reasoning tokens, high ~165 — probed live 2026-07-06),
+    // so a steps control. Reasoning summary surfaces on nano-gpt natively and on
+    // OpenRouter behind `include_reasoning`. Vision + tools.
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
+  {
+    id: 'chatgpt-5.4',
+    displayName: 'ChatGPT 5.4',
+    family: 'chatgpt',
+    // Reasoning model with a steerable effort surface; vision + tools. 1M-token
+    // window upstream (recommended capped at our 200k sweet-spot).
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
+  {
+    id: 'chatgpt-5.5',
+    displayName: 'ChatGPT 5.5',
+    family: 'chatgpt',
+    // Reasoning model with a steerable effort surface; vision + tools. 1M-token
+    // window upstream (recommended capped at our 200k sweet-spot).
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
   {
     id: 'grok-4.3',
     displayName: 'Grok 4.3',

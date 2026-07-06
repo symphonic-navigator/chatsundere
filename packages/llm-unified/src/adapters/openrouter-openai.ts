@@ -106,6 +106,16 @@ export interface OpenRouterAdapterOptions {
    * `provider: "xAI"`). Driven by the offering's `trust.zdr` so a ZDR privacy
    * claim is actually enforced on the wire, never merely asserted. */
   zdr?: boolean;
+  /** When true, emit the top-level `include_reasoning: true` on reasoning-on
+   * requests so OpenRouter surfaces the model's reasoning summary on
+   * `delta.reasoning`. Needed for the OpenAI GPT-5 family: unlike DeepSeek/GLM
+   * (which stream reasoning natively, so OpenRouter forwards it unprompted),
+   * OpenAI gates its reasoning summary behind this flag — without it the
+   * `reasoning` channel stays empty even at high effort (probed live 2026-07-06:
+   * `reasoning:{enabled:true,effort:high}` alone yields 0 reasoning chars; adding
+   * `include_reasoning:true` yields the summary). Only meaningful for
+   * reasoning-capable offerings; ignored when reasoning is off. */
+  includeReasoning?: boolean;
 }
 
 const DEFAULT_ON_EFFORT = 'medium';
@@ -170,6 +180,9 @@ export function openRouterAdapter(slug: string, opts: OpenRouterAdapterOptions):
         body.reasoning = req.reasoning.enabled
           ? { enabled: true, effort: req.reasoning.effort ?? DEFAULT_ON_EFFORT }
           : { enabled: false };
+        // OpenAI gates its reasoning summary behind the top-level flag; other
+        // routes stream it unprompted, so this is opt-in per offering.
+        if (req.reasoning.enabled && opts.includeReasoning) body.include_reasoning = true;
       }
       if (req.tools?.length) {
         body.tools = req.tools.map((t) => ({

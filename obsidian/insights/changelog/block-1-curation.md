@@ -6,6 +6,31 @@
 
 ## Session log
 
+**2026-07-06 — ChatGPT (OpenAI) family curated on nano-gpt + OpenRouter**
+(mode-2 `/curate`, worktree `curate-openai-models`). Six models onboarded on
+**explicit user request** (users asked for OpenAI by name), all **🚫 CENSORED**
+(`freedomOriented: false`, mirroring Claude): `chatgpt-4o` (floating
+"unclarified" checkpoint), `chatgpt-4o-2024-11-20` (pinned Nov '24 — closest
+available to the API-less "GG" 4o), `chatgpt-4.1` (all three non-reasoning),
+`chatgpt-5` (→ `gpt-5.1`), `chatgpt-5.4`, `chatgpt-5.5` (reasoning, **steps**).
+12 offerings across both routers, all on the generic `openRouterAdapter` (OpenAI
+honours the unified `reasoning` object on both, like Grok 4.3) — no hand-written
+adapter, one small `includeReasoning` option added (OpenRouter gates OpenAI's
+reasoning summary behind the top-level flag; nano-gpt streams it natively).
+Validation ([[../changelog/README|suite]] `curation/run-openai-suite.ts`): **all
+six nano-gpt offerings green**; OpenRouter `gpt-4o`/`gpt-4.1` green. **Two
+OpenRouter caveats, both kept at Chris's call** (max provider coverage) with
+`confidence: 'partial'`: `gpt-4o-2024-11-20` **404s** under our data policy
+(single OpenAI endpoint fails the privacy guardrail — needs the account policy
+relaxed), and the **GPT-5 reasoning summary is stochastic** on OpenRouter
+(reasoning works; the visible trace is unreliable — reliable on nano-gpt). Both
+tracked in [[../follow-ups-index]]; full WHY in [[../models/chatgpt]]. Gates:
+tsc 0, biome 0, llm-unified `bun test` **421/0**. Not a Larissa path
+(no auth/sync/proxy/crypto; existing router egress); not a Laura path (picker
+entries only, no flow change). **Device test:** restart `pnpm dev` (packages/*
+changed), pick a ChatGPT model, confirm CENSORED badge + a reasoning turn on
+nano-gpt for a GPT-5 model.
+
 **Earlier 2026-06-10 (later) — Claude Fable 5 curated on nano-gpt**
 (mode-2 `/curate`, inline, squashed on master, **NOT pushed**). Eighth member of
 the `claude` family, but mechanically its own animal: **no thinking sibling

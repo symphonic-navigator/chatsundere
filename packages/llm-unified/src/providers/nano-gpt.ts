@@ -59,6 +59,23 @@ const CLAUDE_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 // sibling slug 404s), so it cannot meet the canonical's reasoning capability.
 const GROK_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
+// OpenAI (ChatGPT) on nano-gpt (the anonymising-router path). Reasoning is
+// steered by the OpenAI-style unified `reasoning` OBJECT — NOT a slug swap:
+// `{enabled:false}` is a genuine off (0 reasoning chars) and `{enabled:true,
+// effort}` enables, with the reasoning SUMMARY streaming on the `reasoning`
+// channel natively (probed live 2026-07-06). So the GPT-5 family reuses the
+// shared unified-reasoning-object adapter (openRouterAdapter), exactly like
+// Grok 4.3. Effort genuinely modulates (measured on OpenRouter), so a steps
+// control with a real off — mirroring the Sonnet-5/Fable shape for consistency
+// across the censored reasoning models. gpt-4o/4.1 have no reasoning at all.
+const OPENAI_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
+const OPENAI_NONE: ReasoningControl = { mode: 'none' };
+
 interface ClaudeSpec {
   canonicalRef: string;
   base: string;
@@ -187,6 +204,39 @@ function slugSwapOffering(
     context: { recommended: ctx, max: maxCtx },
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  };
+}
+
+// An OpenAI (ChatGPT) offering on nano-gpt. Censored at source
+// (`canonical.freedomOriented=false`) while nano-gpt routes verbatim
+// (`freedomOrientedDeployment=true`) → effectiveFreedom 'restricted' → CENSORED
+// badge. Reuses the shared unified-reasoning-object adapter (bound in
+// registerNanoGpt by the `chatgpt-` branch). Vision + tools across the family.
+function openaiOffering(
+  canonicalRef: string,
+  slug: string,
+  reasoning: ReasoningControl,
+  ctx: number,
+  maxCtx: number = ctx,
+): Offering {
+  return {
+    canonicalRef,
+    providerId: 'nano-gpt',
+    upstreamSlug: slug,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${slug}` },
+    profile: {
+      reasoning,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: ctx, max: maxCtx },
+    // nano-gpt routes to the OpenAI upstream — no ZDR/TEE, US jurisdiction.
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true, // nano-gpt adds no censorship of its own
     source: 'curated',
     confidence: 'verified',
     serviceKind: 'llm',
@@ -408,6 +458,15 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'llm',
   },
+  // OpenAI (ChatGPT) family via nano-gpt (anonymising-router path). Onboarded
+  // 2026-07-06 on explicit user request; CENSORED badge. gpt-4o/4.1 non-reasoning,
+  // GPT-5 family reasons via the unified `reasoning` object (steps).
+  openaiOffering('chatgpt-4o', 'openai/gpt-4o', OPENAI_NONE, 128_000),
+  openaiOffering('chatgpt-4o-2024-11-20', 'openai/gpt-4o-2024-11-20', OPENAI_NONE, 128_000),
+  openaiOffering('chatgpt-4.1', 'openai/gpt-4.1', OPENAI_NONE, 200_000, 1_047_576),
+  openaiOffering('chatgpt-5', 'openai/gpt-5.1', OPENAI_STEPS, 200_000, 400_000),
+  openaiOffering('chatgpt-5.4', 'openai/gpt-5.4', OPENAI_STEPS, 200_000, 1_048_576),
+  openaiOffering('chatgpt-5.5', 'openai/gpt-5.5', OPENAI_STEPS, 200_000, 1_048_576),
   ...webOfferings,
   ...ttiOfferings,
   // Grok TTS via nano-gpt's xAI wrapper — text-to-speech; bypasses the chat
@@ -496,6 +555,17 @@ export function registerNanoGpt(): void {
     } else if (o.canonicalRef === 'grok-4.3') {
       // Grok on nano-gpt honours the unified `reasoning` object (not slug-swap),
       // so it reuses the shared unified-reasoning-object adapter. No ZDR here.
+      registerAdapter(
+        o.adapter.adapterId,
+        openRouterAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
+        }),
+      );
+    } else if (o.canonicalRef?.startsWith('chatgpt-')) {
+      // OpenAI on nano-gpt honours the unified `reasoning` object (like Grok) and
+      // surfaces its reasoning summary natively, so it reuses the shared adapter.
+      // No `include_reasoning` flag needed here — that gate is OpenRouter-only.
       registerAdapter(
         o.adapter.adapterId,
         openRouterAdapter(o.upstreamSlug, {
