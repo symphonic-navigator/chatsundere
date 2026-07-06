@@ -50,6 +50,7 @@ import {
 } from './blob-repair.js';
 import {
   type NewBlob,
+  blobFieldsOf,
   isBlobRef,
   readBlobBytesById,
   resolveBlobFieldById,
@@ -486,6 +487,14 @@ export async function drainOutbox(): Promise<DrainResult> {
     // `ok` ack; a `conflict` means the old ref may still be live under LWW, so
     // deleting the old blob would destroy a live object — DEFER it (Larissa M-2).
     if (upsertKeys.has(kid) && ackByKey.get(kid) !== 'ok') continue;
+    // Audit #6: the ok-ack gate only sees THIS key; a restore revives the id under a
+    // NEW key. Re-check actual references before destroying the server object — a
+    // referenced id is authoritatively alive and the delete must drop (not retry).
+    // Blob deletes are rare, so a filtered scan of the owning collection is fine.
+    if (del.blobId && (await blobIdIsReferenced(del.collection, del.blobId))) {
+      if (del.seq !== undefined) seqsToDrop.push(del.seq);
+      continue;
+    }
     try {
       await activeDeleteBlob()(del.blobId);
       noteBlobLocallyRemoved(del.blobId);
@@ -513,6 +522,23 @@ export async function drainOutbox(): Promise<DrainResult> {
   }
 
   return { pushedHighestRev, head, epoch, needsRecovery, needsPull };
+}
+
+/** True when any live row of the collection references the blobId (audit #6). */
+async function blobIdIsReferenced(collection: SyncCollection, blobId: string): Promise<boolean> {
+  const db = getClientDataDb();
+  const fields = blobFieldsOf(collection);
+  if (fields.length === 0) return false;
+  const hit = await db
+    .table(collection)
+    .filter((row) =>
+      fields.some((f) => {
+        const ref = (row as Record<string, unknown>)[f.refField];
+        return isBlobRef(ref) && ref.blobId === blobId;
+      }),
+    )
+    .first();
+  return hit !== undefined;
 }
 
 /**
