@@ -50,6 +50,7 @@ export const SETTINGS_SYNC_ALLOWLIST: readonly string[] = [
   'expertWeb',
   'substituteVisionModel',
   'expertModel',
+  'artefactExpertModel',
   'imageGeneration',
   'voiceMode',
   'dictationSensitivity',

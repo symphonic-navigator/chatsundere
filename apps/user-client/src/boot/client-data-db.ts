@@ -32,6 +32,11 @@ export interface SettingsRow {
   /** Global expert model — an offering ref "templateId:upstreamSlug"; null = none.
    *  Forwards a single sanitised question via the ask_expert tool. */
   expertModel: string | null;
+  /** Global artefact-expert model — an offering ref "templateId:upstreamSlug";
+   *  absent ⇒ null = none. When set, chats delegate artefact creation to this
+   *  model unless the chat opts out (`ChatRow.useArtefactExpertModel`).
+   *  Non-indexed (schemaless) — no Dexie version bump. */
+  artefactExpertModel?: string | null;
   /** Global image-generation models. `ref` = "providerTemplateId:upstreamSlug".
    *  `primary` drives generate_image; `nsfw` is the NSFW-capable second slot
    *  (spec 2026-06-09 §6). Both null until the user picks. */
@@ -232,6 +237,11 @@ export interface ChatRow {
   activeCompactionId?: string | null;
   /** Once-per-chat flag: the 80 % "compact?" toast has been shown. */
   compactionToastShown?: boolean;
+  /** Per-chat opt-out for the global artefact expert (`SettingsRow.
+   *  artefactExpertModel`): absent ⇒ true (use the expert when one is set).
+   *  Only meaningful while a global artefact expert is configured.
+   *  Non-indexed (schemaless) — no Dexie version bump. */
+  useArtefactExpertModel?: boolean;
 }
 
 export type ContentBlock =
@@ -1463,6 +1473,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
         expertWeb: { search: null, fetch: null, searchTierId: null },
         substituteVisionModel: null,
         expertModel: null,
+        artefactExpertModel: null,
         imageGeneration: { primary: null, nsfw: null },
         voiceMode: 'paragraph',
         dictationSensitivity: 'medium',
