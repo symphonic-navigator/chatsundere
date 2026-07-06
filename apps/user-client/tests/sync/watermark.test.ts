@@ -36,6 +36,7 @@ describe('getSyncState', () => {
       backfillTotal: null,
       backfillDone: null,
       suppressedRevs: {},
+      linkGeneration: 0,
     });
   });
 
