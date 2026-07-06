@@ -36,6 +36,7 @@ import {
   TOMBSTONE_CYCLE_CAP,
   applyRecord,
   flushInvalidations,
+  resetBlindIdCycleCache,
   resetTombstoneCounter,
   settleTombstoneNotice,
 } from './apply.js';
@@ -303,6 +304,7 @@ export async function drainOutbox(): Promise<DrainResult> {
   if (outbox.length === 0) return emptyDrain();
 
   resetBlobRepairCycle();
+  resetBlindIdCycleCache();
 
   const recordRows = outbox.filter(
     (r): r is SyncOutboxRow & { op: 'upsert' | 'delete' } => r.op === 'upsert' || r.op === 'delete',
@@ -942,6 +944,7 @@ function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<
 export async function runPullLoop(): Promise<void> {
   const syncUrl = effectiveSyncUrl();
   if (!syncUrl) return;
+  resetBlindIdCycleCache();
   const pull =
     pullOverride ?? ((since: number, limit: number) => defaultPull(syncUrl, since, limit));
 

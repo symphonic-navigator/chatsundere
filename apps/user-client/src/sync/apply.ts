@@ -104,6 +104,18 @@ export function resetTombstoneCounter(): void {
 }
 
 /**
+ * Stage-2 reverse index (audit #4): `collection → (blindIdB64 → local sync key)`,
+ * built lazily per drain/pull cycle so a recovery pull-all enumerates each
+ * collection's local keys at most once. Reset at cycle start (worker.ts).
+ */
+let blindIdCache: Map<string, Map<string, string>> | null = null;
+
+/** Reset the stage-2 blind-id cache; the drain + pull cycles call this at start. */
+export function resetBlindIdCycleCache(): void {
+  blindIdCache = null;
+}
+
+/**
  * §7.3a — retire a latched CALM tombstone notice at the END of a pull cycle that
  * did not itself re-cross the threshold. A one-off cross-device mass deletion
  * latches the `tombstone_threshold` notice via `setAttention`; nothing else ever
@@ -266,6 +278,20 @@ async function readLocalRow(collection: SyncCollection, key: string): Promise<un
   return db.table(collection).get(key);
 }
 
+/**
+ * The local sync keys of a collection — the table primary keys (§3.1), mirroring
+ * `readLocalRow`'s keying: `settings` is the singleton `'1'`; `vectors` live in
+ * the separate knowledge database with no local table here (they ride their
+ * document's lifecycle, §7.5), so they enumerate to nothing.
+ */
+async function listLocalKeys(collection: SyncCollection): Promise<string[]> {
+  const db = getClientDataDb();
+  if (collection === 'settings') return ['1'];
+  if (collection === 'vectors') return [];
+  const keys = await db.table(collection).toCollection().primaryKeys();
+  return keys.map((k) => String(k));
+}
+
 /** The owning chat id for a decrypted row, when the collection derives one (§7.6). */
 function chatIdOf(collection: SyncCollection, key: string, row: unknown): string | undefined {
   if (collection === 'chats') return key;
@@ -360,9 +386,22 @@ async function hasPendingDelete(collection: SyncCollection, key: string): Promis
 
 /**
  * Resolve a pulled tombstone's blind id back to its local sync key (§7.3). A
- * tombstone carries only the blind id, so we re-derive the blind id of each
- * known `syncRows` key in the collection and match — the only key source for a
- * body-less record. Returns null when no known row matches (nothing to remove).
+ * tombstone carries only the blind id, so we re-derive the blind id of candidate
+ * keys and match — the only key source for a body-less record. Returns null when
+ * nothing local matches (nothing to remove).
+ *
+ * Stage 1 (steady state): re-derive from the `syncRows` metas — cheap, and the
+ * common case.
+ *
+ * Stage 2 (audit #4, recovery): a `syncRows`-independent fallback. Recovery
+ * legitimately CLEARS `syncRows` (step 2) then pulls all from 0, so every pulled
+ * tombstone would resolve to null and silently no-op — deletions from other
+ * devices skipped, and non-repush collections (e.g. `attachments`, excluded from
+ * REPUSH_COLLECTIONS) never cleaned up. The ROW is still local, so we enumerate
+ * the collection's local primary keys once per cycle and match by re-derived
+ * blind id. Stage-1-first is load-bearing: a steady-state hit returns before we
+ * ever enumerate the whole table. Stateless — a crashed-and-rerun recovery
+ * behaves identically.
  */
 async function findKeyByBlindId(
   mk: MasterKey,
@@ -370,12 +409,24 @@ async function findKeyByBlindId(
   blindIdB64: string,
 ): Promise<string | null> {
   const db = getClientDataDb();
+  // Stage 1 — steady state: resolve via syncRows (cheap; the common case).
   const metas = await db.syncRows.where('collection').equals(collection).toArray();
   for (const meta of metas) {
     const bid = toBase64Url(await activeBlindId()(mk, collection, meta.key));
     if (bid === blindIdB64) return meta.key;
   }
-  return null;
+  // Stage 2 (audit #4) — syncRows-independent fallback for the recovery pull-all.
+  blindIdCache ??= new Map();
+  let perCollection = blindIdCache.get(collection);
+  if (!perCollection) {
+    perCollection = new Map();
+    const keys = await listLocalKeys(collection);
+    for (const key of keys) {
+      perCollection.set(toBase64Url(await activeBlindId()(mk, collection, key)), key);
+    }
+    blindIdCache.set(collection, perCollection);
+  }
+  return perCollection.get(blindIdB64) ?? null;
 }
 
 // ===== The pipeline =====
