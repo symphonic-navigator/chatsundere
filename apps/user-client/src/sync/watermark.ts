@@ -23,7 +23,17 @@ function defaultState(): SyncStateRow {
     backfillTotal: null,
     backfillDone: null,
     suppressedRevs: {},
+    linkGeneration: 0,
   };
+}
+
+/**
+ * The per-link engine generation (audit #8): bumped by every engine reset so an
+ * in-flight drain/pull that started before the reset can be recognised and its
+ * write-backs discarded (they belong to the previous account).
+ */
+export async function getLinkGeneration(): Promise<number> {
+  return (await getSyncState()).linkGeneration ?? 0;
 }
 
 /** Record a suppressed pulled rev so a fast Undo can rewind below it (audit #5). */

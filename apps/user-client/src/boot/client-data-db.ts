@@ -607,6 +607,10 @@ export interface SyncStateRow {
   /** Highest pulled-but-suppressed rev per `collection:key` (audit #5): consumed
    *  by the fast-Undo watermark rewind, cleared on drain-ack/recovery/relink. */
   suppressedRevs?: Record<string, number>;
+  /** The per-link engine generation (audit #8): bumped by every engine reset so
+   *  an in-flight drain/pull from the previous link can be recognised and its
+   *  write-backs discarded. Non-indexed; absent on legacy rows (reads as 0). */
+  linkGeneration?: number;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */

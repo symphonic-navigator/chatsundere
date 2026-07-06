@@ -4,6 +4,7 @@ import { getClientDataDb } from '../boot/client-data-db.js';
 import { getDb } from '../boot/open-db.js';
 import { setAuthDegraded } from '../lib/auth-degrade.js';
 import { getSyncState } from './watermark.js';
+import { withSyncLock } from './worker.js';
 
 /**
  * Per-link engine-state reset (spec §3.2, Larissa L-1). An invitation join
@@ -13,8 +14,25 @@ import { getSyncState } from './watermark.js';
  * stranding), a stale watermark draws 400 `bad_since` on the first pull, and
  * stale CAS bases are meaningless against the new account. Also arms the
  * backfill flag — the two always travel together.
+ *
+ * Audit #8: acquires the sync Web Lock (blocking) so any lock-respecting cycle
+ * finishes first — its acks then land against the OLD generation and the
+ * generation-guarded writers discard anything still in flight (the immediate
+ * drain bypasses the lock; the generation bump below is what covers it). The
+ * cycle-internal caller (`enforceServerIdentity`) already holds the lock, so it
+ * passes `{ alreadyLocked: true }` to avoid a non-reentrant self-deadlock.
  */
-export async function resetEngineStateForNewLink(): Promise<void> {
+export async function resetEngineStateForNewLink(
+  opts: { alreadyLocked?: boolean } = {},
+): Promise<void> {
+  if (opts.alreadyLocked) {
+    await resetForNewLinkBody();
+    return;
+  }
+  await withSyncLock(resetForNewLinkBody);
+}
+
+async function resetForNewLinkBody(): Promise<void> {
   const db = getClientDataDb();
   await getSyncState(); // ensure the singleton exists before update()
   // Read the crypto IDB's linked-account identity BEFORE opening the Dexie
@@ -25,6 +43,7 @@ export async function resetEngineStateForNewLink(): Promise<void> {
   await db.transaction('rw', db.syncRows, db.syncOutbox, db.syncState, async () => {
     await db.syncRows.clear();
     await db.syncOutbox.clear();
+    const current = await db.syncState.get('state');
     await db.syncState.update('state', {
       epoch: null,
       watermarkRev: 0,
@@ -36,6 +55,9 @@ export async function resetEngineStateForNewLink(): Promise<void> {
       backfillDone: null,
       linkedServerUserId: linked?.server_user_id,
       suppressedRevs: {},
+      // Audit #8: bump so an in-flight drain/pull from the previous link is
+      // recognised as stale and its write-backs discarded.
+      linkGeneration: (current?.linkGeneration ?? 0) + 1,
     });
   });
   // Clear the in-memory auth-degraded latch too: this fresh account holds valid
@@ -61,6 +83,7 @@ export async function resetEngineStateForLocalOnly(): Promise<void> {
   await db.transaction('rw', db.syncRows, db.syncOutbox, db.syncState, async () => {
     await db.syncRows.clear();
     await db.syncOutbox.clear();
+    const current = await db.syncState.get('state');
     await db.syncState.update('state', {
       epoch: null,
       watermarkRev: 0,
@@ -72,6 +95,8 @@ export async function resetEngineStateForLocalOnly(): Promise<void> {
       backfillDone: null,
       linkedServerUserId: undefined,
       suppressedRevs: {},
+      // Audit #8: every engine reset bumps the generation (see the new-link path).
+      linkGeneration: (current?.linkGeneration ?? 0) + 1,
     });
   });
 }
