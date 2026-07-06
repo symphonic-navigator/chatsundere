@@ -416,127 +416,130 @@ now that the id is known up front (it is the `templateId`).
 - Test: `apps/user-client/tests/data/use-upsert-provider.test.ts`
 
 **Interfaces:**
-- Produces: `useUpsertProvider()` mutation taking `{ templateId, apiKey, enabled }` (no `id`), keyed by `templateId`.
+- Produces: `upsertProviderRow(args: UpsertArgs): Promise<ProviderRow>` — the React-free write core, keyed by `templateId`. `useUpsertProvider()` is a thin mutation wrapper over it.
+- `UpsertArgs = { templateId: string; apiKey: ProviderRow['apiKey']; enabled: boolean }` (no `id`).
 
 - [ ] **Step 1: Write the failing test**
 
+Drives the real write core (not a raw `db.put`), in the default local-only link
+state (so `mutateSynced` takes its passthrough branch and the create path enqueues
+nothing) — the test exercises the actual code under test.
+
 ```ts
-// apps/user-client/tests/data/use-upsert-provider.test.ts
+// apps/user-client/tests/data/upsert-provider-row.test.ts
 import 'fake-indexeddb/auto';
 import { asMasterKey, getRandomBytes } from '@chatsundere/crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { _resetClientDataDbForTests, getClientDataDb, openClientDataDb } from '../../src/boot/client-data-db.js';
+import { upsertProviderRow } from '../../src/data/providers.js';
 import { sealSecret } from '../../src/lib/secrets.js';
 
-// useUpsertProvider is a hook; exercise its mutationFn logic through the db by
-// importing the extracted writer. If the mutation is not extracted, drive it via
-// renderHook — but the invariant under test is storage shape, so a direct db
-// assertion after two upserts of the same templateId is sufficient and simpler.
-
 const mk = asMasterKey(getRandomBytes(32));
+const seal = (v: string) => sealSecret(v, mk, 'provider/nano-gpt/api-key');
 
-describe('provider upsert keyed by templateId', () => {
+describe('upsertProviderRow (keyed by templateId)', () => {
   beforeEach(async () => {
     await _resetClientDataDbForTests();
     await openClientDataDb();
   });
   afterEach(async () => await _resetClientDataDbForTests());
 
-  it('creates a row whose id equals its templateId with keySlot set', async () => {
-    const db = getClientDataDb();
-    const apiKey = await sealSecret('k1', mk, 'provider/nano-gpt/api-key');
-    await db.providers.put({
-      id: 'nano-gpt', templateId: 'nano-gpt', displayName: 'nano-gpt', baseUrl: '',
-      apiKey, routing: { kind: 'direct' }, enabled: false, keySlot: 'nano-gpt',
-      createdAt: 1, updatedAt: 1,
-    });
-    const row = await db.providers.get('nano-gpt');
-    expect(row?.id).toBe('nano-gpt');
-    expect(row?.keySlot).toBe('nano-gpt');
+  it('creates a row whose id equals its templateId, with keySlot = templateId', async () => {
+    const row = await upsertProviderRow({ templateId: 'nano-gpt', apiKey: await seal('k1'), enabled: false });
+    expect(row.id).toBe('nano-gpt');
+    expect(row.keySlot).toBe('nano-gpt');
+    expect((await getClientDataDb().providers.get('nano-gpt'))?.id).toBe('nano-gpt');
   });
 
-  it('a second put of the same templateId leaves exactly one row', async () => {
+  it('a second upsert of the same templateId updates in place — exactly one row', async () => {
+    await upsertProviderRow({ templateId: 'nano-gpt', apiKey: await seal('a'), enabled: false });
+    await upsertProviderRow({ templateId: 'nano-gpt', apiKey: await seal('b'), enabled: true });
     const db = getClientDataDb();
-    const seal = async (v: string) => sealSecret(v, mk, 'provider/nano-gpt/api-key');
-    const common = { id: 'nano-gpt', templateId: 'nano-gpt', displayName: 'nano-gpt', baseUrl: '', routing: { kind: 'direct' as const }, keySlot: 'nano-gpt', createdAt: 1 };
-    await db.providers.put({ ...common, apiKey: await seal('a'), enabled: false, updatedAt: 1 });
-    await db.providers.put({ ...common, apiKey: await seal('b'), enabled: true, updatedAt: 2 });
     expect(await db.providers.where('templateId').equals('nano-gpt').count()).toBe(1);
+    expect((await db.providers.get('nano-gpt'))?.enabled).toBe(true);
   });
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails/passes appropriately**
+- [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter @chatsundere/user-client test use-upsert-provider`
-Expected: PASS already for the storage-shape invariant (this test pins the target
-shape; it guards Steps 3–4 from regressing it). If it fails, fix the imports first.
+Run: `pnpm --filter @chatsundere/user-client test upsert-provider-row`
+Expected: FAIL — `upsertProviderRow` is not exported.
 
-- [ ] **Step 3: Rewrite `useUpsertProvider`**
+- [ ] **Step 3: Extract the write core and thin the hook**
 
-Replace the `UpsertArgs` interface and `useUpsertProvider` in `data/providers.ts`.
-Remove the `import { uuidv7 } from 'uuidv7';` line.
+In `data/providers.ts`, remove the `import { uuidv7 } from 'uuidv7';` line, replace
+the `UpsertArgs` interface and `useUpsertProvider`, and add the exported core:
 
 ```ts
-interface UpsertArgs {
+export interface UpsertArgs {
   templateId: string;
   apiKey: ProviderRow['apiKey'];
   enabled: boolean;
 }
 
 /**
- * Create or update the single provider row for a template. The row's `id` IS its
- * `templateId` (spec §5), so the sync key is deterministic across devices and a
- * second row cannot exist. A new row seals its api key under its own templateId
- * slot; an edit preserves the existing `keySlot` (which may be a pre-v35 uuid).
+ * Create or update the single provider row for a template (React-free core). The
+ * row's `id` IS its `templateId` (spec §5), so the sync key is deterministic
+ * across devices and a second row cannot exist. A new row seals its api key under
+ * its own templateId slot; an edit preserves the existing `keySlot` (which may be
+ * a pre-v35 uuid).
  */
+export async function upsertProviderRow(args: UpsertArgs): Promise<ProviderRow> {
+  const db = getClientDataDb();
+  const now = Date.now();
+  const existing = await db.providers.get(args.templateId);
+  const row: ProviderRow = existing
+    ? { ...existing, apiKey: args.apiKey, enabled: args.enabled, updatedAt: now }
+    : {
+        id: args.templateId,
+        templateId: args.templateId,
+        displayName: args.templateId,
+        baseUrl: '',
+        apiKey: args.apiKey,
+        routing: { kind: 'direct' },
+        enabled: args.enabled,
+        keySlot: args.templateId,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+  if (existing) {
+    // Class-2 edit (spec §5): gated synced write-through.
+    await mutateSynced({
+      collection: 'providers',
+      key: row.id,
+      tables: ['providers'],
+      write: async (tx) => {
+        await tx.table('providers').put(row);
+      },
+    });
+  } else {
+    const linked = isLinkedForSync();
+    // Class-1 creation-insert: row + outbox row are atomic.
+    await db.transaction('rw', [db.providers, db.syncOutbox], async (tx) => {
+      await db.providers.add(row);
+      if (linked) enqueueSync(tx, 'providers', row.id, 'upsert');
+    });
+    if (linked) scheduleClass1Sync();
+  }
+  return row;
+}
+
+/** Mutation wrapper over {@link upsertProviderRow} that invalidates the list. */
 export function useUpsertProvider() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: UpsertArgs): Promise<ProviderRow> => {
-      const db = getClientDataDb();
-      const now = Date.now();
-      const existing = await db.providers.get(args.templateId);
-      const row: ProviderRow = existing
-        ? { ...existing, apiKey: args.apiKey, enabled: args.enabled, updatedAt: now }
-        : {
-            id: args.templateId,
-            templateId: args.templateId,
-            displayName: args.templateId,
-            baseUrl: '',
-            apiKey: args.apiKey,
-            routing: { kind: 'direct' },
-            enabled: args.enabled,
-            keySlot: args.templateId,
-            createdAt: now,
-            updatedAt: now,
-          };
-
-      if (existing) {
-        // Class-2 edit (spec §5): gated synced write-through.
-        await mutateSynced({
-          collection: 'providers',
-          key: row.id,
-          tables: ['providers'],
-          write: async (tx) => {
-            await tx.table('providers').put(row);
-          },
-        });
-      } else {
-        const linked = isLinkedForSync();
-        // Class-1 creation-insert: row + outbox row are atomic.
-        await db.transaction('rw', [db.providers, db.syncOutbox], async (tx) => {
-          await db.providers.add(row);
-          if (linked) enqueueSync(tx, 'providers', row.id, 'upsert');
-        });
-        if (linked) scheduleClass1Sync();
-      }
-      return row;
-    },
+    mutationFn: upsertProviderRow,
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.providers }),
   });
 }
 ```
+
+- [ ] **Step 3b: Run to verify it passes**
+
+Run: `pnpm --filter @chatsundere/user-client test upsert-provider-row`
+Expected: PASS (2 tests).
 
 - [ ] **Step 4: Simplify the provider sheet `onSave`**
 
@@ -582,7 +585,7 @@ Expected: PASS except the 8 known baseline failures.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/user-client/src/data/providers.ts apps/user-client/src/routes/app/settings/provider.tsx apps/user-client/tests/data/use-upsert-provider.test.ts
+git add apps/user-client/src/data/providers.ts apps/user-client/src/routes/app/settings/provider.tsx apps/user-client/tests/data/upsert-provider-row.test.ts
 git commit -m "Key provider writes by templateId, collapse the seal dance
 
 Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
