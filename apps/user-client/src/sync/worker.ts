@@ -250,6 +250,9 @@ interface OutboxGroup {
   key: string;
   op: 'upsert' | 'delete';
   seqs: number[];
+  /** True when ANY delete op joined this group (audit #2): a later background
+   *  upsert must never silently cancel a queued deletion. */
+  hasDelete: boolean;
 }
 
 /**
@@ -263,13 +266,22 @@ function coalesce(
   const groups = new Map<string, OutboxGroup>();
   for (const row of rows) {
     if (row.seq === undefined) continue;
-    const id = `${row.collection}${row.key}`;
+    // The `:`-separated form (never a bare concat): `${collection}${key}` would
+    // merge distinct pairs that abut ambiguously across collections.
+    const id = keyId(row.collection, row.key);
     const existing = groups.get(id);
     if (existing) {
       existing.seqs.push(row.seq);
       existing.op = row.op; // latest op wins (delete-after-upsert → delete)
+      existing.hasDelete = existing.hasDelete || row.op === 'delete';
     } else {
-      groups.set(id, { collection: row.collection, key: row.key, op: row.op, seqs: [row.seq] });
+      groups.set(id, {
+        collection: row.collection,
+        key: row.key,
+        op: row.op,
+        seqs: [row.seq],
+        hasDelete: row.op === 'delete',
+      });
     }
   }
   return [...groups.values()];
@@ -370,7 +382,27 @@ export async function drainOutbox(): Promise<DrainResult> {
 
     const row = await readLocalRow(group.collection, group.key);
     if (row === undefined || row === null) {
-      // Upsert of a row that no longer exists locally — nothing to seal.
+      if (group.hasDelete && meta) {
+        // Audit #2: the row is gone AND a delete was queued AND the server knows
+        // it — the truthful push is the tombstone. A background job's no-op upsert
+        // of the deleted key raced in behind the delete; last-op-wins must not eat
+        // the deletion (the server would otherwise keep the record forever and a
+        // later recovery would resurrect it locally). Construct the delete entry
+        // explicitly so `hasDelete` never leaks into the sealed `CoalescedEntry`.
+        const entry: CoalescedEntry = {
+          collection: group.collection,
+          key: group.key,
+          op: 'delete',
+          seqs: group.seqs,
+          row: undefined,
+          baseRev,
+        };
+        prepared.push(await prepareRecord(crypto, mk, entry));
+        continue;
+      }
+      // No queued delete (or the server never knew the row, L-4): an upsert of a
+      // vanished row has nothing truthful to seal — dropping is correct. Minting a
+      // tombstone here would be the wrong polarity / a bogus baseRev-0 push.
       seqsToDrop.push(...group.seqs);
       continue;
     }
