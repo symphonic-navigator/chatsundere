@@ -196,17 +196,18 @@ const offerings: Offering[] = [
   // The `include_reasoning` flag is bound in registerOpenRouter (OpenRouter gates
   // OpenAI's reasoning summary behind it). No ZDR (honest US-router baseline).
   //
-  // Verified live 2026-07-06 (suite): gpt-4o and gpt-4.1 fully green. Two caveats
-  // survive on OpenRouter, both kept at Chris's call (both-providers coverage)
-  // with `confidence: 'partial'` and documented in the Model Curation Records:
-  //   - gpt-4o-2024-11-20 → HTTP 404 under our key's data policy: this pinned
-  //     checkpoint has a single OpenAI endpoint that fails OpenRouter's privacy
-  //     guardrail. Needs the account's data policy relaxed to route (base gpt-4o,
-  //     with multiple endpoints, passes). Verify on the user's own key/settings.
-  //   - GPT-5 family → reasoning HAPPENS (reasoning_tokens, tools, vision, usage
-  //     all green) but OpenRouter surfaces OpenAI's reasoning SUMMARY only
-  //     stochastically, so the visible chain-of-thought is unreliable here (it is
-  //     reliable on nano-gpt, which streams the summary natively).
+  // Verified live 2026-07-06 (suite): gpt-4o, gpt-4o-2024-11-20 and gpt-4.1 all
+  // green. One caveat survives on the GPT-5 family, kept at Chris's call with
+  // `confidence: 'partial'` and documented in the Model Curation Record: reasoning
+  // HAPPENS (reasoning_tokens, tools, vision, usage all green) but OpenRouter
+  // surfaces OpenAI's reasoning SUMMARY only stochastically (re-confirmed on a
+  // fully-open account — it is OpenAI's behaviour, not a routing policy), so the
+  // visible chain-of-thought is unreliable here (reliable on nano-gpt, which
+  // streams the summary natively). Note: gpt-4o-2024-11-20's sole endpoint is
+  // OpenAI-direct, so it 404s under a strict OpenRouter account data policy (base
+  // gpt-4o falls back to Azure); it routes once the account allows that endpoint —
+  // end users with a locked-down OR policy will still 404, so nano-gpt is the
+  // reliable route for that checkpoint.
   openRouterOffering('chatgpt-4o', 'openai/gpt-4o', {
     vision: true,
     reasoning: OPENAI_NONE,
@@ -216,9 +217,6 @@ const offerings: Offering[] = [
     vision: true,
     reasoning: OPENAI_NONE,
     recommended: 128_000,
-    // 404s under our data policy (single OpenAI endpoint fails the guardrail);
-    // route once the account's data policy is relaxed. Verify on the user's key.
-    confidence: 'partial',
   }),
   openRouterOffering('chatgpt-4.1', 'openai/gpt-4.1', {
     vision: true,

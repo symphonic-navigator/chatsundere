@@ -87,30 +87,29 @@ cadence, so we surface **two** distinct user-pickable identities:
 | Canonical | Display | Slug (both providers) | Reasoning | rec / max | Notes |
 |---|---|---|---|---|---|
 | `chatgpt-4o` | ChatGPT 4o | `openai/gpt-4o` | none | 128k / 128k | floating "unclarified" checkpoint |
-| `chatgpt-4o-2024-11-20` | ChatGPT 4o 11/24 | `openai/gpt-4o-2024-11-20` | none | 128k / 128k | closest to "GG"; **OR 404 caveat** |
+| `chatgpt-4o-2024-11-20` | ChatGPT 4o 11/24 | `openai/gpt-4o-2024-11-20` | none | 128k / 128k | closest to "GG"; OR needs an open data policy (see caveat 1) |
 | `chatgpt-4.1` | ChatGPT 4.1 | `openai/gpt-4.1` | none | 200k / ~1M | |
 | `chatgpt-5` | ChatGPT 5 | `openai/gpt-5.1` | steps | 200k / 400k | "GPT-5" is served by the 5.1 endpoint (Chris's mapping) |
 | `chatgpt-5.4` | ChatGPT 5.4 | `openai/gpt-5.4` | steps | 200k / ~1M | |
 | `chatgpt-5.5` | ChatGPT 5.5 | `openai/gpt-5.5` | steps | 200k / ~1M | |
 
-## OpenRouter caveats (both kept at Chris's call — `confidence: 'partial'`)
+## OpenRouter caveats
 
-Chris chose maximum provider coverage over dropping the affected routes; the
-caveats are recorded honestly rather than hidden.
-
-1. **`chatgpt-4o-2024-11-20` → HTTP 404 under our data policy.** Not a missing
-   model: this pinned checkpoint has a **single** OpenAI endpoint on OpenRouter
-   that fails the account's privacy guardrail — `"No endpoints available matching
-   your guardrail restrictions and data policy"`. The base `openai/gpt-4o` (many
-   endpoints) passes. **Action for Chris:** relax the account data policy at
-   <https://openrouter.ai/settings/privacy> (allow the OpenAI endpoint / providers
-   that may train), then re-run `curation/run-openai-suite.ts openrouter:openai/gpt-4o-2024-11-20`
-   to lift it to `verified`. End users with strict OpenRouter privacy settings
-   will hit the same 404 — the CENSORED-family route is best served by nano-gpt.
+1. **`chatgpt-4o-2024-11-20` → data-policy 404 — RESOLVED 2026-07-06.** This
+   pinned checkpoint's **sole** OpenRouter endpoint is OpenAI-direct (base
+   `openai/gpt-4o` also has an Azure endpoint and falls back to it), so under a
+   strict account data policy it 404'd — `"No endpoints available matching your
+   guardrail restrictions and data policy"`. Chris opened the account's data
+   policy at <https://openrouter.ai/settings/privacy> to allow that endpoint;
+   the offering then ran **green** (`confidence: 'verified'`). **Note for users:**
+   anyone with a locked-down OpenRouter privacy policy will hit the same 404 —
+   nano-gpt is the reliable route for this checkpoint.
 2. **GPT-5 family reasoning summary is stochastic on OpenRouter** (see mechanics
-   above). Reasoning works; the visible trace is unreliable. Reliable on nano-gpt.
-
-Both are tracked in [[../insights/follow-ups-index]].
+   above) — kept at `confidence: 'partial'`. Reasoning works (tokens/tools/vision/
+   usage green); the visible trace is unreliable. Re-confirmed on a fully-open
+   account (different effort steps failed across two runs), so it is OpenAI's
+   behaviour, not a routing policy. Reliable on nano-gpt. Tracked in
+   [[../insights/follow-ups-index]].
 
 ## Validation (live conversation-suite, 2026-07-06, `curation/run-openai-suite.ts`)
 
@@ -124,7 +123,7 @@ the `vision` scenario.
 | `nano-gpt:*` (all six) | **PASS** — tool fires, JSON valid, usage normalised, memory carried, reasoning present on every on-step and absent on off | **PASS** |
 | `openrouter:openai/gpt-4o` | **PASS** | **PASS** |
 | `openrouter:openai/gpt-4.1` | **PASS** | **PASS** |
-| `openrouter:openai/gpt-4o-2024-11-20` | **404** (data policy — caveat 1) | 404 |
+| `openrouter:openai/gpt-4o-2024-11-20` | **PASS** (after the account data-policy unlock — caveat 1) | **PASS** |
 | `openrouter:openai/gpt-5.1` · `gpt-5.4` · `gpt-5.5` | tool/usage/memory **PASS**; `reasoning-present` **flaky** (caveat 2) | **PASS** |
 
 nano-gpt gpt-5.1 and gpt-5.4 were each run to a full green across all effort
