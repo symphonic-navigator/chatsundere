@@ -1,5 +1,39 @@
 # Chatsundere Status — Full Backend Transition
 
+**Last updated:** 2026-07-06 — **SYNC AUDIT DONE (1 CRITICAL + 7 HIGH, all
+code-verified) → spec + overnight plan committed; remote run imminent.** A
+four-package adversarial audit of the client sync engine (push / pull+trash /
+lifecycle / blob) found the steady-state machinery solid but eight severe
+defects in two roots: (A) the watermark advances past non-durably-absorbed
+records (`!mk` mid-pull CRITICAL; suppressed-rev loss after Undo; recovery
+drops pending deletes), (B) transitions violate steady-state premises
+(recovery skips pulled tombstones via cleared `syncRows`; restore revives
+blobRefs without re-PUT/delete-cancel — irreversible byte loss;
+`blob_reupload_threshold` ask has no answer path; relink races in-flight
+drains). Every severe finding was independently re-verified at code level;
+~13 MEDIUMs + LOWs recorded for the follow-ups index (spec §7). **Artefacts
+on the branch:** spec
+`superpowers/specs/2026-07-06-sync-audit-fixes-design.md` (5 numbered PRs,
+no Dexie bump anywhere — all new fields unindexed), overnight-hardened plan
+`superpowers/plans/2026-07-06-sync-audit-fixes.md` (11 TDD tasks, lanes
+α PR1→2→3 ∥ β PR4, PR5 on the local lane merge; worker never touches
+master/STATUS/obsidian; PRs into `full-backend-transition`), both `771265a7`.
+**Parallel-work scaffold `7d7979b5`:** `SettingsRow.artefactExpertModel`
+(allowlisted) + `ChatRow.useArtefactExpertModel` (absent ⇒ true) pre-landed
+so Chris's parallel artefact-expert feature and the remote run cannot
+collide (`strip.ts` untouched by all 5 PRs). Gates: typecheck 14/14
+uncached, strip+apply 35/35, Biome clean. **NEXT:** Chris reads spec (focus:
+§3.1c Undo semantics, §3.3 polarity, §3.2b affordance, §3.4 residual race,
+§3.5 discard polarity, §8 device steps, §9 coordination), pushes, starts the
+remote run with the kickoff prompt. Morning integration: Liz reviews PRs
+1→5, **Larissa on the combined diff** (mandatory sync/trash path), **Laura**
+on the "Upload them now" affordance, merge, Chris's six §8 two-browser
+scenarios, STATUS + follow-ups update. Parallel here: artefact-expert
+feature (own worktree) + possibly 1–2 LLM curations (adapter-only,
+collision-free).
+
+---
+
 **Last updated:** 2026-07-05 (later) — **v0.2.0 PRE-RELEASE BLOCKERS FIXED +
 INTEGRATED onto `full-backend-transition` (fast-forward → `9b224df2`).** The
 2026-07-05 three-way deep-audit's six release-blockers (+ one MEDIUM-2 rider +
