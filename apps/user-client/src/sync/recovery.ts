@@ -61,6 +61,18 @@ const PULL_PAGE_LIMIT = 200;
 const PULL_PAGE_CAP = 64;
 
 /**
+ * Thrown when the session MK vanishes mid-pull-all (audit finding #1): recovery
+ * aborts BEFORE the step-5 epoch persist, so the persisted epoch still mismatches
+ * and the whole recovery re-runs once the engine is available again.
+ */
+export class RecoveryAbortedError extends Error {
+  constructor() {
+    super('Recovery aborted: engine unavailable mid-pull.');
+    this.name = 'RecoveryAbortedError';
+  }
+}
+
+/**
  * Per-recovery blob re-upload threshold (spec §8, default 512 MiB): above this
  * the recovery ASKS before uploading (a `blob_reupload_threshold` attention),
  * rather than silently pushing a large amount over a possibly-costly link.
@@ -226,7 +238,7 @@ async function performRecovery(): Promise<void> {
   // so the pull starts from `since=0`.
   await db.syncRows.clear();
   await getSyncState();
-  await db.syncState.update(STATE_ID, { watermarkRev: 0 });
+  await db.syncState.update(STATE_ID, { watermarkRev: 0, suppressedRevs: {} });
 
   // Step 3 — pull-all from 0 under §7's rules. Captures the new epoch from the
   // authenticated responses but does NOT compare/persist it (that is step 5).
@@ -358,7 +370,12 @@ async function pullAllFromZero(): Promise<string | null> {
 
       let highestRev = watermarkRev;
       for (const record of response.records) {
-        await applyRecord(record);
+        const outcome = await applyRecord(record);
+        // Engine loss (locked/forgotten session) mid-pull-all: abort BEFORE the
+        // step-5 epoch persist so the new epoch is never written over an unapplied
+        // corpus (audit finding #1). The persisted epoch still mismatches, so the
+        // next authenticated cycle re-runs the whole recovery.
+        if (outcome.kind === 'unavailable') throw new RecoveryAbortedError();
         if (record.rev > highestRev) highestRev = record.rev;
       }
       await advanceWatermark(Math.max(watermarkRev, highestRev));

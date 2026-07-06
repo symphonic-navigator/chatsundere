@@ -22,7 +22,49 @@ function defaultState(): SyncStateRow {
     backfillPending: false,
     backfillTotal: null,
     backfillDone: null,
+    suppressedRevs: {},
   };
+}
+
+/** Record a suppressed pulled rev so a fast Undo can rewind below it (audit #5). */
+export async function recordSuppressedRev(
+  collection: string,
+  key: string,
+  rev: number,
+): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.syncState, async () => {
+    const state = await getSyncState();
+    const map = { ...(state.suppressedRevs ?? {}) };
+    const id = `${collection}:${key}`;
+    map[id] = Math.max(map[id] ?? 0, rev);
+    await db.syncState.update(STATE_ID, { suppressedRevs: map });
+  });
+}
+
+/**
+ * Consume (read + delete) the suppressed revs for the given pairs; returns the
+ * minimum, or null when none were recorded.
+ */
+export async function takeSuppressedRevs(
+  pairs: Array<{ collection: string; key: string }>,
+): Promise<number | null> {
+  const db = getClientDataDb();
+  let min: number | null = null;
+  await db.transaction('rw', db.syncState, async () => {
+    const state = await getSyncState();
+    const map = { ...(state.suppressedRevs ?? {}) };
+    for (const p of pairs) {
+      const id = `${p.collection}:${p.key}`;
+      const rev = map[id];
+      if (rev !== undefined) {
+        min = min === null ? rev : Math.min(min, rev);
+        delete map[id];
+      }
+    }
+    await db.syncState.update(STATE_ID, { suppressedRevs: map });
+  });
+  return min;
 }
 
 /**
@@ -62,6 +104,25 @@ export async function advanceWatermark(rev: number): Promise<void> {
   await db.transaction('rw', db.syncState, async () => {
     const state = await getSyncState();
     const next = Math.max(state.watermarkRev, rev);
+    if (next !== state.watermarkRev) {
+      await db.syncState.update(STATE_ID, { watermarkRev: next });
+    }
+  });
+}
+
+/**
+ * DELIBERATE monotonicity exception (audit #5; the recovery `watermarkRev: 0`
+ * reset is the other one): rewind the watermark so a suppressed-then-undone
+ * foreign edit is re-delivered. Only ever called with `suppressedRev - 1`,
+ * i.e. a rev the server actually served — never attacker-controllable input.
+ * Rewinding lower than necessary is safe (re-deliveries are idempotent echoes);
+ * rewinding is never allowed to move FORWARD (min clamp).
+ */
+export async function rewindWatermark(rev: number): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.syncState, async () => {
+    const state = await getSyncState();
+    const next = Math.min(state.watermarkRev, Math.max(0, rev));
     if (next !== state.watermarkRev) {
       await db.syncState.update(STATE_ID, { watermarkRev: next });
     }

@@ -35,6 +35,7 @@ export async function resetEngineStateForNewLink(): Promise<void> {
       backfillTotal: null,
       backfillDone: null,
       linkedServerUserId: linked?.server_user_id,
+      suppressedRevs: {},
     });
   });
   // Clear the in-memory auth-degraded latch too: this fresh account holds valid
@@ -70,6 +71,7 @@ export async function resetEngineStateForLocalOnly(): Promise<void> {
       backfillTotal: null,
       backfillDone: null,
       linkedServerUserId: undefined,
+      suppressedRevs: {},
     });
   });
 }

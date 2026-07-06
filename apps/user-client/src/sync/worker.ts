@@ -75,6 +75,7 @@ import {
   setAttention,
   setPulling,
   settleTransientAttention,
+  takeSuppressedRevs,
 } from './watermark.js';
 
 /**
@@ -634,6 +635,12 @@ async function applyOk(prep: PreparedRecord, rev: number): Promise<void> {
       .and((r) => r.terminal === true)
       .delete();
   });
+  // Audit #5: the server-authoritative delete ack is terminal for this key — clear
+  // any suppressed-rev the Undo rewind would have consumed (its own transaction, so
+  // called OUTSIDE the scope above, which does not include `syncState`).
+  if (prep.op === 'delete') {
+    await takeSuppressedRevs([{ collection: prep.collection, key: prep.key }]);
+  }
   // §11.3 — a swept terminal sentinel means a previously oversize record just
   // synced under a smaller edit: retire the global `record_too_large` banner (its
   // durable, per-item signal is the §10 item marker, not this status line). Only
@@ -751,6 +758,10 @@ async function applyTombstoned(prep: PreparedRecord): Promise<void> {
       await db.syncOutbox.bulkDelete(prep.seqs);
     },
   );
+  // Audit #5: a server tombstone is terminal for this key — clear any suppressed-rev
+  // the Undo rewind would have consumed (its own transaction, called OUTSIDE the
+  // scope above, which does not include `syncState`).
+  await takeSuppressedRevs([{ collection: prep.collection, key: prep.key }]);
 }
 
 /**
@@ -976,6 +987,7 @@ export async function runPullLoop(): Promise<void> {
       let lowestDeferredRev: number | null = null; // per PAGE
       let highestApplied = watermarkRev; // per PAGE, seeded from this page's since
       let cappedThisCycle = false; // per PAGE (drives this page's `more`)
+      let engineUnavailable = false; // the MK vanished mid-page (audit finding #1)
       for (const record of ordered) {
         if (record.rev <= watermarkRev) continue; // L-B: honest servers never send these
         if (record.deleted && applied >= TOMBSTONE_CYCLE_CAP) {
@@ -984,14 +996,30 @@ export async function runPullLoop(): Promise<void> {
           cappedThisCycle = true;
           continue; // defer this tombstone; keep scanning the page for the true minimum
         }
-        await applyRecord(record);
+        const outcome = await applyRecord(record);
+        if (outcome.kind === 'unavailable') {
+          // Engine loss (locked/forgotten session): this record and the rest of the
+          // page were NOT absorbed, so they are never counted into `highestApplied`.
+          // Abort the page and hold the watermark — advancing past the unapplied tail
+          // would be permanent loss (the server only serves rev > since).
+          engineUnavailable = true;
+          break;
+        }
         if (record.deleted) applied += 1; // accumulates across pages (cycle-scoped `applied`)
         if (record.rev > highestApplied) highestApplied = record.rev;
       }
       // Watermark: hold below the lowest deferred rev, else advance to highest applied.
+      // Everything up to `highestApplied` was durably absorbed, so persisting it is
+      // safe even on an engine-loss abort; the deferred-tombstone `min` still wins
+      // (holding the lower watermark is always safe).
       const nextWatermark = lowestDeferredRev !== null ? lowestDeferredRev - 1 : highestApplied;
       await advanceWatermark(nextWatermark); // monotone clamp inside
       flushInvalidations();
+
+      // Engine-loss abort: stop the whole loop now (the finally still clears
+      // `pulling`), BEFORE deciding `more` — the next unlocked cycle resumes from
+      // the held watermark.
+      if (engineUnavailable) return;
 
       // L-A: once the cap trips, stop paging this cycle (the next trigger resumes).
       more = cappedThisCycle ? false : response.more;

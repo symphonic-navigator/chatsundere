@@ -23,7 +23,7 @@ import { enqueueBlobPut } from './enqueue.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
 import { extractKeyFor } from './sync-keys.js';
-import { getSyncState, setAttention } from './watermark.js';
+import { getSyncState, recordSuppressedRev, setAttention } from './watermark.js';
 
 /**
  * Pull-side application (spec §7 — the security-critical path). `applyRecord`
@@ -70,7 +70,10 @@ export const TOMBSTONE_CYCLE_CAP = 200;
 export type ApplyOutcome =
   | { kind: 'echo' } // §7.0 — my own re-delivered write; rev adopted, no data change
   | { kind: 'stale' } // rev ≤ syncRows.rev — ignored
-  | { kind: 'rejected' } // §7.1 inert rejection (open failed) or no MK
+  | { kind: 'rejected' } // §7.1 inert rejection (open failed) — mutates nothing
+  // Engine-availability failure (no MK): NOT poison — the pull loop must abort and
+  // hold the watermark (audit finding #1).
+  | { kind: 'unavailable' }
   | { kind: 'skipped' } // §7.2 unhandled collection (vectors — materialised elsewhere)
   | { kind: 'tombstoned' } // §7.3 — row routed to trash (or nothing local to move)
   | { kind: 'tamper' } // §7.4 H-1 — upsert onto a live tombstone anchor, rejected
@@ -395,7 +398,12 @@ async function findKeyByBlindId(
  */
 export async function applyRecord(pulled: SyncPulledRecord): Promise<ApplyOutcome> {
   const mk = useSessionStore.getState().mk;
-  if (!mk) return { kind: 'rejected' };
+  // Engine loss (locked/forgotten session) is NOT a per-record rejection: the MK
+  // may have vanished mid-page (a concurrent `closeAndForget()`), so the pull loop
+  // must ABORT and hold the watermark rather than advance past the unapplied tail
+  // (audit finding #1). The server only serves rev > since, so a wrongly-advanced
+  // watermark is permanent data loss.
+  if (!mk) return { kind: 'unavailable' };
 
   const collection = pulled.collection;
 
@@ -562,7 +570,14 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
       return { kind: 'tamper' };
     }
     // §7.4 L-3 — a pending local delete wins locally too; suppress the insert.
-    if (await hasPendingDelete(collection, key)) return { kind: 'suppressed' };
+    // Audit #3/#5: establish the CAS base (so a recovery drain still finds meta and
+    // mints the tombstone, and a post-Undo edit pushes a correct baseRev) and record
+    // the suppressed rev (so an Undo can rewind the watermark below it).
+    if (await hasPendingDelete(collection, key)) {
+      await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
+      await recordSuppressedRev(collection, key, pulled.rev);
+      return { kind: 'suppressed' };
+    }
 
     await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
     await afterApplied(collection, key, row);

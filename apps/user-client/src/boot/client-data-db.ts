@@ -604,6 +604,9 @@ export interface SyncStateRow {
    * "unknown identity", never as a mismatch).
    */
   linkedServerUserId?: string;
+  /** Highest pulled-but-suppressed rev per `collection:key` (audit #5): consumed
+   *  by the fast-Undo watermark rewind, cleared on drain-ack/recovery/relink. */
+  suppressedRevs?: Record<string, number>;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */
