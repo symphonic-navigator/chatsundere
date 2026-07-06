@@ -6,6 +6,8 @@ import { deleteDocumentCascade, deleteLibraryCascade } from '../data/knowledge.j
 import { deletePersonaCascade } from '../data/personas.js';
 import { rejectEntry } from '../memory/repo.js';
 import { isDeadKey } from '../sync/dead-keys.js';
+import { scheduleClass1Sync } from '../sync/triggers.js';
+import { rewindWatermark, takeSuppressedRevs } from '../sync/watermark.js';
 
 /** Thrown when a fast in-place Undo is attempted after the delete has already drained
  *  (a dead-key marker exists). The caller must fall back to the new-identity restore. */
@@ -107,6 +109,18 @@ export async function softDelete(
         for (const snap of snapshots) await tx.table(snap.collection).put(snap.row);
         await tx.table('trash').bulkDelete(addedIds);
       });
+
+      // Audit #5: a foreign edit pulled while our delete was pending was suppressed
+      // and its rev skipped. Now that the delete is undone, rewind the watermark
+      // below the lowest suppressed rev so the next pull re-delivers it and normal
+      // LWW resolution runs against the restored row.
+      const minSuppressed = await takeSuppressedRevs(
+        snapshots.map((s) => ({ collection: s.collection, key: s.key })),
+      );
+      if (minSuppressed !== null) {
+        await rewindWatermark(minSuppressed - 1);
+        scheduleClass1Sync(); // kick a pull promptly rather than waiting for the timer
+      }
     },
   };
 }

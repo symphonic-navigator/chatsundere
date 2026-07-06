@@ -110,6 +110,25 @@ export async function advanceWatermark(rev: number): Promise<void> {
   });
 }
 
+/**
+ * DELIBERATE monotonicity exception (audit #5; the recovery `watermarkRev: 0`
+ * reset is the other one): rewind the watermark so a suppressed-then-undone
+ * foreign edit is re-delivered. Only ever called with `suppressedRev - 1`,
+ * i.e. a rev the server actually served — never attacker-controllable input.
+ * Rewinding lower than necessary is safe (re-deliveries are idempotent echoes);
+ * rewinding is never allowed to move FORWARD (min clamp).
+ */
+export async function rewindWatermark(rev: number): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.syncState, async () => {
+    const state = await getSyncState();
+    const next = Math.min(state.watermarkRev, Math.max(0, rev));
+    if (next !== state.watermarkRev) {
+      await db.syncState.update(STATE_ID, { watermarkRev: next });
+    }
+  });
+}
+
 /** Set (or clear) the multi-page pull-progress state the status line renders. */
 export async function setPulling(p: { pages: number; startedAt: number } | null): Promise<void> {
   await getSyncState();

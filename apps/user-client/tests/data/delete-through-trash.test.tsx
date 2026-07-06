@@ -2,7 +2,7 @@
 
 import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { uuidv7 } from 'uuidv7';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -83,8 +83,13 @@ describe('useDeleteChat routes through the trashcan', () => {
     expect(undo).toBeDefined();
     await act(async () => {
       undo?.onClick();
-      // Let the fire-and-forget restore task settle.
-      await new Promise((r) => setTimeout(r, 0));
+    });
+    // The Undo's restore chain is fire-and-forget; wait for it to settle FULLY —
+    // the DB restore and the deferred "Restored." toast — so nothing bleeds into the
+    // next test (a fixed setTimeout(0) is too short now that restore also rewinds
+    // the watermark below any suppressed rev).
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts.some((t) => t.message === 'Restored.')).toBe(true);
     });
 
     expect((await db.chats.get(chatId))?.personaId).toBe('p1');
