@@ -37,6 +37,14 @@ Findings **#1–#4 and #6 are FIXED** on the branch; #5 and #7–#10 remain open
 
 Test plan impact: step 1 now has the *fixed* expectation (deviceless recovery works with the **new** key after rotation); step 3 expects a genuinely clean device from the in-app delete; step 4 expects a 403 + disabled button; step 8 expects immediate revocation instead of the 15-minute window.
 
+## Addendum 2026-07-07 — findings #8 and #9 fixed (branch `claude/pre-test-analysis-open-items-6s118y`)
+
+- **#8 fixed.** Whole-cycle transport failures are no longer swallowed silently: three consecutive failed sync cycles raise a new self-healing `transport_failing` attention (rendered on the account page's status line AND app-wide via `GlobalSyncLine`, where it is collapsible to the dot — no affordance to hide). Failures are counted only while connectivity reads `linked_online`, so airplane mode never false-alarms; the next completed cycle retires the banner, resets the streak, and stamps `lastSyncAt` (previously never written — the "Synced · …" relative suffix now works too).
+- **#9 fixed.** While the first post-link sync is pending (linked, online, `lastSyncAt === null`), the Entrance Hall shows a calm non-gold "Syncing your account…" card instead of the SetupCard's "Create your first companion" — closing the duplicate-persona misdirection after deviceless recovery/pairing. Local-only and offline devices keep the SetupCard. Laura pre-squash on both: **no hard defects** (her lead soft — the banner's collapsibility — folded).
+- **Still open: #5 (mindspace convergence — dedicated session), #7 (join/finish invitation strand — runbook now, structural fix a Lyra/Chris design question), #10 (QR native-camera dead end — operator documentation + the F7 base-URL convention decision).**
+
+Test plan impact: step 9's first leg now has a *fixed* expectation — a persistently 500-ing sync-service surfaces the `transport_failing` banner after ~3 failed cycles instead of nothing; step 2's setup-card misdirection watch is replaced by the expectation of the "Syncing your account…" card while the backfill/first pull runs.
+
 ---
 
 ## Q1 — Can user data only be seen by the user themself, after authentication?
