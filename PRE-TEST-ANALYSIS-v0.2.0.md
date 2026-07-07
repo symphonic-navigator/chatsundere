@@ -41,9 +41,27 @@ Test plan impact: step 1 now has the *fixed* expectation (deviceless recovery wo
 
 - **#8 fixed.** Whole-cycle transport failures are no longer swallowed silently: three consecutive failed sync cycles raise a new self-healing `transport_failing` attention (rendered on the account page's status line AND app-wide via `GlobalSyncLine`, where it is collapsible to the dot — no affordance to hide). Failures are counted only while connectivity reads `linked_online`, so airplane mode never false-alarms; the next completed cycle retires the banner, resets the streak, and stamps `lastSyncAt` (previously never written — the "Synced · …" relative suffix now works too).
 - **#9 fixed.** While the first post-link sync is pending (linked, online, `lastSyncAt === null`), the Entrance Hall shows a calm non-gold "Syncing your account…" card instead of the SetupCard's "Create your first companion" — closing the duplicate-persona misdirection after deviceless recovery/pairing. Local-only and offline devices keep the SetupCard. Laura pre-squash on both: **no hard defects** (her lead soft — the banner's collapsibility — folded).
-- **Still open: #5 (mindspace convergence — dedicated session), #7 (join/finish invitation strand — runbook now, structural fix a Lyra/Chris design question), #10 (QR native-camera dead end — operator documentation + the F7 base-URL convention decision).**
+- **Still open: #7 (join/finish invitation strand — runbook now, structural fix a Lyra/Chris design question), #10 (QR native-camera dead end — operator documentation + the F7 base-URL convention decision).**
 
 Test plan impact: step 9's first leg now has a *fixed* expectation — a persistently 500-ing sync-service surfaces the `transport_failing` banner after ~3 failed cycles instead of nothing; step 2's setup-card misdirection watch is replaced by the expectation of the "Syncing your account…" card while the backfill/first pull runs.
+
+## Addendum 2026-07-07 (later) — finding #5 fixed (this branch)
+
+- **#5 fixed.** Built-in mindspaces now carry deterministic slug ids
+  (`mindspace-builtin-<name>`, defined once in `BUILT_IN_MINDSPACES`); a Dexie v36
+  migration rekeys the seeded rows and remaps every reference in the same
+  transaction — `settings.defaultMindspaceId`, `personas.mindspaceId`,
+  `chats.resolvedMindspaceId` (a third synced reference field the original finding
+  missed: every synced chat rendered with the fallback palette on other devices),
+  and trash row snapshots. Built-ins stay excluded from sync; convergence follows
+  from identical seeding. No republish choreography — same load-bearing assumption
+  as the provider fix (no real account has pre-migration ciphertext; v0.1.3 is
+  local-only, dev sync state is reset before go-live). Spec:
+  [`superpowers/specs/2026-07-07-builtin-mindspace-deterministic-ids-design.md`](superpowers/specs/2026-07-07-builtin-mindspace-deterministic-ids-design.md).
+
+Test plan impact: step 7's second leg now has a *fixed* expectation — device B
+shows device A's chosen default/persona mindspace after sync (and synced chats
+render with their original palette) instead of the silent fallback.
 
 ---
 
@@ -181,7 +199,7 @@ Ordered so the highest-risk findings get verified first.
 4. **Primary-admin self-delete (finding #3):** as sole primary admin call the account-delete path (via API if no UI) — confirm whether the instance is left ownerless. Decide guard before go-live.
 5. **Uplift happy path:** local alpha profile with personas + a sealed provider key → late-link via invitation → secrets still open, backfill completes, `backfillPending` clears; username-collision variant → rename-and-retry fires.
 6. **Uplift interruption:** kill the network exactly around `join/finish` → confirm the `code_already_redeemed` strand and the mint-new-invitation remedy; kill mid-backfill → confirm resume on reconnect/reboot.
-7. **Multi-device convergence:** create the same provider on two devices (verify the v35 dedup); set a built-in mindspace as default/persona mindspace on device A and check device B (expect the silent fallback — finding #5).
+7. **Multi-device convergence:** create the same provider on two devices (verify the v35 dedup); set a built-in mindspace as default/persona mindspace on device A and check device B (expect convergence — finding #5 fixed).
 8. **Admin role lifecycle across devices:** promote/demote/transfer-primary with a second linked device open — observe the ≤15-min token window, the stale gold tile, and that the admin-client itself 403s correctly on fresh login.
 9. **Sync failure visibility:** force the sync-service to 500 persistently → confirm what (if anything) the user sees; quota-exceeded → banner appears, retires only after an accepted write; oversized record → terminal banner, drain not wedged.
 10. **QR paths:** in-app camera scan (works) vs native camera scan (dead end — document for operators).

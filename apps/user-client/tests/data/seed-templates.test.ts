@@ -23,7 +23,7 @@ afterEach(async () => {
 
 describe('seedTemplates CRUD', () => {
   it('opens at version 33 on a fresh install', () => {
-    expect(getClientDataDb().verno).toBe(35);
+    expect(getClientDataDb().verno).toBe(36);
   });
 
   it('creates and reads back a template with greeting + body', async () => {

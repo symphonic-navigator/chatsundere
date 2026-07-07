@@ -154,7 +154,7 @@ describe('client-data-db v33 — sync engine schema', () => {
   it('opens at version 33 with the four sync tables on a fresh install', async () => {
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(35);
+    expect(db.verno).toBe(36);
     const names = db.tables.map((t) => t.name);
     expect(names).toContain('syncOutbox');
     expect(names).toContain('syncRows');
@@ -168,7 +168,7 @@ describe('client-data-db v33 — sync engine schema', () => {
     await openClientDataDb();
 
     const db = getClientDataDb();
-    expect(db.verno).toBe(35);
+    expect(db.verno).toBe(36);
 
     // Unstamped rows gain a numeric updatedAt.
     for (const [table, id] of [
