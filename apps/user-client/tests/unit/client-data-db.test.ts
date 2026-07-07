@@ -35,18 +35,18 @@ describe('chatsundere_client_data Dexie schema', () => {
     expect(settings?.expertModel).toBeNull();
   });
 
-  it('seeds seven built-in mindspaces on first open', async () => {
+  it('seeds seven built-in mindspaces with deterministic slug ids on first open', async () => {
     const db = await openClientDataDb();
     const all = await db.mindspaces.toArray();
-    const names = all.map((m) => m.displayName).sort();
-    expect(names).toEqual([
-      'Aurum',
-      'Azuro',
-      'Crimson',
-      'Indigaut',
-      'Rosari',
-      'Verdan',
-      'Violetta',
+    const ids = all.map((m) => m.id).sort();
+    expect(ids).toEqual([
+      'mindspace-builtin-aurum',
+      'mindspace-builtin-azuro',
+      'mindspace-builtin-crimson',
+      'mindspace-builtin-indigaut',
+      'mindspace-builtin-rosari',
+      'mindspace-builtin-verdan',
+      'mindspace-builtin-violetta',
     ]);
     expect(all.every((m: MindspaceRow) => m.builtIn === true)).toBe(true);
   });
@@ -56,9 +56,7 @@ describe('chatsundere_client_data Dexie schema', () => {
     const settings = await db.settings.get(1);
     expect(settings).toBeDefined();
     expect(settings?.id).toBe(1);
-    const aurum = await db.mindspaces.where('displayName').equals('Aurum').first();
-    expect(aurum).toBeDefined();
-    expect(settings?.defaultMindspaceId).toBe(aurum?.id);
+    expect(settings?.defaultMindspaceId).toBe('mindspace-builtin-aurum');
     expect(settings?.globalInstructions).toBe('');
     expect(settings?.globalAboutMe).toBe('');
     expect(settings?.corsProxy).toBeNull();

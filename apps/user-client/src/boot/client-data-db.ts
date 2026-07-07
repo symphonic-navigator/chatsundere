@@ -3,7 +3,6 @@
 import type { ImageModelConfig } from '@chatsundere/llm-unified';
 import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
-import { uuidv7 } from 'uuidv7';
 import { pickProviderSurvivor } from '../data/provider-dedup.js';
 import type { EncryptedBlob } from '../lib/secrets.js';
 import type { TtsHighpassSetting } from '../lib/voice/voice-filter.js';
@@ -1482,14 +1481,22 @@ export async function _resetClientDataDbForTests(opts: { keepData?: boolean } = 
 
 // ===== Seeding =====
 
-const BUILT_IN_MINDSPACES: ReadonlyArray<{ displayName: string; accent: string }> = [
-  { displayName: 'Crimson', accent: '#b33a5e' },
-  { displayName: 'Aurum', accent: '#c9a84c' },
-  { displayName: 'Verdan', accent: '#6aa97a' },
-  { displayName: 'Azuro', accent: '#4a7eb3' },
-  { displayName: 'Indigaut', accent: '#5d4e9e' },
-  { displayName: 'Violetta', accent: '#9a5bb8' },
-  { displayName: 'Rosari', accent: '#c97a99' },
+/**
+ * The seven built-in mindspaces. `id` is a deterministic, self-describing slug —
+ * identical on every device — so the synced reference fields
+ * (`settings.defaultMindspaceId`, `personas.mindspaceId`,
+ * `chats.resolvedMindspaceId`) converge across devices (the v35 provider-identity
+ * pattern; pre-test-analysis #5). Ids are immutable identity: mutable attributes
+ * (accent, texture) deliberately stay out of the slug.
+ */
+const BUILT_IN_MINDSPACES: ReadonlyArray<{ id: string; displayName: string; accent: string }> = [
+  { id: 'mindspace-builtin-crimson', displayName: 'Crimson', accent: '#b33a5e' },
+  { id: 'mindspace-builtin-aurum', displayName: 'Aurum', accent: '#c9a84c' },
+  { id: 'mindspace-builtin-verdan', displayName: 'Verdan', accent: '#6aa97a' },
+  { id: 'mindspace-builtin-azuro', displayName: 'Azuro', accent: '#4a7eb3' },
+  { id: 'mindspace-builtin-indigaut', displayName: 'Indigaut', accent: '#5d4e9e' },
+  { id: 'mindspace-builtin-violetta', displayName: 'Violetta', accent: '#9a5bb8' },
+  { id: 'mindspace-builtin-rosari', displayName: 'Rosari', accent: '#c97a99' },
 ];
 
 async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
@@ -1497,6 +1504,9 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
   const existingMindspaces = await db.mindspaces.toArray();
   const existingNames = new Set(existingMindspaces.map((m) => m.displayName));
 
+  // Deliberately displayName-keyed, not id-keyed: a pre-v36 DB still holds the
+  // built-ins under per-device uuid ids until the rekey migration runs, and an
+  // id-keyed check would double-seed there.
   const missingBuiltins = BUILT_IN_MINDSPACES.filter((b) => !existingNames.has(b.displayName));
   const staleVerdanOrAzuro = existingMindspaces.filter(
     (m) =>
@@ -1513,7 +1523,7 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
     // Add any missing built-ins
     if (missingBuiltins.length > 0) {
       await db.mindspaces.bulkAdd(
-        missingBuiltins.map((b) => buildMindspace(uuidv7(), b.displayName, b.accent, now)),
+        missingBuiltins.map((b) => buildMindspace(b.id, b.displayName, b.accent, now)),
       );
     }
     // Refresh stale palettes for Verdan / Azuro (preserving id + texture + builtIn flag)
@@ -1525,8 +1535,9 @@ async function seedBuiltinsIfNeeded(db: ClientDataDb): Promise<void> {
     }
     // Seed the settings singleton if it doesn't exist
     if (!existingSettings) {
-      const aurum = await db.mindspaces.where('displayName').equals('Aurum').first();
-      const aurumId = aurum?.id ?? (await db.mindspaces.toCollection().first())?.id ?? uuidv7();
+      const aurum = await db.mindspaces.get('mindspace-builtin-aurum');
+      const aurumId =
+        aurum?.id ?? (await db.mindspaces.toCollection().first())?.id ?? 'mindspace-builtin-aurum';
       await db.settings.add({
         id: 1,
         displayName: '',
