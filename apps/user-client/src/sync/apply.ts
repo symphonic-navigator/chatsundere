@@ -575,8 +575,9 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
   }
 
   // Built-in mindspaces never sync (engine spec §12.5, apply side): a sealed
-  // built-in from another device (or a pre-fix recovery) is inert — its uuid is
-  // device-local by construction and applying it would duplicate the seeded seven.
+  // built-in from another device (or a pre-v36 recovery) is inert — every device
+  // seeds the same slug-keyed seven, so applying one is redundant at best and,
+  // from a pre-v36 writer, would resurrect a dead per-device uuid row.
   if (collection === 'mindspaces' && (row as { builtIn?: boolean }).builtIn === true) {
     return { kind: 'rejected' };
   }

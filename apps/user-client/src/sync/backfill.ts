@@ -29,7 +29,8 @@ import { drainOutbox } from './worker.js';
  *  - **Candidates are un-synced only** (§3.4): a local row with NO `syncRows`
  *    CAS base AND NO `syncOutbox` entry of any op (a pending entry is already in
  *    flight; a terminal one is doomed and must never be re-enqueued — L-6), and
- *    for `mindspaces` never a built-in (its uuid is per-device, §12.5).
+ *    for `mindspaces` never a built-in (deterministically seeded on every
+ *    device — syncing them would be redundant, §12.5).
  *  - **A one-off total** (§3.7/U-8): the total is snapshotted on the first run
  *    and never recomputed, so rows the user adds mid-backfill do not inflate the
  *    progress denominator — the bar advances honestly toward a stable target.
@@ -104,8 +105,9 @@ export function _resetBackfillForTests(): void {
  * Every local sync key for a collection (§3.6). `settings` is the singleton (key
  * `'1'`); `vectors` live in the separate knowledge database (lazily imported so
  * the embeddings engine never loads on the far commoner non-vector path);
- * built-in mindspaces are excluded (their per-device uuids must not sync,
- * §12.5). Everything else derives its key from the row via `syncKeyOfRow`.
+ * built-in mindspaces are excluded (deterministically seeded on every device —
+ * syncing them would be redundant, §12.5). Everything else derives its key
+ * from the row via `syncKeyOfRow`.
  */
 async function listLocalKeys(collection: SyncCollection): Promise<string[]> {
   const db = getClientDataDb();
