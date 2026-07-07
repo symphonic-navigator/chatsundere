@@ -67,9 +67,17 @@ Create `apps/backend/Dockerfile`:
 # CLI entrypoints. The compose selects a service via `command:`. Build context
 # is the REPO ROOT so the pnpm workspace resolves. Multi-stage; cheap layers
 # first so source edits do not re-run the dependency install.
+#
+# The repo is a PNPM workspace (packageManager pnpm@9.15.0, pnpm-lock.yaml) —
+# install with pnpm via corepack (exactly like apps/user-client/Dockerfile),
+# then RUN the services on Bun. Do NOT use `bun install` here: there is no bun
+# lockfile, so `bun install --frozen-lockfile` would fail. The services import
+# only @chatsundere/crypto and @chatsundere/shared-types (both tsc-built), so
+# only those two workspace packages need building.
 
 # ---------- Build stage ----------
-FROM oven/bun:1-alpine AS builder
+FROM node:22-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
 # 1. Manifests first → install cached until a manifest or the lockfile moves.
@@ -79,16 +87,13 @@ COPY apps/sync-service/package.json apps/sync-service/
 COPY apps/proxy-service/package.json apps/proxy-service/
 COPY packages/crypto/package.json packages/crypto/
 COPY packages/shared-types/package.json packages/shared-types/
-# Bun installs the workspace from the pnpm lockfile. --ignore-scripts skips the
-# root `prepare` (lefthook, needs git) and native postinstalls the services do
-# not use at runtime.
-RUN bun install --frozen-lockfile --ignore-scripts
+# --ignore-scripts: the root `prepare` runs `lefthook install` (needs git, absent
+# here) and skips native postinstalls the services do not use at runtime.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# 2. Build the workspace packages the services consume from dist/.
+# 2. Build the two workspace packages the services consume from dist/ (tsc).
 COPY packages/ packages/
-RUN bun install --frozen-lockfile --ignore-scripts \
- && cd packages/shared-types && bun run build \
- && cd ../crypto && bun run build
+RUN pnpm --filter @chatsundere/shared-types --filter @chatsundere/crypto build
 
 # 3. Service source (cheapest to invalidate → last).
 COPY apps/auth-service/ apps/auth-service/
@@ -103,6 +108,8 @@ ARG GIT_SHA=""
 ARG BUILT_AT=""
 
 WORKDIR /app
+# Copy the whole installed tree (pnpm's node_modules symlink farm + built dist +
+# service source). Docker preserves symlinks; Bun resolves node_modules normally.
 COPY --from=builder /app /app
 
 # Version marker (frontend parity).
