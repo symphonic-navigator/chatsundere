@@ -88,7 +88,7 @@ describe('client-data-db v35 (provider id → templateId)', () => {
 
   it('opens at verno 35 on a fresh install', async () => {
     await openClientDataDb();
-    expect(getClientDataDb().verno).toBe(35);
+    expect(getClientDataDb().verno).toBe(36);
   });
 
   it('collapses two nano-gpt rows to one keyed by templateId, preserving the sealed key', async () => {
@@ -104,7 +104,7 @@ describe('client-data-db v35 (provider id → templateId)', () => {
     await _resetClientDataDbForTests({ keepData: true });
     await openClientDataDb();
     const db = getClientDataDb();
-    expect(db.verno).toBe(35);
+    expect(db.verno).toBe(36);
 
     const rows = (await db.providers
       .where('templateId')

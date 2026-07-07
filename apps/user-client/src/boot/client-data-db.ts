@@ -1414,6 +1414,70 @@ class ClientDataDb extends Dexie {
           }
         }
       });
+
+    // Version 36 — built-in mindspace identity: built-ins move from per-device
+    // uuidv7 ids to the deterministic slugs in BUILT_IN_MINDSPACES, so the synced
+    // reference fields converge across devices (pre-test-analysis #5; the v35
+    // provider-identity pattern). Rekey the seeded rows and remap every
+    // referencing store in the same transaction: settings.defaultMindspaceId,
+    // personas.mindspaceId, chats.resolvedMindspaceId, and the row snapshots
+    // inside trash entries for personas/chats (a trashcan restore must not
+    // resurrect a dead uuid reference). Unknown ids (historic imports) pass
+    // through untouched. Idempotent: slug-keyed rows are left alone. Stores are
+    // unchanged; the bump exists only to run this data rewrite.
+    this.version(36)
+      .stores({ mindspaces: 'id, builtIn, displayName' })
+      .upgrade(async (tx) => {
+        const slugByName = new Map(BUILT_IN_MINDSPACES.map((b) => [b.displayName, b.id]));
+        const table = tx.table('mindspaces');
+        const rows = (await table.toArray()) as MindspaceRow[];
+        const oldIdToSlug = new Map<string, string>();
+        for (const r of rows) {
+          if (r.builtIn !== true) continue;
+          const slug = slugByName.get(r.displayName);
+          if (slug === undefined || r.id === slug) continue;
+          oldIdToSlug.set(r.id, slug);
+          await table.delete(r.id);
+          await table.put({ ...r, id: slug });
+        }
+        if (oldIdToSlug.size === 0) return;
+        const remap = (id: unknown): string | null =>
+          typeof id === 'string' ? (oldIdToSlug.get(id) ?? null) : null;
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            const mapped = remap(s.defaultMindspaceId);
+            if (mapped !== null) s.defaultMindspaceId = mapped;
+          });
+        await tx
+          .table('personas')
+          .toCollection()
+          .modify((p: Record<string, unknown>) => {
+            const mapped = remap(p.mindspaceId);
+            if (mapped !== null) p.mindspaceId = mapped;
+          });
+        await tx
+          .table('chats')
+          .toCollection()
+          .modify((c: Record<string, unknown>) => {
+            const mapped = remap(c.resolvedMindspaceId);
+            if (mapped !== null) c.resolvedMindspaceId = mapped;
+          });
+        await tx
+          .table('trash')
+          .toCollection()
+          .modify((t: Record<string, unknown>) => {
+            if (t.collection !== 'personas' && t.collection !== 'chats') return;
+            const snapshot = t.row;
+            if (typeof snapshot !== 'object' || snapshot === null) return;
+            const snap = snapshot as Record<string, unknown>;
+            const mappedPersona = remap(snap.mindspaceId);
+            if (mappedPersona !== null) snap.mindspaceId = mappedPersona;
+            const mappedChat = remap(snap.resolvedMindspaceId);
+            if (mappedChat !== null) snap.resolvedMindspaceId = mappedChat;
+          });
+      });
   }
 }
 
