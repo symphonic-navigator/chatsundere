@@ -731,3 +731,35 @@ actions — both executed the same session, nothing deferred without action.
   Tier 3 alone would not close the combined vector. Consciously kept at
   Tier 1 for consistency. Revisit if step-up tiers are ever re-mapped
   (cf. F2 in [[follow-ups-index]] — Tier-4 gates on operator endpoints).
+
+---
+
+## 2026-07-07 — Deployment kit (Larissa CLEAR TO SQUASH; Informational deferrals)
+
+Larissa audited the self-hosted deployment kit (`deploy/*`, `apps/backend/Dockerfile`,
+frontend image, `docker.yml`) — it mints server-side long-term key material and defines
+the production network exposure, so it was on her gate despite touching no service code.
+**No Critical/High/Medium.** The two crypto-critical invariants are robust: OPAQUE is
+generated once (never overwritten on re-run — regenerating would brick every account's
+passphrase auth) and the sync-service receives a **bucket-scoped** MinIO key, never root.
+The one **Low** (`.dockerignore` did not exclude `.env*`, so a real local `.env.production`
+could bake into an image) was **fixed, not deferred** (`**/.env` + `**/.env.*` added).
+Consciously deferred **Informational** items:
+
+- **I-1 — monitoring password echoed to stdout by `generate.sh`.** Necessary (apr1 is
+  one-way; the operator must see the plaintext once) and local-laptop-only, but it persists
+  in shell scrollback. Follow-up option: also write it to a `chmod 600` file the operator
+  shreds after noting. Low value; not blocking.
+- **I-2 — Traefik basic-auth uses apr1 (MD5-crypt)** for the internal Prometheus endpoint.
+  Weak KDF, but guards only ciphertext-blind metrics and the password is a strong random
+  24-byte value → offline cracking infeasible. Switch to bcrypt only if a dependency-light
+  path appears.
+- **I-3 — Redis has no `requirepass`.** Internal-network-only, no published port; matches
+  the existing architecture and the deny-list threat model (assumes network isolation).
+  Pre-existing, not introduced by this kit.
+
+**Related non-deferral, flagged for the go-live (NOT security-signed-off yet):** auth omits
+`TRUST_PROXY_HOPS`, so `rate-limit.ts` reads a client-spoofable left-most `X-Forwarded-For`
+— the tracked **L-β-2 / L-B4** ("required before v0.1.0 deployment"). This kit is what makes
+auth publicly reachable, so resolve it before the real backend go-live. Tracked in
+[[follow-ups-index]].

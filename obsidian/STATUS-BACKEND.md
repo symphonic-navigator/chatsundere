@@ -1,6 +1,49 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-07 — **PRE-TEST-ANALYSIS OPEN ITEMS #8 + #9 FIXED on
+**Last updated:** 2026-07-07 (later) — **DEPLOYMENT KIT for the v0.2.0 backend
+go-live SQUASHED to `master`** (two feature units: `f301478e` "Add backend
+container image and CI; bake admin console into the frontend image" + `45ba197d`
+"Add self-hosted deployment kit and update deployment docs"). **NOT pushed —
+Chris pushes after the VPS staging dry-run.** The whole backend (auth+sync+proxy
++postgres+redis+minio) was built/merged/audited but never deployed; this kit makes
+the first deploy real for Chris AND for third-party self-hosters (AGPLv3). What
+landed: **(1)** a single **backend image** (`apps/backend/Dockerfile`) carrying all
+three Bun services (pnpm/corepack install, Bun runtime, service chosen by compose
+`command:`) + a CI `build-backend` job mirroring the frontend (cosign, `:latest`
+tag-gated); **(2)** the **admin-client baked into the frontend image** under
+`/admin/` (same-origin, so the shipped Admin tile works in prod); **(3)** a
+`deploy/` kit — `compose.template.yml` (unified frontend+backend+infra behind an
+existing Traefik), `deployment.env.template`, `generate.sh` (local, openssl-only,
+mints all random secrets + renders the compose), `install.sh` (server: MinIO
+bucket+scoped-key, OPAQUE-once, bring-up, first-admin bootstrap), prod Postgres
+init, README; **(4)** `INSTANCE_NAME` namespacing so **two Chatsundere stacks run
+side-by-side on one host/Traefik** (Ksena's catch — Traefik router names are
+globally unique per Traefik; list-form labels required). Built spec→plan→
+**subagent-driven (8 tasks + fix wave + INSTANCE_NAME), per-task spec+quality
+reviews**; **whole-branch opus review** "ready with fixes" (all folded);
+**Larissa CLEAR TO SQUASH** (OPAQUE-once + MinIO scoped-not-root robust; network
+posture sound; no secrets in git). **Corrections the live checks caught:** auth+
+sync **migrate-then-serve** in their compose command (`index.ts` runs no migrator);
+`mc version suspend` not `disable` (live-verified vs dev MinIO); `bootstrap-admin`
+is **non-interactive** (mints the first invitation — spec/DEPLOYMENT.md corrected);
+`bun run` banner-on-stderr fixed in the invitation capture (live-verified);
+`TRAEFIK_AUTH_USERS` `$$`-doubled (Compose `--env-file` interpolation); auth
+`/metrics//healthz//readyz` no longer publicly routed (`cs-auth` scoped to
+`PathPrefix(/api)`); prod Prometheus scrape config (was dev `host.docker.internal`);
+openssl-only base64url (dropped `basenc` → stock-macOS-safe). Gates: image builds;
+`docker compose config` parses (monitoring on/off); shellcheck clean; `nginx -t`
+ok; **live**: `mc` scoped-key + `bootstrap-admin` capture against real containers.
+**OWED: Chris's VPS staging dry-run (spec §10) — `generate.sh` → scp `out/` →
+`install.sh` → healthy → MinIO key → OPAQUE → `/readyz` → invitation → register →
+chat/sync/blob through the new proxy — then push.** Before the real go-live,
+resolve the tracked **`TRUST_PROXY_HOPS` on auth** (L-β-2, per-IP rate-limit
+spoofing). Spec/plan:
+[[../superpowers/specs/2026-07-07-deployment-kit-design]],
+[[../superpowers/plans/2026-07-07-deployment-kit]].
+
+---
+
+**Prior — 2026-07-07:** **PRE-TEST-ANALYSIS OPEN ITEMS #8 + #9 FIXED on
 the remote branch `claude/pre-test-analysis-open-items-6s118y`** (remote
 session; the #1–#4/#6 fix branch is merged to master as PR #26, `25e0e80`).
 **(#8 Medium)** generic sync transport failures are no longer invisible: the
