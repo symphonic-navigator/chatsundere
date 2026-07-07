@@ -264,9 +264,15 @@ Idempotent, safe to re-run. Steps:
    so the command carries them, idempotently, on every deploy/upgrade; sync mints
    its `instance_epoch` on first migrate.
 6. Wait for `auth` / `sync` / `proxy` `/readyz` green.
-7. **Bootstrap the first admin** interactively:
-   `docker compose exec auth bun run bootstrap-admin` (prompts for the username),
-   then print the first invitation URL/QR the CLI emits.
+7. **Bootstrap the first admin.** `docker compose exec auth bun run --cwd
+   apps/auth-service bootstrap-admin` — the CLI is **not interactive** (takes no
+   username): it mints the first `primary_admin` **invitation** (code +
+   `qr_url = API_BASE_URL/join#<code>`), writes it to a `0600` file inside the
+   container, and prints the path. `install.sh` cats that file back out so the
+   operator sees the code/URL, then **redeems it in the user-client** to register
+   the first admin (the username is chosen at registration). The CLI refuses
+   (exit 1, "refusing to run") once a `primary_admin`/`auth_methods` row exists —
+   which is how a re-run of `install.sh` stays idempotent here.
 8. Final summary: the four public URLs, the config endpoint
    (`https://auth.<base>/api/v1/config`), and the operator's next actions.
 
@@ -343,8 +349,9 @@ The device/VPS steps Chris runs himself:
 2. `scp -r out/ …` to a **staging** directory on the VPS (not the live one), point
    `BASE_DOMAIN` at test subdomains.
 3. `install.sh` → watch: infra healthy → MinIO bucket+scoped key created → OPAQUE
-   filled once → app services `/readyz` green → `bootstrap-admin` prompts →
-   invitation URL printed.
+   filled once → app services `/readyz` green → `bootstrap-admin` mints + surfaces
+   the first `primary_admin` invitation (code + `/join#<code>` URL; no prompt).
+   Redeem that invitation in the user-client to register the first admin.
 4. Browser: `https://app.<test-base>` loads; `https://app.<test-base>/admin/`
    loads and sees the account; `https://auth.<test-base>/api/v1/config` returns
    `proxyUrl` / `syncUrl` / `features` incl. `blobs`.
