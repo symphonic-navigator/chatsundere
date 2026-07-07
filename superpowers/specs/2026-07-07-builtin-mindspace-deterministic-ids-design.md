@@ -78,8 +78,10 @@ second copy).
 
 ### 3.2 Seeding changes (`seedBuiltinsIfNeeded`, `client-data-db.ts:1495`)
 
-- Missing-built-in detection matches on **`id`** instead of `displayName`; new rows are
-  seeded via `buildMindspace(b.id, …)` — the `uuidv7()` call at line 1516 disappears.
+- Missing-built-in detection stays **`displayName`-keyed** (deliberate: it is correct in
+  every DB state, including a pre-v36 DB that still holds uuid built-ins — id-keyed
+  detection would double-seed there); new rows are seeded via `buildMindspace(b.id, …)` —
+  the `uuidv7()` call at line 1516 disappears.
 - The settings-singleton seed uses the Aurum slug constant directly instead of the
   `where('displayName').equals('Aurum')` query (`client-data-db.ts:1528-1529`); the
   final `?? uuidv7()` fallback becomes the Aurum slug (the row is guaranteed to exist in
