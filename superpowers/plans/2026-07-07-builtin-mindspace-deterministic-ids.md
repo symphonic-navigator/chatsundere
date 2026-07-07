@@ -10,6 +10,64 @@
 
 **Tech Stack:** TypeScript strict, Dexie 4, Vitest + fake-indexeddb, Biome, pnpm 9 / Turborepo.
 
+## Operating rules for the overnight worker (READ FIRST)
+
+These rules are binding and override your defaults. The repo's CLAUDE.md and this
+session's conventions are NOT assumed to be in your context — everything you need is
+in this section and the tasks below.
+
+1. **Branch.** Work on a dedicated branch cut from `master` tip — intended name
+   `fix/builtin-mindspace-ids`; if your harness assigns a `claude/...` name instead,
+   that is fine, just report it. **Never commit to `master`. Do NOT merge and do NOT
+   push-to-master; stop at Task 5 (hand-off).**
+2. **STOP-guard before any edit.** Open `apps/user-client/src/boot/client-data-db.ts`
+   and check: `this.version(35)` must be the highest Dexie version and
+   `this.version(36)` must NOT exist. If v36 already exists, a parallel branch claimed
+   it — STOP and report; do not renumber silently.
+3. **Baseline first (Step 0).** On the untouched checkout run
+   `pnpm -C apps/user-client test`. Expect **exactly 8 failures** — a known
+   environmental baseline (Node's experimental `localStorage` shim; the failures
+   cluster in localStorage-dependent test files). Record the failing file names. Every
+   later full run must fail in **exactly those files, exactly 8** — a 9th failure is a
+   real regression you introduced; fix it, never explain it away as "pre-existing"
+   without confirming it fails identically on `master`.
+4. **Language.** Every text artefact — code, comments, test names, commit messages,
+   doc edits — is **British English** (`colour`, `initialise`, `behaviour`). No US
+   spelling, no German, anywhere in the repo.
+5. **TDD per task.** Failing test → run to confirm it fails → minimal implementation →
+   run to confirm it passes → commit. The tasks are already structured this way;
+   follow the step order.
+6. **Execution discipline.** Use subagent-driven development (one fresh subagent per
+   task, two-stage review: spec-compliance then code-quality) if your harness supports
+   subagents; otherwise execute the tasks yourself in order, treating each task's
+   final step as a review checkpoint. Subagents never merge, push, or switch branches.
+7. **Verification is full-suite, never touched-dirs-only.** The gate commands, exact
+   and copy-pasteable, all from the repo root:
+   - `pnpm typecheck --force` → expect **14/14** tasks successful (`--force` is
+     mandatory — Turborepo caches typecheck and a cached pass lies on test-only
+     changes).
+   - `pnpm -C apps/user-client test` → full user-client vitest; green apart from the
+     8-failure baseline (rule 3).
+   - `pnpm run build` → expect **9/9** tasks successful (build and typecheck diverge
+     subtly; run both at the end).
+8. **Commit hygiene.** Biome runs as the lefthook pre-commit gate (it bans non-null
+   assertions `!`); never bypass it with `--no-verify`. Commit messages: free-form
+   imperative, subject capitalised, no Conventional-Commits prefix. Doc-only commits
+   append ` [skip ci]` (exact form, with the space). Every commit ends with:
+   `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`
+9. **Security boundary.** This plan does NOT touch the security-audit paths
+   (`apps/auth-service`, `apps/sync-service`, `apps/proxy-service`,
+   `packages/crypto`) — the `apps/user-client/src/sync/*` edits in Task 3 are
+   comment-only. The security audit (Larissa) runs post-run on the controller side;
+   you do not need to and cannot summon her. Do not expand scope into those paths.
+10. **STATUS files.** Do NOT edit `obsidian/STATUS-BACKEND.md` or
+    `obsidian/STATUS-CLIENT-ONLY.md` — the controller updates them at integration
+    (avoids collisions with parallel sessions). The only docs you touch are the two
+    named in Task 4.
+11. **Scope.** Implement exactly this plan. If you hit something that seems to demand
+    a design decision not covered here, STOP on that task, note it in the hand-off
+    report, and continue with independent tasks if any remain.
+
 ## Global Constraints
 
 - Every text artefact is **British English** (code, comments, commit messages, docs).
@@ -631,13 +689,28 @@ Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
 
 ---
 
-## Final verification (whole branch)
+### Task 5: Final verification + hand-off (whole branch)
 
-- [ ] `pnpm typecheck --force` — expect 14/14.
-- [ ] `pnpm -C apps/user-client test` — full suite; green apart from the known 8-failure Node-localStorage baseline (exactly 8).
-- [ ] `rg -n 'verno\)\.toBe\(35\)' apps/user-client/tests` — prints nothing.
-- [ ] `rg -n "uuidv7" apps/user-client/src/boot/client-data-db.ts` — no `uuidv7(` call and no import remain (comment mentions are fine).
-- [ ] Biome is enforced per commit by lefthook; if any commit was made with `--no-verify` (it should not be), run `pnpm biome check` on the changed files.
+**Files:** none (verification and reporting only).
+
+- [ ] **Step 1: Run the full gates on the branch tip**
+
+- `pnpm typecheck --force` — expect 14/14.
+- `pnpm -C apps/user-client test` — full suite; green apart from the known 8-failure Node-localStorage baseline (exactly the files recorded in Step 0 — see operating rule 3).
+- `pnpm run build` — expect 9/9.
+- `rg -n 'verno\)\.toBe\(35\)' apps/user-client/tests` — prints nothing.
+- `rg -n "uuidv7" apps/user-client/src/boot/client-data-db.ts` — no `uuidv7(` call and no import remain (comment mentions are fine).
+
+- [ ] **Step 2: Hand-off report — then STOP**
+
+Do NOT merge, do NOT push to `master`, do NOT squash — the human device-tests first
+and the controller squashes at integration. Report back:
+
+1. The branch name and the full commit list (`git log --oneline master..HEAD`).
+2. Every verification number from Step 1, including the exact baseline-failure file
+   names and count (must be the Step-0 set).
+3. Any deviation from the plan (there should be none) and any task stopped under
+   operating rule 11.
 
 ## Deliberately out of scope
 
