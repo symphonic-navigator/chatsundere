@@ -36,3 +36,20 @@ export interface RecoveryFinishResponse {
   access_token: string;
   expires_in: number;
 }
+
+/**
+ * Request body for `POST /api/v1/me/recovery` — pushes the freshly regenerated
+ * recovery material to the server so deviceless recovery keeps working after a
+ * client-side recovery-key rotation. All fields are base64url.
+ */
+export interface RecoveryUpdateRequest {
+  new_recovery_verifier_key: string;
+  new_wrapped_mk_recovery: string;
+  new_wrap_nonce_recovery: string;
+  new_wrap_aad_recovery: string;
+}
+
+/** Response body for `POST /api/v1/me/recovery`. */
+export interface RecoveryUpdateResponse {
+  ok: boolean;
+}

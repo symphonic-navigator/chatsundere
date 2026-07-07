@@ -476,3 +476,27 @@ Defect B (My Account rename → server-first). Spec
   feature's scope.
 - **Chris sign-off:** advisory; Chris's call. Logged for a possible later polish
   pass on `InlineEditRow`. Tracked in [[follow-ups-index]].
+
+---
+
+## 2026-07-06 — Pre-test-analysis fixes (logout page, recovery-key rotation)
+
+Laura pre-squash verdict: **CLEAN, no hard defects; four soft notes.** Three
+folded immediately (honest "everywhere"-confirm residue copy; account-recovery
+confirm names the nothing-changes-on-failure nuance; login-recovery regenerate
+checkbox fails safe on the `null` link state). One deferred:
+
+### SOFT — "Delete my account everywhere" disabled-reason relies on the cached role
+
+- **Deferred:** the primary-admin gate on the logout page reads
+  `useAccountLinkStore().role`, which is written only at link/join/pairing time
+  (pre-test analysis Q2 caveat 1). A user who just transferred the primary role
+  away on another device still sees the button greyed out with "transfer the
+  role first" until re-link — a reason that no longer applies.
+- **Rationale:** the reverse direction (stale-enabled) is fully caught
+  server-side: `DELETE /api/v1/me` refuses a primary admin with 403 and the page
+  maps it to the constructive transfer-primary copy. So the gate can only be
+  over-cautious, never under-cautious. The underlying stale-role refresh is a
+  pre-existing, separately tracked issue; when it lands, this button inherits
+  the fix for free.
+- **Chris sign-off:** advisory (soft), no sign-off required.

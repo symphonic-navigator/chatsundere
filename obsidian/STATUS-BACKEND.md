@@ -1,6 +1,55 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-06 — **EXTERNAL-REVIEW BACKEND HARDENING squashed to
+**Last updated:** 2026-07-06 (late) — **PRE-TEST-ANALYSIS FIXES built on the
+remote branch `claude/pre-test-analysis-fixes-ltcwag`** (remote session; Chris
+asked for the problems in `PRE-TEST-ANALYSIS-v0.2.0.md` to be fixed ahead of
+tomorrow's test run). **Findings #1–#4 and #6 are fixed; #5 and #7–#10 stay
+open as test targets** (rows added to [[insights/follow-ups-index]]; the
+analysis file carries a fix-status addendum with the revised test-plan
+expectations). What landed: **(#1 Critical)** recovery-key regeneration now
+reaches the server — new `POST /api/v1/me/recovery` (Tier-1 step-up, material
+validated, audited as `recovery_key.regenerated`), `ServerClient.updateRecovery`
++ wire types, account page pushes **server-first** via the crypto flow's
+`serverUpdate` (failure → honest "NOT changed" alert; link-state `unknown`
+refuses), login-screen recovery disables regeneration for linked accounts and
+names My Account → Recovery Key. **(#2 High)** the in-app "Delete all my local
+data" now runs the full `wipeDevice()` erase, with link-state-honest confirm
+copy. **(#3 High)** `DELETE /api/v1/me` refuses the primary admin (403, checked
+before the step-up ceremony). **(#4 High)** the logout page gains a linked-only
+"Delete my account everywhere" — server delete first (nothing deleted anywhere
+on failure), then device wipe; disabled-with-reason for the primary admin.
+**(#6 Medium)** role change revokes the subject's sessions exactly as suspend
+does; transfer-primary revokes both actor and target (integration tests pin the
+deny entries; admin-users tests re-issue tokens after the transfer). **Bonus:
+the entire auth-service "OPAQUE baseline" failure set is fixed** — the stale
+`${API_BASE_URL}/v1` OPAQUE server identity sat in **13** integration-test
+fixtures (root cause of the long-carried red set, incl. the `buildProof`
+serverId bug); all aligned with `opaqueServerIdentity(origin)`, the bootstrap
+CLI tests' hard-coded `/home/chris/…` cwd made portable + spawned CLI given
+`env: {...process.env}` — suite green for the first time: **174 pass / 12 skip
+/ 0 fail** against native PG16+Redis, so `recovery/finish` finally has green
+automated coverage. **Audits:** **Larissa CLEAR TO SQUASH** — her MEDIUM
+(regenerate tail failure: server accepted, local write failed → key minted
+but never revealed = probability-gated lockout) was **fixed, not deferred**
+(`localWriteFailed` result + honest split-state reveal, tests pinned); both
+LOWs fixed (stray `dump.rdb` removed + gitignored; delete-everywhere 403 now
+branches on envelope code); informationals done (pino redact names for the new
+wire fields, AAD non-empty check) and the Tier-1-vs-Tier-3 decision recorded in
+[[insights/security-deferrals]]. **Laura pre-squash CLEAN** — 3 of 4 softs
+folded (honest "everywhere" residue copy, confirm-modal failure nuance,
+login-checkbox `null` link-state fails safe); the 4th (stale cached role gates
+the disabled reason — pre-existing Q2 caveat) logged in
+[[insights/ux-deferrals]]. Gates: `pnpm typecheck --force` **14/14**; build
+**9/9**; user-client vitest **2836/0** (full clean run); crypto `bun test`
+**201/0**; auth-service **174/0**; Biome clean on all changed files. STATUS
+staleness flagged by the analysis (step-up modal/interceptor, onboarding
+three-path) corrected below. **OWED: Chris reviews + merges the branch, then
+tomorrow's manual multi-device run** (test plan in the analysis file, steps
+1/3/4/8 now carry the *fixed* expectations).
+
+---
+
+**Prior — 2026-07-06:** **EXTERNAL-REVIEW BACKEND HARDENING squashed to
 `master`** (`672e72e5`, one feature unit). Four defects from an external code
 review (Codex, run by a tester) — each verified against the real code before
 touching it. **(1) Refresh-token rotation race (was Critical)** — `refresh.ts`
@@ -555,12 +604,13 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
 - `DELETE /api/v1/me/account` partial-upload cleanup (per ADR 0026
   Failure Mode C)
 - UUIDv4 → UUIDv7 migration across the entire data model (ADR 0025)
-- Client-side step-up: `<StepUpModal />` + request interceptor in
-  user-client that catches 401 `step_up_required` + `webauthn_uv_required`
-  and runs the unified `/api/v1/auth/step-up/{start,finish}` flow.
-- Client-side cross-device identity:
-  - User-client onboarding overhaul (three paths: QR / manual / local)
-  - Admin-client invitation-form fields for suggested_username and note
+- ~~Client-side step-up: `<StepUpModal />` + request interceptor~~ —
+  **implemented and live** (step-up modal + 401 interceptor confirmed in the
+  2026-07-05 integration audit; staleness flagged by the 2026-07-06
+  pre-test analysis and corrected here).
+- ~~Client-side cross-device identity (onboarding three paths QR / manual /
+  local; admin-client invitation-form fields)~~ — **implemented and live**
+  (onboarding matrix + admin console overhaul).
 - Theming pivot to cyberpunk (mood-board curation pending from Chris)
 
 ### Open design questions / blockers

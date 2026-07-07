@@ -49,6 +49,8 @@ export type {
   RecoveryStartResponse,
   RecoveryFinishRequest,
   RecoveryFinishResponse,
+  RecoveryUpdateRequest,
+  RecoveryUpdateResponse,
 } from './recovery.js';
 
 export type {

@@ -10,6 +10,7 @@
 // tampering.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { and, desc, eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -72,7 +73,7 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
       registrationResponse: linkStartBody.registration_response,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
     const zero32 = Buffer.alloc(32).toString('base64url');
@@ -136,7 +137,7 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
       password,
       identifiers: {
         client: username,
-        server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
       },
     });
     if (!finishResult) throw new Error('test setup: OPAQUE finishLogin returned undefined');
@@ -243,7 +244,7 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
         password,
         identifiers: {
           client: username,
-          server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
         },
       });
       if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');

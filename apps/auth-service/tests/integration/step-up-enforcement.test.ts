@@ -6,6 +6,7 @@
 // with a seeded key.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -16,7 +17,7 @@ import { createServer } from '../../src/server.js';
 
 const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
 const password = 'step-up-enforce-passphrase-correct-horse';
-const serverId = `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`;
+const serverId = opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth');
 
 describe.skipIf(skip)('step-up enforcement', () => {
   const username = `stepupenf-${Date.now()}`.slice(0, 32).replace(/-/g, 'x');

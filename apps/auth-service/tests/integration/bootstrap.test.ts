@@ -14,6 +14,11 @@ import { createServer } from '../../src/server.js';
 const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
 
 const ORIGIN = { Origin: 'http://localhost:3000' };
+
+// The auth-service package root, derived from this file's location so the
+// CLI spawns work on any checkout (the previous hard-coded /home/chris/…
+// path made these tests fail everywhere but one machine).
+const SERVICE_ROOT = new URL('../../', import.meta.url).pathname;
 const JSON_ORIGIN = { 'Content-Type': 'application/json', ...ORIGIN };
 
 describe.skipIf(skip)('Bootstrap CLI', () => {
@@ -62,7 +67,13 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
 
     // Try to run bootstrap — should refuse.
     const proc = Bun.spawn(['bun', 'run', 'src/cli/bootstrap.ts'], {
-      cwd: '/home/chris/workspace/chatsundere/apps/auth-service',
+      cwd: SERVICE_ROOT,
+      // Pass the test-process env explicitly: Bun.spawn's default environment
+      // is the process's ORIGINAL environ, so the vars tests/setup.ts sets at
+      // runtime (DATABASE_URL, the HMAC keys, …) never reach the child without
+      // this — the CLI then dies in env validation on any machine that does
+      // not export them in the shell.
+      env: { ...process.env },
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -104,7 +115,13 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
 
     // Try to run bootstrap — should refuse.
     const proc = Bun.spawn(['bun', 'run', 'src/cli/bootstrap.ts'], {
-      cwd: '/home/chris/workspace/chatsundere/apps/auth-service',
+      cwd: SERVICE_ROOT,
+      // Pass the test-process env explicitly: Bun.spawn's default environment
+      // is the process's ORIGINAL environ, so the vars tests/setup.ts sets at
+      // runtime (DATABASE_URL, the HMAC keys, …) never reach the child without
+      // this — the CLI then dies in env validation on any machine that does
+      // not export them in the shell.
+      env: { ...process.env },
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -123,7 +140,13 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
 
   it('bootstrap CLI creates invitation and writes file with 0600 permissions', async () => {
     const proc = Bun.spawn(['bun', 'run', 'src/cli/bootstrap.ts'], {
-      cwd: '/home/chris/workspace/chatsundere/apps/auth-service',
+      cwd: SERVICE_ROOT,
+      // Pass the test-process env explicitly: Bun.spawn's default environment
+      // is the process's ORIGINAL environ, so the vars tests/setup.ts sets at
+      // runtime (DATABASE_URL, the HMAC keys, …) never reach the child without
+      // this — the CLI then dies in env validation on any machine that does
+      // not export them in the shell.
+      env: { ...process.env },
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -189,7 +212,13 @@ describe.skipIf(skip)('Bootstrap CLI', () => {
   it('bootstrap file path follows naming convention', async () => {
     // Step 1: Run bootstrap to create the file and invitation.
     const proc = Bun.spawn(['bun', 'run', 'src/cli/bootstrap.ts'], {
-      cwd: '/home/chris/workspace/chatsundere/apps/auth-service',
+      cwd: SERVICE_ROOT,
+      // Pass the test-process env explicitly: Bun.spawn's default environment
+      // is the process's ORIGINAL environ, so the vars tests/setup.ts sets at
+      // runtime (DATABASE_URL, the HMAC keys, …) never reach the child without
+      // this — the CLI then dies in env validation on any machine that does
+      // not export them in the shell.
+      env: { ...process.env },
       stdout: 'pipe',
       stderr: 'pipe',
     });

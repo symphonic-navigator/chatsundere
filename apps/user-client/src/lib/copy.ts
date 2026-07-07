@@ -218,6 +218,9 @@ export const copy = {
     regenerateLabel: 'Generate a new recovery key as well',
     regenerateHint:
       'Use this if you think your old recovery key may have been seen by someone else.',
+    regenerateLinkedHint:
+      'Your account is linked to a server, so a new key has to be registered there too. ' +
+      'Once you are signed in, generate one under My Account → Recovery Key.',
     finishCta: 'Set new passphrase',
     newKeyTitle: 'Save your new recovery key.',
     newKeyBody:

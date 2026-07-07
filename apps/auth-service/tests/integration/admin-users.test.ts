@@ -4,8 +4,10 @@
 // Requires a live PostgreSQL instance and Redis. Skipped when DATABASE_URL is absent.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
+import { isTokenRevoked } from '../../src/auth/deny-list.js';
 import { generateCode, hashCode } from '../../src/codes/token.js';
 import { closeDb, createDb } from '../../src/db/client.js';
 import { pendingCodes, users } from '../../src/db/schema.js';
@@ -57,7 +59,7 @@ async function registerUser(
     registrationResponse: startBody.registration_response,
     identifiers: {
       client: opts.username,
-      server: `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`,
+      server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
     },
   });
 
@@ -282,6 +284,12 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     const row = (await db.select({ role: users.role }).from(users).where(eq(users.id, userId)))[0];
     expect(row?.role).toBe('admin');
 
+    // A role change revokes the subject's sessions (stale-role tokens must not
+    // outlive the change). Structural check via the deny-list helper: any token
+    // for this sub issued before the revocation instant is refused (iat 0 is
+    // always before it), avoiding a same-second iat flake on the real token.
+    expect(await isTokenRevoked(createRedis(), { sub: userId, jti: 'probe', iat: 0 })).toBe(true);
+
     // Restore to user for the DELETE test later.
     await db.update(users).set({ role: 'user' }).where(eq(users.id, userId));
   });
@@ -357,10 +365,27 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     expect(newPrimary?.role).toBe('primary_admin');
     expect(oldPrimary?.role).toBe('admin');
 
+    // A transfer revokes BOTH sides' sessions: the demoted actor's tokens
+    // still claim primary_admin (an escalation window), the promoted target's
+    // still claim admin. Structural check via the deny-list helper (iat 0 is
+    // always before the revocation instant).
+    const redis = createRedis();
+    expect(await isTokenRevoked(redis, { sub: primaryId, jti: 'probe', iat: 0 })).toBe(true);
+    expect(await isTokenRevoked(redis, { sub: adminId, jti: 'probe', iat: 0 })).toBe(true);
+
     // Swap back so afterAll cleanup and DELETE test work correctly.
     // Direct DB update: demote the new primary first, then restore original.
     await db.update(users).set({ role: 'admin' }).where(eq(users.id, adminId));
     await db.update(users).set({ role: 'primary_admin' }).where(eq(users.id, primaryId));
+
+    // Re-issue both tokens: the deny entries above refuse every token issued
+    // before the transfer, and the tests below still authenticate with them.
+    // The deny-list is iat-aware, so fresh tokens pass.
+    ({ accessToken: primaryToken } = await issueTokens({
+      userId: primaryId,
+      role: 'primary_admin',
+    }));
+    ({ accessToken: adminToken } = await issueTokens({ userId: adminId, role: 'admin' }));
   });
 
   it('POST /api/v1/admin/transfer-primary returns 403 for non-primary-admin', async () => {

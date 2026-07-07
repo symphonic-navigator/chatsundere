@@ -693,3 +693,41 @@ The clearing model per kind: `delete_rate_limited` retires on a clean cycle (gen
 - **Severity:** low (Larissa's classification). Narrow, inherent to server-first-without-two-phase-commit — which the design *consciously chose* over optimistic-local (spec §2, Chris-approved). No secret exposure, no zero-knowledge breach; the crypto source-of-truth stays self-consistent.
 - **Rationale for deferral:** The failure window is a single JS tick between a successful server PATCH and a local `put`, on a path (rename) that is neither frequent nor urgent. Full closure needs a 2PC-style reconcile marker, disproportionate to the risk.
 - **Follow-up commitment:** If it ever surfaces, add a "rename pending local-commit" marker that self-heals on next boot, or — on a later `serverOutcome === 'auth_failed'` — offer a reconcile that re-attempts online login and re-PATCHes to realign. Tracked in [[follow-ups-index]].
+
+---
+
+## 2026-07-06 — Pre-test-analysis fixes: Larissa audit outcomes (recovery-material rotation + admin revocations)
+
+Larissa verdict on the branch: **CLEAR TO SQUASH** conditional on two housekeeping
+actions — both executed the same session, nothing deferred without action.
+
+- **MEDIUM (FIXED, not deferred) — regenerate partial failure could strand deviceless recovery.**
+  `packages/crypto/src/flows/regenerate-recovery-key.ts`. Server-first ordering
+  meant the tail failure (server accepted the new material, local IndexedDB
+  write then failed) minted a recovery key nobody ever saw while the server now
+  only accepts that key — the same permanent-lockout class as analysis finding
+  #1, probability-gated. Fixed: the flow no longer throws on the linked-path
+  local-write failure; it returns the key with `localWriteFailed: true`, and
+  the account page reveals it with an honest split-state warning (server holds
+  the new key; this device's local recovery-key sign-in keeps the old one until
+  a later successful rotation). Pinned by a crypto flow test (close-the-db
+  trick) and a page test.
+- **LOW (FIXED) — stray `dump.rdb`** removed and `dump.rdb` gitignored (a local
+  redis-server drops one into its cwd; an auth-session dump can carry step-up
+  keys, recovery nonces and OPAQUE state).
+- **LOW (FIXED) — delete-everywhere 403 conflation:** the logout page now
+  branches on the envelope code (`forbidden` vs `step_up_required`) so a
+  cancelled step-up no longer masquerades as the primary-admin refusal.
+- **INFORMATIONAL (DONE) — log-redaction names:** `new_recovery_verifier_key`,
+  `new_wrapped_mk_recovery`, `new_wrap_nonce_recovery`, `wrapped_mk_recovery`,
+  `wrap_nonce_recovery` added to the pino redact list (not exploitable today —
+  no body logging — but the verifier key alone forges the recovery proof).
+- **INFORMATIONAL (DONE) — `new_wrap_aad_recovery`** now also non-empty-checked.
+- **DECISION RECORDED — Tier 1 for `POST /api/v1/me/recovery`.** Matches the
+  passphrase-change precedent and creates no new capability (a Tier-1 session
+  can already rotate the OPAQUE credential). Larissa notes it is slightly
+  sharper than passphrase change (silently invalidates the user's ultimate
+  backstop, leaves no obvious signal) and defensible as-is; raising it to
+  Tier 3 alone would not close the combined vector. Consciously kept at
+  Tier 1 for consistency. Revisit if step-up tiers are ever re-mapped
+  (cf. F2 in [[follow-ups-index]] — Tier-4 gates on operator endpoints).

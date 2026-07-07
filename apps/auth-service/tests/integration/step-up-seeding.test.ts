@@ -7,6 +7,7 @@
 // mechanism=opaque still works after a recovery.
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
 import { eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
@@ -17,7 +18,9 @@ import { createServer } from '../../src/server.js';
 
 const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
 
-const serverId = `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/v1`;
+// Must match the server's derivation (origin-only opaqueServerIdentity) — used
+// for both the recovery HMAC proof and the OPAQUE identifiers.
+const serverId = opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth');
 
 /** Reads the jti claim out of a JWS access token without verifying it. */
 function jtiOf(accessToken: string): string {

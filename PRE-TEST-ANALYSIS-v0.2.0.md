@@ -24,6 +24,21 @@ Items 1–4 are the ones worth fixing (or consciously deferring with sign-off) b
 
 ---
 
+## Addendum 2026-07-06 — fix status (branch `claude/pre-test-analysis-fixes-ltcwag`)
+
+Findings **#1–#4 and #6 are FIXED** on the branch; #5 and #7–#10 remain open (logged in [`follow-ups-index.md`](obsidian/insights/follow-ups-index.md)) and stay test targets for tomorrow.
+
+- **#1 fixed.** New `POST /api/v1/me/recovery` (Tier-1 step-up, audited, material validated) replaces the recovery verifier + wrap server-side; the account page pushes it **server-first** via the crypto flow's `serverUpdate` callback, so a failed push leaves the old key fully valid — and the page says so honestly. Link-state `unknown` refuses (fail safe). The login-screen recovery flow disables regeneration for linked accounts and names the constructive path (My Account → Recovery Key).
+- **#2 fixed.** The in-app "Delete all my local data" now runs `wipeDevice()` — the same complete erase as "Start over". Confirm copy is honest per link state (linked: server copy survives, recovery key brings it back; local-only: no recovery).
+- **#3 fixed.** `DELETE /api/v1/me` refuses `primary_admin` with 403 (before the step-up ceremony); transfer-primary is the named path.
+- **#4 fixed.** The logout page gains a linked-only "Delete my account everywhere": server delete first (nothing deleted anywhere on failure — honest error), then the full device wipe. Disabled-with-reason for the primary admin.
+- **#6 fixed.** Role change revokes the subject's sessions exactly as suspend does; transfer-primary revokes both actor and target. The ≤15-min stale-role window in test plan step 8 no longer exists — expect an immediate sign-out instead.
+- **Bonus — the auth-service test baseline is green.** The `buildProof` serverId fixture bug turned out to be one instance of a stale OPAQUE server identity (`${API_BASE_URL}/v1` vs `opaqueServerIdentity(origin)`) sitting in **13** integration-test files — the root cause of the entire long-carried "OPAQUE baseline" failure set. All fixtures aligned, the bootstrap CLI tests' hard-coded `/home/chris/…` cwd made portable, and the spawned CLI now inherits the test env. **`recovery/finish` has green automated coverage for the first time**; full suite 174 pass / 12 skip / 0 fail.
+
+Test plan impact: step 1 now has the *fixed* expectation (deviceless recovery works with the **new** key after rotation); step 3 expects a genuinely clean device from the in-app delete; step 4 expects a 403 + disabled button; step 8 expects immediate revocation instead of the 15-minute window.
+
+---
+
 ## Q1 — Can user data only be seen by the user themself, after authentication?
 
 **Verdict: OK** (one by-design caveat)

@@ -164,6 +164,10 @@ visuals/
 # Claude / debug sessions only, never committed.
 dumps/
 
+# Redis RDB snapshots — a locally started redis-server drops one into its cwd;
+# an auth-session dump can carry step-up keys, recovery nonces and OPAQUE state.
+dump.rdb
+
 # === Claude Code (transient session state) ===
 .claude/scheduled_tasks.lock
 .claude/worktrees/

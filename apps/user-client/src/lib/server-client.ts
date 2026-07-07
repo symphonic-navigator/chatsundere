@@ -23,6 +23,7 @@ import type {
   RecoveryFinishResponse,
   RecoveryStartRequest,
   RecoveryStartResponse,
+  RecoveryUpdateRequest,
   StepUpFinishRequest,
   StepUpFinishResponse,
   StepUpStartRequest,
@@ -86,6 +87,13 @@ export const httpServerClient: ServerClient = {
       path: '/api/v1/recovery/finish',
       json: req,
       authMode: 'none',
+    }),
+  updateRecovery: (req: RecoveryUpdateRequest, baseUrl: string, _accessToken: string) =>
+    apiFetch<void>({
+      baseUrl,
+      path: '/api/v1/me/recovery',
+      json: req,
+      authMode: 'bearer',
     }),
   deleteMe: (baseUrl: string, _accessToken: string) =>
     apiFetch<void>({ baseUrl, path: '/api/v1/me', method: 'DELETE', authMode: 'bearer' }),

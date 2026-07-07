@@ -26,6 +26,7 @@ export const AUDIT_EVENT_TYPES = [
   'pairing_code.redeemed',
   'wrapping_invariant_violated',
   'recovery_used',
+  'recovery_key.regenerated',
   'refresh_token.reuse_detected',
 ] as const;
 
@@ -131,5 +132,6 @@ export const AUDIT_EVENT_SCHEMAS: Record<
   'pairing_code.redeemed': pairingCodeRedeemedMeta,
   wrapping_invariant_violated: wrappingInvariantViolatedMeta,
   recovery_used: emptyMeta,
+  'recovery_key.regenerated': emptyMeta,
   'refresh_token.reuse_detected': refreshTokenReuseMeta,
 };
