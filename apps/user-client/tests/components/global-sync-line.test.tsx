@@ -101,6 +101,36 @@ describe('GlobalSyncLine', () => {
     expect(container.querySelector('[data-global-sync-status]')).toBeNull();
   });
 
+  it('shows the transport_failing attention and lets it collapse (no affordance to hide)', async () => {
+    // Laura soft (pre-test analysis #8): an affordance-less, self-healing
+    // attention must not pin an unactionable warning over the chat — it may
+    // tuck to the dot exactly like backfill.
+    linkOnline();
+    const attention: SyncAttention = { kind: 'transport_failing' };
+    await seedState({ watermarkRev: 10, attention });
+    renderOnApp();
+    expect(await screen.findByText(/Syncing is not getting through/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sync status' }));
+    expect(screen.getByRole('button', { name: 'Show sync status' })).toBeInTheDocument();
+    expect(screen.queryByText(/Syncing is not getting through/)).not.toBeInTheDocument();
+  });
+
+  it('an attention with an affordance never collapses', async () => {
+    linkOnline();
+    const attention: SyncAttention = { kind: 'recovery_paused' };
+    await seedState({ watermarkRev: 10, attention });
+    renderOnApp();
+    await screen.findByText('Your server is behaving inconsistently — syncing is paused.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sync status' }));
+    // Still fully visible — the Retry affordance must never hide behind the dot.
+    expect(
+      screen.getByText('Your server is behaving inconsistently — syncing is paused.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
   it('collapses to a dot and expands back on tap', async () => {
     linkOnline();
     await seedState({

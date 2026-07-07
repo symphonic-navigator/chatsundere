@@ -75,6 +75,8 @@ import {
   clearQuotaOnAcceptedWrite,
   getLinkGeneration,
   getSyncState,
+  noteCycleCompleted,
+  noteCycleFailed,
   setAttention,
   setPulling,
   settleTransientAttention,
@@ -933,37 +935,48 @@ export async function enforceServerIdentity(): Promise<void> {
 export async function runSyncCycle(): Promise<void> {
   if (!canRunCycle()) return;
   await withSingleFlight(async () => {
-    await purgeTrash();
-    await enforceServerIdentity();
-    // §11.3 — start tracking which attention kinds this cycle raises, so a stale
-    // transient banner (rate-limit / quota) can retire once the cycle stays clean.
-    beginAttentionCycle();
-    const result = await drainOutbox();
-    if (result.needsRecovery) {
-      // Epoch mismatch — Task 9 re-syncs everything; skip the pull this cycle.
-      // Recovery owns the attention state, so we do NOT settle transient banners here.
-      await recovery();
-      return;
+    // Pre-test analysis #8 — a whole-cycle transport failure (a persistently
+    // 500-ing or unreachable sync-service) used to vanish into `fireCycle`'s
+    // swallow. Count it here so N consecutive failures raise the
+    // `transport_failing` attention; a completed cycle is the positive signal
+    // that resets the counter, retires the banner, and stamps `lastSyncAt`.
+    try {
+      await purgeTrash();
+      await enforceServerIdentity();
+      // §11.3 — start tracking which attention kinds this cycle raises, so a stale
+      // transient banner (rate-limit / quota) can retire once the cycle stays clean.
+      beginAttentionCycle();
+      const result = await drainOutbox();
+      if (result.needsRecovery) {
+        // Epoch mismatch — Task 9 re-syncs everything; skip the pull this cycle.
+        // Recovery owns the attention state, so we do NOT settle transient banners here.
+        await recovery();
+      } else {
+        // §11.3 — the drain completed without a recovery handoff: retire a stale
+        // `delete_rate_limited` / `quota_exceeded` banner it did not re-raise.
+        await settleTransientAttention();
+        if (result.needsPull || result.head === null) {
+          // Pull when the drain says so (piggyback L-1 / a conflict owed resolution),
+          // OR when nothing was pushed this cycle (`head === null`): a pure-reader
+          // device with an empty outbox has no push response to read `head` from, so
+          // it cannot rule out being behind — it MUST pull to discover other devices'
+          // writes. This is the trigger-driven reader path (boot after unlock, the
+          // doorbell poke, foreground, the coarse timer), including a fresh link's
+          // "Pulling your data onto this device…" first sync (§6, §11.1).
+          // === Task 7 SEAM: the pull loop lands here (registered via _setPullLoop). ===
+          await pullLoop();
+        }
+        // Backfill handoff (tail of the cycle, inside the single-flight lock, AFTER
+        // drain+pull): registered at boot via `_setBackfill`. Deliberately NOT reached
+        // on a recovery-handoff cycle — recovery re-syncs everything wholesale, so a
+        // backfill on top would be redundant.
+        await backfill();
+      }
+      await noteCycleCompleted();
+    } catch (err) {
+      await noteCycleFailed();
+      throw err;
     }
-    // §11.3 — the drain completed without a recovery handoff: retire a stale
-    // `delete_rate_limited` / `quota_exceeded` banner it did not re-raise.
-    await settleTransientAttention();
-    if (result.needsPull || result.head === null) {
-      // Pull when the drain says so (piggyback L-1 / a conflict owed resolution),
-      // OR when nothing was pushed this cycle (`head === null`): a pure-reader
-      // device with an empty outbox has no push response to read `head` from, so
-      // it cannot rule out being behind — it MUST pull to discover other devices'
-      // writes. This is the trigger-driven reader path (boot after unlock, the
-      // doorbell poke, foreground, the coarse timer), including a fresh link's
-      // "Pulling your data onto this device…" first sync (§6, §11.1).
-      // === Task 7 SEAM: the pull loop lands here (registered via _setPullLoop). ===
-      await pullLoop();
-    }
-    // Backfill handoff (tail of the cycle, inside the single-flight lock, AFTER
-    // drain+pull): registered at boot via `_setBackfill`. Deliberately NOT reached
-    // on a recovery-handoff cycle — recovery returns early above, and recovery
-    // re-syncs everything wholesale, so a backfill on top would be redundant.
-    await backfill();
   });
 }
 

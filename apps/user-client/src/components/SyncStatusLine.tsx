@@ -78,6 +78,10 @@ function attentionView(a: SyncAttention): {
       // §5.2 — the reconnect affordance is router-backed, so the pure derive
       // path only signals intent; the component maps it to a navigate action.
       return { text: syncCopy.attention.authDegraded, wantsReconnect: true };
+    case 'transport_failing':
+      // Pre-test analysis #8 — self-healing (retires on the next completed
+      // cycle), so no action affordance: there is nothing for the user to do.
+      return { text: syncCopy.attention.transportFailing };
   }
 }
 

@@ -1,6 +1,38 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-06 (late) — **PRE-TEST-ANALYSIS FIXES built on the
+**Last updated:** 2026-07-07 — **PRE-TEST-ANALYSIS OPEN ITEMS #8 + #9 FIXED on
+the remote branch `claude/pre-test-analysis-open-items-6s118y`** (remote
+session; the #1–#4/#6 fix branch is merged to master as PR #26, `25e0e80`).
+**(#8 Medium)** generic sync transport failures are no longer invisible: the
+cycle wrapper counts consecutive whole-cycle failures (only while connectivity
+reads `linked_online` — airplane mode never false-alarms) and raises a new
+self-healing `transport_failing` attention after 3; the next completed cycle
+retires it and stamps `lastSyncAt` (previously **never written** — the
+"Synced · …" suffix now works as a side effect). Renders app-wide via
+`GlobalSyncLine`, where it is collapsible to the dot (Laura's lead soft,
+folded: an affordance-less attention pinned over the chat would be nagging).
+**(#9 Low)** the Entrance Hall no longer misdirects a freshly
+recovered/paired user: while the first post-link sync is pending (linked,
+`linked_online`, `lastSyncAt === null`) a calm non-gold `FirstSyncCard`
+("Syncing your account…") takes the Crown instead of the SetupCard's "Create
+your first companion" (duplicate-persona risk); local-only and
+offline/unreachable devices keep the SetupCard (the cue could never resolve
+there). **Laura pre-squash on both: no hard defects** (3 residual softs ruled
+acceptable-as-built, logged in [[insights/follow-ups-index]]). Not a Larissa
+path (client-only sync engine + Entrance Hall; no crypto/auth/sync-service
+change). Gates: `pnpm typecheck --force` **14/14**; full user-client vitest
+green (incl. 6 new transport-attention, 4 new first-sync-gate, 2 new
+GlobalSyncLine collapse tests); Biome clean on changed files. **Still open
+from the analysis: #5 (mindspace convergence — dedicated session), #7
+(join/finish invitation strand — runbook now, structural fix a Lyra/Chris
+design question), #10 (QR native-camera dead end — operator docs + F7
+convention decision).** Test-plan impact recorded in the analysis addendum
+(steps 2 + 9 now carry *fixed* expectations). **OWED: Chris reviews + merges
+the branch; the manual multi-device run.**
+
+---
+
+**Prior — 2026-07-06 (late):** **PRE-TEST-ANALYSIS FIXES built on the
 remote branch `claude/pre-test-analysis-fixes-ltcwag`** (remote session; Chris
 asked for the problems in `PRE-TEST-ANALYSIS-v0.2.0.md` to be fixed ahead of
 tomorrow's test run). **Findings #1–#4 and #6 are fixed; #5 and #7–#10 stay

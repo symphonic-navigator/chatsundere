@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useConnectivityStore } from '@chatsundere/ui-shared';
 import type { SyncAttention, SyncStateRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 
@@ -210,6 +211,60 @@ export async function clearQuotaOnAcceptedWrite(): Promise<void> {
   if (raisedThisCycle.has('quota_exceeded')) return;
   const { attention } = await getSyncState();
   if (attention?.kind === 'quota_exceeded') await setAttention(null);
+}
+
+// ===== Whole-cycle transport health (pre-test analysis #8) =====
+
+/**
+ * Consecutive failed cycles before the `transport_failing` attention raises.
+ * With the trigger mix (boot, foreground, Class-1 kicks, the 10-minute timer)
+ * this surfaces within seconds when the user is actively writing — exactly when
+ * unsynced changes are accumulating — and within ~30 minutes on an idle device.
+ */
+const TRANSPORT_FAILURE_THRESHOLD = 3;
+
+/**
+ * In-memory (deliberately not persisted): after a reload the counter simply
+ * re-accumulates, while a persisted `transport_failing` banner survives the
+ * reload on its own and retires on the first completed cycle.
+ */
+let consecutiveCycleFailures = 0;
+
+/**
+ * Record a whole-cycle failure (the generic transport class `fireCycle` used to
+ * swallow invisibly: a persistently 500-ing or unreachable sync-service). Counts
+ * ONLY while connectivity believes the server reachable — a device that knows
+ * it is offline (`server_unreachable` via the browser's offline event, or
+ * `local_offline`) already surfaces that calmly through the ConnectivityBadge
+ * and the offline status line, and an alarm banner for ordinary airplane-mode
+ * would be a false positive. Never clobbers a coexisting attention state: every
+ * other kind (quota, tamper, auth-degraded, recovery-paused, …) is more
+ * specific than "requests are failing".
+ */
+export async function noteCycleFailed(): Promise<void> {
+  if (useConnectivityStore.getState().state.kind !== 'linked_online') return;
+  consecutiveCycleFailures += 1;
+  if (consecutiveCycleFailures < TRANSPORT_FAILURE_THRESHOLD) return;
+  const { attention } = await getSyncState();
+  if (attention === null) await setAttention({ kind: 'transport_failing' });
+}
+
+/**
+ * Record a completed cycle: reset the failure counter, stamp `lastSyncAt` (the
+ * status line's "Synced · …" suffix and the Entrance Hall's first-sync gate both
+ * read it), and retire a `transport_failing` banner — a completed cycle IS the
+ * positive proof transport works again. Other attention kinds are never touched.
+ */
+export async function noteCycleCompleted(): Promise<void> {
+  consecutiveCycleFailures = 0;
+  const state = await getSyncState();
+  await getClientDataDb().syncState.update(STATE_ID, { lastSyncAt: Date.now() });
+  if (state.attention?.kind === 'transport_failing') await setAttention(null);
+}
+
+/** Test seam: reset the in-memory consecutive-failure counter. */
+export function _resetTransportFailuresForTests(): void {
+  consecutiveCycleFailures = 0;
 }
 
 // ===== In-memory recovery flag (§8) =====
