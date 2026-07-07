@@ -25,6 +25,8 @@ dumps
 # Local infra / env / editor cruft
 infra
 .envrc
+**/.env
+**/.env.*
 .mise.toml
 .editorconfig
 **/.DS_Store

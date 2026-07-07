@@ -53,6 +53,12 @@ COPY apps/user-client/ apps/user-client/
 RUN VITE_BASE=/ APP_VERSION="$VERSION" APP_SHA="$GIT_SHA" APP_BUILT_AT="$BUILT_AT" \
     pnpm --filter user-client build
 
+# 5. Build the admin-client (Vite base already '/admin/') so the frontend image
+#    serves it same-origin under /admin/ — required for it to read the
+#    user-client's IndexedDB account (a different origin shows "No account").
+COPY apps/admin-client/ apps/admin-client/
+RUN VITE_BASE=/admin/ pnpm --filter admin-client build
+
 # ---------- Runtime stage ----------
 FROM nginx:1.27-alpine
 
@@ -61,6 +67,7 @@ ARG GIT_SHA=""
 ARG BUILT_AT=""
 
 COPY --from=builder /app/apps/user-client/dist /usr/share/nginx/html
+COPY --from=builder /app/apps/admin-client/dist /usr/share/nginx/html/admin
 COPY apps/user-client/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Plain-text version marker, served at /VERSION (chatsune parity). Written after
