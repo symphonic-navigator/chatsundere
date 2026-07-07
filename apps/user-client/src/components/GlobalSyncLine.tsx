@@ -103,10 +103,12 @@ export function GlobalSyncLine(): JSX.Element | null {
         }
       : undefined);
 
-  // An attention is an error the user must ACT on — never let a prior "collapse
-  // the backfill dot" tuck it away behind a calm dot (it would read as benign
-  // progress and hide the Reconnect affordance). Only backfill is collapsible.
-  if (collapsed && view.kind !== 'attention') {
+  // An attention carrying an affordance must never be tucked behind a calm dot
+  // (it would read as benign progress and hide e.g. the Reconnect action). An
+  // affordance-LESS attention (`transport_failing` — self-healing, nothing to
+  // do) is collapsible exactly like backfill (Laura soft, pre-test analysis #8):
+  // pinning an unactionable warning over the chat would be nagging, not help.
+  if (collapsed && (view.kind !== 'attention' || action === undefined)) {
     return (
       <button
         type="button"

@@ -74,6 +74,10 @@ export const syncCopy = {
      *  paused until the account is re-linked. Local work is unaffected. */
     authDegraded:
       "This server no longer recognises this device. Your data is safe here — reconnect with a new invitation when you're ready.",
+    /** Pre-test analysis #8 — repeated whole-cycle failures against a server the
+     *  app believes reachable. Self-healing; retires on the next completed cycle. */
+    transportFailing:
+      'Syncing is not getting through to your server. Your changes are safe on this device and will catch up automatically — if this keeps happening, tell your operator.',
   },
 
   /** Action labels the status line renders alongside retriable attention states. */
@@ -89,6 +93,17 @@ export const syncCopy = {
   /** The calm inline breadcrumb shown on the chat surface (§7.3, Laura soft). */
   breadcrumb: {
     deletedElsewhere: 'This was deleted on another device.',
+  },
+
+  /**
+   * Pre-test analysis #9 — the Entrance Hall's Crown card while the first
+   * post-link sync is still running (deviceless recovery, pairing, invitation
+   * join): reassure that the data is on its way instead of nudging the user to
+   * create a duplicate first companion.
+   */
+  firstSync: {
+    title: 'Syncing your account…',
+    body: 'Your data is on its way to this device.',
   },
 
   /**

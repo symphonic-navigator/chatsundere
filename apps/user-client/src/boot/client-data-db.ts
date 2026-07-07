@@ -726,7 +726,10 @@ export type SyncAttention =
   | { kind: 'recovery_paused' }
   | { kind: 'blob_reupload_threshold'; bytes: number; count: number }
   | { kind: 'tamper' }
-  | { kind: 'auth_degraded' };
+  | { kind: 'auth_degraded' }
+  /** Pre-test analysis #8 — consecutive whole-cycle transport failures while the
+   *  server is believed reachable; cleared by the next completed cycle. */
+  | { kind: 'transport_failing' };
 
 // ===== Dexie subclass =====
 

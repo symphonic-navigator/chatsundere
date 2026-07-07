@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect } from 'react';
 import { PostOnboardingBiometricPrompt } from '../../components/PostOnboardingBiometricPrompt.js';
-import { SetupCard, type SetupStep } from '../../components/SetupCard.js';
+import { FirstSyncCard, SetupCard, type SetupStep } from '../../components/SetupCard.js';
 import { NavTile } from '../../components/ui/NavTile.js';
 import { useAllArtefactCount } from '../../data/artefacts.js';
 import { useChats } from '../../data/chats.js';
@@ -24,6 +24,7 @@ import { useProviders } from '../../data/providers.js';
 import { useDisplayName, useSettings } from '../../data/settings.js';
 import { APP_VERSION } from '../../lib/version.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
+import { useFirstSyncPending } from '../../sync/first-sync.js';
 
 /** Landing surface for /app — greeting, optional continue-card, and eight room tiles in the fixed ascension order. */
 export function EntranceHall(): JSX.Element {
@@ -58,6 +59,11 @@ export function EntranceHall(): JSX.Element {
   if (personaCount === 0)
     setupSteps.push({ label: 'Create your first companion', to: '/app/persona/new' });
   const needsSetup = setupSteps.length > 0;
+  // Pre-test analysis #9 — while the first post-link sync is still running, an
+  // empty vault is expected, not a first run: the SetupCard's "Create your first
+  // companion" there is active misdirection (it invites a duplicate persona),
+  // so the calm FirstSyncCard takes the Crown instead.
+  const firstSyncPending = useFirstSyncPending();
   const artefactCount = useAllArtefactCount().data ?? 0;
   const libraryCount = useFilteredLibraries().data?.length ?? 0;
 
@@ -75,8 +81,11 @@ export function EntranceHall(): JSX.Element {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Crown — Setup card wins over Continue (spec §3.2) */}
-        {needsSetup ? (
+        {/* Crown — Setup card wins over Continue (spec §3.2); a pending first
+            sync wins over Setup (pre-test analysis #9). */}
+        {needsSetup && firstSyncPending ? (
+          <FirstSyncCard />
+        ) : needsSetup ? (
           <SetupCard steps={setupSteps} />
         ) : recentChat && recentPersona ? (
           <NavTile colour="pink" gold wide to={`/app/chat/${recentChat.id}`} label="Continue">

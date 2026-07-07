@@ -51,10 +51,16 @@ function canTrigger(): boolean {
   return true;
 }
 
-/** Fire a cycle iff the guard passes; swallow the cycle's own errors. */
+/**
+ * Fire a cycle iff the guard passes. The swallow is DELIBERATE and no longer
+ * silent (pre-test analysis #8): the worker counts every whole-cycle failure
+ * and raises the `transport_failing` attention after N consecutive ones, so a
+ * persistently failing sync-service surfaces on the status surfaces instead of
+ * dying here as an unhandled rejection.
+ */
 function fireCycle(): void {
   if (!canTrigger()) return;
-  void cycle();
+  cycle().catch(() => undefined);
 }
 
 // ===== The debounced Class-1 kick =====
