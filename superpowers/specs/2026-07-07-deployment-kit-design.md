@@ -259,8 +259,10 @@ Idempotent, safe to re-run. Steps:
    (rotating it bricks every account's passphrase auth). Print the
    "back-this-up-now, never rotate" warning.
 5. `docker compose up -d auth sync proxy frontend` (+ monitoring if present).
-   Migrations run on boot (Drizzle) for both databases; sync mints its
-   `instance_epoch` on first migrate.
+   auth + sync **migrate-then-serve in their compose command** (`bun run
+   db:migrate && exec bun src/index.ts`) — migrations are NOT run by `index.ts`,
+   so the command carries them, idempotently, on every deploy/upgrade; sync mints
+   its `instance_epoch` on first migrate.
 6. Wait for `auth` / `sync` / `proxy` `/readyz` green.
 7. **Bootstrap the first admin** interactively:
    `docker compose exec auth bun run bootstrap-admin` (prompts for the username),

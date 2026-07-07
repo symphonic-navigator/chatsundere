@@ -451,7 +451,12 @@ services:
   auth:
     image: ghcr.io/symphonic-navigator/chatsundere-backend:latest
     restart: unless-stopped
-    command: ['bun', 'apps/auth-service/src/index.ts']
+    # Migrate-then-serve: migrations are NOT run at boot by index.ts (verified —
+    # a separate db:migrate script); running them in the command makes every
+    # deploy/upgrade (incl. a Watchtower image pull) self-migrate idempotently.
+    # cd into the service dir so drizzle's `migrationsFolder: './migrations'`
+    # and the package script resolve; `exec` hands signals to the Bun process.
+    command: ['sh', '-c', 'cd apps/auth-service && bun run db:migrate && exec bun src/index.ts']
     environment:
       NODE_ENV: production
       PORT: '3100'
@@ -486,7 +491,10 @@ services:
   sync:
     image: ghcr.io/symphonic-navigator/chatsundere-backend:latest
     restart: unless-stopped
-    command: ['bun', 'apps/sync-service/src/index.ts']
+    # Migrate-then-serve (see auth). sync ALSO needs this: getInstanceEpoch reads
+    # sync_meta at boot, a table a migration creates + seeds — without migrating
+    # first the service refuses to boot.
+    command: ['sh', '-c', 'cd apps/sync-service && bun run db:migrate && exec bun src/index.ts']
     environment:
       NODE_ENV: production
       PORT: '3200'
@@ -950,6 +958,9 @@ else
 fi
 
 echo "== Bring up application services =="
+# auth + sync migrate-then-serve via their compose command (idempotent), so no
+# separate migration step is needed here; the /readyz wait below tolerates the
+# one-off migrate delay on first boot.
 $COMPOSE up -d auth sync proxy frontend
 # monitoring/watchtower come up too if present in the compose:
 $COMPOSE up -d
@@ -1098,6 +1109,14 @@ tables (they remain the source of truth) and **add** the new template-level
 variables (`BASE_DOMAIN`, `HOST_*`, `TRAEFIK_NETWORK`, `TRAEFIK_CERTRESOLVER`).
 State that the MinIO scoped-key hand-step and the OPAQUE generation are now
 automated by `install.sh` (idempotently). Cross-reference `deploy/README.md`.
+**Also correct the migration claim:** chapter 6 (and any other spot) currently
+says "Migrations run on boot (Drizzle)". They do NOT — `index.ts` runs no
+migrator. auth + sync now **migrate-then-serve in their compose command**
+(`cd apps/<svc>-service && bun run db:migrate && exec bun src/index.ts`), so a
+deploy or a Watchtower image pull self-migrates idempotently. Update the wording
+to say so, and note that upgrades therefore need no manual migration step.
+Run `grep -ni "migrations run on boot\|on boot (Drizzle)" obsidian/DEPLOYMENT.md`
+and fix every hit.
 
 - [ ] **Step 3: Fix the proxy-port discrepancy**
 
