@@ -36,8 +36,8 @@ MinIO, Prometheus, Grafana) and the **backend services on the host** via
 
 Development secrets are **deliberately committed** in `apps/*/.env.dev` — they are
 throwaway values loaded only against the loopback-bound dev compose and are never
-used in any deployment (production keys live in an uncommitted `compose.prod.yml`;
-see [`infra/compose.prod.yml.example`](infra/compose.prod.yml.example)). The dev
+used in any deployment (production secrets are generated per-deployment by
+[`deploy/generate.sh`](deploy/README.md) into a git-ignored `deploy/out/`). The dev
 scripts load them explicitly with `bun --env-file=.env.dev`, so no
 `scripts/setup-dev.sh` step is needed for the local stack. In the client's
 server-linking flow, point at the auth-service at `http://localhost:3100`; it

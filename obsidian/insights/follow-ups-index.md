@@ -24,7 +24,7 @@ Canonical source: [[security-deferrals]]
 | M-7 | WebAuthn local-verify test does not exercise a real signed assertion | Squash D device-test scripts | Low |
 | L-1 | `decodeRecoveryKey` uses non-constant-time string operations | Before v0.1.0 (if ever, low risk) | Low |
 | L-B3 | Per-username login rate-limit counts successful logins | Before v0.1.0 | Low |
-| L-B4 | `XDG_RUNTIME_DIR` for bootstrap CLI documentation | Before v0.1.0 in compose.prod.yml.example | Low |
+| L-B4 | `XDG_RUNTIME_DIR` for bootstrap CLI documentation | Before v0.1.0 in `deploy/compose.template.yml` (superseded `compose.prod.yml.example`, retired in the deployment-kit squash) | Low |
 | — | Refresh-reuse user-facing notification | Phase 1 sync-service real-time channel | — |
 | — | Raw MK in login-flow returns — tighten MK custody | Dedicated "Tighten crypto MK custody" squash before v0.1.0 | — |
 | — | `passkey-management.ts` belongs in `packages/crypto` not user-client | Before v0.1.0 (own small squash, Larissa-audited) | — |
@@ -96,7 +96,7 @@ Items that have been decided but not yet implemented in code.
 | ~~`/api/join` endpoint with atomic code validation~~ | Resolved 2026-05-22 — Squash β (commit `7a01697`); unified two-round flow per ADR 0028, kind discriminator (invitation \| pairing), atomic UPDATE-WHERE redemption, `assertOpaqueWrappingPresent` defence-in-depth on pairing finish. | — |
 | ~~`pending_codes` DB table (single table with `type` discriminator)~~ | Resolved 2026-05-22 — Squash α migration 0003 + 0004 (role nullable). Plus migration 0005 (commit `cffeb0b`, Squash γ) added `opaque_client_identifier` so OPAQUE login + step-up survive username changes. | — |
 | Pairing-code GET surfaces `code: null` and `qr_url: null` (spec §4.5 deviation) | Surfaced 2026-05-22 in Squash β — HMAC-only storage means the plaintext is unrecoverable after the POST response. Revisit at v0.1.0+ if user feedback wants post-creation re-display. | Either store plaintext encrypted under a server key, or freeze the null behaviour as final. |
-| `TRUSTED_PROXY_IPS` env var + X-Forwarded-For trust model | Surfaced 2026-05-22 by Larissa β L-β-2 (deferred). Required before v0.1.0 deployment. | Auth-service middleware; document the "production deployment must front with a reverse proxy that overwrites X-Forwarded-For" requirement in `compose.prod.yml.example` and `apps/auth-service/README.md`. |
+| `TRUSTED_PROXY_IPS` env var + X-Forwarded-For trust model | Surfaced 2026-05-22 by Larissa β L-β-2 (deferred). Required before v0.1.0 deployment. | Auth-service middleware; document the "production deployment must front with a reverse proxy that overwrites X-Forwarded-For" requirement in `obsidian/DEPLOYMENT.md` and `apps/auth-service/README.md` (the old target, `compose.prod.yml.example`, is retired as of the deployment-kit squash). |
 | Switch from native UUIDv4 to UUIDv7 (`uuidv7` npm package on client, `gen_uuidv7()` SQL function on server) | Before any new entity DB tables land; documented in ADR 0025 | Cross-cutting; library-based |
 | Auto-handover client state machine with failure-mode handling | After cross-device-identity brief + ADR 0026 land (both done 2026-05-20) | User-client; per pattern in [[2026-05-20-pattern-frontend-changes-affecting-crypto-semantics]] consider Larissa-pass on the state-machine file specifically |
 | Partial-upload cleanup endpoint `DELETE /api/me/account` on handover-cancel | Co-requisite of auto-handover client state machine | Per ADR 0026 §Failure Mode C; Larissa-audit |

@@ -10,10 +10,11 @@ British English throughout. Every chapter ends with a constructive next step,
 never a gate — if something here reads as a wall, that is a documentation bug.
 
 > **Scope note.** The blob transport (MinIO/S3) documented here landed with
-> Block 6C. The application service blocks (`auth-service`, `sync-service`,
-> `proxy-service`) join `infra/compose.prod.yml.example` in the v0.2.0 cutover
-> session; where a step depends on a not-yet-added service block, it says so and
-> names the env var the block must carry.
+> Block 6C. The full stack — `auth-service`, `sync-service`, `proxy-service`,
+> the frontend, and the supporting data services — is now defined once in
+> `deploy/compose.template.yml` and rendered per-deployment by
+> `deploy/generate.sh` (chapters 5–6); the hand-copied prod-compose example it
+> superseded is retired.
 
 ---
 
@@ -27,7 +28,7 @@ TLS and routes by host works.
                          ┌──────────── Traefik (:80/:443, TLS) ────────────┐
    browser / PWA ──HTTPS─┤  auth.<domain>   → auth-service  (:3100)         │
                          │  sync.<domain>   → sync-service  (:3200)         │
-                         │  proxy.<domain>  → proxy-service (:3300)         │
+                         │  proxy.<domain>  → proxy-service (:8080)         │
                          └──────────────────────────────────────────────────┘
                                     │ internal `chatsundere` network
         ┌───────────────┬───────────┼───────────────┬───────────────┐
@@ -192,7 +193,7 @@ configuration knob pretending otherwise.
 
 ### 4.3 proxy-service
 
-`NODE_ENV`, `PORT` (`3300`), `OPS_PORT`, `LOG_LEVEL`, `REDIS_URL`, `JWT_ISSUER`,
+`NODE_ENV`, `PORT` (`8080`), `OPS_PORT` (`9090`), `LOG_LEVEL`, `REDIS_URL`, `JWT_ISSUER`,
 `JWT_AUDIENCE`, `AUTH_JWKS_URL`, `CORS_ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`,
 `RATE_LIMIT_USER_PER_MIN`, `RATE_LIMIT_IP_PER_MIN`, `MAX_BODY_BYTES`,
 `MAX_CONCURRENT_PER_USER`, `PROXY_IDLE_TIMEOUT_S`.
@@ -213,52 +214,159 @@ Either drift is safe but pointless; set both, or neither.
 Generate secrets with e.g. `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`
 (base64url) for the HMAC keys, and a real EdDSA key for `AUTH_JWT_PRIVATE_KEY`.
 
-*Next step:* chapter 5 walks the compose file that wires these together.
+### 4.5 Template-level variables (`deploy/deployment.env.template`)
+
+These sit above the four service tables — they drive Traefik routing and
+hostnames rather than any one service's `.env`, and `deploy/generate.sh`
+prompts for them interactively rather than expecting you to hand-edit them:
+
+| Var | Format | Secret | Notes |
+|---|---|---|---|
+| `INSTANCE_NAME` | lowercase alphanumeric + hyphen (`chatsundere`) | no | namespaces the compose project, Traefik router/service/middleware names, the internal network, and the Watchtower scope — set a different value per stack when running multiple Chatsundere instances behind one Traefik (see the note at the end of §5) |
+| `BASE_DOMAIN` | e.g. `chatsundere.me` | no | the domain every `HOST_*` is derived from |
+| `HOST_APP` | `app.<domain>` | no | frontend + admin-client (`/admin/`) |
+| `HOST_AUTH` | `auth.<domain>` | no | |
+| `HOST_SYNC` | `sync.<domain>` | no | |
+| `HOST_PROXY` | `proxy.<domain>` | no | |
+| `HOST_PROMETHEUS` | `prometheus.<domain>` | no | only used when monitoring is rendered in |
+| `HOST_GRAFANA` | `grafana.<domain>` | no | only used when monitoring is rendered in |
+| `TRAEFIK_NETWORK` | docker network name (`traefik`) | no | your **existing** Traefik's external network |
+| `TRAEFIK_CERTRESOLVER` | Traefik cert resolver name (`letsencrypt`) | no | as configured in your own Traefik |
+
+`generate.sh` derives `API_BASE_URL`, `PROXY_PUBLIC_URL`, `SYNC_PUBLIC_URL`,
+`ADMIN_PUBLIC_URL`, and `CORS_ALLOWED_ORIGINS` from the `HOST_*` values, so they
+do not need separate prompts — they still appear as ordinary vars in the
+rendered `deployment.env` and are covered by the §4.1/4.2 tables above.
+
+*Next step:* chapter 5 walks the generator that turns this reference into a
+running deployment.
 
 ---
 
-## 5. Compose walkthrough
+## 5. Generate (local)
 
-Copy `infra/compose.prod.yml.example` to `compose.prod.yml` (do **not** commit the
-copy) and export the variables named in its header. The example currently defines
-`postgres`, `redis`, `minio`, `prometheus`, and `grafana`; the three application
-services join it in the v0.2.0 cutover.
+The deploy kit is a **two-phase, secret-generating installer**: `deploy/generate.sh`
+runs on your laptop and produces a self-contained `out/` directory; `deploy/install.sh`
+(chapter 6) runs on the VPS and brings the stack up. Quickstart in
+`deploy/README.md`; this chapter is the operator-level detail behind it.
 
-Points worth calling out:
+`generate.sh` depends on nothing but `bash` ≥ 4, `openssl`, and `awk` —
+deliberately dependency-light for the local phase, and openssl-only for secret
+generation (no GNU coreutils, no `basenc`). Stock macOS `/bin/bash` is 3.2 (the
+script uses bash-4 associative arrays); macOS operators need Homebrew bash. The
+built-in LibreSSL `openssl` on macOS is sufficient — no other install needed.
 
-- **`minio`** runs on the internal `chatsundere` network only — no `ports:` entry,
-  so neither `:9000` nor the console `:9001` is reachable from outside the compose
-  network. Its root credentials come from `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`
-  with `:?`-guarded placeholders that **refuse to start** on an unset value — there
-  is deliberately no default credential.
-- **`postgres` / `redis`** are likewise unpublished — only Traefik binds host ports.
-- **Named volumes** (`minio_data`, `postgres_data`, …) so a `compose down` keeps
-  your data; the Prometheus/Grafana volumes are named for the UID-ownership reason
-  noted inline.
+```bash
+cd deploy
+./generate.sh
+```
 
-Validate before starting: `docker compose -f compose.prod.yml config` must parse.
+It prompts for `BASE_DOMAIN`, `INSTANCE_NAME` (default `chatsundere`),
+`TRAEFIK_NETWORK` (default `traefik`), `TRAEFIK_CERTRESOLVER` (default
+`letsencrypt`), whether to include Prometheus + Grafana, whether to include a
+scoped Watchtower, and — optionally — per-host overrides for
+`HOST_APP`/`HOST_AUTH`/`HOST_SYNC`/`HOST_PROXY` if you don't want the
+`app./auth./sync./proxy.<domain>` convention (§4.5).
 
-*Next step:* chapter 6 brings the stack up for the first time.
+What it renders into `out/`:
+
+- **`deployment.env`** — every var from §4 filled with a random secret
+  (`POSTGRES_PASSWORD`, `MINIO_ROOT_USER`/`PASSWORD`, `GRAFANA_ADMIN_PASSWORD`,
+  `TRAEFIK_AUTH_USERS` (an `apr1` hash for the monitoring basic-auth
+  middleware), `AUTH_JWT_PRIVATE_KEY`, `INVITATION_HMAC_KEY`,
+  `REFRESH_TOKEN_HMAC_KEY`, `HMAC_KEY_PENDING_CODES`) — **except**
+  `OPAQUE_SERVER_SETUP` and the MinIO scoped `S3_ACCESS_KEY_ID`/
+  `S3_SECRET_ACCESS_KEY`, which stay `CHANGE-ME-ON-SERVER`: those are minted
+  once, on the server, by `install.sh`, so they never sit on a laptop or
+  transit over `scp` unnecessarily. Written `chmod 600`.
+- **`docker-compose.yml`** — rendered from `deploy/compose.template.yml` with
+  the monitoring/Watchtower blocks trimmed per your y/N answers. It pins
+  `name: ${INSTANCE_NAME}` at the top level, which fixes the Compose project
+  name (and therefore the internal network's real name,
+  `<INSTANCE_NAME>_chatsundere`) regardless of the directory `install.sh` runs
+  from on the server.
+- **`postgres-init/`** — the multi-database bootstrap script, copied in
+  verbatim.
+- **`install.sh`** — copied alongside so `out/` is fully self-contained; it
+  reads back `deployment.env` for everything it needs.
+
+Validate before shipping: `docker compose -f out/docker-compose.yml --env-file
+out/deployment.env config` must parse.
+
+Ship it:
+
+```bash
+scp -r out/ user@your-vps:/opt/chatsundere
+```
+
+**Running multiple instances on one host.** Give each Chatsundere stack
+sharing a host/Traefik a distinct `INSTANCE_NAME` (and distinct hostnames).
+Everything else — the compose project, the Traefik router/service/middleware
+names, the internal docker network, and the Watchtower scope — namespaces off
+that value automatically, so the stacks never collide.
+
+*Next step:* chapter 6 installs and bootstraps the stack on the server.
 
 ---
 
-## 6. Bootstrap
+## 6. Install & bootstrap (server)
 
-1. `docker compose -f compose.prod.yml up -d postgres redis minio` and wait for
-   all three healthchecks green (`docker compose ps`).
-2. **MinIO scoped key** (one hand-step, chapter 10): create the `chatsundere-blobs`
-   bucket and an access key scoped to that bucket's CRUD, and put *that* key in the
-   sync-service's `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` — never the root
-   credential. (The sync-service also creates the bucket itself at boot if absent,
-   so a missing bucket is not fatal — but the scoped key must exist.)
-3. Start the application services. Migrations run on boot (Drizzle) for both
-   databases; the sync-service also mints its `instance_epoch` on first migrate.
-4. Create the first admin with the `bootstrap-admin` CLI (auth-service), then mint
-   the first invitation.
-5. Point a client at your instance — it discovers topology from
-   `GET https://auth.<domain>/api/v1/config`, which returns `proxyUrl`, `syncUrl`,
-   and the `features` array (`proxy`, `sync`, and `blobs` when the checkpoint in
-   §4.4 is satisfied).
+```bash
+ssh user@your-vps 'cd /opt/chatsundere && ./install.sh'
+```
+
+`install.sh` is **idempotent** — safe to re-run; it fills each generate-once
+secret only while it is still `CHANGE-ME-ON-SERVER`, and every other step
+either no-ops or converges on a re-run. What it does, in order:
+
+1. **Preflight.** `docker compose config` must parse, and the Traefik external
+   network named by `TRAEFIK_NETWORK` must already exist — it refuses to start
+   with a clear message (create it with `docker network create <name>`, or
+   point `TRAEFIK_NETWORK` at the network your existing Traefik already uses)
+   rather than silently standing up an orphaned network.
+2. **Data services.** Brings up `postgres`, `redis`, `minio` and waits for all
+   three healthchecks.
+3. **MinIO bucket + scoped key — now automated.** Creates the `chatsundere-blobs`
+   bucket (`mc mb --ignore-existing`), suspends object versioning as a
+   belt-and-braces measure (new buckets are unversioned by default; versioning
+   would break the deletion promise — chapter 9/10), and mints a
+   bucket-scoped access key (`mc admin user svcacct add`, policy limited to
+   that one bucket's CRUD) written into `S3_ACCESS_KEY_ID`/
+   `S3_SECRET_ACCESS_KEY` in `deployment.env` — **never** the MinIO root
+   credential. Skipped on re-run once a real key is present.
+4. **OPAQUE server setup — generated once.** Runs `bun run generate-opaque-setup`
+   once, inside the backend image, and writes the result into
+   `OPAQUE_SERVER_SETUP` in `deployment.env`. **Never rotate this value** —
+   every registration record is bound to it; losing or regenerating it
+   permanently bricks every account's passphrase authentication (passkey
+   unlock is unaffected). **Back up `deployment.env` immediately after this
+   step succeeds.** Skipped on re-run once a real value is present.
+5. **Application services.** A single `docker compose up -d` brings up every
+   service the rendered compose file defines — `auth`, `sync`, `proxy`,
+   `frontend`, and monitoring/Watchtower if you opted in. **auth and sync
+   migrate-then-serve in their own compose command**
+   (`cd apps/<svc>-service && bun run db:migrate && exec bun src/index.ts`) —
+   `index.ts` itself runs no migrator. So every deploy, and every Watchtower
+   image pull, self-migrates idempotently; there is **no separate manual
+   migration step on upgrade**. The sync-service also mints its
+   `instance_epoch` on its first-ever migrate.
+6. **Wait for `/readyz`** on `auth`, `sync`, and `proxy`.
+7. **Bootstrap the first admin.** `bootstrap-admin`
+   (`apps/auth-service/src/cli/bootstrap.ts`) is **not interactive** — it takes
+   no username, no stdin at all. It mints the first `primary_admin`
+   **invitation** (a code plus `qr_url = API_BASE_URL/join#<code>`), writes it
+   to a `0600` file inside the container, and prints the path; `install.sh`
+   cats that file back out to your terminal. **Redeem that invitation in the
+   user-client** (`https://<HOST_APP>/join`) to register the actual first
+   admin account — you choose the username at registration, not on the
+   server. It refuses (exit 1, "refusing to run") once a `primary_admin`
+   already exists, which `install.sh` treats as success rather than failure —
+   the mechanism that makes re-running the script safe.
+
+Point a client at your instance once it's up — it discovers topology from
+`GET https://<HOST_AUTH>/api/v1/config`, which returns `proxyUrl`, `syncUrl`,
+and the `features` array (`proxy`, `sync`, and `blobs` when the checkpoint in
+§4.4 is satisfied).
 
 *Next step:* chapter 7 is the part you will actually revisit — running it day to
 day, and getting your data back when something breaks.
@@ -283,8 +391,8 @@ object is ever logged.
 `v*.*.*` release tag, so scope any Watchtower to conscious releases.
 
 **Keep MinIO current — a conscious duty, not a Watchtower job.** MinIO stopped
-publishing community container images in October 2025; the compose example pins
-the newest published image (`RELEASE.2025-09-07T16-13-09Z`), and later security
+publishing community container images in October 2025; `deploy/compose.template.yml`
+pins the newest published image (`RELEASE.2025-09-07T16-13-09Z`), and later security
 fixes — including the CVE-2025-62506 session-policy fix in
 `RELEASE.2025-10-15T17-29-55Z` — exist **only as source releases**. The exposure
 is bounded here (exploiting it needs valid S3 credentials; the store is
@@ -373,7 +481,8 @@ is the right answer, not a limitation you will hit by surprise.
   service's ops port and are scraped over the internal network only — never
   Traefik-routed.
 - **Secrets hygiene.** All HMAC keys and the EdDSA private key are strong,
-  unique, and out of version control (`compose.prod.yml` is git-ignored).
+  unique, and out of version control (`deploy/out/` — where `generate.sh`
+  writes `deployment.env` — is git-ignored).
 - **TLS everywhere public.** Traefik terminates TLS; no plaintext public ingress.
 - **Shared Redis for the deny-list.** auth, sync, and proxy MUST share one Redis
   instance/db so a revoked session dies everywhere within the second. Losing Redis
@@ -382,7 +491,8 @@ is the right answer, not a limitation you will hit by surprise.
   - Neither the S3 API port (`:9000`) nor the **web console** (`:9001`) is
     published — internal network only.
   - **No default root credentials.** `minioadmin`/`minioadmin` must never survive;
-    the compose example's `:?` guards enforce a conscious value.
+    `deploy/compose.template.yml`'s `:?` guards enforce a conscious value, and
+    `generate.sh` fills it with a random one before you ever see the file.
   - The sync-service runs on a **scoped access key** limited to one bucket's CRUD,
     **not** the root credential.
   - **Versioning and ILM off** (or documented as breaking the deletion promise —
