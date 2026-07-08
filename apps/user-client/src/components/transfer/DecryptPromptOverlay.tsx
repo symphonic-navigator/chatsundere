@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button.js';
 
@@ -18,6 +19,7 @@ export function DecryptPromptOverlay({
   busy,
 }: DecryptPromptOverlayProps): JSX.Element {
   const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -41,15 +43,26 @@ export function DecryptPromptOverlay({
         <p className="mb-3 mt-1 text-[11px] text-paper-soft">
           Enter the password it was exported with.
         </p>
-        <input
-          aria-label="Password"
-          type="password"
-          autoComplete="off"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          className="w-full rounded-md border border-paper-soft/30 bg-transparent px-3 py-1.5 text-sm text-paper"
-        />
+        <div className="relative">
+          <input
+            aria-label="Password"
+            type={show ? 'text' : 'password'}
+            autoComplete="off"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full rounded-md border border-paper-soft/30 bg-transparent px-3 py-1.5 pr-9 text-sm text-paper"
+          />
+          <button
+            type="button"
+            onClick={() => setShow((s) => !s)}
+            aria-label={show ? 'Hide password' : 'Show password'}
+            aria-pressed={show}
+            className="absolute inset-y-0 right-2 flex items-center text-paper-soft hover:text-paper"
+          >
+            {show ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+          </button>
+        </div>
         {error ? <p className="mt-2 text-[11px] text-amber-300/80">{error}</p> : null}
         <div className="cs-dialog-actions">
           <Button tone="neutral" onClick={onCancel}>

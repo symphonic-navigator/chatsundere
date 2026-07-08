@@ -34,4 +34,18 @@ describe('DecryptPromptOverlay', () => {
       true,
     );
   });
+
+  it('toggles password visibility', () => {
+    render(
+      <DecryptPromptOverlay onSubmit={vi.fn()} onCancel={() => {}} error={null} busy={false} />,
+    );
+    const field = screen.getByLabelText(/^password$/i) as HTMLInputElement;
+    expect(field.type).toBe('password');
+
+    fireEvent.click(screen.getByRole('button', { name: /show password/i }));
+    expect(field.type).toBe('text');
+
+    fireEvent.click(screen.getByRole('button', { name: /hide password/i }));
+    expect(field.type).toBe('password');
+  });
 });
