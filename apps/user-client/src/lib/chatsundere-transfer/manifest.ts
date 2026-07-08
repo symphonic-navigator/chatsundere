@@ -22,11 +22,31 @@ export interface KnowledgeManifest {
   source: { libraryName: string };
 }
 
+export interface EncryptedManifest {
+  format: 'chatsundere/encrypted';
+  version: number;
+  algoVersion: string;
+  enclosedFormat: 'chatsundere/persona' | 'chatsundere/knowledge';
+  kdf: {
+    name: 'argon2id';
+    salt: string;
+    memorySizeKiB: number;
+    iterations: number;
+    parallelism: number;
+    hashLength: number;
+  };
+  nonce: string;
+  integrityHmac: string;
+  exportedAt: string;
+  appVersion: string;
+}
+
 export type DetectedFormat =
   | 'chatsune/persona'
   | 'chatsune/knowledge'
   | 'chatsundere/persona'
   | 'chatsundere/knowledge'
+  | 'chatsundere/encrypted'
   | 'unknown';
 
 const KNOWN: ReadonlySet<string> = new Set([
@@ -34,6 +54,7 @@ const KNOWN: ReadonlySet<string> = new Set([
   'chatsune/knowledge',
   'chatsundere/persona',
   'chatsundere/knowledge',
+  'chatsundere/encrypted',
 ]);
 
 /** Branch import on a parsed manifest's `format` field. */

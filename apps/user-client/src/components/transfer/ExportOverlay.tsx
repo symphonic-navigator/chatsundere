@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState } from 'react';
 import { exportPersona } from '../../data/chatsundere-export.js';
+import {
+  type EncryptFormState,
+  INITIAL_ENCRYPT_FORM,
+  resolveExportPassword,
+} from '../../lib/chatsundere-transfer/encryption-form.js';
 import { slug, triggerDownload } from '../../lib/download.js';
 import { toastStore } from '../../state/toast.store.js';
 import { Button } from '../ui/Button.js';
+import { EncryptExportSection } from './EncryptExportSection.js';
 
 export interface ExportOverlayProps {
   personaId: string;
@@ -30,6 +36,7 @@ export function ExportOverlay({
   const [artefacts, setArtefacts] = useState(true);
   const [images, setImages] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [enc, setEnc] = useState<EncryptFormState>(INITIAL_ENCRYPT_FORM);
 
   // Escape to close.
   useEffect(() => {
@@ -41,10 +48,15 @@ export function ExportOverlay({
   }, [onClose]);
 
   async function handleExport(): Promise<void> {
+    const resolved = resolveExportPassword(enc);
+    if (!resolved.ok) return;
     setExporting(true);
     try {
-      const blob = await exportPersona(personaId, { memory, artefacts, images });
-      triggerDownload(blob, `${slug(personaName)}-chatsundere.tar.gz`);
+      const blob = resolved.password
+        ? await exportPersona(personaId, { memory, artefacts, images }, resolved.password)
+        : await exportPersona(personaId, { memory, artefacts, images });
+      const suffix = resolved.password ? '-chatsundere-encrypted.tar.gz' : '-chatsundere.tar.gz';
+      triggerDownload(blob, `${slug(personaName)}${suffix}`);
       toastStore.show({ message: 'Persona exported', tone: 'success', durationMs: 3000 });
       onClose();
     } catch (e) {
@@ -90,7 +102,12 @@ export function ExportOverlay({
             checked={images}
             onChange={setImages}
           />
+          <EncryptExportSection state={enc} onChange={setEnc} />
         </div>
+        {(() => {
+          const r = resolveExportPassword(enc);
+          return !r.ok ? <p className="mb-2 text-[11px] text-amber-300/80">{r.reason}</p> : null;
+        })()}
         <div className="cs-dialog-actions">
           <Button tone="neutral" onClick={onClose}>
             Cancel
@@ -98,7 +115,7 @@ export function ExportOverlay({
           <Button
             tone="primary"
             priority
-            disabled={exporting}
+            disabled={exporting || !resolveExportPassword(enc).ok}
             onClick={() => {
               void handleExport();
             }}

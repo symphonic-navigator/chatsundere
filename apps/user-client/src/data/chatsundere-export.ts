@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { encryptExportPack } from '@chatsundere/crypto';
+import type { EnclosedFormat } from '@chatsundere/crypto';
 import type { EncodedVector } from '@chatsundere/embeddings';
 import type { ArtefactRow, AttachmentRow } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { KNOWLEDGE_COLLECTION, getKnowledgeVectorStore } from '../boot/knowledge-vectors-db.js';
+import { wrapEncrypted } from '../lib/chatsundere-transfer/encrypted-container.js';
 import type {
   ExportedVector,
   KnowledgePackPayload,
@@ -15,6 +18,19 @@ import type {
 } from '../lib/chatsundere-transfer/persona-pack.js';
 import { writePersonaPack } from '../lib/chatsundere-transfer/persona-pack.js';
 import { APP_VERSION } from '../lib/version.js';
+
+/** Encrypt a plaintext pack Blob under `password` when one is given; otherwise return it unchanged. */
+async function maybeEncrypt(
+  plain: Blob,
+  enclosedFormat: EnclosedFormat,
+  password: string | undefined,
+  meta: { exportedAt: string; appVersion: string },
+): Promise<Blob> {
+  if (!password) return plain;
+  const bytes = new Uint8Array(await plain.arrayBuffer());
+  const container = await encryptExportPack(password, bytes, enclosedFormat);
+  return wrapEncrypted(container, meta);
+}
 
 /** Placeholder text substituted for each dropped image attachment when `images: false`. */
 export const IMAGE_PLACEHOLDER_TEXT = 'Image not carried over in this transfer.';
@@ -45,7 +61,11 @@ export interface PersonaExportOptions {
  *   replaced by a text attachment carrying `IMAGE_PLACEHOLDER_TEXT` (same `id` and
  *   position, so message context is preserved). Blob bytes are never written.
  */
-export async function exportPersona(personaId: string, opts: PersonaExportOptions): Promise<Blob> {
+export async function exportPersona(
+  personaId: string,
+  opts: PersonaExportOptions,
+  password?: string,
+): Promise<Blob> {
   const db = getClientDataDb();
 
   const persona = await db.personas.get(personaId);
@@ -188,10 +208,9 @@ export async function exportPersona(personaId: string, opts: PersonaExportOption
     included: { memory: opts.memory, artefacts: opts.artefacts, images: opts.images },
   };
 
-  return writePersonaPack(payload, {
-    exportedAt: new Date(Date.now()).toISOString(),
-    appVersion: APP_VERSION.version,
-  });
+  const meta = { exportedAt: new Date(Date.now()).toISOString(), appVersion: APP_VERSION.version };
+  const plain = await writePersonaPack(payload, meta);
+  return maybeEncrypt(plain, 'chatsundere/persona', password, meta);
 }
 
 /**
@@ -199,7 +218,7 @@ export async function exportPersona(personaId: string, opts: PersonaExportOption
  * as a Chatsundere knowledge pack (gzip-compressed ustar tarball). The library
  * `id` is stripped; the importer assigns a fresh id.
  */
-export async function exportLibrary(libraryId: string): Promise<Blob> {
+export async function exportLibrary(libraryId: string, password?: string): Promise<Blob> {
   const db = getClientDataDb();
 
   const library = await db.libraries.get(libraryId);
@@ -247,8 +266,7 @@ export async function exportLibrary(libraryId: string): Promise<Blob> {
     vectors,
   };
 
-  return writeKnowledgePack(payload, {
-    exportedAt: new Date(Date.now()).toISOString(),
-    appVersion: APP_VERSION.version,
-  });
+  const meta = { exportedAt: new Date(Date.now()).toISOString(), appVersion: APP_VERSION.version };
+  const plain = await writeKnowledgePack(payload, meta);
+  return maybeEncrypt(plain, 'chatsundere/knowledge', password, meta);
 }

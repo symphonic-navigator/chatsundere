@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { CryptoError } from '@chatsundere/crypto';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getClientDataDb } from '../../boot/client-data-db.js';
 import { importPersonaPack } from '../../data/chatsundere-import.js';
 import { previewChatsuneSessions } from '../../data/chatsune-import.js';
+import { decryptTransferPack } from '../../lib/chatsundere-transfer/encrypted-container.js';
 import {
   readManifestFormat,
   readManifestJson,
@@ -14,6 +16,7 @@ import {
   type ParsedPersonaExport,
   parsePersonaExport,
 } from '../../lib/chatsune-import/persona-parse.js';
+import { DecryptPromptOverlay } from '../transfer/DecryptPromptOverlay.js';
 
 export interface AppliedPersonaImport {
   persona: ParsedPersonaExport['persona'];
@@ -61,8 +64,11 @@ export function ChatsuneImportControl({
     name: string;
     doImport: () => Promise<void>;
   } | null>(null);
+  const [pendingEncrypted, setPendingEncrypted] = useState<Blob | null>(null);
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptError, setDecryptError] = useState<string | null>(null);
 
-  async function doChatsunderePersonaImport(file: File, sourceName: string): Promise<void> {
+  async function doChatsunderePersonaImport(file: Blob, sourceName: string): Promise<void> {
     const result = await importPersonaPack(file, sourceName);
     navigate(`/app/persona/${result.personaId}`, {
       state: {
@@ -71,12 +77,18 @@ export function ChatsuneImportControl({
     });
   }
 
-  async function onPick(file: File): Promise<void> {
+  async function onPick(file: Blob): Promise<void> {
     setError(null);
     setPreview(null);
     setPersonaCollision(null);
 
     const format = await readManifestFormat(file);
+
+    if (format === 'chatsundere/encrypted') {
+      setDecryptError(null);
+      setPendingEncrypted(file);
+      return;
+    }
 
     if (format === 'chatsundere/persona') {
       // Create a new persona from the pack and land in its editor.
@@ -131,6 +143,27 @@ export function ChatsuneImportControl({
     }
   }
 
+  async function onDecryptSubmit(password: string): Promise<void> {
+    const file = pendingEncrypted;
+    if (!file) return;
+    setDecrypting(true);
+    setDecryptError(null);
+    try {
+      const inner = await decryptTransferPack(file, password);
+      setPendingEncrypted(null);
+      setDecrypting(false);
+      await onPick(inner);
+    } catch (e) {
+      setDecrypting(false);
+      if (e instanceof CryptoError && e.code === 'wrong_password') {
+        setDecryptError('That password didn’t work, or the file is damaged — try again.');
+      } else {
+        setPendingEncrypted(null);
+        setError(e instanceof Error ? e.message : 'Could not open this file.');
+      }
+    }
+  }
+
   function apply(): void {
     if (!preview) return;
     onApply({
@@ -146,6 +179,17 @@ export function ChatsuneImportControl({
 
   return (
     <div className="mb-3">
+      {pendingEncrypted ? (
+        <DecryptPromptOverlay
+          onSubmit={(pw) => void onDecryptSubmit(pw)}
+          onCancel={() => {
+            setPendingEncrypted(null);
+            setDecryptError(null);
+          }}
+          error={decryptError}
+          busy={decrypting}
+        />
+      ) : null}
       <input
         ref={inputRef}
         type="file"

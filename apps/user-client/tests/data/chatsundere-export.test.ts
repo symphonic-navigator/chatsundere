@@ -1,6 +1,7 @@
 // @vitest-environment node
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
+import { decryptExportPack } from '@chatsundere/crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetClientDataDbForTests,
@@ -8,6 +9,9 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { IMAGE_PLACEHOLDER_TEXT, exportPersona } from '../../src/data/chatsundere-export.js';
+import { readEncryptedContainer } from '../../src/lib/chatsundere-transfer/encrypted-container.js';
+import { readManifestFormat } from '../../src/lib/chatsundere-transfer/import-detect.js';
+import { readPersonaPack } from '../../src/lib/chatsundere-transfer/persona-pack.js';
 import { gunzip, untar } from '../../src/lib/chatsune-import/archive-reader.js';
 
 async function readArchiveFile(blob: Blob, name: string): Promise<unknown> {
@@ -112,5 +116,28 @@ describe('exportPersona', () => {
     expect(attachments[0]?.text).toBe(IMAGE_PLACEHOLDER_TEXT);
     const names = untar(await gunzip(new Uint8Array(await blob.arrayBuffer()))).map((f) => f.name);
     expect(names.some((n) => n.startsWith('blobs/'))).toBe(false);
+  });
+
+  it('with a password, produces an encrypted pack that decrypts back to the plaintext pack', async () => {
+    const blob = await exportPersona(
+      'p1',
+      { memory: true, artefacts: true, images: false },
+      'hunter2',
+    );
+
+    // The outer file is detected as encrypted, not persona.
+    expect(await readManifestFormat(blob)).toBe('chatsundere/encrypted');
+
+    // Decrypt → the inner pack parses as a persona pack for the same persona.
+    const container = await readEncryptedContainer(blob);
+    expect(container.enclosedFormat).toBe('chatsundere/persona');
+    const innerBytes = await decryptExportPack('hunter2', container);
+    const parsed = await readPersonaPack(new Blob([innerBytes as Uint8Array<ArrayBuffer>]));
+    expect(parsed.payload.persona.name).toBe('Fable');
+  });
+
+  it('without a password, is unchanged (persona format, one-tap)', async () => {
+    const blob = await exportPersona('p1', { memory: true, artefacts: true, images: false });
+    expect(await readManifestFormat(blob)).toBe('chatsundere/persona');
   });
 });

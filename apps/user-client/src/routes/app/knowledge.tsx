@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { CryptoError } from '@chatsundere/crypto';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getClientDataDb } from '../../boot/client-data-db.js';
+import { DecryptPromptOverlay } from '../../components/transfer/DecryptPromptOverlay.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Button } from '../../components/ui/Button.js';
 import { ListRow } from '../../components/ui/ListRow.js';
@@ -13,6 +15,7 @@ import { importKnowledgePack } from '../../data/chatsundere-import.js';
 import { importChatsuneLibrary } from '../../data/chatsune-import.js';
 import { useDocumentCounts, useFilteredLibraries } from '../../data/knowledge.js';
 import { QK } from '../../data/queryKeys.js';
+import { decryptTransferPack } from '../../lib/chatsundere-transfer/encrypted-container.js';
 import {
   readManifestFormat,
   readManifestJson,
@@ -34,8 +37,11 @@ export function KnowledgeList(): JSX.Element {
     name: string;
     doImport: () => Promise<void>;
   } | null>(null);
+  const [pendingEncrypted, setPendingEncrypted] = useState<Blob | null>(null);
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptError, setDecryptError] = useState<string | null>(null);
 
-  async function doChatsundereLibraryImport(file: File, sourceName: string): Promise<void> {
+  async function doChatsundereLibraryImport(file: Blob, sourceName: string): Promise<void> {
     await importKnowledgePack(file, sourceName);
     await qc.invalidateQueries({ queryKey: QK.libraries });
     await qc.invalidateQueries({ queryKey: QK.documentCounts });
@@ -46,11 +52,17 @@ export function KnowledgeList(): JSX.Element {
     });
   }
 
-  async function onPickImport(file: File): Promise<void> {
+  async function onPickImport(file: Blob): Promise<void> {
     setImportError(null);
     setLibraryCollision(null);
 
     const format = await readManifestFormat(file);
+
+    if (format === 'chatsundere/encrypted') {
+      setDecryptError(null);
+      setPendingEncrypted(file);
+      return;
+    }
 
     if (format === 'chatsundere/knowledge') {
       try {
@@ -108,11 +120,43 @@ export function KnowledgeList(): JSX.Element {
     }
   }
 
+  async function onDecryptSubmit(password: string): Promise<void> {
+    const file = pendingEncrypted;
+    if (!file) return;
+    setDecrypting(true);
+    setDecryptError(null);
+    try {
+      const inner = await decryptTransferPack(file, password);
+      setPendingEncrypted(null);
+      setDecrypting(false);
+      await onPickImport(inner);
+    } catch (e) {
+      setDecrypting(false);
+      if (e instanceof CryptoError && e.code === 'wrong_password') {
+        setDecryptError('That password didn’t work, or the file is damaged — try again.');
+      } else {
+        setPendingEncrypted(null);
+        setImportError(e instanceof Error ? e.message : 'Could not open this file.');
+      }
+    }
+  }
+
   const rows = libraries.data ?? [];
 
   return (
     <PageScaffold crumbs={[{ label: 'My Knowledge' }]} back="/app" onHelp={onHelp}>
       {helpOverlay}
+      {pendingEncrypted ? (
+        <DecryptPromptOverlay
+          onSubmit={(pw) => void onDecryptSubmit(pw)}
+          onCancel={() => {
+            setPendingEncrypted(null);
+            setDecryptError(null);
+          }}
+          error={decryptError}
+          busy={decrypting}
+        />
+      ) : null}
       <input
         ref={importRef}
         type="file"

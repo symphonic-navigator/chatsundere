@@ -13,9 +13,10 @@ vi.mock('../../src/data/chatsundere-export.js', () => ({
   exportLibrary: vi.fn(),
 }));
 
-vi.mock('../../src/lib/download.js', () => ({
-  triggerDownload: triggerDownloadMock,
-}));
+vi.mock('../../src/lib/download.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/download.js')>();
+  return { ...actual, triggerDownload: triggerDownloadMock };
+});
 
 // Stub toast so store state does not bleed between tests.
 vi.mock('../../src/state/toast.store.js', () => ({
@@ -57,5 +58,37 @@ describe('ExportOverlay', () => {
       artefacts: true,
       images: true,
     });
+  });
+
+  it('encrypts and names the file -encrypted when a matching password is set', async () => {
+    exportPersonaMock.mockClear();
+    triggerDownloadMock.mockClear();
+    render(<ExportOverlay personaId="p3" personaName="Ivy" onClose={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText(/encrypt with a password/i));
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'secret' } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /^export$/i }));
+
+    expect(exportPersonaMock).toHaveBeenCalledWith(
+      'p3',
+      { memory: true, artefacts: true, images: false },
+      'secret',
+    );
+    await Promise.resolve();
+    expect(triggerDownloadMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('-chatsundere-encrypted.tar.gz'),
+    );
+  });
+
+  it('disables Export while the passwords do not match', () => {
+    render(<ExportOverlay personaId="p4" personaName="Jae" onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText(/encrypt with a password/i));
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'a' } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'b' } });
+    expect((screen.getByRole('button', { name: /^export$/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 });

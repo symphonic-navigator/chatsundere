@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { DocumentRow, LibraryRow } from '../../../boot/client-data-db.js';
 import { ModelDownloadBanner } from '../../../components/knowledge/ModelDownloadBanner.js';
+import { LibraryExportOverlay } from '../../../components/transfer/LibraryExportOverlay.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
@@ -11,7 +12,6 @@ import { ListRow } from '../../../components/ui/ListRow.js';
 import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
-import { exportLibrary } from '../../../data/chatsundere-export.js';
 import {
   useAddDocuments,
   useCreateLibrary,
@@ -21,9 +21,7 @@ import {
   useUpdateLibrary,
 } from '../../../data/knowledge.js';
 import { useAdultMode } from '../../../data/settings.js';
-import { slug, triggerDownload } from '../../../lib/download.js';
 import { STATUS_LABEL, STATUS_TONE } from '../../../lib/knowledge-status.js';
-import { toastStore } from '../../../state/toast.store.js';
 import { useClass2Gate } from '../../../sync/gate.js';
 import { InlineEditRow } from '../account/InlineEditRow.js';
 import { InlineEditTextarea } from '../settings/InlineEditTextarea.js';
@@ -160,6 +158,7 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
   const class2 = useClass2Gate();
   const { onHelp, helpOverlay } = useHelp('knowledge-library');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   const docs = useDocuments(props.libraryId);
   const addDocs = useAddDocuments(props.libraryId);
@@ -177,21 +176,6 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
       setUploadError(
         `Could not read: ${failed.join(', ')}. Only non-empty .md/.markdown/.txt files are supported.`,
       );
-    }
-  }
-
-  async function onExportLibrary(): Promise<void> {
-    if (!existing) return;
-    try {
-      const blob = await exportLibrary(existing.id);
-      triggerDownload(blob, `${slug(existing.name)}-chatsundere.tar.gz`);
-      toastStore.show({ message: 'Library exported', tone: 'success', durationMs: 3000 });
-    } catch (e) {
-      toastStore.show({
-        message: e instanceof Error ? e.message : 'Export failed',
-        tone: 'warn',
-        durationMs: 3500,
-      });
     }
   }
 
@@ -225,15 +209,20 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
       onHelp={onHelp}
     >
       {helpOverlay}
+      {showExport ? (
+        <LibraryExportOverlay
+          libraryId={existing.id}
+          libraryName={existing.name}
+          onClose={() => setShowExport(false)}
+        />
+      ) : null}
       <div className="flex flex-col gap-5 px-4 pb-8 pt-2">
         <div className="flex justify-end">
           <OverflowMenu
             items={[
               {
                 label: 'Export',
-                onSelect: () => {
-                  void onExportLibrary();
-                },
+                onSelect: () => setShowExport(true),
               },
               {
                 label: 'Delete library',

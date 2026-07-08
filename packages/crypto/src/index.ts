@@ -204,3 +204,9 @@ export {
 } from './sync-envelope/index.js';
 export type { SealedRecord } from './sync-envelope/index.js';
 export { BLOB_AAD_PREFIX, mintBlobId, openBlob, sealBlob } from './sync-blob/index.js';
+export { encryptExportPack, decryptExportPack } from './export/encrypt-export.js';
+export type {
+  EnclosedFormat,
+  ExportKdfParams,
+  EncryptedContainer,
+} from './export/encrypt-export.js';

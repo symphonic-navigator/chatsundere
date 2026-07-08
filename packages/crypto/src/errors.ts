@@ -2,6 +2,7 @@
 
 export type CryptoErrorCode =
   | 'wrong_passphrase'
+  | 'wrong_password'
   | 'wrong_recovery_key'
   | 'passkey_not_available'
   | 'prf_not_supported'
