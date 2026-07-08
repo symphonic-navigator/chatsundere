@@ -39,11 +39,13 @@ total); user-client transfer/export/component **508/508**. Spec/plan:
 kept until Chris pushes. **Deferred follow-ups** (non-blocking): `useEncryptedImport`
 hook to dedup the two import hosts; Valibot-validate the encrypted manifest; fold
 `algoVersion` into the AAD when a v2 scheme lands; bounded gzip-inflate on the *shared*
-pack-import decompressor (pre-existing gzip-bomb surface); Laura softs (show-password
-toggle on the import prompt, mismatch-reason placement parity). **Next:** Chris
-device-verifies (spec §10: encrypted persona+library export → import on a fresh client;
-wrong password stays constructive; a real v0.1.3 export imports with no prompt), then
-pushes.
+pack-import decompressor (pre-existing gzip-bomb surface); remaining Laura soft
+(mismatch-reason placement parity across the two export overlays). **Follow-up landed
+(`a086db1e`):** a show-password reveal toggle on the import `DecryptPromptOverlay` (the
+import has no confirmation field, so a typo is the whole failure — Laura soft, Chris
+approved). **Next:** Chris device-verifies (spec §10: encrypted persona+library export →
+import on a fresh client; wrong password stays constructive; a real v0.1.3 export imports
+with no prompt), then pushes.
 
 **Earlier — 2026-07-06 — PROVIDER ROWS UNIQUE PER TEMPLATE (duplicate-provider fix).**
 Landed on master as one squash (`fc8b3f4b`), **awaiting Chris's device-verify + push**
