@@ -8,7 +8,44 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-06 — **PROVIDER ROWS UNIQUE PER TEMPLATE (duplicate-provider fix).**
+**Last updated:** 2026-07-08 — **OPTIONAL PASSWORD ENCRYPTION FOR TRANSFER PACKS
+SQUASHED TO MASTER (`b7211524`). NOT pushed (Chris pushes after device-verify).**
+Field-user request: encrypt persona/knowledge-library exports under a freely chosen
+password. Built as a thin **outer shell** around the existing transfer packs —
+`writePersonaPack`/`writeKnowledgePack` untouched; the plaintext gzip-tar is sealed
+(`Argon2id → HKDF → AES-256-GCM` + house integrity HMAC, new `packages/crypto/src/export/`
+flow) and wrapped in the **same** gzip-tar envelope with a `chatsundere/encrypted`
+manifest carrying the KDF params. **Off by default on both surfaces** (one-tap plaintext
+path byte-unchanged); a shared `EncryptExportSection` (checkbox → password + confirm +
+no-recovery notice) sits in the persona `ExportOverlay` and a new `LibraryExportOverlay`.
+Import detects the format, prompts via `DecryptPromptOverlay`, decrypts to the inner
+pack, then **recurses into the existing import path** — so id-remap/collision logic is
+untouched; wrong password/tamper both surface as a constructive "didn't work, or the
+file is damaged" with the typed password preserved (no dead-end). **Backward-compat
+(hard):** v0.1.3 plaintext packs import unchanged (encryption metadata lives only on the
+encrypted manifest); pinned by test + manual step. Standalone password, never
+account-bound (import runs on a device with no account). KDF params **bounded before
+derivation** (512 MiB ceiling) so a hostile container can't force a huge allocation.
+Built spec→plan→**subagent-driven (8 TDD tasks, per-task spec+quality review)**→
+**whole-branch opus review "Ready to merge"**→**Larissa CLEAR TO SQUASH** (crypto path;
+no Crit/High — encrypt-then-MAC, AAD binds version+format, no wrong-password/tamper
+oracle, zero-knowledge untouched)→**Laura NO HARD DEFECTS** (4 soft, deferred). One
+post-audit fix wave folded (KDF ceiling 1GiB→512MiB, broadened wrong-password copy,
++tamper-nonce/salt tests, JSDoc, `useId()`). Gates on master post-squash:
+`pnpm typecheck --force` **14/14** (0 cached); crypto `bun test` **8/8** export (207
+total); user-client transfer/export/component **508/508**. Spec/plan:
+[[../superpowers/specs/2026-07-08-encrypted-export-design]],
+[[../superpowers/plans/2026-07-08-encrypted-export]]. Branch `feat/encrypted-export`
+kept until Chris pushes. **Deferred follow-ups** (non-blocking): `useEncryptedImport`
+hook to dedup the two import hosts; Valibot-validate the encrypted manifest; fold
+`algoVersion` into the AAD when a v2 scheme lands; bounded gzip-inflate on the *shared*
+pack-import decompressor (pre-existing gzip-bomb surface); Laura softs (show-password
+toggle on the import prompt, mismatch-reason placement parity). **Next:** Chris
+device-verifies (spec §10: encrypted persona+library export → import on a fresh client;
+wrong password stays constructive; a real v0.1.3 export imports with no prompt), then
+pushes.
+
+**Earlier — 2026-07-06 — PROVIDER ROWS UNIQUE PER TEMPLATE (duplicate-provider fix).**
 Landed on master as one squash (`fc8b3f4b`), **awaiting Chris's device-verify + push**
 (manual steps in [`superpowers/specs/2026-07-06-provider-key-uniqueness-design.md`](../superpowers/specs/2026-07-06-provider-key-uniqueness-design.md) §10).
 Root cause of the "two `nano-gpt` rows on one primary-admin" report (2026-07-06): cross-device
