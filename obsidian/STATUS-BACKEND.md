@@ -1,6 +1,19 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-07 (later) — **DEPLOYMENT KIT for the v0.2.0 backend
+**Last updated:** 2026-07-09 — **Proxy-service fix: `ERR_CONTENT_DECODING_FAILED`
+on non-streaming forwards SQUASHED to `master`.** Chat titles stopped generating;
+the console showed intermittent `POST /v1/chat/completions net::ERR_CONTENT_DECODING_FAILED
+200`. Root cause (reproduced empirically): Bun's `fetch` transparently decodes the
+upstream body (gzip/br) but leaves `Content-Encoding` on the response headers;
+`filterResponseHeaders` forwarded it verbatim while the route re-streamed the
+already-decoded body → the browser tried to gunzip plaintext. Only non-streaming
+JSON replies hit it (title-gen, memory-extraction); SSE carries no `Content-Encoding`.
+Two-layer fix: `buildForwardHeaders` now forces `Accept-Encoding: identity` upstream
+(no compression at source), and `filterResponseHeaders` strips `content-encoding` +
+`content-length` (safety net; the stale content-length was also a latent desync
+vector Larissa flagged as removed). Proxy suite **87/87**, typecheck clean.
+**Larissa CLEAR TO SQUASH** (Finding 2 closed at source — no deferral). **NOT pushed.**
+Prior entry: 2026-07-07 (later) — **DEPLOYMENT KIT for the v0.2.0 backend
 go-live SQUASHED to `master`** (two feature units: `f301478e` "Add backend
 container image and CI; bake admin console into the frontend image" + `45ba197d`
 "Add self-hosted deployment kit and update deployment docs"). **NOT pushed —

@@ -12,6 +12,7 @@ describe('buildForwardHeaders', () => {
     'last-event-id': '42',
     'mcp-protocol-version': '2025-06-18',
     'x-title': 'custom',
+    'accept-encoding': 'gzip, br',
     connection: 'keep-alive',
     host: 'proxy.chatsundere.me',
   });
@@ -23,6 +24,8 @@ describe('buildForwardHeaders', () => {
     expect(out.get('x-cors-proxy-target')).toBeNull());
   test('hop-by-hop stripped', () => expect(out.get('connection')).toBeNull());
   test('Host rewritten to target', () => expect(out.get('host')).toBe('api.x.ai'));
+  test('forces identity content-coding upstream', () =>
+    expect(out.get('accept-encoding')).toBe('identity'));
   test('upstream key forwarded', () => expect(out.get('authorization')).toBe('Bearer UPSTREAM'));
   test.each(['x-api-key', 'mcp-session-id', 'last-event-id', 'mcp-protocol-version', 'x-title'])(
     'forwards %s',
@@ -37,6 +40,8 @@ describe('filterResponseHeaders', () => {
     'set-cookie': 'sess=1',
     'access-control-allow-origin': '*',
     connection: 'close',
+    'content-encoding': 'gzip',
+    'content-length': '512',
   });
   const out = filterResponseHeaders(up);
   test('keeps content-type', () => expect(out.get('content-type')).toBe('text/event-stream'));
@@ -44,4 +49,11 @@ describe('filterResponseHeaders', () => {
   test('drops Set-Cookie', () => expect(out.get('set-cookie')).toBeNull());
   test('drops upstream CORS', () => expect(out.get('access-control-allow-origin')).toBeNull());
   test('drops hop-by-hop', () => expect(out.get('connection')).toBeNull());
+  // Bun's fetch decodes the upstream body before we re-stream it, so the encoded
+  // representation's headers are stale and must be dropped — forwarding
+  // `Content-Encoding: gzip` over a decoded body is exactly ERR_CONTENT_DECODING_FAILED.
+  test('drops content-encoding (body already decoded)', () =>
+    expect(out.get('content-encoding')).toBeNull());
+  test('drops content-length (describes the encoded body)', () =>
+    expect(out.get('content-length')).toBeNull());
 });
