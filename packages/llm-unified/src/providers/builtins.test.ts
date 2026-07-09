@@ -37,9 +37,9 @@ describe('built-in providers', () => {
     if (p) {
       expect(p.corsHint).toBe('inofficial');
       // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
-      // + 8 Claude + 1 Grok 4.3 (llm) + 6 ChatGPT (OpenAI, censored) + 4 web
-      // + 3 tti + 2 Grok voice (tts + stt) = 34.
-      expect(p.offerings).toHaveLength(34);
+      // + 8 Claude + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI, censored) + 4 web
+      // + 3 tti + 2 Grok voice (tts + stt) = 35.
+      expect(p.offerings).toHaveLength(35);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });

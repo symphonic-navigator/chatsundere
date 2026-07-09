@@ -83,6 +83,15 @@ const targets: GrokTarget[] = [
     }),
   },
   {
+    label: 'nano-gpt:x-ai/grok-4.5',
+    baseUrl: 'https://nano-gpt.com/api/v1',
+    apiKey: key('.nano-test-key'),
+    adapter: openRouterAdapter('x-ai/grok-4.5', {
+      vision: true,
+      reasoning: { mode: 'toggle', defaultOn: true },
+    }),
+  },
+  {
     label: 'xai:grok-4.20 (slug-swap)',
     baseUrl: 'https://api.x.ai/v1',
     apiKey: key('.xai-test-key'),

@@ -334,6 +334,15 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote:
       'xAI/Grok refuses near-nothing; freedom-oriented model and deployment (Chris, 2026-06-28).',
   },
+  {
+    id: 'grok-4.5',
+    displayName: 'Grok 4.5',
+    family: 'grok',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'xAI/Grok refuses near-nothing; Grok 4.5 is judged even more freedom-oriented than 4.3 (Chris, 2026-07-09, tested and approved).',
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */

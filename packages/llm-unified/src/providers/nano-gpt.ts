@@ -49,14 +49,18 @@ const MISTRAL_NONE: ReasoningControl = { mode: 'none' };
 // the rest `:thinking` — so each offering carries its explicit thinking slug.
 const CLAUDE_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
-// Grok 4.3 on nano-gpt steers reasoning via the OpenAI-style `reasoning` OBJECT
-// (`{enabled:false}` is a genuine off — probed live 2026-06-28), NOT a slug swap
-// and NOT `reasoning_effort` (`reasoning_effort:none` does NOT disable it). The
-// thinking text streams on the `reasoning` channel, so the offering reuses the
-// shared unified-reasoning-object adapter (openRouterAdapter) rather than the
-// slug-swap one. Default-on, matching xAI's own default. Grok 4.20 is NOT
-// offered here: nano-gpt serves only its non-reasoning variant (the reasoning
-// sibling slug 404s), so it cannot meet the canonical's reasoning capability.
+// Grok 4.3/4.5 on nano-gpt steer reasoning via the OpenAI-style `reasoning`
+// OBJECT (`{enabled:false}` is a genuine off — 4.3 probed 2026-06-28, 4.5 probed
+// 2026-07-09), NOT a slug swap and NOT `reasoning_effort` (`reasoning_effort:none`
+// does NOT disable it). The thinking text streams on the `reasoning` channel, so
+// the offering reuses the shared unified-reasoning-object adapter
+// (openRouterAdapter) rather than the slug-swap one. Default-on, matching xAI's
+// own default. Grok 4.20 is NOT offered here: nano-gpt serves only its
+// non-reasoning variant (the reasoning sibling slug 404s), so it cannot meet the
+// canonical's reasoning capability. Note (4.5): nano-gpt proxies it through xAI's
+// Responses API, so an encrypted reasoning blob (`reasoning.encrypted`,
+// `xai-responses-v1`) leaks in `reasoning_details`; the adapter reads only the
+// `reasoning` summary channel and ignores it → display-only, no replay.
 const GROK_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
 // OpenAI (ChatGPT) on nano-gpt (the anonymising-router path). Reasoning is
@@ -458,6 +462,33 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'llm',
   },
+  // Grok 4.5 via nano-gpt (the anonymising-router path). Same wire shape as 4.3:
+  // reasoning is a clean toggle on the unified `reasoning` object, tool calls
+  // arrive single-block when fired. Probed live 2026-07-09 — the conversation
+  // suite passes core 22/22 + vision 4/4 across both reasoning permutations. Two
+  // route quirks are documented but non-blocking: nano-gpt occasionally lets the
+  // model emit the tool call as markdown text rather than firing it (the known
+  // DSv4-Flash-style nondeterminism), and `tool_choice: 'required'` errors on
+  // this route (we never send it). nano-gpt routes to the xAI upstream → no
+  // ZDR/TEE, US jurisdiction.
+  {
+    canonicalRef: 'grok-4.5',
+    providerId: 'nano-gpt',
+    upstreamSlug: 'x-ai/grok-4.5',
+    adapter: { kind: 'catalogue', adapterId: 'nano-gpt:x-ai/grok-4.5' },
+    profile: {
+      reasoning: GROK_TOGGLE,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_000_000 },
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  },
   // OpenAI (ChatGPT) family via nano-gpt (anonymising-router path). Onboarded
   // 2026-07-06 on explicit user request; CENSORED badge. gpt-4o/4.1 non-reasoning,
   // GPT-5 family reasons via the unified `reasoning` object (steps).
@@ -552,7 +583,7 @@ export function registerNanoGpt(): void {
           thinkingSlug: claudeThinkingByBase[o.upstreamSlug] ?? `${o.upstreamSlug}:thinking`,
         }),
       );
-    } else if (o.canonicalRef === 'grok-4.3') {
+    } else if (o.canonicalRef?.startsWith('grok-')) {
       // Grok on nano-gpt honours the unified `reasoning` object (not slug-swap),
       // so it reuses the shared unified-reasoning-object adapter. No ZDR here.
       registerAdapter(
