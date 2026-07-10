@@ -225,6 +225,8 @@ export async function recoverFromScratch(
     wrapped_mk_opaque_aad: newOpaqueTagged.aad,
     wrapped_mk_opaque_integrity: newOpaqueTagged.integrity_hmac,
     linked_at: new Date(),
+    // Freeze the identifier baked into this fresh OPAQUE registration.
+    opaque_client_identifier: args.username,
   };
 
   await putLocalAndLinkedAccount(args.db, localRow, linkedRow);

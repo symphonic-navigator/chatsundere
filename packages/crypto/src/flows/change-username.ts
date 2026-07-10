@@ -21,6 +21,12 @@ export interface ChangeUsernameArgs {
  *
  * The `linked_account` row has no `username` field; the single source of truth
  * for the username after this call is `local_account.username`.
+ *
+ * Deliberately never touches `linked_account.opaque_client_identifier`: that
+ * field is frozen at OPAQUE registration/link time and every later OPAQUE
+ * ceremony (login, step-up, pairing) must keep presenting it unchanged, or
+ * it desynchronises from the server's frozen `auth_methods.opaque_client_identifier`
+ * (auth-service migration 0005) and every OPAQUE round starts failing.
  */
 export async function changeUsername(args: ChangeUsernameArgs): Promise<void> {
   validateUsername(args.newUsername);

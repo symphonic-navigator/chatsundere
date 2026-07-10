@@ -118,6 +118,22 @@ interface MockClientOpts {
     wrap_nonce_opaque: string;
     wrap_aad_opaque: string;
   };
+  /**
+   * The OPAQUE client identifier the registration record was actually sealed
+   * under (used for `opaqueServer.startLogin`'s `userIdentifier`/
+   * `identifiers.client`, and echoed back as the response's
+   * `opaque_client_identifier`). Defaults to `USERNAME` so existing tests,
+   * where the account has never been renamed, see no divergence.
+   */
+  opaqueClientIdentifier?: string;
+  /**
+   * The live display username returned as `username` in both the start and
+   * finish responses. Defaults to `USERNAME`. Set this different from
+   * `opaqueClientIdentifier` to simulate pairing to a renamed account.
+   */
+  liveUsername?: string;
+  /** If set, the `/join/start` pairing response omits `opaque_client_identifier` entirely, simulating a pre-fix server. */
+  omitOpaqueClientIdentifier?: boolean;
 }
 
 function makeServerClient(opts: MockClientOpts): ServerClient {
@@ -137,12 +153,13 @@ function makeServerClient(opts: MockClientOpts): ServerClient {
       }
       if (req.kind !== 'pairing') throw new Error('expected pairing kind');
 
+      const clientIdentifier = opts.opaqueClientIdentifier ?? USERNAME;
       const { serverLoginState, loginResponse } = opaqueServer.startLogin({
         serverSetup: opts.serverSetup,
-        userIdentifier: USERNAME,
+        userIdentifier: clientIdentifier,
         startLoginRequest: req.login_request,
         registrationRecord: opts.registrationRecord ?? '',
-        identifiers: { client: USERNAME, server: SERVER_ID },
+        identifiers: { client: clientIdentifier, server: SERVER_ID },
       });
       loginSession = serverLoginState;
 
@@ -150,7 +167,8 @@ function makeServerClient(opts: MockClientOpts): ServerClient {
         kind: 'pairing',
         session_id: 'test-pairing-session-456',
         login_response: loginResponse,
-        username: USERNAME,
+        username: opts.liveUsername ?? USERNAME,
+        ...(opts.omitOpaqueClientIdentifier ? {} : { opaque_client_identifier: clientIdentifier }),
       };
     },
 
@@ -161,7 +179,7 @@ function makeServerClient(opts: MockClientOpts): ServerClient {
         return {
           kind: 'invitation',
           user_id: 'ignored',
-          username: USERNAME,
+          username: opts.liveUsername ?? USERNAME,
           role: 'user',
           access_token: 'ignored',
           expires_in: 900,
@@ -186,7 +204,7 @@ function makeServerClient(opts: MockClientOpts): ServerClient {
       return {
         kind: 'pairing',
         user_id: 'srv-uuid-xyz',
-        username: USERNAME,
+        username: opts.liveUsername ?? USERNAME,
         role: 'user',
         access_token: 'access-jwt-pairing',
         expires_in: 900,
@@ -272,6 +290,7 @@ describe('startJoinByPairing', () => {
     });
 
     expect(state.username).toBe(USERNAME);
+    expect(state.opaqueClientIdentifier).toBe(USERNAME);
     expect(state.sessionId).toBe('test-pairing-session-456');
     expect(typeof state.loginResponse).toBe('string');
     expect(state.loginResponse.length).toBeGreaterThan(0);
@@ -291,6 +310,25 @@ describe('startJoinByPairing', () => {
         passphrase: PASSPHRASE,
       }),
     ).rejects.toMatchObject({ code: 'opaque_protocol_error' });
+  });
+
+  it('falls back to username when the server omits opaque_client_identifier (legacy server)', async () => {
+    const serverSetup = opaqueServer.createSetup();
+    const { registrationRecord } = await registerOpaqueUser(serverSetup, PASSPHRASE, USERNAME);
+    const client = makeServerClient({
+      serverSetup,
+      registrationRecord,
+      omitOpaqueClientIdentifier: true,
+    });
+
+    const state = await startJoinByPairing({
+      serverClient: client,
+      baseUrl: BASE_URL,
+      code: CODE,
+      passphrase: PASSPHRASE,
+    });
+
+    expect(state.opaqueClientIdentifier).toBe(USERNAME);
   });
 });
 
@@ -365,6 +403,69 @@ describe('finishJoinByPairing', () => {
     expect(linkedRow?.issuer_label).toBe('My Chatsundere');
     expect(linkedRow?.wrapped_mk_opaque_ciphertext).toBeInstanceOf(Uint8Array);
     expect(linkedRow?.wrapped_mk_opaque_integrity).toBeInstanceOf(Uint8Array);
+
+    result.session.close();
+    db.close();
+  });
+
+  it('succeeds pairing to a RENAMED account using the server-returned frozen identifier, not the live username', async () => {
+    const db = await openLocalDb(DB);
+    const serverSetup = opaqueServer.createSetup();
+    const FROZEN_ID = 'alice'; // the identifier the OPAQUE record was registered under
+    const LIVE_USERNAME = 'alice-renamed'; // the current display username after a rename
+
+    // Registration happened under the frozen identifier — a username change
+    // afterwards never touches the OPAQUE record (Finding #3, Task C1).
+    const { exportKey, registrationRecord } = await registerOpaqueUser(
+      serverSetup,
+      PASSPHRASE,
+      FROZEN_ID,
+    );
+
+    const originalMk = getRandomBytes(32);
+    const wrappedMkFields = await buildServerWrappedMk(exportKey, originalMk, FROZEN_ID);
+
+    const client = makeServerClient({
+      serverSetup,
+      registrationRecord,
+      wrappedMkFields,
+      opaqueClientIdentifier: FROZEN_ID,
+      liveUsername: LIVE_USERNAME,
+    });
+
+    const joinState = await startJoinByPairing({
+      serverClient: client,
+      baseUrl: BASE_URL,
+      code: CODE,
+      passphrase: PASSPHRASE,
+    });
+
+    expect(joinState.username).toBe(LIVE_USERNAME);
+    expect(joinState.opaqueClientIdentifier).toBe(FROZEN_ID);
+
+    // RED (pre-fix): finishJoinByPairing presented `joinState.username`
+    // (LIVE_USERNAME) as the OPAQUE client identity, which mismatches what
+    // the server bound the KE2/KE3 evidence to (FROZEN_ID) — finishLogin
+    // fails mutual authentication and the round throws opaque_protocol_error.
+    const result = await finishJoinByPairing({
+      db,
+      serverClient: client,
+      baseUrl: BASE_URL,
+      joinState,
+      passphrase: PASSPHRASE,
+    });
+
+    expect(new Uint8Array(result.mk)).toEqual(new Uint8Array(originalMk));
+
+    // Device B's local account keeps the LIVE display username...
+    const localRow = await getLocalAccount(db);
+    expect(localRow?.username).toBe(LIVE_USERNAME);
+
+    // ...but the linked_account row must stamp the FROZEN identifier, so
+    // this device's future logins/step-ups keep presenting the value the
+    // server actually expects.
+    const linkedRow = await getLinkedAccount(db);
+    expect(linkedRow?.opaque_client_identifier).toBe(FROZEN_ID);
 
     result.session.close();
     db.close();

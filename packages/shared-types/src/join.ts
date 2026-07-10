@@ -18,6 +18,17 @@ export type JoinStartResponse =
       session_id: string;
       login_response: string;
       username: string;
+      /**
+       * The frozen OPAQUE client identifier this account registered under
+       * (`auth_methods.opaque_client_identifier`), distinct from `username`
+       * once the account has been renamed. The joining device must present
+       * this value — not `username` — in the OPAQUE login finish, or the
+       * AKE evidence will not match what the server bound at `/join/start`.
+       * Optional for wire compatibility with older servers that predate
+       * this field; a client talking to such a server should fall back to
+       * `username`.
+       */
+      opaque_client_identifier?: string;
     };
 
 /** Request body for `POST /api/v1/join/finish`. Discriminated by `kind`. */

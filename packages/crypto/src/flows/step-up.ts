@@ -7,7 +7,7 @@ import type {
   StepUpTier,
 } from '@chatsundere/shared-types';
 import { opaqueServerIdentity } from '@chatsundere/shared-types';
-import { getLinkedAccount } from '../db/linked-account.js';
+import { getLinkedAccount, putLinkedAccount } from '../db/linked-account.js';
 import { getLocalAccount } from '../db/local-account.js';
 import { toBase64Url } from '../encoding/base64url.js';
 import { CryptoError } from '../errors.js';
@@ -79,8 +79,11 @@ export interface StepUpWithPassphraseArgs {
 /**
  * Step-up Mechanism B (ADR 0027): a fresh OPAQUE round on the existing
  * session. No username crosses the wire — the server binds the round to the
- * bearer; the client identifiers mirror login-online-linked exactly
- * (local_account.username + opaqueServerIdentity(base_url)).
+ * bearer. The client identifier mirrors what the server reads server-side
+ * (auth-service `auth_methods.opaque_client_identifier`, frozen at
+ * registration/link time): `linked.opaque_client_identifier`, falling back to
+ * the live `local_account.username` only for legacy rows linked before this
+ * field existed (self-healed below on success).
  */
 export async function stepUpWithPassphrase(
   args: StepUpWithPassphraseArgs,
@@ -89,6 +92,7 @@ export async function stepUpWithPassphrase(
   const local = await getLocalAccount(args.db);
   if (!linked || !local) return 'failed';
   const serverIdentity = opaqueServerIdentity(linked.base_url);
+  const clientIdentifier = linked.opaque_client_identifier ?? local.username;
 
   try {
     const { clientLoginState, startLoginRequest } = await opaqueLoginStart(args.passphrase);
@@ -103,7 +107,7 @@ export async function stepUpWithPassphrase(
       clientLoginState,
       loginResponse: start.login_response,
       passphrase: args.passphrase,
-      username: local.username,
+      username: clientIdentifier,
       serverIdentity,
     });
 
@@ -115,6 +119,13 @@ export async function stepUpWithPassphrase(
       },
       linked.base_url,
     );
+
+    // Self-heal: this round just proved `clientIdentifier` authenticates, so
+    // persist it on legacy rows that predate this field.
+    if (!linked.opaque_client_identifier) {
+      await putLinkedAccount(args.db, { ...linked, opaque_client_identifier: clientIdentifier });
+    }
+
     return 'confirmed';
   } catch (err) {
     if (err instanceof CryptoError && err.code === 'wrong_passphrase') return 'wrong_passphrase';

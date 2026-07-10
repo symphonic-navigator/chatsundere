@@ -37,7 +37,8 @@ type Step =
  *
  * - Local-only account: recovery key → new passphrase → (optionally) new recovery key.
  * - Linked account: choose scope (local vs full server) → same three steps;
- *   full scope also calls `recoveryOnline` before unlocking the local session.
+ *   full scope calls `recoveryOnline`, which returns the fresh linked+online
+ *   session directly — no separate local unlock round is needed.
  *
  * Spec §5.4(c) and §5.8.
  */
@@ -97,11 +98,9 @@ export function Recovery() {
 
       if (scope === 'full' && isLinked) {
         // For full recovery we collect the passphrase first (step 2-deferred)
-        // and call recoveryOnline at submit time. After that succeeds the
-        // recovery wrap has been re-written with the same key, so we can call
-        // loginLocalWithRecoveryKey to obtain session + mk for the regenerate
-        // path. No session/mk is available at this point — the deferred
-        // variant carries no payload.
+        // and call recoveryOnline at submit time, which returns the fresh
+        // linked+online session directly. No session/mk is available at this
+        // point — the deferred variant carries no payload.
         setStep({ kind: 'step2-deferred' });
         return;
       }
@@ -160,7 +159,12 @@ export function Recovery() {
           return;
         }
         try {
-          await recoveryOnline({
+          // recoveryOnline returns the fresh linked+online session directly
+          // (carrying the server-issued access token) — adopt it rather than
+          // re-deriving a second, offline local session, which would leave
+          // the user unauthenticated for sync despite a successful
+          // server-assisted recovery.
+          const result = await recoveryOnline({
             db,
             serverClient: httpServerClient,
             baseUrl: env.VITE_AUTH_URL,
@@ -168,21 +172,10 @@ export function Recovery() {
             recoveryKeyString: recoveryKey,
             newPassphrase,
           });
-        } catch (err) {
-          setError(mapOnlineRecoveryError(err));
-          return;
-        }
-
-        // recoveryOnline updated local_account recovery wraps and linked_account.
-        // Now unwrap a local session using the (unchanged) recovery key.
-        try {
-          const result = await loginLocalWithRecoveryKey({ db, recoveryKeyString: recoveryKey });
           session = result.session;
           mk = result.mk;
         } catch (err) {
-          // This path should not fail after a successful recoveryOnline, but
-          // handle defensively.
-          setError(mapRecoveryKeyError(err));
+          setError(mapOnlineRecoveryError(err));
           return;
         }
 

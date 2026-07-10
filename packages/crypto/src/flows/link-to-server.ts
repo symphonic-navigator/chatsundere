@@ -103,6 +103,9 @@ export async function linkToServer(args: LinkToServerArgs): Promise<void> {
     wrapped_mk_opaque_aad: tagged.aad,
     wrapped_mk_opaque_integrity: tagged.integrity_hmac,
     linked_at: new Date(),
+    // Freeze the identifier baked into the OPAQUE registration envelope so
+    // later logins/step-ups keep matching it even after a username change.
+    opaque_client_identifier: username,
   };
   await putLinkedAccount(args.db, row);
 }

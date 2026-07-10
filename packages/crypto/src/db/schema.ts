@@ -35,6 +35,20 @@ export interface LinkedAccountRow {
   wrapped_mk_opaque_aad: Uint8Array;
   wrapped_mk_opaque_integrity: Uint8Array;
   linked_at: Date;
+  /**
+   * The username presented to the server at OPAQUE registration time (via
+   * `linkToServer` / `recoveryOnline` / `recoverFromScratch`), frozen for the
+   * lifetime of this link. OPAQUE bakes the client identifier into the
+   * registration envelope, so every later OPAQUE ceremony (login, step-up,
+   * pairing) must keep presenting this exact value — never the live
+   * `local_account.username` — or the server's stored `opaque_client_identifier`
+   * (auth-service migration 0005) desynchronises after a rename and every OPAQUE
+   * round fails. Optional and unindexed: rows linked before this field existed
+   * have it absent and self-heal it on their next successful OPAQUE ceremony
+   * (see `login-online-linked.ts`, `step-up.ts`). No Dexie/IndexedDB version
+   * bump needed for an optional, unindexed field.
+   */
+  opaque_client_identifier?: string;
 }
 
 export interface PasskeyCredentialRow {

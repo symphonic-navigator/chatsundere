@@ -13,7 +13,9 @@ import { aeadDecrypt, aeadEncrypt } from '../primitives/aead.js';
 import { addIntegrityHmac, deriveIntegrityKey } from '../primitives/integrity.js';
 import { computeRecoveryProof, deriveVerifierKey } from '../recovery.js';
 import type { ServerClient } from '../server-client.js';
-import { WRAP_ALGO, asMasterKey } from '../types.js';
+import { createMasterKeySession } from '../session.js';
+import type { MasterKeySession } from '../session.js';
+import { type MasterKey, WRAP_ALGO, asMasterKey } from '../types.js';
 
 export interface RecoveryOnlineArgs {
   db: IDBDatabase;
@@ -27,6 +29,15 @@ export interface RecoveryOnlineArgs {
   newPassphrase: string;
 }
 
+export interface RecoveryOnlineResult {
+  session: MasterKeySession;
+  /**
+   * The recovered master key. Borrowed — the same buffer is captured by the
+   * session closure. `session.close()` zeroes this buffer; do not store a copy.
+   */
+  mk: MasterKey;
+}
+
 /**
  * Server-assisted recovery flow. Proves possession of the recovery key via an
  * HMAC proof, re-registers OPAQUE under the new passphrase, and rotates all
@@ -35,8 +46,9 @@ export interface RecoveryOnlineArgs {
  *
  * On success the `linked_account` row is updated with new opaque wraps and
  * the `local_account` row is updated with the new recovery wrap matching the
- * server's copy. The caller receives the new linked+online session and can
- * immediately present the main UI.
+ * server's copy. Returns `{ session, mk }` — a fresh linked+online session
+ * carrying the server-issued access token, so the caller can adopt it
+ * directly and present the main UI already authenticated for sync.
  *
  * Protocol summary (two server round-trips):
  *
@@ -55,8 +67,9 @@ export interface RecoveryOnlineArgs {
  *        new_wrapped_mk_opaque, new_wrapped_mk_recovery, … } →
  *      { user_id, role, access_token, expires_in }.
  *   8. Client persists updated linked_account and local_account rows.
+ *   9. Returns `{ session, mk }`.
  */
-export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<void> {
+export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<RecoveryOnlineResult> {
   const serverId = opaqueServerIdentity(args.baseUrl);
   const rk = decodeRecoveryKey(args.recoveryKeyString);
 
@@ -147,7 +160,9 @@ export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<void> {
   );
 
   // Step 8 — Persist updated rows.
-  // Update linked_account with new opaque wraps.
+  // Update linked_account with new opaque wraps. This re-registration freezes
+  // `args.username` as the new OPAQUE client identifier — re-stamp it here so
+  // later logins/step-ups keep matching the fresh registration envelope.
   await putLinkedAccount(args.db, {
     server_user_id: finish.user_id,
     base_url: args.baseUrl,
@@ -158,6 +173,7 @@ export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<void> {
     wrapped_mk_opaque_aad: newOpaqueTagged.aad,
     wrapped_mk_opaque_integrity: newOpaqueTagged.integrity_hmac,
     linked_at: new Date(),
+    opaque_client_identifier: args.username,
   });
 
   // Update local_account recovery wraps so local recovery login still works.
@@ -168,4 +184,18 @@ export async function recoveryOnline(args: RecoveryOnlineArgs): Promise<void> {
   localRow.wrapped_mk_recovery_integrity = newRecoveryTagged.integrity_hmac;
   localRow.recovery_verifier_key = verifierKey;
   await putLocalAccount(args.db, localRow);
+
+  // Step 9 — Build the linked+online session carrying the server-issued
+  // access token, mirroring `recoverFromScratch`.
+  const session = createMasterKeySession({
+    mk,
+    userId: finish.user_id,
+    username: args.username,
+    mode: 'linked',
+    online: true,
+    role: finish.role,
+    accessToken: finish.access_token,
+  });
+
+  return { session, mk };
 }

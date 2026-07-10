@@ -86,8 +86,15 @@ export function createMasterKeySession(init: MasterKeySessionInit): MasterKeySes
     accessToken: init.accessToken,
 
     async deriveDek(context: string) {
-      // Capture at call time: if close() races with this await, the local
-      // reference is still the valid bytes we started with.
+      // Capture at call time: this only guards against `mk` having already
+      // gone `null` (a call arriving after close() throws cleanly via
+      // requireMk()). It does NOT protect against a close() that races DURING
+      // this call's own awaits: `close()` calls `mk.fill(0)`, which zeroes the
+      // SAME buffer `localMk` points at — the reference stays non-null, but
+      // its bytes are gone. Callers that need correctness across an await
+      // boundary (e.g. `apps/user-client/src/sync/worker.ts`'s pull loop,
+      // task B5) must re-check the session store's live `mk` themselves after
+      // the await, not trust that holding a captured reference kept it valid.
       const localMk = requireMk();
       return deriveDek(localMk, context);
     },

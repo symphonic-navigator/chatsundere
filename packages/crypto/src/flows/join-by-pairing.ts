@@ -47,8 +47,18 @@ export interface StartJoinByPairingArgs {
 export interface JoinByPairingState {
   /** The server-assigned session identifier for this pairing attempt. */
   sessionId: string;
-  /** The username as registered on the server, returned in the start response. */
+  /** The live username as registered on the server, returned in the start response. */
   username: string;
+  /**
+   * The frozen OPAQUE client identifier this account registered under
+   * (`auth_methods.opaque_client_identifier`), returned in the start
+   * response. Distinct from `username` once the account has been renamed —
+   * this is the value that must be presented in the OPAQUE login finish and
+   * stamped into `linked_account.opaque_client_identifier`, never `username`.
+   * Falls back to `username` when talking to an older server that predates
+   * this field.
+   */
+  opaqueClientIdentifier: string;
   /**
    * The OPAQUE `login_response` (KE2) returned by the server at `/join/start`.
    * Required to complete the OPAQUE round in `finishJoinByPairing`.
@@ -121,6 +131,9 @@ export async function startJoinByPairing(
   return {
     sessionId: response.session_id,
     username: response.username,
+    // Legacy-server fallback: an older server without this field leaves the
+    // client identity as the live username, matching pre-fix behaviour.
+    opaqueClientIdentifier: response.opaque_client_identifier ?? response.username,
     loginResponse: response.login_response,
     clientLoginState,
   };
@@ -157,14 +170,19 @@ export async function finishJoinByPairing(
   }
 
   const serverId = opaqueServerIdentity(args.baseUrl);
-  const { username } = args.joinState;
+  const { username, opaqueClientIdentifier } = args.joinState;
 
   // --- Finish OPAQUE login to obtain the export-key ----------------------------
+  //
+  // Present the frozen `opaqueClientIdentifier`, not the live `username` — the
+  // server bound this round's AKE evidence to the identifier the OPAQUE record
+  // was registered under (`/join/start`), which desynchronises from `username`
+  // once the account has been renamed.
   const loginResult = await opaqueLoginFinish({
     clientLoginState: args.joinState.clientLoginState as string,
     loginResponse: args.joinState.loginResponse,
     passphrase: args.passphrase,
-    username,
+    username: opaqueClientIdentifier,
     serverIdentity: serverId,
   });
 
@@ -297,6 +315,12 @@ export async function finishJoinByPairing(
     wrapped_mk_opaque_aad: opaqueTagged.aad,
     wrapped_mk_opaque_integrity: opaqueTagged.integrity_hmac,
     linked_at: new Date(),
+    // `opaqueClientIdentifier` is the value this OPAQUE login round just
+    // authenticated under (bound into the KE3 evidence server-side), so it is
+    // provably the account's frozen OPAQUE client identifier for this
+    // device's future logins/step-ups — a login under a stale value could
+    // not have succeeded.
+    opaque_client_identifier: opaqueClientIdentifier,
   };
 
   await putLocalAndLinkedAccount(args.db, localRow, linkedRow);

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { opaqueServerIdentity } from '@chatsundere/shared-types';
-import { getLinkedAccount } from '../db/linked-account.js';
+import { getLinkedAccount, putLinkedAccount } from '../db/linked-account.js';
 import { getLocalAccount, requireLocalAccount } from '../db/local-account.js';
+import type { LinkedAccountRow } from '../db/schema.js';
 import { toBase64Url } from '../encoding/base64url.js';
 import { opaqueLoginFinish, opaqueLoginStart } from '../opaque/client.js';
 import type { ServerClient } from '../server-client.js';
 import { type MasterKeySession, createMasterKeySession } from '../session.js';
-import type { MasterKey } from '../types.js';
+import { type MasterKey, asMasterKey } from '../types.js';
 import { loginLocalWithPassphrase } from './login-local.js';
 
 export interface LoginOnlineLinkedArgs {
@@ -83,7 +84,7 @@ export async function loginOnlineLinked(
     loginLocalWithPassphrase({ db: args.db, passphrase: args.passphrase }),
   );
   const serverReflect = reflect(
-    linked ? runServerLogin(args, local.username, linked.base_url) : Promise.resolve(null),
+    linked ? runServerLogin(args, local.username, linked) : Promise.resolve(null),
   );
 
   const [resolvedLocal, resolvedServer] = await Promise.all([localOutcome, serverReflect]);
@@ -122,12 +123,19 @@ export async function loginOnlineLinked(
   // upgraded linked+online session using the same MK from local auth.
   // The MK unwrapped by the server via opaque_amk is discarded — we
   // already have it authoritatively from the local unwrap.
+  //
+  // `mk` and `localSession` share one underlying buffer (login-local returns
+  // both from a single unwrap). `close()` zeroes that buffer, so copy the key
+  // into a fresh buffer BEFORE closing — otherwise the online session and the
+  // returned key would both be all-zero, and the downstream identity check
+  // would treat the store as a foreign identity and wipe the local data.
+  const onlineMk = asMasterKey(mk.slice());
   localSession.close();
 
   const { accessToken, role } = resolvedServer.value;
   return {
     session: createMasterKeySession({
-      mk,
+      mk: onlineMk,
       userId: linked.server_user_id,
       username: local.username,
       mode: 'linked',
@@ -135,7 +143,7 @@ export async function loginOnlineLinked(
       role,
       accessToken,
     }),
-    mk,
+    mk: onlineMk,
     serverOutcome: { kind: 'ok' },
     serverReachable: true,
     serverAuthOk: true,
@@ -189,23 +197,31 @@ function classifyServerOutcome(
 
 async function runServerLogin(
   args: LoginOnlineLinkedArgs,
-  username: string,
-  baseUrl: string,
+  liveUsername: string,
+  linked: LinkedAccountRow,
 ): Promise<{ accessToken: string; role: 'primary_admin' | 'admin' | 'user' } | null> {
-  const serverId = opaqueServerIdentity(baseUrl);
+  const serverId = opaqueServerIdentity(linked.base_url);
+
+  // OPAQUE binds the client identifier baked in at registration/link time
+  // (auth-service `auth_methods.opaque_client_identifier`); a later username
+  // change must not desynchronise this. Fall back to the live username only
+  // for legacy rows linked before this field existed — self-healed below.
+  const clientIdentifier = linked.opaque_client_identifier ?? liveUsername;
 
   const { clientLoginState, startLoginRequest } = await opaqueLoginStart(args.passphrase);
 
+  // /opaque/login/start looks the account up by the LIVE username; only the
+  // OPAQUE ceremony itself needs the frozen identifier.
   const startResp = await args.serverClient.loginOpaqueStart(
-    { username, start_login_request: startLoginRequest },
-    baseUrl,
+    { username: liveUsername, start_login_request: startLoginRequest },
+    linked.base_url,
   );
 
   const finishResult = await opaqueLoginFinish({
     clientLoginState,
     loginResponse: startResp.login_response,
     passphrase: args.passphrase,
-    username,
+    username: clientIdentifier,
     serverIdentity: serverId,
   });
 
@@ -214,8 +230,15 @@ async function runServerLogin(
       session_id: startResp.session_id,
       finish_login_request: toBase64Url(finishResult.finishLoginRequest),
     },
-    baseUrl,
+    linked.base_url,
   );
+
+  // Self-heal: a legacy row has no frozen identifier yet. This round just
+  // proved `clientIdentifier` authenticates, so persist it now — otherwise
+  // this account would stay one step from bricking at the next rename.
+  if (!linked.opaque_client_identifier) {
+    await putLinkedAccount(args.db, { ...linked, opaque_client_identifier: clientIdentifier });
+  }
 
   return { accessToken: finishResp.access_token, role: finishResp.role };
 }
