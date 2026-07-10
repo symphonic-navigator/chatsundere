@@ -1,6 +1,43 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-09 — **Proxy-service fix: `ERR_CONTENT_DECODING_FAILED`
+**Last updated:** 2026-07-10 — **OPAQUE/SYNC HARDENING SPRINT SQUASHED to `master`
+(3 feature units: `8a19192d` auth+sync, `78d2cb59` client sync engine, `252e47ac`
+client identity). NOT pushed — Chris pushes.** A ~20-finding hardening sprint from
+an external second-opinion review (Codex, run by a tester), every finding first
+cross-verified against the real code by four parallel audit passes (register
+[[insights/2026-07-10-opaque-sync-hardening-findings]]; spec
+[[../superpowers/specs/2026-07-10-opaque-sync-hardening-design]]). **Nothing was a
+zero-knowledge/plaintext/key breach**; the heaviest were a *Critical* data-loss and
+an adversarial-server DoS — both on the very engine going live at v0.2.0.
+**Workstream A (server):** #2 collection validation before store, #9 atomic GETDEL
+state-consumption (4 sites) + partial unique index, #8 atomic Lua login limit +
+trust-gated per-IP backstop, #10a decoy OPAQUE wraps (enumeration oracle), #10b
+hard-fail on missing OPAQUE_SERVER_SETUP, plus C1b (pairing conveys the frozen
+identifier). **Workstream B (client sync, 12 tasks):** #2-client crash-proof pull
+loop, #4a/b/c lock+TOCTOU+monotone-rev, #5 hold-watermark on MK-vanish (no silent
+loss), #6a/b epoch-recovery blobs, V embeddingStatus device-local, #7 corpus-wide
+reconnect reconciliation, C/P/G. **Workstream C (crypto):** #1 master-key buffer
+copy (the Critical — a *successful* linked-online login was wiping the vault via a
+shared-then-zeroed buffer; regression test covers the previously-untested happy
+path), #3 frozen OPAQUE client identifier across renames, R online-recovery adopts
+the access token. Built spec→plan→**subagent-driven (24 tasks + fix waves,
+per-task spec+quality reviews, the subtle ones on opus)**; the review loop caught
+real cascading bugs the register missed (2 extra #9 GETDEL sites, B9's
+cryptographically-broken re-seal premise, B11 key-order divergence, B12 stuck
+indicator, C1b pairing gap). **Whole-scope Larissa over all three surfaces:
+CLEAR TO SQUASH** — no Crit/High/Medium; the pairing-start identifier disclosure
+adjudicated acceptable (already obtainable pre-auth via `/login/start` wrap_aad);
+all seven adversarial-server client-sync invariants verified to hold composed.
+Gates on master post-squash: `pnpm typecheck --force` **14/14**; crypto `bun test`
+**218/0**; user-client sync vitest **391/0**; auth-service **194/0**; Biome clean.
+No Dexie/crypto-DB version bump (optional non-indexed fields). Four non-blocking
+Low follow-ups tracked (L-A1..L-A4 in [[insights/follow-ups-index]]): eager
+OPAQUE-setup check + `/readyz`, migration 0006 duplicate-row note, renamed-account
+`wrap_aad` privacy pass, recovery blob re-push ordering. **OWED: Chris's
+device-verify (spec §9 — linked-online login #1, rename→login/step-up/pairing #3,
+online-recovery R) then push.** Branch `feat/opaque-sync-hardening` kept until push.
+
+Prior entry: 2026-07-09 — **Proxy-service fix: `ERR_CONTENT_DECODING_FAILED`
 on non-streaming forwards SQUASHED to `master`.** Chat titles stopped generating;
 the console showed intermittent `POST /v1/chat/completions net::ERR_CONTENT_DECODING_FAILED
 200`. Root cause (reproduced empirically): Bun's `fetch` transparently decodes the
