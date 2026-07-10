@@ -86,6 +86,19 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
     'lastError',
     'routing',
   ],
+  documents: [
+    // Device-local embedding pipeline state (Finding V). Vectors are
+    // deliberately one-directional: a peer RE-EMBEDS a pulled document from its
+    // `content` rather than receiving vector bytes, so the origin device's
+    // status/error/count describe work done on THAT device only — sealing them
+    // would land a fresh device with `embeddingStatus: 'ready'` and zero local
+    // vectors, silently unsearchable and never picked up by the boot ingestion
+    // sweep. `apply.ts`'s post-apply hook re-defaults these to `pending` when
+    // this device holds no vectors for the pulled document.
+    'embeddingStatus',
+    'embeddingError',
+    'chunkCount',
+  ],
 };
 
 /**

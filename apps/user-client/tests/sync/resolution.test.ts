@@ -44,6 +44,61 @@ describe('resolveConflict — LWW collections (§7.5)', () => {
   });
 });
 
+describe('resolveConflict — same-record equal-timestamp content tiebreak (B11, Finding C)', () => {
+  // Same id, same updatedAt millisecond, DIFFERENT content — the case the plain
+  // uuid tie-break cannot disambiguate (both records share `id`). Two devices
+  // edit the same record independently and land on the same clock tick; without
+  // a content-intrinsic tiebreak both would resolve `winner:'local', repush:false`
+  // and permanently diverge (device A keeps A's content, device B keeps B's).
+  const rowA = { id: 'x', updatedAt: 1000, content: 'Device A wrote this content' };
+  const rowB = { id: 'x', updatedAt: 1000, content: 'Device B wrote something else entirely' };
+
+  it('both devices converge on the SAME winning content regardless of pull order', () => {
+    // Device A's perspective: its own edit is "local", B's edit arrived as "pulled".
+    const resA = resolveConflict('personas', rowA, rowB);
+    // Device B's perspective: the roles are reversed.
+    const resB = resolveConflict('personas', rowB, rowA);
+
+    // Whichever content wins, BOTH devices must agree it is the same content:
+    // the device holding it calls it 'local' and repushes (so the server holds
+    // it too); the device without it calls it 'pulled' and adopts, no repush.
+    if (resA.winner === 'local') {
+      expect(resA).toEqual({ winner: 'local', repush: true });
+      expect(resB).toEqual({ winner: 'pulled', repush: false });
+    } else {
+      expect(resA).toEqual({ winner: 'pulled', repush: false });
+      expect(resB).toEqual({ winner: 'local', repush: true });
+    }
+  });
+
+  it('is stable: repeated resolution of the same pair always agrees', () => {
+    const first = resolveConflict('personas', rowA, rowB);
+    const second = resolveConflict('personas', rowA, rowB);
+    expect(second).toEqual(first);
+  });
+
+  it('identical content at equal (updatedAt, id) stays an idempotent no-op', () => {
+    const same = { id: 'x', updatedAt: 1000, content: 'same content on both devices' };
+    expect(resolveConflict('personas', same, { ...same })).toEqual({
+      winner: 'local',
+      repush: false,
+    });
+  });
+
+  it('identical content built with DIFFERENT key insertion order still converges (B11 LOW finding)', () => {
+    // Same logical record, but as if one device's copy was rebuilt via a field
+    // backfill / Dexie migration that inserted keys in a different order.
+    // Before the canonical key-sort, `encodeRow`'s bare JSON.stringify would
+    // preserve insertion order and could pick OPPOSITE winners on each device.
+    const local = { id: 'x', updatedAt: 1000, content: 'same content on both devices' };
+    const pulled = { content: 'same content on both devices', updatedAt: 1000, id: 'x' };
+    expect(resolveConflict('personas', local, pulled)).toEqual({
+      winner: 'local',
+      repush: false,
+    });
+  });
+});
+
 describe('resolveConflict — settings (server-wins + M-8 replay guard)', () => {
   it('applies a same-or-newer pulled row (server wins) with the applied note', () => {
     expect(resolveConflict('settings', { updatedAt: 1 }, { updatedAt: 2 })).toEqual({

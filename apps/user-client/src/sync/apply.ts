@@ -8,6 +8,7 @@ import {
 } from '@chatsundere/crypto';
 import type { MasterKey } from '@chatsundere/crypto';
 import type { BlobRef, SyncCollection, SyncPulledRecord } from '@chatsundere/shared-types';
+import { SYNC_COLLECTIONS } from '@chatsundere/shared-types';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import type { SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
 import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
@@ -18,6 +19,7 @@ import { enqueueEager } from './blob-fetch.js';
 import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
 import { applyPulledBlobRow, blobFieldsOf, isBlobCollection } from './blob-transform.js';
 import { putBlob } from './blob-transport.js';
+import { hashRow } from './content-hash.js';
 import { isDeadKey, markDead } from './dead-keys.js';
 import { enqueueBlobPut } from './enqueue.js';
 import { resolveConflict } from './resolution.js';
@@ -177,6 +179,48 @@ export function _setApplyBlobHooks(overrides: {
   if (overrides.proactiveHeal) proactiveHealFn = overrides.proactiveHeal;
 }
 
+// ===== Document re-embed apply-side hooks (Finding V) =====
+
+/**
+ * Whether the local knowledge-vectors DB holds any chunk for the given
+ * document id. Lazily imported (mirrors `backfill.ts`'s `vectors` handling,
+ * `worker.ts`'s `readLocalRow`): the far commoner non-document apply path must
+ * never drag the embeddings engine in.
+ */
+type HasLocalVectorsFn = (documentId: string) => Promise<boolean>;
+
+async function hasLocalVectorsDefault(documentId: string): Promise<boolean> {
+  const { getKnowledgeVectorStore, KNOWLEDGE_COLLECTION } = await import(
+    '../boot/knowledge-vectors-db.js'
+  );
+  const rows = await getKnowledgeVectorStore().scan({
+    collection: KNOWLEDGE_COLLECTION,
+    filter: { tags: { documentId } },
+  });
+  return rows.length > 0;
+}
+
+/** Enqueue a document for (re-)embedding. Lazily imported, same reasoning. */
+type TriggerReembedFn = (documentId: string) => void;
+
+function triggerReembedDefault(documentId: string): void {
+  void import('../knowledge/start-ingestion.js').then(({ enqueueDocument }) =>
+    enqueueDocument(documentId),
+  );
+}
+
+let hasLocalVectorsFn: HasLocalVectorsFn = hasLocalVectorsDefault;
+let triggerReembedFn: TriggerReembedFn = triggerReembedDefault;
+
+/** Test seam: intercept the document re-embed apply-side hooks (Finding V). */
+export function _setApplyDocumentReembedHooks(overrides: {
+  hasLocalVectors?: HasLocalVectorsFn;
+  triggerReembed?: TriggerReembedFn;
+}): void {
+  if (overrides.hasLocalVectors) hasLocalVectorsFn = overrides.hasLocalVectors;
+  if (overrides.triggerReembed) triggerReembedFn = overrides.triggerReembed;
+}
+
 // ===== Coalesced invalidation (spec §7.6, Laura soft) =====
 
 type Invalidator = (keys: readonly (readonly unknown[])[]) => void;
@@ -248,6 +292,8 @@ export function _resetApplyForTests(): void {
   onSettingsNote = () => undefined;
   eagerEnqueueFn = enqueueEager;
   proactiveHealFn = defaultHeal;
+  hasLocalVectorsFn = hasLocalVectorsDefault;
+  triggerReembedFn = triggerReembedDefault;
   pendingInvalidations.clear();
 }
 
@@ -259,6 +305,23 @@ function activeBlindId(): BlindIdFn {
 }
 
 // ===== Helpers =====
+
+/**
+ * The accepted collection set (finding #2, client half), built from the same
+ * `SYNC_COLLECTIONS` source the sync-service's `isSyncCollection` guards
+ * against (`apps/sync-service/src/records/collections.ts`) — defence in depth:
+ * `pulled.collection` is server-supplied, typed as `SyncCollection` at compile
+ * time but NOT runtime-validated, so a compromised/adversarial server can still
+ * serve an arbitrary string. `db.table()` throws `InvalidTableError` for
+ * anything that is not a real Dexie table; every lookup that would reach it
+ * with a server-controlled collection name is guarded below.
+ */
+const CLIENT_SYNC_COLLECTION_SET: ReadonlySet<string> = new Set(SYNC_COLLECTIONS);
+
+/** True if `collection` is one of the v1 sync collections (finding #2). */
+function isSyncCollection(collection: string): boolean {
+  return CLIENT_SYNC_COLLECTION_SET.has(collection);
+}
 
 /** LOCAL SHA-256 → base64url of the given bytes (§7.0 — never trust the wire hash). */
 async function sha256B64(bytes: Uint8Array): Promise<string> {
@@ -275,6 +338,10 @@ async function sha256B64(bytes: Uint8Array): Promise<string> {
 async function readLocalRow(collection: SyncCollection, key: string): Promise<unknown> {
   const db = getClientDataDb();
   if (collection === 'settings') return db.settings.get(1);
+  // Finding #2 (client half): a server-supplied collection outside the known
+  // set has no Dexie table — `db.table()` would throw. Treat it as "nothing
+  // local", never crash on it.
+  if (!isSyncCollection(collection)) return undefined;
   return db.table(collection).get(key);
 }
 
@@ -288,6 +355,9 @@ async function listLocalKeys(collection: SyncCollection): Promise<string[]> {
   const db = getClientDataDb();
   if (collection === 'settings') return ['1'];
   if (collection === 'vectors') return [];
+  // Finding #2 (client half) — see `readLocalRow`: an unknown collection has no
+  // table to enumerate.
+  if (!isSyncCollection(collection)) return [];
   const keys = await db.table(collection).toCollection().primaryKeys();
   return keys.map((k) => String(k));
 }
@@ -408,6 +478,13 @@ async function findKeyByBlindId(
   collection: SyncCollection,
   blindIdB64: string,
 ): Promise<string | null> {
+  // Finding #2 (client half) — see `readLocalRow`: an unknown collection can
+  // never have a local match (this device never wrote a table for it), so
+  // there is nothing to resolve. Stage 2 below delegates to the guarded
+  // `listLocalKeys`, but short-circuiting here documents the invariant and
+  // skips the (harmless but pointless) `syncRows` scan for a collection this
+  // device has never heard of.
+  if (!isSyncCollection(collection)) return null;
   const db = getClientDataDb();
   // Stage 1 — steady state: resolve via syncRows (cheap; the common case).
   const metas = await db.syncRows.where('collection').equals(collection).toArray();
@@ -481,7 +558,17 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
 
   const db = getClientDataDb();
   const key = await findKeyByBlindId(mk, collection, pulled.blindId);
-  if (key === null) return { kind: 'tombstoned' }; // nothing known locally — no-op
+  if (key === null) {
+    // Belt-and-braces (task B5): `findKeyByBlindId` re-derives the blind id from
+    // the raw `mk` buffer across a Dexie await. A `closeAndForget()` racing that
+    // await zeroes the buffer in place, so a real match can silently fail to
+    // resolve — "nothing known locally" would then be a LIE, not a fact, and
+    // the pull loop's watermark advance would orphan the still-local row
+    // forever (the server never re-sends a tombstone once its rev is covered).
+    // Re-reading the session catches the case that matters: MK gone NOW.
+    if (useSessionStore.getState().mk === null) return { kind: 'unavailable' };
+    return { kind: 'tombstoned' }; // nothing known locally — no-op
+  }
 
   const meta = await db.syncRows.get([collection, key]);
   // Stale tombstone: an already-superseded rev must not re-trash a row.
@@ -501,17 +588,23 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
     return { kind: 'tombstoned' };
   }
 
-  const local = collection === 'settings' ? undefined : await readLocalRow(collection, key);
-
   // Row-move + outbox-drop + syncRows-removal in ONE transaction (Larissa L-6):
-  // a crash mid-way must never lose the trash safety net.
+  // a crash mid-way must never lose the trash safety net. The local-row READ now
+  // ALSO joins this transaction (finding #4b): the old code read `local` before
+  // opening the transaction, so a concurrent Class-1/Class-2 write landing in
+  // that gap could be trashed with a stale snapshot while its fresher content
+  // silently vanished (destroyed by the unconditional delete, never captured
+  // anywhere). Locking `table` for the whole read-decide-write span means any
+  // overlapping local write queues behind us and can never land inside the gap.
+  let local: unknown;
   await db.transaction(
     'rw',
     [db.syncRows, db.syncOutbox, db.trash, db.deadKeys, db.table(collection)],
     async () => {
+      local = collection === 'settings' ? undefined : await readLocalRow(collection, key);
       if (local !== undefined && local !== null) {
         const now = Date.now();
-        const meta = deriveLegacyTrashMeta(collection, key, local);
+        const trashMeta = deriveLegacyTrashMeta(collection, key, local);
         const trashRow: TrashRow = {
           id: `${collection}:${key}`,
           collection,
@@ -519,9 +612,9 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
           row: local,
           deletedAt: now,
           purgeAt: now + THIRTY_DAYS_MS,
-          entityKind: meta.entityKind,
-          rootGroup: meta.rootGroup,
-          parentRef: meta.parentRef,
+          entityKind: trashMeta.entityKind,
+          rootGroup: trashMeta.rootGroup,
+          parentRef: trashMeta.parentRef,
         };
         await db.trash.put(trashRow);
         await db.table(collection).delete(key);
@@ -548,6 +641,61 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
   return { kind: 'tombstoned' };
 }
 
+/**
+ * The transactional fold's own result (finding #4b): everything the outer
+ * `db.transaction` decided, plus the side effects that could NOT run inside it
+ * (they touch tables — `db.syncState` — outside the fold's scope) for the
+ * caller to perform once the transaction has committed.
+ */
+type UpsertTxResult = {
+  outcome: ApplyOutcome;
+  /** Set when a row was actually written (insert or resolved-pulled) — drives the post-write side effects. */
+  appliedRow?: unknown;
+  /** A dead-key tamper was detected — `setAttention` runs after commit. */
+  tamper?: boolean;
+  /** A pending-delete suppression happened — `recordSuppressedRev` runs after commit. */
+  suppressedRev?: boolean;
+  /** A settings note the resolver raised — `onSettingsNote` fires after commit. */
+  note?: 'settings-applied' | 'settings-precedence';
+};
+
+/**
+ * Task B9 baseline maintenance: re-read the just-committed local row and stamp
+ * `syncRows.localContentHash` to its `content-hash.ts` fingerprint, so a later
+ * `reconcile.ts` pass finds a fresh baseline instead of `undefined`.
+ *
+ * Deliberately a POST-COMMIT follow-up (its own tiny `syncRows`-only write),
+ * not threaded into the fold's own transaction above: `hashRow` awaits
+ * `crypto.subtle.digest`, a promise NOT bound to Dexie's transaction zone, and
+ * running it INSIDE an open `db.transaction(...)` risks the transaction
+ * auto-committing early (Dexie only keeps a transaction alive across
+ * consecutive Dexie-bound awaits) — which would then throw on every Dexie call
+ * after it in the same scope. Reading the row back here, once the fold's
+ * transaction has already committed, sidesteps that risk entirely and is
+ * exactly what `reconcile.ts` itself does (`readLocalRow` + `hashRow`), so the
+ * stamped value is guaranteed byte-identical to what reconcile would compute
+ * from the same, unchanged row. The narrow window between the fold's commit
+ * and this write is benign: a crash in it just leaves `localContentHash`
+ * unset, which degrades to the pre-existing legacy-row bootstrap behaviour,
+ * not a correctness bug. Best-effort: a hashing throw (an unanticipated row
+ * shape) is swallowed rather than failing an otherwise-successful pull apply.
+ */
+async function stampReconciliationBaseline(collection: SyncCollection, key: string): Promise<void> {
+  const db = getClientDataDb();
+  try {
+    const stored = await readLocalRow(collection, key);
+    if (stored === undefined || stored === null) return;
+    const contentHash = await hashRow(collection, stored);
+    await db.syncRows.update([collection, key], { localContentHash: contentHash });
+  } catch (err) {
+    console.error('[sync] pull-apply: failed to stamp the reconciliation baseline — skipped', {
+      collection,
+      key,
+      err,
+    });
+  }
+}
+
 /** §7.4/§7.5 — pulled upsert: insert, resolve, or reject onto a tombstone anchor. */
 async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<ApplyOutcome> {
   const collection = pulled.collection;
@@ -570,6 +718,12 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
       extractKeyFor(collection),
     );
   } catch {
+    // Belt-and-braces (task B5): `openRecord` re-derives the blind id from the
+    // raw `mk` buffer AFTER the AEAD decrypt await (`seal.ts`). A concurrent
+    // `closeAndForget()` zeroes that same buffer in place, so the throw here
+    // can be an MK-vanish artefact rather than a genuine tamper/corruption —
+    // re-check the session before labelling it an inert rejection.
+    if (useSessionStore.getState().mk === null) return { kind: 'unavailable' };
     inertRejectionCount += 1;
     return { kind: 'rejected' };
   }
@@ -587,8 +741,8 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
 
   // §7.0 — echo shortcut: LOCAL hash of the pulled ciphertext vs our stored hash.
   if (meta) {
-    const localHash = await sha256B64(fromBase64Url(pulled.ciphertext));
-    if (localHash === meta.ciphertextHash) {
+    const echoHash = await sha256B64(fromBase64Url(pulled.ciphertext));
+    if (echoHash === meta.ciphertextHash) {
       // Our own re-delivered write: no data change, but track the server rev.
       if (pulled.rev > meta.rev) {
         await db.syncRows.update([collection, key], { rev: pulled.rev });
@@ -609,68 +763,129 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
     return { kind: 'skipped' };
   }
 
-  const local = await readLocalRow(collection, key);
+  // The ciphertext hash is pure WebCrypto — non-Dexie async work, computed
+  // BEFORE the transaction below opens (only Dexie calls may run inside a
+  // `db.transaction` callback; see the fold's comment).
   const localHash = await sha256B64(fromBase64Url(pulled.ciphertext));
+  const table = collection === 'settings' ? db.settings : db.table(collection);
 
-  if (local === undefined || local === null) {
-    // §7.4 H-1 (NON-NEGOTIABLE) — a dead key is a terminal identity anchor; an
-    // honest server can never deliver an upsert for a blind id it tombstoned.
-    // Anchored on the DURABLE deadKeys marker (§3.9), so it survives trash purge
-    // and restore — not the ephemeral 30-day trash snapshot. Raise the tamper alarm.
-    if (await isDeadKey(collection, key)) {
-      await setAttention({ kind: 'tamper' });
-      return { kind: 'tamper' };
-    }
-    // §7.4 L-3 — a pending local delete wins locally too; suppress the insert.
-    // Audit #3/#5: establish the CAS base (so a recovery drain still finds meta and
-    // mints the tombstone, and a post-Undo edit pushes a correct baseRev) and record
-    // the suppressed rev (so an Undo can rewind the watermark below it).
-    if (await hasPendingDelete(collection, key)) {
-      await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
-      await recordSuppressedRev(collection, key, pulled.rev);
-      return { kind: 'suppressed' };
-    }
+  // §4b (finding, Medium) — fold local-read → resolveConflict → write into ONE
+  // transaction: a concurrent Class-1 append or Class-2 `mutateSynced` (neither
+  // holds the sync lock) can land between a bare read and a later write in a
+  // SEPARATE transaction, causing a lost update or a device-local field restore
+  // from a stale snapshot. Locking `table` for the whole read-decide-write span
+  // means any overlapping local write queues behind us and can never land
+  // inside the gap the old code left open.
+  const result = await db.transaction(
+    'rw',
+    [table, db.syncRows, db.syncOutbox, db.deadKeys],
+    async (): Promise<UpsertTxResult> => {
+      const local = await readLocalRow(collection, key);
 
-    await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
-    await afterApplied(collection, key, row);
+      if (local === undefined || local === null) {
+        // §7.4 H-1 (NON-NEGOTIABLE) — a dead key is a terminal identity anchor;
+        // an honest server can never deliver an upsert for a blind id it
+        // tombstoned. Anchored on the DURABLE deadKeys marker (§3.9), so it
+        // survives trash purge and restore — not the ephemeral 30-day trash
+        // snapshot.
+        if (await isDeadKey(collection, key)) {
+          return { outcome: { kind: 'tamper' }, tamper: true };
+        }
+        // §7.4 L-3 — a pending local delete wins locally too; suppress the
+        // insert. Audit #3/#5: establish the CAS base (so a recovery drain
+        // still finds meta and mints the tombstone, and a post-Undo edit
+        // pushes a correct baseRev) and record the suppressed rev (so an Undo
+        // can rewind the watermark below it).
+        if (await hasPendingDelete(collection, key)) {
+          await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
+          return { outcome: { kind: 'suppressed' }, suppressedRev: true };
+        }
+        await applyPulledRow(collection, key, row, pulled.rev, localHash, undefined);
+        return { outcome: { kind: 'inserted' }, appliedRow: row };
+      }
+
+      // §7.5 — conflict: the pure per-collection rule decides the winner.
+      const resolution = resolveConflict(collection, local, row);
+
+      if (resolution.winner === 'pulled') {
+        await applyPulledRow(collection, key, row, pulled.rev, localHash, local);
+        return {
+          outcome: { kind: 'resolved', winner: 'pulled' },
+          appliedRow: row,
+          note: resolution.note,
+        };
+      }
+
+      // Local wins: keep the local data. Adopt the server rev as the new CAS
+      // base (a metadata-only update, not a local-data mutation — §12.3 / M-1
+      // precedent) so a subsequent re-push does not re-conflict, and enqueue
+      // the re-push when the local row is strictly newer knowledge (repush).
+      if (meta) {
+        await db.syncRows.update([collection, key], { rev: pulled.rev });
+      } else {
+        // No prior CAS base — e.g. a post-link-reset backfill row the server
+        // turned out to already hold (the L-1 "server forgot then remembered"
+        // edge). We MUST establish a base here: otherwise the re-push below
+        // pushes baseRev=0 again, re-conflicts, and `backfillPending` never
+        // clears (the pump wedges on "Uploading… N of M" forever). Adopt the
+        // server rev; the hash tracks the pulled ciphertext per the §7.0 echo
+        // convention until the repush acks.
+        await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
+      }
+      if (resolution.repush) {
+        await db.syncOutbox.add({ collection, key, op: 'upsert', enqueuedAt: Date.now() });
+      }
+      return { outcome: { kind: 'resolved', winner: 'local' }, note: resolution.note };
+    },
+  );
+
+  // Side effects the fold could not perform itself — `setAttention` and
+  // `recordSuppressedRev` open their OWN transaction over `db.syncState`,
+  // outside the scope above — deferred here, after ours has committed. Never
+  // racy: neither touches `table`/`syncRows`, the tables the fold protects.
+  if (result.tamper) await setAttention({ kind: 'tamper' });
+  if (result.suppressedRev) await recordSuppressedRev(collection, key, pulled.rev);
+  if (result.note) onSettingsNote(result.note);
+
+  if (result.appliedRow !== undefined) {
+    // Task B9 baseline maintenance: the row just committed (insert, or a
+    // resolved conflict where the pulled row won) now EQUALS the server —
+    // stamp `syncRows.localContentHash` to it so `reconcile.ts`'s baseline
+    // stays fresh (see `reconcile.ts`'s BASELINE MAINTENANCE note; the fold's
+    // own `db.syncRows.put`/`.update` above carries no `localContentHash`, so
+    // without this the baseline would silently wipe on every pull too).
+    await stampReconciliationBaseline(collection, key);
+    await afterApplied(collection, key, result.appliedRow);
     if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
-    await retireRestoredTrash(collection, key, row);
-    return { kind: 'inserted' };
+    await retireRestoredTrash(collection, key, result.appliedRow);
   }
 
-  // §7.5 — conflict: the pure per-collection rule decides the winner.
-  const resolution = resolveConflict(collection, local, row);
-  if (resolution.note) onSettingsNote(resolution.note);
+  return result.outcome;
+}
 
-  if (resolution.winner === 'pulled') {
-    await applyPulledRow(collection, key, row, pulled.rev, localHash, local);
-    await afterApplied(collection, key, row);
-    if (isBlobCollection(collection)) await afterBlobApplied(mk, collection, key);
-    await retireRestoredTrash(collection, key, row);
-    return { kind: 'resolved', winner: 'pulled' };
+/**
+ * Non-blob apply-side row build: restore device-local / settings fields per
+ * §10, then (Finding V) for `documents` re-default the embedding-pipeline
+ * fields to `pending` when this device holds no local vectors for the pulled
+ * document. Vectors are deliberately one-directional (§7.5 `vectors` skip): a
+ * peer re-embeds from `content` rather than receiving vector bytes, so an
+ * origin device's `ready`/`embedded` status — now deny-listed and absent from
+ * the wire row entirely — must never be inherited without the vectors that
+ * status claims to describe.
+ */
+async function restoreAppliedRow(
+  collection: SyncCollection,
+  row: unknown,
+  local: unknown | undefined,
+): Promise<unknown> {
+  const restored = restoreLocalFields(collection, row, local);
+  if (collection !== 'documents' || typeof restored !== 'object' || restored === null) {
+    return restored;
   }
-
-  // Local wins: keep the local data. Adopt the server rev as the new CAS base
-  // (a metadata-only update, not a local-data mutation — §12.3 / M-1 precedent)
-  // so a subsequent re-push does not re-conflict, and enqueue the re-push when
-  // the local row is strictly newer knowledge (repush).
-  await db.transaction('rw', db.syncRows, db.syncOutbox, async () => {
-    if (meta) {
-      await db.syncRows.update([collection, key], { rev: pulled.rev });
-    } else {
-      // No prior CAS base — e.g. a post-link-reset backfill row the server turned
-      // out to already hold (the L-1 "server forgot then remembered" edge). We
-      // MUST establish a base here: otherwise the re-push below pushes baseRev=0
-      // again, re-conflicts, and `backfillPending` never clears (the pump wedges
-      // on "Uploading… N of M" forever). Adopt the server rev; the hash tracks the
-      // pulled ciphertext per the §7.0 echo convention until the repush acks.
-      await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
-    }
-    if (resolution.repush) {
-      await db.syncOutbox.add({ collection, key, op: 'upsert', enqueuedAt: Date.now() });
-    }
-  });
-  return { kind: 'resolved', winner: 'local' };
+  const documentId = (restored as { id?: unknown }).id;
+  if (typeof documentId !== 'string') return restored;
+  if (await hasLocalVectorsFn(documentId)) return restored;
+  return { ...restored, embeddingStatus: 'pending', embeddingError: null, chunkCount: 0 };
 }
 
 /**
@@ -690,10 +905,11 @@ async function applyPulledRow(
   // Blob-bearing rows use the §4 transform: it preserves local bytes when the
   // pulled ref still matches and otherwise leaves the placeholder state (ref
   // present, bytes absent) for the fetch strategy (§6). Non-blob rows restore
-  // their device-local fields as before (§10).
+  // their device-local fields as before (§10), plus the Finding V re-embed
+  // default for `documents`.
   const toStore = isBlobCollection(collection)
     ? applyPulledBlobRow(collection, row, local)
-    : restoreLocalFields(collection, row, local);
+    : await restoreAppliedRow(collection, row, local);
   const meta: SyncRowMeta = { collection, key, rev, ciphertextHash };
   const table = collection === 'settings' ? db.settings : db.table(collection);
   await db.transaction('rw', table, db.syncRows, async () => {
@@ -764,6 +980,23 @@ async function afterApplied(collection: SyncCollection, key: string, row: unknow
   collectFor(collection, key, chatId);
   if (collection === 'chats') await recomputeChatDerivedSafe(key);
   else if (chatId) await recomputeChatDerivedSafe(chatId);
+  if (collection === 'documents') await afterDocumentApplied(key);
+}
+
+/**
+ * Post-apply document hook (Finding V): `restoreAppliedRow` may have just
+ * defaulted the written row to `pending` (no local vectors); get
+ * `startKnowledgeIngestion`'s queue moving on it immediately rather than
+ * waiting for the next boot sweep. Re-reads the just-written row (not the
+ * pre-transform `row` this function receives via `appliedRow`) since that is
+ * where the default landed.
+ */
+async function afterDocumentApplied(key: string): Promise<void> {
+  const stored = await readLocalRow('documents', key);
+  if (typeof stored !== 'object' || stored === null) return;
+  if ((stored as { embeddingStatus?: unknown }).embeddingStatus === 'pending') {
+    triggerReembedFn(key);
+  }
 }
 
 /**

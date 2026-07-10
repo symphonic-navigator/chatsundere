@@ -132,4 +132,43 @@ describe('strip — deny-list collections (§10)', () => {
     const pulled = { id: 'c9', title: 'fresh', updatedAt: 3 };
     expect(restoreLocalFields('chats', pulled, undefined)).toEqual(pulled);
   });
+
+  it('strips documents embedding-pipeline fields (Finding V — one-directional vectors)', () => {
+    const doc = {
+      id: 'd1',
+      libraryId: 'l1',
+      title: 'Doc',
+      content: 'body',
+      embeddingStatus: 'ready',
+      embeddingError: null,
+      chunkCount: 3,
+      triggerPhrases: [],
+      updatedAt: 5,
+    };
+    const sealed = stripForSeal('documents', doc) as Record<string, unknown>;
+    expect(sealed.title).toBe('Doc');
+    expect(sealed.content).toBe('body');
+    for (const field of ['embeddingStatus', 'embeddingError', 'chunkCount']) {
+      expect(field in sealed).toBe(false);
+    }
+  });
+
+  it('restores documents embedding-pipeline fields from the local row on open', () => {
+    const local = {
+      id: 'd1',
+      libraryId: 'l1',
+      title: 'Doc',
+      content: 'body',
+      embeddingStatus: 'ready',
+      embeddingError: null,
+      chunkCount: 3,
+      triggerPhrases: [],
+      updatedAt: 1,
+    };
+    const pulled = { id: 'd1', libraryId: 'l1', title: 'Doc', content: 'body v2', updatedAt: 5 };
+    const restored = restoreLocalFields('documents', pulled, local) as Record<string, unknown>;
+    expect(restored.content).toBe('body v2');
+    expect(restored.embeddingStatus).toBe('ready');
+    expect(restored.chunkCount).toBe(3);
+  });
 });

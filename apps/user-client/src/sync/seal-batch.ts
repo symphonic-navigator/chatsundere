@@ -3,6 +3,7 @@ import { toBase64Url } from '@chatsundere/crypto';
 import type { MasterKey, SealedRecord } from '@chatsundere/crypto';
 import type { SyncCollection, SyncPushRecord } from '@chatsundere/shared-types';
 import { type NewBlob, isBlobCollection, stripBlobsForSeal } from './blob-transform.js';
+import { hashRow } from './content-hash.js';
 import { stripForSeal } from './strip.js';
 
 /**
@@ -61,6 +62,17 @@ export interface PreparedRecord {
    * be written into `syncRows` on `ok`. Null for tombstones (no ciphertext).
    */
   ciphertextHashB64: string | null;
+  /**
+   * The Task B9 reconnect-reconciliation content fingerprint (`content-hash.ts`'s
+   * `hashRow`) of the RAW row this entry seals — computed here, at seal time,
+   * from the exact snapshot the drain is about to push, so `applyOk` can stamp
+   * `syncRows.localContentHash` to precisely what the server now holds rather
+   * than a possibly-newer live row read later. Null for tombstones (no row) and
+   * on a hashing failure (backstop — see `prepareRecord`'s catch): a null value
+   * simply skips the stamp, degrading to the pre-existing bootstrap-on-next-pass
+   * behaviour rather than failing the push.
+   */
+  contentHashB64: string | null;
   /** Summed encoded size used for byte-batching. */
   encodedBytes: number;
   /**
@@ -118,9 +130,30 @@ export async function prepareRecord(
       seqs,
       record,
       ciphertextHashB64: null,
+      contentHashB64: null,
       encodedBytes: encodedBytesOf(record),
       newBlobs: [],
     };
+  }
+
+  // Task B9 baseline maintenance: hash the RAW row (before any strip) the same
+  // way `content-hash.ts`'s `hashRow` (and thus a later `reconcile.ts` pass
+  // re-reading this same, unchanged row) would — computed from `entry.row`
+  // rather than the `wireRow` built below, so a freshly-minted blob ref (which
+  // the drain holds this record back for, never reaching `applyOk`) can never
+  // leak into the stamped baseline. A throw here (an unanticipated row shape)
+  // is a backstop-caught skip, not a push failure — mirrors `reconcile.ts`'s
+  // own per-row backstop; the push proceeds and `applyOk` simply skips the
+  // stamp, leaving the pre-existing bootstrap-on-next-pass behaviour intact.
+  let contentHashB64: string | null = null;
+  try {
+    contentHashB64 = await hashRow(collection, entry.row);
+  } catch (err) {
+    console.error('[sync] seal: failed to compute the reconciliation content hash — skipped', {
+      collection,
+      key,
+      err,
+    });
   }
 
   // Blob-bearing collections route through the §4 transform: it strips the
@@ -156,6 +189,7 @@ export async function prepareRecord(
     seqs,
     record,
     ciphertextHashB64,
+    contentHashB64,
     encodedBytes: encodedBytesOf(record),
     newBlobs,
   };

@@ -170,6 +170,33 @@ describe('confirmBlobReupload — the blob_reupload_threshold answer path (audit
     expect((await getSyncState()).attention).toMatchObject({ kind: 'blob_reupload_threshold' });
   });
 
+  it('keeps the blob_reupload_threshold attention when the forced re-upload still does not land (review B7 #2)', async () => {
+    const ID1 = id22('stuck');
+    await seedArtefact('a1', ID1, 'image bytes that will not land');
+
+    _setRecoveryBlobDeps(
+      {
+        listBlobs: async () => ({ blobs: [], totalBytes: 0, quotaBytes: 0 }),
+        // `blobs_disabled` is a typed verdict, not a throw, and (by design,
+        // review B7 #1) does not overwrite the attention itself — so this
+        // isolates the #2 bug: `recoverBlobs`'s returned `landed` boolean
+        // must gate the clear, not be discarded.
+        putBlob: async () => ({ status: 'blobs_disabled' as const }),
+        sealBlob: sealBlobFake,
+      },
+      1,
+    );
+
+    await setAttention({ kind: 'blob_reupload_threshold', bytes: 30, count: 1 });
+
+    await confirmBlobReupload(); // resolves — a typed verdict is not a thrown error
+
+    // Before the fix, `confirmBlobReupload` discarded `recoverBlobs`'s
+    // returned boolean and cleared the attention unconditionally — a still-
+    // failing forced re-upload falsely read as "resolved".
+    expect((await getSyncState()).attention).toMatchObject({ kind: 'blob_reupload_threshold' });
+  });
+
   it('performRecovery still asks (uploads nothing) above the threshold — force does not leak', async () => {
     await seedArtefact('a1', id22('auto'), 'some image bytes over the tiny threshold');
 

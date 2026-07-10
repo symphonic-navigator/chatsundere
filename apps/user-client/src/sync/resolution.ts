@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { SyncCollection } from '@chatsundere/shared-types';
+import { canonicalRowBytes } from './content-hash.js';
 
 /**
  * Pure, IO-free per-collection conflict resolution (spec §7.5). `resolveConflict`
  * is called on a pulled record that collides with an existing local row and
  * decides which one survives and whether the local edit must be re-pushed so the
- * server converges. No Dexie, no crypto, no side effects — unit-test-ideal.
+ * server converges. No Dexie, no network, no async, no side effects —
+ * unit-test-ideal. (It does import {@link canonicalRowBytes} for the same-
+ * timestamp content tiebreak below — a synchronous, deterministic JSON
+ * encoding, not a cryptographic operation — so `lww` can stay callable from
+ * inside a Dexie transaction, where non-Dexie async work is unsafe.)
  */
 
 export type Resolution = {
@@ -65,18 +70,51 @@ const JOURNAL_RANK: Record<StatefulRow['state'], number> = {
   archived: 3,
 };
 
+/** Lexicographic byte comparison: negative if `a` < `b`, positive if `a` > `b`. */
+function compareBytes(a: Uint8Array, b: Uint8Array): number {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (a[i] as number) - (b[i] as number);
+    if (diff !== 0) return diff;
+  }
+  return a.length - b.length;
+}
+
 /**
- * Last-write-wins on `updatedAt`. Ties (identical clocks) break by uuid — the
- * higher `id` string wins, deterministically (Larissa I-3). When local wins,
- * the local row is strictly newer knowledge than the server delivered, so it
- * must be re-pushed.
+ * Last-write-wins on `updatedAt`. Ties on `updatedAt` for DIFFERENT records
+ * break by uuid — the higher `id` string wins, deterministically (Larissa I-3).
+ * When local wins, the local row is strictly newer knowledge than the server
+ * delivered, so it must be re-pushed.
+ *
+ * A tie on `updatedAt` for the SAME record (`id` also equal) is a genuine
+ * concurrent same-millisecond edit with different content — the uuid
+ * tie-break is a no-op here since both sides share one id (Finding C, Task
+ * B11). Deliberately NOT `ciphertextHash`: `sealRecord` draws a fresh random
+ * nonce per seal, so the ciphertext hash of the same plaintext differs on
+ * every device and never converges (Task B9). Instead, tiebreak on
+ * {@link canonicalRowBytes} — the deterministic pre-seal JSON encoding both
+ * devices compute identically from their own content — compared
+ * lexicographically: higher wins. Both devices resolve this same pairwise
+ * comparison (just with `local`/`pulled` swapped), so they always agree on the
+ * SAME winning content; the losing side sets `repush: true` so it adopts and
+ * re-pushes regardless of which device pulls first.
  */
-function lww(local: LwwRow, pulled: LwwRow): Resolution {
+function lww(local: LwwRow, pulled: LwwRow, collection: SyncCollection): Resolution {
   if (pulled.updatedAt > local.updatedAt) return { winner: 'pulled', repush: false };
   if (pulled.updatedAt < local.updatedAt) return { winner: 'local', repush: true };
-  // Tie: higher uuid wins. Exact equality (same row) resolves to local, no-op.
-  if (pulled.id > local.id) return { winner: 'pulled', repush: false };
-  return { winner: 'local', repush: local.id > pulled.id };
+  if (pulled.id !== local.id) {
+    // Tie on different records: higher uuid wins.
+    if (pulled.id > local.id) return { winner: 'pulled', repush: false };
+    return { winner: 'local', repush: local.id > pulled.id };
+  }
+  // Same record, same millisecond: content-intrinsic tiebreak.
+  const cmp = compareBytes(
+    canonicalRowBytes(collection, local),
+    canonicalRowBytes(collection, pulled),
+  );
+  if (cmp === 0) return { winner: 'local', repush: false }; // identical content: no-op
+  if (cmp < 0) return { winner: 'pulled', repush: false };
+  return { winner: 'local', repush: true };
 }
 
 /**
@@ -91,7 +129,7 @@ export function resolveConflict(
   pulled: unknown,
 ): Resolution {
   if (LWW_COLLECTIONS.has(collection)) {
-    return lww(local as LwwRow, pulled as LwwRow);
+    return lww(local as LwwRow, pulled as LwwRow, collection);
   }
 
   if (collection === 'personaAvatars') {

@@ -441,27 +441,38 @@ describe('runPullLoop — watermark + page cap (spec §6, M-7)', () => {
     expect((await getSyncState()).watermarkRev).toBe(100);
   });
 
-  it('caps at 64 pages per cycle and continues on the next call', async () => {
-    // Every page reports more:true with a single rev = since+1 (unknown-key
-    // tombstone → applied inertly). The watermark rises one per page.
+  it('caps at 64 pages per cycle, then Task B12 auto-resumes without a second external trigger', async () => {
+    // Every page reports a single rev = since+1 (unknown-key tombstone →
+    // applied inertly), `more:true` through page 69 and `more:false` on page
+    // 70 — bounded so the Task B12 auto-follow-up this cap now queues
+    // settles deterministically instead of chaining forever.
     const pull = vi.fn(
       async (since: number): Promise<SyncPullResponse> => ({
         head: 10_000,
         epoch: 'E1',
-        more: true,
+        more: since < 69,
         records: [pulledTombstone('chats', `t${since}`, since + 1)],
       }),
     );
     _setPullTransport(pull);
 
     await runPullLoop();
+    // The per-invocation anti-pin cap (Larissa M-7) is untouched: exactly 64
+    // pages this call, no more, no fewer.
     expect(pull).toHaveBeenCalledTimes(64);
     expect((await getSyncState()).watermarkRev).toBe(64);
-    expect((await getSyncState()).pulling).toBeNull();
+    // Task B12 (Finding G): capped WITH more still owed keeps the `pulling`
+    // indicator up — the old unconditional clear made this look "done".
+    expect((await getSyncState()).pulling).not.toBeNull();
 
-    await runPullLoop();
-    expect(pull).toHaveBeenCalledTimes(128); // continued from rev 64
-    expect((await getSyncState()).watermarkRev).toBe(128);
+    // No second `runPullLoop()` call here — Task B12's queued follow-up (via
+    // `withSyncLock`, not awaited by the capped call) resumes on its own from
+    // watermark 64 and pages until page 70's `more:false` drains it cleanly.
+    await vi.waitFor(() => expect(pull).toHaveBeenCalledTimes(70));
+    expect((await getSyncState()).watermarkRev).toBe(70);
+    await vi.waitFor(async () => {
+      expect((await getSyncState()).pulling).toBeNull();
+    });
   });
 });
 

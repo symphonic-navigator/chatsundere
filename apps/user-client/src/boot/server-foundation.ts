@@ -5,9 +5,10 @@ import { armAuthDegradeFromBoot } from '../lib/auth-degrade.js';
 import { proxyAuthSource } from '../lib/proxy-auth.js';
 import { armBackfillIfCorpusUnsynced, runBackfillIfPending } from '../sync/backfill.js';
 import { initDoorbell } from '../sync/doorbell.js';
+import { runReconciliationIfDue } from '../sync/reconcile.js';
 import { runRecovery } from '../sync/recovery.js';
 import { initSyncTriggers } from '../sync/triggers.js';
-import { _setBackfill, _setRecovery } from '../sync/worker.js';
+import { _setBackfill, _setReconcile, _setRecovery } from '../sync/worker.js';
 import { getDb } from './open-db.js';
 
 /**
@@ -50,6 +51,10 @@ export async function initServerFoundation(): Promise<void> {
     }
     await runBackfillIfPending();
   });
+  // Task B9 (Finding #7): the corpus-wide reconnect reconciliation, run at the
+  // cycle's tail after backfill. Self-throttled (a coarse interval,
+  // `reconcile.ts`), so registering it unconditionally is safe.
+  _setReconcile(runReconciliationIfDue);
   // §5.2: re-arm the auth-degraded latch from the persisted attention BEFORE the
   // triggers fire the first cycle — a boot into a degraded state must not drain
   // or pull before the latch is restored (canRunCycle/gateOpen consult it).

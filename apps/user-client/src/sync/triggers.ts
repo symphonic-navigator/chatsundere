@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { setImmediateDrain } from './enqueue.js';
-import { drainOutbox, runSyncCycle } from './worker.js';
+import { drainOutbox, runSyncCycle, withSyncLock } from './worker.js';
 
 /**
  * Sync triggers (spec §6 triggers). Every trigger ultimately calls
- * `runSyncCycle()`; the worker's single-flight lock makes overlapping triggers
- * safe. The engine is an accelerant of convergence, not a dependency — each of
- * these is redundant with the coarse timer, so a missed event never wedges sync.
+ * `runSyncCycle()`, which takes the cross-tab sync Web Lock via the worker's
+ * single-flight helper; the immediate-drain write-through registered below
+ * takes the SAME lock (blocking, via `withSyncLock`) so it can never run
+ * `drainOutbox` concurrently with a trigger-driven cycle, same-tab or
+ * cross-tab (finding #4a). The engine is an accelerant of convergence, not a
+ * dependency — each of these is redundant with the coarse timer, so a missed
+ * event never wedges sync.
  *
  * The triggers, all guarded on linked + unlocked + not-offline:
  *  - boot after unlock (the reconcile drain) — fires now if already unlocked,
@@ -102,8 +106,13 @@ export function initSyncTriggers(): void {
   // The worker's whole-outbox drain is the immediate-drain target for the
   // Class-2 write-through (§5). The target key is ignored — draining the whole
   // outbox subsumes the one key, and a rejection propagates to the caller.
+  // Wrapped in the BLOCKING `withSyncLock` (finding #4a), NOT the cycle's
+  // single-flight — the user's just-written change must still get pushed, just
+  // serialised behind a cycle already in flight, never silently dropped.
   setImmediateDrain(async () => {
-    await drainOutbox();
+    await withSyncLock(async () => {
+      await drainOutbox();
+    });
   });
 
   // Boot cycle after unlock (§6): now if already unlocked, and on every

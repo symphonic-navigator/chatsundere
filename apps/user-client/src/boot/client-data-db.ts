@@ -589,6 +589,22 @@ export interface SyncRowMeta {
   key: string;
   rev: number;
   ciphertextHash: string;
+  /**
+   * Task B9 (Finding #7): a LOCAL-ONLY, deterministic content fingerprint of
+   * the row's pre-seal wire form (never the nonce-dependent `ciphertextHash`,
+   * and NEVER sent to the server — a plaintext hash is content-correlatable,
+   * unlike a hash of already-public ciphertext bytes). Read and compared by
+   * the reconnect reconciliation pass (`sync/reconcile.ts`) to detect a row
+   * whose content changed via the `deferWhenOffline` no-outbox path, and kept
+   * FRESH at every convergence point so that comparison stays meaningful: the
+   * reconciliation pass itself (bootstrap + divergence stamps), the push-ack
+   * path (`sync/worker.ts`'s `applyOk`, stamped to exactly what was sealed),
+   * and the pull-apply path (`sync/apply.ts`, stamped to the just-written
+   * local row). Absent on every row that predates this field or has never been
+   * through any of the above — reads as "no baseline yet", never as
+   * "unchanged".
+   */
+  localContentHash?: string;
 }
 
 /** The singleton sync-engine state row. */
@@ -621,6 +637,16 @@ export interface SyncStateRow {
    *  an in-flight drain/pull from the previous link can be recognised and its
    *  write-backs discarded. Non-indexed; absent on legacy rows (reads as 0). */
   linkGeneration?: number;
+  /**
+   * Task B9 (Finding #7): when the corpus-wide reconnect reconciliation pass
+   * last completed a FULL scan, `Date.now()` epoch ms. The coarse throttle that
+   * keeps the pass from re-hashing the whole corpus on every cycle trigger — a
+   * scan aborted mid-way (offline/locked/relink) does NOT stamp this, so the
+   * next eligible cycle retries the full scan rather than losing the
+   * unreached tail until the interval elapses again. Non-indexed; absent on
+   * legacy rows (reads as "never run").
+   */
+  lastReconcileAt?: number | null;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */

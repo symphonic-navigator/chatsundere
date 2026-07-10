@@ -32,6 +32,7 @@ import { getDb } from '../boot/open-db.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
+import type { ApplyOutcome } from './apply.js';
 import {
   TOMBSTONE_CYCLE_CAP,
   applyRecord,
@@ -59,6 +60,7 @@ import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
 import { markDead } from './dead-keys.js';
 import { enqueueBlobPut } from './enqueue.js';
 import { resetEngineStateForNewLink } from './link-reset.js';
+import { isEnginePaused } from './recovery.js';
 import {
   type CoalescedEntry,
   DEFAULT_MAX_BATCH_BYTES,
@@ -149,6 +151,9 @@ let pullLoop: () => Promise<void> = async () => undefined;
 let recovery: () => Promise<void> = async () => undefined;
 /** Boot registers the pending-collection backfill here; no-op until then. */
 let backfill: () => Promise<void> = async () => undefined;
+/** Boot registers the Task B9 reconnect reconciliation here (spec Finding #7);
+ *  no-op until then. Runs at the cycle's tail, after backfill. */
+let reconcile: () => Promise<void> = async () => undefined;
 
 /** Test seam: override the crypto used for sealing/blind-id derivation. */
 export function _setCryptoDeps(deps: Partial<SealCryptoDeps> | null): void {
@@ -192,6 +197,11 @@ export function _setRecovery(fn: () => Promise<void>): void {
 export function _setBackfill(fn: () => Promise<void>): void {
   backfill = fn;
 }
+/** Boot seam: register the Task B9 reconnect reconciliation the cycle runs at
+ *  its tail, after backfill (spec Finding #7). */
+export function _setReconcile(fn: () => Promise<void>): void {
+  reconcile = fn;
+}
 /** Test seam: restore every override to its production default. */
 export function _resetWorkerForTests(): void {
   cryptoOverride = null;
@@ -205,6 +215,7 @@ export function _resetWorkerForTests(): void {
   pullLoop = async () => undefined;
   recovery = async () => undefined;
   backfill = async () => undefined;
+  reconcile = async () => undefined;
   cycleMutex = false;
 }
 
@@ -235,7 +246,7 @@ function blobRepairDeps(): BlobRepairDeps {
  * singleton `1`; `vectors` live in the separate knowledge database; everything
  * else keys by the sync key on its own table.
  */
-async function readLocalRow(collection: SyncCollection, key: string): Promise<unknown> {
+export async function readLocalRow(collection: SyncCollection, key: string): Promise<unknown> {
   const db = getClientDataDb();
   if (collection === 'settings') return db.settings.get(1);
   if (collection === 'vectors') {
@@ -305,6 +316,23 @@ function keyId(collection: SyncCollection, key: string): string {
  */
 async function generationStillCurrent(captured: number): Promise<boolean> {
   return (await getLinkGeneration()) === captured;
+}
+
+/**
+ * Task B5 (Finding #5): mirrors `generationStillCurrent`'s discard-on-race
+ * pattern, but for the MK session rather than the account-link generation. A
+ * `closeAndForget()` (session lock/logout, or a foreground 401) can race a
+ * single record's `applyRecord` — its outcome (even a `rejected` from B1's
+ * blanket catch, or a `tombstoned` from a blind-id-derive that silently
+ * failed to match) is then untrustworthy: the record must not count toward
+ * the watermark. Checking `mk !== null` alone is not quite enough — a
+ * logout-then-different-login mid-page would leave `mk` non-null but wrong
+ * for records already opened under the OLD key — so the captured session
+ * identity is checked too.
+ */
+function sessionStillLive(capturedSessionId: string | null): boolean {
+  const state = useSessionStore.getState();
+  return state.mk !== null && (state.session?.id ?? null) === capturedSessionId;
 }
 
 /**
@@ -682,8 +710,15 @@ async function markTerminal(prep: PreparedRecord): Promise<void> {
 
 /**
  * `ok`: adopt the server rev. An upsert records the LOCALLY-computed ciphertext
- * hash for the §7.0 echo shortcut; a delete removes the now-dead `syncRows`
- * entry. Either way the covered outbox seqs are cleared.
+ * hash for the §7.0 echo shortcut, AND (Task B9 baseline maintenance) the
+ * `content-hash.ts` fingerprint of the exact row snapshot this record sealed
+ * (`prep.contentHashB64`, threaded through from `prepareRecord` at seal time) —
+ * so `reconcile.ts`'s `localContentHash` baseline stays "last known-synced
+ * content" instead of being wiped back to `undefined` by this whole-record
+ * `syncRows.put`, which would otherwise silently re-open the B9 gap on every
+ * ordinary push (see `reconcile.ts`'s BASELINE MAINTENANCE note). A delete
+ * removes the now-dead `syncRows` entry entirely — no baseline to maintain.
+ * Either way the covered outbox seqs are cleared.
  */
 async function applyOk(prep: PreparedRecord, rev: number, generation: number): Promise<void> {
   const db = getClientDataDb();
@@ -702,13 +737,23 @@ async function applyOk(prep: PreparedRecord, rev: number, generation: number): P
       // this lets a fast-Undo before the drain stay identity-preserving (Task 8).
       await markDead(prep.collection, prep.key);
     } else {
-      const meta: SyncRowMeta = {
-        collection: prep.collection,
-        key: prep.key,
-        rev,
-        ciphertextHash: prep.ciphertextHashB64 ?? '',
-      };
-      await db.syncRows.put(meta);
+      // #4c: a stale/low ack — a concurrent pull already advanced past this
+      // rev, or a misbehaving server hands back a low rev on an `ok` ack —
+      // must never regress the CAS base below the current watermark. That
+      // would wedge the key: it is never re-served, and a later local edit
+      // pushes a stale `baseRev` into a perpetual conflict/re-push loop. Drop
+      // the stale ack entirely rather than clobbering the newer meta.
+      const existing = await db.syncRows.get([prep.collection, prep.key]);
+      if (!existing || rev > existing.rev) {
+        const meta: SyncRowMeta = {
+          collection: prep.collection,
+          key: prep.key,
+          rev,
+          ciphertextHash: prep.ciphertextHashB64 ?? '',
+          localContentHash: prep.contentHashB64 ?? undefined,
+        };
+        await db.syncRows.put(meta);
+      }
     }
     await db.syncOutbox.bulkDelete(prep.seqs);
     // §3.4: a later smaller edit that acks clears any lingering terminal sentinel
@@ -762,13 +807,18 @@ async function applyConflict(
     // Audit #8: skip the CAS-base write when a relink has made this ack stale.
     if (!(await generationStillCurrent(generation))) return false;
     const existing = await db.syncRows.get([prep.collection, prep.key]);
-    const meta: SyncRowMeta = {
-      collection: prep.collection,
-      key: prep.key,
-      rev: current.rev,
-      ciphertextHash: prep.ciphertextHashB64 ?? existing?.ciphertextHash ?? '',
-    };
-    await db.syncRows.put(meta);
+    // #4c: mirror the applyOk guard — a poison `current.rev` at or below the
+    // existing watermark must never regress the CAS base (the same wedge risk
+    // as a stale `ok` ack). Drop the stale heal; keep the existing meta.
+    if (!existing || current.rev > existing.rev) {
+      const meta: SyncRowMeta = {
+        collection: prep.collection,
+        key: prep.key,
+        rev: current.rev,
+        ciphertextHash: prep.ciphertextHashB64 ?? existing?.ciphertextHash ?? '',
+      };
+      await db.syncRows.put(meta);
+    }
     return false;
   }
 
@@ -971,6 +1021,13 @@ export async function runSyncCycle(): Promise<void> {
         // on a recovery-handoff cycle — recovery re-syncs everything wholesale, so a
         // backfill on top would be redundant.
         await backfill();
+        // Task B9 (Finding #7): the reconnect reconciliation, registered at boot via
+        // `_setReconcile`. Runs AFTER backfill (backfill covers never-synced rows;
+        // reconciliation covers already-synced rows that drifted via the
+        // `deferWhenOffline` no-outbox path) and, like backfill, is skipped on a
+        // recovery-handoff cycle for the same reason. It self-throttles (a coarse
+        // interval — see `reconcile.ts`), so calling it on every cycle is cheap.
+        await reconcile();
       }
       await noteCycleCompleted();
     } catch (err) {
@@ -982,6 +1039,12 @@ export async function runSyncCycle(): Promise<void> {
 
 /** Cycle preconditions (spec §6): any miss → no-op. */
 function canRunCycle(): boolean {
+  // Finding P: the M-4 flap-stop (recovery.ts) latches `recovery_paused` and
+  // STOPS the engine — but that intent only held for the expensive recovery
+  // loop; the cheap drain/pull cycle kept firing on every trigger, churning
+  // under a misleading "syncing is paused" label. Quiesce the whole cycle so
+  // the copy is accurate.
+  if (isEnginePaused()) return false;
   // §5.2: a degraded engine (the auth service definitively refused a background
   // refresh) does no cycle work at all — no drain, no pull — until a relink
   // clears the latch. Local edits still enqueue; they drain once auth is restored.
@@ -1050,9 +1113,12 @@ async function purgeTrash(): Promise<void> {
 const PULL_PAGE_LIMIT = 200;
 /**
  * Per-cycle page cap (spec §6, Larissa M-7): an unbounded `more: true` server
- * must not pin the client. The rest continues next cycle from the watermark.
+ * must not pin the client. The rest continues next cycle from the watermark
+ * (Task B12: now an IMMEDIATE follow-up cycle, not just "next cycle" — see
+ * `scheduleCappedFollowUp`). Exported so tests can drive exactly-at-the-cap
+ * fixtures without duplicating the magic number.
  */
-const PULL_PAGE_CAP = 64;
+export const PULL_PAGE_CAP = 64;
 
 /** GET one page of changes since `sinceRev` (bearer + refresh via `apiFetch`). */
 function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<SyncPullResponse> {
@@ -1063,6 +1129,55 @@ function defaultPull(syncUrl: string, sinceRev: number, limit: number): Promise<
     credentials: 'omit', // the sync service is cookie-free (CORS: no credentials)
     origin: 'background', // §5.2: a refused refresh latches auth-degraded, never logs out
   });
+}
+
+/**
+ * Task B12 (Finding G, Low/observability): `runPullLoop` hit `PULL_PAGE_CAP`
+ * with `more` still true — a correct anti-pin stop (spec §6, Larissa M-7),
+ * not a drained finish. Left alone, resumption waited for the next EXTERNAL
+ * trigger (foreground, the doorbell, or worst case the 10-minute coarse
+ * timer), so a large first pull (>12,800 records) silently trickled in over
+ * minutes after the status line had already gone quiet. Queue an immediate
+ * resume through the SAME exclusive Web Lock every cycle uses (`withSyncLock`
+ * — blocking, never `withSingleFlight`'s skip-if-busy `ifAvailable` mode,
+ * which would see THIS still-running invocation's own hold and just skip).
+ * Deliberately NOT awaited: the caller is still inside that hold (this runs
+ * from within `runPullLoop`, itself inside the cycle's lock), so awaiting
+ * here would deadlock the follow-up against its own caller. `withSyncLock`
+ * queues the request instead and only grants it once the current call — and
+ * the rest of the cycle it was invoked from (backfill, reconcile,
+ * `noteCycleCompleted`) — has released the lock. Re-checks the ordinary
+ * cycle preconditions at grant time (paused / auth-degraded / unlinked /
+ * offline), same as every other trigger: a state change between the cap and
+ * the grant must not force a pull that should no longer run. Each individual
+ * `runPullLoop` call still stops at 64 pages and releases the lock before
+ * this queues the next one, so the per-invocation anti-pin cap is untouched
+ * — only the SILENCE between capped cycles is fixed.
+ *
+ * Review defect (empirically reproduced): `canRunCycle()` can flip false
+ * between the cap and the GRANT (device went offline / engine paused /
+ * auth-degraded / MK gone) — the queued follow-up used to just bail, leaving
+ * `pulling` set forever (the `finally` that would retire it lives inside
+ * `runPullLoop`, which never ran). A stuck `pulling` then outranks `offline`
+ * on the status line (`SyncStatusLine.tsx`), so a whole outage misreports as
+ * an active pull — active misdirection. Retirement must be unconditional on
+ * every path that does NOT hand off to `runPullLoop` (whose own `finally`
+ * remains the retirement point for every path that DOES), so: clear on the
+ * `canRunCycle()` bail, and clear again (idempotent — `setPulling` is a plain
+ * update) in the outer `.catch` as a backstop for a `withSyncLock`/Web-Locks
+ * rejection that never reaches `runPullLoop` at all.
+ */
+function scheduleCappedFollowUp(): void {
+  void withSyncLock(async () => {
+    if (!canRunCycle()) {
+      // No follow-up pull will run — the device is no longer actively
+      // pulling, so the indicator must fall through to the real state
+      // (Offline / paused-attention / etc.) rather than stay stuck.
+      await setPulling(null);
+      return;
+    }
+    await runPullLoop();
+  }).catch(() => setPulling(null).catch(() => undefined));
 }
 
 /**
@@ -1081,6 +1196,10 @@ export async function runPullLoop(): Promise<void> {
   // Audit #8: capture the link generation so a page that resolves after a relink
   // cannot apply against — or advance the watermark of — the fresh account.
   const generation = await getLinkGeneration();
+  // Task B5: capture the session identity so a mid-page `closeAndForget()` (or
+  // a relogin under a different session) can be detected after each record —
+  // see `sessionStillLive`.
+  const sessionId = useSessionStore.getState().session?.id ?? null;
   const pull =
     pullOverride ?? ((since: number, limit: number) => defaultPull(syncUrl, since, limit));
 
@@ -1090,6 +1209,12 @@ export async function runPullLoop(): Promise<void> {
   const startedAt = Date.now();
   let pages = 0;
   await setPulling({ pages, startedAt });
+  // Task B12 (Finding G): set true only when the loop below exits because it
+  // hit `PULL_PAGE_CAP` with `more` still true. Read in the `finally` so the
+  // `pulling` indicator survives the cap boundary instead of the previous
+  // unconditional clear, which made a capped cycle look "done" on the status
+  // line even with pages still owed — see `scheduleCappedFollowUp`.
+  let cappedWithMore = false;
   try {
     let more = true;
     let applied = 0; // tombstones APPLIED this cycle, across pages — the cap is per-cycle
@@ -1139,7 +1264,40 @@ export async function runPullLoop(): Promise<void> {
           cappedThisCycle = true;
           continue; // defer this tombstone; keep scanning the page for the true minimum
         }
-        const outcome = await applyRecord(record);
+        // Finding #2 (client half), defence in depth: `applyRecord`'s own
+        // guards (§7.1 inert rejection, the collection guard) already absorb
+        // every KNOWN malformed shape. This catch is the backstop for
+        // anything ELSE — a bug, an edge case no guard anticipated — so a
+        // single poison record can never wedge the pipeline for every honest
+        // device forever (the server would just keep re-serving the same
+        // page). Treated exactly like a `rejected` record: nothing mutated,
+        // still counted into `highestApplied` so the watermark advances past it.
+        let outcome: ApplyOutcome;
+        try {
+          outcome = await applyRecord(record);
+        } catch (err) {
+          console.error('[sync] pull loop: unexpected throw applying a record — inert skip', {
+            collection: record.collection,
+            rev: record.rev,
+            err,
+          });
+          outcome = { kind: 'rejected' };
+        }
+        // Task B5 (Finding #5): a `rejected` outcome — whether from the catch
+        // above (B1's blanket backstop) or from `applyRecord`'s own decrypt
+        // catch (which already runs its own belt-and-braces mk re-check, but a
+        // throw that escapes applyRecord entirely — e.g. an unrelated bug in
+        // the post-decrypt write path — bypasses that guard) — is untrustworthy
+        // if the MK session died WHILE this record was being processed
+        // (`closeAndForget()` racing the record's await(s)). Scoped to
+        // `rejected` ONLY: a genuinely SUCCESSFUL outcome (inserted/resolved/
+        // echo/stale/tombstoned/suppressed/tamper) already committed its effect
+        // under a validated key before any race could have corrupted it, so a
+        // session death afterward must not un-count it — re-litigating a
+        // success here would wedge the watermark on real progress forever.
+        if (outcome.kind === 'rejected' && !sessionStillLive(sessionId)) {
+          outcome = { kind: 'unavailable' };
+        }
         if (outcome.kind === 'unavailable') {
           // Engine loss (locked/forgotten session): this record and the rest of the
           // page were NOT absorbed, so they are never counted into `highestApplied`.
@@ -1174,10 +1332,22 @@ export async function runPullLoop(): Promise<void> {
     // §7.3a — a completed cycle that stayed below the threshold retires a stale
     // tombstone notice, so a one-off mass deletion no longer sticks forever. The
     // recovery/bad-since early returns above skip this deliberately (they hand
-    // off to recovery, which owns the attention state).
+    // off to recovery, which owns the attention state). Runs regardless of which
+    // branch below fires — orthogonal to the page cap.
     await settleTombstoneNotice();
+    // Task B12 (Finding G): the loop above stopped either because it fully
+    // drained (`more === false`) or because it hit `PULL_PAGE_CAP` with pages
+    // still owed (`pages >= PULL_PAGE_CAP && more`). Only the latter queues an
+    // immediate resume and keeps the `pulling` indicator alive (`finally`
+    // below); a clean, fully-drained finish always retires it.
+    cappedWithMore = pages >= PULL_PAGE_CAP && more;
+    if (cappedWithMore) scheduleCappedFollowUp();
   } finally {
-    await setPulling(null);
+    // Task B12: skip the clear on a capped-with-more exit — the indicator
+    // stays up until a subsequent (possibly chained) invocation finishes
+    // clean. Every other exit (clean finish, recovery handoff, a stale
+    // generation, an engine-loss abort) clears it exactly as before.
+    if (!cappedWithMore) await setPulling(null);
   }
 }
 
