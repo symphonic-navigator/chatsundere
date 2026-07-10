@@ -31,8 +31,13 @@ export interface OpaqueWrapping {
  */
 export async function assertOpaqueWrappingPresent(args: {
   userId: string;
+  // Injectable for unit tests that need to drive the anomaly branches
+  // (rows.length === 0 / > 1, null wrapping columns) without a real DB —
+  // see tests/unit/wrapping-integrity.test.ts. Production call sites omit
+  // this and get the real connection.
+  db?: Db;
 }): Promise<OpaqueWrapping> {
-  const { db } = createDb();
+  const db = args.db ?? createDb().db;
   const rows = await db
     .select({
       wrappedMasterKey: authMethods.wrappedMasterKey,

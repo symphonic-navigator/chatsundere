@@ -104,13 +104,23 @@ export async function applyBatch(
       const current = existing[0];
       const oldSize = current?.ciphertext?.length ?? 0;
 
-      // 1. Insert/update against a tombstone → terminal.
+      // 1. Unknown collection — governs every path (delete included). An
+      // adversarial client could otherwise push a delete of a fresh blindId
+      // tagged with an arbitrary collection string; stored as a tombstone it
+      // would be served to every device on the account and crash clients that
+      // try db.table(<attacker string>).
+      if (!isSyncCollection(record.collection)) {
+        results.push({ status: 'error', code: 'bad_collection' });
+        continue;
+      }
+
+      // 2. Insert/update against a tombstone → terminal.
       if (current?.deleted && !record.deleted) {
         results.push({ status: 'tombstoned', current: toStored(current) });
         continue;
       }
 
-      // 2. Delete — unconditional (skips CAS), bounded by the delete-rate window.
+      // 3. Delete — unconditional (skips CAS), bounded by the delete-rate window.
       if (record.deleted) {
         if (current?.deleted) {
           results.push({ status: 'ok', rev: current.rev }); // idempotent, no head bump
@@ -145,11 +155,6 @@ export async function applyBatch(
         continue;
       }
 
-      // 3. Unknown collection.
-      if (!isSyncCollection(record.collection)) {
-        results.push({ status: 'error', code: 'bad_collection' });
-        continue;
-      }
       // 4. Update whose collection differs from the stored tag.
       if (current && current.collection !== record.collection) {
         results.push({ status: 'error', code: 'collection_mismatch' });

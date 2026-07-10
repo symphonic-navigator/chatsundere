@@ -90,7 +90,21 @@ export const authMethods = pgTable(
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   },
   (t) => ({
+    // Plain (non-unique) index retained for lookup performance: passkey
+    // queries filter by (user_id, method_type = 'passkey') and a user may
+    // legitimately hold many passkey rows (one per registered authenticator),
+    // so the partial unique index below — scoped to 'opaque' only — cannot
+    // serve those lookups.
     userMethod: index('auth_methods_user_method').on(t.userId, t.methodType),
+    // Finding #9 defence-in-depth (opaque-sync-hardening spec, Task A3): a
+    // user has exactly one OPAQUE credential, so enforce that at the DB
+    // layer as a backstop to the app-level assertOpaqueWrappingPresent
+    // check. Must be partial (WHERE method_type = 'opaque') rather than a
+    // full unique on (user_id, method_type) — a full index would reject the
+    // second, third, … passkey row for any multi-passkey user.
+    userOpaqueUnique: uniqueIndex('auth_methods_user_opaque_unique')
+      .on(t.userId, t.methodType)
+      .where(sql`${t.methodType} = 'opaque'`),
     passkeyCredentialUnique: uniqueIndex('auth_methods_passkey_credential')
       .on(t.passkeyCredentialId)
       .where(sql`${t.passkeyCredentialId} IS NOT NULL`),

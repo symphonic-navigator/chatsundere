@@ -19,14 +19,16 @@ export async function storeNonce(username: string, nonce: Uint8Array): Promise<v
 }
 
 /**
- * Atomically fetches and deletes the stored nonce for the given username, then compares
- * it to the presented nonce. Returns true only if a nonce existed and matched.
+ * Fetches and atomically deletes the stored nonce for the given username via
+ * GETDEL — a single round-trip, so two concurrent consumers cannot both pass
+ * the existence check before the delete lands — then compares it to the
+ * presented nonce. Returns true only if a nonce existed and matched.
  */
 export async function consumeNonce(username: string, nonce: Uint8Array): Promise<boolean> {
   const redis = createRedis();
-  const stored = await redis.get(`recovery:nonce:${username}`);
-  // Delete unconditionally — even on mismatch, prevent replay.
-  await redis.del(`recovery:nonce:${username}`);
+  // GETDEL deletes unconditionally on any existing key — even on a mismatch
+  // below — which is what prevents replay of a stale nonce.
+  const stored = await redis.getdel(`recovery:nonce:${username}`);
   if (!stored) return false;
   const presentedB64 = Buffer.from(nonce).toString('base64url');
   return stored === presentedB64;

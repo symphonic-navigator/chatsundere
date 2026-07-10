@@ -66,6 +66,7 @@ declare -A V=(
   [TRAEFIK_AUTH_USERS]="admin:${APR1_HASH//\$/\$\$}"
   [AUTH_JWT_PRIVATE_KEY]="$(b64url32)" [INVITATION_HMAC_KEY]="$(b64url32)"
   [REFRESH_TOKEN_HMAC_KEY]="$(b64url32)" [HMAC_KEY_PENDING_CODES]="$(b64url32)"
+  [DECOY_WRAP_KEY]="$(b64url32)"
 )
 
 # --- render deployment.env from the template, replacing only known keys ---

@@ -141,6 +141,7 @@ the variables documented here.
 | `INVITATION_HMAC_KEY` | base64url, ≥40 | **yes** | |
 | `REFRESH_TOKEN_HMAC_KEY` | base64url, ≥40 | **yes** | |
 | `HMAC_KEY_PENDING_CODES` | base64url, ≥40 | **yes** | leak-domain-isolated |
+| `DECOY_WRAP_KEY` | base64url, ≥40 | **yes** | leak-domain-isolated; derives decoy OPAQUE wraps for unknown/suspended `login/start` calls (Finding #10a) |
 | `CORS_ALLOWED_ORIGINS` | comma list | no | exact origins |
 | `PROXY_PUBLIC_URL` | https URL | no | surfaced by `/api/v1/config`; omit to hide the proxy feature |
 | `SYNC_PUBLIC_URL` | https URL | no | surfaced as `syncUrl` + the `sync` feature |
@@ -274,7 +275,7 @@ What it renders into `out/`:
   (`POSTGRES_PASSWORD`, `MINIO_ROOT_USER`/`PASSWORD`, `GRAFANA_ADMIN_PASSWORD`,
   `TRAEFIK_AUTH_USERS` (an `apr1` hash for the monitoring basic-auth
   middleware), `AUTH_JWT_PRIVATE_KEY`, `INVITATION_HMAC_KEY`,
-  `REFRESH_TOKEN_HMAC_KEY`, `HMAC_KEY_PENDING_CODES`) — **except**
+  `REFRESH_TOKEN_HMAC_KEY`, `HMAC_KEY_PENDING_CODES`, `DECOY_WRAP_KEY`) — **except**
   `OPAQUE_SERVER_SETUP` and the MinIO scoped `S3_ACCESS_KEY_ID`/
   `S3_SECRET_ACCESS_KEY`, which stay `CHANGE-ME-ON-SERVER`: those are minted
   once, on the server, by `install.sh`, so they never sit on a laptop or

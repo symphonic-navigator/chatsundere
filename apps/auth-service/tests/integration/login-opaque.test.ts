@@ -183,7 +183,7 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
     expect(res.status).toBe(410);
   });
 
-  it('returns 200 with no wrapped key blobs for an unknown username (enumeration mitigation)', async () => {
+  it('returns 200 with a decoy wrap for an unknown username (enumeration mitigation, Finding #10a)', async () => {
     const { startLoginRequest } = opaqueClient.startLogin({ password });
 
     const res = await app.request('/api/v1/opaque/login/start', {
@@ -203,8 +203,10 @@ describe.skipIf(skip)('OPAQUE login round-trip', () => {
     };
     expect(typeof body.session_id).toBe('string');
     expect(typeof body.login_response).toBe('string');
-    // No wrapping blobs for a non-existent user.
-    expect(body.wrapped_mk_opaque).toBeNull();
+    // The wrap fields must be a non-null decoy — a null vs present split would
+    // itself be an existence oracle (Finding #10a).
+    expect(typeof body.wrapped_mk_opaque).toBe('string');
+    expect(Buffer.from(body.wrapped_mk_opaque as string, 'base64url').length).toBe(48);
   });
 
   it('returns 401 when wrong password is used at /finish', async () => {

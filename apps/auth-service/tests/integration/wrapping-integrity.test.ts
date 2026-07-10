@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Defence-in-depth test for assertOpaqueWrappingPresent: deliberately
-// corrupts the user's OPAQUE wrapping columns and asserts that the
-// pairing-finish flow refuses to surface wrapped MK material, writes the
-// wrapping_invariant_violated audit row, and increments the Prometheus
-// counter. The invariant cannot be reached by any legitimate flow today
-// (registration + passphrase-change always write all three columns
-// atomically), so this test exists to catch future regressions or DB
-// tampering.
+// Defence-in-depth test for the auth_methods "exactly one OPAQUE row per
+// user" invariant (ADR 0021). Registers a real user via the OPAQUE join
+// flow, then confirms a second OPAQUE auth_methods row for that user is
+// rejected outright by the DB — see migration 0006 (Task A3, Finding #9).
+// Before that migration, this scenario was only caught by the app-level
+// assertOpaqueWrappingPresent assertion (src/auth/wrapping-integrity.ts),
+// which is retained as a second line of defence but is no longer the
+// primary guarantee.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { opaqueServerIdentity } from '@chatsundere/shared-types';
 import { client as opaqueClient, ready as opaqueReady } from '@serenity-kit/opaque';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { generateCode, hashCode } from '../../src/codes/token.js';
 import { closeDb, createDb } from '../../src/db/client.js';
-import { auditLog, authMethods, pendingCodes, users } from '../../src/db/schema.js';
+import { authMethods, pendingCodes, users } from '../../src/db/schema.js';
 import { createRedis } from '../../src/redis/client.js';
 import { createServer } from '../../src/server.js';
 
@@ -27,8 +27,6 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
 
   let app: ReturnType<typeof createServer>;
   let userId: string;
-  let accessToken: string;
-  let sessionId: string;
   let originalWrappedMk: Uint8Array;
   let originalWrapNonce: Uint8Array;
   let originalWrapAad: Uint8Array;
@@ -119,42 +117,6 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
     originalWrappedMk = opaqueRow.wrappedMasterKey;
     originalWrapNonce = opaqueRow.wrapNonce;
     originalWrapAad = opaqueRow.wrapAad;
-
-    // Login the owner so we can mint a pairing code.
-    const { clientLoginState, startLoginRequest } = opaqueClient.startLogin({ password });
-    const loginStart = await app.request('/api/v1/opaque/login/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
-      body: JSON.stringify({ username, start_login_request: startLoginRequest }),
-    });
-    const loginStartBody = (await loginStart.json()) as {
-      session_id: string;
-      login_response: string;
-    };
-    const finishResult = opaqueClient.finishLogin({
-      clientLoginState,
-      loginResponse: loginStartBody.login_response,
-      password,
-      identifiers: {
-        client: username,
-        server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
-      },
-    });
-    if (!finishResult) throw new Error('test setup: OPAQUE finishLogin returned undefined');
-    const loginFinish = await app.request('/api/v1/opaque/login/finish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
-      body: JSON.stringify({
-        session_id: loginStartBody.session_id,
-        finish_login_request: finishResult.finishLoginRequest,
-      }),
-    });
-    accessToken = ((await loginFinish.json()) as { access_token: string }).access_token;
-    const [, payloadB64] = accessToken.split('.');
-    if (!payloadB64) throw new Error('test setup: malformed access token');
-    sessionId = (
-      JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8')) as { jti: string }
-    ).jti;
   });
 
   beforeEach(async () => {
@@ -170,8 +132,6 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
       })
       .where(and(eq(authMethods.userId, userId), eq(authMethods.methodType, 'opaque')));
     await db.delete(pendingCodes).where(eq(pendingCodes.createdBy, userId));
-    const keys = await redis.keys(`step_up:${sessionId}:*`);
-    if (keys.length) await redis.del(...keys);
   });
 
   afterAll(async () => {
@@ -188,31 +148,22 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
     await closeDb();
   });
 
-  async function mintPairingCode(): Promise<string> {
-    await redis.set(`step_up:${sessionId}:t1`, String(Date.now()), 'EX', 120);
-    const res = await app.request('/api/v1/me/pairing-codes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        Origin: 'http://localhost:3000',
-      },
-      body: '{}',
-    });
-    return ((await res.json()) as { code: string }).code;
-  }
-
-  it('returns 500 wrapping_invariant_violated when the user has multiple OPAQUE auth_methods', async () => {
-    const code = await mintPairingCode();
+  it('rejects a second OPAQUE auth_methods row for the same user at the database', async () => {
+    // Prior to migration 0006 (Task A3, Finding #9 defence-in-depth) the
+    // schema allowed a second OPAQUE row per user, and this test drove that
+    // state through the /finish flow to exercise the app-level
+    // multiple_opaque_methods assertion in assertOpaqueWrappingPresent. The
+    // migration adds a partial unique index on (user_id, method_type) WHERE
+    // method_type = 'opaque', so that state is no longer reachable through
+    // any insert — legitimate or tampered — without first defeating the
+    // constraint itself. The app-level assertion in
+    // src/auth/wrapping-integrity.ts is retained as defence-in-depth (e.g.
+    // against a constraint dropped out-of-band), but this test now verifies
+    // the stronger, DB-level guarantee directly: the insert itself fails.
     const { db } = createDb();
-    // Insert a second OPAQUE row for the same user — the schema allows
-    // this (the (user_id, method_type) index is not unique). Reaching this
-    // state requires explicit code or DB tampering; the test exists to
-    // catch the assertion guarding against either.
     const garbage = new Uint8Array(32);
-    const insertedRows = await db
-      .insert(authMethods)
-      .values({
+    const secondInsert = async () =>
+      db.insert(authMethods).values({
         userId,
         methodType: 'opaque',
         opaqueCredential: garbage,
@@ -221,64 +172,17 @@ describe.skipIf(skip)('Wrapping-integrity invariant on /api/v1/join/finish', () 
         wrappedMasterKey: garbage,
         wrapNonce: garbage,
         wrapAad: garbage,
-      })
-      .returning({ id: authMethods.id });
-    const secondId = insertedRows[0]?.id;
-    if (!secondId) throw new Error('test setup: second opaque insert returned no row');
-
-    try {
-      const { clientLoginState, startLoginRequest } = opaqueClient.startLogin({ password });
-      const startRes = await app.request('/api/v1/join/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
-        body: JSON.stringify({ kind: 'pairing', code, login_request: startLoginRequest }),
       });
-      // /start picks the first matching opaque row (LIMIT 1), so the
-      // start path still succeeds; the invariant assertion fires at /finish.
-      expect(startRes.status).toBe(200);
-      const startBody = (await startRes.json()) as { session_id: string; login_response: string };
+    await expect(secondInsert()).rejects.toThrow(
+      /duplicate key value violates unique constraint "auth_methods_user_opaque_unique"/,
+    );
 
-      const finishResult = opaqueClient.finishLogin({
-        clientLoginState,
-        loginResponse: startBody.login_response,
-        password,
-        identifiers: {
-          client: username,
-          server: opaqueServerIdentity(process.env.API_BASE_URL ?? 'http://localhost:3100/auth'),
-        },
-      });
-      if (!finishResult) throw new Error('OPAQUE finishLogin returned undefined');
-
-      const finishRes = await app.request('/api/v1/join/finish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
-        body: JSON.stringify({
-          kind: 'pairing',
-          session_id: startBody.session_id,
-          login_evidence: finishResult.finishLoginRequest,
-        }),
-      });
-      expect(finishRes.status).toBe(500);
-      const body = (await finishRes.json()) as { error: { code: string; message: string } };
-      expect(body.error.code).toBe('wrapping_invariant_violated');
-      // The generic message must not leak which specific invariant failed.
-      expect(body.error.message).not.toContain('multiple');
-      expect(body.error.message).not.toContain('null');
-
-      const auditRows = await db
-        .select()
-        .from(auditLog)
-        .where(
-          and(eq(auditLog.userId, userId), eq(auditLog.eventType, 'wrapping_invariant_violated')),
-        )
-        .orderBy(desc(auditLog.createdAt))
-        .limit(1);
-      expect(auditRows[0]).toBeDefined();
-      expect(auditRows[0]?.metadata).toMatchObject({ reason: 'multiple_opaque_methods' });
-    } finally {
-      // Remove the second opaque row so afterAll's cleanup does not double-
-      // delete (cascade-on-user handles the rest).
-      await db.delete(authMethods).where(eq(authMethods.id, secondId));
-    }
+    // Confirm the user still has exactly one OPAQUE row — the rejected
+    // insert left no partial row behind.
+    const opaqueRows = await db
+      .select({ id: authMethods.id })
+      .from(authMethods)
+      .where(and(eq(authMethods.userId, userId), eq(authMethods.methodType, 'opaque')));
+    expect(opaqueRows).toHaveLength(1);
   });
 });

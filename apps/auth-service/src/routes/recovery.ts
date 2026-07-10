@@ -15,6 +15,7 @@ import { issueTokens, refreshCookieFor } from '../jwt/issue.js';
 import { revokeAllForUser } from '../jwt/refresh.js';
 import { metrics } from '../metrics.js';
 import { ApiError } from '../middleware/error-envelope.js';
+import { ipKey } from '../middleware/rate-limit.js';
 import { ensureOpaqueReady, getServerSetup } from '../opaque/server.js';
 import { consumeNonce, storeNonce } from '../recovery/nonce.js';
 import { createRedis } from '../redis/client.js';
@@ -56,7 +57,7 @@ export function registerRecoveryRoutes(app: Hono): void {
   app.post('/api/v1/recovery/start', async (c) => {
     await ensureOpaqueReady();
     const body = parse(startReqSchema, await c.req.json());
-    await applyLoginRateLimit(body.username);
+    await applyLoginRateLimit(body.username, ipKey(c));
 
     const { db } = createDb();
     const userRows = await db

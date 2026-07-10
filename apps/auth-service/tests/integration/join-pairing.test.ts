@@ -324,6 +324,45 @@ describe.skipIf(skip)('POST /api/v1/join/start (kind=pairing)', () => {
     expect(body.username).toBe(username);
   });
 
+  it('returns opaque_client_identifier — the frozen identifier the joining device must present at /finish', async () => {
+    const code = await mintPairingCode();
+    const { startLoginRequest } = opaqueClient.startLogin({ password });
+
+    const res = await app.request('/api/v1/join/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
+      body: JSON.stringify({
+        kind: 'pairing',
+        code,
+        login_request: startLoginRequest,
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { opaque_client_identifier: string };
+    // This account has never been renamed in this test suite, so the frozen
+    // identifier still equals the live username — the divergence case (a
+    // renamed account) is covered client-side in join-by-pairing.test.ts,
+    // since reproducing a rename here would need the (unbuilt) rename route.
+    expect(body.opaque_client_identifier).toBe(username);
+
+    // Cross-check against the DB column directly — the value the server sends
+    // must be exactly what auth_methods.opaque_client_identifier holds, the
+    // frozen registration-time identity, not derived from users.username.
+    const { db } = createDb();
+    const authRow = (
+      await db
+        .select({ opaqueClientIdentifier: authMethods.opaqueClientIdentifier })
+        .from(authMethods)
+        .where(eq(authMethods.userId, userId))
+        .limit(1)
+    )[0];
+    if (!authRow?.opaqueClientIdentifier) {
+      throw new Error('test setup: auth_methods row missing opaque_client_identifier');
+    }
+    expect(authRow.opaqueClientIdentifier).toBe(username);
+    expect(body.opaque_client_identifier).toBe(authRow.opaqueClientIdentifier);
+  });
+
   it('returns 400 kind_mismatch when kind=pairing sent for an invitation row', async () => {
     // Insert an invitation row directly so we can test the discriminator
     // without needing admin-token plumbing here.

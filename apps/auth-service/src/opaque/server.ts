@@ -20,16 +20,27 @@ export async function ensureOpaqueReady(): Promise<void> {
  * record is cryptographically bound to it, so it MUST be stable across
  * restarts and identical on every replica. It comes from `OPAQUE_SERVER_SETUP`
  * (generate once with `bun run generate-opaque-setup`). When the variable is
- * unset — tests and throwaway runs only — a per-process setup is generated and
- * a loud warning is printed, because every restart then permanently
- * invalidates all registered accounts' passphrase auth.
+ * unset, this refuses to boot unless `NODE_ENV` is `test` or the
+ * `ALLOW_EPHEMERAL_OPAQUE_SETUP` escape hatch is set — in either of those
+ * cases a per-process setup is generated and a loud warning is printed,
+ * because every restart then permanently invalidates all registered
+ * accounts' passphrase auth.
  */
 export function getServerSetup(): string {
   if (serverSetupCache) return serverSetupCache;
-  const configured = loadEnv().OPAQUE_SERVER_SETUP;
+  const env = loadEnv();
+  const configured = env.OPAQUE_SERVER_SETUP;
   if (configured) {
     serverSetupCache = configured;
     return serverSetupCache;
+  }
+  if (env.NODE_ENV !== 'test' && env.ALLOW_EPHEMERAL_OPAQUE_SETUP !== '1') {
+    throw new Error(
+      'OPAQUE_SERVER_SETUP is required outside tests — refusing to boot with an ' +
+        'ephemeral setup that would invalidate all accounts on restart. Set it with ' +
+        '`bun run generate-opaque-setup`, or set ALLOW_EPHEMERAL_OPAQUE_SETUP=1 for a ' +
+        'throwaway run.',
+    );
   }
   console.warn(
     'OPAQUE_SERVER_SETUP is not set — using an ephemeral per-process setup. ' +
@@ -63,16 +74,17 @@ export async function storeOpaqueState(args: {
 }
 
 /**
- * Fetches and atomically deletes the OPAQUE session state from Redis.
- * Returns null if the session has expired or never existed.
+ * Fetches and atomically deletes the OPAQUE session state from Redis via
+ * GETDEL — a single round-trip, so two concurrent /finish calls cannot both
+ * pass the existence check before the delete lands. Returns null if the
+ * session has expired or never existed.
  */
 export async function fetchOpaqueState(
   scope: 'register' | 'login' | 'step-up' | 'join-pairing',
   sessionId: string,
 ): Promise<Record<string, string> | null> {
   const redis = createRedis();
-  const raw = await redis.get(`opaque:${scope}:${sessionId}`);
+  const raw = await redis.getdel(`opaque:${scope}:${sessionId}`);
   if (!raw) return null;
-  await redis.del(`opaque:${scope}:${sessionId}`);
   return JSON.parse(raw) as Record<string, string>;
 }

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { fromBase64Url, toBase64Url } from '@chatsundere/crypto';
-import type { SyncCollection, SyncPulledRecord, SyncPushResult } from '@chatsundere/shared-types';
+import {
+  SYNC_COLLECTIONS,
+  type SyncCollection,
+  type SyncPulledRecord,
+  type SyncPushResult,
+} from '@chatsundere/shared-types';
 import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import * as v from 'valibot';
@@ -26,7 +31,7 @@ import {
 
 const PushRecordSchema = v.strictObject({
   blindId: v.string(),
-  collection: v.string(),
+  collection: v.picklist(SYNC_COLLECTIONS),
   envelopeVersion: v.number(),
   baseRev: v.number(),
   deleted: v.boolean(),

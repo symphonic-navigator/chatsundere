@@ -118,9 +118,11 @@ export function registerLinkRoutes(app: Hono): void {
     const body = parse(passkeyFinishReq, await c.req.json());
 
     const redis = createRedis();
-    const stateRaw = await redis.get(`webauthn:register:${body.session_id}`);
+    // GETDEL is atomic — single-use round state, no race window for two
+    // concurrent /finish calls to both pass the existence check before the
+    // delete lands (Finding #9 scope extension; see step-up.ts:227).
+    const stateRaw = await redis.getdel(`webauthn:register:${body.session_id}`);
     if (!stateRaw) throw new ApiError(410, 'expired', 'Session expired or not found');
-    await redis.del(`webauthn:register:${body.session_id}`);
 
     const state = JSON.parse(stateRaw) as { challenge: string; userId: string };
     if (state.userId !== claims.sub) {

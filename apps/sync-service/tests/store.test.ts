@@ -125,6 +125,34 @@ describe('applyBatch CAS matrix', () => {
     expect(accepted).toBe(true);
   });
 
+  test('delete with an unvalidated collection is rejected before any write', async () => {
+    // An authenticated client could otherwise push a delete of a fresh blindId
+    // tagged with an arbitrary collection string; without a pre-write check it
+    // would be stored as a tombstone and served to every device on the account,
+    // crashing clients that try db.table('evil').
+    const { results, accepted } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(6, { deleted: true, collection: 'evil' })],
+      allow,
+    );
+    expect(results[0]).toEqual({ status: 'error', code: 'bad_collection' });
+    expect(accepted).toBe(false);
+    const rows = await t.sql.unsafe(`SELECT * FROM sync_records WHERE account_id = '${ACC}'`);
+    expect(rows.length).toBe(0);
+  });
+
+  test('delete with a valid collection still tombstones', async () => {
+    const { results, accepted } = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(6, { deleted: true, collection: 'chats' })],
+      allow,
+    );
+    expect(results[0]?.status).toBe('ok');
+    expect(accepted).toBe(true);
+  });
+
   test('delete of a tombstone is idempotent — no head bump, accepted false', async () => {
     await applyBatch(t.db, ACC, [await rec(5, { deleted: true })], allow); // head 1
     const again = await applyBatch(t.db, ACC, [await rec(5, { deleted: true })], allow);

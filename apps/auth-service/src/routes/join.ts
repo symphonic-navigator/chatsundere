@@ -201,6 +201,10 @@ export function registerJoinRoutes(app: Hono): void {
       session_id: sessionId,
       login_response: loginResponse,
       username: owner.username,
+      // The frozen identifier the OPAQUE record was registered under — Device
+      // B has no other source for it and must present it (not the live
+      // username) at /finish, or the AKE evidence will not match this round.
+      opaque_client_identifier: owner.opaqueClientIdentifier,
     });
   });
 

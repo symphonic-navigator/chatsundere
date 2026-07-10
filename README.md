@@ -85,6 +85,7 @@ rejects anything shorter than 40 characters.
 | `INVITATION_HMAC_KEY` | Keyed hashing of invitation tokens (generated) | _(generated)_ |
 | `REFRESH_TOKEN_HMAC_KEY` | Keyed hashing of refresh tokens (generated) | _(generated)_ |
 | `HMAC_KEY_PENDING_CODES` | Keyed hashing of invitation/pairing codes (generated) | _(generated)_ |
+| `DECOY_WRAP_KEY` | Derives decoy OPAQUE wraps for unknown/suspended login/start (generated) | _(generated)_ |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins | `http://localhost:3000,http://localhost:5174` |
 
 ### `apps/sync-service`

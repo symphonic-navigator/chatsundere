@@ -14,6 +14,8 @@ import { loadEnv } from '../env.js';
 import { issueTokens, refreshCookieFor } from '../jwt/issue.js';
 import { metrics } from '../metrics.js';
 import { ApiError } from '../middleware/error-envelope.js';
+import { ipKey } from '../middleware/rate-limit.js';
+import { deriveDecoyWrap } from '../opaque/decoy-wrap.js';
 import {
   ensureOpaqueReady,
   fetchOpaqueState,
@@ -63,15 +65,19 @@ export function registerLoginRoutes(app: Hono): void {
    * Runs the OPAQUE server-side login-start step. Returns a `ke2` / `login_response`
    * alongside the stored wrapped_mk_opaque blobs for the client.
    *
-   * Enumeration mitigation: when the username does not exist or has no OPAQUE auth method
-   * the response is still a valid-shaped OPAQUE ke2 produced by passing `registrationRecord: null`
-   * to opaqueServer.startLogin. @serenity-kit/opaque handles null records by returning a fake
-   * deterministic response that is indistinguishable from a real one at the network layer.
+   * Enumeration mitigation: when the username does not exist, has no OPAQUE auth method, or
+   * belongs to a suspended account, the response is still a valid-shaped OPAQUE ke2 produced by
+   * passing `registrationRecord: null` to opaqueServer.startLogin. @serenity-kit/opaque handles
+   * null records by returning a fake deterministic response that is indistinguishable from a
+   * real one at the network layer. The sibling wrap fields (`wrapped_mk_opaque` /
+   * `wrap_nonce_opaque` / `wrap_aad_opaque`) get a matching treatment — a deterministic decoy
+   * (see `../opaque/decoy-wrap.js`) rather than `null` — so the response SHAPE never leaks
+   * existence either (Finding #10a).
    */
   app.post('/api/v1/opaque/login/start', async (c) => {
     await ensureOpaqueReady();
     const body = parse(opaqueStartReq, await c.req.json());
-    await applyLoginRateLimit(body.username);
+    await applyLoginRateLimit(body.username, ipKey(c));
 
     const { db } = createDb();
 
@@ -130,7 +136,11 @@ export function registerLoginRoutes(app: Hono): void {
 
     if (!row || row.suspendedAt) {
       // User does not exist or is suspended. The client receives a fake ke2 and will fail at
-      // /finish with a 401 — no information about existence is leaked here.
+      // /finish with a 401 — no information about existence is leaked here. The wrap fields get
+      // a deterministic decoy on the SAME response shape as an active user (non-null, realistic
+      // base64url lengths) rather than null, so a null-vs-present comparison cannot serve as an
+      // existence oracle either. Suspended users are folded onto this exact branch — their real
+      // wrap is never touched here — so suspension is not distinguishable from "unknown" at start.
       const sessionId = generateSessionId();
       await storeOpaqueState({
         scope: 'login',
@@ -140,12 +150,13 @@ export function registerLoginRoutes(app: Hono): void {
           server_login_state: serverLoginState,
         },
       });
+      const decoy = deriveDecoyWrap(body.username);
       return c.json({
         session_id: sessionId,
         login_response: loginResponse,
-        wrapped_mk_opaque: null,
-        wrap_nonce_opaque: null,
-        wrap_aad_opaque: null,
+        wrapped_mk_opaque: decoy.wrapped_mk_opaque,
+        wrap_nonce_opaque: decoy.wrap_nonce_opaque,
+        wrap_aad_opaque: decoy.wrap_aad_opaque,
       });
     }
 
@@ -272,7 +283,7 @@ export function registerLoginRoutes(app: Hono): void {
    */
   app.post('/api/v1/passkey/login/start', async (c) => {
     const body = parse(passkeyStartReq, await c.req.json());
-    await applyLoginRateLimit(body.username);
+    await applyLoginRateLimit(body.username, ipKey(c));
 
     const { db } = createDb();
 
@@ -335,9 +346,11 @@ export function registerLoginRoutes(app: Hono): void {
     const body = parse(passkeyFinishReq, await c.req.json());
 
     const redis = createRedis();
-    const stateRaw = await redis.get(`webauthn:auth:${body.session_id}`);
+    // GETDEL is atomic — single-use round state, no race window for two
+    // concurrent /finish calls to both pass the existence check before the
+    // delete lands (Finding #9 scope extension; see step-up.ts:227).
+    const stateRaw = await redis.getdel(`webauthn:auth:${body.session_id}`);
     if (!stateRaw) throw new ApiError(410, 'expired', 'Session expired or not found');
-    await redis.del(`webauthn:auth:${body.session_id}`);
 
     const state = JSON.parse(stateRaw) as { challenge: string; userId?: string; fake?: boolean };
 

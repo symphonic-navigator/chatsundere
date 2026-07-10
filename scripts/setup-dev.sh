@@ -52,7 +52,8 @@ for app in "${apps[@]}"; do
       AUTH_JWT_PRIVATE_KEY \
       INVITATION_HMAC_KEY \
       REFRESH_TOKEN_HMAC_KEY \
-      HMAC_KEY_PENDING_CODES
+      HMAC_KEY_PENDING_CODES \
+      DECOY_WRAP_KEY
   fi
 done
 
