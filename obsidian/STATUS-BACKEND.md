@@ -1,6 +1,40 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-10 — **OPAQUE/SYNC HARDENING SPRINT SQUASHED to `master`
+**Last updated:** 2026-07-10 (later) — **`TRUST_PROXY_HOPS` ON AUTH SQUASHED to
+`master` (`dc25cdd`, one feature unit). NOT pushed — Chris pushes.** Closes the
+long-tracked go-live blocker **L-β-2** (auth's per-IP rate limits were
+client-spoofable: `ipKey()` read the LEFT-most `X-Forwarded-For`, so a client
+without a fronting proxy could forge the header and bypass the step-up, `/join`,
+and login/passkey/recovery per-IP limits). Fix ports the already-audited
+proxy/sync pattern into auth: new `net/client-ip.ts` (`deriveClientIp`, verbatim
+copy) reads the trusted hop `TRUST_PROXY_HOPS` positions from the RIGHT of
+`X-Forwarded-For` over the real socket peer (`index.ts` now injects it via
+`server.requestIP`), and `ipKey()` uses it. The interim default-off boolean
+`RATE_LIMIT_TRUST_FORWARDED_IP` is **replaced** by `TRUST_PROXY_HOPS` (int,
+default 1 for the single Traefik hop; `.env.dev`=0, no proxy on loopback); the
+per-IP login backstop now runs **unconditionally** on the spoof-resistant
+address, with the `'unknown'` sentinel the sole exclusion (Finding M2 both harms
+stay closed — Larissa confirmed the `'unknown'` fallback, deliberately unlike
+sync's `'0.0.0.0'`, is what keeps harm-1 shut). Deploy kit wired
+(`compose.template.yml`; `deployment.env.template` already had it) + `.env.example`
++ `DEPLOYMENT.md` §4.1. Built inline TDD (RED→GREEN watched); **Larissa CLEAR TO
+SQUASH** (no Crit/High/Medium; 3 informational, all documented/proxy-sync-parity).
+Gates: `pnpm typecheck --force` **14/14**; Biome clean; new tests client-ip
+**7/7** + ip-key **5/5** + login-backstop routes **4/4** + rate-limit unit **1/1**;
+full auth-service suite **204 pass / 12 skip / 1 fail** — the lone fail
+(`admin-users` "returns the filtered total") is **pre-existing** (proven: passes
+under a `-t` filter and fails identically on the stashed base code — a within-file
+test-ordering artefact, zero relation to this change). **Environment note:** the
+running dev Redis container (`chatsundere-dev-redis-1`) is in a corrupt state
+(its working dir was removed host-side → can't persist, can't be `exec`d); tests
+ran against an isolated throwaway Redis. Recreate it before the next `./dev.sh`
+(`docker rm -f` + `./dev-infra.sh`; Postgres/accounts unaffected). Branch
+`feat/auth-trust-proxy-hops` kept until Chris pushes. L-β-2 + the deployment-kit
+`TRUST_PROXY_HOPS` row closed in [[insights/follow-ups-index]] /
+[[insights/security-deferrals]].
+
+Prior entry: 2026-07-10 — **OPAQUE/SYNC HARDENING SPRINT SQUASHED to `master`
+(3 feature units: `8a19192d` auth+sync, `78d2cb59` client sync engine, `252e47ac`
 (3 feature units: `8a19192d` auth+sync, `78d2cb59` client sync engine, `252e47ac`
 client identity). NOT pushed — Chris pushes.** A ~20-finding hardening sprint from
 an external second-opinion review (Codex, run by a tester), every finding first
