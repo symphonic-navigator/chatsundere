@@ -8,14 +8,15 @@
 // defaults it to redis://localhost:6379/15, matching the other Redis-backed
 // integration tests in this suite).
 //
-// The IP-backstop tests also cover Finding M2 (Larissa, Medium): the IP
-// bucket must be gated behind RATE_LIMIT_TRUST_FORWARDED_IP (default off) and
-// must never fire for the 'unknown' sentinel, regardless of the flag —
-// otherwise a naive self-host without a trusted reverse proxy funnels every
-// login into one global bucket, and pre-TRUST_PROXY_HOPS an attacker can
-// spoof a victim's IP to lock them out.
+// Since TRUST_PROXY_HOPS landed, the IP handed to applyLoginRateLimit is the
+// spoof-resistant address derived by ipKey() (the socket peer or the trusted
+// front-proxy hop), so the per-IP backstop is now UNCONDITIONALLY on for a real
+// address — the old RATE_LIMIT_TRUST_FORWARDED_IP gate is gone. The one guard
+// that remains is the 'unknown' sentinel (no derivable address): it must never
+// drive the IP bucket, or a deployment without a socket peer would funnel every
+// login into one global bucket and cap all users at once (Finding M2, harm 1).
 
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 import { closeRedis, createRedis } from '../../src/redis/client.js';
 import { applyLoginRateLimit } from '../../src/routes/_rate-limit-helpers.js';
 
@@ -26,10 +27,6 @@ describe.skipIf(skip)('applyLoginRateLimit', () => {
     const redis = createRedis();
     const keys = await redis.keys('rl:login:*');
     if (keys.length) await redis.del(...keys);
-  });
-
-  afterEach(() => {
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = undefined;
   });
 
   afterAll(async () => {
@@ -55,61 +52,36 @@ describe.skipIf(skip)('applyLoginRateLimit', () => {
     }
   });
 
-  it('still throttles a single username by the per-username limit regardless of the IP-trust flag', async () => {
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = 'false';
-    const usernameOff = `single-user-off-${Math.random().toString(36).slice(2, 8)}`;
+  it('still throttles a single username by the per-username limit', async () => {
+    const username = `single-user-${Math.random().toString(36).slice(2, 8)}`;
     const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
 
-    const resultsOff = await Promise.allSettled(
-      Array.from({ length: 15 }, () => applyLoginRateLimit(usernameOff, ip)),
+    const results = await Promise.allSettled(
+      Array.from({ length: 15 }, () => applyLoginRateLimit(username, ip)),
     );
-    expect(resultsOff.filter((r) => r.status === 'rejected').length).toBeGreaterThanOrEqual(5);
-
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = 'true';
-    const usernameOn = `single-user-on-${Math.random().toString(36).slice(2, 8)}`;
-
-    const resultsOn = await Promise.allSettled(
-      Array.from({ length: 15 }, () => applyLoginRateLimit(usernameOn, ip)),
-    );
-    expect(resultsOn.filter((r) => r.status === 'rejected').length).toBeGreaterThanOrEqual(5);
+    // 15 attempts for one username trip the per-username ceiling (10) well
+    // before the per-IP one (40).
+    expect(results.filter((r) => r.status === 'rejected').length).toBeGreaterThanOrEqual(5);
   });
 
-  it('does NOT throttle by IP when RATE_LIMIT_TRUST_FORWARDED_IP is off (default) — IP spraying with distinct usernames succeeds', async () => {
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = undefined;
+  it('throttles the shared IP bucket unconditionally: many distinct usernames spraying one real IP trip the backstop', async () => {
     const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
-
-    const results = await Promise.allSettled(
-      Array.from({ length: 60 }, (_, i) =>
-        applyLoginRateLimit(`ip-spray-off-${i}-${Math.random().toString(36).slice(2, 6)}`, ip),
-      ),
-    );
-
-    // Every username is distinct and under its own per-username ceiling, so
-    // with the IP bucket gated off, nothing should be rejected — even though
-    // 60 requests would trip LOGIN_IP_MAX_ATTEMPTS (40) if the IP bucket ran.
-    const rejected = results.filter((r) => r.status === 'rejected');
-    expect(rejected.length).toBe(0);
-  });
-
-  it('throttles the shared IP bucket when RATE_LIMIT_TRUST_FORWARDED_IP is on and many distinct usernames log in from one IP', async () => {
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = 'true';
-    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
-
-    const results = await Promise.allSettled(
-      Array.from({ length: 12 }, (_, i) =>
-        applyLoginRateLimit(`ip-spray-user-${i}-${Math.random().toString(36).slice(2, 6)}`, ip),
-      ),
-    );
 
     // Each username is distinct, so the per-username bucket never trips; only
-    // an IP backstop can be responsible for any rejection here.
-    const rejected = results.filter((r) => r.status === 'rejected');
-    expect(rejected.length).toBe(0); // 12 is comfortably under the IP ceiling in one burst...
+    // the IP backstop can reject here. A small burst stays under the ceiling...
+    const firstBurst = await Promise.allSettled(
+      Array.from({ length: 12 }, (_, i) =>
+        applyLoginRateLimit(`ip-spray-a-${i}-${Math.random().toString(36).slice(2, 6)}`, ip),
+      ),
+    );
+    expect(firstBurst.filter((r) => r.status === 'rejected').length).toBe(0);
 
-    // ...but a much larger burst from the same IP must trip the backstop.
+    // ...but a burst past LOGIN_IP_MAX_ATTEMPTS (40) from the same IP must trip
+    // the backstop — with no flag to enable, purely because the derived IP is
+    // now trustworthy.
     const secondBurst = await Promise.allSettled(
       Array.from({ length: 60 }, (_, i) =>
-        applyLoginRateLimit(`ip-spray-user-b-${i}-${Math.random().toString(36).slice(2, 6)}`, ip),
+        applyLoginRateLimit(`ip-spray-b-${i}-${Math.random().toString(36).slice(2, 6)}`, ip),
       ),
     );
     const secondRejected = secondBurst.filter((r) => r.status === 'rejected');
@@ -121,30 +93,14 @@ describe.skipIf(skip)('applyLoginRateLimit', () => {
     }
   });
 
-  it("never throttles by IP when ip is the 'unknown' sentinel, flag on or off", async () => {
-    // Flag off (default): 'unknown' must not collapse everyone into one bucket.
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = undefined;
-    const resultsOff = await Promise.allSettled(
+  it("never throttles by IP when ip is the 'unknown' sentinel", async () => {
+    // 'unknown' is not a real address; it must never collapse every caller into
+    // one shared bucket, even for a burst far past the IP ceiling.
+    const results = await Promise.allSettled(
       Array.from({ length: 50 }, (_, i) =>
-        applyLoginRateLimit(
-          `unknown-ip-off-${i}-${Math.random().toString(36).slice(2, 6)}`,
-          'unknown',
-        ),
+        applyLoginRateLimit(`unknown-ip-${i}-${Math.random().toString(36).slice(2, 6)}`, 'unknown'),
       ),
     );
-    expect(resultsOff.filter((r) => r.status === 'rejected').length).toBe(0);
-
-    // Flag on: 'unknown' must STILL never drive the IP bucket — it is a
-    // sentinel for "no header present", never a real address.
-    process.env.RATE_LIMIT_TRUST_FORWARDED_IP = 'true';
-    const resultsOn = await Promise.allSettled(
-      Array.from({ length: 50 }, (_, i) =>
-        applyLoginRateLimit(
-          `unknown-ip-on-${i}-${Math.random().toString(36).slice(2, 6)}`,
-          'unknown',
-        ),
-      ),
-    );
-    expect(resultsOn.filter((r) => r.status === 'rejected').length).toBe(0);
+    expect(results.filter((r) => r.status === 'rejected').length).toBe(0);
   });
 });

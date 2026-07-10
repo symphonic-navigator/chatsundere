@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { MiddlewareHandler } from 'hono';
+import { loadEnv } from '../env.js';
+import { deriveClientIp } from '../net/client-ip.js';
 import { createRedis } from '../redis/client.js';
 import { ApiError } from './error-envelope.js';
 
@@ -35,9 +37,22 @@ export function rateLimit(args: RateLimitArgs): MiddlewareHandler {
   };
 }
 
+/**
+ * Derives the trusted client IP for rate limiting. Reads the socket peer that
+ * index.ts injects into the Hono env from `server.requestIP()`, then honours
+ * only `TRUST_PROXY_HOPS` positions from the right of X-Forwarded-For — the
+ * address the trusted front proxy actually observed. A client can therefore not
+ * spoof its way past a per-IP limit by setting X-Forwarded-For itself. Falls
+ * back to the 'unknown' sentinel when no address is derivable, which
+ * `applyLoginRateLimit` treats as "skip the per-IP bucket" (never funnel every
+ * caller into one shared bucket).
+ */
 export function ipKey(c: import('hono').Context): string {
-  return (
-    c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? c.req.header('X-Real-IP') ?? 'unknown'
+  const directIp = (c.env as { ip?: string } | undefined)?.ip ?? 'unknown';
+  return deriveClientIp(
+    c.req.header('X-Forwarded-For') ?? null,
+    directIp,
+    loadEnv().TRUST_PROXY_HOPS,
   );
 }
 

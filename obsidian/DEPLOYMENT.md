@@ -143,6 +143,7 @@ the variables documented here.
 | `HMAC_KEY_PENDING_CODES` | base64url, ≥40 | **yes** | leak-domain-isolated |
 | `DECOY_WRAP_KEY` | base64url, ≥40 | **yes** | leak-domain-isolated; derives decoy OPAQUE wraps for unknown/suspended `login/start` calls (Finding #10a) |
 | `CORS_ALLOWED_ORIGINS` | comma list | no | exact origins |
+| `TRUST_PROXY_HOPS` | int (`1`) | no | trusted front-proxy hops for the per-IP rate-limit client IP; **set `0` if auth is exposed without a fronting proxy** |
 | `PROXY_PUBLIC_URL` | https URL | no | surfaced by `/api/v1/config`; omit to hide the proxy feature |
 | `SYNC_PUBLIC_URL` | https URL | no | surfaced as `syncUrl` + the `sync` feature |
 | `SYNC_BLOBS_ENABLED` | `true`/`false` | no | **congruence checkpoint** — see below |

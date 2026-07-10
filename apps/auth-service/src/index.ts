@@ -10,7 +10,13 @@ const app = createServer();
 
 const server = Bun.serve({
   port: env.PORT,
-  fetch: app.fetch,
+  // Inject the real socket peer so ipKey() can derive a spoof-resistant client
+  // IP (deriveClientIp + TRUST_PROXY_HOPS) instead of trusting a client-set
+  // X-Forwarded-For. Mirrors proxy-service and sync-service.
+  fetch(req, srv) {
+    const ip = srv.requestIP(req)?.address;
+    return app.fetch(req, { ip });
+  },
 });
 
 logger.info({ port: server.port }, 'auth-service listening');

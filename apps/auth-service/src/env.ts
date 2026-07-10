@@ -119,21 +119,22 @@ const envSchema = object({
     ),
     'false',
   ),
-  // Gates the per-IP rate-limit backstop in applyLoginRateLimit (Finding M2).
-  // The forwarded IP (ipKey()) is attacker-controlled until TRUST_PROXY_HOPS
-  // lands (separately tracked, owed before backend go-live), so it must not
-  // drive a lockout decision unless the operator affirms they sit behind a
-  // trusted reverse proxy that sets X-Forwarded-For/X-Real-IP correctly. Off
-  // by default: a naive self-host without such a proxy would otherwise either
-  // collapse every login onto the single 'unknown' IP bucket (a global DoS
-  // for all users) or let an attacker spoof a victim's IP to lock that victim
-  // out specifically. 'true' enables; anything else (incl. unset) disables.
-  RATE_LIMIT_TRUST_FORWARDED_IP: optional(
+  // Number of trusted reverse-proxy hops in front of this service. The client
+  // IP used for every per-IP rate limit is read that many positions from the
+  // RIGHT of X-Forwarded-For — the address the trusted front proxy (Traefik)
+  // actually observed — so a client can no longer spoof its way past a per-IP
+  // limit by setting X-Forwarded-For itself (mirrors proxy-service and
+  // sync-service). Default 1: the shipped deployment fronts auth with a single
+  // Traefik hop. A deployment that exposes auth DIRECTLY (no fronting proxy)
+  // MUST set this to 0 so only the real socket peer is trusted; leaving it at 1
+  // there would trust a client-set X-Forwarded-For. See DEPLOYMENT.md.
+  TRUST_PROXY_HOPS: optional(
     pipe(
       string(),
-      transform((s) => s === 'true'),
+      transform((s) => Number.parseInt(s, 10)),
+      number(),
     ),
-    'false',
+    '1',
   ),
 });
 
@@ -159,7 +160,7 @@ export function loadEnv(): {
   SYNC_PUBLIC_URL?: string;
   ADMIN_PUBLIC_URL?: string;
   SYNC_BLOBS_ENABLED: boolean;
-  RATE_LIMIT_TRUST_FORWARDED_IP: boolean;
+  TRUST_PROXY_HOPS: number;
 } {
   return parse(envSchema, {
     NODE_ENV: process.env.NODE_ENV ?? 'development',
@@ -181,6 +182,6 @@ export function loadEnv(): {
     SYNC_PUBLIC_URL: process.env.SYNC_PUBLIC_URL,
     ADMIN_PUBLIC_URL: process.env.ADMIN_PUBLIC_URL,
     SYNC_BLOBS_ENABLED: process.env.SYNC_BLOBS_ENABLED,
-    RATE_LIMIT_TRUST_FORWARDED_IP: process.env.RATE_LIMIT_TRUST_FORWARDED_IP,
+    TRUST_PROXY_HOPS: process.env.TRUST_PROXY_HOPS,
   });
 }

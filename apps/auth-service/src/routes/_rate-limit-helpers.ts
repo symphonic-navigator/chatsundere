@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { loadEnv } from '../env.js';
 import { ApiError } from '../middleware/error-envelope.js';
 import { createRedis } from '../redis/client.js';
 
@@ -75,15 +74,13 @@ async function checkSlidingWindow(
  *
  * Used by both /api/v1/opaque/login/start, /api/v1/passkey/login/start, and
  * /api/v1/recovery/start to maintain consistent 10 attempts / 15 min throttling
- * per spec §8.4. When `ip` is supplied AND the operator has enabled
- * RATE_LIMIT_TRUST_FORWARDED_IP, a second bucket keyed on that address
- * throttles username-spraying from a single source. The IP bucket is gated
- * behind that flag — default OFF — because the forwarded IP is
- * attacker-controlled until TRUST_PROXY_HOPS lands (separately tracked,
- * owed before backend go-live, which will subsume this flag with real
- * hop-count spoof-resistance): trusting it unconditionally lets an attacker
- * spoof a victim's IP and burn through the ceiling to lock that victim out
- * of login for a whole window (Finding M2, harm 2).
+ * per spec §8.4. When a real `ip` is supplied, a second bucket keyed on that
+ * address throttles username-spraying from a single source. The address is the
+ * spoof-resistant one derived by ipKey() (TRUST_PROXY_HOPS), so the bucket runs
+ * unconditionally — an attacker can no longer forge X-Forwarded-For to spoof a
+ * victim's IP and burn through the ceiling to lock them out (Finding M2, harm 2,
+ * now closed by hop-counted derivation rather than a default-off flag). The
+ * 'unknown' sentinel is the sole exclusion (see below).
  */
 export async function applyLoginRateLimit(username: string, ip?: string): Promise<void> {
   // Normalise to lowercase so casing variants do not bypass the limit.
@@ -97,13 +94,15 @@ export async function applyLoginRateLimit(username: string, ip?: string): Promis
     throw new ApiError(429, 'rate_limited', 'Too many login attempts for this username');
   }
 
-  // 'unknown' is ipKey()'s sentinel for "no X-Forwarded-For/X-Real-IP header
-  // present" — it is never a real address, so it must never drive the IP
-  // bucket. Without this guard, any deployment lacking those headers (any
-  // naive self-host) funnels every login/passkey/recovery attempt from every
-  // user into the single rl:login:ip:unknown bucket, capping ALL users at
-  // LOGIN_IP_MAX_ATTEMPTS globally — a self-inflicted DoS (Finding M2, harm 1).
-  if (ip && ip !== 'unknown' && loadEnv().RATE_LIMIT_TRUST_FORWARDED_IP) {
+  // 'unknown' is ipKey()'s sentinel for "no derivable client address" — it is
+  // never a real address, so it must never drive the IP bucket. Without this
+  // guard, any deployment where the socket peer is unavailable funnels every
+  // login/passkey/recovery attempt from every user into the single
+  // rl:login:ip:unknown bucket, capping ALL users at LOGIN_IP_MAX_ATTEMPTS
+  // globally — a self-inflicted DoS (Finding M2, harm 1). The derived IP is
+  // otherwise spoof-resistant (TRUST_PROXY_HOPS), so the backstop runs
+  // unconditionally for a real address.
+  if (ip && ip !== 'unknown') {
     const ipRedisKey = `rl:login:ip:${ip}`;
     const ipLimited = await checkSlidingWindow(
       ipRedisKey,

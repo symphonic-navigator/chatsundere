@@ -216,6 +216,19 @@ Full audit run on the four functional commits of Squash β. Critical: none. High
 
 ### L-β-2 — `ipKey` trusts `X-Forwarded-For` blindly — relies on a deployment invariant
 
+> **RESOLVED 2026-07-10.** Fixed by porting the audited proxy/sync `deriveClientIp`
+> pattern into auth-service: `index.ts` injects the real socket peer, a new
+> `net/client-ip.ts` reads the trusted hop `TRUST_PROXY_HOPS` positions from the
+> RIGHT of `X-Forwarded-For`, and `ipKey()` uses it — so every per-IP limit
+> (`step_up_ip`, `join_ip_minute`, `join_ip_hour`, and the login/passkey/recovery
+> backstop) is spoof-resistant. The interim `RATE_LIMIT_TRUST_FORWARDED_IP` boolean
+> was **replaced** (the derived IP is trustworthy by construction, so the login
+> backstop now runs unconditionally, with the `'unknown'` sentinel the sole
+> exclusion — Finding M2 both harms stay closed). Default `TRUST_PROXY_HOPS=1`
+> (single Traefik hop); a directly-exposed deployment must set `0`, documented in
+> `.env.example` / `DEPLOYMENT.md`. Larissa re-audit: **CLEAR TO SQUASH**, no
+> Crit/High/Medium. The deferral text below is retained for history.
+
 - **Affected paths:** `apps/auth-service/src/middleware/rate-limit.ts:38-42`
 - **Finding (Larissa's summary):** Pre-existing finding (not introduced by Squash β) but the H1 rate-limit wiring widens its blast radius. `ipKey()` reads the first comma-separated value from `X-Forwarded-For` then falls back to `X-Real-IP`, with no allow-list of trusted proxy hops. A client speaking directly to the auth-service (e.g. a misconfigured deployment without a fronting reverse proxy) can set `X-Forwarded-For` to a random value per request and bypass every per-IP rate limit (`step_up_ip`, `join_ip_minute`, `join_ip_hour`, and any future per-IP bucket).
 - **Severity:** low (configuration-dependent; mitigated by the production deployment requiring a reverse proxy that overwrites the header authoritatively).
