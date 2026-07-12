@@ -500,3 +500,36 @@ checkbox fails safe on the `null` link state). One deferred:
   pre-existing, separately tracked issue; when it lands, this button inherits
   the fix for free.
 - **Chris sign-off:** advisory (soft), no sign-off required.
+
+---
+
+## 2026-07-12 — Onboarding matrix makeover
+
+Laura spec-pass: **one HARD (resolved before build)** + four soft; pre-squash
+pass: **CLEAN, no hard defects.** The HARD (the local tile's ~0.7 dim reused the
+system's `disabled` opacity vocabulary on the only no-account path) was fixed by
+dropping the dim entirely — "lesser" is now carried by hierarchy (purple, last
+position, smaller `grow` weight). Two conscious deviations remain, logged so a
+later Laura sweep does not re-flag them:
+
+### DEVIATION — Two gold tiles on one screen (Chris-authored)
+
+- **Deviation:** the makeover rule is "exactly one gold priority overlay per
+  screen"; the onboarding matrix carries **two** — `I have an invitation` and
+  `Link this device to my account`.
+- **Rationale:** both are the fully-featured, account-backed outcome (the
+  "leiwandste" case) and deserve equal gold prominence. The two intents are
+  disjoint (new-with-invite vs existing-user-new-device), so a visitor
+  self-selects cleanly; Laura rated the lost single-anchor a SOFT, not a defect.
+- **Chris sign-off:** Chris-authored and confirmed ("beide in gold, sogar dieses
+  mal").
+
+### DEVIATION — `CloudOff` icon kept for "Just this device" (Chris-arbitrated)
+
+- **Deviation:** Laura's soft flagged the slashed cloud glyph as compounding an
+  "off/disabled" read.
+- **Rationale:** with the tile now full-opacity, the slash reads descriptively
+  ("no cloud, no sync") rather than as disabled; it is the most direct expression
+  of the no-server path. Chris chose it over a warning triangle and over the
+  non-slashed alternatives.
+- **Chris sign-off:** advisory (soft), Chris-arbitrated — kept.
