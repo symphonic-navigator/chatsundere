@@ -8,7 +8,40 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-08 — **OPTIONAL PASSWORD ENCRYPTION FOR TRANSFER PACKS
+**Last updated:** 2026-07-12 — **ONBOARDING MATRIX REBUILT IN THE DESIGN
+LANGUAGE, SQUASHED TO MASTER (`448861f`). NOT pushed (Chris pushes); awaiting
+Chris's device-verify.**
+The onboarding intent surface (`routes/onboarding/matrix.tsx`) — the first screen
+a visitor with no local session sees — was one of the last **pre-makeover**
+screens (rigid 2×2 grid, unstyled placeholder cells, no heading/brand/icons).
+Rebuilt in the makeover language: a `Welcome` eyebrow over the `Chatsundere ✦`
+wordmark (reused `brand-logo-text`/`-twinkle`), then **four standard-height
+`NavTile`s vertically centred** on the screen (`justify-center`, no scrolling at
+380 px). The two account-backed paths — **I have an invitation** and **Link this
+device to my account** — share the **gold** priority overlay (a conscious
+**two-gold** deviation; both are the fully-featured outcome — Chris-authored).
+**Use a recovery key** is pink; **Just this device** is purple at **full
+opacity** — its "lesser" read is carried by **hierarchy** (last position), never
+dimming (in this design language opacity means `disabled`). Icons: `Ticket` /
+`MonitorSmartphone` (the PC+phone "first-choice combo") / `KeyRound` / `CloudOff`.
+**No `NavTile` change** — standard primitive at its normal size. Built
+spec→**Laura spec-pass** (**1 HARD** — the local tile's ~0.7 dim reused the
+disabled opacity vocabulary — **resolved before build** by dropping the dim; 4
+soft, `CloudOff`+two-gold Chris-arbitrated, `Welcome`-eyebrow adopted)→build→
+**Laura pre-squash CLEAN**. **Device-review correction folded:** the first cut
+stretched tiles to fill the viewport (`flex-grow` 3:3:2:2) → read as oversized
+blobs + scrolled; Chris's call gave them normal menu height, centred (the `grow`
+prop was removed entirely). Not a Larissa path. Gates (final): `pnpm typecheck`
+**0**; full user-client vitest **2931 pass** (clean run, all 546 files); `pnpm
+build` **9/9**; Biome clean on changed files. Deviations logged in
+[[insights/ux-deferrals]]. Spec:
+[[../superpowers/specs/2026-07-12-onboarding-matrix-makeover-design]]. Branch
+`feat/onboarding-makeover` kept until Chris pushes. **Next:** Chris
+device-verifies (spec §8: fresh client → four standard-height tiles centred, no
+scroll at 380 px; gold pair / pink / full-opacity purple; each tile enters its
+existing flow), then pushes for the v0.2.0 release.
+
+**Earlier — 2026-07-08 — OPTIONAL PASSWORD ENCRYPTION FOR TRANSFER PACKS
 SQUASHED TO MASTER (`b7211524`). NOT pushed (Chris pushes after device-verify).**
 Field-user request: encrypt persona/knowledge-library exports under a freely chosen
 password. Built as a thin **outer shell** around the existing transfer packs —
