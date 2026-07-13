@@ -8,6 +8,25 @@
 
 **Tech Stack:** TypeScript strict, Bun (auth-service, `bun test`), React 18 + Vite (user-client, Vitest), Valibot (server env), Zustand stores, Dexie.
 
+## Operating rules for the executing session (READ FIRST — binding)
+
+1. **Language.** Every artefact written into the repo is British English (`colour`, `initialise`, `behaviour`) — code, comments, copy, test names, commit messages, STATUS updates. Chat with Chris is German; nothing else is.
+2. **TDD per task.** Failing test → run and watch it fail → minimal implementation → run and watch it pass → commit. No implementation-first work.
+3. **Execution discipline.** Subagent-driven: one fresh subagent per task, per-task spec review + code-quality review before moving on. **Subagents never merge, push, or switch branches.** Dispatch implementers serially, never in parallel on one tree. Verify each subagent commit landed on the intended branch: `git branch --contains <sha>`.
+4. **Worktree.** All work on a feature branch in a dedicated worktree under `.claude/worktrees/<name>` (suggested: `fix/pre-golive-bundle`). The main tree stays on `master` at all times. Integration to `master` uses a throwaway master worktree, never a checkout of the main tree.
+5. **Gates — exact commands, run from the repo root:**
+   - `pnpm typecheck --force` → expect **14/14 successful, 0 cached** (never trust a cached pass on test-touching work).
+   - `pnpm --filter @chatsundere/user-client exec vitest run` → full suite, no path filter. Baseline on `master` (`448861f`): **2931 pass, 546 files**. A handful of Node-localStorage failures are a known environmental baseline — before dismissing ANY failure as pre-existing, confirm it fails identically on `master`.
+   - `cd apps/auth-service && bun test` (needs Postgres+Redis: `./dev-infra.sh` from the root; if the dev Redis container is wedged, `docker rm -f chatsundere-dev-redis-1` then re-run). Baseline: **204 pass / 12 skip / 1 fail** — the 1 is the pre-existing `admin-users` "returns the filtered total" ordering artefact; anything else is yours.
+   - `cd packages/llm-unified && bun test` (Unit E). Baseline: ~421 pass. Rebuild after changes: `pnpm --filter @chatsundere/llm-unified build` (stale `dist/` causes phantom tsc errors downstream).
+   - `pnpm build` → **9/9** before the final squash. Biome runs in the pre-commit hook and bans `!` (non-null assertions); tests live under `tests/**`.
+6. **Security gate.** Larissa (Opus-class security audit subagent) audits the Unit A diff pre-squash (it touches `apps/auth-service`) and gets a courtesy pass on Units B+C (sync-engine semantics). Units D/E/F are NOT Larissa paths — client + llm-unified error type only. Summon her with **absolute worktree paths**, never relative ones (relative paths read stale main-tree copies).
+7. **UX gate.** Laura (`.claude/agents/laura.md`) pre-squash on Units A, D, E. Her spec-pass already ran on the spec (findings folded); the pre-squash verifies the build honours it. Hard defects block the squash.
+8. **Squash + do not push.** One squashed commit per unit (A–F), free-form imperative subject, capitalised. `[skip ci]` (exact form, with the space) only on doc-only commits. Squash to `master` via the throwaway worktree, verify the squash captured the full branch tree (diff vs branch tip + typecheck on master). **NEVER `git push` — Chris pushes after his device verification.**
+9. **Co-author tag** on every commit: `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`.
+10. **End of run:** update `obsidian/STATUS-BACKEND.md` (Units A, C) and `obsidian/STATUS-CLIENT-ONLY.md` (Units B, D, E, F) — what landed, gate numbers, what is owed (Chris's spec-§9 device verification). Update `obsidian/insights/follow-ups-index.md` per Unit F. Report back to Chris: verification numbers per suite, the six squash SHAs, and any deviations from the plan.
+11. **Empirical truth over docs.** Where this plan says "investigate first" (A4 step on form fast-forward, B1 clear path, C1 vectors key contract), the investigation result binds — if it contradicts the plan's assumption, record the deviation in your report rather than forcing the plan's wording.
+
 ## Global Constraints
 
 - **Spec:** `superpowers/specs/2026-07-13-pre-golive-fix-bundle-design.md` — read it first; it is the contract. Laura's spec-pass findings are already folded into it.
@@ -304,7 +323,7 @@ test('legacy form still parses byte-identically', () => {
   - throws `CryptoError('invalid_recovery_key_format')` → inline key-field error (same copy as `routes/login/recovery.tsx:234` uses for this code — read it and reuse verbatim), screen stays `ready`, typed inputs preserved.
   - throws `HttpError` 429 with `Retry-After: 300` → fatal copy "Too many attempts. Please wait about 5 minutes."; without Retry-After → "Too many attempts. Please wait a few minutes."
 - [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3: Implement** — extend the CryptoError branch:
+- [ ] **Step 3: Implement.** FIRST read `apps/user-client/src/routes/login/recovery.tsx:234` and copy the exact string it maps `invalid_recovery_key_format` to — call it `INVALID_KEY_COPY` below (the two surfaces must show identical copy; do not invent a new phrasing). Then extend the CryptoError branch:
 
 ```tsx
 if (err instanceof CryptoError && err.code === 'not_found') {
@@ -312,7 +331,7 @@ if (err instanceof CryptoError && err.code === 'not_found') {
   return;
 }
 if (err instanceof CryptoError && err.code === 'invalid_recovery_key_format') {
-  setRecoveryKeyError(/* the login-surface copy for this code, reused verbatim */);
+  setRecoveryKeyError(INVALID_KEY_COPY); // the literal read from login/recovery.tsx:234
   setScreen({ kind: 'ready' });
   return;
 }
