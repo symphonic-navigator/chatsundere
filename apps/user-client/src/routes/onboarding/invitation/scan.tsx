@@ -45,6 +45,7 @@ export function InvitationScan() {
             kind: 'invitation_input',
             baseUrl: result.value.baseUrl,
             code: result.value.code,
+            suggestedUsername: result.value.suggestedUsername,
           });
           navigate({ pathname: '/onboarding/invitation', search }, { replace: true });
         });

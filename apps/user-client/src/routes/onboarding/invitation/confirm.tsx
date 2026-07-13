@@ -110,9 +110,10 @@ function InvitationConfirmInner() {
     { kind: 'invitation_input' | 'invitation_confirm' }
   >;
 
-  const [username, setUsername] = useState(
-    onboardingState.kind === 'invitation_confirm' ? (onboardingState.suggestedUsername ?? '') : '',
-  );
+  // Pre-fill from the operator's suggested username (carried in from the QR/link
+  // via invitation_input, or an invitation_confirm session). Empty for manual
+  // code entry, which never carries a suggestion. The field stays editable.
+  const [username, setUsername] = useState(storeCtx.suggestedUsername ?? '');
   const [passphrase, setPassphrase] = useState('');
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [passphraseError, setPassphraseError] = useState<string | null>(null);
@@ -442,6 +443,18 @@ function InvitationConfirmInner() {
                 {usernameError}
               </p>
             )}
+            {/* Provenance cue (Laura SOFT): only while the field still holds the
+                untouched operator suggestion — reassures a QR user that the
+                pre-filled name is a suggestion, and signals it is editable.
+                Vanishes the moment they type. */}
+            {!isLateLink &&
+              !usernameError &&
+              storeCtx.suggestedUsername &&
+              username === storeCtx.suggestedUsername && (
+                <p className="mt-1 text-xs text-paper-soft">
+                  Suggested by your operator — change it to anything you like.
+                </p>
+              )}
           </div>
         )}
 

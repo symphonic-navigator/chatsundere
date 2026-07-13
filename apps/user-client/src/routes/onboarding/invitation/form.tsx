@@ -45,6 +45,12 @@ function InvitationFormInner() {
     const s = useOnboardingStore.getState().state;
     return s.kind === 'invitation_input' || s.kind === 'invitation_confirm' ? s.code : '';
   });
+  // Carried through (not edited here) so a QR-seeded pre-fill survives the
+  // Continue that rebuilds the store state on its way to the confirm screen.
+  const [suggestedUsername] = useState(() => {
+    const s = useOnboardingStore.getState().state;
+    return s.kind === 'invitation_input' ? s.suggestedUsername : undefined;
+  });
 
   const [probing, setProbing] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
@@ -67,7 +73,7 @@ function InvitationFormInner() {
         setProbeError(copy.onboardingProbe.invalid);
         return;
       }
-      setOnboardingState({ kind: 'invitation_input', baseUrl, code });
+      setOnboardingState({ kind: 'invitation_input', baseUrl, code, suggestedUsername });
       navigate(navTarget('/onboarding/invitation/confirm'));
     } finally {
       setProbing(false);

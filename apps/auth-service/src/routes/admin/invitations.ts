@@ -103,7 +103,7 @@ export function registerAdminInvitationRoutes(app: Hono): void {
       .returning({ id: pendingCodes.id });
     if (!newInvitation) throw new ApiError(500, 'internal', 'Failed to create invitation');
     const env = loadEnv();
-    const qrUrl = buildJoinQrUrl(env, code);
+    const qrUrl = buildJoinQrUrl(env, code, body.suggested_username);
     await writeAudit({
       db,
       eventType: 'invitation.created',

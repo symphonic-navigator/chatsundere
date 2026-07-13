@@ -73,10 +73,16 @@ export function JoinLanding(): JSX.Element | null {
     );
   }
 
-  const { baseUrl, code } = parsed.value;
+  const { baseUrl, code, suggestedUsername } = parsed.value;
 
   const seedAndGo = (kind: 'invitation_input' | 'pairing_input', to: string) => (): void => {
-    setOnboardingState({ kind, baseUrl, code });
+    // The suggested username is an invitation-only pre-fill hint; the pairing
+    // path adds a device to an existing account, so it carries no such field.
+    setOnboardingState(
+      kind === 'invitation_input'
+        ? { kind, baseUrl, code, suggestedUsername }
+        : { kind, baseUrl, code },
+    );
     navigate(to);
   };
 

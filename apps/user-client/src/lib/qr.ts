@@ -5,6 +5,24 @@ import { isValidCode, normaliseCodeInput } from './code-input.js';
 export interface ParsedJoin {
   baseUrl: string;
   code: string;
+  /**
+   * Operator-suggested username carried by the `u` query param (invitation QR
+   * mints only). Present only when the param is a well-formed username; a
+   * malformed or absent value is dropped, never surfaced — it is a pre-fill
+   * hint, so it must not block an otherwise-valid join.
+   */
+  suggestedUsername?: string;
+}
+
+// Mirrors the auth-service username rule (apps/auth-service/src/routes/join.ts
+// USERNAME_RE): a suggested name that could never pass finish is not worth
+// pre-filling, so we drop it rather than seed a field the server will reject.
+const SUGGESTED_USERNAME_RE = /^[a-z][a-z0-9_-]{2,31}$/;
+
+function readSuggestedUsername(url: URL): string | undefined {
+  const raw = url.searchParams.get('u');
+  if (raw === null) return undefined;
+  return SUGGESTED_USERNAME_RE.test(raw) ? raw : undefined;
 }
 
 export type ParseJoinResult =
@@ -71,7 +89,14 @@ export function parseJoinUrl(raw: string): ParseJoinResult {
     if (!isAllowedScheme(serverUrl)) {
       return { ok: false, error: 'bad_server_param' };
     }
-    return { ok: true, value: { baseUrl: serverParam, code: fragment } };
+    return {
+      ok: true,
+      value: {
+        baseUrl: serverParam,
+        code: fragment,
+        suggestedUsername: readSuggestedUsername(url),
+      },
+    };
   }
 
   // Legacy form: base URL = origin + everything up to /join (inclusive of
@@ -79,7 +104,10 @@ export function parseJoinUrl(raw: string): ParseJoinResult {
   const basePath = url.pathname.slice(0, -'join'.length);
   const baseUrl = `${url.origin}${basePath}`;
 
-  return { ok: true, value: { baseUrl, code: fragment } };
+  return {
+    ok: true,
+    value: { baseUrl, code: fragment, suggestedUsername: readSuggestedUsername(url) },
+  };
 }
 
 export async function scanWithCamera(

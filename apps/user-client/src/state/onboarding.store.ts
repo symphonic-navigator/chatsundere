@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 export type OnboardingState =
   | { kind: 'idle' }
-  | { kind: 'invitation_input'; baseUrl: string; code: string }
+  | { kind: 'invitation_input'; baseUrl: string; code: string; suggestedUsername?: string }
   | {
       kind: 'invitation_confirm';
       sessionId: string;

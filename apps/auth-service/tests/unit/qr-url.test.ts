@@ -39,4 +39,29 @@ describe('buildJoinQrUrl', () => {
     const env = { API_BASE_URL: 'https://chat.example.com' } as never;
     expect(buildJoinQrUrl(env, 'ABCD-EFGH-JK')).toBe('https://chat.example.com/join#ABCD-EFGH-JK');
   });
+
+  test('client-origin form: suggested username rides as a url-encoded u param', () => {
+    const env = {
+      API_BASE_URL: baseUrl,
+      APP_PUBLIC_URL: 'https://app.example.com',
+    } as never;
+    expect(buildJoinQrUrl(env, 'ABCD-EFGH-JK', 'alice')).toBe(
+      'https://app.example.com/join?server=https%3A%2F%2Fauth.example.com&u=alice#ABCD-EFGH-JK',
+    );
+  });
+
+  test('legacy form: suggested username becomes the sole u query param', () => {
+    const env = { API_BASE_URL: baseUrl } as never;
+    expect(buildJoinQrUrl(env, 'ABCD-EFGH-JK', 'alice')).toBe(
+      'https://auth.example.com/join?u=alice#ABCD-EFGH-JK',
+    );
+  });
+
+  test('null / undefined / empty suggested username is omitted entirely', () => {
+    const env = { API_BASE_URL: 'https://chat.example.com' } as never;
+    const expected = 'https://chat.example.com/join#ABCD-EFGH-JK';
+    expect(buildJoinQrUrl(env, 'ABCD-EFGH-JK', null)).toBe(expected);
+    expect(buildJoinQrUrl(env, 'ABCD-EFGH-JK', undefined)).toBe(expected);
+    expect(buildJoinQrUrl(env, 'ABCD-EFGH-JK', '')).toBe(expected);
+  });
 });

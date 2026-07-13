@@ -24,6 +24,42 @@ describe('parseJoinUrl', () => {
     if (result.ok) expect(result.value.baseUrl).toBe('https://relay.example.com/t4524089/');
   });
 
+  it('reads a well-formed suggested username from the u param (client-origin form)', () => {
+    const result = parseJoinUrl(
+      'https://app.example.com/join?server=https%3A%2F%2Fauth.example.com&u=alice#AB7K3-MN9PN',
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.baseUrl).toBe('https://auth.example.com');
+      expect(result.value.code).toBe('AB7K3-MN9PN');
+      expect(result.value.suggestedUsername).toBe('alice');
+    }
+  });
+
+  it('reads a suggested username from the legacy form too', () => {
+    const result = parseJoinUrl('https://chatsundere.me/join?u=bob_23#AB7K3-MN9PN');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.suggestedUsername).toBe('bob_23');
+  });
+
+  it('drops a malformed suggested username rather than failing the parse', () => {
+    // Uppercase / leading digit / too-long all violate the username rule; the
+    // join must still succeed, just without a pre-fill.
+    for (const bad of ['Alice', '9nine', 'a', 'has space', 'x'.repeat(40)]) {
+      const result = parseJoinUrl(
+        `https://chatsundere.me/join?u=${encodeURIComponent(bad)}#AB7K3-MN9PN`,
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.suggestedUsername).toBeUndefined();
+    }
+  });
+
+  it('leaves suggestedUsername undefined when no u param is present', () => {
+    const result = parseJoinUrl('https://chatsundere.me/join#AB7K3-MN9PN');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.suggestedUsername).toBeUndefined();
+  });
+
   it('rejects non-loopback http://', () => {
     const result = parseJoinUrl('http://chatsundere.me/join#AB7K3-MN9PN');
     expect(result.ok).toBe(false);
