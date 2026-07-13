@@ -43,7 +43,14 @@ matching the login surface; genuinely-terminal fatals stay fatal), and the
 relay-cut footer shows a calm "Retry will work once your account is linked." hint
 **without** disabling Retry (works-after-link preserved). Code review + Laura
 confirm: no defects; post-refinement master gates re-run green (typecheck 14/14,
-build 9/9, the two touched test files 10/10). Spec/plan:
+build 9/9, the two touched test files 10/10). **Two more Chris-approved copy
+fixes** (squashes `37d51609` + `4f84cd93`): the local-account-`conflict` recovery
+fatal now offers "Back to onboarding" (routes to the real exit; retryable fatals
+keep "Try again"), and `rateLimitMessage` was extracted to one shared
+`lib/recovery-copy.ts` so login shows the same honest `Retry-After`-derived
+wait-time as onboarding (plural glitch fixed, orphaned static copy removed). Code
+review Approved; typecheck 14/14, the three touched test files 18/18, build 9/9.
+Spec/plan:
 [[../superpowers/specs/2026-07-13-pre-golive-fix-bundle-design]],
 [[../superpowers/plans/2026-07-13-pre-golive-fix-bundle]]. Branch
 `fix/pre-golive-bundle` kept until Chris pushes. **Next:** Chris device-verifies
