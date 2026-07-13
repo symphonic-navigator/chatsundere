@@ -48,6 +48,21 @@ export function pickResponseHeaders(headers: Headers): Record<string, string> {
   return out;
 }
 
+/**
+ * Thrown when a provider requires the account proxy but the device has no
+ * discovered proxy URL / no account token — the user-facing remedy is
+ * linking the account.
+ */
+export class ProxyUnavailableError extends Error {
+  readonly missing: 'proxy_url' | 'account_token';
+
+  constructor(missing: 'proxy_url' | 'account_token', message: string) {
+    super(message);
+    this.name = 'ProxyUnavailableError';
+    this.missing = missing;
+  }
+}
+
 export interface BuildRequestArgs {
   provider: ProviderConfig;
   apiKey: string;
@@ -90,10 +105,16 @@ export function buildRequest(args: BuildRequestArgs): Request {
     const proxyUrl = source?.getUrl() ?? null;
     const token = source?.getToken() ?? null;
     if (proxyUrl === null) {
-      throw new Error('transport: cors-proxy routing selected but no proxy is available');
+      throw new ProxyUnavailableError(
+        'proxy_url',
+        'transport: cors-proxy routing selected but no proxy is available',
+      );
     }
     if (token === null) {
-      throw new Error('transport: cors-proxy routing selected but no account token is available');
+      throw new ProxyUnavailableError(
+        'account_token',
+        'transport: cors-proxy routing selected but no account token is available',
+      );
     }
     // The proxy target must be a BARE ORIGIN: apps/proxy-service `parseTarget`
     // refuses a target carrying a path (400 bad_target), and the forward is built

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { afterEach, describe, expect, it, test } from 'bun:test';
 import { setProxyAuthSource } from './proxy-auth.js';
-import { buildRequest, redactRequestHeaders } from './transport.js';
+import { ProxyUnavailableError, buildRequest, redactRequestHeaders } from './transport.js';
 import type { ProviderConfig } from './types.js';
 
 const directConfig: ProviderConfig = {
@@ -86,11 +86,20 @@ describe('buildRequest', () => {
     expect(req.url).toBe('https://proxy.example/v1/chat/completions');
   });
 
-  it('cors-proxy routing throws without a registered source or token', () => {
+  it('cors-proxy routing throws a typed ProxyUnavailableError without a registered source or token', () => {
     setProxyAuthSource(null);
     expect(() =>
       buildRequest({ provider: proxyConfig, apiKey: 'k', path: '/p', method: 'GET' }),
     ).toThrow(/no proxy is available/);
+    try {
+      buildRequest({ provider: proxyConfig, apiKey: 'k', path: '/p', method: 'GET' });
+      expect.unreachable('buildRequest should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toBeInstanceOf(ProxyUnavailableError);
+      expect((error as ProxyUnavailableError).missing).toBe('proxy_url');
+    }
+
     setProxyAuthSource({
       getUrl: () => 'https://proxy.example',
       getToken: () => null,
@@ -99,6 +108,14 @@ describe('buildRequest', () => {
     expect(() =>
       buildRequest({ provider: proxyConfig, apiKey: 'k', path: '/p', method: 'GET' }),
     ).toThrow(/no account token/);
+    try {
+      buildRequest({ provider: proxyConfig, apiKey: 'k', path: '/p', method: 'GET' });
+      expect.unreachable('buildRequest should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toBeInstanceOf(ProxyUnavailableError);
+      expect((error as ProxyUnavailableError).missing).toBe('account_token');
+    }
   });
 
   it('redactRequestHeaders strips x-chatsundere-authorization', () => {

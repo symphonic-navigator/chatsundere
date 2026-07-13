@@ -844,6 +844,7 @@ export function ChatPage(): JSX.Element {
             disabled={isStreamLive}
             retryDisabled={class2Gate.disabled}
             retryDisabledReason={class2Gate.tooltip ?? undefined}
+            failureKind={last.failureKind}
             onShowDiagnostics={diagnosticsReport ? () => setDiagOpen(true) : undefined}
             onRetry={async () => {
               // activeChatId is non-null whenever messages exist (chat-mode only).

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
   type OneShotArgs,
+  ProxyUnavailableError,
   type ReasoningIntent,
   type StreamChunk,
   type WireContentPart,
@@ -1048,11 +1049,19 @@ async function runIntoDraft(
 
       console.error('[stream-manager] stream failed for chat', args.chatId, err);
 
+      // A ProxyUnavailableError means the provider needed the account proxy
+      // relay and this device has no link — the constructive remedy is
+      // linking the account, not a generic retry (spec §6, Task E2).
+      const proxyUnavailable = err instanceof ProxyUnavailableError;
+
       // Persist whatever was buffered so the StreamInterruptedFooter can
-      // offer Retry/Discard when the user revisits the chat.
+      // offer Retry/Discard when the user revisits the chat. failureKind
+      // threads the specific-remedy discriminant onto the row the footer
+      // already reads, so a chat revisit still shows the right affordance.
       await db.messages.update(draftMessageId, {
         contentBlocks: current.contentBuffer,
         streamingState: 'incomplete',
+        ...(proxyUnavailable ? { failureKind: 'proxy_unavailable' as const } : {}),
       });
       // Persist the lore pill row and any vision pill rows so the pill blocks
       // already seeded into contentBuffer can resolve — without this the
@@ -1119,7 +1128,9 @@ async function runIntoDraft(
       // Surface the failure for the away-from-chat case — the inline
       // footer covers the in-chat case.
       toastStore.show({
-        message: `${args.persona.name} couldn't reach the model — retry from the chat`,
+        message: proxyUnavailable
+          ? `${args.persona.name} needs your account link to reach this model — open My Account → Server linking.`
+          : `${args.persona.name} couldn't reach the model — retry from the chat`,
         tone: 'warn',
         durationMs: 6000,
       });
@@ -1275,9 +1286,14 @@ async function runOpenerStream(
 
       console.error('[stream-manager] opener re-roll failed for chat', args.chatId, err);
 
+      // Same discriminant as the main runIntoDraft catch — the footer treats
+      // an interrupted opener row identically to an interrupted chat reply.
+      const proxyUnavailable = err instanceof ProxyUnavailableError;
+
       await db.messages.update(draftMessageId, {
         contentBlocks: current.contentBuffer,
         streamingState: 'incomplete',
+        ...(proxyUnavailable ? { failureKind: 'proxy_unavailable' as const } : {}),
       });
 
       set((s) => {
@@ -1289,7 +1305,9 @@ async function runOpenerStream(
       void queryClient.invalidateQueries({ queryKey: ['chats', args.chatId] });
 
       toastStore.show({
-        message: `${args.persona.name} couldn't reach the model — retry from the chat`,
+        message: proxyUnavailable
+          ? `${args.persona.name} needs your account link to reach this model — open My Account → Server linking.`
+          : `${args.persona.name} couldn't reach the model — retry from the chat`,
         tone: 'warn',
         durationMs: 6000,
       });

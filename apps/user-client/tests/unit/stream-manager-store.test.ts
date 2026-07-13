@@ -10,6 +10,7 @@ import * as engine from '../../src/lib/stream-engine';
 import * as titleGen from '../../src/lib/title-generator';
 import * as toolLoop from '../../src/lib/tool-loop';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
+import { toastStore, useToastStore } from '../../src/state/toast.store';
 
 async function seedChat() {
   const db = await openClientDataDb();
@@ -1160,6 +1161,116 @@ describe('stream-manager.store', () => {
     expect(personaMsg?.streamingState).toBe('incomplete');
     const firstBlock = personaMsg?.contentBlocks[0];
     expect(firstBlock).toEqual({ type: 'pill', pillId: kb?.id });
+  });
+
+  it('a ProxyUnavailableError failure marks the incomplete row and shows the account-link toast', async () => {
+    // Task E2 / spec §6: a requires-proxy send with no linked account throws
+    // the typed ProxyUnavailableError from packages/llm-unified — the client
+    // must surface the specific remedy, not the generic "couldn't reach" toast.
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-proxy-fail';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    vi.spyOn(engine, 'runStreamEngine').mockRejectedValue(
+      new llmUnified.ProxyUnavailableError(
+        'proxy_url',
+        'transport: cors-proxy routing selected but no proxy is available',
+      ),
+    );
+
+    toastStore.clear();
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      chat: {
+        id: myChatId,
+        personaId,
+        title: 'kept',
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      },
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const msgs = await db.messages.where('chatId').equals(myChatId).sortBy('createdAt');
+    const personaMsg = msgs.find((m) => m.role === 'persona');
+    expect(personaMsg?.streamingState).toBe('incomplete');
+    expect(personaMsg?.failureKind).toBe('proxy_unavailable');
+
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]?.message).toBe(
+      `${persona?.name} needs your account link to reach this model — open My Account → Server linking.`,
+    );
+  });
+
+  it('a plain engine failure keeps the generic toast and leaves failureKind unset', async () => {
+    const { db, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const myChatId = 'c-generic-fail';
+    await db.chats.add({
+      id: myChatId,
+      personaId,
+      title: 'kept',
+      resolvedMindspaceId: 'm1',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+
+    vi.spyOn(engine, 'runStreamEngine').mockRejectedValue(new Error('upstream down'));
+
+    toastStore.clear();
+    const store = useStreamManagerStore.getState();
+    await store.start({
+      ...baseStartArgs(myChatId, persona, model),
+      chatId: myChatId,
+      chat: {
+        id: myChatId,
+        personaId,
+        title: 'kept',
+        resolvedMindspaceId: 'm1',
+        createdAt: 1,
+        lastMessageAt: 1,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      },
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const msgs = await db.messages.where('chatId').equals(myChatId).sortBy('createdAt');
+    const personaMsg = msgs.find((m) => m.role === 'persona');
+    expect(personaMsg?.streamingState).toBe('incomplete');
+    expect(personaMsg?.failureKind).toBeUndefined();
+
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]?.message).toBe(
+      `${persona?.name} couldn't reach the model — retry from the chat`,
+    );
   });
 
   it('persists a describe_image pill after substitute-vision describe completes on a fresh send', async () => {

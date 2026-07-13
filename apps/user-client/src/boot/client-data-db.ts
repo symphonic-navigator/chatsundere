@@ -285,6 +285,11 @@ export interface MessageRow {
    *  alternating user/persona turn that goes on the wire. */
   seedRole?: 'greeting' | 'body';
   streamingState: 'complete' | 'incomplete';
+  /** Set when an `incomplete` message failed because a provider needed the
+   *  account proxy relay and the device has no link (spec §6, Task E2).
+   *  Drives StreamInterruptedFooter's "Open Server linking" affordance.
+   *  Non-indexed — no version bump needed for this field. */
+  failureKind?: 'proxy_unavailable';
 }
 
 /** One turn of a seed-template body: strictly alternating, user-first. */

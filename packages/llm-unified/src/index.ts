@@ -59,7 +59,12 @@ export {
   ProxyRedirectError,
 } from './proxy-fetch.js';
 
-export { buildRequest, type BuildRequestArgs, type StreamDiagnosticsSink } from './transport.js';
+export {
+  buildRequest,
+  ProxyUnavailableError,
+  type BuildRequestArgs,
+  type StreamDiagnosticsSink,
+} from './transport.js';
 
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';
 
