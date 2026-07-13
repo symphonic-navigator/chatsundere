@@ -20,14 +20,18 @@ export interface LoginOnlineLinkedArgs {
 /**
  * Discriminated outcome for the server leg of a double-auth login.
  *
- * - `ok`          — OPAQUE round-trip completed and produced an access token.
- * - `unreachable` — 5xx, network error, or timeout; degrade to offline.
- * - `auth_failed` — server returned 401; the passphrase may have been changed
- *                   elsewhere; degrade to offline with a specific banner.
- * - `skipped`     — no linked account exists; server was never contacted.
+ * - `ok`           — OPAQUE round-trip completed and produced an access token.
+ * - `rate_limited` — server answered 429; it is reachable but throttling us.
+ *                    Degrade to offline, but surface an honest "too many
+ *                    attempts, try again shortly" signal — never "unreachable".
+ * - `unreachable`  — 5xx, network error, or timeout; degrade to offline.
+ * - `auth_failed`  — server returned 401; the passphrase may have been changed
+ *                    elsewhere; degrade to offline with a specific banner.
+ * - `skipped`      — no linked account exists; server was never contacted.
  */
 export type ServerOutcome =
   | { kind: 'ok' }
+  | { kind: 'rate_limited'; retryAfterSeconds?: number }
   | { kind: 'unreachable' }
   | { kind: 'auth_failed' }
   | { kind: 'skipped' };
@@ -185,6 +189,21 @@ function isAuthFailure(error: unknown): boolean {
   return e.status === 401 || e.code === 'wrong_passphrase';
 }
 
+/**
+ * Returns the retry-after hint (seconds) when the server answered 429, or
+ * `undefined` for any other error. A 429 means the server is reachable but
+ * throttling — it must NOT collapse into the misleading `unreachable` outcome,
+ * which would tell the user their server is down when it is merely busy.
+ */
+function rateLimitHint(error: unknown): { retryAfterSeconds?: number } | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const e = error as { status?: unknown; code?: unknown; retryAfterSeconds?: unknown };
+  if (e.status !== 429 && e.code !== 'rate_limited') return null;
+  return {
+    retryAfterSeconds: typeof e.retryAfterSeconds === 'number' ? e.retryAfterSeconds : undefined,
+  };
+}
+
 function classifyServerOutcome(
   linked: Awaited<ReturnType<typeof getLinkedAccount>>,
   result: ReflectOk<unknown> | ReflectErr,
@@ -192,6 +211,8 @@ function classifyServerOutcome(
   if (!linked) return { kind: 'skipped' };
   if (result.ok) return { kind: 'ok' };
   if (isAuthFailure(result.error)) return { kind: 'auth_failed' };
+  const rateLimited = rateLimitHint(result.error);
+  if (rateLimited) return { kind: 'rate_limited', ...rateLimited };
   return { kind: 'unreachable' };
 }
 

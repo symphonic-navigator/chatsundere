@@ -143,6 +143,12 @@ export function Login() {
           case 'unreachable':
             useConnectivityStore.getState().onServerUnreachable();
             break;
+          case 'rate_limited':
+            // Reachable but throttled — honest "server busy", never "unreachable".
+            // The local session is already open (local-first), so the user still
+            // lands in the app; the badge carries the transient signal.
+            useConnectivityStore.getState().onServerRateLimited();
+            break;
           case 'auth_failed':
             useConnectivityStore.getState().onServerAuthFailed();
             break;

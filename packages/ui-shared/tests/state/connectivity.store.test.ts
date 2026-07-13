@@ -65,6 +65,12 @@ describe('onNetworkOffline', () => {
     expect(getKind()).toBe('server_unreachable');
   });
 
+  it('transitions server_rate_limited → server_unreachable', () => {
+    reset('server_rate_limited');
+    useConnectivityStore.getState().onNetworkOffline();
+    expect(getKind()).toBe('server_unreachable');
+  });
+
   it('transitions server_unreachable → server_unreachable (stays)', () => {
     reset('server_unreachable');
     useConnectivityStore.getState().onNetworkOffline();
@@ -84,6 +90,7 @@ describe('onServerOk', () => {
     'local_online',
     'linked_online',
     'server_unreachable',
+    'server_rate_limited',
     'server_auth_failed',
   ] as const;
 
@@ -101,6 +108,20 @@ describe('onServerUnreachable', () => {
     reset('local_online');
     useConnectivityStore.getState().onServerUnreachable();
     expect(getKind()).toBe('server_unreachable');
+  });
+});
+
+describe('onServerRateLimited', () => {
+  it('transitions to server_rate_limited from any state', () => {
+    reset('linked_online');
+    useConnectivityStore.getState().onServerRateLimited();
+    expect(getKind()).toBe('server_rate_limited');
+  });
+
+  it('is cleared by a subsequent onServerOk (self-heals to linked_online)', () => {
+    reset('server_rate_limited');
+    useConnectivityStore.getState().onServerOk();
+    expect(getKind()).toBe('linked_online');
   });
 });
 

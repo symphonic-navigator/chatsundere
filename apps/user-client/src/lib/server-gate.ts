@@ -56,6 +56,11 @@ export function deriveServerGate(i: GateInputs): ServerGate {
   if (i.connectivity === 'server_auth_failed') {
     return disabled('auth-action', copy.serverGate.authAction);
   }
+  if (i.connectivity === 'server_rate_limited') {
+    // Reachable but throttling us: behaves like offline (engine paused, self-heals
+    // on the next probe) but the copy tells the honest "too many attempts" story.
+    return disabled('offline', copy.serverGate.serverBusy);
+  }
   if (i.connectivity === 'server_unreachable' || i.connectivity === 'local_offline') {
     return disabled('offline', copy.serverGate.offline);
   }

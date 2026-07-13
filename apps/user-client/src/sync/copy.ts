@@ -115,6 +115,8 @@ export const syncCopy = {
     offlinePaused:
       "Your server isn't reachable, so shared edits are paused — nothing is lost, and everything wakes up the moment you're back. Reading works as always.",
     linkedOnline: 'Connected to your server — shared edits sync as you make them.',
+    rateLimited:
+      'Your server asked us to slow down after too many attempts, so shared edits are paused for a moment — nothing is lost, and syncing resumes on its own shortly. Reading works as always.',
     authFailed: 'Your server needs you to sign in again before syncing resumes.',
     local: 'Local-only — everything stays on this device.',
   },

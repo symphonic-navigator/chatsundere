@@ -24,7 +24,7 @@ const LINKED_ROW = {
   linked_at: new Date(),
 };
 
-function makeServerClient(behaviour: 'ok' | '401' | '500'): ServerClient {
+function makeServerClient(behaviour: 'ok' | '401' | '500' | '429'): ServerClient {
   return {
     async joinStart() {
       throw new Error('unexpected');
@@ -44,6 +44,13 @@ function makeServerClient(behaviour: 'ok' | '401' | '500'): ServerClient {
       }
       if (behaviour === '500') {
         throw Object.assign(new Error('Internal Server Error'), { status: 500 });
+      }
+      if (behaviour === '429') {
+        throw Object.assign(new Error('Too Many Requests'), {
+          status: 429,
+          code: 'rate_limited',
+          retryAfterSeconds: 42,
+        });
       }
       // For 'ok', this path is still reached and would need OPAQUE state.
       // We throw here to indicate the test should use a simpler path.
@@ -124,6 +131,32 @@ describe('loginOnlineLinked — ServerOutcome classification', () => {
     expect(result.serverOutcome.kind).toBe('unreachable');
     expect(result.serverReachable).toBe(false);
     expect(result.serverAuthOk).toBe(false);
+    expect(result.session.online).toBe(false);
+    result.session.close();
+    db.close();
+  });
+
+  it('classifies a 429 response as rate_limited, not unreachable', async () => {
+    const db = await openLocalDb(DB);
+    await createLocalAccount({ db, username: 'alice', passphrase: 'pw' });
+    await putLinkedAccount(db, LINKED_ROW);
+
+    const result = await loginOnlineLinked({
+      db,
+      serverClient: makeServerClient('429'),
+      passphrase: 'pw',
+    });
+
+    expect(result.serverOutcome.kind).toBe('rate_limited');
+    // The server answered (429), so it was reachable — the honest signal is
+    // "throttled", never "unreachable".
+    if (result.serverOutcome.kind === 'rate_limited') {
+      expect(result.serverOutcome.retryAfterSeconds).toBe(42);
+    }
+    expect(result.serverReachable).toBe(true);
+    expect(result.serverAuthOk).toBe(false);
+    // No access token was issued, so the session still degrades to offline linked.
+    expect(result.session.mode).toBe('linked');
     expect(result.session.online).toBe(false);
     result.session.close();
     db.close();

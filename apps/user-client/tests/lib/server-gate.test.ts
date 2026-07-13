@@ -53,6 +53,15 @@ describe('deriveServerGate', () => {
     }
   });
 
+  it('server_rate_limited reads as offline (paused) but with the honest busy copy', () => {
+    const gate = deriveServerGate(inputs({ connectivity: 'server_rate_limited' }));
+    expect(gate.enabled).toBe(false);
+    expect(gate.reason).toBe('offline');
+    expect(gate.tooltip).toBe(copy.serverGate.serverBusy);
+    // Distinct from the plain-offline copy — the user is told they are throttled.
+    expect(gate.tooltip).not.toBe(copy.serverGate.offline);
+  });
+
   it('discovery invalid is server-error, distinct from offline', () => {
     const gate = deriveServerGate(
       inputs({ discoveryStatus: 'invalid', connectivity: 'linked_online' }),

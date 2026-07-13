@@ -49,6 +49,7 @@ export const copy = {
       integrityFailure: "Couldn't verify your local data. Try clearing site data and re-linking.",
       authFailed: 'Authentication failed.',
       serverUnreachable: 'Could not reach the server.',
+      rateLimited: 'Too many attempts. Please wait a moment, then try again.',
       genericError: 'Something went wrong. Please try again.',
       prfRequired: 'Your passkey does not support PRF — needed for biometric login.',
       passkeyCancelled: '',

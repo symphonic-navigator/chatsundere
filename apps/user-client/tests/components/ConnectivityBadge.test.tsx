@@ -31,6 +31,18 @@ describe('ConnectivityBadge expanded framing (§11.2)', () => {
     ).toBeInTheDocument();
   });
 
+  it('tells the honest "server busy" story when throttled — never "unreachable"', async () => {
+    linked();
+    useConnectivityStore.getState().setState({ kind: 'server_rate_limited' });
+    render(<ConnectivityBadge />);
+    // The pill itself reads "Server busy", not "Server unreachable".
+    expect(screen.getByRole('button', { name: /connectivity: server busy/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
+    expect(screen.getByText(/asked us to slow down after too many attempts/i)).toBeInTheDocument();
+    // The misleading unreachable framing must not appear for a throttled server.
+    expect(screen.queryByText(/isn't reachable/i)).not.toBeInTheDocument();
+  });
+
   it('shows the connected framing when linked and online', async () => {
     linked();
     useConnectivityStore.getState().setState({ kind: 'linked_online' });

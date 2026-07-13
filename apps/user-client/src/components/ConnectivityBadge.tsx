@@ -16,6 +16,7 @@ const label = {
   local_online: { text: 'Local', tone: 'default' },
   linked_online: { text: 'Linked', tone: 'success' },
   server_unreachable: { text: 'Server unreachable', tone: 'warning' },
+  server_rate_limited: { text: 'Server busy', tone: 'warning' },
   server_auth_failed: { text: 'Server auth failed', tone: 'danger' },
 } satisfies Record<Connectivity['kind'], { text: string; tone: Tone }>;
 
@@ -26,6 +27,7 @@ const minimalLabel: Partial<Record<Connectivity['kind'], string>> = {
   // "Not synced" rather than "Offline": in a local-first app only shared-edit
   // sync is paused — the chat itself works fully. The tap framing carries the rest.
   server_unreachable: 'Not synced',
+  server_rate_limited: 'Not synced',
   server_auth_failed: 'Auth failed',
 };
 
@@ -42,6 +44,8 @@ export function connectivityFraming(kind: Connectivity['kind'], linkStatus: Link
       return syncCopy.connectivity.linkedOnline;
     case 'server_auth_failed':
       return syncCopy.connectivity.authFailed;
+    case 'server_rate_limited':
+      return syncCopy.connectivity.rateLimited;
     default:
       // server_unreachable (and any local_* a linked device transiently shows):
       // the app rests into reading mode — shared edits paused, wakes on return.

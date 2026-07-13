@@ -105,7 +105,11 @@ export function ChangePassphrase() {
     let cancelled = false;
     void (async () => {
       const kind = connectivity.kind;
-      if (kind === 'server_unreachable' || kind === 'server_auth_failed') {
+      if (
+        kind === 'server_unreachable' ||
+        kind === 'server_rate_limited' ||
+        kind === 'server_auth_failed'
+      ) {
         // Confirm the user actually has a linked account before showing the blocked screen.
         // A `server_unreachable` state for an unlinked user should not happen in practice,
         // but guard defensively.
@@ -255,12 +259,17 @@ export function ChangePassphrase() {
 
   if (screen.kind === 'offline-blocked') {
     // ── Offline-blocked surface ─────────────────────────────────────────────
+    // A throttled server is reachable, so the plain-offline copy would repeat the
+    // very "unreachable" lie this state exists to avoid — split the copy on it.
+    const throttled = connectivity.kind === 'server_rate_limited';
     content = (
       <section className="space-y-6 pt-8">
         <h1 className="font-display text-3xl italic tracking-tight text-paper lg:text-4xl">
-          {c.offlineTitle}
+          {throttled ? c.rateLimitedTitle : c.offlineTitle}
         </h1>
-        <p className="text-sm leading-relaxed text-paper-soft">{c.offlineBody}</p>
+        <p className="text-sm leading-relaxed text-paper-soft">
+          {throttled ? c.rateLimitedBody : c.offlineBody}
+        </p>
         <Link
           to="/app/account"
           className="inline-block rounded-[var(--radius-card)] bg-ink-soft px-4 py-3 text-sm font-medium text-paper ring-1 ring-inset ring-aurora-700/30 transition-opacity hover:opacity-80"

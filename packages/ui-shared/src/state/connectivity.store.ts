@@ -6,6 +6,11 @@ export type Connectivity =
   | { kind: 'local_online' }
   | { kind: 'linked_online' }
   | { kind: 'server_unreachable' }
+  // Server answered 429: reachable but throttling us. Distinct from
+  // server_unreachable so the badge can tell the honest "too many attempts,
+  // this resumes shortly" story instead of falsely claiming the server is down.
+  // The sync engine treats it exactly like offline (paused) — see server-gate.
+  | { kind: 'server_rate_limited' }
   | { kind: 'server_auth_failed' };
 
 interface ConnectivityState {
@@ -15,6 +20,7 @@ interface ConnectivityState {
   onNetworkOffline(): void;
   onServerOk(): void;
   onServerUnreachable(): void;
+  onServerRateLimited(): void;
   onServerAuthFailed(): void;
 }
 
@@ -32,6 +38,7 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
     if (
       s.kind === 'linked_online' ||
       s.kind === 'server_auth_failed' ||
+      s.kind === 'server_rate_limited' ||
       s.kind === 'server_unreachable'
     )
       set({ state: { kind: 'server_unreachable' } });
@@ -39,6 +46,7 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
   },
   onServerOk: () => set({ state: { kind: 'linked_online' } }),
   onServerUnreachable: () => set({ state: { kind: 'server_unreachable' } }),
+  onServerRateLimited: () => set({ state: { kind: 'server_rate_limited' } }),
   onServerAuthFailed: () => set({ state: { kind: 'server_auth_failed' } }),
 }));
 

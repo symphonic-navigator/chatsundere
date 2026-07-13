@@ -12,6 +12,8 @@ export const copy = {
       'This comes alive once you link an account. Link one under Account → Server linking — or request an invitation.',
     offline:
       "Your server isn't reachable right now. This wakes up again the moment the connection returns.",
+    serverBusy:
+      'Your server is asking us to slow down after too many attempts. This resumes on its own in a moment — nothing is lost.',
     authAction:
       'The server stopped recognising this session. Sync your passphrase under Account → Server linking to restore the link.',
     serverOdd:
@@ -249,6 +251,11 @@ export const copy = {
     successCta: 'Back to settings',
     offlineTitle: "We can't change your passphrase while offline",
     offlineBody: 'Reach a server, then try again. Your local data is safe in the meantime.',
+    // Throttled (429) variant: the server IS reachable, so the offline copy would
+    // lie. Same block, honest words — the state self-heals in a moment.
+    rateLimitedTitle: 'The server is asking us to slow down',
+    rateLimitedBody:
+      'Too many attempts just now — this clears on its own in a moment. Your local data is safe; try again shortly.',
     offlineBackCta: 'Back to settings',
     errors: {
       mismatch: 'The two passphrases do not match.',
