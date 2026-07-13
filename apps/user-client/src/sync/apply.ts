@@ -112,9 +112,28 @@ export function resetTombstoneCounter(): void {
  */
 let blindIdCache: Map<string, Map<string, string>> | null = null;
 
-/** Reset the stage-2 blind-id cache; the drain + pull cycles call this at start. */
+/**
+ * Stage-1 forward memo (Task B3, MEDIUM-3): `collection → (sync key → blindIdB64)`,
+ * built lazily per drain/pull cycle so `findKeyByBlindId`'s steady-state loop
+ * re-derives each `syncRows` meta's blind id AT MOST ONCE per cycle rather than
+ * once PER pulled tombstone. Against a large vault (10k+ rows) with a
+ * multi-hundred-tombstone page, the un-memoised re-derivation was minutes of CPU
+ * under the sync Web Lock — read as a hang. Same lifecycle as `blindIdCache`
+ * (below) — MUST be nulled at the exact same site(s): a memo entry surviving
+ * across a master-key change would derive under the wrong MK, a correctness bug.
+ */
+let blindIdStage1Cache: Map<string, Map<string, string>> | null = null;
+
+/**
+ * Reset both blind-id caches (stage-1 forward memo + stage-2 reverse index); the
+ * drain + pull cycles call this at start. Both are per-cycle and MK-scoped: every
+ * `drainOutbox()`/`runPullLoop()` call resets them BEFORE reading the cycle's own
+ * `mk`, so a stale entry from a prior master key can never survive into a new
+ * cycle's derivations — there is no separate MK-change hook to keep in sync.
+ */
 export function resetBlindIdCycleCache(): void {
   blindIdCache = null;
+  blindIdStage1Cache = null;
 }
 
 /**
@@ -461,7 +480,9 @@ async function hasPendingDelete(collection: SyncCollection, key: string): Promis
  * nothing local matches (nothing to remove).
  *
  * Stage 1 (steady state): re-derive from the `syncRows` metas — cheap, and the
- * common case.
+ * common case. Task B3: derivations are memoised per (collection, key) across
+ * the cycle in `blindIdStage1Cache`, so a multi-hundred-tombstone page against a
+ * large vault re-derives each meta's blind id once, not once per tombstone.
  *
  * Stage 2 (audit #4, recovery): a `syncRows`-independent fallback. Recovery
  * legitimately CLEARS `syncRows` (step 2) then pulls all from 0, so every pulled
@@ -487,9 +508,21 @@ async function findKeyByBlindId(
   if (!isSyncCollection(collection)) return null;
   const db = getClientDataDb();
   // Stage 1 — steady state: resolve via syncRows (cheap; the common case).
+  // Task B3: memoised across the cycle — a meta's blind id is derived at most
+  // once per (collection, key), however many tombstones this cycle re-scan it.
   const metas = await db.syncRows.where('collection').equals(collection).toArray();
+  blindIdStage1Cache ??= new Map();
+  let stage1PerCollection = blindIdStage1Cache.get(collection);
+  if (!stage1PerCollection) {
+    stage1PerCollection = new Map();
+    blindIdStage1Cache.set(collection, stage1PerCollection);
+  }
   for (const meta of metas) {
-    const bid = toBase64Url(await activeBlindId()(mk, collection, meta.key));
+    let bid = stage1PerCollection.get(meta.key);
+    if (bid === undefined) {
+      bid = toBase64Url(await activeBlindId()(mk, collection, meta.key));
+      stage1PerCollection.set(meta.key, bid);
+    }
     if (bid === blindIdB64) return meta.key;
   }
   // Stage 2 (audit #4) — syncRows-independent fallback for the recovery pull-all.

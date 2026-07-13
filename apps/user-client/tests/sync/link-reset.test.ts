@@ -75,6 +75,22 @@ describe('resetEngineStateForNewLink', () => {
     expect(state.backfillDone).toBeNull();
   });
 
+  it('clears a tamper attention wholesale (a relink is a legitimate reset, spec 2026-07-13 §3.1)', async () => {
+    const db = getClientDataDb();
+    await db.syncState.put({
+      id: 'state',
+      epoch: 'old-epoch',
+      watermarkRev: 99,
+      lastSyncAt: 123,
+      pulling: null,
+      attention: { kind: 'tamper' },
+    });
+
+    await resetEngineStateForNewLink();
+
+    expect((await getSyncState()).attention).toBeNull();
+  });
+
   it('is idempotent on a fresh database (first-ever link costs nothing)', async () => {
     await resetEngineStateForNewLink();
     const state = await getSyncState();

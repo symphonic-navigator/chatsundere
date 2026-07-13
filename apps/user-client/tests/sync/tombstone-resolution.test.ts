@@ -145,3 +145,39 @@ describe('findKeyByBlindId — stage-2 local-key fallback (audit #4)', () => {
     expect(spy).not.toHaveBeenCalled(); // resolved on stage 1 — never enumerated the table
   });
 });
+
+// ===== Task B3 — stage-1 per-cycle memoisation (MEDIUM-3) =====
+
+describe('findKeyByBlindId — stage-1 per-cycle memoisation (Task B3)', () => {
+  it('derives each syncRows meta blind id at most once per cycle, not once per tombstone', async () => {
+    const db = getClientDataDb();
+
+    // M=20 syncRows metas, none of which the N=5 tombstones below will match —
+    // a guaranteed stage-1 miss on every lookup, so the UNMEMOISED baseline
+    // scans all M metas on EVERY one of the N lookups (N×M = 100 derivations).
+    // No local rows are seeded for 'chats', so stage 2's fallback enumerates an
+    // empty table and contributes zero extra derivations either way — the count
+    // below isolates stage 1's behaviour cleanly.
+    const M = 20;
+    const N = 5;
+    for (let i = 0; i < M; i++) {
+      await db.syncRows.put({ collection: 'chats', key: `k${i}`, rev: 1, ciphertextHash: 'h' });
+    }
+
+    let deriveCalls = 0;
+    _setApplyComputeBlindId(async (_mk, collection, key) => {
+      deriveCalls += 1;
+      return fakeBlindId(collection, key);
+    });
+
+    for (let i = 0; i < N; i++) {
+      const outcome = await applyRecord(tombstoneForKey('chats', `ghost${i}`, i + 1));
+      expect(outcome).toEqual({ kind: 'tombstoned' }); // no match — no-op, as before
+    }
+
+    // Memoised: the first miss caches all M metas' blind ids; the remaining
+    // N-1 lookups reuse the cache and derive nothing new. Ceiling per the brief:
+    // at most M (+N for genuinely new/uncached keys) — nowhere near N×M.
+    expect(deriveCalls).toBeLessThanOrEqual(M + N);
+  });
+});

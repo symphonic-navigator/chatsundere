@@ -84,6 +84,32 @@ describe('setPulling / setAttention', () => {
   });
 });
 
+describe('setAttention — tamper outranks routine notices (spec 2026-07-13 §3.1)', () => {
+  it('is not clobbered by a pulled-tombstone wave notice', async () => {
+    await setAttention({ kind: 'tamper' });
+    await setAttention({ kind: 'tombstone_threshold', count: 25 });
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+
+  it('is not clobbered by a quota-exceeded notice', async () => {
+    await setAttention({ kind: 'tamper' });
+    await setAttention({ kind: 'quota_exceeded', usedBytes: 900, quotaBytes: 1000 });
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+
+  it('is not clobbered by a clear attempt', async () => {
+    await setAttention({ kind: 'tamper' });
+    await setAttention(null);
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+
+  it('stays tamper when tamper is raised again (idempotent)', async () => {
+    await setAttention({ kind: 'tamper' });
+    await setAttention({ kind: 'tamper' });
+    expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
+  });
+});
+
 describe('checkEpoch (§8)', () => {
   it('persists the epoch on first sync', async () => {
     expect(await checkEpoch('epoch-A')).toBe('first');

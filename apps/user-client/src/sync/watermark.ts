@@ -178,8 +178,14 @@ export function beginAttentionCycle(): void {
 
 /** Set (or clear) the attention (error) state the status line renders. */
 export async function setAttention(a: SyncAttention | null): Promise<void> {
-  await getSyncState();
+  const state = await getSyncState();
   if (a) raisedThisCycle.add(a.kind);
+  // The tamper security alarm outranks every routine notice (spec 2026-07-13
+  // §3.1): once raised it survives being overwritten by a lower-severity kind
+  // or cleared outright, and only a wholesale engine reset (relink/decouple/
+  // wipe, which write `syncState` directly, never through this function) can
+  // dismiss it.
+  if (state.attention?.kind === 'tamper' && a?.kind !== 'tamper') return;
   await getClientDataDb().syncState.update(STATE_ID, { attention: a });
 }
 

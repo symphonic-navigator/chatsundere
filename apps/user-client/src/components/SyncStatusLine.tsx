@@ -153,23 +153,27 @@ export function deriveSyncStatus(input: {
     };
   }
 
-  // 6. First-ever sync — an empty watermark on a reachable server: the initial
-  //    "pulling your data onto this device". "Synced" is defined to EXCLUDE this.
-  if (state.watermarkRev === 0 && online) {
+  // 6. First-ever sync — an empty watermark on a reachable server that has never
+  //    completed a cycle: the initial "pulling your data onto this device". A
+  //    completed cycle stamps `lastSyncAt` even on a zero-record account (an
+  //    empty account never advances the watermark), so once stamped this falls
+  //    through to the normal synced/waiting vocabulary instead of "pulling"
+  //    forever. "Synced" is defined to EXCLUDE the still-unstamped case.
+  if (state.watermarkRev === 0 && online && state.lastSyncAt === null) {
     return { kind: 'pulling', tone: 'active', text: syncCopy.status.pulling };
   }
 
-  // 6. Waiting — online with pending outbox entries.
+  // 7. Waiting — online with pending outbox entries.
   if (outboxCount > 0)
     return { kind: 'waiting', tone: 'active', text: syncCopy.status.waiting(outboxCount) };
 
-  // 7. Fetching images — records are settled, but the eager thumb/avatar queue
+  // 8. Fetching images — records are settled, but the eager thumb/avatar queue
   //    (§6) is still draining. "Synced" is gated until it empties, so the line
   //    never claims completion while pictures are still arriving.
   if (input.fetchingImages)
     return { kind: 'fetching', tone: 'active', text: syncCopy.blob.fetching };
 
-  // 8. Synced — nothing pending, no pull, no attention, no images in flight.
+  // 9. Synced — nothing pending, no pull, no attention, no images in flight.
   const rel = state.lastSyncAt !== null ? ` · ${relativeTimeLabel(state.lastSyncAt, now)}` : '';
   return { kind: 'synced', tone: 'neutral', text: `${syncCopy.status.synced}${rel}` };
 }

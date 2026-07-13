@@ -120,11 +120,23 @@ describe('SyncStatusLine', () => {
     expect(await screen.findByText(/3 pages so far/)).toBeInTheDocument();
   });
 
-  it('Pulling: always shown on watermarkRev === 0 (fresh device)', async () => {
+  it('Pulling: shown on watermarkRev === 0 before any cycle has completed (fresh device)', async () => {
     linkOnline();
-    await seedState({ watermarkRev: 0, pulling: null });
+    // A truly fresh device has no completed cycle yet, so `lastSyncAt` is null —
+    // that is what distinguishes it from an already-synced empty account.
+    await seedState({ watermarkRev: 0, lastSyncAt: null, pulling: null });
     renderLine();
     expect(await screen.findByText('Pulling your data onto this device…')).toBeInTheDocument();
+  });
+
+  it('Synced: an already-synced empty account (watermarkRev === 0 but a cycle has completed)', async () => {
+    linkOnline();
+    // A zero-record account never advances the watermark, but a completed cycle
+    // still stamps `lastSyncAt` — the line must not show "Pulling" forever.
+    await seedState({ watermarkRev: 0, lastSyncAt: Date.now(), pulling: null });
+    renderLine();
+    const el = await screen.findByText(/^Synced/);
+    expect(el).toBeInTheDocument();
   });
 
   it('"Synced" EXCLUDES an active pull — a pulling-set state renders Pulling, not Synced', async () => {
@@ -326,6 +338,22 @@ describe('deriveSyncStatus (pure precedence)', () => {
     };
     expect(deriveSyncStatus({ state, outboxCount: 0, online: true, recovering: false }).kind).toBe(
       'pulling',
+    );
+  });
+
+  it('a never-synced account (watermark 0, no completed cycle yet) reads Pulling', () => {
+    const state: SyncStateRow = { ...BASE_STATE, watermarkRev: 0, lastSyncAt: null };
+    expect(deriveSyncStatus({ state, outboxCount: 0, online: true, recovering: false }).kind).toBe(
+      'pulling',
+    );
+  });
+
+  it('an already-synced empty account (watermark 0, but a cycle has completed) reads Synced, not Pulling', () => {
+    // A zero-record account never advances the watermark, but a completed cycle
+    // still stamps `lastSyncAt` — that stamp is what tells the two apart.
+    const state: SyncStateRow = { ...BASE_STATE, watermarkRev: 0, lastSyncAt: Date.now() };
+    expect(deriveSyncStatus({ state, outboxCount: 0, online: true, recovering: false }).kind).toBe(
+      'synced',
     );
   });
 });
