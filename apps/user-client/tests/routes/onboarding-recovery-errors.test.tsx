@@ -78,6 +78,36 @@ describe('OnboardingRecovery — catch handler branches (D1)', () => {
     mockRecoverFromScratch.mockReset();
   });
 
+  it('CryptoError conflict → fatal screen offers "Back to onboarding", not "Try again"', async () => {
+    mockRecoverFromScratch.mockRejectedValue(new CryptoError('conflict', 'already exists'));
+    const user = userEvent.setup();
+    renderRoute();
+
+    await fillAndSubmit(user);
+
+    expect(
+      await screen.findByText('A local account already exists on this device.'),
+    ).toBeInTheDocument();
+    const action = screen.getByRole('link', { name: 'Back to onboarding' });
+    expect(action).toBeInTheDocument();
+    expect(action).toHaveAttribute('href', '/onboarding');
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('HttpError 5xx (server unreachable) fatal → still offers "Try again"', async () => {
+    mockRecoverFromScratch.mockRejectedValue(new HttpError(503, undefined, 'unavailable'));
+    const user = userEvent.setup();
+    renderRoute();
+
+    await fillAndSubmit(user);
+
+    expect(
+      await screen.findByText('Server unreachable. Check your connection.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Back to onboarding' })).not.toBeInTheDocument();
+  });
+
   it('CryptoError not_found → inline username-field error, screen stays ready, inputs preserved', async () => {
     mockRecoverFromScratch.mockRejectedValue(new CryptoError('not_found', 'no such user'));
     const user = userEvent.setup();

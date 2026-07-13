@@ -23,7 +23,14 @@ import { HttpError } from '../../lib/fetch.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isValidServerUrl } from '../../lib/server-url.js';
 
-type Screen = { kind: 'ready' } | { kind: 'submitting' } | { kind: 'fatal'; message: string };
+type Screen =
+  | { kind: 'ready' }
+  | { kind: 'submitting' }
+  // `action` distinguishes fatals that are genuinely retryable (server
+  // unreachable, unexpected error) from the local-account-conflict fatal,
+  // where re-running the same recovery attempt would just hit the same
+  // conflict again — that one routes back to onboarding instead.
+  | { kind: 'fatal'; message: string; action?: 'retry' | 'onboarding' };
 
 // Verbatim copy of routes/login/recovery.tsx's mapRecoveryKeyError result for
 // this code (lib/copy.ts recovery.errors.keyInvalid) — both recovery surfaces
@@ -121,7 +128,11 @@ export function OnboardingRecovery() {
       navigate('/app', { replace: true });
     } catch (err) {
       if (err instanceof CryptoError && err.code === 'conflict') {
-        setScreen({ kind: 'fatal', message: 'A local account already exists on this device.' });
+        setScreen({
+          kind: 'fatal',
+          message: 'A local account already exists on this device.',
+          action: 'onboarding',
+        });
         return;
       }
       if (
@@ -182,13 +193,22 @@ export function OnboardingRecovery() {
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
-        <button
-          type="button"
-          onClick={() => setScreen({ kind: 'ready' })}
-          className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
-        >
-          Try again
-        </button>
+        {screen.action === 'onboarding' ? (
+          <Link
+            to="/onboarding"
+            className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+          >
+            Back to onboarding
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setScreen({ kind: 'ready' })}
+            className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+          >
+            Try again
+          </button>
+        )}
       </main>
     );
   }
