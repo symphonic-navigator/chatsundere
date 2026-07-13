@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useId } from 'react';
 import { normaliseCodeInput } from '../lib/code-input.js';
+import { parseJoinUrl } from '../lib/qr.js';
 
 interface Props {
   baseUrl: string;
@@ -11,22 +12,22 @@ interface Props {
 
 /**
  * Variant-C form fields: URL field + Code field shared by the invitation
- * and pairing form screens. Includes paste-auto-split: pasting a
- * `https://<base>/join#<CODE>` URL into the URL field extracts the fragment
- * into the Code field and trims the URL to its base. See spec § 2 Decision 11.
+ * and pairing form screens. Includes paste-auto-split: pasting a full join
+ * URL (legacy `https://<base>/join#<CODE>` or client-origin
+ * `https://<app>/join?server=<base>#<CODE>`) into the URL field extracts the
+ * fragment into the Code field and the resolved server into the URL field.
+ * Delegates to `parseJoinUrl` so both forms and their scheme/param
+ * validation stay in one place. See spec § 2 Decision 11.
  */
 export function JoinFormFields({ baseUrl, code, onBaseUrlChange, onCodeChange }: Props) {
   const urlId = useId();
   const codeId = useId();
 
   function handleUrlChange(raw: string) {
-    const match = raw.match(/^(.+\/join)#([A-Za-z0-9-]+)$/);
-    const joinPart = match?.[1];
-    const codePart = match?.[2];
-    if (joinPart !== undefined && codePart !== undefined) {
-      const base = joinPart.replace(/\/join$/, '/');
-      onBaseUrlChange(base);
-      onCodeChange(normaliseCodeInput(codePart));
+    const parsed = parseJoinUrl(raw);
+    if (parsed.ok) {
+      onBaseUrlChange(parsed.value.baseUrl);
+      onCodeChange(normaliseCodeInput(parsed.value.code));
       return;
     }
     onBaseUrlChange(raw);

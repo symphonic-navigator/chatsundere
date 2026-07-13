@@ -236,9 +236,16 @@ prompts for them interactively rather than expecting you to hand-edit them:
 | `TRAEFIK_CERTRESOLVER` | Traefik cert resolver name (`letsencrypt`) | no | as configured in your own Traefik |
 
 `generate.sh` derives `API_BASE_URL`, `PROXY_PUBLIC_URL`, `SYNC_PUBLIC_URL`,
-`ADMIN_PUBLIC_URL`, and `CORS_ALLOWED_ORIGINS` from the `HOST_*` values, so they
-do not need separate prompts — they still appear as ordinary vars in the
-rendered `deployment.env` and are covered by the §4.1/4.2 tables above.
+`ADMIN_PUBLIC_URL`, `APP_PUBLIC_URL`, and `CORS_ALLOWED_ORIGINS` from the
+`HOST_*` values, so they do not need separate prompts — they still appear as
+ordinary vars in the rendered `deployment.env` and are covered by the §4.1/4.2
+tables above.
+
+`APP_PUBLIC_URL` is the user-client's public origin. When set, join QR codes
+and deep links point at `${APP_PUBLIC_URL}/join?server=…#code`, so a
+native-camera scan lands on a real screen; when unset, they degrade to the
+legacy auth-origin form (`${API_BASE_URL}/join#code`, with any `/auth` suffix
+stripped). See `apps/auth-service/.env.example` for the full env-var contract.
 
 *Next step:* chapter 5 walks the generator that turns this reference into a
 running deployment.

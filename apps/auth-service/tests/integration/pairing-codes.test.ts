@@ -201,9 +201,13 @@ describe.skipIf(skip)('/api/v1/me/pairing-codes', () => {
         state: string;
       };
       expect(body.code).toMatch(/^[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}-[0-9ABCDEFGHJKMNPQRSTUWXYZ]{5}$/);
-      expect(body.qr_url).toBe(
-        `${process.env.API_BASE_URL ?? 'http://localhost:3100/auth'}/join#${body.code}`,
+      // qr_url is the join deep-link built from the (stripped) base URL —
+      // buildJoinQrUrl always strips a trailing /auth suffix (B1 fix).
+      const strippedBase = (process.env.API_BASE_URL ?? 'http://localhost:3100/auth').replace(
+        /\/auth$/,
+        '',
       );
+      expect(body.qr_url).toBe(`${strippedBase}/join#${body.code}`);
       expect(body.state).toBe('active');
       const ttlMs = new Date(body.expires_at).getTime() - new Date(body.created_at).getTime();
       expect(ttlMs).toBeGreaterThanOrEqual(290_000);

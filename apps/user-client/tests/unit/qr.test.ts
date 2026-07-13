@@ -35,12 +35,69 @@ describe('parseJoinUrl', () => {
     expect(parseJoinUrl('https://chatsundere.me/login').ok).toBe(false);
   });
 
-  it('rejects out-of-alphabet fragment chars', () => {
-    expect(parseJoinUrl('https://chatsundere.me/join#IB7K3-MN9PN').ok).toBe(false);
-    expect(parseJoinUrl('https://chatsundere.me/join#VB7K3-MN9PN').ok).toBe(false);
+  it('normalises confusable fragment chars (I/V) before validating, same as manual entry', () => {
+    // I and V are confusable-character substitution targets (→ 1 / Y) in
+    // normaliseCodeInput, so a fragment carrying them now auto-corrects
+    // rather than being rejected outright.
+    const r1 = parseJoinUrl('https://chatsundere.me/join#IB7K3-MN9PN');
+    expect(r1).toEqual({
+      ok: true,
+      value: { baseUrl: 'https://chatsundere.me/', code: '1B7K3-MN9PN' },
+    });
+    const r2 = parseJoinUrl('https://chatsundere.me/join#VB7K3-MN9PN');
+    expect(r2).toEqual({
+      ok: true,
+      value: { baseUrl: 'https://chatsundere.me/', code: 'YB7K3-MN9PN' },
+    });
+  });
+
+  it('rejects a fragment that is still malformed after normalisation', () => {
+    // Too few alphabet characters to reach the canonical 10-char shape even
+    // once normalised.
+    expect(parseJoinUrl('https://chatsundere.me/join#AB7-MN9').ok).toBe(false);
+  });
+
+  it('normalises a lowercase legacy join-URL paste to the canonical uppercase code', () => {
+    const result = parseJoinUrl('https://chatsundere.me/join#ab7k3-mn9pn');
+    expect(result).toEqual({
+      ok: true,
+      value: { baseUrl: 'https://chatsundere.me/', code: 'AB7K3-MN9PN' },
+    });
   });
 
   it('rejects entirely malformed strings', () => {
     expect(parseJoinUrl('not a url').ok).toBe(false);
+  });
+
+  it('new client-origin form: server param wins, code from fragment', () => {
+    const r = parseJoinUrl(
+      'https://app.example.com/join?server=https%3A%2F%2Fauth.example.com#AB7K3-MN9PN',
+    );
+    expect(r).toEqual({
+      ok: true,
+      value: { baseUrl: 'https://auth.example.com', code: 'AB7K3-MN9PN' },
+    });
+  });
+
+  it('new form: decoded server must be https (or loopback http) — else bad_server_param', () => {
+    const r = parseJoinUrl(
+      'https://app.example.com/join?server=http%3A%2F%2Fevil.example.com#AB7K3-MN9PN',
+    );
+    expect(r).toEqual({ ok: false, error: 'bad_server_param' });
+  });
+
+  it('new form: loopback-http server accepted (dev)', () => {
+    const r = parseJoinUrl(
+      'https://app.example.com/join?server=http%3A%2F%2Flocalhost%3A8080#AB7K3-MN9PN',
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it('legacy form still parses byte-identically', () => {
+    const r = parseJoinUrl('https://auth.example.com/join#AB7K3-MN9PN');
+    expect(r).toEqual({
+      ok: true,
+      value: { baseUrl: 'https://auth.example.com/', code: 'AB7K3-MN9PN' },
+    });
   });
 });

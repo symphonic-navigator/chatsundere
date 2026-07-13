@@ -109,6 +109,20 @@ const envSchema = object({
       ),
     ),
   ),
+  // Public origin of the user-client. When set, join QR codes / deep links
+  // point at `${APP_PUBLIC_URL}/join?...` so a native-camera scan lands on a
+  // real screen (spec 2026-07-13 §2). Loopback http allowed for dev, exactly
+  // like ADMIN_PUBLIC_URL.
+  APP_PUBLIC_URL: optional(
+    pipe(
+      string(),
+      url(),
+      check(
+        isHttpsOrLoopbackHttp,
+        'APP_PUBLIC_URL must be an https URL, or http on a loopback host',
+      ),
+    ),
+  ),
   // Mirrors the sync-service's S3 presence for the /api/v1/config "blobs" flag
   // (blob spec §10/§14). A manual pairing — DEPLOYMENT ch.4 names it a congruence
   // checkpoint. 'true' enables; anything else (incl. unset) disables.
@@ -159,6 +173,7 @@ export function loadEnv(): {
   PROXY_PUBLIC_URL?: string;
   SYNC_PUBLIC_URL?: string;
   ADMIN_PUBLIC_URL?: string;
+  APP_PUBLIC_URL?: string;
   SYNC_BLOBS_ENABLED: boolean;
   TRUST_PROXY_HOPS: number;
 } {
@@ -181,6 +196,7 @@ export function loadEnv(): {
     PROXY_PUBLIC_URL: process.env.PROXY_PUBLIC_URL,
     SYNC_PUBLIC_URL: process.env.SYNC_PUBLIC_URL,
     ADMIN_PUBLIC_URL: process.env.ADMIN_PUBLIC_URL,
+    APP_PUBLIC_URL: process.env.APP_PUBLIC_URL,
     SYNC_BLOBS_ENABLED: process.env.SYNC_BLOBS_ENABLED,
     TRUST_PROXY_HOPS: process.env.TRUST_PROXY_HOPS,
   });

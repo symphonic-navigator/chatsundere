@@ -3,6 +3,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { count, eq } from 'drizzle-orm';
+import { buildJoinQrUrl } from '../codes/qr-url.js';
 import { generateCode, hashCode } from '../codes/token.js';
 import { closeDb, createDb } from '../db/client.js';
 import { authMethods, pendingCodes, users } from '../db/schema.js';
@@ -43,7 +44,7 @@ export async function main(): Promise<void> {
   const invitationId = inserted[0]?.id;
   if (!invitationId) throw new Error('Failed to insert invitation');
 
-  const qrUrl = `${env.API_BASE_URL}/join#${code}`;
+  const qrUrl = buildJoinQrUrl(env, code);
 
   const dir = process.env.XDG_RUNTIME_DIR ?? '/tmp';
   mkdirSync(dir, { recursive: true });

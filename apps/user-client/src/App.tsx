@@ -49,6 +49,7 @@ import { TreasuryTemplatesList } from './routes/app/treasury/templates.js';
 import { UiShowcase } from './routes/app/ui-showcase.js';
 import { ChangePassphrase } from './routes/change-passphrase.js';
 import { Gate } from './routes/gate.js';
+import { JoinLanding } from './routes/join.js';
 import { Login } from './routes/login/index.js';
 import { Recovery } from './routes/login/recovery.js';
 import { StartOver } from './routes/login/start-over.js';
@@ -108,6 +109,7 @@ export function App() {
               <Route element={<Root />}>
                 <Route index element={<Gate />} />
                 {/* No-session routes */}
+                <Route path="/join" element={<JoinLanding />} />
                 <Route path="/onboarding" element={<OnboardingMatrix />} />
                 <Route path="/onboarding/invitation" element={<InvitationForm />} />
                 <Route path="/onboarding/invitation/scan" element={<InvitationScan />} />

@@ -4,6 +4,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { writeAudit } from '../audit/log.js';
 import { requireStepUp } from '../auth/step-up.js';
+import { buildJoinQrUrl } from '../codes/qr-url.js';
 import { generateCode, hashCode } from '../codes/token.js';
 import { createDb } from '../db/client.js';
 import { pendingCodes } from '../db/schema.js';
@@ -50,7 +51,7 @@ export function registerMePairingCodeRoutes(app: Hono): void {
     if (!row) throw new ApiError(500, 'internal', 'pending_codes insert returned no row');
 
     const env = loadEnv();
-    const qrUrl = `${env.API_BASE_URL}/join#${code}`;
+    const qrUrl = buildJoinQrUrl(env, code);
 
     await writeAudit({
       db,
