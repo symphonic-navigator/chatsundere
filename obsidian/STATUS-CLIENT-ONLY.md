@@ -8,7 +8,7 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-13 — **TWO FIELD-TEST FIXES LANDED (squashed to
+**Last updated:** 2026-07-13 — **THREE FIELD-TEST FIXES LANDED (squashed to
 `master`, NOT pushed — Chris pushes after device verification):**
 **(1) `e71db547` — a server 429 is no longer mislabelled "Server unreachable".**
 The linked-login classifier collapsed every non-401 (429 included) into
@@ -22,9 +22,19 @@ one hard copy-lie fix applied.
 It was dead code (`invitation_confirm` never set); now `buildJoinQrUrl` carries it
 as a `u` param and `parseJoinUrl` → `invitation_input` → confirm pre-fills the
 editable field (with a provenance cue). Manual code entry carries no suggestion.
-Larissa clean, Laura clean. *Follow-ups (INFO):* surface the 429 `Retry-After`
-as a concrete wait; client could also drop RESERVED suggested names pre-fill.
-Both fixes TDD, typecheck 14/14, Biome clean.
+Larissa clean, Laura clean.
+**(3) `845b96b1` — the badge now shows the concrete rate-limit wait.** The
+sliding-window Lua computes the real seconds-to-free, `applyLoginRateLimit`
+throws it as `retryAfterSeconds`, errorEnvelope emits `Retry-After` + CORS
+exposes it; the badge framing derives "resume on their own in about 2 minutes"
+from a stale-proof `retryAt`. Side-effect: this also lights up the concrete
+path in `recovery-copy.ts` (it read the hint but never received one). Larissa
+clean (Lua atomic/race-free), Laura no hard defects.
+*Open (Chris's call):* unify the wait-time phrasing between the badge
+(`formatRetryWait`: sub-minute seconds, else ceil-minutes) and `recovery-copy.ts`
+(round-minutes) — Laura SOFT, and Chris values wait-time convergence. *INFO:*
+client could also drop RESERVED suggested names at pre-fill; badge panel is not
+a live countdown (deliberate). All three fixes TDD, typecheck 14/14, Biome clean.
 
 Prior landing — **PRE-GO-LIVE FIX BUNDLE: six units
 squashed to `master` (A→F), NOT pushed — Chris pushes after his device
