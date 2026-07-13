@@ -8,7 +8,17 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-12 — **ONBOARDING MATRIX REBUILT IN THE DESIGN
+**Last updated:** 2026-07-13 — **release-day pre-go-live fix bundle specced +
+planned; execution handed to a fresh session.** The client-side units: a new
+`/join` landing route (client-origin QR deep links, two-gold chooser), sync
+tamper-attention guard + empty-account status fix + blind-id memo, vector
+tombstones on document delete, recovery error-surface fixes (onboarding dead
+branches, flow-R back affordance), a typed `ProxyUnavailableError` with a
+constructive relay-cut surface, and hygiene. Full context, findings and gates
+live in [[STATUS-BACKEND]] (2026-07-13 entry); spec/plan/kickoff under
+`superpowers/`. Laura spec-pass folded (1 HARD + 4 SOFT).
+
+**Earlier — 2026-07-12 — ONBOARDING MATRIX REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`448861f`). NOT pushed (Chris pushes); awaiting
 Chris's device-verify.**
 The onboarding intent surface (`routes/onboarding/matrix.tsx`) — the first screen

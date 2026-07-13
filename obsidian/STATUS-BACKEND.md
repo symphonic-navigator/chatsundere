@@ -1,6 +1,34 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-10 (later) — **`TRUST_PROXY_HOPS` ON AUTH SQUASHED to
+**Last updated:** 2026-07-13 — **RELEASE-DAY AUDIT of pairing / client sync /
+CORS proxy / recovery-key restore DONE; fix bundle SPECCED + PLANNED, execution
+handed to a fresh Opus 4.8 session.** Four parallel read-only audits ahead of
+tonight's v0.2.0 go-live. Headline: **one BLOCKER** — the pairing QR (and the
+bootstrap CLI's) mints `${API_BASE_URL}/join#code` WITHOUT the `/auth` strip the
+invitation mint has, so on the deploy-kit topology (Traefik routes the auth host
+only for `/api`) every QR-driven pairing 404s; plus a HIGH — a system-camera
+scan of EITHER QR dead-ends on a raw 404 (no `GET /join` anywhere). Chris chose
+the client-origin convention: QRs now point at `${APP_PUBLIC_URL}/join?server=…#code`
+with a new client `/join` chooser route. Other confirmed findings folded into the
+bundle: sync `setAttention` clobbers the sticky `tamper` alarm (new MEDIUM);
+known MEDIUM-1 (vectors never tombstoned server-side) + MEDIUM-3 (mass-delete
+blind-id CPU); recovery onboarding's `not_found`/`invalid_recovery_key_format`
+branches are dead code (generic "Something went wrong"); flow-R wrong-key
+dead-end; the promised relay-cut constructive message was never built. **Verified
+working:** wire contracts field-by-field across all four areas (no drift), the
+wafer/xAI `bad_target` fix IS on master (`62874ec4`, regression-tested — but the
+real-key device probe is still owed), Content-Encoding fix present, recovery-key
+format tolerance test-pinned (no lockout risk), pairing protocol/atomicity clean.
+Spec [[../superpowers/specs/2026-07-13-pre-golive-fix-bundle-design]] (**Laura
+spec-pass: 1 HARD + 4 SOFT, all folded**; Chris-approved), plan
+[[../superpowers/plans/2026-07-13-pre-golive-fix-bundle]] (hardened with the
+operating-rules contract), kickoff brief
+[[../superpowers/plans/2026-07-13-pre-golive-fix-bundle-kickoff]]. Six squash
+units A–F; Larissa owed on A (+B/C courtesy), Laura pre-squash on A/D/E. **OWED:
+the executing session lands A–F; then Chris's spec-§9 device verification (incl.
+the F7 live QR scan + one real xAI/wafer proxy send) and the push.**
+
+Prior entry: 2026-07-10 (later) — **`TRUST_PROXY_HOPS` ON AUTH SQUASHED to
 `master` (`dc25cdd`, one feature unit). NOT pushed — Chris pushes.** Closes the
 long-tracked go-live blocker **L-β-2** (auth's per-IP rate limits were
 client-spoofable: `ipKey()` read the LEFT-most `X-Forwarded-For`, so a client
