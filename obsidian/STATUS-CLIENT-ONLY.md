@@ -35,7 +35,15 @@ see the fix-bundle report). Gates on `master` post-squash: `pnpm typecheck
 --force` **14/14** (0 cached); full user-client vitest **2967 pass / 9
 environmental** (8 Node-localStorage + 1 stream-manager parallel-load flake,
 isolated 42/42 — confirmed via the localStorage error text, not code); `pnpm
-build` **9/9**; llm-unified `bun test` **421/421**; Biome clean. Spec/plan:
+build` **9/9**; llm-unified `bun test` **421/421**; Biome clean. **Post-audit
+refinements (Chris-approved, 2026-07-13; squashes `1da337f2` + `b5b1ee21`):** two
+Laura softs implemented on his call — onboarding recovery now surfaces
+unknown-username + the 429 rate-limit **inline/non-fatal** (inputs preserved,
+matching the login surface; genuinely-terminal fatals stay fatal), and the
+relay-cut footer shows a calm "Retry will work once your account is linked." hint
+**without** disabling Retry (works-after-link preserved). Code review + Laura
+confirm: no defects; post-refinement master gates re-run green (typecheck 14/14,
+build 9/9, the two touched test files 10/10). Spec/plan:
 [[../superpowers/specs/2026-07-13-pre-golive-fix-bundle-design]],
 [[../superpowers/plans/2026-07-13-pre-golive-fix-bundle]]. Branch
 `fix/pre-golive-bundle` kept until Chris pushes. **Next:** Chris device-verifies
