@@ -30,11 +30,12 @@ exposes it; the badge framing derives "resume on their own in about 2 minutes"
 from a stale-proof `retryAt`. Side-effect: this also lights up the concrete
 path in `recovery-copy.ts` (it read the hint but never received one). Larissa
 clean (Lua atomic/race-free), Laura no hard defects.
-*Open (Chris's call):* unify the wait-time phrasing between the badge
-(`formatRetryWait`: sub-minute seconds, else ceil-minutes) and `recovery-copy.ts`
-(round-minutes) — Laura SOFT, and Chris values wait-time convergence. *INFO:*
-client could also drop RESERVED suggested names at pre-fill; badge panel is not
-a live countdown (deliberate). All three fixes TDD, typecheck 14/14, Biome clean.
+**(3b) `d94a757a` — wait-time phrasing unified** across the badge and both
+recovery gates via one shared `formatWaitPhrase` (`lib/wait-time.ts`): rounds up,
+seconds below a minute, exact-minute values unchanged. Closes Laura's convergence
+soft note (Chris's call, done). *INFO (open):* client could drop RESERVED
+suggested names at pre-fill; badge panel is not a live countdown (deliberate).
+All four fixes TDD, typecheck 14/14, Biome clean.
 
 Prior landing — **PRE-GO-LIVE FIX BUNDLE: six units
 squashed to `master` (A→F), NOT pushed — Chris pushes after his device
