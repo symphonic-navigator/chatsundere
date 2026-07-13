@@ -7,6 +7,7 @@ import {
   useConnectivityStore,
 } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
+import { formatRetryWait } from '../lib/wait-time.js';
 import { syncCopy } from '../sync/copy.js';
 
 type Tone = NonNullable<Parameters<typeof InlineMarker>[0]['tone']>;
@@ -30,22 +31,6 @@ const minimalLabel: Partial<Record<Connectivity['kind'], string>> = {
   server_rate_limited: 'Not synced',
   server_auth_failed: 'Auth failed',
 };
-
-/**
- * Turns the server's absolute retry-at instant into a calm, concrete wait
- * phrase, computed fresh at render so it never goes stale. Returns null when
- * there is no hint or the window has already elapsed — the caller then falls
- * back to the vaguer "resumes shortly" copy.
- */
-export function formatRetryWait(retryAt: number | undefined, now: number): string | null {
-  if (retryAt === undefined) return null;
-  const remainingMs = retryAt - now;
-  if (remainingMs <= 0) return null;
-  const seconds = Math.ceil(remainingMs / 1000);
-  if (seconds < 60) return `about ${seconds} second${seconds === 1 ? '' : 's'}`;
-  const minutes = Math.ceil(seconds / 60);
-  return `about ${minutes} minute${minutes === 1 ? '' : 's'}`;
-}
 
 /**
  * The expanded/tapped framing — "the badge explains the weather" (spec §11.2).

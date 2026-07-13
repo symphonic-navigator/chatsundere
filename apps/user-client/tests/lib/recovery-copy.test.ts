@@ -14,4 +14,14 @@ describe('rateLimitMessage', () => {
   it('undefined (no Retry-After) → "a few minutes"', () => {
     expect(rateLimitMessage(undefined)).toBe('Too many attempts. Please wait a few minutes.');
   });
+
+  // Unified with the connectivity badge via the shared formatter: sub-minute
+  // waits now read in seconds, and non-round waits round UP (never sooner).
+  it('45 seconds → "about 45 seconds" (finer than the old minute floor)', () => {
+    expect(rateLimitMessage(45)).toBe('Too many attempts. Please wait about 45 seconds.');
+  });
+
+  it('80 seconds → "about 2 minutes" (rounded up, matching the badge)', () => {
+    expect(rateLimitMessage(80)).toBe('Too many attempts. Please wait about 2 minutes.');
+  });
 });

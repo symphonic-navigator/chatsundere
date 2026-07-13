@@ -3,7 +3,7 @@ import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-share
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ConnectivityBadge, formatRetryWait } from '../../src/components/ConnectivityBadge.js';
+import { ConnectivityBadge } from '../../src/components/ConnectivityBadge.js';
 
 function linked(): void {
   useAccountLinkStore
@@ -69,25 +69,6 @@ describe('ConnectivityBadge expanded framing (§11.2)', () => {
     render(<ConnectivityBadge />);
     await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
     expect(screen.getByText(/everything stays on this device/i)).toBeInTheDocument();
-  });
-});
-
-describe('formatRetryWait', () => {
-  const now = 1_000_000;
-  it('renders sub-minute waits in seconds, with singular/plural', () => {
-    expect(formatRetryWait(now + 1_000, now)).toBe('about 1 second');
-    expect(formatRetryWait(now + 45_000, now)).toBe('about 45 seconds');
-    expect(formatRetryWait(now + 58_600, now)).toBe('about 59 seconds');
-  });
-  it('renders minute-plus waits in whole minutes, rounded up', () => {
-    expect(formatRetryWait(now + 60_000, now)).toBe('about 1 minute');
-    expect(formatRetryWait(now + 61_000, now)).toBe('about 2 minutes');
-    expect(formatRetryWait(now + 900_000, now)).toBe('about 15 minutes');
-  });
-  it('returns null with no hint or an already-elapsed window', () => {
-    expect(formatRetryWait(undefined, now)).toBeNull();
-    expect(formatRetryWait(now - 1, now)).toBeNull();
-    expect(formatRetryWait(now, now)).toBeNull();
   });
 });
 
