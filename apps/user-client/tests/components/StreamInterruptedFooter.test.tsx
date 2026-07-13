@@ -52,4 +52,29 @@ describe('StreamInterruptedFooter', () => {
     const link = screen.getByRole('link', { name: /open server linking/i });
     expect(link.getAttribute('href')).toBe('/app/account/server-linking');
   });
+
+  it('hints that Retry works after linking when proxy-unavailable, without disabling Retry', () => {
+    render(
+      <MemoryRouter>
+        <StreamInterruptedFooter
+          onRetry={() => {}}
+          onDiscard={() => {}}
+          failureKind="proxy_unavailable"
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Retry will work once your account is linked.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeEnabled();
+  });
+
+  it('does not show the linking hint in a generic (non-proxy) failure state', () => {
+    render(
+      <MemoryRouter>
+        <StreamInterruptedFooter onRetry={() => {}} onDiscard={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.queryByText('Retry will work once your account is linked.'),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -50,6 +50,15 @@ export function StreamInterruptedFooter(p: Props): JSX.Element {
         {p.retryDisabled && p.retryDisabledReason ? (
           <p className="stream-interrupted-reason">{p.retryDisabledReason}</p>
         ) : null}
+        {proxyUnavailable && !p.retryDisabled ? (
+          // Retry stays enabled here (it completes the interrupted turn once
+          // the user returns from linking) — this is a warning, not a
+          // disabled-control explanation, so it reuses retryDisabledReason's
+          // visual slot without touching the `disabled` attribute above. Gated
+          // on !retryDisabled so the two reason paragraphs stay mutually
+          // exclusive even if a caller ever sets both.
+          <p className="stream-interrupted-reason">Retry will work once your account is linked.</p>
+        ) : null}
         <button
           type="button"
           data-action="discard"
