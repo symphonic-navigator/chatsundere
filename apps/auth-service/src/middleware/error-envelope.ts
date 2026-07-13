@@ -17,6 +17,14 @@ export class ApiError extends HTTPException {
 
 export const errorEnvelope: ErrorHandler = (err, c) => {
   if (err instanceof ApiError) {
+    // Surface a rate-limit wait as the standard Retry-After header (whole
+    // seconds) so the client can tell the user exactly how long, not just "in a
+    // moment". CORS exposes this header (see corsAndOriginCheck) so a
+    // cross-origin fetch can actually read it.
+    const retryAfter = err.metadata?.retryAfterSeconds;
+    if (err.status === 429 && typeof retryAfter === 'number' && retryAfter > 0) {
+      c.header('Retry-After', String(Math.ceil(retryAfter)));
+    }
     return c.json(
       { error: { code: err.code, message: err.message, ...(err.metadata ?? {}) } },
       err.status,

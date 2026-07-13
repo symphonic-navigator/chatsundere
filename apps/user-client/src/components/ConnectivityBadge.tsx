@@ -32,20 +32,36 @@ const minimalLabel: Partial<Record<Connectivity['kind'], string>> = {
 };
 
 /**
+ * Turns the server's absolute retry-at instant into a calm, concrete wait
+ * phrase, computed fresh at render so it never goes stale. Returns null when
+ * there is no hint or the window has already elapsed — the caller then falls
+ * back to the vaguer "resumes shortly" copy.
+ */
+export function formatRetryWait(retryAt: number | undefined, now: number): string | null {
+  if (retryAt === undefined) return null;
+  const remainingMs = retryAt - now;
+  if (remainingMs <= 0) return null;
+  const seconds = Math.ceil(remainingMs / 1000);
+  if (seconds < 60) return `about ${seconds} second${seconds === 1 ? '' : 's'}`;
+  const minutes = Math.ceil(seconds / 60);
+  return `about ${minutes} minute${minutes === 1 ? '' : 's'}`;
+}
+
+/**
  * The expanded/tapped framing — "the badge explains the weather" (spec §11.2).
  * While a linked user is offline it carries the system-level explanation that
  * shared edits are paused but nothing is lost; other states get a calm
  * one-liner. Local-only users get no engine framing.
  */
-export function connectivityFraming(kind: Connectivity['kind'], linkStatus: LinkStatus): string {
+export function connectivityFraming(state: Connectivity, linkStatus: LinkStatus): string {
   if (linkStatus !== 'linked') return syncCopy.connectivity.local;
-  switch (kind) {
+  switch (state.kind) {
     case 'linked_online':
       return syncCopy.connectivity.linkedOnline;
     case 'server_auth_failed':
       return syncCopy.connectivity.authFailed;
     case 'server_rate_limited':
-      return syncCopy.connectivity.rateLimited;
+      return syncCopy.connectivity.rateLimited(formatRetryWait(state.retryAt, Date.now()));
     default:
       // server_unreachable (and any local_* a linked device transiently shows):
       // the app rests into reading mode — shared edits paused, wakes on return.
@@ -100,7 +116,7 @@ export function ConnectivityBadge({ minimal = false }: { minimal?: boolean } = {
       </button>
       {expanded ? (
         <output className="absolute right-0 top-full z-30 mt-1 block w-64 rounded-md border border-white/10 bg-ink-soft/95 p-3 text-[11px] leading-relaxed text-paper-soft shadow-lg backdrop-blur-sm">
-          {connectivityFraming(state.kind, linkStatus)}
+          {connectivityFraming(state, linkStatus)}
         </output>
       ) : null}
     </span>

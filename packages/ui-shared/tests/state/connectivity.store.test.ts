@@ -118,6 +118,25 @@ describe('onServerRateLimited', () => {
     expect(getKind()).toBe('server_rate_limited');
   });
 
+  it('records retryAt in the future when given a retry-after hint', () => {
+    reset('linked_online');
+    const before = Date.now();
+    useConnectivityStore.getState().onServerRateLimited(120);
+    const s = useConnectivityStore.getState().state;
+    expect(s.kind).toBe('server_rate_limited');
+    if (s.kind === 'server_rate_limited') {
+      expect(s.retryAt).toBeGreaterThanOrEqual(before + 120_000);
+      expect(s.retryAt).toBeLessThanOrEqual(Date.now() + 120_000);
+    }
+  });
+
+  it('leaves retryAt undefined when no hint is given', () => {
+    reset('linked_online');
+    useConnectivityStore.getState().onServerRateLimited();
+    const s = useConnectivityStore.getState().state;
+    if (s.kind === 'server_rate_limited') expect(s.retryAt).toBeUndefined();
+  });
+
   it('is cleared by a subsequent onServerOk (self-heals to linked_online)', () => {
     reset('server_rate_limited');
     useConnectivityStore.getState().onServerOk();

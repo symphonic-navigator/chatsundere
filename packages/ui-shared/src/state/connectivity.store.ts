@@ -10,7 +10,10 @@ export type Connectivity =
   // server_unreachable so the badge can tell the honest "too many attempts,
   // this resumes shortly" story instead of falsely claiming the server is down.
   // The sync engine treats it exactly like offline (paused) — see server-gate.
-  | { kind: 'server_rate_limited' }
+  // `retryAt` is the absolute epoch-ms instant the server said a slot frees
+  // (from its Retry-After header); the badge derives the remaining wait at
+  // render so it never goes stale. Absent when the server gave no hint.
+  | { kind: 'server_rate_limited'; retryAt?: number }
   | { kind: 'server_auth_failed' };
 
 interface ConnectivityState {
@@ -20,7 +23,7 @@ interface ConnectivityState {
   onNetworkOffline(): void;
   onServerOk(): void;
   onServerUnreachable(): void;
-  onServerRateLimited(): void;
+  onServerRateLimited(retryAfterSeconds?: number): void;
   onServerAuthFailed(): void;
 }
 
@@ -46,7 +49,16 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
   },
   onServerOk: () => set({ state: { kind: 'linked_online' } }),
   onServerUnreachable: () => set({ state: { kind: 'server_unreachable' } }),
-  onServerRateLimited: () => set({ state: { kind: 'server_rate_limited' } }),
+  onServerRateLimited: (retryAfterSeconds) =>
+    set({
+      state: {
+        kind: 'server_rate_limited',
+        retryAt:
+          retryAfterSeconds && retryAfterSeconds > 0
+            ? Date.now() + retryAfterSeconds * 1000
+            : undefined,
+      },
+    }),
   onServerAuthFailed: () => set({ state: { kind: 'server_auth_failed' } }),
 }));
 

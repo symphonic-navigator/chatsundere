@@ -135,7 +135,9 @@ export function LoginScreen() {
                   setErrorKey('serverUnreachable');
                   return;
                 case 'rate_limited':
-                  useConnectivityStore.getState().onServerRateLimited();
+                  useConnectivityStore
+                    .getState()
+                    .onServerRateLimited(serverOutcome.retryAfterSeconds);
                   setErrorKey('rateLimited');
                   return;
                 case 'auth_failed':

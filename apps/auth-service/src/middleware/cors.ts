@@ -21,6 +21,10 @@ export function corsAndOriginCheck(allowedOrigins: string[]): MiddlewareHandler 
       c.header('Access-Control-Allow-Origin', origin);
       c.header('Vary', 'Origin');
       c.header('Access-Control-Allow-Credentials', 'true');
+      // Retry-After is not a CORS-safelisted response header, so a cross-origin
+      // fetch cannot read it unless we expose it explicitly. The client uses it
+      // to show a concrete rate-limit wait rather than a vague "in a moment".
+      c.header('Access-Control-Expose-Headers', 'Retry-After');
     }
 
     if (isPreflight) {

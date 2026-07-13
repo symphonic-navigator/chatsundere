@@ -19,9 +19,12 @@ const LOGIN_IP_MAX_ATTEMPTS = 40;
 // observe a sub-threshold count before any of them lands their ZADD (the bug
 // in the previous zremrangebyscore -> zcard -> check -> zadd sequence: every
 // step was a separate round-trip, so concurrent requests raced the same
-// stale read). Returns true when this attempt pushed the window over `max`;
-// on that path the just-added member is removed again so a blocked attempt
-// does not itself count towards the next window.
+// stale read). Returns the whole-second wait until a slot frees when this
+// attempt pushed the window over `max` (>= 1), or 0 when it was allowed; on the
+// blocked path the just-added member is removed again so a blocked attempt does
+// not itself count towards the next window. The wait is derived from the oldest
+// surviving entry: once it scrolls out of the window (its score + windowMs), the
+// count drops back below `max`, so that instant is the earliest honest retry.
 const SLIDING_WINDOW_SCRIPT = `
 local key = KEYS[1]
 local now = tonumber(ARGV[1])
@@ -36,17 +39,21 @@ local count = redis.call('ZCARD', key)
 redis.call('PEXPIRE', key, windowMs)
 if count > max then
   redis.call('ZREM', key, member)
-  return 1
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local retryMs = (tonumber(oldest[2]) + windowMs) - now
+  if retryMs < 1 then retryMs = 1 end
+  return math.ceil(retryMs / 1000)
 else
   return 0
 end
 `;
 
+/** Whole seconds until a slot frees (>= 1), or 0 if the attempt was allowed. */
 async function checkSlidingWindow(
   redisKey: string,
   windowSec: number,
   max: number,
-): Promise<boolean> {
+): Promise<number> {
   const redis = createRedis();
   const now = Date.now();
   const windowMs = windowSec * 1000;
@@ -62,7 +69,7 @@ async function checkSlidingWindow(
     max,
     member,
   );
-  return result === 1;
+  return typeof result === 'number' ? result : Number(result);
 }
 
 /**
@@ -85,13 +92,15 @@ async function checkSlidingWindow(
 export async function applyLoginRateLimit(username: string, ip?: string): Promise<void> {
   // Normalise to lowercase so casing variants do not bypass the limit.
   const usernameRedisKey = `rl:login:username:${username.toLowerCase()}`;
-  const usernameLimited = await checkSlidingWindow(
+  const usernameRetryAfter = await checkSlidingWindow(
     usernameRedisKey,
     LOGIN_WINDOW_SEC,
     LOGIN_MAX_ATTEMPTS,
   );
-  if (usernameLimited) {
-    throw new ApiError(429, 'rate_limited', 'Too many login attempts for this username');
+  if (usernameRetryAfter > 0) {
+    throw new ApiError(429, 'rate_limited', 'Too many login attempts for this username', {
+      retryAfterSeconds: usernameRetryAfter,
+    });
   }
 
   // 'unknown' is ipKey()'s sentinel for "no derivable client address" — it is
@@ -104,13 +113,15 @@ export async function applyLoginRateLimit(username: string, ip?: string): Promis
   // unconditionally for a real address.
   if (ip && ip !== 'unknown') {
     const ipRedisKey = `rl:login:ip:${ip}`;
-    const ipLimited = await checkSlidingWindow(
+    const ipRetryAfter = await checkSlidingWindow(
       ipRedisKey,
       LOGIN_IP_WINDOW_SEC,
       LOGIN_IP_MAX_ATTEMPTS,
     );
-    if (ipLimited) {
-      throw new ApiError(429, 'rate_limited', 'Too many login attempts from this address');
+    if (ipRetryAfter > 0) {
+      throw new ApiError(429, 'rate_limited', 'Too many login attempts from this address', {
+        retryAfterSeconds: ipRetryAfter,
+      });
     }
   }
 }

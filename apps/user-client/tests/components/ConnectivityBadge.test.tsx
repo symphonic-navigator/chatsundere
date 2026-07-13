@@ -3,7 +3,7 @@ import { useAccountLinkStore, useConnectivityStore } from '@chatsundere/ui-share
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ConnectivityBadge } from '../../src/components/ConnectivityBadge.js';
+import { ConnectivityBadge, formatRetryWait } from '../../src/components/ConnectivityBadge.js';
 
 function linked(): void {
   useAccountLinkStore
@@ -43,6 +43,19 @@ describe('ConnectivityBadge expanded framing (§11.2)', () => {
     expect(screen.queryByText(/isn't reachable/i)).not.toBeInTheDocument();
   });
 
+  it('surfaces the concrete wait when the server gave a Retry-After', async () => {
+    linked();
+    // ~2 minutes out — the framing should name it, not just say "shortly".
+    useConnectivityStore.getState().setState({
+      kind: 'server_rate_limited',
+      retryAt: Date.now() + 118_000,
+    });
+    render(<ConnectivityBadge />);
+    await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
+    // Concrete wait, and the self-healing framing is preserved (Laura SOFT).
+    expect(screen.getByText(/resume on their own in about 2 minutes/i)).toBeInTheDocument();
+  });
+
   it('shows the connected framing when linked and online', async () => {
     linked();
     useConnectivityStore.getState().setState({ kind: 'linked_online' });
@@ -56,6 +69,25 @@ describe('ConnectivityBadge expanded framing (§11.2)', () => {
     render(<ConnectivityBadge />);
     await userEvent.click(screen.getByRole('button', { name: /connectivity/i }));
     expect(screen.getByText(/everything stays on this device/i)).toBeInTheDocument();
+  });
+});
+
+describe('formatRetryWait', () => {
+  const now = 1_000_000;
+  it('renders sub-minute waits in seconds, with singular/plural', () => {
+    expect(formatRetryWait(now + 1_000, now)).toBe('about 1 second');
+    expect(formatRetryWait(now + 45_000, now)).toBe('about 45 seconds');
+    expect(formatRetryWait(now + 58_600, now)).toBe('about 59 seconds');
+  });
+  it('renders minute-plus waits in whole minutes, rounded up', () => {
+    expect(formatRetryWait(now + 60_000, now)).toBe('about 1 minute');
+    expect(formatRetryWait(now + 61_000, now)).toBe('about 2 minutes');
+    expect(formatRetryWait(now + 900_000, now)).toBe('about 15 minutes');
+  });
+  it('returns null with no hint or an already-elapsed window', () => {
+    expect(formatRetryWait(undefined, now)).toBeNull();
+    expect(formatRetryWait(now - 1, now)).toBeNull();
+    expect(formatRetryWait(now, now)).toBeNull();
   });
 });
 
