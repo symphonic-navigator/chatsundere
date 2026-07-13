@@ -30,6 +30,12 @@ type Screen = { kind: 'ready' } | { kind: 'submitting' } | { kind: 'fatal'; mess
 // must show identical wording for a malformed recovery key.
 const INVALID_KEY_COPY = "That recovery key doesn't match.";
 
+// Same wording as routes/login/recovery.tsx's mapOnlineRecoveryError result for
+// a 404 (lib/copy.ts recovery.errors.unknownUsername) — both recovery surfaces
+// must show identical wording for an unknown username, and both keep the user
+// on a live, editable form rather than a fatal dead-end.
+const UNKNOWN_USERNAME_COPY = copy.recovery.errors.unknownUsername;
+
 /** The recovery-attempt rate-limit window is 10 attempts / 15 min. */
 function rateLimitMessage(retryAfterSeconds: number | undefined): string {
   if (retryAfterSeconds === undefined) return 'Too many attempts. Please wait a few minutes.';
@@ -53,8 +59,13 @@ export function OnboardingRecovery() {
   const [passphrase, setPassphrase] = useState('');
   const [passphraseConfirm, setPassphraseConfirm] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [recoveryKeyError, setRecoveryKeyError] = useState<string | null>(null);
   const [passphraseError, setPassphraseError] = useState<string | null>(null);
+  // Form-level (non-field) inline error, currently used for the rate-limit
+  // case: it isn't about any one input, so it renders above the submit button
+  // rather than under a specific field.
+  const [formError, setFormError] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: 'ready' });
 
   const urlValid = isValidServerUrl(baseUrl);
@@ -65,8 +76,10 @@ export function OnboardingRecovery() {
 
   async function handleContinue() {
     setUrlError(null);
+    setUsernameError(null);
     setRecoveryKeyError(null);
     setPassphraseError(null);
+    setFormError(null);
     if (!continueEnabled) return;
     setScreen({ kind: 'submitting' });
 
@@ -120,7 +133,11 @@ export function OnboardingRecovery() {
         return;
       }
       if (err instanceof CryptoError && err.code === 'not_found') {
-        setScreen({ kind: 'fatal', message: 'No account with that username on this server.' });
+        // Non-fatal: unknown username in a stressful recovery moment is kinder
+        // fixed in place than dead-ended. Same copy + inline mechanism as
+        // routes/login/recovery.tsx's mapOnlineRecoveryError 404 case.
+        setUsernameError(UNKNOWN_USERNAME_COPY);
+        setScreen({ kind: 'ready' });
         return;
       }
       if (err instanceof CryptoError && err.code === 'invalid_recovery_key_format') {
@@ -136,11 +153,15 @@ export function OnboardingRecovery() {
         // is unreachable via that caller today. Left as a harmless backstop in
         // case a future caller surfaces a raw 404 HttpError instead.
         if (err.status === 404 || err.code === 'not_found') {
-          setScreen({ kind: 'fatal', message: 'No account with that username on this server.' });
+          setUsernameError(UNKNOWN_USERNAME_COPY);
+          setScreen({ kind: 'ready' });
           return;
         }
         if (err.status === 429 || err.code === 'rate_limited') {
-          setScreen({ kind: 'fatal', message: rateLimitMessage(err.retryAfterSeconds) });
+          // Non-fatal: same honest wait-time copy, but kept on the live form
+          // rather than a dead-end, consistent with the login recovery surface.
+          setFormError(rateLimitMessage(err.retryAfterSeconds));
+          setScreen({ kind: 'ready' });
           return;
         }
         if (err.status >= 500 || err.status === 0) {
@@ -232,9 +253,17 @@ export function OnboardingRecovery() {
             autoComplete="username"
             spellCheck={false}
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              if (usernameError) setUsernameError(null);
+            }}
             className="mt-1 w-full rounded-[var(--radius-input)] bg-ink-soft px-3 py-2 font-mono ring-1 ring-inset ring-aurora-700/30 focus:outline-none focus:ring-aurora-500"
           />
+          {usernameError && (
+            <p role="alert" className="mt-1 text-sm text-danger">
+              {usernameError}
+            </p>
+          )}
         </div>
 
         <div>
@@ -288,6 +317,11 @@ export function OnboardingRecovery() {
         {!passphrasesMatch && passphraseConfirm.length > 0 && (
           <p role="alert" className="text-sm text-danger">
             Passphrases do not match.
+          </p>
+        )}
+        {formError && (
+          <p role="alert" className="text-sm text-danger">
+            {formError}
           </p>
         )}
 

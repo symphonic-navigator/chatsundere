@@ -51,6 +51,11 @@ import { OnboardingRecovery } from '../../src/routes/onboarding/recovery.js';
 // surfaces must show identical wording.
 const INVALID_KEY_COPY = "That recovery key doesn't match.";
 
+// The exact copy the login surface's mapOnlineRecoveryError maps a 404 to
+// (lib/copy.ts recovery.errors.unknownUsername) — both recovery surfaces must
+// show identical wording for an unknown username.
+const UNKNOWN_USERNAME_COPY = 'No account with that username on this server.';
+
 function renderRoute() {
   return render(
     <MemoryRouter>
@@ -73,16 +78,21 @@ describe('OnboardingRecovery — catch handler branches (D1)', () => {
     mockRecoverFromScratch.mockReset();
   });
 
-  it('CryptoError not_found → fatal "No account with that username on this server."', async () => {
+  it('CryptoError not_found → inline username-field error, screen stays ready, inputs preserved', async () => {
     mockRecoverFromScratch.mockRejectedValue(new CryptoError('not_found', 'no such user'));
     const user = userEvent.setup();
     renderRoute();
 
     await fillAndSubmit(user);
 
-    expect(
-      await screen.findByText('No account with that username on this server.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(UNKNOWN_USERNAME_COPY)).toBeInTheDocument();
+    // Screen stayed 'ready' — the form (with typed values) is still on screen,
+    // not the fatal full-screen message.
+    expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('chris');
+    expect((screen.getByLabelText('Recovery key') as HTMLInputElement).value).toBe(
+      'XXXX-XXXX-XXXX-XXXX',
+    );
+    expect(screen.getByLabelText('Server URL')).toBeInTheDocument();
   });
 
   it('CryptoError invalid_recovery_key_format → inline key error, screen stays ready, inputs preserved', async () => {
@@ -104,7 +114,7 @@ describe('OnboardingRecovery — catch handler branches (D1)', () => {
     expect(screen.getByLabelText('Server URL')).toBeInTheDocument();
   });
 
-  it('HttpError 429 rate_limited with Retry-After → "about N minutes"', async () => {
+  it('HttpError 429 rate_limited with Retry-After → inline "about N minutes", screen stays ready, inputs preserved', async () => {
     mockRecoverFromScratch.mockRejectedValue(new HttpError(429, 'rate_limited', 'slow down', 300));
     const user = userEvent.setup();
     renderRoute();
@@ -114,9 +124,16 @@ describe('OnboardingRecovery — catch handler branches (D1)', () => {
     expect(
       await screen.findByText('Too many attempts. Please wait about 5 minutes.'),
     ).toBeInTheDocument();
+    // Screen stayed 'ready' — the form (with typed values) is still on screen,
+    // not the fatal full-screen message.
+    expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('chris');
+    expect((screen.getByLabelText('Recovery key') as HTMLInputElement).value).toBe(
+      'XXXX-XXXX-XXXX-XXXX',
+    );
+    expect(screen.getByLabelText('Server URL')).toBeInTheDocument();
   });
 
-  it('HttpError 429 rate_limited without Retry-After → "a few minutes"', async () => {
+  it('HttpError 429 rate_limited without Retry-After → inline "a few minutes", screen stays ready, inputs preserved', async () => {
     mockRecoverFromScratch.mockRejectedValue(new HttpError(429, 'rate_limited', 'slow down'));
     const user = userEvent.setup();
     renderRoute();
@@ -126,5 +143,10 @@ describe('OnboardingRecovery — catch handler branches (D1)', () => {
     expect(
       await screen.findByText('Too many attempts. Please wait a few minutes.'),
     ).toBeInTheDocument();
+    expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('chris');
+    expect((screen.getByLabelText('Recovery key') as HTMLInputElement).value).toBe(
+      'XXXX-XXXX-XXXX-XXXX',
+    );
+    expect(screen.getByLabelText('Server URL')).toBeInTheDocument();
   });
 });
