@@ -763,7 +763,7 @@ export type SyncAttention =
 
 // ===== Dexie subclass =====
 
-class ClientDataDb extends Dexie {
+export class ClientDataDb extends Dexie {
   settings!: Table<SettingsRow, 1>;
   providers!: Table<ProviderRow, string>;
   mindspaces!: Table<MindspaceRow, string>;

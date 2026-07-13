@@ -2,7 +2,7 @@
 
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type SettingsRow, getClientDataDb } from '../boot/client-data-db.js';
+import { type ClientDataDb, type SettingsRow, getClientDataDb } from '../boot/client-data-db.js';
 import { mutateSynced } from '../sync/enqueue.js';
 import { patchTouchesSyncedField } from '../sync/strip.js';
 import { QK } from './queryKeys.js';
@@ -15,9 +15,22 @@ export function useSettings() {
       const db = getClientDataDb();
       const row = await db.settings.get(1);
       if (!row) throw new Error('settings singleton missing — seed should have run');
-      return row;
+      return clearOrphanedCorsProxy(db, row);
     },
   });
+}
+
+/**
+ * `corsProxy` is dead since the relay cut (`94bdcdd6`): nothing reads it any
+ * more, but alpha users who registered before the cut still carry the row
+ * with its sealed `sharedKey` blob — unreadable ciphertext, unused forever.
+ * Clear it to the same empty shape a fresh install gets (spec 2026-07-13
+ * §7.2), and persist the clear so it doesn't re-fire on every load.
+ */
+async function clearOrphanedCorsProxy(db: ClientDataDb, row: SettingsRow): Promise<SettingsRow> {
+  if (row.corsProxy === null) return row;
+  await db.settings.update(1, { corsProxy: null });
+  return { ...row, corsProxy: null };
 }
 
 /** Partially update the settings singleton and invalidate the query on success. */
