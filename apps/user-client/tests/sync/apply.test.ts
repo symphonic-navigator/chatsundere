@@ -317,6 +317,25 @@ describe('applyRecord — §7.3a tombstone threshold (Larissa M-2)', () => {
     }
     expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
   });
+
+  // §4.3 (2026-07-13): a document delete now carries a `vectors` tombstone per
+  // chunk — hundreds per document. Those are invisible infrastructure and must
+  // NOT count toward the user-facing "items removed on another device" tally.
+  it('does NOT raise the notice for pulled vector tombstones, however many arrive', async () => {
+    resetTombstoneCounter();
+    for (let i = 0; i < 25; i++) {
+      await applyRecord(pulledTombstone('vectors', `d1#${i}`, 1));
+    }
+    expect((await getSyncState()).attention ?? null).toBeNull();
+  });
+
+  it('still raises the notice for a document-tombstone wave (visible collections count)', async () => {
+    resetTombstoneCounter();
+    for (let i = 0; i < 20; i++) {
+      await applyRecord(pulledTombstone('documents', `d${i}`, 1));
+    }
+    expect((await getSyncState()).attention).toEqual({ kind: 'tombstone_threshold', count: 20 });
+  });
 });
 
 // ===== §7.5 conflict resolution =====

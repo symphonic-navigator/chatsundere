@@ -140,8 +140,29 @@ async function seedJournal(id: string): Promise<void> {
   } as unknown as MemoryJournalRow);
 }
 
-/** A no-op vector store so knowledge cascades never touch the embeddings DB. */
-const noopStore = { deleteWhere: async () => undefined } as unknown as VectorStoreLike;
+/** A no-op vector store so knowledge cascades never touch the embeddings DB.
+ *  `scan` yields no chunks, so a cascade carries no `vectors` tombstones. */
+const noopStore = {
+  scan: async () => [],
+  deleteWhere: async () => undefined,
+} as unknown as VectorStoreLike;
+
+/**
+ * A vector store stub whose `scan` returns fake chunk rows per document. Each id
+ * is a real `vectors` sync key (`` `${documentId}#${chunkIndex}` ``,
+ * `sync-keys.ts`) — a `VectorRow`'s primary key IS its sync key — so a cascade
+ * tombstone lands on exactly the blind id the push path would upsert.
+ */
+function vectorStoreWith(chunksByDoc: Record<string, string[]>): VectorStoreLike {
+  return {
+    scan: async (req: { filter?: { tags?: { documentId?: string } } }) => {
+      const docId = req.filter?.tags?.documentId;
+      const ids = docId ? (chunksByDoc[docId] ?? []) : Object.values(chunksByDoc).flat();
+      return ids.map((id) => ({ id }));
+    },
+    deleteWhere: async () => undefined,
+  } as unknown as VectorStoreLike;
+}
 
 beforeEach(async () => {
   await _resetClientDataDbForTests();
@@ -258,6 +279,53 @@ describe('Class-2 cascade deletes enqueue child tombstones', () => {
       'documents:d1:delete',
       'documents:d2:delete',
       'libraries:l1:delete',
+    ]);
+  });
+});
+
+// ── Document/library deletes tombstone their vectors server-side (§4, 2026-07-13)
+describe('Class-2 cascade deletes tombstone document vectors', () => {
+  it('a document delete tombstones the document AND each of its synced vector chunks', async () => {
+    setOnline();
+    await seedLibrary('l1');
+    await seedDocument('d1', 'l1');
+
+    await deleteDocumentCascade('d1', vectorStoreWith({ d1: ['d1#0', 'd1#1', 'd1#2'] }));
+
+    expect(stamps(await outbox())).toEqual([
+      'documents:d1:delete',
+      'vectors:d1#0:delete',
+      'vectors:d1#1:delete',
+      'vectors:d1#2:delete',
+    ]);
+  });
+
+  it('an UNLINKED document delete enqueues nothing (local-only removes vectors, no tombstones)', async () => {
+    setLocalOnly();
+    await seedLibrary('l1');
+    await seedDocument('d1', 'l1');
+
+    await deleteDocumentCascade('d1', vectorStoreWith({ d1: ['d1#0', 'd1#1'] }));
+
+    expect(await getClientDataDb().documents.get('d1')).toBeUndefined();
+    expect(await outbox()).toHaveLength(0);
+  });
+
+  it('a library delete cascades vector tombstones per contained document', async () => {
+    setOnline();
+    await seedLibrary('l1');
+    await seedDocument('d1', 'l1');
+    await seedDocument('d2', 'l1');
+
+    await deleteLibraryCascade('l1', vectorStoreWith({ d1: ['d1#0'], d2: ['d2#0', 'd2#1'] }));
+
+    expect(stamps(await outbox())).toEqual([
+      'documents:d1:delete',
+      'documents:d2:delete',
+      'libraries:l1:delete',
+      'vectors:d1#0:delete',
+      'vectors:d2#0:delete',
+      'vectors:d2#1:delete',
     ]);
   });
 });

@@ -583,10 +583,16 @@ export async function applyRecord(pulled: SyncPulledRecord): Promise<ApplyOutcom
 async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<ApplyOutcome> {
   const collection = pulled.collection;
 
-  // §7.3a — count every pulled tombstone; a calm notice above the threshold.
-  tombstoneCycleCount += 1;
-  if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) {
-    await setAttention({ kind: 'tombstone_threshold', count: tombstoneCycleCount });
+  // §7.3a — count every pulled tombstone for a VISIBLE collection; a calm notice
+  // above the threshold. `vectors` are excluded (§4.3, 2026-07-13): they are
+  // invisible infrastructure and one document delete now carries a tombstone per
+  // chunk (hundreds), which must never raise the "items removed on another device"
+  // alarm.
+  if (collection !== 'vectors') {
+    tombstoneCycleCount += 1;
+    if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) {
+      await setAttention({ kind: 'tombstone_threshold', count: tombstoneCycleCount });
+    }
   }
 
   const db = getClientDataDb();

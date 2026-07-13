@@ -29,7 +29,10 @@ describe('defensive materialisation on document delete', () => {
     // Sanity: the reference carries no copied text yet.
     expect((await listPendingAttachments('c1'))[0]?.text).toBeUndefined();
 
-    await deleteDocumentCascade(docId as string, { deleteWhere: async () => {} } as never);
+    await deleteDocumentCascade(
+      docId as string,
+      { scan: async () => [], deleteWhere: async () => {} } as never,
+    );
 
     const [row] = await listPendingAttachments('c1');
     expect(row?.text).toBe('body text');
@@ -46,7 +49,10 @@ describe('defensive materialisation on document delete', () => {
     const { updateAttachmentText } = await import('../../src/data/attachments.js');
     await updateAttachmentText(attId, 'edited note');
 
-    await deleteDocumentCascade(docId as string, { deleteWhere: async () => {} } as never);
+    await deleteDocumentCascade(
+      docId as string,
+      { scan: async () => [], deleteWhere: async () => {} } as never,
+    );
 
     const [row] = await listPendingAttachments('c1');
     expect(row?.text).toBe('edited note');

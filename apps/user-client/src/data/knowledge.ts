@@ -78,16 +78,27 @@ export async function deleteDocumentCascade(
 ): Promise<void> {
   const doc = await getClientDataDb().documents.get(id);
   if (doc) await materialiseReferencesForDocument(id, doc.content);
-  // Vectors ride the document's lifecycle (spec §7.5/§10): removed from the
-  // separate knowledge database locally, never tombstoned individually — the
-  // document tombstone is the signal.
+  // Vectors are removed from the separate knowledge database locally AND — as of
+  // 2026-07-13 (spec §4.3) — tombstoned server-side, one per chunk, so the pushed
+  // ciphertext no longer accumulates against the account quota forever. This
+  // supersedes the original sync-spec decision that vectors are "never tombstoned
+  // individually — the document tombstone is the signal"; the separate rule that a
+  // document-edit SHRINK uses cleared-state updates (not tombstones) is unchanged.
+  // The store scan is the source of truth for the keys: a VectorRow's primary key
+  // IS its `vectors` sync key (`${documentId}#${chunkIndex}`, sync-keys.ts), so the
+  // keys are collected BEFORE the local delete removes them.
+  const vectorKeys = (
+    await store.scan({ collection: KNOWLEDGE_COLLECTION, filter: { tags: { documentId: id } } })
+  ).map((row) => row.id);
   await deleteDocumentVectors(id, store);
-  // Class-2 delete (spec §5): enqueue the document tombstone.
+  // Class-2 delete (spec §5): enqueue the document tombstone plus a `vectors`
+  // tombstone per chunk (cascade — only enqueued in the linked path).
   await mutateSynced({
     collection: 'documents',
     key: id,
     op: 'delete',
     tables: opts?.intoTrash ? ['documents', 'trash'] : ['documents'],
+    cascade: vectorKeys.map((k) => ({ collection: 'vectors' as const, key: k })),
     write: async (tx) => {
       if (opts?.intoTrash && doc) await snapshotRowIntoTrash(tx, Date.now(), 'documents', id, doc);
       await tx.table('documents').delete(id);
@@ -110,15 +121,26 @@ export async function deleteLibraryCascade(
   const docs = await db.documents.where('libraryId').equals(id).toArray();
   const docIds = docs.map((d) => d.id);
   // Pre-work touches other databases/collections (attachment materialisation,
-  // the separate vector store) — done outside the synced transaction.
+  // the separate vector store) — done outside the synced transaction. The vector
+  // chunk keys of every contained document are collected here (BEFORE the local
+  // delete removes them) so the cascade can tombstone them server-side too (§4.3).
+  const vectorKeys: string[] = [];
   for (const doc of docs) {
     await materialiseReferencesForDocument(doc.id, doc.content);
+    const keys = (
+      await store.scan({
+        collection: KNOWLEDGE_COLLECTION,
+        filter: { tags: { documentId: doc.id } },
+      })
+    ).map((row) => row.id);
+    vectorKeys.push(...keys);
     await deleteDocumentVectors(doc.id, store);
   }
-  // Class-2 delete (spec §5) with cascade tombstones for the synced documents.
-  // The persona/chat binding prune is a LOCAL cleanup only: a dangling
-  // `libraryId` on another device is filtered at read time, so it is not synced
-  // (avoids turning a library delete into a fan-out of persona/chat edits).
+  // Class-2 delete (spec §5) with cascade tombstones for the synced documents and
+  // each contained document's vector chunks (§4.3). The persona/chat binding prune
+  // is a LOCAL cleanup only: a dangling `libraryId` on another device is filtered
+  // at read time, so it is not synced (avoids turning a library delete into a
+  // fan-out of persona/chat edits).
   await mutateSynced({
     collection: 'libraries',
     key: id,
@@ -126,7 +148,10 @@ export async function deleteLibraryCascade(
     tables: opts?.intoTrash
       ? ['libraries', 'documents', 'personas', 'chats', 'trash']
       : ['libraries', 'documents', 'personas', 'chats'],
-    cascade: docIds.map((k) => ({ collection: 'documents' as const, key: k })),
+    cascade: [
+      ...docIds.map((k) => ({ collection: 'documents' as const, key: k })),
+      ...vectorKeys.map((k) => ({ collection: 'vectors' as const, key: k })),
+    ],
     write: async (tx) => {
       if (opts?.intoTrash) {
         // Snapshot the EXACT cascade set (I-2) before the live rows are removed.

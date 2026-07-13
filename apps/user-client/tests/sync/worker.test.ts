@@ -542,6 +542,33 @@ describe('runSyncCycle (spec §6)', () => {
   });
 });
 
+describe('drainOutbox — a rate-limited delete stays in the outbox and retries', () => {
+  it('keeps a delete tombstone entry when the server bounces it with delete_rate_limited', async () => {
+    // §4.3: a mass document/vectors delete may bounce off the per-account delete
+    // rate limit. The bounced tombstone must NOT drop or mark terminal — it stays
+    // in the outbox and retries next cycle (only `record_too_large` is terminal).
+    const db = getClientDataDb();
+    await db.syncRows.put({ collection: 'vectors', key: 'd1#0', rev: 3, ciphertextHash: 'h' });
+    await addOutbox('vectors', 'd1#0', 'delete');
+
+    const push = vi.fn(async () => ({
+      head: 3,
+      epoch: 'E1',
+      results: [{ status: 'error', code: 'delete_rate_limited' } as const],
+    }));
+    _setPushTransport(push);
+
+    await drainOutbox();
+
+    const rows = await outbox();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ collection: 'vectors', key: 'd1#0', op: 'delete' });
+    expect(rows[0]?.terminal).not.toBe(true);
+    // The CAS base is untouched, so a retry re-seals the same tombstone.
+    expect(await db.syncRows.get(['vectors', 'd1#0'])).toBeDefined();
+  });
+});
+
 describe('runSyncCycle — §11.3 transient attention auto-clear', () => {
   it('retires a stale delete_rate_limited banner on a cycle that does not re-raise it', async () => {
     _setPullLoop(vi.fn(async () => undefined));
