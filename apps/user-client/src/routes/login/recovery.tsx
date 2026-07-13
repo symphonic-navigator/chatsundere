@@ -11,7 +11,7 @@ import {
   regenerateRecoveryKey,
 } from '@chatsundere/crypto';
 import { useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as v from 'valibot';
 import { activateSession } from '../../boot/activate-session.js';
@@ -21,6 +21,7 @@ import { RecoveryKeyInput } from '../../components/RecoveryKeyInput.js';
 import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
 import { env } from '../../env.js';
 import { copy } from '../../lib/copy.js';
+import { HttpError } from '../../lib/fetch.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { PassphrasePair, RecoveryKeyLike } from '../../lib/validators.js';
 
@@ -63,7 +64,21 @@ export function Recovery() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Re-enter-recovery-key affordance (flow R, spec §5.2): the deferred branch
+  // only verifies the key once the passphrase is submitted, so a wrong key
+  // errors on the passphrase screen — which has no key field of its own.
+  // `pendingKeyFocus` claims focus back onto the key input once step1 remounts.
+  const recoveryKeyInputRef = useRef<HTMLInputElement>(null);
+  const [pendingKeyFocus, setPendingKeyFocus] = useState(false);
+
   const c = copy.recovery;
+
+  useEffect(() => {
+    if (step.kind === 'step1' && pendingKeyFocus) {
+      recoveryKeyInputRef.current?.focus();
+      setPendingKeyFocus(false);
+    }
+  }, [step, pendingKeyFocus]);
 
   // Detect linked account once on mount. useEffect ensures StrictMode's double
   // invocation in dev does not double-fire the IDB read in production.
@@ -218,6 +233,24 @@ export function Recovery() {
     }
   }
 
+  // ── Back affordance: step2-deferred → step1 ───────────────────────────────
+
+  /**
+   * Flow R back affordance (spec §5.2). Only offered on `step2-deferred`: that
+   * branch reaches the passphrase screen without ever verifying the key, so a
+   * wrong key surfaces here with no way back. `step2-local` already verified
+   * the key at step 1 and holds a live `MasterKeySession`/`MasterKey` in its
+   * step payload — discarding those without closing the session would leave
+   * key material unzeroed, so this affordance is scoped to step2-deferred only.
+   * Scope stays as chosen; only the key field is cleared and re-focused.
+   */
+  function handleReenterRecoveryKey() {
+    setError(null);
+    setRecoveryKey('');
+    setPendingKeyFocus(true);
+    setStep({ kind: 'step1' });
+  }
+
   // ── Step 3: new recovery key reveal ───────────────────────────────────────
 
   function handleStep3Finish() {
@@ -251,7 +284,14 @@ export function Recovery() {
           return c.errors.serverUnreachable;
       }
     }
-    // Non-CryptoError (network failure, HTTP error) → server unreachable message.
+    if (err instanceof HttpError) {
+      if (err.status === 429) return c.errors.rateLimited;
+      if (err.status === 404) return c.errors.unknownUsername;
+      // 409/401 (and everything else) keep the generic unreachable copy — a
+      // specific guess for those statuses would mislead (spec §5.2).
+      return c.errors.serverUnreachable;
+    }
+    // Network failure (fetch throw) → unchanged unreachable copy.
     return c.errors.serverUnreachable;
   }
 
@@ -372,6 +412,18 @@ export function Recovery() {
               {busy ? 'Working…' : c.finishCta}
             </button>
           </form>
+
+          {step.kind === 'step2-deferred' && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleReenterRecoveryKey}
+                className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+              >
+                {c.reenterKeyCta}
+              </button>
+            </div>
+          )}
         </div>
       </main>
     );
@@ -394,7 +446,12 @@ export function Recovery() {
           }}
           className="space-y-6"
         >
-          <RecoveryKeyInput value={recoveryKey} onChange={setRecoveryKey} disabled={busy} />
+          <RecoveryKeyInput
+            value={recoveryKey}
+            onChange={setRecoveryKey}
+            disabled={busy}
+            inputRef={recoveryKeyInputRef}
+          />
 
           {/* Scope selector — linked accounts only */}
           {isLinked && (

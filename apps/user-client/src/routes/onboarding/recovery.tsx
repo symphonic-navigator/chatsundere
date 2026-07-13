@@ -25,6 +25,18 @@ import { isValidServerUrl } from '../../lib/server-url.js';
 
 type Screen = { kind: 'ready' } | { kind: 'submitting' } | { kind: 'fatal'; message: string };
 
+// Verbatim copy of routes/login/recovery.tsx's mapRecoveryKeyError result for
+// this code (lib/copy.ts recovery.errors.keyInvalid) — both recovery surfaces
+// must show identical wording for a malformed recovery key.
+const INVALID_KEY_COPY = "That recovery key doesn't match.";
+
+/** The recovery-attempt rate-limit window is 10 attempts / 15 min. */
+function rateLimitMessage(retryAfterSeconds: number | undefined): string {
+  if (retryAfterSeconds === undefined) return 'Too many attempts. Please wait a few minutes.';
+  const minutes = Math.max(1, Math.round(retryAfterSeconds / 60));
+  return `Too many attempts. Please wait about ${minutes} minutes.`;
+}
+
 /**
  * `/onboarding/recovery` — single-screen recovery-from-scratch flow.
  * User enters server URL + username + recovery key + new passphrase (twice).
@@ -107,13 +119,28 @@ export function OnboardingRecovery() {
         setScreen({ kind: 'ready' });
         return;
       }
+      if (err instanceof CryptoError && err.code === 'not_found') {
+        setScreen({ kind: 'fatal', message: 'No account with that username on this server.' });
+        return;
+      }
+      if (err instanceof CryptoError && err.code === 'invalid_recovery_key_format') {
+        // Same copy as routes/login/recovery.tsx's mapRecoveryKeyError (lib/copy.ts
+        // recovery.errors.keyInvalid) — the two recovery surfaces must read identically.
+        setRecoveryKeyError(INVALID_KEY_COPY);
+        setScreen({ kind: 'ready' });
+        return;
+      }
       if (err instanceof HttpError) {
+        // recoverFromScratch wraps a server 404 into CryptoError('not_found')
+        // (handled above) before this catch ever sees an HttpError, so this arm
+        // is unreachable via that caller today. Left as a harmless backstop in
+        // case a future caller surfaces a raw 404 HttpError instead.
         if (err.status === 404 || err.code === 'not_found') {
           setScreen({ kind: 'fatal', message: 'No account with that username on this server.' });
           return;
         }
-        if (err.status === 429 || err.code === 'rate_limit_exceeded') {
-          setScreen({ kind: 'fatal', message: 'Too many attempts. Please wait a minute.' });
+        if (err.status === 429 || err.code === 'rate_limited') {
+          setScreen({ kind: 'fatal', message: rateLimitMessage(err.retryAfterSeconds) });
           return;
         }
         if (err.status >= 500 || err.status === 0) {

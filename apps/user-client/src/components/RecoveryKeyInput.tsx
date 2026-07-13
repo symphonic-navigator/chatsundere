@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { type ChangeEvent, useId } from 'react';
+import { type ChangeEvent, type RefObject, useId } from 'react';
 import { copy } from '../lib/copy.js';
 
 export interface RecoveryKeyInputProps {
@@ -7,6 +7,9 @@ export interface RecoveryKeyInputProps {
   value: string;
   onChange(normalised: string): void;
   disabled?: boolean;
+  /** Forwarded to the underlying input so callers can focus it imperatively
+   *  (e.g. flow R's "Re-enter recovery key" affordance re-claims focus). */
+  inputRef?: RefObject<HTMLInputElement>;
 }
 
 /**
@@ -22,7 +25,12 @@ export interface RecoveryKeyInputProps {
  *   - The displayed value is derived purely from `value`; the controlled input
  *     always reflects the latest normalised string so paste-then-clear works.
  */
-export function RecoveryKeyInput({ value, onChange, disabled = false }: RecoveryKeyInputProps) {
+export function RecoveryKeyInput({
+  value,
+  onChange,
+  disabled = false,
+  inputRef,
+}: RecoveryKeyInputProps) {
   const inputId = useId();
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
@@ -41,6 +49,7 @@ export function RecoveryKeyInput({ value, onChange, disabled = false }: Recovery
         {copy.recovery.recoveryKeyLabel}
       </label>
       <input
+        ref={inputRef}
         id={inputId}
         type="text"
         inputMode="text"
