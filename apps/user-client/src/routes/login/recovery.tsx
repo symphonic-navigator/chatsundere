@@ -22,6 +22,7 @@ import { RecoveryKeyReveal } from '../../components/RecoveryKeyReveal.js';
 import { env } from '../../env.js';
 import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
+import { rateLimitMessage } from '../../lib/recovery-copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { PassphrasePair, RecoveryKeyLike } from '../../lib/validators.js';
 
@@ -285,7 +286,9 @@ export function Recovery() {
       }
     }
     if (err instanceof HttpError) {
-      if (err.status === 429) return c.errors.rateLimited;
+      // Honest wait-time copy, shared with the onboarding recovery surface
+      // (lib/recovery-copy.ts) — both surfaces read identically.
+      if (err.status === 429) return rateLimitMessage(err.retryAfterSeconds);
       if (err.status === 404) return c.errors.unknownUsername;
       // 409/401 (and everything else) keep the generic unreachable copy — a
       // specific guess for those statuses would mislead (spec §5.2).

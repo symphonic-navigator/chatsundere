@@ -20,6 +20,7 @@ import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
 import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
+import { rateLimitMessage } from '../../lib/recovery-copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isValidServerUrl } from '../../lib/server-url.js';
 
@@ -42,13 +43,6 @@ const INVALID_KEY_COPY = "That recovery key doesn't match.";
 // must show identical wording for an unknown username, and both keep the user
 // on a live, editable form rather than a fatal dead-end.
 const UNKNOWN_USERNAME_COPY = copy.recovery.errors.unknownUsername;
-
-/** The recovery-attempt rate-limit window is 10 attempts / 15 min. */
-function rateLimitMessage(retryAfterSeconds: number | undefined): string {
-  if (retryAfterSeconds === undefined) return 'Too many attempts. Please wait a few minutes.';
-  const minutes = Math.max(1, Math.round(retryAfterSeconds / 60));
-  return `Too many attempts. Please wait about ${minutes} minutes.`;
-}
 
 /**
  * `/onboarding/recovery` — single-screen recovery-from-scratch flow.

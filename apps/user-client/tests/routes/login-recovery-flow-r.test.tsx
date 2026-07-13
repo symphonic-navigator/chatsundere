@@ -128,14 +128,28 @@ describe('Recovery (login surface) — flow R back affordance (D2)', () => {
     expect(screen.queryByRole('button', { name: 'Re-enter recovery key' })).not.toBeInTheDocument();
   });
 
-  it('mapOnlineRecoveryError: HttpError 429 → rate-limit copy', async () => {
+  it('mapOnlineRecoveryError: HttpError 429 without Retry-After → shared "a few minutes" copy', async () => {
     mockRecoveryOnline.mockRejectedValue(new HttpError(429, 'rate_limited', 'slow down'));
     const user = userEvent.setup();
 
     await reachStep2Deferred(user);
     await fillAndSubmitPassphrase(user);
 
-    expect(await screen.findByText('Too many attempts — wait a few minutes.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Too many attempts. Please wait a few minutes.'),
+    ).toBeInTheDocument();
+  });
+
+  it('mapOnlineRecoveryError: HttpError 429 with Retry-After → shared "about N minutes" copy', async () => {
+    mockRecoveryOnline.mockRejectedValue(new HttpError(429, 'rate_limited', 'slow down', 300));
+    const user = userEvent.setup();
+
+    await reachStep2Deferred(user);
+    await fillAndSubmitPassphrase(user);
+
+    expect(
+      await screen.findByText('Too many attempts. Please wait about 5 minutes.'),
+    ).toBeInTheDocument();
   });
 
   it('mapOnlineRecoveryError: HttpError 404 → unknown-username copy', async () => {

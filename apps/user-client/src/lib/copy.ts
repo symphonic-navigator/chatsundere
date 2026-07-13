@@ -231,7 +231,6 @@ export const copy = {
     errors: {
       keyInvalid: "That recovery key doesn't match.",
       serverUnreachable: 'The server is unreachable. Try local-only recovery, or try again later.',
-      rateLimited: 'Too many attempts — wait a few minutes.',
       // Same wording as routes/onboarding/recovery.tsx's not_found copy — both
       // recovery surfaces must read identically for an unknown username.
       unknownUsername: 'No account with that username on this server.',
