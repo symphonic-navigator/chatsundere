@@ -1,32 +1,41 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-13 — **RELEASE-DAY AUDIT of pairing / client sync /
-CORS proxy / recovery-key restore DONE; fix bundle SPECCED + PLANNED, execution
-handed to a fresh Opus 4.8 session.** Four parallel read-only audits ahead of
-tonight's v0.2.0 go-live. Headline: **one BLOCKER** — the pairing QR (and the
-bootstrap CLI's) mints `${API_BASE_URL}/join#code` WITHOUT the `/auth` strip the
-invitation mint has, so on the deploy-kit topology (Traefik routes the auth host
-only for `/api`) every QR-driven pairing 404s; plus a HIGH — a system-camera
-scan of EITHER QR dead-ends on a raw 404 (no `GET /join` anywhere). Chris chose
-the client-origin convention: QRs now point at `${APP_PUBLIC_URL}/join?server=…#code`
-with a new client `/join` chooser route. Other confirmed findings folded into the
-bundle: sync `setAttention` clobbers the sticky `tamper` alarm (new MEDIUM);
-known MEDIUM-1 (vectors never tombstoned server-side) + MEDIUM-3 (mass-delete
-blind-id CPU); recovery onboarding's `not_found`/`invalid_recovery_key_format`
-branches are dead code (generic "Something went wrong"); flow-R wrong-key
-dead-end; the promised relay-cut constructive message was never built. **Verified
-working:** wire contracts field-by-field across all four areas (no drift), the
-wafer/xAI `bad_target` fix IS on master (`62874ec4`, regression-tested — but the
-real-key device probe is still owed), Content-Encoding fix present, recovery-key
-format tolerance test-pinned (no lockout risk), pairing protocol/atomicity clean.
-Spec [[../superpowers/specs/2026-07-13-pre-golive-fix-bundle-design]] (**Laura
-spec-pass: 1 HARD + 4 SOFT, all folded**; Chris-approved), plan
-[[../superpowers/plans/2026-07-13-pre-golive-fix-bundle]] (hardened with the
-operating-rules contract), kickoff brief
-[[../superpowers/plans/2026-07-13-pre-golive-fix-bundle-kickoff]]. Six squash
-units A–F; Larissa owed on A (+B/C courtesy), Laura pre-squash on A/D/E. **OWED:
-the executing session lands A–F; then Chris's spec-§9 device verification (incl.
-the F7 live QR scan + one real xAI/wafer proxy send) and the push.**
+**Last updated:** 2026-07-13 — **PRE-GO-LIVE FIX BUNDLE LANDED: six units
+squashed to `master` (A→F), NOT pushed — Chris pushes after his device
+verification.** The release-day audit (pairing / client sync / CORS proxy /
+recovery-key restore) surfaced one BLOCKER + one HIGH + a set of MEDIUMs; all six
+fix units are now built, audited, and on master. **Server-relevant units:
+Unit A** (`84d3f7dd`) — the BLOCKER fix: the pairing QR and bootstrap CLI minted
+`${API_BASE_URL}/join#code` WITHOUT the `/auth` strip the invitation mint had, so
+on the deploy-kit topology every QR-driven pairing 404'd. All three mint sites now
+route through one shared `buildJoinQrUrl` helper (auth-service) that strips `/auth`
+uniformly and, when the new optional **`APP_PUBLIC_URL`** env is set, points QR
+codes at the client origin `${APP_PUBLIC_URL}/join?server=…#code`; the client
+serves a new public `/join` chooser route so a system-camera scan (the HIGH) lands
+on a real screen. New env wired through the deploy kit (`generate.sh`,
+`deployment.env.template`, `DEPLOYMENT.md`). **Unit C** (`6b143299`, MEDIUM-1) —
+document/library delete now enqueues `vectors` tombstones server-side (same
+blind-id key path as the upsert, verified byte-for-byte; excluded from the
+user-facing tombstone tally). **Client-side units B/D/E/F** are summarised in
+[[STATUS-CLIENT-ONLY]] (2026-07-13). **Audits:** **Larissa CLEAR** on the Unit A
+auth-service diff (env parity with `ADMIN_PUBLIC_URL`, no injection/info-disclosure,
+join code rides the fragment as before, no new route, no new wipe path, ZK intact)
+**+ courtesy CLEAR** on B+C (tamper guard monotone, tombstone keys blind-id-only
+with no new plaintext, blind-id memo MK-scoping safe — **no security-deferrals row
+warranted**). Laura no hard defects on A/D/E. **Verified pre-audit (still true):**
+wire contracts no-drift, wafer/xAI `bad_target` fix on master (`62874ec4`,
+regression-tested), Content-Encoding fix present, recovery-key format tolerance
+test-pinned. Gates on `master` post-squash: `pnpm typecheck --force` **14/14** (0
+cached); auth-service `bun test` **209 pass / 12 skip / 0 fail** (the pre-existing
+`admin-users` ordering artefact passed this run); full user-client vitest **2967
+pass / 9 environmental**; `pnpm build` **9/9**; llm-unified **421/421**; no Dexie
+bump. **Six squash SHAs:** A `84d3f7dd` · B `b4a4944b` · C `6b143299` · D
+`cf5b3f77` · E `cd0a3935` · F `16890861`. Spec/plan under `superpowers/`; branch
+`fix/pre-golive-bundle` kept until push. **OWED: Chris's spec-§9 device
+verification** (system-camera + in-app scans of both QR forms against the staged
+prod topology — closes F7's "one live scan"; recovery copy; flow-R back; relay-cut
+footer; empty-account status; many-chunk delete no-alarm/no-hang) **+ the non-code
+checklist** (one real xAI/wafer proxy send with a real key) **then the push.**
 
 Prior entry: 2026-07-10 (later) — **`TRUST_PROXY_HOPS` ON AUTH SQUASHED to
 `master` (`dc25cdd`, one feature unit). NOT pushed — Chris pushes.** Closes the

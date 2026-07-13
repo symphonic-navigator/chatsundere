@@ -8,15 +8,42 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-13 — **release-day pre-go-live fix bundle specced +
-planned; execution handed to a fresh session.** The client-side units: a new
-`/join` landing route (client-origin QR deep links, two-gold chooser), sync
-tamper-attention guard + empty-account status fix + blind-id memo, vector
-tombstones on document delete, recovery error-surface fixes (onboarding dead
-branches, flow-R back affordance), a typed `ProxyUnavailableError` with a
-constructive relay-cut surface, and hygiene. Full context, findings and gates
-live in [[STATUS-BACKEND]] (2026-07-13 entry); spec/plan/kickoff under
-`superpowers/`. Laura spec-pass folded (1 HARD + 4 SOFT).
+**Last updated:** 2026-07-13 — **PRE-GO-LIVE FIX BUNDLE LANDED: six units
+squashed to `master` (A→F), NOT pushed — Chris pushes after his device
+verification.** Executed subagent-driven (13 TDD tasks + a Laura-driven Unit-A
+fix wave, per-task spec+quality review, whole-branch opus review READY TO
+SQUASH). The client-side units (B, D, E, F; A spans auth-service + client):
+**Unit A** (`84d3f7dd`) — join QR codes now point at the client origin via a
+shared `buildJoinQrUrl` helper + optional `APP_PUBLIC_URL`, and a new **public
+`/join` chooser route** (two-gold `NavTile`s, seeds the onboarding store like the
+`kind_mismatch` handoff → flow root, never `/confirm`; no wipe path);
+`parseJoinUrl` accepts both the new client-origin form and the legacy form (paste
+now normalises lowercase codes). **Unit B** (`b4a4944b`) — sync robustness:
+`setAttention` tamper-alarm guard, empty-account "Synced" status fix, a per-cycle
+stage-1 blind-id memo. **Unit C** (`6b143299`) — vector tombstones server-side on
+document/library delete (excluded from the user-facing tombstone tally).
+**Unit D** (`cf5b3f77`) — recovery error surfaces: onboarding unknown-username
+(fatal) / malformed-key (inline) / honest 429, and flow-R "Re-enter recovery key"
+back affordance + status disambiguation. **Unit E** (`cd0a3935`) — a typed
+`ProxyUnavailableError` (llm-unified) drives a constructive toast + "Open Server
+linking" footer button. **Unit F** (`16890861`) — a settings normaliser clears the
+orphaned relay secret. **No Dexie bump** anywhere (all touched fields non-indexed).
+**Audits:** Larissa CLEAR on Unit A (auth-service) + courtesy CLEAR on B+C
+(tamper guard monotone, tombstone keys blind-id-only, memo MK-scoping safe, no new
+plaintext); Laura **no hard defects** on A/D/E (softs are Chris-arbitrated taste —
+see the fix-bundle report). Gates on `master` post-squash: `pnpm typecheck
+--force` **14/14** (0 cached); full user-client vitest **2967 pass / 9
+environmental** (8 Node-localStorage + 1 stream-manager parallel-load flake,
+isolated 42/42 — confirmed via the localStorage error text, not code); `pnpm
+build` **9/9**; llm-unified `bun test` **421/421**; Biome clean. Spec/plan:
+[[../superpowers/specs/2026-07-13-pre-golive-fix-bundle-design]],
+[[../superpowers/plans/2026-07-13-pre-golive-fix-bundle]]. Branch
+`fix/pre-golive-bundle` kept until Chris pushes. **Next:** Chris device-verifies
+(spec §9: system-camera + in-app scans of both QR forms → `/join` chooser →
+prefilled flow; recovery typo/unknown-username copy; flow-R back; relay-cut
+footer; empty-account "Synced"; delete a many-chunk document on device 1 → device
+2 removes it with no "items removed" alarm and no hang) + the non-code checklist
+(one real xAI/wafer proxy send), then pushes.
 
 **Earlier — 2026-07-12 — ONBOARDING MATRIX REBUILT IN THE DESIGN
 LANGUAGE, SQUASHED TO MASTER (`448861f`). NOT pushed (Chris pushes); awaiting
