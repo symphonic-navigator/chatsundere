@@ -62,24 +62,16 @@ describe('effectiveAuthUrl', () => {
     });
   });
 
+  // The module-scope mock above supplies a VITE_AUTH_URL, and Vitest always
+  // runs with MODE === 'test', so devOverridesActive() is false for every
+  // test in this file. A pass here therefore witnesses two things at once:
+  // that effectiveAuthUrl() reads the linked-account store, and that the
+  // VITE_AUTH_URL override does not leak into a non-dev build.
   it('returns the linked account base URL', () => {
     useAccountLinkStore.getState().setLinked({
       base_url: 'https://auth.example.com',
       issuer_label: 'Example',
       role: 'primary_admin',
-    });
-    expect(effectiveAuthUrl()).toBe('https://auth.example.com');
-  });
-
-  // Pins the property the user-client's server-urls.ts documents: a build that
-  // is not the Vite dev server must never honour VITE_*. Vitest runs with
-  // MODE === 'test', so devOverridesActive() is false here and the store wins
-  // even though the mock supplies a VITE_AUTH_URL.
-  it('ignores VITE_AUTH_URL outside the dev server', () => {
-    useAccountLinkStore.getState().setLinked({
-      base_url: 'https://auth.example.com',
-      issuer_label: null,
-      role: 'admin',
     });
     expect(effectiveAuthUrl()).toBe('https://auth.example.com');
   });
@@ -138,7 +130,7 @@ export function effectiveAuthUrl(): string {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter admin-client test -- server-urls`
-Expected: PASS, 3 tests.
+Expected: PASS, 2 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -172,7 +164,7 @@ Create `apps/admin-client/tests/unit/decision-tree-publishes-account.test.ts`:
 ```ts
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore } from '@chatsundere/ui-shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getLocalAccountMock = vi.fn();
 const getLinkedAccountMock = vi.fn();
@@ -235,6 +227,28 @@ describe('runDecisionTreePreLogin account publication', () => {
     await runDecisionTreePreLogin();
     expect(closeMock).toHaveBeenCalledTimes(1);
   });
+
+  describe('when offline', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // Publication must happen before the online check, so an offline operator
+    // with a valid linked row still gets a usable base URL for the retry
+    // path. The baseUrl assertion is what pins that ordering: if setLinked
+    // ever moved inside an `if (navigator.onLine)` guard, this would fail
+    // while every other test in this file kept passing.
+    it('still publishes the linked row so a retry can reach the server', async () => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      getLocalAccountMock.mockResolvedValue({ id: 'local' });
+      getLinkedAccountMock.mockResolvedValue(LINKED_ROW);
+
+      const result = await runDecisionTreePreLogin();
+
+      expect(result.branch).toBe('offline');
+      expect(useAccountLinkStore.getState().baseUrl).toBe('https://auth.example.com');
+    });
+  });
 });
 ```
 
@@ -281,7 +295,7 @@ Note the publication happens **before** the `navigator.onLine` check: an offline
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter admin-client test -- decision-tree-publishes-account`
-Expected: PASS, 3 tests.
+Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Verify the existing decision-tree tests still pass**
 
@@ -529,7 +543,7 @@ Do not merge, push, or tag. Report: the test counts, the typecheck result, and a
 ## Notes for the implementer
 
 - **Why the order matters.** `env.ts` is slimmed last on purpose. Making `VITE_AUTH_URL` optional while `api.ts` still reads `env.VITE_AUTH_URL` gives `string | undefined` where `apiFetch` wants `string`, so `tsc` breaks mid-plan. `server-urls.ts` compiles against both the old and the new schema, which is what makes the ordering safe.
-- **The dev-override path is not unit-tested.** Under Vitest `import.meta.env.MODE` is `'test'`, so `devOverridesActive()` is always false; forcing it true means stubbing Vite's statically-replaced env, which is brittle. The property that matters for production — that the override is *not* honoured — is covered by Task 1's second test. The dev path is exercised by `./dev.sh` daily.
+- **The dev-override path is not unit-tested.** Under Vitest `import.meta.env.MODE` is `'test'`, so `devOverridesActive()` is always false; forcing it true means stubbing Vite's statically-replaced env, which is brittle. The property that matters for production — that the override is *not* honoured — is covered as a second assertion within Task 1's first test. The dev path is exercised by `./dev.sh` daily.
 - **Do not touch `packages/ui-shared`.** `useAccountLinkStore` and `setLinked` already fit exactly; `setLinked` takes `Pick<LinkedAccountRow, 'base_url' | 'issuer_label' | 'role'>` and the row is passed straight through.
 - **Task 2's `@chatsundere/crypto` mock may need widening.** It replaces the module for that test file, and `ui-shared` also imports from `crypto` (`account-link.store.ts` pulls in `getLinkedAccount`). The three functions in the factory cover what `decision-tree.ts` and the store need today. If the import graph pulls in another `crypto` export and the test dies with "… is not a function", add that export to the factory — do not delete the mock or reach past the package boundary to import the store from its source path.
 - **Vite HMR ignores `packages/*`.** If you change anything under `packages/` (you should not need to), restart the dev server — HMR will not pick it up.

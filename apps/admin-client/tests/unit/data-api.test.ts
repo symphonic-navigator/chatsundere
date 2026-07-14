@@ -6,8 +6,8 @@ vi.mock('../../src/lib/fetch.js', () => ({
   apiFetch: (opts: unknown) => apiFetchMock(opts),
   HttpError: class HttpError extends Error {},
 }));
-vi.mock('../../src/env.js', () => ({
-  env: { VITE_AUTH_URL: 'http://auth.test' },
+vi.mock('../../src/lib/server-urls.js', () => ({
+  effectiveAuthUrl: () => 'http://auth.test',
 }));
 
 import {

@@ -13,8 +13,8 @@ import type {
   AdminUserDetail,
   AdminUserListResponse,
 } from '@chatsundere/shared-types';
-import { env } from '../env.js';
 import { apiFetch } from '../lib/fetch.js';
+import { effectiveAuthUrl } from '../lib/server-urls.js';
 import {
   type AuditListQuery,
   type AuditRow,
@@ -51,7 +51,7 @@ export async function listUsers(query: UserListQuery): Promise<Paged<UserRow>> {
   if (query.role && query.role !== 'all') params.set('role', query.role);
   if (query.status && query.status !== 'all') params.set('status', query.status);
   const res = await apiFetch<AdminUserListResponse>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/users?${params.toString()}`,
     authMode: 'bearer',
   });
@@ -65,7 +65,7 @@ export async function listUsers(query: UserListQuery): Promise<Paged<UserRow>> {
 
 export async function getUser(id: string): Promise<UserDetailView> {
   const res = await apiFetch<AdminUserDetail>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/users/${encodeURIComponent(id)}`,
     authMode: 'bearer',
   });
@@ -78,7 +78,7 @@ export async function getUser(id: string): Promise<UserDetailView> {
 
 export async function suspendUser(id: string): Promise<void> {
   await apiFetch<{ ok: true }>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/users/${encodeURIComponent(id)}/suspend`,
     method: 'POST',
     authMode: 'bearer',
@@ -87,7 +87,7 @@ export async function suspendUser(id: string): Promise<void> {
 
 export async function unsuspendUser(id: string): Promise<void> {
   await apiFetch<{ ok: true }>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/users/${encodeURIComponent(id)}/unsuspend`,
     method: 'POST',
     authMode: 'bearer',
@@ -96,7 +96,7 @@ export async function unsuspendUser(id: string): Promise<void> {
 
 export async function deleteUser(id: string): Promise<void> {
   await apiFetch<{ ok: true }>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/users/${encodeURIComponent(id)}`,
     method: 'DELETE',
     authMode: 'bearer',
@@ -105,7 +105,7 @@ export async function deleteUser(id: string): Promise<void> {
 
 export async function changeRole(id: string, role: 'admin' | 'user'): Promise<void> {
   await apiFetch<{ ok: true }>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/users/${encodeURIComponent(id)}/role`,
     json: { role },
     authMode: 'bearer',
@@ -114,7 +114,7 @@ export async function changeRole(id: string, role: 'admin' | 'user'): Promise<vo
 
 export async function transferPrimary(targetUserId: string): Promise<void> {
   await apiFetch<{ ok: true }>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: '/api/v1/admin/transfer-primary',
     json: { target_user_id: targetUserId },
     authMode: 'bearer',
@@ -127,7 +127,7 @@ export async function listInvitations(
   const { page, perPage, params } = pagination(query);
   if (query.status && query.status !== 'all') params.set('status', query.status);
   const res = await apiFetch<AdminInvitationListResponse>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/invitations?${params.toString()}`,
     authMode: 'bearer',
   });
@@ -145,7 +145,7 @@ export async function createInvitation(
     ...(input.note ? { note: input.note } : {}),
   };
   return apiFetch<AdminCreateInvitationResponse>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: '/api/v1/admin/invitations',
     json: body,
     authMode: 'bearer',
@@ -154,7 +154,7 @@ export async function createInvitation(
 
 export async function revokeInvitation(id: string): Promise<void> {
   await apiFetch<{ ok: true }>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/invitations/${encodeURIComponent(id)}`,
     method: 'DELETE',
     authMode: 'bearer',
@@ -172,7 +172,7 @@ export async function listAudit(query: AuditListQuery): Promise<Paged<AuditRow>>
   if (query.from) params.set('since', `${query.from}T00:00:00.000Z`);
   if (query.to) params.set('until', `${query.to}T23:59:59.999Z`);
   const res = await apiFetch<AdminAuditLogResponse>({
-    baseUrl: env.VITE_AUTH_URL,
+    baseUrl: effectiveAuthUrl(),
     path: `/api/v1/admin/audit-log?${params.toString()}`,
     authMode: 'bearer',
   });
@@ -186,7 +186,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     listUsers({ status: 'suspended', page: 1, per_page: 1 }),
     listInvitations({ status: 'pending', page: 1, per_page: 100 }),
     apiFetch<AdminAuditLogResponse>({
-      baseUrl: env.VITE_AUTH_URL,
+      baseUrl: effectiveAuthUrl(),
       path: `/api/v1/admin/audit-log?since=${encodeURIComponent(sinceIso)}&limit=1`,
       authMode: 'bearer',
     }),

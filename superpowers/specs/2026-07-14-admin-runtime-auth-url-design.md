@@ -203,6 +203,26 @@ fail early.
 This is not defensive error handling for an impossible scenario (CLAUDE.md §10) —
 it is a named assertion of an invariant the architecture relies on.
 
+### 5.1 The unstated invariant this rests on
+
+The argument above holds because **neither store is persisted**. `useSessionStore`
+and `useAccountLinkStore` share one module lifetime, so they cannot disagree:
+`setSession` has exactly one call site (`routes/login/index.tsx`, inside the form
+submit), which is strictly downstream of the decision tree's `setLinked`. A
+session therefore implies a published `baseUrl`. Every data-bearing route sits
+behind `AdminRouteGuard`, which redirects to the login when the session is
+absent — including a deep link to `/admin/dashboard`, since nginx serves the
+admin shell for any `/admin/` path and the shell then finds empty stores.
+
+Adding `persist` to `useSessionStore` would break this: a reload would restore a
+session, pass the guard, mount the dashboard against an empty account-link store,
+and every query would fail with "No linked account — the pre-login decision tree
+must run first", which misnames the fault. CLAUDE.md §14 already forbids tokens
+in `localStorage`, so the rule that protects this is in place — but it protects
+it by accident, and the dependency is worth naming. Surfaced by the whole-branch
+review, which checked the §5 claim against the real routing rather than taking
+it on assertion.
+
 ## 6. Testing
 
 - `tests/unit/data-api.test.ts:10` currently mocks `env: { VITE_AUTH_URL:

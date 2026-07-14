@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getLinkedAccount, getLocalAccount, openLocalDb } from '@chatsundere/crypto';
+import { useAccountLinkStore } from '@chatsundere/ui-shared';
 
 export type PreLoginBranch = 'no_account' | 'no_link' | 'offline' | 'ready';
 
@@ -24,7 +25,14 @@ export async function runDecisionTreePreLogin(): Promise<PreLoginResult> {
     const local = await getLocalAccount(db);
     if (!local) return { branch: 'no_account' };
     const linked = await getLinkedAccount(db);
-    if (!linked) return { branch: 'no_link' };
+    if (!linked) {
+      useAccountLinkStore.getState().setLocalOnly();
+      return { branch: 'no_link' };
+    }
+    // The row we just read carries the auth base URL the data layer needs
+    // (spec §3). Publishing it here avoids a second IndexedDB open racing
+    // this one; ui-shared's initAccountLinkFromDb is deliberately not used.
+    useAccountLinkStore.getState().setLinked(linked);
     if (!navigator.onLine) return { branch: 'offline' };
     return { branch: 'ready' };
   } finally {
