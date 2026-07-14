@@ -23,6 +23,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Static, dependency-free, milliseconds — so it runs first. Catches the
+      # class of defect where a service declares an env var, generate.sh mints
+      # it, DEPLOYMENT.md documents it, and compose never passes it in. That is
+      # how APP_PUBLIC_URL shipped dead on 2026-07-14 and broke every QR pairing.
+      - name: Check deploy env wiring
+        run: ./deploy/check-env-wiring.sh
+
       - name: Lint
         run: pnpm lint
 
