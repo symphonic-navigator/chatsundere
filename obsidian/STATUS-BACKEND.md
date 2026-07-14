@@ -1,8 +1,38 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-13 — **PRE-GO-LIVE FIX BUNDLE LANDED: six units
+**Last updated:** 2026-07-14 — **v0.2.0 CUT AND PUSHED — BACKEND GO-LIVE.** Chris
+completed the spec-§9 device verification owed by the 2026-07-13 entry (all
+surfaces looked correct locally), pushed the pre-go-live fix bundle, and tagged
+`v0.2.0` on `b5d00085` (the master tip). `master` and `origin/master` are in sync.
+**Run `29362731641` green** — Build Backend 1m6s, Build Frontend 4m31s. Verified
+against GHCR, not merely from the run status: `chatsundere-backend` now answers on
+`latest` / `0.2.0` / `0.2` / `0`, with `latest` and `0.2.0` sharing digest
+`sha256:3d48ad2f…`; `chatsundere-frontend` likewise on `sha256:8070443b…`.
+
+**Why the tag was the missing piece:** the backend image had never carried a
+`latest`. `latest` is deliberately gated on a `v*.*.*` tag push
+(`.github/workflows/docker.yml:78`/`:182`) so that Watchtower — which watches
+`:latest` — only moves on a conscious release, never on a plain master merge. The
+backend job only entered CI with `f301478e` (2026-07-07), and the last tag before
+now was **v0.1.4 (2026-06-30)**, so no tag had ever contained the backend job.
+`v0.2.0` is the first that does, which is why this is both the go-live and the
+first backend `latest`. `deploy/compose.template.yml` pins
+`chatsundere-backend:latest` at lines 19/64/120 and was therefore dangling until
+this tag.
+
+**`version.txt` bumped 0.1.0 → 0.2.0.** Tagged builds read the version from the
+ref, so the image is `0.2.0` either way; the bump exists so subsequent master
+builds produce `0.2.0-pre.N` rather than a `0.1.0-pre.N` that sorts *below* the
+shipped release.
+
+**Standing lesson:** a release tag is not a build step — it *is* the deploy.
+Watchtower pulls `latest` the moment the tag build lands. Cut it only behind the
+verification gate, never to "get an image built".
+
+Prior entry: 2026-07-13 — **PRE-GO-LIVE FIX BUNDLE LANDED: six units
 squashed to `master` (A→F), NOT pushed — Chris pushes after his device
-verification.** The release-day audit (pairing / client sync / CORS proxy /
+verification.** *(Both OWED items below are now discharged — see the 2026-07-14
+entry.)* The release-day audit (pairing / client sync / CORS proxy /
 recovery-key restore) surfaced one BLOCKER + one HIGH + a set of MEDIUMs; all six
 fix units are now built, audited, and on master. **Server-relevant units:
 Unit A** (`84d3f7dd`) — the BLOCKER fix: the pairing QR and bootstrap CLI minted
