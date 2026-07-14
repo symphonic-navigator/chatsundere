@@ -31,6 +31,41 @@ discriminating test (a private window) failed to discriminate:
    failed to collect with a ValiError at `env.ts:15` whenever no local `.env`
    existed — the production condition — and now pass.
 
+**⚠️ WATCHTOWER IS DEAD — AUTO-DEPLOY DOES NOT WORK, ON EITHER STACK.** Confirmed
+from its logs on 2026-07-14: it crashloops with `client version 1.25 is too old.
+Minimum supported API version is 1.44`. Docker Engine 28 raised the minimum API
+version; `containrrr/watchtower` is **unpinned** in both `deploy/compose.template.yml:243`
+and `infra/compose.alpha.yml:36`, so both pull `:latest` — which was **last built
+2023-11-11** (verified against the registry). The project is abandoned upstream.
+**This also closes the earlier open question** of why the old alpha stack never
+pulled v0.2.0's `latest`: same cause, invisible for weeks because `latest` never
+moved between v0.1.4 and v0.2.0.
+
+**Deploys are therefore manual until this is decided:**
+```
+cd /opt/chatsundere
+docker compose --env-file deployment.env -f docker-compose.yml pull
+docker compose --env-file deployment.env -f docker-compose.yml up -d
+```
+(`--env-file` is not optional — the kit's env file is `deployment.env`, and
+Compose auto-loads only `.env`.)
+
+**The decision is deferred and wants a spec + Larissa, not a quick image swap.**
+Watchtower holds `/var/run/docker.sock` — root-equivalent on the host — in an
+auto-updating third-party container that every self-hoster runs. A compromised
+fork account would root every instance. Options: (a) maintained fork
+`nickfedor/watchtower` / `ghcr.io/nicholas-fedor/watchtower` (last built
+2026-06-30), pinned by digest; (b) drop Watchtower — `install.sh` is already
+idempotent and does the job over ssh; (c) fork + socket-proxy to cut its rights.
+**The strongest datum for (b): it has been broken for weeks and nobody noticed —
+the automation delivered zero value while carrying the full risk.**
+
+**⚠️ ALPHA TESTERS INBOUND (2026-07-14).** Chris issued three invitations;
+requests expected within 24h, coordinated via Discord with screenshots. Two
+consequences: every fix during the test window needs the manual pull above, and
+the admin console (users, invitations, audit log) is now load-bearing rather than
+cosmetic — which is what v0.2.2 restores.
+
 **⚠️ CI HAS BEEN RED SINCE AT LEAST 2026-07-07 — SEPARATE UNIT, NOT YET FIXED.**
 Every `ci.yml` run fails at the **Lint** step on two pre-existing Biome format
 errors (`apps/user-client/src/index.css`, `apps/admin-client/src/index.css`), so
