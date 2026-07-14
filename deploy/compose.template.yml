@@ -42,6 +42,12 @@ services:
       PROXY_PUBLIC_URL: ${PROXY_PUBLIC_URL}
       SYNC_PUBLIC_URL: ${SYNC_PUBLIC_URL}
       ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL}
+      # Without this, buildJoinQrUrl (codes/qr-url.ts) silently falls back to the
+      # legacy auth-origin form `${API_BASE_URL}/join#code`, and every QR-driven
+      # pairing 404s — there is no /join on the auth host. generate.sh has always
+      # written the value into deployment.env; it was simply never passed in here,
+      # which left the 2026-07-13 blocker fix inert in production.
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
       SYNC_BLOBS_ENABLED: ${SYNC_BLOBS_ENABLED}
     depends_on:
       postgres: {condition: service_healthy}
