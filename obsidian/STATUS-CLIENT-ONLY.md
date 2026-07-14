@@ -8,7 +8,54 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-13 — **THREE FIELD-TEST FIXES LANDED (squashed to
+**Last updated:** 2026-07-14 — **MEMORY-CONSOLIDATION ROBUSTNESS LANDED
+(squashed to `master` as `78ca7afd`, NOT pushed — Chris pushes after his device
+verification).** Field report (Sara & Soren, v0.1.4): "Consolidate now" failed
+persistently with a generic "That didn't work.", leaving a ~24 h memory gap.
+Root causes: the one-shot library's 30 s default is too short for whole-body
+regeneration, dreaming ran the entire backlog in one call, and failures
+surfaced no honest state. **What landed (client-only, no Dexie/schema change, no
+server, no `packages/*`):** long-output timeouts threaded into the memory +
+compaction one-shot calls (extraction 60 s, dreaming/compaction 180 s);
+**dreaming now self-drains the committed backlog in slices of the oldest
+`DREAM_BATCH_SIZE` (40)**, checkpointing saveBody+archive per slice so a
+mid-drain failure loses nothing (a typed `MemoryInvalidOutputError` replaces the
+silent invalid-output return); `archiveCommitted` gains an explicit id-list
+form; the **extraction cursor is held when the uncommitted cap drops fresh
+entries** (re-extract, never lose); the **memory-injection budget fills
+newest-first per group** (emitted chronologically) so a large backlog degrades
+to "oldest out of context", never "yesterday forgotten"; manual memory actions
+take the **same per-persona mutex as the background pipeline** (calm busy toast
+when held), **classify failures into honest reassuring copy** (timeout /
+upstream-busy / invalid-output / no-credentials / failed), count partial
+progress, and refresh the committed list per slice + on the error path so the
+true remainder always shows; the memory page renders that copy with a
+**precedence-pinned Retry** (copy and button always name the same action) and a
+long-run pending sub-line. Built spec→**Laura spec-pass** (2 HARD + 4 soft
+folded)→plan→**subagent-driven (8 TDD tasks, per-task spec+quality review, the
+two load-bearing ones reviewed on opus)**→**whole-branch opus review READY TO
+MERGE** (2 Minors folded: assembly JSDoc accuracy + a background
+invalid-output resilience test with the mutex-release assertion)→**Laura
+pre-squash NO HARD DEFECTS** (3 softs; the `no-credentials`→step-up reachability
+soft deferred to [[insights/ux-deferrals]], canonical home
+[[insights/follow-ups-index]] at the next hygiene pass). **Not a Larissa path**
+(client-only; no crypto/auth/sync/proxy). Gates on the squash: `pnpm typecheck
+--force` **14/14** (0 cached); full user-client vitest at the **8**
+Node-localStorage baseline (+1 known stream-manager parallel-load flake, passes
+38/38 isolated); `pnpm build` **9/9**; Biome clean. Spec/plan:
+[[../superpowers/specs/2026-07-14-memory-consolidation-robustness-design]],
+[[../superpowers/plans/2026-07-14-memory-consolidation-robustness]]. Branch
+`feat/memory-consolidation-robustness` kept until Chris pushes. **Next:** Chris
+device-verifies (spec §7: seed a large committed backlog, model via nano-gpt →
+"Consolidate now" ticks the committed count down per slice with the pending
+sub-line visible, section empties, body updates, no error; kill the network
+mid-drain → error names the provider problem and the committed list immediately
+shows the true remainder, Retry continues; recent memories survive in context
+when the backlog exceeds the injection budget; slow-model compaction shows no
+30 s abort; "Learn from this chat" during a background run → calm busy toast, no
+duplicate entries), then pushes.
+
+Prior landing — 2026-07-13 — **THREE FIELD-TEST FIXES LANDED (squashed to
 `master`, NOT pushed — Chris pushes after device verification):**
 **(1) `e71db547` — a server 429 is no longer mislabelled "Server unreachable".**
 The linked-login classifier collapsed every non-401 (429 included) into
