@@ -137,6 +137,7 @@ Enforced as a hard rule in §3 because Chatsune drifted on this point repeatedly
 - **Granularity:** one squashed commit per feature unit. Correct units: "Set up monorepo and tooling", "Add auth-service", "Wire user-client registration". Not finer, not coarser. See [ADR 0003](obsidian/decisions/0003-squash-per-feature.md).
 - **Commit messages:** free-form imperative, no Conventional Commits prefix. Subject line capitalised.
 - **`[skip ci]` for doc-only commits.** If a commit touches only text — Markdown, ADRs, briefs, READMEs, comments without code change — append `[skip ci]` to the subject so GitHub Actions short-circuits. Mixed commits (text + code) do *not* get the tag. Use GitHub's exact form `[skip ci]` (with the space); `[skip-ci]` with a hyphen is not recognised.
+- **Never tag a release on a `[skip ci]` commit.** GitHub evaluates the marker per *commit*, not per event: if the tagged commit carries it, the tag push is skipped too and **no image is ever built** — silently, with no failed run to find. A release tag belongs on the last commit *without* the marker. The reliable habit is ordering: **squash → tag → then the STATUS commit**, so the doc commit can never end up under the tag. Bit us on 2026-07-14, when `v0.2.2` landed on a STATUS commit and the v0.2.0 admin fix sat unreleased with nothing to look at.
 - **Co-author tag:** `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`.
 - **Subagents never merge, push, or switch branches.** Those responsibilities stay with me.
 
