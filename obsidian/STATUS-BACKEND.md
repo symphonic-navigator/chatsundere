@@ -1,6 +1,51 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-14 — **v0.2.0 CUT AND PUSHED — BACKEND GO-LIVE.** Chris
+**Last updated:** 2026-07-14 (later) — **ADMIN CONSOLE REPAIRED, SQUASHED to
+`master` (`2c461979`), NOT pushed — Chris pushes and tags.** The v0.2.0 go-live
+surfaced that `https://app.chatsundere.me/admin/` renders nothing but the page
+background. **Two independent defects, one symptom** — which is why the obvious
+discriminating test (a private window) failed to discriminate:
+
+1. **`a20a11c7`** — the user-client SW's `navigateFallback` shadowed `/admin/`
+   (absent from `navigateFallbackDenylist`), serving the user-client shell. The
+   second time that fallback has swallowed a sibling path (`/model/` and the
+   embedding weights were the first), so the comment now states the general rule.
+2. **`2c461979`** — `apps/admin-client/src/env.ts` required `VITE_AUTH_URL`,
+   `VITE_SYNC_URL` and `VITE_PROXY_URL` at module scope; the generic image
+   supplies none (Dockerfile passes only `VITE_BASE`), so the valibot parse threw
+   before `createRoot`. **The admin console had never worked in the image**, since
+   `f301478e` (2026-07-07) baked it in. Cause: drift — the user-client moved to
+   runtime discovery in WS0 (VITE_* became dev-only overrides); the admin, built
+   2026-05-20, never followed. Fix: the linked account row's `base_url` is now the
+   source of truth — the decision tree already read that row every start and
+   discarded it, and now publishes it into `useAccountLinkStore`; a new
+   `effectiveAuthUrl()` reads it under the user-client's dev-override rule; twelve
+   `api.ts` call sites moved onto it. `VITE_SYNC_URL`/`VITE_PROXY_URL` deleted —
+   **zero usages, yet their absence crashed the app.** No-account stays a
+   signposted dead end; those four failure states were already built and had
+   simply never run. Spec + plan under `superpowers/`; Larissa/Laura not required
+   (admin-client is outside her paths; no flow added — one only became reachable).
+   Gates on `master` post-squash: `pnpm typecheck --force` **14/14, 0 cached**;
+   admin suite **13 files / 71 tests**; no dev URL baked into `dist`.
+   **Death certificate:** `login-decision-tree` + `users-list-filter` previously
+   failed to collect with a ValiError at `env.ts:15` whenever no local `.env`
+   existed — the production condition — and now pass.
+
+**⚠️ CI HAS BEEN RED SINCE AT LEAST 2026-07-07 — SEPARATE UNIT, NOT YET FIXED.**
+Every `ci.yml` run fails at the **Lint** step on two pre-existing Biome format
+errors (`apps/user-client/src/index.css`, `apps/admin-client/src/index.css`), so
+**Typecheck, Build and Test never run in CI at all.** That is why this bug
+survived: the admin suite encodes it and would have failed CI. The pre-commit hook
+does not catch it because it lints only staged files, and those lines were never
+re-staged. Fixing the two files restores the whole gate — Chris's call on timing.
+
+**NEXT:** push `master`, tag **v0.2.1** (both admin fixes ride it; the SW fix
+alone is necessary but not sufficient), Watchtower pulls, then a **cold start** on
+each device (the SW activates silently on next cold start by design). Then Chris's
+spec §8 manual verification: login renders and the user list loads on PC + phone;
+`/admin/` in a private window shows `NoAccountFailure` with a working way back.
+
+Prior entry: 2026-07-14 — **v0.2.0 CUT AND PUSHED — BACKEND GO-LIVE.** Chris
 completed the spec-§9 device verification owed by the 2026-07-13 entry (all
 surfaces looked correct locally), pushed the pre-go-live fix bundle, and tagged
 `v0.2.0` on `b5d00085` (the master tip). `master` and `origin/master` are in sync.
