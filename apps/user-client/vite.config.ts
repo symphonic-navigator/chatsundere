@@ -103,12 +103,19 @@ export default defineConfig({
         // tracked in obsidian/insights/follow-ups-index.md.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
+        // Every same-origin path that is NOT part of this SPA must be listed
+        // here, or the SW's navigate-fallback shadows it with our index.html.
         // `/model/` serves the self-hosted embedding weights (config/tokenizer
         // JSON + the int8 ONNX). Without this denylist entry the SW's
         // navigate-fallback shadows those asset requests with index.html, so
         // transformers.js receives HTML and every backend fails with
         // "Unexpected token '<'… No backend available" (Chunk A device test).
-        navigateFallbackDenylist: [/^\/auth\/v1\//, /^\/api\//, /^\/model\//],
+        // `/admin/` is the separately-built admin-client, baked into the same
+        // image and served same-origin so it can read the user-client's
+        // IndexedDB account (see apps/user-client/Dockerfile step 5). Without
+        // it, navigating to /admin/ renders the user-client shell — the admin
+        // never mounts and the page shows only our background.
+        navigateFallbackDenylist: [/^\/auth\/v1\//, /^\/api\//, /^\/model\//, /^\/admin\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) =>
