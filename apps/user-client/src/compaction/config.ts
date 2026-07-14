@@ -20,3 +20,6 @@ export const COMPACTION_MAX_OUTPUT_TOKENS = 2000;
 export const COMPACTION_SAFETY_MARGIN = 1000;
 /** If the source itself exceeds this fraction of the window, drop oldest source first (spec §4.5). */
 export const COMPACTION_SOURCE_FRACTION = 0.7;
+
+/** Summariser one-shot timeout — 2000-token outputs outgrow the 30 s library default. */
+export const COMPACTION_TIMEOUT_MS = 180_000;

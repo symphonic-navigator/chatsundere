@@ -95,15 +95,21 @@ export async function commitOldestUncommitted(
   return toCommit.length;
 }
 
-export async function archiveCommitted(personaId: string, dreamId: string): Promise<number> {
+export async function archiveCommitted(
+  personaId: string,
+  dreamId: string,
+  ids?: string[],
+): Promise<number> {
   const committed = await listJournal(personaId, 'committed');
-  if (!committed.length) return 0;
+  const idSet = ids ? new Set(ids) : null;
+  const targets = idSet ? committed.filter((r) => idSet.has(r.id)) : committed;
+  if (!targets.length) return 0;
   const db = getClientDataDb();
   // Class-2-by-background-job journal transition (spec §5): offline-defer, same
   // shape as the auto-commit above — coupled to the dream's `memoryBody` save.
   const linked = isClass2Allowed();
   await db.transaction('rw', [db.memoryJournal, db.syncOutbox], async (tx) => {
-    for (const r of committed) {
+    for (const r of targets) {
       await db.memoryJournal.update(r.id, {
         state: 'archived',
         archivedByDreamId: dreamId,
@@ -112,7 +118,7 @@ export async function archiveCommitted(personaId: string, dreamId: string): Prom
     }
   });
   if (linked) scheduleClass1Sync();
-  return committed.length;
+  return targets.length;
 }
 
 export async function getCurrentBody(personaId: string): Promise<MemoryBodyRow | undefined> {

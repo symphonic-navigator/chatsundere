@@ -26,7 +26,11 @@ import {
   buildCompactionTranscript,
   validateSummary,
 } from './compaction-prompt.js';
-import { COMPACTION_MAX_OUTPUT_TOKENS, COMPACTION_SOURCE_FRACTION } from './config.js';
+import {
+  COMPACTION_MAX_OUTPUT_TOKENS,
+  COMPACTION_SOURCE_FRACTION,
+  COMPACTION_TIMEOUT_MS,
+} from './config.js';
 import { getActiveCheckpoint, writeCheckpoint } from './repo.js';
 import { selectTailStartIndex } from './tail.js';
 
@@ -66,6 +70,7 @@ async function summarise(args: CompactionArgs, transcript: string): Promise<stri
         { role: 'system', content: system },
         { role: 'user', content: transcript },
       ] satisfies WireMessage[],
+      timeoutMs: COMPACTION_TIMEOUT_MS,
       bodyExtras: {
         temperature: 0.3,
         max_tokens: COMPACTION_MAX_OUTPUT_TOKENS,
@@ -85,6 +90,7 @@ async function summarise(args: CompactionArgs, transcript: string): Promise<stri
       { role: 'system', content: COMPACTION_SYSTEM_PROMPT + COMPACTION_RETRY_REMINDER },
       { role: 'user', content: transcript },
     ] satisfies WireMessage[],
+    timeoutMs: COMPACTION_TIMEOUT_MS,
     bodyExtras: {
       temperature: 0.5,
       max_tokens: COMPACTION_MAX_OUTPUT_TOKENS,

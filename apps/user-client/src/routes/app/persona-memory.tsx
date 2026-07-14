@@ -18,10 +18,32 @@ import {
   useUnextractedCount,
   useUpdateEntry,
 } from '../../data/memory.js';
+import type { MemoryActionState } from '../../lib/use-memory-actions.js';
 import { useMemoryActions } from '../../lib/use-memory-actions.js';
+import type { MemoryActionError } from '../../memory/classify-error.js';
 import { toastStore } from '../../state/toast.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { usePersonaEditing } from './persona/use-persona-editing.js';
+
+const ERROR_COPY: Record<MemoryActionError, string> = {
+  'no-credentials': 'Credentials unavailable — re-authenticate, then retry.',
+  timeout:
+    'The model took too long to answer. Nothing was lost — it may be busy; try again in a little while.',
+  'upstream-busy':
+    'Your AI provider is having trouble right now. Nothing was lost — try again in a few minutes.',
+  'invalid-output':
+    "The model's answer couldn't be used. Nothing was lost — retrying usually helps.",
+  failed: "That didn't work — but nothing was lost. Try again.",
+};
+
+/** Picks the copy for an errored action state — partial-progress copy takes
+ *  precedence over the code-specific message once at least one slice was
+ *  checkpointed, unless the failure was credentials (nothing to retry-into). */
+function memoryErrorCopy(state: MemoryActionState): string {
+  if ((state.partialSlices ?? 0) > 0 && state.error !== 'no-credentials')
+    return 'Consolidated some of them — the rest are still below. Try again to finish.';
+  return ERROR_COPY[state.error ?? 'failed'];
+}
 
 /** The single home for a persona's memory: review/triage journal entries and
  *  view/edit the consolidated body. Reached from the chat cockpit (with ?chat=)
@@ -55,7 +77,8 @@ export function PersonaMemory(): JSX.Element {
   const class2 = useClass2Gate();
 
   const { data: unextracted = 0 } = useUnextractedCount(chatId);
-  const { learnState, consolidateState, learnNow, consolidateNow } = useMemoryActions(chatId);
+  const { learnState, consolidateState, learnNow, consolidateNow, lastAttempted } =
+    useMemoryActions(chatId);
 
   // Local draft for memoryInstructions — held locally, persisted on blur.
   const [memInstructions, setMemInstructions] = useState('');
@@ -300,24 +323,37 @@ export function PersonaMemory(): JSX.Element {
             >
               {consolidateState.status === 'pending' ? 'Consolidating…' : 'Consolidate now'}
             </button>
-            {learnState.status === 'error' || consolidateState.status === 'error' ? (
-              <div className="memory-page-action-error" role="alert">
-                <span>
-                  {learnState.error === 'no-credentials' ||
-                  consolidateState.error === 'no-credentials'
-                    ? 'Credentials unavailable — re-authenticate, then retry.'
-                    : "That didn't work."}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void (learnState.status === 'error' ? learnNow() : consolidateNow())
-                  }
-                >
-                  Retry
-                </button>
-              </div>
+            {learnState.status === 'pending' || consolidateState.status === 'pending' ? (
+              <p className="text-[11px] text-paper-soft">
+                This can take a minute or two for a large memory — you can leave this page; it keeps
+                going.
+              </p>
             ) : null}
+            {(() => {
+              // The slot shows the most-recently-attempted action's error, and Retry fires
+              // that same action — copy and button can never refer to different actions.
+              const candidates =
+                lastAttempted === 'consolidate'
+                  ? ([
+                      [consolidateState, consolidateNow],
+                      [learnState, learnNow],
+                    ] as const)
+                  : ([
+                      [learnState, learnNow],
+                      [consolidateState, consolidateNow],
+                    ] as const);
+              const active = candidates.find(([s]) => s.status === 'error');
+              if (!active) return null;
+              const [state, retry] = active;
+              return (
+                <div className="memory-page-action-error" role="alert">
+                  <span>{memoryErrorCopy(state)}</span>
+                  <button type="button" onClick={() => void retry()}>
+                    Retry
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <p className="memory-page-orient">

@@ -13,8 +13,11 @@ import { type ChatRow, type PersonaRow, getClientDataDb } from '../boot/client-d
 import {
   AUTO_COMMIT_KEEP_RECENT,
   AUTO_COMMIT_THRESHOLD,
+  DREAM_BATCH_SIZE,
   DREAM_THRESHOLD,
+  DREAM_TIMEOUT_MS,
   EXTRACTION_MIN_NEW_MESSAGES,
+  EXTRACTION_TIMEOUT_MS,
   EXTRACTION_WINDOW_CAP,
   MEMORY_BODY_MAX_TOKENS,
   UNCOMMITTED_CAP,
@@ -50,6 +53,7 @@ async function callModel(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
+  timeoutMs: number,
 ): Promise<string> {
   const messages: WireMessage[] = [
     { role: 'system', content: systemPrompt },
@@ -61,6 +65,7 @@ async function callModel(
     apiKey: args.apiKey,
     target: offeringToTarget(args.offering),
     messages,
+    timeoutMs,
     // Reasoning off: extraction/dreaming need the answer in `content`, not the
     // reasoning channel (see title-generator.ts). Fixed-on models still survive.
     bodyExtras: { temperature: 0.3, max_tokens: maxTokens, reasoning: { enabled: false } },
@@ -96,7 +101,13 @@ export async function runExtraction(
     messages: cleaned,
     userGuidance: args.persona.memoryInstructions ?? '',
   });
-  const raw = await callModel(args, system, 'Extract now and return only the JSON array.', 1024);
+  const raw = await callModel(
+    args,
+    system,
+    'Extract now and return only the JSON array.',
+    1024,
+    EXTRACTION_TIMEOUT_MS,
+  );
   const fresh = dropDuplicates(
     parseExtractionOutput(raw),
     existing.map((e) => e.content),
@@ -106,6 +117,12 @@ export async function runExtraction(
   const room = Math.max(0, UNCOMMITTED_CAP - (await countJournal(args.persona.id, 'uncommitted')));
   const toAdd = fresh.slice(0, room);
   if (toAdd.length) await addJournalEntries(args.persona.id, toAdd);
+  if (toAdd.length < fresh.length) {
+    // Cursor held: advancing would silently lose the dropped entries forever.
+    // A later run re-extracts the window; dedup tolerates the overlap.
+    console.warn('[memory] uncommitted cap reached — cursor held for re-extraction');
+    return toAdd.length;
+  }
   if (newCursor) await advanceCursor(args.chat.id, newCursor);
   return toAdd.length;
 }
@@ -116,29 +133,60 @@ export async function runAutoCommit(personaId: string): Promise<number> {
   return commitOldestUncommitted(personaId, AUTO_COMMIT_KEEP_RECENT);
 }
 
-/** Consolidate committed entries into a new body version. Returns true when a body was written. */
+/** Thrown when a consolidation slice's output fails validateMemoryBody — the
+ *  manual path surfaces it as `invalid-output`; the background pipeline logs it. */
+export class MemoryInvalidOutputError extends Error {
+  constructor() {
+    super('memory consolidation output failed validation');
+    this.name = 'MemoryInvalidOutputError';
+  }
+}
+
+/**
+ * Consolidate committed entries into new body versions, in slices of the oldest
+ * DREAM_BATCH_SIZE entries, looping until the backlog is drained. Each slice is
+ * checkpointed (saveBody + archive) before the next starts, so a mid-drain
+ * failure loses nothing. Returns true when at least one body was written.
+ */
 export async function runDreaming(
   args: MemoryPipelineArgs,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; onSlice?: () => void } = {},
 ): Promise<boolean> {
   const committedCount = await countJournal(args.persona.id, 'committed');
   if (committedCount === 0) return false;
   if (!opts.force && committedCount < DREAM_THRESHOLD) return false;
 
-  const committed = await listJournal(args.persona.id, 'committed');
-  const body = await getCurrentBody(args.persona.id);
-  const system = buildConsolidationPrompt({
-    existingBody: body?.content ?? null,
-    entries: committed.map((c) => ({ content: c.content, isCorrection: c.isCorrection })),
-    userGuidance: args.persona.memoryInstructions ?? '',
-  });
-  const raw = await callModel(args, system, 'Output only the new memory body text now.', 4096);
-  const newBody = raw.trim();
-  if (!validateMemoryBody(newBody, MEMORY_BODY_MAX_TOKENS)) return false;
+  let wrote = false;
+  for (;;) {
+    const committed = await listJournal(args.persona.id, 'committed');
+    if (!committed.length) break;
+    const slice = committed.slice(0, DREAM_BATCH_SIZE);
+    const body = await getCurrentBody(args.persona.id);
+    const system = buildConsolidationPrompt({
+      existingBody: body?.content ?? null,
+      entries: slice.map((c) => ({ content: c.content, isCorrection: c.isCorrection })),
+      userGuidance: args.persona.memoryInstructions ?? '',
+    });
+    const raw = await callModel(
+      args,
+      system,
+      'Output only the new memory body text now.',
+      4096,
+      DREAM_TIMEOUT_MS,
+    );
+    const newBody = raw.trim();
+    if (!validateMemoryBody(newBody, MEMORY_BODY_MAX_TOKENS)) throw new MemoryInvalidOutputError();
 
-  await saveBody(args.persona.id, newBody, committed.length, 'dream');
-  await archiveCommitted(args.persona.id, uuidv7());
-  return true;
+    await saveBody(args.persona.id, newBody, slice.length, 'dream');
+    await archiveCommitted(
+      args.persona.id,
+      uuidv7(),
+      slice.map((s) => s.id),
+    );
+    wrote = true;
+    opts.onSlice?.();
+  }
+  return wrote;
 }
 
 /**

@@ -31,3 +31,41 @@ describe('assembleMemoryContext', () => {
     expect(out).not.toContain('xxxx');
   });
 });
+
+describe('newest-first budget selection', () => {
+  it('drops the oldest committed lines when the budget is tight, keeping the newest', () => {
+    // Each line "- [committed] <item>" costs ~7 tokens; budget for ~2 lines.
+    const out = assembleMemoryContext({
+      memoryBody: '',
+      committed: ['oldest entry text', 'middle entry text', 'newest entry text'],
+      uncommitted: [],
+      maxTokens: 15,
+    });
+    expect(out).toContain('newest entry text');
+    expect(out).not.toContain('oldest entry text');
+  });
+
+  it('emits survivors in chronological order', () => {
+    const out = assembleMemoryContext({
+      memoryBody: '',
+      committed: ['first entry', 'second entry'],
+      uncommitted: [],
+      maxTokens: 6000,
+    });
+    const first = out.indexOf('first entry');
+    const second = out.indexOf('second entry');
+    expect(first).toBeGreaterThan(-1);
+    expect(first).toBeLessThan(second);
+  });
+
+  it('pending entries also keep newest under a tight budget', () => {
+    const out = assembleMemoryContext({
+      memoryBody: '',
+      committed: [],
+      uncommitted: ['old pending entry', 'new pending entry'],
+      maxTokens: 8,
+    });
+    expect(out).toContain('new pending entry');
+    expect(out).not.toContain('old pending entry');
+  });
+});

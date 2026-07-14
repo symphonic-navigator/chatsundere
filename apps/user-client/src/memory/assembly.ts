@@ -3,8 +3,9 @@ import { estimateTokens } from '../lib/token-estimator.js';
 
 /**
  * Build the <usermemory> block for system-prompt injection: the whole body
- * first, then committed, then pending journal entries — dropping lines once
- * the token budget is exhausted. Returns '' when there is no content.
+ * first, then committed, then pending journal entries. Within each group, the
+ * newest entries survive a tight token budget; survivors are emitted in
+ * chronological order. Returns '' when there is no content.
  */
 export function assembleMemoryContext(input: {
   memoryBody: string;
@@ -25,15 +26,19 @@ export function assembleMemoryContext(input: {
   }
 
   const journalLines: string[] = [];
+  // Select newest-first so a large backlog degrades to "oldest out of context",
+  // never "yesterday forgotten"; emit survivors in chronological reading order.
   const push = (marker: string, items: string[]): void => {
-    for (const item of items) {
+    const kept: string[] = [];
+    for (const item of [...items].reverse()) {
       const line = `- [${marker}] ${item}`;
       const cost = estimateTokens(line);
       if (cost <= remaining) {
         remaining -= cost;
-        journalLines.push(line);
+        kept.unshift(line);
       }
     }
+    journalLines.push(...kept);
   };
   push('committed', committed);
   push('pending', uncommitted);

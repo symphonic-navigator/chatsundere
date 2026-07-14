@@ -17,6 +17,7 @@ vi.mock('@chatsundere/llm-unified', async (orig) => {
   };
 });
 
+import { runOneShotCompletion } from '@chatsundere/llm-unified';
 import { getClientDataDb, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { listCheckpoints } from '../../src/compaction/repo.js';
 import { runCompaction } from '../../src/compaction/runner.js';
@@ -81,5 +82,54 @@ describe('runCompaction', () => {
     expect(cps).toHaveLength(1);
     expect(cps[0]?.summaryMarkdown).toContain('Established Facts');
     expect(cps[0]?.trigger).toBe('manual');
+  });
+
+  it('passes the compaction timeout to the one-shot call', async () => {
+    await openClientDataDb();
+    const db = getClientDataDb();
+    const now = Date.now();
+    await db.chats.add({
+      id: 'rc2',
+      personaId: 'p',
+      title: null,
+      resolvedMindspaceId: 'm',
+      createdAt: now,
+      updatedAt: now,
+      lastMessageAt: now,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    for (let i = 0; i < 20; i += 1) {
+      await db.messages.add({
+        id: `n${i}`,
+        chatId: 'rc2',
+        role: i % 2 === 0 ? 'user' : 'persona',
+        contentBlocks: [{ type: 'text', text: `message ${i} with enough words to count` }] as never,
+        createdAt: now + i,
+        updatedAt: now + i,
+        bookmarked: false,
+        streamingState: 'complete',
+      });
+    }
+    const chat = await db.chats.get('rc2');
+    if (!chat) throw new Error('chat missing');
+    await runCompaction({
+      chat,
+      persona: { id: 'p', name: 'Fable' } as never,
+      provider: {} as never,
+      providerConfig: {} as never,
+      apiKey: 'k',
+      offering: {
+        context: { recommended: 512, max: 512 },
+        upstreamSlug: 'test-model',
+        canonicalRef: 'test/test-model',
+        adapter: { kind: 'direct' },
+      } as never,
+      trigger: 'manual',
+    });
+    expect(vi.mocked(runOneShotCompletion).mock.calls[0]?.[0]).toMatchObject({
+      timeoutMs: 180_000,
+    });
   });
 });

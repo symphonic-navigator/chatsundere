@@ -4,15 +4,47 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import 'fake-indexeddb/auto';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { Toast } from '../../src/components/Toast.js';
+import type { MemoryActionState } from '../../src/lib/use-memory-actions.js';
+import { useMemoryActions } from '../../src/lib/use-memory-actions.js';
 import { addJournalEntries, commitEntry, saveBody } from '../../src/memory/repo.js';
 import { PersonaMemory } from '../../src/routes/app/persona-memory.js';
+
+vi.mock('../../src/lib/use-memory-actions.js', () => ({
+  useMemoryActions: vi.fn(),
+}));
+
+const mockedUseMemoryActions = vi.mocked(useMemoryActions);
+
+/** Sets the mocked useMemoryActions() return value for one test. Unspecified
+ *  fields default to idle/no-op, matching the hook's real initial state. */
+function mockMemoryActions(
+  overrides: {
+    learnState?: MemoryActionState;
+    consolidateState?: MemoryActionState;
+    lastAttempted?: 'learn' | 'consolidate' | null;
+    learnNow?: () => Promise<void>;
+    consolidateNow?: () => Promise<void>;
+  } = {},
+) {
+  mockedUseMemoryActions.mockReturnValue({
+    learnState: overrides.learnState ?? { status: 'idle' },
+    consolidateState: overrides.consolidateState ?? { status: 'idle' },
+    learnNow: overrides.learnNow ?? vi.fn(),
+    consolidateNow: overrides.consolidateNow ?? vi.fn(),
+    lastAttempted: overrides.lastAttempted ?? null,
+  });
+}
+
+function renderPage({ chat }: { chat?: string } = {}) {
+  return setup(chat ? `/app/persona/p1/memory?chat=${chat}` : '/app/persona/p1/memory');
+}
 
 function setup(initialPath: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -38,6 +70,7 @@ beforeEach(async () => {
   await openClientDataDb();
   // Minimal persona row — only fields the page reads must be present.
   await getClientDataDb().personas.add({ id: 'p1', name: 'Fable', useMemory: false } as never);
+  mockMemoryActions();
 });
 afterEach(async () => {
   await _resetClientDataDbForTests();
@@ -182,5 +215,67 @@ describe('PersonaMemory — actions gating', () => {
     await screen.findByRole('heading', { level: 1, name: /memory/i });
     expect(screen.queryByRole('button', { name: /learn from this chat/i })).not.toBeInTheDocument();
     expect(screen.getByText(/open a chat with fable/i)).toBeInTheDocument();
+  });
+});
+
+describe('PersonaMemory — action error copy', () => {
+  // The page's own persona lookup resolves asynchronously (Dexie via react-query),
+  // so these await the loaded copy rather than asserting synchronously — the
+  // brief's snippet assumed a synchronously-available persona.
+  it('renders the timeout copy for a consolidate timeout', async () => {
+    mockMemoryActions({
+      consolidateState: { status: 'error', error: 'timeout', partialSlices: 0 },
+      lastAttempted: 'consolidate',
+    });
+    renderPage({ chat: 'c1' });
+    expect(
+      await screen.findByText(
+        'The model took too long to answer. Nothing was lost — it may be busy; try again in a little while.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the partial-progress copy when slices were checkpointed', async () => {
+    mockMemoryActions({
+      consolidateState: { status: 'error', error: 'timeout', partialSlices: 2 },
+      lastAttempted: 'consolidate',
+    });
+    renderPage({ chat: 'c1' });
+    expect(
+      await screen.findByText(
+        'Consolidated some of them — the rest are still below. Try again to finish.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('error slot and Retry follow the most recently attempted action', async () => {
+    const learnNow = vi.fn();
+    const consolidateNow = vi.fn();
+    mockMemoryActions({
+      learnState: { status: 'error', error: 'failed' },
+      consolidateState: { status: 'error', error: 'upstream-busy' },
+      lastAttempted: 'consolidate',
+      learnNow,
+      consolidateNow,
+    });
+    renderPage({ chat: 'c1' });
+    expect(
+      await screen.findByText(
+        'Your AI provider is having trouble right now. Nothing was lost — try again in a few minutes.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(consolidateNow).toHaveBeenCalled();
+    expect(learnNow).not.toHaveBeenCalled();
+  });
+
+  it('shows the long-run sub-line while consolidating', async () => {
+    mockMemoryActions({ consolidateState: { status: 'pending' }, lastAttempted: 'consolidate' });
+    renderPage({ chat: 'c1' });
+    expect(
+      await screen.findByText(
+        'This can take a minute or two for a large memory — you can leave this page; it keeps going.',
+      ),
+    ).toBeInTheDocument();
   });
 });

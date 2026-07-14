@@ -533,3 +533,33 @@ later Laura sweep does not re-flag them:
   of the no-server path. Chris chose it over a warning triangle and over the
   non-slashed alternatives.
 - **Chris sign-off:** advisory (soft), Chris-arbitrated — kept.
+
+## 2026-07-14 — `no-credentials` memory-action retry has no step-up affordance
+
+> **Note on scope:** this is a Laura **soft** (advisory), not a hard defect — it
+> would normally live in [`follow-ups-index.md`](follow-ups-index.md), which the
+> spec (`superpowers/specs/2026-07-14-memory-consolidation-robustness-design.md`)
+> already claims as its home. It is recorded here instead only because
+> `follow-ups-index.md` had an uncommitted parallel edit this session, so writing
+> to it risked a merge collision. Chris's call. Move the canonical row into
+> `follow-ups-index.md` at the next hygiene pass and drop this note.
+
+- **Affected flow / surface:** Persona memory page — the honest-error slot on the
+  "Learn from this chat" / "Consolidate now" actions, `no-credentials` code.
+- **Finding (Laura's summary):** The `no-credentials` copy ("Credentials
+  unavailable — re-authenticate, then retry.") tells the user to re-authenticate,
+  but the only control on this surface is **Retry**, which re-fires the same
+  action and fails identically — there is no step-up affordance here, so a linked
+  user who hits this could loop.
+- **Mode:** pre-squash.
+- **Criterion:** Constructive error handling / no dead-end (§11 north stars).
+- **Rationale for deferral:** In the current local-only alpha the `no-credentials`
+  path is effectively unreachable (no account, no master-key gate on manual memory
+  actions), so no field user hits it yet. Wiring the memory page to the shared
+  `<StepUpModal>` / step-up interceptor is a backend-coupled follow-up, out of this
+  client-only unit's scope. Consciously deferred at spec-pass and confirmed here.
+- **Follow-up commitment:** When the memory actions become credential-gated on the
+  live backend (v0.3.0 sync/step-up wiring), route the `no-credentials` retry
+  through the step-up interceptor so the copy's instruction is satisfiable.
+- **Chris sign-off:** advisory (soft) — not blocking; recorded for release-cut
+  visibility per Chris's call.

@@ -64,6 +64,29 @@ describe('memory repo', () => {
     expect(await countJournal('p1', 'archived')).toBe(1);
   });
 
+  it('archiveCommitted with an id list archives only those rows', async () => {
+    const db = getClientDataDb();
+    for (const id of ['a', 'b', 'c']) {
+      await db.memoryJournal.add({
+        id,
+        personaId: 'p1',
+        content: `fact ${id}`,
+        category: null,
+        state: 'committed',
+        isCorrection: false,
+        createdAt: 1,
+        committedAt: 1,
+        autoCommitted: true,
+        archivedByDreamId: null,
+      } as never);
+    }
+    const n = await archiveCommitted('p1', 'dream-1', ['a', 'b']);
+    expect(n).toBe(2);
+    expect(await countJournal('p1', 'archived')).toBe(2);
+    expect(await countJournal('p1', 'committed')).toBe(1);
+    expect((await db.memoryJournal.get('c'))?.state).toBe('committed');
+  });
+
   it('getUnextractedUserText returns user text after the cursor and a new cursor', async () => {
     const db = getClientDataDb();
     await db.chats.add({
