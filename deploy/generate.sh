@@ -11,7 +11,24 @@ b64url32() { openssl rand 32 | openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 pw() { openssl rand -base64 24 | tr -d '/+='; }
 
 echo "Chatsundere deployment generator"
-read -rp "Base domain (e.g. chatsundere.me): " BASE_DOMAIN
+# The only prompt without a default, and the only one where an empty answer is
+# meaningless: it renders every host as a bare `app.` / `auth.` / `proxy.` and
+# then surfaces two layers later as an unrelated compose interpolation error
+# (`MINIO_ROOT_USER is missing a value`). Refuse it here, where it is still
+# cheap to fix, and name the next step on every rejection.
+while :; do
+  read -rp "Base domain (e.g. chatsundere.me): " BASE_DOMAIN ||
+    { echo "No input — run generate.sh from an interactive terminal."; exit 1; }
+  BASE_DOMAIN=${BASE_DOMAIN//[[:space:]]/}
+  case "$BASE_DOMAIN" in
+    '')    echo "  A base domain is required — e.g. chatsundere.me" ;;
+    *://*) echo "  Drop the scheme: enter '${BASE_DOMAIN#*://}', not '$BASE_DOMAIN'." ;;
+    */*)   echo "  Drop the path: enter '${BASE_DOMAIN%%/*}', not '$BASE_DOMAIN'." ;;
+    .*|*.) echo "  '$BASE_DOMAIN' has a leading or trailing dot." ;;
+    *.*)   break ;;
+    *)     echo "  '$BASE_DOMAIN' is not a domain — it needs a dot, e.g. $BASE_DOMAIN.me" ;;
+  esac
+done
 read -rp "Instance name (unique per stack on this host) [chatsundere]: " INSTANCE_NAME
 INSTANCE_NAME=${INSTANCE_NAME:-chatsundere}
 read -rp "Traefik external network name [traefik]: " TRAEFIK_NETWORK
@@ -112,6 +129,14 @@ EOF
 fi
 
 chmod 600 out/deployment.env
+# Copy the installer BEFORE listing out/ — it is the entrypoint step 3 tells the
+# user to run, so a listing that omits it invites a bare `docker compose up`
+# instead (which skips the MinIO key, the OPAQUE setup and the admin bootstrap).
+# No error-swallowing here: we cd'd to our own directory, so a failing copy is a
+# real fault and must not leave the listing lying about what was generated.
+cp install.sh out/install.sh
+chmod +x out/install.sh
+
 echo
 echo "Generated out/:"
 ls -1 out
@@ -123,5 +148,3 @@ echo "  1. BACK UP out/deployment.env after install.sh runs — it will hold"
 echo "     irreplaceable OPAQUE + HMAC/JWT secrets."
 echo "  2. scp -r out/ user@your-vps:/opt/chatsundere"
 echo "  3. ssh user@your-vps 'cd /opt/chatsundere && ./install.sh'"
-cp install.sh out/install.sh 2>/dev/null || true
-chmod +x out/install.sh 2>/dev/null || true
