@@ -8,7 +8,54 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-14 — **MEMORY-CONSOLIDATION ROBUSTNESS LANDED
+**Last updated:** 2026-07-15 — **BACKGROUND-WORKER MODELS BUILT on branch
+`claude/background-worker-models-g8icgs` (pushed; NOT squashed to master —
+this is a remote feature branch, Chris reviews/merges).** Some models (the
+DeepSeek family) reason and then stop, producing no final answer — merely
+annoying in interactive chat (the user regenerates) but silently destructive
+for the unattended **background chores** (title generation, memory pipeline,
+compaction), which have no user in the loop. A persona on DeepSeek quietly gets
+no titles, no memory, no compaction. Fix (a conscious, Chris-approved omakase
+deviation — a working app beats a purist single model): personas gain an
+**optional "background helper"** model that runs the chores while the persona's
+own model stays in the conversation. **Four parts, one PR:** **(1)** a per-model
+`unsuitableAsBackgroundWorker?` flag on `CanonicalModel` (+ Valibot schema +
+`isUnsuitableAsBackgroundWorker` predicate), set on the three DeepSeek
+canonicals — `packages/llm-unified`, the one non-user-client surface. **(2)** an
+optional helper slot on the persona (four new **non-indexed** `PersonaRow`
+fields → **no Dexie bump**; personas seal whole, so they sync by default), a
+second `ModelSlotPicker` beneath the main model in the hub, filtered by a new
+`'background-worker'` picker mode that drops flagged canonicals and any offering
+resolving to *restricted* freedom (keeps `'free'`+`'unknown'` — Chris's call:
+only proven censorship excluded), plus a flagged-main-model **warning** that
+points *down* to the helper (never "change your main model") and clears once a
+helper is picked. **(3)** a shared `resolveBackgroundOffering` (helper when set +
+reachable, else the persona's own model — **silent fallback**, a chore never
+raises an alarm) threaded through every chore seam (auto title/memory/compaction
+via `resolvePersonaContext`→`stream-manager`, manual memory + manual compaction);
+compaction summarises on the helper but keeps the **interactive** model's context
+window via a new `windowOffering`. **(4)** an opt-in per-persona greeting toggle
+("let the helper write the greeting"), disabled-with-reason (precedence
+roleplay-off → greeting-off → no-helper). Built spec→**Laura spec-pass** (1 HARD
+— the warning misdirected toward changing the main model — + 5 soft, all
+folded)→TDD→**Laura pre-squash CLEAR** (no hard defects; 2 non-blocking softs: a
+"Models" pairing eyebrow deferred to a defined design language, and the
+project-wide disabled-reason-on-touch pattern — neither feature-specific). **Not
+a Larissa path** (client-only; the llm-unified change is catalogue metadata, no
+crypto/auth/sync/proxy). Gates: `pnpm typecheck --force` **14/14**; `pnpm build`
+**9/9**; llm-unified `bun test` **425/425**; full user-client vitest **3047
+pass / 1 env** (a `sync/doorbell` parallel-load timing flake, passes isolated
+9/9 — unrelated, no sync code touched); Biome clean on all changed files. New
+pure helpers `lib/persona-hub.ts` (`showBackgroundHelperWarning`,
+`greetingHelperGate`) + `data/resolve-background-offering.ts`, unit-tested. Spec:
+[[../superpowers/specs/2026-07-15-background-worker-models-design]]. **Next:**
+Chris device-verifies (spec §7: persona on DeepSeek → warning shows + no
+titles/memory; pick a reliable helper → warning clears, titles + memory run on
+the helper while the reply still streams from DeepSeek; helper picker offers no
+DeepSeek/Censored entry; greeting toggle only enables with a helper set; delete
+the helper's provider → chores silently fall back), then merges the branch.
+
+**Prior — 2026-07-14 — MEMORY-CONSOLIDATION ROBUSTNESS LANDED
 (squashed to `master` as `78ca7afd`, NOT pushed — Chris pushes after his device
 verification).** Field report (Sara & Soren, v0.1.4): "Consolidate now" failed
 persistently with a generic "That didn't work.", leaving a ~24 h memory gap.

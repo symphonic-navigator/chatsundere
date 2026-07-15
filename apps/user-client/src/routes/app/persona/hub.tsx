@@ -32,6 +32,7 @@ import { useMindspaces } from '../../../data/mindspaces.js';
 import { useRemovePersonaAvatar, useSetPersonaAvatar } from '../../../data/persona-avatars.js';
 import { useProviders } from '../../../data/providers.js';
 import { QK } from '../../../data/queryKeys.js';
+import { hasBackgroundHelper } from '../../../data/resolve-background-offering.js';
 import { useSettings } from '../../../data/settings.js';
 import { normaliseAvatar } from '../../../lib/avatar-normalise.js';
 import { resolveImportedNsfw } from '../../../lib/chatsune-import/nsfw.js';
@@ -47,6 +48,7 @@ import {
   missingRequirement,
   modelBehaviourMeta,
   roleplayMeta,
+  showBackgroundHelperWarning,
 } from '../../../lib/persona-hub.js';
 import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
@@ -167,6 +169,19 @@ export function PersonaHub(): JSX.Element {
     providerRow && persona.modelId
       ? { providerTemplateId: providerRow.templateId, upstreamSlug: persona.modelId }
       : null;
+
+  // Background helper (optional second model that runs the persona's chores).
+  const backgroundProviderRow = providers.data?.find((p) => p.id === persona.backgroundProviderId);
+  const currentBackgroundModel =
+    hasBackgroundHelper(persona) && backgroundProviderRow && persona.backgroundModelId
+      ? {
+          providerTemplateId: backgroundProviderRow.templateId,
+          upstreamSlug: persona.backgroundModelId,
+        }
+      : null;
+  // Nudge toward the helper only when the main model is a think-then-stop model
+  // AND no helper is set yet; it clears once one is picked.
+  const showHelperWarning = showBackgroundHelperWarning(persona);
 
   // ── Avatar handlers (always-save) ───────────────────────────────────────────
 
@@ -426,28 +441,70 @@ export function PersonaHub(): JSX.Element {
               onSave={(v) => patch({ tagline: v })}
             />
 
-            <div>
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider text-paper-soft">Model</span>
-                {missingRequirement(persona) === 'model' ? (
-                  <span className="text-[11px] text-paper-soft/70">— Needs setup</span>
-                ) : null}
+            {/* Models — the persona's own model plus an optional background helper. */}
+            <div className="flex flex-col gap-3">
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wider text-paper-soft">Model</span>
+                  {missingRequirement(persona) === 'model' ? (
+                    <span className="text-[11px] text-paper-soft/70">— Needs setup</span>
+                  ) : null}
+                </div>
+                <ModelSlotPicker
+                  label="Model"
+                  emptyLabel="Choose a model"
+                  filter="all"
+                  providers={providers.data ?? []}
+                  configuredTemplateIds={usableTemplateIds(providers.data ?? [], hasProxy)}
+                  current={currentModel}
+                  onSelect={(sel) =>
+                    void patch({
+                      canonicalId: sel.canonicalId,
+                      providerId: sel.providerRowId,
+                      modelId: sel.upstreamSlug,
+                    })
+                  }
+                />
               </div>
-              <ModelSlotPicker
-                label="Model"
-                emptyLabel="Choose a model"
-                filter="all"
-                providers={providers.data ?? []}
-                configuredTemplateIds={usableTemplateIds(providers.data ?? [], hasProxy)}
-                current={currentModel}
-                onSelect={(sel) =>
-                  void patch({
-                    canonicalId: sel.canonicalId,
-                    providerId: sel.providerRowId,
-                    modelId: sel.upstreamSlug,
-                  })
-                }
-              />
+
+              <div>
+                <div className="mb-1 text-xs uppercase tracking-wider text-paper-soft">
+                  Background helper
+                </div>
+                {showHelperWarning ? (
+                  <p role="note" className="mb-2 text-[11px] leading-snug text-amber-300/80">
+                    This model sometimes only thinks and never answers, which breaks background
+                    chores like chat titles and memory. Pick a reliable helper below to run them for
+                    you.
+                  </p>
+                ) : null}
+                <ModelSlotPicker
+                  label="Background helper"
+                  emptyLabel="Optional — pick a reliable helper"
+                  filter="background-worker"
+                  providers={providers.data ?? []}
+                  configuredTemplateIds={usableTemplateIds(providers.data ?? [], hasProxy)}
+                  current={currentBackgroundModel}
+                  onSelect={(sel) =>
+                    void patch({
+                      backgroundCanonicalId: sel.canonicalId,
+                      backgroundProviderId: sel.providerRowId,
+                      backgroundModelId: sel.upstreamSlug,
+                    })
+                  }
+                  onClear={() =>
+                    void patch({
+                      backgroundCanonicalId: null,
+                      backgroundProviderId: undefined,
+                      backgroundModelId: undefined,
+                    })
+                  }
+                />
+                <p className="mt-1 text-[11px] text-paper-soft/70">
+                  Runs chat titles and memory for you. Censored and think-only models can't be
+                  helpers.
+                </p>
+              </div>
             </div>
           </div>
         </section>

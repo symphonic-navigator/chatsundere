@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { CanonicalModel } from '@chatsundere/llm-unified';
+import { type CanonicalModel, effectiveFreedom } from '@chatsundere/llm-unified';
 import { describe, expect, it } from 'vitest';
 import type { ProviderRow } from '../../src/boot/client-data-db.js';
 import {
@@ -119,5 +119,61 @@ describe('buildPickerData', () => {
     const models = data.groups.flatMap((g) => g.models);
     expect(models.length).toBeGreaterThan(0);
     expect(models.some((m) => m.teeAvailable)).toBe(true);
+  });
+
+  describe('background-worker filter', () => {
+    // wafer offers DeepSeek (flagged), GLM/Kimi (free) and Qwen (unknown freedom:
+    // modelFreedom null on a freedom-oriented deployment) — no censored models.
+    it('excludes flagged models but keeps free AND unknown-freedom ones', () => {
+      const all = buildPickerData([providerRow('pr-wafer', 'wafer')], ['wafer'], 'all');
+      const bg = buildPickerData(
+        [providerRow('pr-wafer', 'wafer')],
+        ['wafer'],
+        'background-worker',
+      );
+      const famAll = all.groups.map((g) => g.family);
+      const famBg = bg.groups.map((g) => g.family);
+
+      expect(famAll).toContain('deepseek'); // wafer offers it under 'all'
+      expect(famBg).not.toContain('deepseek'); // …a think-then-stop model can't be its own helper
+      expect(famBg).toContain('qwen'); // 'unknown' freedom stays (Chris 2026-07-15)
+      expect(famBg).toContain('glm'); // 'free' stays
+    });
+
+    // nano-gpt additionally offers Claude + ChatGPT, both 'restricted' (Censored).
+    it('excludes restricted (censored) deployments, keeping the survivors non-restricted', () => {
+      const all = buildPickerData([providerRow('pr-nano', 'nano-gpt')], ['nano-gpt'], 'all');
+      const bg = buildPickerData(
+        [providerRow('pr-nano', 'nano-gpt')],
+        ['nano-gpt'],
+        'background-worker',
+      );
+      expect(all.groups.map((g) => g.family)).toEqual(
+        expect.arrayContaining(['claude', 'chatgpt', 'deepseek']),
+      );
+      const bgFam = bg.groups.map((g) => g.family);
+      expect(bgFam).not.toContain('claude');
+      expect(bgFam).not.toContain('chatgpt');
+      expect(bgFam).not.toContain('deepseek');
+
+      // Invariant: every surviving offering resolves as non-restricted.
+      for (const g of bg.groups) {
+        for (const m of g.models) {
+          for (const o of m.offers) {
+            expect(
+              effectiveFreedom(m.canonical.freedomOriented, o.offering.freedomOrientedDeployment),
+            ).not.toBe('restricted');
+          }
+        }
+      }
+    });
+
+    it("leaves the 'all' filter's model set unchanged", () => {
+      const allWafer = buildPickerData([providerRow('pr-wafer', 'wafer')], ['wafer'], 'all');
+      // 'all' keeps the DeepSeek + Qwen it always did (byte-unchanged behaviour).
+      expect(allWafer.groups.map((g) => g.family)).toEqual(
+        expect.arrayContaining(['deepseek', 'qwen', 'glm']),
+      );
+    });
   });
 });

@@ -56,6 +56,7 @@ import {
 } from '../tools/generate-image.js';
 import { addGeneratedImageArtefact } from './artefacts.js';
 import { providerApiKeySlot } from './providers.js';
+import { type ChoreCallBundle, resolveBackgroundBundle } from './resolve-background-offering.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // lastCompanionText — lorebook companion-scan helper
@@ -103,6 +104,10 @@ interface PersonaContext {
   providerConfig: ProviderConfig;
   apiKey: string;
   offering: Offering;
+  /** Call bundle for the persona's unattended background chores (title, memory,
+   *  compaction): the background helper when set + reachable, else = the persona's
+   *  own model (provider/providerConfig/apiKey/offering above). */
+  background: ChoreCallBundle;
   globalInstructions: string;
   globalAboutMe: string;
   screenEffectsEnabled: boolean;
@@ -152,6 +157,21 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
 
   const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
 
+  const providerConfig: ProviderConfig = {
+    baseUrl: providerDef.baseUrl,
+    routing:
+      providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+  };
+
+  // The bundle that runs this persona's unattended background chores (title,
+  // memory, compaction): the background helper when set + reachable, else the
+  // persona's own model. Silent fallback — a chore never surfaces an error.
+  const background = await resolveBackgroundBundle(
+    persona,
+    { provider: providerDef, providerConfig, apiKey, offering },
+    { db, mk },
+  );
+
   const allProviders = await db.providers.toArray();
   const hasProxy = isProxyAvailable();
   const webOptions = webBackendOptions(usableTemplateIds(allProviders, hasProxy), hasProxy);
@@ -188,13 +208,10 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     chat,
     persona,
     providerDef,
-    providerConfig: {
-      baseUrl: providerDef.baseUrl,
-      routing:
-        providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
-    },
+    providerConfig,
     apiKey,
     offering,
+    background,
     globalInstructions: settings.globalInstructions,
     globalAboutMe: settings.globalAboutMe,
     screenEffectsEnabled: settings.screenEffectsEnabled,
@@ -447,6 +464,24 @@ export interface StartOpenerArgs {
 }
 
 /**
+ * The call bundle that generates the greeting opener: the persona's background
+ * helper when the greeting-helper toggle is on, otherwise the persona's own
+ * model. When the toggle is on, `ctx.background` has already resolved to the
+ * helper (or silently degraded to the persona's own model if the helper is
+ * unreachable), so no extra reachability handling is needed here.
+ */
+function openerBundle(ctx: PersonaContext): ChoreCallBundle {
+  return ctx.persona.greetingUsesBackgroundModel
+    ? ctx.background
+    : {
+        provider: ctx.providerDef,
+        providerConfig: ctx.providerConfig,
+        apiKey: ctx.apiKey,
+        offering: ctx.offering,
+      };
+}
+
+/**
  * Generate the greeting opener for a freshly created chat (spec 2026-06-11 §6).
  * Resolves the persona chain (needs the MasterKey) and delegates to the
  * stream-manager. Rejects on initial-generation failure so the page can show
@@ -461,10 +496,7 @@ export function useStartOpener() {
         chatId: args.chatId,
         chat: ctx.chat,
         persona: ctx.persona,
-        provider: ctx.providerDef,
-        providerConfig: ctx.providerConfig,
-        apiKey: ctx.apiKey,
-        offering: ctx.offering,
+        ...openerBundle(ctx),
         reasoning: args.reasoning,
         globalInstructions: ctx.globalInstructions,
         globalAboutMe: ctx.globalAboutMe,
@@ -587,6 +619,7 @@ export function useSendMessage() {
         providerConfig: ctx.providerConfig,
         apiKey: ctx.apiKey,
         offering: ctx.offering,
+        background: ctx.background,
         priorMessages,
         userMessageText: args.text,
         reasoning: args.reasoning,
@@ -669,10 +702,7 @@ export function useRegenerate() {
           targetMessageId: opener.id,
           chat: ctx.chat,
           persona: ctx.persona,
-          provider: ctx.providerDef,
-          providerConfig: ctx.providerConfig,
-          apiKey: ctx.apiKey,
-          offering: ctx.offering,
+          ...openerBundle(ctx),
           reasoning: args.reasoning,
           globalInstructions: ctx.globalInstructions,
           globalAboutMe: ctx.globalAboutMe,
@@ -729,6 +759,7 @@ export function useRegenerate() {
         providerConfig: ctx.providerConfig,
         apiKey: ctx.apiKey,
         offering: ctx.offering,
+        background: ctx.background,
         priorMessages,
         userMessageText,
         reasoning: args.reasoning,

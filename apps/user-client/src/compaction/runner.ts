@@ -40,7 +40,14 @@ export interface CompactionArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
   apiKey: string;
+  /** The model that runs the summarisation call (the background helper when the
+   *  persona has one, else the persona's own model). */
   offering: Offering;
+  /** The offering whose context window the compaction targets. Compaction keeps
+   *  the chat inside the INTERACTIVE model's window, so this stays the persona's
+   *  own model even when `offering` (the summariser) is the background helper.
+   *  Absent ⇒ falls back to `offering` (the pre-helper behaviour). */
+  windowOffering?: Offering;
   trigger: 'manual' | 'auto' | 'overflow';
 }
 
@@ -116,7 +123,7 @@ export async function runCompaction(args: CompactionArgs): Promise<CompactionChe
   );
   if (all.length === 0) return null;
 
-  const window = resolveContextWindow(args.persona, args.offering);
+  const window = resolveContextWindow(args.persona, args.windowOffering ?? args.offering);
   const tokens = all.map((m) => estimateTokens(flattenAnswerText(m.contentBlocks)));
   const tailStartIdx = selectTailStartIndex(tokens, window);
   if (tailStartIdx <= 0) return null; // nothing to compress yet

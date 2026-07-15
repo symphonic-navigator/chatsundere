@@ -28,6 +28,8 @@ export function defaultDraft(
     canonicalId: null,
     providerId: firstEnabled?.id ?? '',
     modelId: '',
+    backgroundCanonicalId: null,
+    greetingUsesBackgroundModel: false,
     mindspaceId: null,
     aboutMeOverride: null,
     textureOverride: null,

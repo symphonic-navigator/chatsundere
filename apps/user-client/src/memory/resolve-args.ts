@@ -3,6 +3,7 @@ import { getOffering, getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { providerApiKeySlot } from '../data/providers.js';
+import { resolveBackgroundBundle } from '../data/resolve-background-offering.js';
 import { openSecret } from '../lib/secrets.js';
 import type { MemoryPipelineArgs } from './pipeline.js';
 
@@ -45,16 +46,22 @@ export async function resolveMemoryPipelineArgs(
 
   const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
 
-  return {
+  // Manual memory runs on the persona's background helper when set + reachable,
+  // else the persona's own model (silent fallback — same as the auto pipeline).
+  const bundle = await resolveBackgroundBundle(
     persona,
-    chat,
-    provider: providerDef,
-    providerConfig: {
-      baseUrl: providerDef.baseUrl,
-      routing:
-        providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+    {
+      provider: providerDef,
+      providerConfig: {
+        baseUrl: providerDef.baseUrl,
+        routing:
+          providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
+      },
+      apiKey,
+      offering,
     },
-    apiKey,
-    offering,
-  };
+    { db, mk },
+  );
+
+  return { persona, chat, ...bundle };
 }

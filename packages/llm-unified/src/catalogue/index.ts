@@ -19,6 +19,7 @@ export {
   getCanonical,
   availableCanonicals,
   resolveModelInstructions,
+  isUnsuitableAsBackgroundWorker,
 } from './canonical-registry.js';
 export { MISTRAL_FORMATTING_INSTRUCTIONS } from './model-instructions.js';
 export { type CompletionTarget, offeringToTarget } from './target.js';

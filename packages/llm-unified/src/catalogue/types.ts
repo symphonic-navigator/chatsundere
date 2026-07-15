@@ -26,6 +26,11 @@ export interface CanonicalModel {
   /** Model-intrinsic freedom; null = not yet assessed. */
   freedomOriented: boolean | null;
   freedomNote?: string;
+  /** The model tends to emit reasoning and then stop, producing no final answer.
+   *  Fine for interactive chat (the user regenerates); unreliable for the
+   *  unattended background chores (title generation, memory, compaction). Absent
+   *  ⇒ suitable. Currently the DeepSeek family. */
+  unsuitableAsBackgroundWorker?: boolean;
   /** Curated behavioural/formatting steering that travels with the model across
    *  providers — injected as a Band-1 prompt segment (chat + greeting jobs).
    *  See the model-instructions spec (2026-06-12). */

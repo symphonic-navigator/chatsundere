@@ -171,6 +171,17 @@ export interface PersonaRow {
   canonicalId: string | null;
   providerId: string;
   modelId: string;
+  /** Optional background-helper model — runs this persona's unattended chores
+   *  (title generation, memory, compaction) instead of the persona's own model,
+   *  so a "thinks-then-stops" model (DeepSeek) stays in the conversation while a
+   *  reliable helper does the chores. `backgroundCanonicalId` null/absent ⇒ unset
+   *  → the persona's own model runs the chores. Non-indexed; no Dexie bump. */
+  backgroundCanonicalId?: string | null;
+  backgroundProviderId?: string;
+  backgroundModelId?: string;
+  /** Let the background helper write the opening greeting too. Absent ⇒ false
+   *  (the persona's own model greets). Only meaningful when a helper is set. */
+  greetingUsesBackgroundModel?: boolean;
   mindspaceId: string | null;
   aboutMeOverride: string | null;
   textureOverride: MindspaceTexture | null;

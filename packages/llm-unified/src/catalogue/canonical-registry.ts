@@ -12,6 +12,7 @@ export const CANONICALS: CanonicalModel[] = [
     requiredCaps: { tools: true, reasoning: true, vision: false },
     freedomOriented: true,
     freedomNote: 'DeepSeek open-weight model; judged freedom-oriented by Chris (2026-05-30).',
+    unsuitableAsBackgroundWorker: true,
   },
   {
     id: 'deepseek-v4-flash',
@@ -20,6 +21,7 @@ export const CANONICALS: CanonicalModel[] = [
     requiredCaps: { tools: true, reasoning: true, vision: false },
     freedomOriented: true,
     freedomNote: 'DeepSeek open-weight model; judged freedom-oriented by Chris (2026-05-30).',
+    unsuitableAsBackgroundWorker: true,
   },
   {
     id: 'deepseek-v4-pro',
@@ -28,6 +30,7 @@ export const CANONICALS: CanonicalModel[] = [
     requiredCaps: { tools: true, reasoning: true, vision: false },
     freedomOriented: true,
     freedomNote: 'DeepSeek open-weight model; judged freedom-oriented by Chris (2026-05-30).',
+    unsuitableAsBackgroundWorker: true,
   },
   {
     id: 'glm-5',
@@ -380,4 +383,14 @@ export function availableCanonicals(configuredTemplateIds: string[]): {
 export function resolveModelInstructions(offering: { canonicalRef: string | null }): string {
   if (!offering.canonicalRef) return '';
   return getCanonical(offering.canonicalRef)?.modelInstructions ?? '';
+}
+
+/**
+ * Whether a model is unfit to run a persona's unattended background chores
+ * (title generation, memory, compaction) because it tends to emit reasoning and
+ * then stop without a final answer. Currently the DeepSeek family. Drives the
+ * background-helper picker filter and the flagged-main-model warning.
+ */
+export function isUnsuitableAsBackgroundWorker(model: CanonicalModel): boolean {
+  return model.unsuitableAsBackgroundWorker === true;
 }

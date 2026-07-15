@@ -7,6 +7,7 @@ import {
   CANONICALS,
   availableCanonicals,
   getCanonical,
+  isUnsuitableAsBackgroundWorker,
   listCanonicals,
   resolveModelInstructions,
 } from './canonical-registry.js';
@@ -74,6 +75,33 @@ describe('canonical-registry', () => {
     expect(grok?.requiredCaps).toEqual({ tools: true, reasoning: true, vision: true });
     expect(grok?.freedomOriented).toBe(true);
     expect(grok?.family).toBe('grok');
+  });
+});
+
+describe('unsuitableAsBackgroundWorker', () => {
+  test('every DeepSeek canonical is flagged', () => {
+    for (const id of ['deepseek-v3.2', 'deepseek-v4-flash', 'deepseek-v4-pro']) {
+      const c = getCanonical(id);
+      expect(c).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: asserted defined above
+      expect(isUnsuitableAsBackgroundWorker(c!)).toBe(true);
+    }
+  });
+
+  test('non-DeepSeek canonicals are suitable (flag absent)', () => {
+    for (const id of ['glm-5', 'grok-4.3', 'kimi-k2.6', 'claude-sonnet-5']) {
+      const c = getCanonical(id);
+      expect(c).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: asserted defined above
+      expect(isUnsuitableAsBackgroundWorker(c!)).toBe(false);
+      // biome-ignore lint/style/noNonNullAssertion: asserted defined above
+      expect(c!.unsuitableAsBackgroundWorker).toBeUndefined();
+    }
+  });
+
+  test('the flag currently marks exactly the DeepSeek family', () => {
+    const flagged = CANONICALS.filter(isUnsuitableAsBackgroundWorker).map((c) => c.id);
+    expect(flagged.sort()).toEqual(['deepseek-v3.2', 'deepseek-v4-flash', 'deepseek-v4-pro']);
   });
 });
 
