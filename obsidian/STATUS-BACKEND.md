@@ -1,7 +1,12 @@
 # Chatsundere Status — Backend
 
-**Last updated:** 2026-07-14 (later) — **ADMIN CONSOLE REPAIRED, SQUASHED to
-`master` (`2c461979`), NOT pushed — Chris pushes and tags.** The v0.2.0 go-live
+**Last updated:** 2026-07-15 — **ADMIN CONSOLE REPAIRED, SHIPPED as `v0.2.2`
+(`2c461979`).** *(Corrected 2026-07-15: this entry long claimed "NOT pushed —
+Chris pushes and tags". Both admin fixes have been on `origin/master` for a
+while, and the release went out as **v0.2.2**, not the v0.2.1 the old NEXT block
+below predicted. A later **v0.2.3** (`099c0e10`) then shipped the merged
+background-worker PR #30. Both tags sit on non-`[skip ci]` commits, so §8's
+tagging trap was avoided. `Docker Build & Push` is green on both.)* The v0.2.0 go-live
 surfaced that `https://app.chatsundere.me/admin/` renders nothing but the page
 background. **Two independent defects, one symptom** — which is why the obvious
 discriminating test (a private window) failed to discriminate:
@@ -74,11 +79,28 @@ survived: the admin suite encodes it and would have failed CI. The pre-commit ho
 does not catch it because it lints only staged files, and those lines were never
 re-staged. Fixing the two files restores the whole gate — Chris's call on timing.
 
-**NEXT:** push `master`, tag **v0.2.1** (both admin fixes ride it; the SW fix
-alone is necessary but not sufficient), Watchtower pulls, then a **cold start** on
-each device (the SW activates silently on next cold start by design). Then Chris's
-spec §8 manual verification: login renders and the user list loads on PC + phone;
-`/admin/` in a private window shows `NoAccountFailure` with a working way back.
+**~~NEXT:~~ DONE (recorded 2026-07-15).** The push happened and the release went
+out as **v0.2.2** (both admin fixes ride it, as this block required). Watchtower
+did *not* pull it — it is dead (see above), so the deploy was manual. The cold
+start on each device (the SW activates silently on next cold start by design) and
+Chris's spec §8 manual verification — login renders and the user list loads on
+PC + phone; `/admin/` in a private window shows `NoAccountFailure` with a working
+way back — are Chris's to confirm; this file no longer tracks them as blocking.
+
+**Still open on the backend side:** the **Watchtower decision** (spec + Larissa,
+see above — it has been broken for weeks with nobody noticing, which is the
+strongest argument for dropping it) and the **red CI** (re-verified 2026-07-15:
+`apps/user-client/src/index.css` and `apps/admin-client/src/index.css` still fail
+Biome, so `CI` on `master` never reaches Typecheck/Build/Test — `Docker Build &
+Push` is a separate workflow and is green). `GitHub Pages Deploy` also fails on
+both `master` and `v0.2.3` — the teaser site, not the app; unexamined so far.
+
+> ⚠️ **`version.txt` is stale at `0.2.0` while the newest tag is `v0.2.3`**
+> (spotted 2026-07-15, not acted on — release mechanics are Chris's call). Per
+> the v0.2.0 entry below, the bump exists so untagged `master` builds produce
+> `0.2.x-pre.N` that sorts *above* the shipped release. At `0.2.0` they now
+> produce `0.2.0-pre.N`, which sorts **below** v0.2.2/v0.2.3 — the exact failure
+> the bump was introduced to prevent.
 
 Prior entry: 2026-07-14 — **v0.2.0 CUT AND PUSHED — BACKEND GO-LIVE.** Chris
 completed the spec-§9 device verification owed by the 2026-07-13 entry (all

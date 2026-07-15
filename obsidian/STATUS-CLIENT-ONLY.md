@@ -9,9 +9,9 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 ## Current
 
 **Last updated:** 2026-07-15 (later) — **GROK 4.5 CURATED ON xAI-DIRECT +
-OPENROUTER, AND ITS FAKED REASONING-OFF FIXED — squashed on branch
-`feat/grok-4.5` (`605e9ff2`), NOT on master, NOT pushed — Chris decides how it
-lands.** xAI cleared Grok 4.5 for the EU today, which was the sole blocker
+OPENROUTER, AND ITS FAKED REASONING-OFF FIXED — on `master` (`605e9ff2`,
+fast-forwarded from `feat/grok-4.5`, which is now removed), NOT pushed — Chris
+pushes after his device check.** xAI cleared Grok 4.5 for the EU today, the sole blocker
 recorded in [[models/grok-4.5]]; both remaining routes are now onboarded. The
 curation found more than it went looking for: **Grok 4.5 reasoning is MANDATORY
 on every route**, and the providers differ only in how honestly they say so —
@@ -55,9 +55,11 @@ known write-as-text nondeterminism and passed on re-run); `pnpm typecheck
 landing (merge to `master` vs review first), then a device check that Grok 4.5
 appears on all three providers and shows no Off chip.
 
-**Prior — 2026-07-15 — BACKGROUND-WORKER MODELS BUILT on branch
-`claude/background-worker-models-g8icgs` (pushed; NOT squashed to master —
-this is a remote feature branch, Chris reviews/merges).** Some models (the
+**Prior — 2026-07-15 — BACKGROUND-WORKER MODELS SHIPPED — merged as
+PR #30 (`099c0e10`) and released as `v0.2.3`.** *(Corrected 2026-07-15: this
+entry claimed "NOT squashed to master — Chris reviews/merges". He has since done
+both; the tag sits on the merge commit, which carries no `[skip ci]`, and
+`Docker Build & Push` is green on it.)* Some models (the
 DeepSeek family) reason and then stop, producing no final answer — merely
 annoying in interactive chat (the user regenerates) but silently destructive
 for the unattended **background chores** (title generation, memory pipeline,
@@ -95,12 +97,13 @@ pass / 1 env** (a `sync/doorbell` parallel-load timing flake, passes isolated
 9/9 — unrelated, no sync code touched); Biome clean on all changed files. New
 pure helpers `lib/persona-hub.ts` (`showBackgroundHelperWarning`,
 `greetingHelperGate`) + `data/resolve-background-offering.ts`, unit-tested. Spec:
-[[../superpowers/specs/2026-07-15-background-worker-models-design]]. **Next:**
-Chris device-verifies (spec §7: persona on DeepSeek → warning shows + no
-titles/memory; pick a reliable helper → warning clears, titles + memory run on
-the helper while the reply still streams from DeepSeek; helper picker offers no
-DeepSeek/Censored entry; greeting toggle only enables with a helper set; delete
-the helper's provider → chores silently fall back), then merges the branch.
+[[../superpowers/specs/2026-07-15-background-worker-models-design]].
+**~~Next~~ — merged and shipped;** the spec-§7 device verification (persona on
+DeepSeek → warning shows + no titles/memory; pick a reliable helper → warning
+clears, titles + memory run on the helper while the reply still streams from
+DeepSeek; helper picker offers no DeepSeek/Censored entry; greeting toggle only
+enables with a helper set; delete the helper's provider → chores silently fall
+back) is Chris's to confirm on the shipped build, no longer a merge gate.
 
 **Prior — 2026-07-14 — MEMORY-CONSOLIDATION ROBUSTNESS LANDED
 (squashed to `master` as `78ca7afd`, NOT pushed — Chris pushes after his device
