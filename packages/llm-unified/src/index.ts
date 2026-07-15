@@ -92,7 +92,11 @@ export {
   type WebAdapterFactory,
 } from './integrations/web-adapter-registry.js';
 
-export { runOneShotCompletion, type OneShotArgs } from './one-shot-completion.js';
+export {
+  runOneShotCompletion,
+  type OneShotArgs,
+  type OneShotRawResponse,
+} from './one-shot-completion.js';
 
 export { probeProvider, type ProbeArgs } from './probe.js';
 

@@ -3,6 +3,7 @@ import { Brain } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
+import { MemoryResponseOverlay } from '../../components/MemoryResponseOverlay.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
 import {
@@ -21,6 +22,7 @@ import {
 import type { MemoryActionState } from '../../lib/use-memory-actions.js';
 import { useMemoryActions } from '../../lib/use-memory-actions.js';
 import type { MemoryActionError } from '../../memory/classify-error.js';
+import type { MemoryRawResponse } from '../../memory/pipeline.js';
 import { toastStore } from '../../state/toast.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { usePersonaEditing } from './persona/use-persona-editing.js';
@@ -92,6 +94,9 @@ export function PersonaMemory(): JSX.Element {
   }, [currentBody?.content]);
 
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+
+  // The captured model answer to inspect in the debug overlay (null = closed).
+  const [inspecting, setInspecting] = useState<MemoryRawResponse | null>(null);
 
   // Reject = deferred delete + undo. Hide locally, commit the delete after the window.
   // No unmount cleanup: a pending delete must complete; the toast closure keeps
@@ -250,6 +255,9 @@ export function PersonaMemory(): JSX.Element {
       onHelp={onHelp}
     >
       {helpOverlay}
+      {inspecting ? (
+        <MemoryResponseOverlay open response={inspecting} onClose={() => setInspecting(null)} />
+      ) : null}
       <div data-testid="persona-memory" className="flex flex-col gap-6 px-4 pb-8 pt-4">
         <h1 className="flex items-center gap-2 text-lg font-medium text-paper">
           <Brain size={18} aria-hidden="true" />
@@ -345,13 +353,27 @@ export function PersonaMemory(): JSX.Element {
               const active = candidates.find(([s]) => s.status === 'error');
               if (!active) return null;
               const [state, retry] = active;
+              const response = state.response;
               return (
-                <div className="memory-page-action-error" role="alert">
-                  <span>{memoryErrorCopy(state)}</span>
-                  <button type="button" onClick={() => void retry()}>
-                    Retry
-                  </button>
-                </div>
+                <>
+                  <div className="memory-page-action-error" role="alert">
+                    <span>{memoryErrorCopy(state)}</span>
+                    <button type="button" onClick={() => void retry()}>
+                      Retry
+                    </button>
+                  </div>
+                  {/* Shown only when a model answer was actually captured — a
+                      timeout or upstream error yields nothing to inspect. */}
+                  {response ? (
+                    <button
+                      type="button"
+                      className="memory-page-inspect"
+                      onClick={() => setInspecting(response)}
+                    >
+                      Show the model's answer
+                    </button>
+                  ) : null}
+                </>
               );
             })()}
           </div>

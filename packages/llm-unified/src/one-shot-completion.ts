@@ -10,6 +10,21 @@ import type { ProviderConfig, ProviderDefinition, ReasoningIntent, WireMessage }
 
 const DEFAULT_ONE_SHOT_TIMEOUT_MS = 30_000;
 
+/**
+ * The parsed assistant message from a one-shot call, split into its channels.
+ * Surfaced via {@link OneShotArgs.onRawResponse} for diagnostics — notably the
+ * memory-consolidation debug view, where a model that answers with reasoning
+ * but empty `content` otherwise looks like an opaque "answer couldn't be used".
+ */
+export interface OneShotRawResponse {
+  /** `message.content` verbatim, or '' when the model returned none. */
+  content: string;
+  /** `message.reasoning` (modern) or `message.reasoning_content` (legacy), or ''. */
+  reasoning: string;
+  /** The choice's `finish_reason`, or null when absent. */
+  finishReason: string | null;
+}
+
 export interface OneShotArgs {
   provider: ProviderDefinition;
   providerConfig: ProviderConfig;
@@ -22,10 +37,21 @@ export interface OneShotArgs {
   timeoutMs?: number;
   /** Optional sink for retry decisions. Caller (apps/) wires the console line. */
   onRetry?: OnRetry;
+  /**
+   * Optional diagnostics hook, fired once per attempt the moment a 2xx body is
+   * parsed — before the empty-content guard throws — so a debug view can see a
+   * response whose `content` is empty but whose `reasoning` is not. Fires only
+   * for parsed 2xx responses; a non-2xx status or a timeout never calls it. On a
+   * successful retry the last invocation wins.
+   */
+  onRawResponse?: (raw: OneShotRawResponse) => void;
 }
 
 interface OneShotResponse {
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{
+    message?: { content?: string; reasoning?: string; reasoning_content?: string };
+    finish_reason?: string;
+  }>;
 }
 
 /**
@@ -116,7 +142,20 @@ export async function runOneShotCompletionWithSleep(
         throw err;
       }
       const json = (await response.json()) as OneShotResponse;
-      const content = json.choices?.[0]?.message?.content;
+      const choice = json.choices?.[0];
+      const message = choice?.message;
+      const content = message?.content;
+      if (args.onRawResponse) {
+        const reasoning =
+          (typeof message?.reasoning === 'string' && message.reasoning) ||
+          (typeof message?.reasoning_content === 'string' && message.reasoning_content) ||
+          '';
+        args.onRawResponse({
+          content: typeof content === 'string' ? content : '',
+          reasoning,
+          finishReason: choice?.finish_reason ?? null,
+        });
+      }
       if (typeof content !== 'string' || content.length === 0) {
         throw new Error('one-shot returned empty content');
       }

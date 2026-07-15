@@ -269,6 +269,61 @@ describe('PersonaMemory — action error copy', () => {
     expect(learnNow).not.toHaveBeenCalled();
   });
 
+  it('offers the debug view only when a model answer was captured', async () => {
+    // No captured response → no inspect affordance (e.g. a timeout).
+    mockMemoryActions({
+      consolidateState: { status: 'error', error: 'timeout' },
+      lastAttempted: 'consolidate',
+    });
+    const first = renderPage({ chat: 'c1' });
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.queryByRole('button', { name: /show the model's answer/i })).toBeNull();
+    first.unmount();
+
+    // A captured response → the quiet inspect button appears below Retry.
+    mockMemoryActions({
+      consolidateState: {
+        status: 'error',
+        error: 'invalid-output',
+        response: { content: '', reasoning: 'I thought a lot', finishReason: 'stop' },
+      },
+      lastAttempted: 'consolidate',
+    });
+    renderPage({ chat: 'c1' });
+    expect(
+      await screen.findByRole('button', { name: /show the model's answer/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens the response overlay with reasoning and content split apart', async () => {
+    mockMemoryActions({
+      consolidateState: {
+        status: 'error',
+        error: 'invalid-output',
+        response: {
+          content: '',
+          reasoning: 'The user likes cats.',
+          finishReason: 'stop',
+        },
+      },
+      lastAttempted: 'consolidate',
+    });
+    renderPage({ chat: 'c1' });
+    await userEvent.click(await screen.findByRole('button', { name: /show the model's answer/i }));
+
+    const overlay = await screen.findByTestId('memory-response');
+    expect(overlay).toBeInTheDocument();
+    // Reasoning surfaces verbatim; content shows the honest empty-state note.
+    expect(screen.getByTestId('memory-response-reasoning')).toHaveTextContent(
+      'The user likes cats.',
+    );
+    expect(screen.getByTestId('memory-response-content')).toHaveTextContent(
+      'the model returned no content',
+    );
+    // The empty-content case is called out explicitly.
+    expect(screen.getByText(/only reasoning \(or nothing\) came back/i)).toBeInTheDocument();
+  });
+
   it('shows the long-run sub-line while consolidating', async () => {
     mockMemoryActions({ consolidateState: { status: 'pending' }, lastAttempted: 'consolidate' });
     renderPage({ chat: 'c1' });

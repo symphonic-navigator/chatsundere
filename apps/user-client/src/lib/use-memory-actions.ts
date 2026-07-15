@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { QK } from '../data/queryKeys.js';
 import { type MemoryActionError, classifyMemoryActionError } from '../memory/classify-error.js';
 import { releaseMemoryLock, tryAcquireMemoryLock } from '../memory/mutex.js';
-import { runDreaming, runExtraction } from '../memory/pipeline.js';
+import { type MemoryRawResponse, runDreaming, runExtraction } from '../memory/pipeline.js';
 import { resolveMemoryPipelineArgs } from '../memory/resolve-args.js';
 import { toastStore } from '../state/toast.store.js';
 import { queryClient } from './queryClient.js';
@@ -13,6 +13,13 @@ export interface MemoryActionState {
   error?: MemoryActionError;
   /** Consolidation slices checkpointed before a failure (partial progress). */
   partialSlices?: number;
+  /**
+   * The raw model answer from the failing call (content + reasoning, split),
+   * when one was parsed. Present only on `error` and only when a 2xx body was
+   * received — powers the "show the model's answer" debug view. Absent for
+   * timeouts and non-2xx failures, which never yield a model message.
+   */
+  response?: MemoryRawResponse;
 }
 
 const IDLE: MemoryActionState = { status: 'idle' };
@@ -39,6 +46,12 @@ export function useMemoryActions(chatId: string): {
       setLastAttempted(kind);
       let personaId: string | null = null;
       let slices = 0;
+      // Last parsed model answer — held so the error path can offer a debug view
+      // of what the model actually returned (chiefly: reasoning but no content).
+      let lastResponse: MemoryRawResponse | undefined;
+      const onRawResponse = (r: MemoryRawResponse): void => {
+        lastResponse = r;
+      };
       try {
         const args = await resolveMemoryPipelineArgs(chatId, `memory-${kind}`);
         personaId = args.persona.id;
@@ -53,11 +66,12 @@ export function useMemoryActions(chatId: string): {
         setState({ status: 'pending' });
         try {
           if (kind === 'learn') {
-            await runExtraction(args, { force: true });
+            await runExtraction(args, { force: true, onRawResponse });
           } else {
             const id = personaId;
             await runDreaming(args, {
               force: true,
+              onRawResponse,
               onSlice: () => {
                 slices += 1;
                 void queryClient.invalidateQueries({ queryKey: QK.memory(id) });
@@ -69,7 +83,12 @@ export function useMemoryActions(chatId: string): {
           releaseMemoryLock(personaId);
         }
       } catch (e) {
-        setState({ status: 'error', error: classifyMemoryActionError(e), partialSlices: slices });
+        setState({
+          status: 'error',
+          error: classifyMemoryActionError(e),
+          partialSlices: slices,
+          response: lastResponse,
+        });
       } finally {
         // Error paths must refresh too: a mid-drain failure has already archived
         // slices, and the committed list must show the true remainder (Laura HARD-1).

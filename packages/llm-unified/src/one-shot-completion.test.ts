@@ -60,6 +60,101 @@ describe('runOneShotCompletion', () => {
     expect(attempts).toBe(5); // 500 is retryable, so should retry 4 times (5 total)
   });
 
+  it('fires onRawResponse with content, reasoning and finishReason on 200', async () => {
+    const oldFetch = globalThis.fetch;
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: { content: 'the body', reasoning: 'my chain of thought' },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    ) as unknown as typeof fetch;
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
+    const captured: unknown[] = [];
+    await runOneShotCompletion({
+      provider: nanoGpt,
+      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+      apiKey: 'k',
+      target: { slug: model.upstreamSlug },
+      messages: [],
+      bodyExtras: {},
+      onRawResponse: (r) => captured.push(r),
+    });
+    globalThis.fetch = oldFetch;
+    expect(captured).toEqual([
+      { content: 'the body', reasoning: 'my chain of thought', finishReason: 'stop' },
+    ]);
+  });
+
+  it('reads the legacy reasoning_content channel', async () => {
+    const oldFetch = globalThis.fetch;
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: 'x', reasoning_content: 'legacy thoughts' } }],
+          }),
+          { status: 200 },
+        ),
+    ) as unknown as typeof fetch;
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
+    let captured: { reasoning?: string; finishReason?: unknown } = {};
+    await runOneShotCompletion({
+      provider: nanoGpt,
+      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+      apiKey: 'k',
+      target: { slug: model.upstreamSlug },
+      messages: [],
+      bodyExtras: {},
+      onRawResponse: (r) => {
+        captured = r;
+      },
+    });
+    globalThis.fetch = oldFetch;
+    expect(captured.reasoning).toBe('legacy thoughts');
+    expect(captured.finishReason).toBeNull();
+  });
+
+  it('fires onRawResponse before throwing on empty content (only-reasoning case)', async () => {
+    const oldFetch = globalThis.fetch;
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '', reasoning: 'thought hard, said nothing' } }],
+          }),
+          { status: 200 },
+        ),
+    ) as unknown as typeof fetch;
+    const model = nanoGpt.offerings[0];
+    if (!model) throw new Error('no offerings');
+    const captured: unknown[] = [];
+    await expect(
+      runOneShotCompletion({
+        provider: nanoGpt,
+        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
+        apiKey: 'k',
+        target: { slug: model.upstreamSlug },
+        messages: [],
+        bodyExtras: {},
+        onRawResponse: (r) => captured.push(r),
+      }),
+    ).rejects.toThrow();
+    globalThis.fetch = oldFetch;
+    expect(captured).toEqual([
+      { content: '', reasoning: 'thought hard, said nothing', finishReason: null },
+    ]);
+  });
+
   it('throws on empty content', async () => {
     const oldFetch = globalThis.fetch;
     globalThis.fetch = mock(
