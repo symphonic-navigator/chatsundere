@@ -8,7 +8,54 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-15 — **BACKGROUND-WORKER MODELS BUILT on branch
+**Last updated:** 2026-07-15 (later) — **GROK 4.5 CURATED ON xAI-DIRECT +
+OPENROUTER, AND ITS FAKED REASONING-OFF FIXED — squashed on branch
+`feat/grok-4.5` (`605e9ff2`), NOT on master, NOT pushed — Chris decides how it
+lands.** xAI cleared Grok 4.5 for the EU today, which was the sole blocker
+recorded in [[models/grok-4.5]]; both remaining routes are now onboarded. The
+curation found more than it went looking for: **Grok 4.5 reasoning is MANDATORY
+on every route**, and the providers differ only in how honestly they say so —
+OpenRouter answers `{enabled:false}` with HTTP 400 ("Reasoning is mandatory for
+this endpoint"), xAI-direct rejects `reasoning_effort: 'none'` with 400 (and
+silently ignores the unified off object), while **nano-gpt accepts the off,
+hides the trace, reports `reasoning_tokens: 0` and bills the user for the
+reasoning anyway** (a one-token answer `7` cost 198 completion tokens). The
+2026-07-09 curation believed that fabricated counter and **shipped a toggle
+whose off position was a fiction**; the conversation-suite could not catch it,
+because its `reasoning-absent` assertion passes against a merely *hidden* trace
+— it validates the channel, not the billing. Cross-route comparison caught it.
+**What landed (one unit, `packages/llm-unified` only):** xAI-direct `grok-4.5`
++ OpenRouter `x-ai/grok-4.5` as `steps` low/medium/high with **`offStep: null`**
+(the contract that stops either adapter emitting an off); OpenRouter enforces
+**ZDR** on the wire (verified live: HTTP 200, `provider: "xAI"`) and stays the
+privacy route for the family. **nano-gpt corrected `toggle` → `fixed-on`** —
+which matters beyond honesty: the cockpit emits no intent for `fixed-on` and
+`buildWire` then defaults to `{enabled:false}`, so without the new guard the
+corrected offering would have sent exactly the off upstream refuses. **Context
+1M → 500k** on nano-gpt (xAI's own `/models` *and* OpenRouter both report
+`context_length: 500000`; the 1M was an assumption mirrored from 4.3, overstating
+the ceiling twofold — Chris: the 500k is deliberate, 4.5 is internally "V9", ~1.5T,
+and window size acts multiplicatively on compute). Both adapters now derive
+whether an off may reach the wire **from the offering's own control**, so the
+offering stays the single source of truth; every existing offering is unchanged
+(none was previously `fixed-on` on the OpenRouter adapter). **No user-client
+change and none needed** — the cockpit already renders a lit *disabled* "On"
+chip for `fixed-on` and omits the Off chip when `offStep` is null, and reasoning
+state is derived per offering, never restored, so no stale "off" survives.
+**Not a Larissa path** (catalogue + adapters; no crypto/auth/sync/proxy). **No
+Laura** (no user-reachable flow added; the fake Off chip disappearing *is* the
+fix). Gates: live suite 2026-07-15 serial with the production adapters —
+`xai:grok-4.5` core **33/33** + vision **4/4**, `openrouter:x-ai/grok-4.5 (ZDR)`
+core **33/33** + vision **4/4**, `nano-gpt:x-ai/grok-4.5` core **11/11** +
+vision **4/4**, plus a `grok-4.3` regression **22/22** (an earlier run hit the
+known write-as-text nondeterminism and passed on re-run); `pnpm typecheck
+--force` **14/14** (0 cached); `pnpm build` **9/9**; llm-unified `bun test`
+**439/439**; Biome clean. Full write-up incl. the "never trust a provider's
+`reasoning_tokens: 0`" lesson: [[models/grok-4.5]]. **Next:** Chris's call on
+landing (merge to `master` vs review first), then a device check that Grok 4.5
+appears on all three providers and shows no Off chip.
+
+**Prior — 2026-07-15 — BACKGROUND-WORKER MODELS BUILT on branch
 `claude/background-worker-models-g8icgs` (pushed; NOT squashed to master —
 this is a remote feature branch, Chris reviews/merges).** Some models (the
 DeepSeek family) reason and then stop, producing no final answer — merely
