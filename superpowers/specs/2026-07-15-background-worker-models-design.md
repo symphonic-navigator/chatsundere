@@ -2,9 +2,19 @@
 
 **Date:** 2026-07-15
 **Author:** Liz
-**Status:** Draft — awaiting Laura spec-pass, then Chris sign-off
-**Audit path:** Not Larissa (no crypto/auth/sync/proxy). Laura spec-pass required
+**Status:** Laura spec-pass complete (1 HARD + 5 soft, all folded) — awaiting
+Chris sign-off, then plan → TDD.
+**Audit path:** Not Larissa (no crypto/auth/sync/proxy). Laura spec-pass done
 (a new user-reachable persona field, a conditional warning, and a greeting toggle).
+
+> **Laura spec-pass (2026-07-15):** primary placement (helper slot beneath the
+> main model in the hub) **confirmed**; disabled-over-hidden greeting toggle
+> **confirmed correct**; the "helper" framing is behaviourally honest. **HARD-1**:
+> the warning copy misdirected toward changing the *main* model → fixed (§4.B, now
+> points to the helper below, never "a different model"). Softs folded: "Models"
+> subgroup, narrower-list explainer line, "helper" not "assistant", the greeting
+> toggle's disabled-reason precedence + cross-page "where" (§4.B / §4.D). No
+> blocking structural defect.
 
 ---
 
@@ -122,35 +132,50 @@ Unset is `backgroundCanonicalId` absent or `null`. `defaultDraft` sets
 (`'background-worker'` implies no vision requirement; the two axes don't need to
 compose here.)
 
-**UI — where it lives.** *Primary proposal (Laura to arbitrate):* directly
-**beneath the main Model slot in the persona hub** (`routes/app/persona/hub.tsx`,
-the Identity section), so the warning appears exactly where the problematic
-choice was made. A second `ModelSlotPicker` with
+**UI — where it lives.** **Primary placement (Laura spec-pass confirmed):**
+directly **beneath the main Model slot in the persona hub**
+(`routes/app/persona/hub.tsx`, the Identity section), so the warning appears
+exactly where the problematic choice was made — co-locating the remedy with the
+choice (Laura: the alternative manufactures click-depth and buries the override
+for the majority of non-flagged personas). A second `ModelSlotPicker` with
 `filter="background-worker"`, `label="Background helper"`,
 `emptyLabel="Optional — pick a reliable helper"`, writing
 `backgroundCanonicalId` / `backgroundProviderId` / `backgroundModelId`. It clears
-back to unset via the picker's existing clear affordance.
-*Alternative (if Laura prefers a leaner hub):* house the slot on the
-`Model behaviour` sub-page (`/app/persona/:id/model`, the blue cluster) and route
-attention to it from the hub via the tile meta when the warning condition holds.
+back to unset via the picker's existing "Use none" clear affordance. The main and
+helper slots are **wrapped in one small "Models" subgroup** so the eye reads them
+as a pair, not a fourth loose Identity field (Laura SOFT — ND-friendly density).
+
+Because the helper picker is filtered harder than the main one (no *Censored*
+models, no flagged think-only models), it silently omits entries the main picker
+shows. One quiet line in the helper picker's empty/header area explains the
+narrower list so its absence is understood, not mysterious (Laura SOFT):
+> Censored and think-only models can't be helpers.
 
 **The warning.** Shown only when the persona's **main** canonical is flagged
-**and** no helper is set:
+**and** no helper is set. It must point the user **down to the helper slot**, and
+must **not** tell them to change their main model — the whole point is to *keep*
+the chosen main model in the conversation and add a reliable helper for the
+chores (Laura HARD-1: the original "pick a different model here" actively
+misdirected toward abandoning the deliberately-chosen model):
 
 > This model sometimes only thinks and never answers, which breaks background
-> tasks like chat titles and memory. Please pick a different model here to run
-> them.
+> chores like chat titles and memory. Pick a reliable helper below to run them
+> for you.
 
-(British English; final *deredere* phrasing is Laura/Chris's call.) The warning
-is a soft, inline, non-blocking cue (not a hard gate — the persona still
-functions, just without reliable chores). It **clears the moment a helper is
-chosen**, so it reads as a resolvable nudge, not a nag.
+The word **"below"** (or a direct tie to the helper field) is load-bearing.
+(British English; final *deredere* phrasing is Chris's to arbitrate, but the
+*direction* — toward the helper, never away from the main model — is a HARD build
+mandate.) The warning is a soft, inline, non-blocking cue (not a hard gate — the
+persona still functions, just without reliable chores). It **clears the moment a
+helper is chosen**, so it reads as a resolvable nudge, not a nag.
 
-**Chatsundere twist (copy, Laura/Chris-arbitrated).** Frame the slot as the
-persona's quiet **helper / assistant** who takes care of the background chores
-(titles, remembering) while the persona herself stays in the conversation —
-rather than a technical "background worker model" label. Proposed surface label
-**"Background helper"**; open to Chris's wording.
+**Chatsundere twist (copy, Chris-arbitrated).** Frame the slot as the persona's
+quiet **helper** who takes care of the background chores (titles, remembering)
+while the persona herself stays in the conversation — rather than a technical
+"background worker model" label. Use **"helper"**, not "assistant" (Laura SOFT:
+"assistant" collides with "the AI assistant" and risks reading as a second
+conversational voice). Proposed surface label **"Background helper"**; open to
+Chris's wording.
 
 ### 4.C Step 3 — route the chores through the helper
 
@@ -202,9 +227,16 @@ greetingUsesBackgroundModel?: boolean;
 
 A toggle in the greeting section (`routes/app/persona/roleplay.tsx`, where
 `greetingEnabled` / `greetingInstructions` already live), labelled e.g.
-**"Let the helper write the greeting"**. Per §11 *disabled over hidden*: the
-toggle is always shown but **disabled-with-reason** ("Set a background helper
-first") when no helper is set.
+**"Let the helper write the greeting"**. Keep its copy off "behind the scenes" —
+here the helper produces visible, in-character content (Laura SOFT). Per §11
+*disabled over hidden*: the toggle is always shown but **disabled-with-reason**.
+
+The greeting block already disables when Roleplay is off; this toggle adds a
+third gate (no helper set). The disabled reason must name the **true first
+blocker** in precedence order **roleplay-off → greeting-off → no-helper** so it
+never misleads (Laura SOFT-3). The no-helper reason must also say **where** the
+helper is set, since it lives on a different page (Laura SOFT-2):
+> Set a background helper on the persona's main screen first.
 
 Resolution: `useStartOpener` (`data/send-message.ts:459`) already holds the
 `PersonaContext`; it picks `ctx.backgroundOffering` when
@@ -253,10 +285,12 @@ applies, so a stale helper degrades to the persona's own model.)
 - **Persona draft** (vitest): defaults leave the helper unset and
   `greetingUsesBackgroundModel` falsey.
 - **Warning gate** (vitest): visible iff main canonical flagged **and** helper
-  unset; clears once a helper is set.
+  unset; clears once a helper is set. The copy points at the helper slot and
+  never instructs a main-model change (HARD-1 regression guard).
 - **Greeting resolution** (vitest): opener uses helper iff
-  `greetingUsesBackgroundModel && helper set`, else main; disabled-with-reason
-  toggle when no helper.
+  `greetingUsesBackgroundModel && helper set`, else main. Disabled-reason
+  precedence: roleplay-off → greeting-off → no-helper, each naming its true
+  blocker.
 - Full user-client vitest at the standing 8-Node-localStorage baseline; llm-unified
   suite green; `pnpm typecheck --force` 14/14; `pnpm build` 9/9; Biome clean.
 
