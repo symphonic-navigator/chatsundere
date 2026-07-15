@@ -1,5 +1,30 @@
 # Chatsundere Status — Backend
 
+> ## ▶ AGREED NEXT SESSION (2026-07-16, in this order — Chris, 2026-07-15)
+>
+> **1. Straighten the notes.** They misled us twice on 2026-07-15 and could not
+> answer "what's next?" — the trigger for this. Concretely: the [[ROADMAP]] is
+> frozen at its 2026-05-31 lock and still lists Blocks 2–5 as *not started*
+> though all of it shipped; **both** STATUS "Next session" blocks are pre-backend
+> and almost entirely discharged; and the **v0.3.0 → v0.2.0 revision was never
+> recorded** — there is no ADR (the series ends at 0035) while [ADR 0031] and
+> CLAUDE.md §12 both still claim "v0.3.0 (Block 6, encrypted backend live)". That
+> was explicitly logged as *"Chris's call; not a silent drift"* and has drifted
+> silently ever since. Also fold in: `version.txt` (see the ⚠️ below).
+>
+> **2. The Watchtower decision.** Spec + Larissa, not a quick image swap — it
+> holds `/var/run/docker.sock` on every self-hoster's box. Options and the
+> strongest datum (it has been broken for weeks and delivered zero value while
+> carrying the full risk) are in the ⚠️ block below.
+>
+> **Then** Chris has new feature ideas to brainstorm. Also queued, unscheduled:
+> **Projects** — the one deliberately-deferred client feature, deferred "to after
+> the backend", which is now live; it needs Chris's project-oriented-memory model
+> and the new IA. And these carry triggers that have **already passed**: MEDIUM-3
+> (mass-delete blind-id CPU, "probe before/around v0.2.0"), L-A1 + L-A3 ("before
+> backend go-live"), F2 (Tier-4 step-up, "before more than one operator" — the
+> alpha testers are in). See [[insights/follow-ups-index]].
+
 **Last updated:** 2026-07-15 — **ADMIN CONSOLE REPAIRED, SHIPPED as `v0.2.2`
 (`2c461979`).** *(Corrected 2026-07-15: this entry long claimed "NOT pushed —
 Chris pushes and tags". Both admin fixes have been on `origin/master` for a

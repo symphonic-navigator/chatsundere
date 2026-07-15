@@ -51,9 +51,9 @@ vision **4/4**, plus a `grok-4.3` regression **22/22** (an earlier run hit the
 known write-as-text nondeterminism and passed on re-run); `pnpm typecheck
 --force` **14/14** (0 cached); `pnpm build` **9/9**; llm-unified `bun test`
 **439/439**; Biome clean. Full write-up incl. the "never trust a provider's
-`reasoning_tokens: 0`" lesson: [[models/grok-4.5]]. **Next:** Chris's call on
-landing (merge to `master` vs review first), then a device check that Grok 4.5
-appears on all three providers and shows no Off chip.
+`reasoning_tokens: 0`" lesson: [[models/grok-4.5]]. **Chris device-verified all
+three providers 2026-07-15 and ships it the same day** — only the push is
+outstanding.
 
 **Prior — 2026-07-15 — BACKGROUND-WORKER MODELS SHIPPED — merged as
 PR #30 (`099c0e10`) and released as `v0.2.3`.** *(Corrected 2026-07-15: this
