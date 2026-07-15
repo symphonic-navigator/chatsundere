@@ -64,6 +64,42 @@ const offerings: Offering[] = [
     confidence: 'verified', // run-xai-suite.ts: core 44/44 + vision 4/4, 0 fail (2026-06-02)
     serviceKind: 'llm',
   },
+  // Grok 4.5 — onboarded 2026-07-15, the day xAI cleared it for the EU. Same
+  // wire shape as 4.3 (native `reasoning_effort`, `delta.reasoning_content`,
+  // standard usage envelope, no Responses-API artefacts) with ONE difference:
+  // reasoning is MANDATORY. `reasoning_effort: 'none'` returns HTTP 400 and the
+  // unified `reasoning: {enabled:false}` object is accepted but silently
+  // ignored — hence `offStep: null`, and no off is ever offered to the user.
+  // Window is 500k, NOT the 1M of 4.3: xAI's own /models reports
+  // `context_length: 500000` and OpenRouter agrees (both probed 2026-07-15).
+  {
+    canonicalRef: 'grok-4.5',
+    providerId: 'xai',
+    upstreamSlug: 'grok-4.5',
+    adapter: { kind: 'catalogue', adapterId: 'xai:grok-4.5' },
+    profile: {
+      reasoning: {
+        mode: 'steps',
+        steps: ['low', 'medium', 'high'],
+        offStep: null,
+        defaultStep: 'low',
+      },
+      toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    // `long_context_threshold` is 200k — above it xAI doubles the price
+    // (prompt 20k→40k, completion 60k→120k ticks), so recommended sits at the
+    // cheap band exactly as for 4.3; max is this model's real 500k ceiling.
+    context: { recommended: 200_000, max: 500_000 },
+    // US jurisdiction, no TEE/ZDR on the direct route. The ZDR path for Grok 4.5
+    // is OpenRouter (`provider:{zdr:true}`), same as for 4.3.
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true, // Chris: xAI/Grok refuses near-nothing
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  },
   // Grok 4.20 — distinct from 4.3: reasoning is a SLUG SWAP, not the
   // `reasoning_effort` param (probed live 2026-06-28: both 4.20 slugs reject
   // `reasoning_effort` with HTTP 400). Pinned dated snapshots (avoid the
@@ -189,9 +225,15 @@ export function registerXai(): void {
         }),
       );
     } else {
+      // The offering's profile is the single source of truth for the reasoning
+      // control, so Grok 4.5's `offStep: null` reaches the adapter and no `none`
+      // is ever sent on that route (HTTP 400). Byte-identical for 4.3.
       registerAdapter(
         o.adapter.adapterId,
-        xaiAdapter(o.upstreamSlug, { vision: o.profile.vision }),
+        xaiAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
+        }),
       );
     }
   }

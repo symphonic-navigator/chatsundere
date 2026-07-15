@@ -72,11 +72,22 @@ Chatsundere's anti-censorship stance.
 
 ## Offerings
 
-Two curated chat offerings:
+Three curated chat offerings:
 
 - **Grok 4.3** — `canonicalRef: 'grok-4.3'`, `upstreamSlug: 'grok-4.3'`,
   `adapterId: 'xai:grok-4.3'`. Reasoning via the native `reasoning_effort` param
-  (`steps`). See [[../models/grok-4.3]].
+  (`steps`, with `none` a genuine off). See [[../models/grok-4.3]].
+- **Grok 4.5** — `canonicalRef: 'grok-4.5'`, `upstreamSlug: 'grok-4.5'`,
+  `adapterId: 'xai:grok-4.5'`. Shares the `reasoning_effort` adapter with 4.3,
+  with **one decisive difference: reasoning is mandatory.** `reasoning_effort:
+  'none'` returns HTTP 400 ("This model does not support `reasoning_effort` value
+  `none`"), and the unified `reasoning: {enabled:false}` object is accepted but
+  **silently ignored** — the model reasons regardless. Its control therefore
+  carries `offStep: null`, which is what stops the adapter ever emitting an off
+  value. Window is **500k**, not 4.3's 1M (`/models` reports
+  `context_length: 500000`; `long_context_threshold` 200k, above which the price
+  roughly doubles). Added **2026-07-15**, the day xAI cleared the model for the
+  EU — that clearance was the only thing blocking it. See [[../models/grok-4.5]].
 - **Grok 4.20** — `canonicalRef: 'grok-4.20'`, base `upstreamSlug:
   'grok-4.20-0309-non-reasoning'`, `adapterId:
   'xai:grok-4.20-0309-non-reasoning'`. Reasoning via a **slug swap**

@@ -54,16 +54,32 @@ describe('built-in providers', () => {
     }
   });
 
-  it('openrouter has direct CORS hint, seventeen offerings, and sortPriority 45', () => {
+  it('openrouter has direct CORS hint, eighteen offerings, and sortPriority 45', () => {
     const p = getProvider('openrouter');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      // 8 original + 2 Grok (4.3, 4.20, both ZDR-enforced) + Claude Sonnet 5
-      // + 6 ChatGPT (OpenAI, censored) = 17.
-      expect(p.offerings).toHaveLength(17);
+      // 8 original + 3 Grok (4.3, 4.5, 4.20 — all ZDR-enforced) + Claude
+      // Sonnet 5 + 6 ChatGPT (OpenAI, censored) = 18.
+      expect(p.offerings).toHaveLength(18);
       expect(p.sortPriority).toBe(45);
     }
+  });
+
+  it('offers grok-4.5 on openrouter as the ZDR route with mandatory reasoning', () => {
+    const grok45 = getProvider('openrouter')?.offerings.find((o) => o.canonicalRef === 'grok-4.5');
+    expect(grok45?.upstreamSlug).toBe('x-ai/grok-4.5');
+    // OpenRouter is the ZDR path for Grok; the adapter enforces it on the wire.
+    expect(grok45?.trust).toEqual({ tee: false, zdr: true, jurisdiction: 'US' });
+    // Reasoning is mandatory upstream: OpenRouter answers `{enabled:false}` with
+    // HTTP 400 "Reasoning is mandatory for this endpoint" → no off step.
+    expect(grok45?.profile.reasoning).toEqual({
+      mode: 'steps',
+      steps: ['low', 'medium', 'high'],
+      offStep: null,
+      defaultStep: 'low',
+    });
+    expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
   });
 
   it('registers the eight Claude offerings on nano-gpt with the cache adapter and CENSORED freedom', () => {
@@ -163,17 +179,29 @@ describe('built-in providers', () => {
     }
   });
 
-  it('registers xai with grok-4.3 + grok-4.20 (llm), grok-imagine-image (tti) and the two voice offerings', () => {
+  it('registers grok-4.3 + grok-4.5 + grok-4.20 (llm), grok-imagine-image (tti) and the two voice offerings', () => {
     const p = getProvider('xai');
     expect(p?.corsHint).toBe('requires-proxy');
     expect(p?.capabilities).toContain('vision');
-    expect(p?.offerings).toHaveLength(5);
+    expect(p?.offerings).toHaveLength(6);
     const llm = p?.offerings.find((o) => o.canonicalRef === 'grok-4.3');
     expect(llm?.serviceKind).toBe('llm');
     expect(llm?.context).toEqual({ recommended: 200_000, max: 1_000_000 });
     expect(llm?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
     expect(llm?.freedomOrientedDeployment).toBe(true);
     expect(llm?.confidence).toBe('verified');
+    // Grok 4.5: reasoning is MANDATORY (`reasoning_effort: 'none'` is HTTP 400),
+    // so the steps control carries offStep null; 500k ceiling, NOT 4.3's 1M.
+    const grok45 = p?.offerings.find((o) => o.canonicalRef === 'grok-4.5');
+    expect(grok45?.upstreamSlug).toBe('grok-4.5');
+    expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
+    expect(grok45?.profile.reasoning).toEqual({
+      mode: 'steps',
+      steps: ['low', 'medium', 'high'],
+      offStep: null,
+      defaultStep: 'low',
+    });
+    expect(grok45?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
     // Grok 4.20: slug-swap reasoning, distinct dated base slug, 2M ceiling.
     const grok420 = p?.offerings.find((o) => o.canonicalRef === 'grok-4.20');
     expect(grok420?.upstreamSlug).toBe('grok-4.20-0309-non-reasoning');
@@ -184,6 +212,20 @@ describe('built-in providers', () => {
     expect(tti?.tti?.groupId).toBe('xai-imagine');
     expect(tti?.tti?.canDoNsfw).toBe(false);
     expect(tti?.tti?.displayName).toBe('Grok Imagine');
+  });
+
+  // Corrected 2026-07-15. nano-gpt ACCEPTS `reasoning:{enabled:false}` for Grok
+  // 4.5 but only hides the trace: it reports `reasoning_tokens: 0` while the
+  // model reasons anyway and the user is billed for it (a one-token answer cost
+  // 198 completion tokens). Reasoning is mandatory upstream on every route, so
+  // the honest control is fixed-on — an off switch here would be a lie.
+  it('models grok-4.5 on nano-gpt as fixed-on, since its reasoning-off only hides', () => {
+    const grok45 = getProvider('nano-gpt')?.offerings.find((o) => o.canonicalRef === 'grok-4.5');
+    expect(grok45?.upstreamSlug).toBe('x-ai/grok-4.5');
+    expect(grok45?.profile.reasoning).toEqual({ mode: 'fixed-on' });
+    // The real xAI ceiling — 4.3's 1M was mirrored here by mistake.
+    expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
+    expect(grok45?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
   });
 
   it('nano-gpt has 3 web search offerings + 1 fetch offering with traits/tiers', () => {

@@ -129,8 +129,15 @@ function xaiParseChunk(
 
 export interface XaiAdapterOptions {
   vision: boolean;
+  /** The offering's reasoning control — source of truth for the profile AND for
+   * which `reasoning_effort` values may be emitted. Defaults to the Grok 4.3
+   * shape below. Grok 4.5 passes a control with `offStep: null`: it rejects
+   * `reasoning_effort: 'none'` with HTTP 400 and has no off switch at all
+   * (probed live 2026-07-15), so the adapter must never emit an off value. */
+  reasoning?: ReasoningControl;
 }
 
+/** Grok 4.3: low/medium/high, with `none` a genuine off (probed 2026-06-02). */
 const REASONING: ReasoningControl = {
   mode: 'steps',
   steps: ['low', 'medium', 'high'],
@@ -140,20 +147,35 @@ const REASONING: ReasoningControl = {
 const DEFAULT_ON_EFFORT = 'low';
 
 /**
- * Grok 4.3 via xAI's OpenAI-compatible `/chat/completions`. Probed live
- * 2026-06-02: reasoning is the native `reasoning_effort` param (no slug swap),
- * `none` disables, `low|medium|high` enable (`low` is xAI's default). Reasoning
- * streams on `delta.reasoning_content` and is ALREADY the human-readable summary
- * — there is no opaque encrypted blob on the Chat Completions surface, so it is
- * display-only and never replayed (`replayReasoning: false`).
+ * Grok 4.3 and 4.5 via xAI's OpenAI-compatible `/chat/completions`. Reasoning is
+ * the native `reasoning_effort` param (no slug swap) and streams on
+ * `delta.reasoning_content` as the human-readable summary — there is no opaque
+ * encrypted blob on this surface, so it is display-only and never replayed
+ * (`replayReasoning: false`).
+ *
+ * The two models differ ONLY in whether reasoning can be switched off, which the
+ * caller expresses through `opts.reasoning`:
+ *   - **Grok 4.3** (probed 2026-06-02): `none` disables, `low|medium|high`
+ *     enable (`low` is xAI's default) — the default control below.
+ *   - **Grok 4.5** (probed 2026-07-15): reasoning is MANDATORY. `none` is
+ *     rejected with HTTP 400 ("This model does not support `reasoning_effort`
+ *     value `none`"), and the unified `reasoning: {enabled:false}` object is
+ *     accepted but silently ignored — the model reasons regardless. Its control
+ *     therefore carries `offStep: null` and a disabled intent falls back to the
+ *     lightest effort rather than producing a wire error.
  *
  * Prompt caching uses the `x-grok-conv-id` request header: set per-request from
  * `req.cacheKey` (the chat's UUIDv7 id) so all turns of one chat route to the
  * same cache server. Usage via `stream_options.include_usage`.
  */
 export function xaiAdapter(slug: string, opts: XaiAdapterOptions): ModelAdapter {
+  const control = opts.reasoning ?? REASONING;
+  // The wire value meaning "off", or null when the model always reasons.
+  const offEffort = control.mode === 'steps' ? control.offStep : null;
+  const defaultEffort = control.mode === 'steps' ? control.defaultStep : DEFAULT_ON_EFFORT;
+
   const profile: ModelProfile = {
-    reasoning: REASONING,
+    reasoning: control,
     toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
     vision: opts.vision,
     replayReasoning: false,
@@ -169,8 +191,8 @@ export function xaiAdapter(slug: string, opts: XaiAdapterOptions): ModelAdapter 
         stream: true,
         stream_options: { include_usage: true },
         reasoning_effort: req.reasoning.enabled
-          ? (req.reasoning.effort ?? DEFAULT_ON_EFFORT)
-          : 'none',
+          ? (req.reasoning.effort ?? defaultEffort)
+          : (offEffort ?? defaultEffort),
       };
       if (req.tools?.length) {
         body.tools = req.tools.map((t) => ({

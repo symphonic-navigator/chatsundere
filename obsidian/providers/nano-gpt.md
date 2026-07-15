@@ -75,14 +75,28 @@ Azure slug.
 
 ## Grok (xAI upstream) — added 2026-06-28
 
-Grok 4.3 is offered on nano-gpt (`x-ai/grok-4.3`), routing to the xAI upstream
-(no TEE/ZDR, US jurisdiction). The reasoning quirk: nano-gpt steers Grok by the
-OpenAI-style **`reasoning` object** (`{enabled:false}` is a genuine off, probed
-live), **not** the slug-swap mechanism the GLM/DeepSeek families use, and **not**
-`reasoning_effort` (`reasoning_effort: none` does *not* disable it). So the Grok
-4.3 offering reuses the unified reasoning-object adapter (`openRouterAdapter`,
-no ZDR), not `nanoGptSlugSwapAdapter`. Tool calls arrive single-block. See
-[[../models/grok-4.3]].
+Grok 4.3 (`x-ai/grok-4.3`) and Grok 4.5 (`x-ai/grok-4.5`) are offered on
+nano-gpt, routing to the xAI upstream (no TEE/ZDR, US jurisdiction). The
+reasoning quirk: nano-gpt steers Grok by the OpenAI-style **`reasoning`
+object**, **not** the slug-swap mechanism the GLM/DeepSeek families use, and
+**not** `reasoning_effort` (`reasoning_effort: none` does *not* disable it). So
+both offerings reuse the unified reasoning-object adapter (`openRouterAdapter`,
+no ZDR), not `nanoGptSlugSwapAdapter`. Tool calls arrive single-block. For 4.3
+`{enabled:false}` is a genuine off (probed live). See [[../models/grok-4.3]].
+
+> ⚠️ **nano-gpt fakes the reasoning-off on Grok 4.5 — found 2026-07-15.** Unlike
+> 4.3, Grok 4.5 cannot be silenced upstream at all: xAI-direct rejects
+> `reasoning_effort: 'none'` (HTTP 400) and OpenRouter answers "Reasoning is
+> mandatory for this endpoint and cannot be disabled" (HTTP 400). nano-gpt
+> neither errors nor obeys — it **accepts `{enabled:false}`, hides the trace and
+> reports `reasoning_tokens: 0` while the model reasons anyway and the user is
+> billed for it** (a one-token answer `7` cost 198 completion tokens). The 4.5
+> offering is therefore `fixed-on`, and **nano-gpt's `reasoning_tokens` counter
+> is not trustworthy on this route** — the reasoning cost appears folded into
+> `completion_tokens` instead. This is a provider-behaviour caveat worth carrying
+> forward when curating any future nano-gpt model: verify an "off" against
+> `completion_tokens` and the visible answer length, never against the provider's
+> own reasoning counter. Full write-up in [[../models/grok-4.5]].
 
 **Grok 4.20 is NOT offered on nano-gpt.** nano-gpt serves only the
 non-reasoning variant — the bare slug does not reason even with

@@ -127,9 +127,13 @@ const DEFAULT_ON_EFFORT = 'medium';
  * underlying model onto a single unified `reasoning` request param and a single
  * `delta.reasoning` response channel. Probed live 2026-05-31:
  *   - `reasoning: { enabled: true, effort? }` enables; `{ enabled: false }` is a
- *     GENUINE off across all curated targets — including GLM-5.1, which cannot
- *     be silenced on Tensorix/wafer but is a clean toggle here. The unified
- *     param is honoured per route, so every curated offering is a `toggle`.
+ *     genuine off on every route that has an off — including GLM-5.1, which
+ *     cannot be silenced on Tensorix/wafer but is a clean toggle here.
+ *   - The exception is a reasoning-MANDATORY route: x-ai/grok-4.5 answers
+ *     `{enabled:false}` with HTTP 400 "Reasoning is mandatory for this endpoint
+ *     and cannot be disabled" (probed live 2026-07-15). Such an offering carries
+ *     a control with no off (`fixed-on`, or `steps` with `offStep: null`) and
+ *     the off branch is never taken — see `canDisableReasoning` below.
  *   - Reasoning text always arrives on `delta.reasoning` (never
  *     `reasoning_content`), even for models whose native field is
  *     `reasoning_content`. The parser prefers `reasoning` and falls back to
@@ -146,6 +150,14 @@ const DEFAULT_ON_EFFORT = 'medium';
  */
 export function openRouterAdapter(slug: string, opts: OpenRouterAdapterOptions): ModelAdapter {
   const reasons = opts.reasoning.mode !== 'none';
+  // Whether an off intent may be put on the wire at all. A `fixed-on` control,
+  // and a `steps` control with no off step, describe a model that ALWAYS
+  // reasons; OpenRouter rejects `{enabled:false}` on such a route with HTTP 400
+  // ("Reasoning is mandatory for this endpoint and cannot be disabled" — probed
+  // live 2026-07-15 on x-ai/grok-4.5), so the off branch must never be taken.
+  const canDisableReasoning =
+    opts.reasoning.mode === 'toggle' ||
+    (opts.reasoning.mode === 'steps' && opts.reasoning.offStep !== null);
   const profile: ModelProfile = {
     reasoning: opts.reasoning,
     toolCalls: { supported: true, streaming: true, concurrentWithReasoning: true },
@@ -175,14 +187,17 @@ export function openRouterAdapter(slug: string, opts: OpenRouterAdapterOptions):
       if (opts.zdr) body.provider = { zdr: true };
       // Reasoning steering via OpenRouter's unified `reasoning` object. Only
       // emitted for reasoning-capable offerings — a non-reasoning model gets no
-      // param. `{ enabled: false }` is a genuine off across every curated target.
+      // param. `{ enabled: false }` is a genuine off on every route that HAS an
+      // off; a reasoning-mandatory route (see `canDisableReasoning`) stays on.
       if (reasons) {
-        body.reasoning = req.reasoning.enabled
-          ? { enabled: true, effort: req.reasoning.effort ?? DEFAULT_ON_EFFORT }
-          : { enabled: false };
+        const on = req.reasoning.enabled || !canDisableReasoning;
+        const effort = req.reasoning.enabled
+          ? (req.reasoning.effort ?? DEFAULT_ON_EFFORT)
+          : DEFAULT_ON_EFFORT;
+        body.reasoning = on ? { enabled: true, effort } : { enabled: false };
         // OpenAI gates its reasoning summary behind the top-level flag; other
         // routes stream it unprompted, so this is opt-in per offering.
-        if (req.reasoning.enabled && opts.includeReasoning) body.include_reasoning = true;
+        if (on && opts.includeReasoning) body.include_reasoning = true;
       }
       if (req.tools?.length) {
         body.tools = req.tools.map((t) => ({

@@ -462,27 +462,37 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'llm',
   },
-  // Grok 4.5 via nano-gpt (the anonymising-router path). Same wire shape as 4.3:
-  // reasoning is a clean toggle on the unified `reasoning` object, tool calls
-  // arrive single-block when fired. Probed live 2026-07-09 — the conversation
-  // suite passes core 22/22 + vision 4/4 across both reasoning permutations. Two
-  // route quirks are documented but non-blocking: nano-gpt occasionally lets the
-  // model emit the tool call as markdown text rather than firing it (the known
-  // DSv4-Flash-style nondeterminism), and `tool_choice: 'required'` errors on
-  // this route (we never send it). nano-gpt routes to the xAI upstream → no
-  // ZDR/TEE, US jurisdiction.
+  // Grok 4.5 via nano-gpt (the anonymising-router path). Tool calls arrive
+  // single-block when fired. Two route quirks are documented but non-blocking:
+  // nano-gpt occasionally lets the model emit the tool call as markdown text
+  // rather than firing it (the known DSv4-Flash-style nondeterminism), and
+  // `tool_choice: 'required'` errors on this route (we never send it). nano-gpt
+  // routes to the xAI upstream → no ZDR/TEE, US jurisdiction.
+  //
+  // CORRECTED 2026-07-15 (was `GROK_TOGGLE`, max 1M). Grok 4.5 reasoning is
+  // MANDATORY on every route — xAI-direct rejects `reasoning_effort: 'none'`
+  // with HTTP 400 and OpenRouter answers "Reasoning is mandatory for this
+  // endpoint and cannot be disabled". nano-gpt neither errors nor obeys: it
+  // ACCEPTS `{enabled:false}`, hides the trace and reports
+  // `reasoning_tokens: 0` while the model reasons anyway and the user is billed
+  // for it (probed 2026-07-15: a one-token answer "7" cost 198 completion
+  // tokens). The 2026-07-09 curation read that fabricated counter as a genuine
+  // off — it is the textbook "off only hides" case, so the control is
+  // `fixed-on` and no off is offered. Window corrected to the real 500k, which
+  // xAI's own /models and OpenRouter both report (the 1M was mirrored from 4.3
+  // because nano-gpt reports no window of its own).
   {
     canonicalRef: 'grok-4.5',
     providerId: 'nano-gpt',
     upstreamSlug: 'x-ai/grok-4.5',
     adapter: { kind: 'catalogue', adapterId: 'nano-gpt:x-ai/grok-4.5' },
     profile: {
-      reasoning: GROK_TOGGLE,
+      reasoning: { mode: 'fixed-on' },
       toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
       vision: true,
       replayReasoning: false,
     },
-    context: { recommended: 200_000, max: 1_000_000 },
+    context: { recommended: 200_000, max: 500_000 },
     trust: { tee: false, zdr: false, jurisdiction: 'US' },
     freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
     source: 'curated',

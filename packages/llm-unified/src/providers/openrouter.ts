@@ -176,6 +176,27 @@ const offerings: Offering[] = [
     max: 2_000_000,
     zdr: true,
   }),
+  // Grok 4.5 — onboarded 2026-07-15, the day xAI cleared it for the EU. Unlike
+  // 4.3/4.20 this is NOT the family toggle: reasoning is mandatory, and
+  // OpenRouter says so honestly — `reasoning:{enabled:false}` returns HTTP 400
+  // "Reasoning is mandatory for this endpoint and cannot be disabled" (probed
+  // live 2026-07-15). Effort buckets are accepted, so the control is `steps`
+  // with `offStep: null`: full effort steering, no off. Window 500k (both xAI's
+  // own /models and OpenRouter report `context_length: 500000` — deliberate,
+  // this is a 1.5T model). ZDR verified live: `provider:{zdr:true}` routes to
+  // xAI (HTTP 200, `provider: "xAI"`), so the 🔒 badge is earned, not asserted.
+  openRouterOffering('grok-4.5', 'x-ai/grok-4.5', {
+    vision: true,
+    reasoning: {
+      mode: 'steps',
+      steps: ['low', 'medium', 'high'],
+      offStep: null,
+      defaultStep: 'low',
+    },
+    recommended: 200_000,
+    max: 500_000,
+    zdr: true,
+  }),
   // Claude Sonnet 5 — the one Claude offering NOT on nano-gpt (Chris, 2026-06-30).
   // OpenRouter reports a 1M context ceiling; recommended stays at our 200k Claude
   // sweet-spot (matches the nano-gpt Claude offerings). Vision ✅, reasoning is a

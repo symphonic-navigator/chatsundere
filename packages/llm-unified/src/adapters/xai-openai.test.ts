@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { CanonicalRequest } from '../adapter-contract.js';
+import type { ReasoningControl } from '../catalogue/types.js';
 import { xaiAdapter } from './xai-openai.js';
 
 const base: CanonicalRequest = {
@@ -59,6 +60,39 @@ describe('xaiAdapter buildRequest', () => {
     });
     expect(p.vision).toBe(true);
     expect(p.replayReasoning).toBe(false);
+  });
+});
+
+// Grok 4.5 has no off: `reasoning_effort: 'none'` is HTTP 400 on that route
+// (probed live 2026-07-15). The control's `offStep: null` says so, and the
+// adapter must honour it — emitting 'none' would break every disabled request.
+describe('xaiAdapter with a reasoning-mandatory control (Grok 4.5)', () => {
+  const control: ReasoningControl = {
+    mode: 'steps',
+    steps: ['low', 'medium', 'high'],
+    offStep: null,
+    defaultStep: 'low',
+  };
+  const a = xaiAdapter('grok-4.5', { vision: true, reasoning: control });
+
+  it('never emits reasoning_effort none, falling back to the default step', () => {
+    expect(a.buildRequest({ ...base, reasoning: { enabled: false } }).body.reasoning_effort).toBe(
+      'low',
+    );
+  });
+
+  it('still honours an explicit effort and the default when enabled', () => {
+    expect(
+      a.buildRequest({ ...base, reasoning: { enabled: true, effort: 'high' } }).body
+        .reasoning_effort,
+    ).toBe('high');
+    expect(a.buildRequest({ ...base, reasoning: { enabled: true } }).body.reasoning_effort).toBe(
+      'low',
+    );
+  });
+
+  it('carries the mandatory-reasoning control on the profile', () => {
+    expect(a.profile.reasoning).toEqual(control);
   });
 });
 

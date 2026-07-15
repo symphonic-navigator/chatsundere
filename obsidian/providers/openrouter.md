@@ -48,10 +48,13 @@ forwards `extraHeaders: wire.headers`).
 
 **Probed live 2026-06-28 (Grok):** `x-ai/grok-4.3` and `x-ai/grok-4.20` both
 route ZDR cleanly — HTTP 200, `provider: "xAI"` (xAI now offers ZDR on
-OpenRouter). These two offerings therefore carry `trust.zdr: true` and the 🔒
-badge; the adapter (`openRouterAdapter`, `zdr` option) sends the flag on every
-request, driven by the offering's `trust.zdr` so the claim is **enforced on the
-wire, never merely asserted**.
+OpenRouter). **`x-ai/grok-4.5` joins them (probed live 2026-07-15)** — same
+result, HTTP 200 and `provider: "xAI"`. These three offerings therefore carry
+`trust.zdr: true` and the 🔒 badge; the adapter (`openRouterAdapter`, `zdr`
+option) sends the flag on every request, driven by the offering's `trust.zdr` so
+the claim is **enforced on the wire, never merely asserted**. Since xAI-direct
+offers no ZDR, OpenRouter remains **the** privacy route for the whole Grok
+family.
 
 **Fail-closed (proven, not assumed).** When no compliant endpoint exists,
 OpenRouter returns **HTTP 404** ("No allowed providers are available for the
@@ -75,12 +78,22 @@ OpenRouter exposes a **unified `reasoning` request parameter** and, crucially,
   `reasoning_content` (GLM, Kimi). OpenRouter rewrites it. The adapter reads
   `reasoning` first and falls back to `reasoning_content` only defensively, in
   case a future route leaks the native field.
-- **`{ enabled: false }` is a GENUINE off for every curated target** (0 reasoning
-  tokens, empty `reasoning` channel — probed live 2026-05-31). This is the key
-  divergence from Tensorix/wafer: **GLM-5.1 and Kimi-K2.6, which are `fixed-on`
-  on those providers (their off only hides), toggle cleanly on OpenRouter**
-  because OpenRouter's unified param is honoured per route. Every OpenRouter
-  offering is therefore a **`toggle`** (`defaultOn: true`).
+- **`{ enabled: false }` is a GENUINE off wherever the route has an off** (0
+  reasoning tokens, empty `reasoning` channel — probed live 2026-05-31). This is
+  the key divergence from Tensorix/wafer: **GLM-5.1 and Kimi-K2.6, which are
+  `fixed-on` on those providers (their off only hides), toggle cleanly on
+  OpenRouter** because OpenRouter's unified param is honoured per route.
+- **The exception — reasoning-mandatory routes (found 2026-07-15).** Some models
+  cannot be silenced upstream at all, and OpenRouter says so **honestly** rather
+  than faking compliance: `x-ai/grok-4.5` answers `{enabled:false}` with **HTTP
+  400 "Reasoning is mandatory for this endpoint and cannot be disabled"**. Such
+  an offering carries a control with no off (`fixed-on`, or `steps` with
+  `offStep: null`) and `openRouterAdapter` never takes the off branch. This
+  honesty is worth noting as a provider virtue: on the same model nano-gpt
+  accepts the off, hides the trace, reports `reasoning_tokens: 0` and bills the
+  user for the reasoning anyway (see [[../models/grok-4.5]]).
+- Every *other* OpenRouter offering is a **`toggle`** (`defaultOn: true`), bar
+  the two effort-steerable exceptions (Claude Sonnet 5, the ChatGPT family).
 
 Per-target reasoning probe (single neutral prompt, reasoning on vs off):
 
