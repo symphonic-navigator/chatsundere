@@ -43,8 +43,43 @@ describe('useMemoryActions', () => {
     await act(async () => {
       await result.current.learnNow();
     });
-    expect(runExtraction).toHaveBeenCalledWith({ persona: { id: 'p1' } }, { force: true });
+    expect(runExtraction).toHaveBeenCalledWith(
+      { persona: { id: 'p1' } },
+      { force: true, onRawResponse: expect.any(Function) },
+    );
     await waitFor(() => expect(result.current.learnState.status).toBe('idle'));
+  });
+
+  it('captures the last model answer onto the error state for the debug view', async () => {
+    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    tryAcquireMemoryLock.mockReturnValue(true);
+    const answer = { content: '', reasoning: 'thought but said nothing', finishReason: 'stop' };
+    runDreaming.mockImplementation(
+      async (_a: unknown, opts: { onRawResponse?: (r: unknown) => void }) => {
+        opts.onRawResponse?.(answer);
+        throw new Error('one-shot returned empty content');
+      },
+    );
+    const { result } = renderHook(() => useMemoryActions('c1'));
+    await act(async () => {
+      await result.current.consolidateNow();
+    });
+    await waitFor(() => expect(result.current.consolidateState.status).toBe('error'));
+    expect(result.current.consolidateState.response).toEqual(answer);
+  });
+
+  it('leaves response undefined when no model answer was captured (e.g. timeout)', async () => {
+    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    tryAcquireMemoryLock.mockReturnValue(true);
+    runDreaming.mockImplementation(async () => {
+      throw new DOMException('The operation timed out.', 'TimeoutError');
+    });
+    const { result } = renderHook(() => useMemoryActions('c1'));
+    await act(async () => {
+      await result.current.consolidateNow();
+    });
+    await waitFor(() => expect(result.current.consolidateState.status).toBe('error'));
+    expect(result.current.consolidateState.response).toBeUndefined();
   });
 
   it('consolidateNow sets error when resolution fails', async () => {

@@ -200,6 +200,19 @@ describe('runDreaming (batched)', () => {
     expect(await countJournal('p1', 'committed')).toBe(5);
   });
 
+  it('forwards the raw model answer to onRawResponse (debug-view capture)', async () => {
+    await seedCommitted(5);
+    const answer = { content: '', reasoning: 'thought hard', finishReason: 'stop' };
+    // The one-shot call fires its onRawResponse, then the empty content throws.
+    runOneShotCompletion.mockImplementation(async (a: { onRawResponse?: (r: unknown) => void }) => {
+      a.onRawResponse?.(answer);
+      throw new Error('one-shot returned empty content');
+    });
+    const onRawResponse = vi.fn();
+    await expect(runDreaming(args(), { force: true, onRawResponse })).rejects.toThrow();
+    expect(onRawResponse).toHaveBeenCalledWith(answer);
+  });
+
   it('respects the threshold gate without force', async () => {
     await seedCommitted(DREAM_THRESHOLD - 1);
     expect(await runDreaming(args())).toBe(false);

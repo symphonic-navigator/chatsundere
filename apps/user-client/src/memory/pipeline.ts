@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
   type Offering,
+  type OneShotRawResponse,
   type ProviderConfig,
   type ProviderDefinition,
   type WireMessage,
@@ -48,12 +49,21 @@ export interface MemoryPipelineArgs {
   offering: Offering;
 }
 
+/**
+ * Optional diagnostics hook: fired with the raw model response (content +
+ * reasoning, split) on every parsed call. The manual memory actions use it to
+ * power the "show the model's answer" debug view when a consolidation fails —
+ * chiefly to reveal a model that answered with reasoning but empty content.
+ */
+export type MemoryRawResponse = OneShotRawResponse;
+
 async function callModel(
   args: MemoryPipelineArgs,
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
   timeoutMs: number,
+  onRawResponse?: (raw: MemoryRawResponse) => void,
 ): Promise<string> {
   const messages: WireMessage[] = [
     { role: 'system', content: systemPrompt },
@@ -70,13 +80,14 @@ async function callModel(
     // reasoning channel (see title-generator.ts). Fixed-on models still survive.
     bodyExtras: { temperature: 0.3, max_tokens: maxTokens, reasoning: { enabled: false } },
     onRetry: (e) => console.warn(formatRetryEvent(e)),
+    onRawResponse,
   });
 }
 
 /** Extract memories from the chat's unextracted user messages. Returns entries added. */
 export async function runExtraction(
   args: MemoryPipelineArgs,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; onRawResponse?: (raw: MemoryRawResponse) => void } = {},
 ): Promise<number> {
   const freshChat = await getClientDataDb().chats.get(args.chat.id);
   const cursor = freshChat?.lastExtractedMessageId ?? null;
@@ -107,6 +118,7 @@ export async function runExtraction(
     'Extract now and return only the JSON array.',
     1024,
     EXTRACTION_TIMEOUT_MS,
+    opts.onRawResponse,
   );
   const fresh = dropDuplicates(
     parseExtractionOutput(raw),
@@ -150,7 +162,11 @@ export class MemoryInvalidOutputError extends Error {
  */
 export async function runDreaming(
   args: MemoryPipelineArgs,
-  opts: { force?: boolean; onSlice?: () => void } = {},
+  opts: {
+    force?: boolean;
+    onSlice?: () => void;
+    onRawResponse?: (raw: MemoryRawResponse) => void;
+  } = {},
 ): Promise<boolean> {
   const committedCount = await countJournal(args.persona.id, 'committed');
   if (committedCount === 0) return false;
@@ -173,6 +189,7 @@ export async function runDreaming(
       'Output only the new memory body text now.',
       4096,
       DREAM_TIMEOUT_MS,
+      opts.onRawResponse,
     );
     const newBody = raw.trim();
     if (!validateMemoryBody(newBody, MEMORY_BODY_MAX_TOKENS)) throw new MemoryInvalidOutputError();

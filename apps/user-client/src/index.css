@@ -4400,6 +4400,18 @@ h1 {
   align-items: center;
   width: 100%;
 }
+/* Quiet text-link below Retry — a diagnostic affordance, not a primary action.
+   Higher specificity than `.memory-page-actions button` so the bordered button
+   base is overridden. */
+.memory-page-actions .memory-page-inspect {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  opacity: 0.85;
+}
 .memory-page-version-list {
   display: flex;
   flex-direction: column;
