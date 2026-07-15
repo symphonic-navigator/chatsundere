@@ -71,6 +71,27 @@ describe('parseCatalogueEntry', () => {
     expect(r.ok ? r.entry.canonical.modelInstructions : undefined).toBe('Prefer prose.');
   });
 
+  it('round-trips unsuitableAsBackgroundWorker (present true / present false / absent)', () => {
+    const flagged = structuredClone(validEntry);
+    (flagged.canonical as { unsuitableAsBackgroundWorker?: boolean }).unsuitableAsBackgroundWorker =
+      true;
+    const rf = parseCatalogueEntry(flagged);
+    expect(rf.ok).toBe(true);
+    expect(rf.ok ? rf.entry.canonical.unsuitableAsBackgroundWorker : undefined).toBe(true);
+
+    const explicitFalse = structuredClone(validEntry);
+    (
+      explicitFalse.canonical as { unsuitableAsBackgroundWorker?: boolean }
+    ).unsuitableAsBackgroundWorker = false;
+    const rfalse = parseCatalogueEntry(explicitFalse);
+    expect(rfalse.ok).toBe(true);
+    expect(rfalse.ok ? rfalse.entry.canonical.unsuitableAsBackgroundWorker : true).toBe(false);
+
+    // Absent stays absent (⇒ suitable).
+    const r = parseCatalogueEntry(validEntry);
+    expect(r.ok && r.entry.canonical.unsuitableAsBackgroundWorker).toBeUndefined();
+  });
+
   it('rejects a structurally invalid entry', () => {
     expect(parseCatalogueEntry({ canonical: { id: 'x' } }).ok).toBe(false);
   });

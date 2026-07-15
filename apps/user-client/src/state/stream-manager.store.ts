@@ -37,6 +37,10 @@ import {
 } from '../data/attachments.js';
 import { providerApiKeySlot } from '../data/providers.js';
 import { QK } from '../data/queryKeys.js';
+import {
+  type ChoreCallBundle,
+  resolveBackgroundBundle,
+} from '../data/resolve-background-offering.js';
 import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildWebTools } from '../integrations/web/build-web-tools.js';
@@ -126,6 +130,10 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
   /** Per-send image-generation context, resolved in the send path which holds
    *  the MasterKey. null/absent = no generate_image tool. */
   images?: import('../tools/generate-image.js').ImageToolContext | null;
+  /** Call bundle for this send's unattended background chores (title, memory,
+   *  compaction): the persona's background helper when set + reachable, else the
+   *  persona's own model. Absent ⇒ chores use the interactive model. */
+  background?: ChoreCallBundle;
 };
 
 export type RegenerateStreamArgs = StartArgs & {
@@ -182,15 +190,30 @@ interface StreamManagerStore {
   ) => Promise<import('../boot/client-data-db.js').CompactionCheckpointRow | null>;
 }
 
-/** Extract the provider/chat fields shared by every `runCompaction` call site. */
+/** The call bundle for this send's background chores (title, memory, compaction):
+ *  the persona's background helper when resolved in the send path, else the
+ *  persona's own interactive model. */
+function choreBundle(args: StartArgs): ChoreCallBundle {
+  return (
+    args.background ?? {
+      provider: args.provider,
+      providerConfig: args.providerConfig,
+      apiKey: args.apiKey,
+      offering: args.offering,
+    }
+  );
+}
+
+/** Extract the provider/chat fields shared by every `runCompaction` call site.
+ *  The CALL runs on the chore bundle (helper when set); the target window stays
+ *  the persona's own model via `windowOffering`, since compaction exists to keep
+ *  the chat inside the interactive model's context, not the helper's. */
 function compactionArgsFrom(args: StartArgs): Omit<CompactionArgs, 'trigger'> {
   return {
     chat: args.chat,
     persona: args.persona,
-    provider: args.provider,
-    providerConfig: args.providerConfig,
-    apiKey: args.apiKey,
-    offering: args.offering,
+    ...choreBundle(args),
+    windowOffering: args.offering,
   };
 }
 
@@ -217,10 +240,7 @@ function fireMemoryPipeline(args: StartArgs): void {
   void runMemoryPipeline({
     persona: args.persona,
     chat: args.chat,
-    provider: args.provider,
-    providerConfig: args.providerConfig,
-    apiKey: args.apiKey,
-    offering: args.offering,
+    ...choreBundle(args),
   })
     .then(async () => {
       // Refresh the badge/overlay after background writes (no useLiveQuery in this project).
@@ -261,10 +281,7 @@ async function fireTitleGen(args: StartArgs, finalContentBlocks: ContentBlock[])
     await generateTitleAsync({
       chat: args.chat,
       persona: args.persona,
-      provider: args.provider,
-      providerConfig: args.providerConfig,
-      apiKey: args.apiKey,
-      offering: args.offering,
+      ...choreBundle(args),
       firstUserMessage: args.userText,
       firstPersonaResponse,
       globalInstructions: args.globalInstructions,
@@ -323,13 +340,19 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
         providerDef.corsHint === 'requires-proxy' ? { kind: 'cors-proxy' } : { kind: 'direct' },
     };
 
+    // Summarise on the background helper when set (else the persona's own model);
+    // the target window stays the persona's own model via `windowOffering`.
+    const bundle = await resolveBackgroundBundle(
+      persona,
+      { provider: providerDef, providerConfig, apiKey, offering },
+      { db, mk },
+    );
+
     const compactionArgs: CompactionArgs = {
       chat,
       persona,
-      provider: providerDef,
-      providerConfig,
-      apiKey,
-      offering,
+      ...bundle,
+      windowOffering: offering,
       trigger: 'manual',
     };
 

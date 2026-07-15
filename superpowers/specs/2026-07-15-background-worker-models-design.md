@@ -2,8 +2,10 @@
 
 **Date:** 2026-07-15
 **Author:** Liz
-**Status:** Laura spec-pass complete (1 HARD + 5 soft, all folded) — awaiting
-Chris sign-off, then plan → TDD.
+**Status:** IMPLEMENTED. Laura spec-pass (1 HARD + 5 soft, all folded) →
+built → **Laura pre-squash CLEAR (no hard defects; 2 non-blocking softs)**.
+Gates green: typecheck 14/14, build 9/9, llm-unified 425/425, full user-client
+vitest at the doorbell-flake baseline, Biome clean.
 **Audit path:** Not Larissa (no crypto/auth/sync/proxy). Laura spec-pass done
 (a new user-reachable persona field, a conditional warning, and a greeting toggle).
 

@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../../components/AutoSizeTextarea.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
+import { greetingHelperGate } from '../../../lib/persona-hub.js';
 import { usePersonaEditing } from './use-persona-editing.js';
 
 /**
@@ -67,6 +68,12 @@ export function PersonaRoleplay(): JSX.Element {
   const back = `/app/persona/${id}`;
   // Amber cue: greeting is on but rules are empty — the opener cannot compose anything.
   const greetingInvalid = persona.greetingEnabled && greetingText.trim() === '';
+
+  // Greeting-helper toggle: the background helper (set on the persona's main
+  // screen) may write the opener too. Precedence-ordered disabled reason names
+  // the true first blocker: roleplay off → greeting off → no helper set.
+  const { disabled: greetingHelperDisabled, reason: greetingHelperReason } =
+    greetingHelperGate(persona);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -193,6 +200,40 @@ export function PersonaRoleplay(): JSX.Element {
               Write the greeting rules, or turn the greeting off.
             </p>
           ) : null}
+
+          {/* Greeting-helper toggle — disabled-with-reason until a helper is set. */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm text-paper">Let the helper write the greeting</div>
+              <p className="text-[11px] text-paper-soft">
+                Use the persona's background helper for the opener too, not just the background
+                chores.
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Let the helper write the greeting"
+              aria-pressed={persona.greetingUsesBackgroundModel ?? false}
+              disabled={greetingHelperDisabled}
+              title={greetingHelperReason}
+              onClick={() =>
+                void patch({
+                  greetingUsesBackgroundModel: !(persona.greetingUsesBackgroundModel ?? false),
+                })
+              }
+              className={`h-6 w-12 shrink-0 rounded-full border ${
+                persona.greetingUsesBackgroundModel
+                  ? 'border-paper bg-paper/30'
+                  : 'border-paper-soft/30 bg-white/5'
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <span
+                className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                  persona.greetingUsesBackgroundModel ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
     </PageScaffold>

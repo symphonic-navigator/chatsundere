@@ -3,13 +3,22 @@
 import {
   type CanonicalModel,
   type Offering,
+  effectiveFreedom,
   getProvider,
+  isUnsuitableAsBackgroundWorker,
   listCanonicals,
   listOfferings,
 } from '@chatsundere/llm-unified';
 import type { ProviderRow } from '../../boot/client-data-db.js';
 
-export type ModelFilter = 'all' | 'vision';
+/**
+ * `'background-worker'` is the persona's helper slot: it excludes models flagged
+ * unsuitable as background workers (they cannot be their own backup) and any
+ * offering resolving to *restricted* freedom. `'free'` and `'unknown'` stay —
+ * only proven censorship is filtered (Chris 2026-07-15), because a helper can be
+ * steered by indirect interpretation, not just outright refusal.
+ */
+export type ModelFilter = 'all' | 'vision' | 'background-worker';
 
 /** A configured, filter-matching deployment of one canonical model. */
 export interface PickerOffering {
@@ -103,14 +112,29 @@ export function buildPickerData(
     providers.filter((p) => p.enabled).map((p) => [p.templateId, p] as const),
   );
   const usable = new Set(configuredTemplateIds);
-  const matchesFilter = (o: Offering): boolean => filter === 'all' || o.profile.vision;
+  // Vision axis only; the background-worker freedom axis needs the canonical in
+  // scope, so it is applied inside the loop below.
+  const matchesVision = (o: Offering): boolean => filter !== 'vision' || o.profile.vision;
 
   const models: PickerModel[] = [];
   let hiddenCount = 0;
 
   for (const canonical of listCanonicals()) {
+    // A think-then-stop model cannot run its own persona's chores — it is exactly
+    // what the helper slot exists to work around.
+    if (filter === 'background-worker' && isUnsuitableAsBackgroundWorker(canonical)) continue;
+
     // `listOfferings` is already rank-sorted (TEE → freedom → priority → confidence).
-    const matching = listOfferings(canonical.id).filter(matchesFilter);
+    const matching = listOfferings(canonical.id).filter((o) => {
+      if (!matchesVision(o)) return false;
+      if (filter === 'background-worker') {
+        // Exclude only proven censorship; keep 'free' and 'unknown'.
+        return (
+          effectiveFreedom(canonical.freedomOriented, o.freedomOrientedDeployment) !== 'restricted'
+        );
+      }
+      return true;
+    });
     if (matching.length === 0) continue; // not relevant to this filter at all
 
     const offers: PickerOffering[] = [];
