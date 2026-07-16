@@ -8,7 +8,47 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-15 (later) — **GROK 4.5 CURATED ON xAI-DIRECT +
+**Last updated:** 2026-07-16 — **INKLING CURATED (Thinking Machines' first
+public model — a community first) + TWO HONEST-SURFACING UX UNITS — on `master`
+(`a78ab8d6` / `1cc82386` / `c6d935b7`), NOT pushed — Chris pushes after his
+device check.** Three squashed units. **(1) Curate Inkling on nano-gpt**
+(`thinkingmachines/inkling`, 975B/41B sparse MoE, multimodal, Apache-2.0, routed
+to Baseten): reasoning is a **genuine toggle** on the unified reasoning object
+(reused via `openRouterAdapter`), `{enabled:false}` is a real off; tool calls
+single-block; vision works. The headline finding: **nano-gpt withholds Inkling's
+reasoning trace text on the OpenAI-compatible route** — it bills `reasoning_tokens`
+but streams no `reasoning` channel — a **provider-side passthrough gap for this
+new model**, proven because `zai-org/glm-5.1:thinking` surfaces its trace on the
+identical route and nano-gpt's own web UI shows Inkling's trace. Chris pinged
+Milan (nano-gpt) 2026-07-16; a fix is expected within days. **(2) A general
+`reasoningTraceHidden` capability**: when an offering reasons but no trace
+surfaces, the stream engine synthesises a terminal `(hidden reasoning, n tokens)`
+marker (above a 100-token floor; nothing on a trivial "hi" or a failed turn)
+rather than an empty bubble — Inkling is the sole consumer today. **When nano-gpt
+wires the passthrough, drop the flag** (the suite's `reasoning-hidden-billed`
+assertion fails the day a trace appears, self-signalling the flip). Grok 4.5 was
+expected to qualify but a live probe shows it *does* surface a summary — **not** a
+hidden case, no flag. **(3) A new `Uncensored?` badge** makes the `unknown`
+freedom state visible in the picker (muted slate, axis in the visible label for
+touch), so an unassessed model no longer reads as a positive all-clear.
+**Freedom deferred**: Inkling's `freedomOriented` is `null` (US model, leaky-but-
+present guardrails per its own card) — we await **Lex's safetymaxxed bench** (once
+Inkling reaches OpenRouter) rather than guess. **Recorded quirk**: Inkling is
+tool-eager — offered `generate_image` *and* asked to describe an image it fires
+the tool; the suite's vision run drops the tool to isolate the input pipe.
+**Larissa:** not her path (catalogue + adapters; no crypto/auth/sync/proxy).
+**Laura:** spec-pass (two hard defects fixed — axis-in-label, `Unrated` dropped)
++ pre-squash **PASS**, one soft finding (`Uncensored?` residual-reassurance,
+consciously arbitrated — watch Ksena). Gates: live suite 2026-07-16
+(`run-inkling-suite.ts`) core **22/22** + vision **4/4** (tools-free); `pnpm
+typecheck --force` **14/14**; Biome clean; vitest = the 8 Node-localStorage
+baseline + one stream-manager load-flake (passes isolated), **no regression**.
+Full write-up: [[models/inkling]]; design + Laura passes:
+[[../superpowers/specs/2026-07-16-inkling-ux]]. Device-verification steps for
+Chris are in the spec's Manual-verification section. **Restart the dev stack
+before testing** (Vite HMR ignores `packages/*`).
+
+**Prior — 2026-07-15 (later) — GROK 4.5 CURATED ON xAI-DIRECT +
 OPENROUTER, AND ITS FAKED REASONING-OFF FIXED — on `master` (`605e9ff2`,
 fast-forwarded from `feat/grok-4.5`, which is now removed), NOT pushed — Chris
 pushes after his device check.** xAI cleared Grok 4.5 for the EU today, the sole blocker
@@ -1287,17 +1327,27 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**⏰ FIRST THING — REMIND CHRIS (his explicit request): TEST the native transfer
-(import/export) end-to-end. "Großes Testen".** The feature is now rebased onto
-master on top of the deployed **v0.1.2** line, NOT pushed yet — Chris's push also
-brings `origin/master` up to the deploy tags (the branch ref had lagged 17
-commits behind `v0.1.2`). Run the device checklist (Current entry / spec §9):
-export Fable (images off) → import on a fresh client → history + reasoning +
-**memory + avatar present, pills/tool-calls survive**, model prompts, post-import
-note (import now lands in the persona **hub**); re-import → explanatory collision
-warning → "Create anyway" makes a second Fable; library export → import **adopts
-instantly, no embedding spinner**. The **emoji-shower** + **context-pre-seeding**
-specs/plans also rebased onto master (implementation still pending).
+**⏰ FIRST THING — INKLING: push + device-verify.** The three Inkling units are on
+`master` (`a78ab8d6` / `1cc82386` / `c6d935b7`), NOT pushed — Chris pushes after
+the device check. **Restart the dev stack first** (Vite HMR ignores `packages/*`,
+so a catalogue change needs a restart). Walk the spec's Manual-verification:
+picker shows Inkling's muted `Uncensored?` pill (not red, not absent); reasoning
+on + a real prompt → `(hidden reasoning, n tokens)` marker at the top; trivial
+"hi" → no marker; reasoning off → no marker; tools + vision work.
+
+**Two Inkling follow-ups (tracked):**
+- **When nano-gpt (Milan) wires Inkling's reasoning passthrough** — expected
+  within days — **drop `reasoningTraceHidden`** on the offering and Inkling
+  becomes an ordinary visible-reasoning toggle with full CoT reverb. The suite's
+  `reasoning-hidden-billed` assertion fails the day a trace appears, self-
+  signalling the flip; re-run `run-inkling-suite.ts` to confirm.
+- **Lex's safetymaxxed bench** (once Inkling reaches OpenRouter) → revisit
+  Inkling's `freedomOriented` (currently `null` → `Uncensored?`) with his results
+  instead of guessing. The general `Uncensored?` badge now exists to carry that
+  honesty for any unassessed model.
+
+**Active workstream remains the backend** (Block 6, proxy + sync → v0.3.0) — see
+[[STATUS-BACKEND]]. Inkling was a curation by-catch on the client/catalogue side.
 
 **→ UI/UX makeover — essentially complete.** All surfaces have landed on master
 via the design-language pass and the deployed v0.1.x line: design language,
