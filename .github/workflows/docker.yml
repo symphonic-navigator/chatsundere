@@ -65,7 +65,7 @@ jobs:
         with:
           images: ${{ env.FRONTEND_IMAGE }}
           # `latest` moves ONLY on a v*.*.* tag push, never on a plain master
-          # push — Watchtower watches :latest, so a release is a conscious tag,
+          # push — WUD watches :latest, so a release is a conscious tag,
           # not every merge. A master push still builds + pushes a sha-/branch-
           # tagged image to keep the build green, but leaves the live alpha alone.
           tags: |
@@ -169,7 +169,7 @@ jobs:
         with:
           images: ${{ env.BACKEND_IMAGE }}
           # `latest` moves ONLY on a v*.*.* tag push, never on a plain master
-          # push — Watchtower watches :latest, so a release is a conscious tag,
+          # push — WUD watches :latest, so a release is a conscious tag,
           # not every merge. A master push still builds + pushes a sha-/branch-
           # tagged image to keep the build green, but leaves the live alpha alone.
           tags: |

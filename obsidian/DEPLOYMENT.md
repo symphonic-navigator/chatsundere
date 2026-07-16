@@ -224,7 +224,7 @@ prompts for them interactively rather than expecting you to hand-edit them:
 
 | Var | Format | Secret | Notes |
 |---|---|---|---|
-| `INSTANCE_NAME` | lowercase alphanumeric + hyphen (`chatsundere`) | no | namespaces the compose project, Traefik router/service/middleware names, the internal network, and the Watchtower scope — set a different value per stack when running multiple Chatsundere instances behind one Traefik (see the note at the end of §5) |
+| `INSTANCE_NAME` | lowercase alphanumeric + hyphen (`chatsundere`) | no | namespaces the compose project, Traefik router/service/middleware names, and the internal network — set a different value per stack when running multiple Chatsundere instances behind one Traefik (see the note at the end of §5). The bundled WUD updater has no per-instance scope — run only one WUD per host. |
 | `BASE_DOMAIN` | e.g. `chatsundere.me` | no | the domain every `HOST_*` is derived from |
 | `HOST_APP` | `app.<domain>` | no | frontend + admin-client (`/admin/`) |
 | `HOST_AUTH` | `auth.<domain>` | no | |
@@ -273,7 +273,7 @@ cd deploy
 It prompts for `BASE_DOMAIN`, `INSTANCE_NAME` (default `chatsundere`),
 `TRAEFIK_NETWORK` (default `traefik`), `TRAEFIK_CERTRESOLVER` (default
 `letsencrypt`), whether to include Prometheus + Grafana, whether to include a
-scoped Watchtower, and — optionally — per-host overrides for
+bundled WUD auto-updater, and — optionally — per-host overrides for
 `HOST_APP`/`HOST_AUTH`/`HOST_SYNC`/`HOST_PROXY` if you don't want the
 `app./auth./sync./proxy.<domain>` convention (§4.5).
 
@@ -289,7 +289,7 @@ What it renders into `out/`:
   once, on the server, by `install.sh`, so they never sit on a laptop or
   transit over `scp` unnecessarily. Written `chmod 600`.
 - **`docker-compose.yml`** — rendered from `deploy/compose.template.yml` with
-  the monitoring/Watchtower blocks trimmed per your y/N answers. It pins
+  the monitoring/WUD blocks trimmed per your y/N answers. It pins
   `name: ${INSTANCE_NAME}` at the top level, which fixes the Compose project
   name (and therefore the internal network's real name,
   `<INSTANCE_NAME>_chatsundere`) regardless of the directory `install.sh` runs
@@ -311,8 +311,20 @@ scp -r out/ user@your-vps:/opt/chatsundere
 **Running multiple instances on one host.** Give each Chatsundere stack
 sharing a host/Traefik a distinct `INSTANCE_NAME` (and distinct hostnames).
 Everything else — the compose project, the Traefik router/service/middleware
-names, the internal docker network, and the Watchtower scope — namespaces off
-that value automatically, so the stacks never collide.
+names, and the internal docker network — namespaces off that value
+automatically, so the stacks never collide. The one exception is the bundled
+WUD auto-updater: WUD has no per-instance scope, so run only ONE WUD per host
+— on a multi-instance host, decline the bundled WUD and let a single
+host-level WUD watch every stack via the `wud.watch` labels.
+
+**Host-WUD topology.** The alpha host runs a single host-level WUD
+(`infra/compose.wud.yml`), not one WUD per stack. Each stack opts individual
+containers in via the `wud.watch=true` label (plus `wud.watch.digest=true` for
+the mutable `:latest` tag), rather than the generator rendering a
+per-instance, scoped updater. A legacy single-app Watchtower may continue to
+run untouched alongside the host WUD — the two use disjoint label namespaces,
+so they do not interfere with each other — while each app migrates from its
+own Watchtower onto the shared host WUD incrementally, one stack at a time.
 
 *Next step:* chapter 6 installs and bootstraps the stack on the server.
 
@@ -352,10 +364,10 @@ either no-ops or converges on a re-run. What it does, in order:
    step succeeds.** Skipped on re-run once a real value is present.
 5. **Application services.** A single `docker compose up -d` brings up every
    service the rendered compose file defines — `auth`, `sync`, `proxy`,
-   `frontend`, and monitoring/Watchtower if you opted in. **auth and sync
+   `frontend`, and monitoring/WUD if you opted in. **auth and sync
    migrate-then-serve in their own compose command**
    (`cd apps/<svc>-service && bun run db:migrate && exec bun src/index.ts`) —
-   `index.ts` itself runs no migrator. So every deploy, and every Watchtower
+   `index.ts` itself runs no migrator. So every deploy, and every WUD
    image pull, self-migrates idempotently; there is **no separate manual
    migration step on upgrade**. The sync-service also mints its
    `instance_epoch` on its first-ever migrate.
@@ -396,10 +408,10 @@ health and `sync_blob_inconsistency_total` for DB/S3 skew.
 identifiers. S3 credentials are redacted at the logger even if an env-shaped
 object is ever logged.
 
-**Upgrades.** Pull the new tag-gated image and recreate; `:latest` only moves on a
-`v*.*.*` release tag, so scope any Watchtower to conscious releases.
+**Upgrades.** Pull the new tag-gated image and recreate — WUD watches `:latest`,
+which only moves on a conscious `v*.*.*` release tag.
 
-**Keep MinIO current — a conscious duty, not a Watchtower job.** MinIO stopped
+**Keep MinIO current — a conscious duty, not a WUD job.** MinIO stopped
 publishing community container images in October 2025; `deploy/compose.template.yml`
 pins the newest published image (`RELEASE.2025-09-07T16-13-09Z`), and later security
 fixes — including the CVE-2025-62506 session-policy fix in

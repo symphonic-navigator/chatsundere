@@ -107,7 +107,7 @@ echo "== Bring up application services =="
 # auth + sync migrate-then-serve via their compose command (idempotent), so no
 # separate migration step is needed here; the /readyz wait below tolerates the
 # one-off migrate delay on first boot. A bare `up -d` (no service names) already
-# brings up every service the compose file defines, incl. monitoring/watchtower
+# brings up every service the compose file defines, incl. monitoring/WUD
 # when the generator rendered them in, so one call covers the whole stack.
 "${COMPOSE[@]}" up -d
 

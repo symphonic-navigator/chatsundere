@@ -36,7 +36,7 @@ TRAEFIK_NETWORK=${TRAEFIK_NETWORK:-traefik}
 read -rp "Traefik cert resolver name [letsencrypt]: " TRAEFIK_CERTRESOLVER
 TRAEFIK_CERTRESOLVER=${TRAEFIK_CERTRESOLVER:-letsencrypt}
 read -rp "Include Prometheus + Grafana monitoring? [y/N]: " MON
-read -rp "Include a scoped Watchtower for auto-updates? [Y/n]: " WT
+read -rp "Include a bundled WUD auto-updater? [Y/n]: " WT
 
 HOST_APP="app.$BASE_DOMAIN"
 HOST_AUTH="auth.$BASE_DOMAIN"
@@ -102,12 +102,12 @@ done < deployment.env.template
 # Marker lines are always dropped; skip/skipw gate the lines *between* them.
 # Defaults fall out of the regexes: an empty MON answer doesn't match ^[Yy]
 # (monitoring skipped, matching the "[y/N]" prompt default), and an empty WT
-# answer doesn't match ^[Nn] (watchtower kept, matching the "[Y/n]" default).
+# answer doesn't match ^[Nn] (the bundled WUD kept, matching the "[Y/n]" default).
 awk -v mon="$MON" -v wt="$WT" '
   /# >>> MONITORING/ { skip = (mon !~ /^[Yy]/); next }
   /# <<< MONITORING/ { skip = 0; next }
-  /# >>> WATCHTOWER/ { skipw = (wt ~ /^[Nn]/); next }
-  /# <<< WATCHTOWER/ { skipw = 0; next }
+  /# >>> WUD/ { skipw = (wt ~ /^[Nn]/); next }
+  /# <<< WUD/ { skipw = 0; next }
   { if (!skip && !skipw) print }
 ' compose.template.yml > out/docker-compose.yml
 

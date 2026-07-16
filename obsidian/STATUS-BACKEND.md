@@ -25,6 +25,20 @@
 > backend go-live"), F2 (Tier-4 step-up, "before more than one operator" — the
 > alpha testers are in). See [[insights/follow-ups-index]].
 
+**Last updated:** 2026-07-16 — **Watchtower→WUD migration landed.**
+`containrrr/watchtower` was archived 2025-12-17; replaced with maintained
+`getwud/wud`. New host-level updater `infra/compose.wud.yml` — **one WUD per host**
+(WUD has no Watchtower-style scope), each stack opts in per-container via
+`wud.watch` + `wud.watch.digest`. The alpha stack drops its bundled watchtower and
+subscribes to the host WUD; the deployment kit keeps a bundled WUD gated by
+`generate.sh`. Larissa **CLEAR TO SQUASH** — one deferrable **Medium** (the WUD
+dashboard is a new host-control surface behind single-factor basicauth; verify
+env-value exposure + add WUD native auth before the backend stack joins the host
+WUD) logged in [[insights/security-deferrals]]. Manual verification (spec §8) owed
+on the host; follow-up: migrate the remaining ~10 host apps to the host WUD
+incrementally. Spec:
+[[../superpowers/specs/2026-07-16-watchtower-to-wud-migration-design]].
+
 **Last updated:** 2026-07-15 — **ADMIN CONSOLE REPAIRED, SHIPPED as `v0.2.2`
 (`2c461979`).** *(Corrected 2026-07-15: this entry long claimed "NOT pushed —
 Chris pushes and tags". Both admin fixes have been on `origin/master` for a
@@ -1019,7 +1033,7 @@ than the high-level "where are we" lives elsewhere (see Pointers below).
    diffs (6A + 6B owed, 6C fresh), Chris's device/VPS dry-run verification
    (sync spec §18 + blob spec §20), then merge + the roadmap ADR amendment.
 2. **Full-build spec + two docs** — the whole backend deployed for the first
-   time (auth+proxy+sync+postgres+redis; Traefik/Watchtower/healthcheck/metrics;
+   time (auth+proxy+sync+postgres+redis; Traefik/WUD/healthcheck/metrics;
    dry-run-first), plus (a) a **deploy guide for Chris** built on his existing
    VPS compose, and (b) a **Discord announcement** ("Chatsundere has a backend").
 3. **ADR amendment** — record the v0.3.0 → **v0.2.0** roadmap revision against

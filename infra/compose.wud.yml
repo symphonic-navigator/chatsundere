@@ -1,0 +1,53 @@
+# Host-level auto-updater for the WHOLE server. Exactly ONE WUD watches every
+# stack on the host; each stack opts a container in with `wud.watch=true`.
+# WUD has no Watchtower-style scope, so never run a second WUD on this host.
+#
+# Deploy once:
+#   docker compose -f infra/compose.wud.yml --env-file infra/wud.env up -d
+#
+# On day one it watches only the alpha frontend (the sole container carrying
+# `wud.watch=true`). The legacy single-app watchtower keeps running untouched:
+# it acts on `com.centurylinklabs.watchtower.*` labels, WUD on `wud.watch` — two
+# disjoint namespaces, no collision. Migrate the remaining apps over time by
+# adding `wud.watch=true` and removing each app's watchtower.
+
+name: wud
+
+services:
+  wud:
+    image: getwud/wud
+    restart: unless-stopped
+    volumes:
+      # RW socket: the Docker trigger recreates containers in place. Same host
+      # control surface as Watchtower had — accepted; hardening is a later step.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Opt-in only: touch nothing without an explicit `wud.watch=true` label.
+      WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
+      # 2-minute cadence, matching the former alpha Watchtower poll interval.
+      WUD_WATCHER_LOCAL_CRON: "*/2 * * * *"
+      # Docker trigger `local`: recreate the container from its running config
+      # (preserves the migrate-then-serve command, env, and labels). AUTO
+      # defaults true so updates apply automatically; PRUNE removes the
+      # superseded image (the old WATCHTOWER_CLEANUP behaviour).
+      WUD_TRIGGER_DOCKER_LOCAL_PRUNE: "true"
+    labels:
+      # Dashboard on port 3000, behind Traefik + basicauth (Prometheus/Grafana
+      # pattern from compose.alpha.yml). HOST_WUD and the basicauth user list
+      # come from infra/wud.env; the cert resolver is pinned to `letsencrypt`
+      # here (matching compose.alpha.yml) — edit it below if the host differs.
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.wud.rule=Host(`${HOST_WUD}`)"
+      - "traefik.http.routers.wud.entrypoints=websecure"
+      - "traefik.http.routers.wud.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.wud.middlewares=wud-auth"
+      - "traefik.http.middlewares.wud-auth.basicauth.users=${WUD_AUTH_USERS}"
+      - "traefik.http.services.wud.loadbalancer.server.port=3000"
+    networks: [traefik]
+
+networks:
+  # Shared network with Traefik. Must already exist on the host.
+  traefik:
+    external: true
+    name: traefik

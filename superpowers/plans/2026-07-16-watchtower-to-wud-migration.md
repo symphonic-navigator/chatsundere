@@ -29,7 +29,7 @@
 - **Modify** `deploy/generate.sh` — awk marker rename, prompt reword.
 - **Modify** `deploy/deployment.env.template` — reword the `INSTANCE_NAME` scope comment.
 - **Modify** `deploy/install.sh` — one comment mentioning watchtower.
-- **Regenerate/edit** `deploy/out/docker-compose.yml`, `deploy/out/install.sh`, `deploy/out/deployment.env`.
+- **Note** `deploy/out/` is gitignored scratch — NOT tracked, nothing to commit there (see Task 5 premise correction).
 - **Modify** `.github/workflows/docker.yml` — two comments.
 - **Modify** docs: `obsidian/DEPLOYMENT.md`, `deploy/README.md`, STATUS files.
 
@@ -272,7 +272,7 @@ rm -rf /tmp/wud-kit-test && cp -r deploy /tmp/wud-kit-test
 cd /tmp/wud-kit-test
 printf 'chatsundere.me\n\n\n\n\n\n\n' | ./generate.sh >/dev/null
 docker compose -f out/docker-compose.yml --env-file out/deployment.env config >/dev/null && echo OK
-grep -c 'wud.watch=true' out/docker-compose.yml     # expect 4
+grep -c '"wud.watch=true"' out/docker-compose.yml   # expect 4 (quote-specific: the WUD block comment also contains the bare string)
 grep -c watchtower out/docker-compose.yml           # expect 0
 cd /home/chris/workspace/chatsundere
 ```
@@ -371,7 +371,7 @@ grep -c 'image: getwud/wud' out/docker-compose.yml   # expect 1
 # Declined (WUD omitted):
 printf 'chatsundere.me\n\n\n\n\nn\n\n' | ./generate.sh >/dev/null
 grep -c 'image: getwud/wud' out/docker-compose.yml   # expect 0
-grep -c 'wud.watch=true' out/docker-compose.yml      # expect 4 (labels always present)
+grep -c '"wud.watch=true"' out/docker-compose.yml  # expect 4 (quote-specific; labels always present)
 cd /home/chris/workspace/chatsundere
 ```
 Expected: `1`, then `0`, then `4`.
@@ -385,11 +385,18 @@ git commit -m "Gate the bundled WUD on the generator prompt, drop scope wording"
 
 ---
 
-## Task 5: Regenerate committed `deploy/out/` sample + install.sh comment
+## Task 5: install.sh comment fix
+
+> **Premise correction (2026-07-16):** the original plan assumed `deploy/out/`
+> was committed sample output to regenerate. It is NOT — `deploy/.gitignore`
+> carries `/out/` ("holds newly-minted secrets, never commit") and `out/` has
+> never been tracked. The `out/` seen in the main tree is untracked, gitignored
+> local scratch from a prior run. There is nothing to regenerate or commit there;
+> the generator's WUD output is already verified via the scratch runs in Tasks 3
+> and 4. Task 5 therefore reduces to the single tracked source fix below.
 
 **Files:**
 - Modify: `deploy/install.sh`
-- Modify: `deploy/out/docker-compose.yml`, `deploy/out/install.sh`, `deploy/out/deployment.env`
 
 **Interfaces:**
 - Consumes: the edited template + generator from Tasks 3–4.
@@ -405,36 +412,26 @@ with:
 # brings up every service the compose file defines, incl. monitoring/WUD
 ```
 
-- [ ] **Step 2: Regenerate the sample compose + installer from a scratch run**
+- [ ] **Step 2: Confirm the generator emits WUD output (record, not commit)**
 
-The committed `out/` was generated with monitoring OFF, updater ON. Regenerate the two structurally-changed files (no secrets in them) and copy them back:
+The committed `out/` does not exist; this scratch run only confirms generate.sh
+produces correct WUD output. Nothing is copied back.
 ```bash
 rm -rf /tmp/wud-out && cp -r deploy /tmp/wud-out && cd /tmp/wud-out
 printf 'chatsundere.me\n\n\n\n\n\n\n' | ./generate.sh >/dev/null
-cp out/docker-compose.yml /home/chris/workspace/chatsundere/deploy/out/docker-compose.yml
-cp out/install.sh        /home/chris/workspace/chatsundere/deploy/out/install.sh
-cd /home/chris/workspace/chatsundere
+docker compose -f out/docker-compose.yml --env-file out/deployment.env config >/dev/null && echo OK
+grep -ci watchtower out/docker-compose.yml            # expect 0
+grep -c '"wud.watch=true"' out/docker-compose.yml     # expect 4
+rm -rf /tmp/wud-out
+cd /home/chris/workspace/chatsundere/.claude/worktrees/watchtower-to-wud
 ```
+Expected: `OK`, then `0`, then `4`.
 
-- [ ] **Step 3: Hand-edit the one comment in the committed `out/deployment.env`**
-
-`out/deployment.env` holds sample secrets that must NOT churn, so edit only the comment line. In `deploy/out/deployment.env`, apply the exact same `INSTANCE_NAME` comment reword as Task 4 Step 3 (replace the `...and the Watchtower scope,` paragraph with the WUD-note version).
-
-- [ ] **Step 4: Validate the committed sample**
-
-Run:
-```bash
-docker compose -f deploy/out/docker-compose.yml --env-file deploy/out/deployment.env config >/dev/null && echo OK
-grep -rc watchtower deploy/out/ | grep -v ':0' || echo "no watchtower refs left"
-grep -c 'wud.watch=true' deploy/out/docker-compose.yml   # expect 4
-```
-Expected: `OK`, then `no watchtower refs left`, then `4`.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add deploy/install.sh deploy/out/
-git commit -m "Regenerate deployment-kit sample output for WUD"
+git add deploy/install.sh
+git commit -m "Update install.sh comment for WUD"
 ```
 
 ---

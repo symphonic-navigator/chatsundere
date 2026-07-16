@@ -464,7 +464,7 @@ lives on the `full-backend-transition` branch and merges back to master turnkey.
   safe.** `docker.yml` and `pages.yml` trigger **only** on `push: branches:
   [master]` and `tags: v*.*.*` (plus PRs to master). A push to
   `full-backend-transition` triggers **no workflow at all** — no CI, no image
-  build, no Watchtower deploy. Push as often as wanted; it is inert.
+  build, no WUD deploy. Push as often as wanted; it is inert.
 - **Merge back to master only when schlüsselfertig** (turnkey): typecheck + full
   vitest green on the branch, Larissa clean on every `packages/crypto`/sync-
   touching unit, Laura clean on every user-reachable flow change.

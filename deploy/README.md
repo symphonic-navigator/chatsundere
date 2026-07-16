@@ -30,8 +30,11 @@ This writes `out/` with `deployment.env` (random secrets filled),
 **Running multiple instances on one host?** Give each stack a distinct
 `INSTANCE_NAME` (default `chatsundere`) and distinct hostnames — everything
 else (compose project, Traefik router/service/middleware names, the internal
-network, the Watchtower scope) namespaces off it automatically, so stacks
-sharing a host/Traefik never collide. See `../obsidian/DEPLOYMENT.md` §5.
+network) namespaces off it automatically, so stacks sharing a host/Traefik never
+collide. The one exception is the bundled WUD auto-updater: WUD has no
+per-instance scope, so run only ONE WUD per host — on a multi-instance host,
+decline the bundled WUD and let a single host-level WUD watch every stack via the
+`wud.watch` labels. See `../obsidian/DEPLOYMENT.md` §5.
 
 ## 2. Ship + install (server)
 

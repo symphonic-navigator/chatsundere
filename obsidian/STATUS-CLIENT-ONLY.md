@@ -535,7 +535,10 @@ confirm no key in the pasted report), then pushes. Then back to the **chat makeo
 `app.chatsundere.me` 🎉 (squash `7aa46eb`; tag `v0.1.0` on the feature commit;
 STATUS `0638076`). Pushed, tagged, deployed, device-confirmed by Chris.**
 The first public early alpha ships as a self-contained **frontend Docker image**
-to Chris's VPS via Traefik + a scoped Watchtower — superseding the GitHub Pages
+to Chris's VPS via Traefik + a scoped Watchtower *(the auto-updater migrated from
+Watchtower to a host-level WUD on 2026-07-16 — see STATUS-BACKEND / DEPLOYMENT.md
+§5; the Watchtower mentions below are the historical 2026-06-27 record)* —
+superseding the GitHub Pages
 `/alpha/` path (`pages.yml` left as-is for the teaser; its `/alpha/` deploy is
 now obsolete — a later cleanup). Three pieces. **(A) `apps/user-client/Dockerfile`
 + `nginx.conf` + root `.dockerignore`** — multi-stage, monorepo-aware (build

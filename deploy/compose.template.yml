@@ -11,8 +11,8 @@ services:
       - "traefik.http.routers.${INSTANCE_NAME}-frontend.entrypoints=websecure"
       - "traefik.http.routers.${INSTANCE_NAME}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.services.${INSTANCE_NAME}-frontend.loadbalancer.server.port=80"
-      - "com.centurylinklabs.watchtower.enable=true"
-      - "com.centurylinklabs.watchtower.scope=${INSTANCE_NAME}"
+      - "wud.watch=true"
+      - "wud.watch.digest=true"
     networks: [chatsundere, traefik]
 
   auth:
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     # Migrate-then-serve: migrations are NOT run at boot by index.ts (verified —
     # a separate db:migrate script); running them in the command makes every
-    # deploy/upgrade (incl. a Watchtower image pull) self-migrate idempotently.
+    # deploy/upgrade (incl. a WUD image pull) self-migrate idempotently.
     # cd into the service dir so drizzle's `migrationsFolder: './migrations'`
     # and the package script resolve; `exec` hands signals to the Bun process.
     command: ['sh', '-c', 'cd apps/auth-service && bun run db:migrate && exec bun src/index.ts']
@@ -62,8 +62,8 @@ services:
       - "traefik.http.routers.${INSTANCE_NAME}-auth.entrypoints=websecure"
       - "traefik.http.routers.${INSTANCE_NAME}-auth.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.services.${INSTANCE_NAME}-auth.loadbalancer.server.port=3100"
-      - "com.centurylinklabs.watchtower.enable=true"
-      - "com.centurylinklabs.watchtower.scope=${INSTANCE_NAME}"
+      - "wud.watch=true"
+      - "wud.watch.digest=true"
     networks: [chatsundere, traefik]
 
   sync:
@@ -118,8 +118,8 @@ services:
       - "traefik.http.routers.${INSTANCE_NAME}-sync.entrypoints=websecure"
       - "traefik.http.routers.${INSTANCE_NAME}-sync.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.services.${INSTANCE_NAME}-sync.loadbalancer.server.port=3200"
-      - "com.centurylinklabs.watchtower.enable=true"
-      - "com.centurylinklabs.watchtower.scope=${INSTANCE_NAME}"
+      - "wud.watch=true"
+      - "wud.watch.digest=true"
     networks: [chatsundere, traefik]
 
   proxy:
@@ -151,8 +151,8 @@ services:
       - "traefik.http.routers.${INSTANCE_NAME}-proxy.entrypoints=websecure"
       - "traefik.http.routers.${INSTANCE_NAME}-proxy.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.services.${INSTANCE_NAME}-proxy.loadbalancer.server.port=8080"
-      - "com.centurylinklabs.watchtower.enable=true"
-      - "com.centurylinklabs.watchtower.scope=${INSTANCE_NAME}"
+      - "wud.watch=true"
+      - "wud.watch.digest=true"
     networks: [chatsundere, traefik]
 
   postgres:
@@ -244,21 +244,23 @@ services:
     networks: [chatsundere, traefik]
   # <<< MONITORING
 
-  # >>> WATCHTOWER
-  watchtower:
-    image: containrrr/watchtower
+  # >>> WUD
+  wud:
+    image: getwud/wud
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      WATCHTOWER_SCOPE: ${INSTANCE_NAME}
-      WATCHTOWER_LABEL_ENABLE: 'true'
-      WATCHTOWER_CLEANUP: 'true'
-      WATCHTOWER_POLL_INTERVAL: '300'
-    labels:
-      - "com.centurylinklabs.watchtower.scope=${INSTANCE_NAME}"
+      # Opt-in only: WUD touches nothing without an explicit `wud.watch=true`
+      # label, so it never disturbs the host's other containers.
+      WUD_WATCHER_LOCAL_WATCHBYDEFAULT: 'false'
+      # 5-minute cadence (matches the previous 300-second poll interval).
+      WUD_WATCHER_LOCAL_CRON: '*/5 * * * *'
+      # Docker trigger: recreate on a new `:latest` digest; PRUNE cleans up the
+      # superseded image. AUTO defaults true, so updates apply automatically.
+      WUD_TRIGGER_DOCKER_LOCAL_PRUNE: 'true'
     networks: [chatsundere]
-  # <<< WATCHTOWER
+  # <<< WUD
 
 volumes:
   postgres_data:

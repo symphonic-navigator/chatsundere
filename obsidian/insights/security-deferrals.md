@@ -776,3 +776,46 @@ Consciously deferred **Informational** items:
 — the tracked **L-β-2 / L-B4** ("required before v0.1.0 deployment"). This kit is what makes
 auth publicly reachable, so resolve it before the real backend go-live. Tracked in
 [[follow-ups-index]].
+
+---
+
+## 2026-07-16 — Watchtower→WUD migration (Larissa CLEAR TO SQUASH; one deferrable Medium)
+
+Larissa audited the Watchtower→WUD migration (`infra/compose.wud.yml`,
+`infra/compose.alpha.yml`, `deploy/*`, `docker.yml`, docs). `containrrr/watchtower`
+was archived 2025-12-17; it is replaced by maintained `getwud/wud`, with a single
+host-level WUD the alpha stack (and, later, the other host apps) opt into via
+`wud.watch` labels. **No Critical/High.** Secrets hygiene is clean (nothing added
+under the gitignored `deploy/out/`; `wud.env.example` is placeholder-only; the
+`$$`-doubled apr1 guidance is correct), and the opt-in safety property
+(`WUD_WATCHER_LOCAL_WATCHBYDEFAULT=false`) is set in **both** WUD instances, so WUD
+never touches a container lacking `wud.watch=true`. The registry trust model is
+unchanged from Watchtower (AUTO-recreate on a moved `:latest` digest; `:latest`
+still moves only on a `v*.*.*` tag). Consciously deferred:
+
+- **M-1 (Medium, deferrable) — the WUD dashboard/API is a *new* host-control
+  surface.** Watchtower exposed no UI; `infra/compose.wud.yml` ships a Traefik
+  router for WUD's dashboard behind a **single** basicauth middleware, and WUD's own
+  auth (`WUD_AUTH_*`) is unset — so the Traefik gate is the only one, in front of an
+  API that can enumerate and recreate containers while the WUD container holds the
+  RW docker socket. It is **off until the operator sets `HOST_WUD`/`WUD_AUTH_USERS`**,
+  and the wiring is explicitly Chris's, so it is non-blocking. **Follow-up commitment
+  (before the backend stack — auth/sync/proxy — is placed under the host WUD):**
+  (1) verify whether WUD's dashboard/API surfaces watched containers' **environment
+  values** — if it does, it would disclose `AUTH_JWT_PRIVATE_KEY`,
+  `OPAQUE_SERVER_SETUP` and the HMAC keys, which **escalates M-1 to High**; (2) add
+  WUD native auth as defence-in-depth so the socket-holding API is never single-gated;
+  consider an IP allowlist / internal-only router instead of public `websecure`.
+  Tracked in [[follow-ups-index]].
+- **L-1 (Low) — empty `WUD_AUTH_USERS` / a missing `--env-file` fails the gate open.**
+  A basicauth middleware with no users, combined with WUD having no native auth, is
+  the concrete path by which M-1 fails open. The M-1 defence-in-depth (WUD native
+  auth) removes this single-point dependency. Non-blocking.
+- **I-1 (Informational) — no image signature/provenance verification.** Registry
+  control = code execution across every `wud.watch` container, with no cosign/notary
+  gate. **Equally true of Watchtower — no regression**; socket hardening is out of
+  scope per spec §7. The real long-term hardening is signed images + digest pinning.
+- **I-2 (Informational) — digest-watch empirically unverified.** A *failed*
+  `wud.watch.digest` comparison on the mutable `:latest` silently stops applying
+  updates → a missed-patch availability gap. Covered by manual-verification (spec §8
+  step 3); if digest tracking needs `wud.tag.include=^latest$`, add it per service.
