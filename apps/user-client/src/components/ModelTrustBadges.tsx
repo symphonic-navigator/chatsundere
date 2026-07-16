@@ -27,20 +27,36 @@ export function TrustBadge({ kind }: { kind: 'tee' | 'zdr' }): JSX.Element {
 }
 
 /**
- * The loud, honest signal for a censored model. Only 'restricted' carries a
- * badge today (free/unknown stay unmarked); restricted means the model — or its
- * deployment — applies content restrictions somewhere in the stack.
+ * Honest signal on the freedom/censorship axis. 'restricted' → a loud red
+ * "Censored" (the model or its deployment applies content restrictions).
+ * 'unknown' → a muted "Uncensored?" — we have not yet evaluated whether this
+ * model censors, and absence of a badge would otherwise read as a positive
+ * all-clear. 'free' stays unmarked (the common, cleared norm). The axis lives in
+ * the visible label, not just the tooltip, because the mobile-first surface has
+ * no hover (spec 2026-07-16, Laura spec-pass).
  */
 export function FreedomBadge({ state }: { state: FreedomState }): JSX.Element | null {
-  if (state !== 'restricted') return null;
-  return (
-    <span
-      title="This model is censored by its maker. Reached via an anonymising router — the server never sees your data — but the model itself applies content restrictions."
-      className="rounded border border-danger/40 bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-danger"
-    >
-      Censored
-    </span>
-  );
+  if (state === 'restricted') {
+    return (
+      <span
+        title="This model is censored by its maker. Reached via an anonymising router — the server never sees your data — but the model itself applies content restrictions."
+        className="rounded border border-danger/40 bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-danger"
+      >
+        Censored
+      </span>
+    );
+  }
+  if (state === 'unknown') {
+    return (
+      <span
+        title="Not yet evaluated for content restrictions — an independent safety evaluation is pending."
+        className="rounded border border-paper-soft/30 bg-paper-soft/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-paper-soft"
+      >
+        Uncensored?
+      </span>
+    );
+  }
+  return null;
 }
 
 /** Jurisdiction badge — the legal home of the deployment (e.g. EU). */
