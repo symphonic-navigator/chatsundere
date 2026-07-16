@@ -15,6 +15,14 @@ export interface ModelProfile {
   vision: boolean;
   /** Hard-CoT models replay thinking into history; soft-CoT do not. */
   replayReasoning: boolean;
+  /** The offering reasons internally (billed reasoning tokens) but the provider
+   *  does not surface the trace text on our route — so there is nothing to stream
+   *  into the reasoning group. When true, the client shows a terminal
+   *  "(hidden reasoning, n tokens)" marker instead of an empty bubble. The current
+   *  case is nano-gpt's Inkling, a provider-side passthrough gap for that new
+   *  model (expected to be fixed upstream; the flag is then dropped). Absent ⇒
+   *  traces surface normally. */
+  reasoningTraceHidden?: boolean;
 }
 
 /** Curated, provider-independent identity. What the user picks. */

@@ -136,6 +136,11 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
   const contentBuffer: ContentBlock[] = [];
   const pillRows: PillRow[] = [];
   let finishReason: StreamEngineResult['finishReason'] = 'unknown';
+  // For the hidden-reasoning marker (offerings whose provider reasons internally
+  // but never surfaces the trace text — Inkling today). We only synthesise a
+  // marker when NO trace text arrived and the billed reasoning is non-trivial.
+  let sawReasoningText = false;
+  let reasoningTokens = 0;
 
   for await (const chunk of streamCompletion({
     provider: args.provider,
@@ -155,6 +160,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     if (chunk.type === 'token') {
       appendText(contentBuffer, chunk.text);
     } else if (chunk.type === 'reasoning') {
+      if (chunk.text) sawReasoningText = true;
       appendReasoning(contentBuffer, chunk.text);
     } else if (chunk.type === 'tool-call') {
       const pill: PillRow = {
@@ -176,14 +182,37 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       finishReason = chunk.reason;
     } else if (chunk.type === 'usage') {
       // Usage display is a later feature (a subsequent catalogue-runtime slice).
-      // Adapters emit usage chunks; we deliberately ignore them here for now.
+      // We read only reasoningTokens here, for the hidden-reasoning marker below.
+      if (typeof chunk.usage.reasoningTokens === 'number') {
+        reasoningTokens = chunk.usage.reasoningTokens;
+      }
     } else if (chunk.type === 'error') {
       throw new Error(`stream-engine: upstream ${chunk.message}`);
     }
   }
 
+  // Hidden-reasoning marker: the offering reasoned internally but its provider
+  // never surfaced the trace text on our route, so there is nothing to stream
+  // into a reasoning group. Synthesise a terminal "(hidden reasoning, n tokens)"
+  // block at the reasoning slot (front) instead of leaving the turn looking as
+  // though reasoning did nothing. Reaching here means the stream finished
+  // cleanly — an abort or upstream error throws mid-loop, so a failed turn never
+  // plants a marker (and never renders an "undefined tokens" broken state).
+  if (
+    args.offering.profile.reasoningTraceHidden &&
+    !sawReasoningText &&
+    reasoningTokens >= HIDDEN_REASONING_FLOOR
+  ) {
+    contentBuffer.unshift({ type: 'reasoning', text: '', hiddenTokens: reasoningTokens });
+  }
+
   return { finalContentBlocks: contentBuffer, pillRows, finishReason, usedTokens };
 }
+
+/** Below this many billed reasoning tokens, a hidden-reasoning turn plants no
+ *  marker — a trivial "hi" (~24 tokens) would otherwise clutter the chat surface
+ *  every turn, since the toggle defaults on. Tunable; see the 2026-07-16 spec. */
+const HIDDEN_REASONING_FLOOR = 100;
 
 /** Append text to the tail of the content buffer, coalescing adjacent text blocks. */
 function appendText(buf: ContentBlock[], text: string): void {

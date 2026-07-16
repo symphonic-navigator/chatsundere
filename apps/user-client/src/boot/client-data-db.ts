@@ -268,7 +268,12 @@ export interface ChatRow {
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'pill'; pillId: string }
-  | { type: 'reasoning'; text: string };
+  /** `hiddenTokens` marks a reasoning block whose trace text the provider never
+   *  surfaced (Inkling via nano-gpt's passthrough gap): `text` is empty and
+   *  `hiddenTokens` carries the billed reasoning-token count, rendered as a
+   *  terminal "(hidden reasoning, n tokens)" marker. Non-indexed JSON, so
+   *  widening the union needs no Dexie version bump. */
+  | { type: 'reasoning'; text: string; hiddenTokens?: number };
 
 export interface MessageRow {
   id: string;

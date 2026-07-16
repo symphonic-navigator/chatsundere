@@ -2074,6 +2074,25 @@ h1 {
   appearance: none;
 }
 
+/* Terminal, non-interactive kin of .reasoning-pill: the model reasoned but the
+ * provider withheld the trace text, so there is nothing to open. Muted neutral
+ * (not the mindspace accent) and no pointer, so it reads as a plain statement of
+ * fact rather than a collapsed control. */
+.reasoning-hidden-marker {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  margin-block: 0.75rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  user-select: none;
+  color: color-mix(in srgb, var(--color-paper) 55%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-paper) 14%, transparent);
+}
+
 .reasoning-pill-dots {
   display: inline-flex;
   gap: 0.15rem;

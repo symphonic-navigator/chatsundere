@@ -148,3 +148,22 @@ export function ReasoningPill(p: ReasoningPillProps): JSX.Element {
     </div>
   );
 }
+
+/**
+ * Terminal marker for a reasoning group whose trace text the provider never
+ * surfaced (Inkling via nano-gpt's passthrough gap). It has nothing to expand or
+ * read aloud — no chevron, no dots, no handler. It states plainly that the model
+ * reasoned and what it cost, so a hidden-reasoning turn never looks as though
+ * reasoning did nothing. The tooltip attributes the absence to the provider
+ * (desktop enhancement; the label stands without it).
+ */
+export function HiddenReasoningMarker({ tokens }: { tokens: number }): JSX.Element {
+  return (
+    <span
+      className="reasoning-hidden-marker"
+      title="The model reasoned internally, but the provider does not expose the reasoning trace on this route."
+    >
+      (hidden reasoning, {tokens.toLocaleString('en-GB')} tokens)
+    </span>
+  );
+}

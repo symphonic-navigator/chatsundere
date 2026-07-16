@@ -29,7 +29,7 @@ import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { MessageControls } from './MessageControls.js';
 import { Pill } from './Pill.js';
-import { type MonologueController, ReasoningPill } from './ReasoningPill.js';
+import { HiddenReasoningMarker, type MonologueController, ReasoningPill } from './ReasoningPill.js';
 import { MarkdownContent, type VoiceGlow } from './markdown/MarkdownContent.js';
 import { ArtefactSaveContext } from './markdown/artefact-save-context.js';
 
@@ -607,9 +607,19 @@ function renderBlocks(
       return <MarkdownContent key={`g-${idx}`} text={text} glow={glow} />;
     }
     if (group.type === 'reasoning') {
-      const trace = group.blocks
-        .map((b) => (b as { type: 'reasoning'; text: string }).text)
-        .join('');
+      const reasoningBlocks = group.blocks as {
+        type: 'reasoning';
+        text: string;
+        hiddenTokens?: number;
+      }[];
+      const trace = reasoningBlocks.map((b) => b.text).join('');
+      // A hidden-reasoning group carries the billed token count but no trace text
+      // (the provider withheld it) — render the terminal marker, not an empty pill.
+      const hiddenTokens = reasoningBlocks.find((b) => b.hiddenTokens !== undefined)?.hiddenTokens;
+      if (trace === '' && hiddenTokens !== undefined) {
+        // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across appends
+        return <HiddenReasoningMarker key={`g-${idx}`} tokens={hiddenTokens} />;
+      }
       return (
         <ReasoningPill
           // biome-ignore lint/suspicious/noArrayIndexKey: group ordering is stable across appends
