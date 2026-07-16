@@ -81,8 +81,13 @@ incrementally, never a big bang.
    - `WUD_WATCHER_LOCAL_CRON="*/2 * * * *"` — preserves the alpha 2-minute cadence.
    - `/var/run/docker.sock` mounted RW (required for the Docker trigger to recreate
      containers). Same posture as Watchtower — accepted; socket hardening is out of
-     scope (§8).
-   - No Traefik router; the WUD dashboard stays internal.
+     scope (§7).
+   - **WUD dashboard exposed via Traefik**, behind a basicauth middleware, following the
+     Prometheus/Grafana pattern already in `compose.alpha.yml` (port 3000, `websecure`,
+     the host's cert resolver). The design provides the ready router/middleware label
+     block and the WUD joins the external `traefik` network; **Chris owns the final
+     wiring** — hostname (`HOST_WUD`), cert resolver name, and the basicauth user list
+     are his to set on the host.
 
 2. **`infra/compose.alpha.yml`** — remove the bundled `watchtower` service. The frontend
    service carries `wud.watch=true` + `wud.watch.digest=true` and becomes the first WUD
@@ -118,7 +123,8 @@ bundled WUD (or already runs their own host WUD) still gets working opt-in.
 
 ## 6. File Change Inventory
 
-- `infra/compose.wud.yml` — **new** (host-level WUD).
+- `infra/compose.wud.yml` — **new** (host-level WUD, incl. the Traefik router +
+  basicauth label block and membership of the external `traefik` network for the UI).
 - `infra/compose.alpha.yml` — remove watchtower service; add `wud.*` labels to frontend.
 - `deploy/compose.template.yml` — watchtower service → wud service; `wud.*` labels on the
   four services.
@@ -137,8 +143,6 @@ bundled WUD (or already runs their own host WUD) still gets working opt-in.
 - **Socket hardening** (docker-socket-proxy). WUD still needs RW socket for the Docker
   trigger; restricting it is a separate, later decision. Recorded, not done here.
 - **Docker-Compose trigger.** Rejected in §2.
-- **Routing the WUD dashboard** behind Traefik + basicauth. The UI stays internal for
-  now; can be added later if Chris wants the dashboard.
 - **Migrating the remaining ~10 host apps** to WUD. That is Chris's incremental
   follow-up; this design only makes the alpha stack the first citizen and establishes
   the host WUD they will all subscribe to.
@@ -154,6 +158,8 @@ bundled WUD (or already runs their own host WUD) still gets working opt-in.
    pruned.
 4. Confirm the legacy watchtower's app still updates on its own — no interference either
    direction.
-5. Regenerate the kit (`deploy/generate.sh`), answer the WUD prompt both Y and n, and
+5. Reach the WUD dashboard over HTTPS at `HOST_WUD`, confirm basicauth challenges and the
+   dashboard renders.
+6. Regenerate the kit (`deploy/generate.sh`), answer the WUD prompt both Y and n, and
    confirm the emitted `out/docker-compose.yml` contains (Y) the wud service + labels, or
    (n) only the labels.
