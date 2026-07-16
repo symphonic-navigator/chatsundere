@@ -140,6 +140,25 @@ const offerings: Offering[] = [
     reasoning: TOGGLE,
     recommended: 262_144,
   }),
+  // Kimi K3 — Moonshot's 2.5T flagship (QAT, native 4-bit). Onboarded 2026-07-16
+  // on user demand while open weights are pending; the ONLY OpenRouter route today
+  // is Moonshot AI itself (a PRC provider), so freedom is UNKNOWN — the canonical
+  // carries `freedomOriented: null` (see canonical-registry), which resolves the
+  // 🕊️ badge to unknown regardless of this deployment axis. Vision ✅ (image
+  // input), 1,048,576 ceiling; recommended stays at the Kimi-family 262k sweet-spot
+  // pending long-context evidence. Reasoning is MANDATORY here: OpenRouter answers
+  // `reasoning:{enabled:false}` with HTTP 400 "Reasoning is mandatory for this
+  // endpoint and cannot be disabled" (probed live 2026-07-16), and effort does not
+  // modulate the trace (low/medium/high all ~50-110 reasoning tokens on the same
+  // task), so the honest control is `fixed-on`, not `steps` — the adapter never
+  // takes the off branch (`canDisableReasoning` is false). Unlike K2.6 (a clean
+  // toggle here), K3 cannot be silenced upstream at all.
+  openRouterOffering('kimi-k3', 'moonshotai/kimi-k3', {
+    vision: true,
+    reasoning: { mode: 'fixed-on' },
+    recommended: 262_144,
+    max: 1_048_576,
+  }),
   // Gemma 4 31B (instruction-tuned) — vision-capable, 262,144 ceiling.
   openRouterOffering('gemma-4-31b', 'google/gemma-4-31b-it', {
     vision: true,

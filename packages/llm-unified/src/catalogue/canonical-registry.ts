@@ -70,6 +70,20 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote: 'Moonshot open-weight model; judged freedom-oriented by Chris (2026-05-30).',
   },
   {
+    id: 'kimi-k3',
+    displayName: 'Kimi K3',
+    family: 'kimi',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    // Moonshot AI is a PRC company subject to KPCh content obligations, so the
+    // model-intrinsic freedom is genuinely UNKNOWN until measured (Chris,
+    // 2026-07-16): `null`, not `false` — absence of evidence is not evidence of
+    // restriction. Moonshot may drop censorship for Western API clients (rumoured,
+    // unconfirmed). Revisit once the eval lands. See [[../../obsidian/models/kimi-k3]].
+    freedomOriented: null,
+    freedomNote:
+      'Moonshot AI is a PRC company (KPCh content obligations); freedom orientation not yet assessed — unknown pending eval (Chris, 2026-07-16).',
+  },
+  {
     id: 'gemma-4-31b',
     displayName: 'Gemma 4 31B',
     family: 'gemma',

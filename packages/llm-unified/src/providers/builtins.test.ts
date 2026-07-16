@@ -38,8 +38,8 @@ describe('built-in providers', () => {
       expect(p.corsHint).toBe('inofficial');
       // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
       // + 8 Claude + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI, censored) + 4 web
-      // + 3 tti + 2 Grok voice (tts + stt) = 35.
-      expect(p.offerings).toHaveLength(35);
+      // + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling = 36.
+      expect(p.offerings).toHaveLength(36);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -54,14 +54,14 @@ describe('built-in providers', () => {
     }
   });
 
-  it('openrouter has direct CORS hint, eighteen offerings, and sortPriority 45', () => {
+  it('openrouter has direct CORS hint, nineteen offerings, and sortPriority 45', () => {
     const p = getProvider('openrouter');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      // 8 original + 3 Grok (4.3, 4.5, 4.20 — all ZDR-enforced) + Claude
-      // Sonnet 5 + 6 ChatGPT (OpenAI, censored) = 18.
-      expect(p.offerings).toHaveLength(18);
+      // 8 original + 1 Kimi K3 (freedom unknown) + 3 Grok (4.3, 4.5, 4.20 — all
+      // ZDR-enforced) + Claude Sonnet 5 + 6 ChatGPT (OpenAI, censored) = 19.
+      expect(p.offerings).toHaveLength(19);
       expect(p.sortPriority).toBe(45);
     }
   });

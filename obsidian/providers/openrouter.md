@@ -91,7 +91,12 @@ OpenRouter exposes a **unified `reasoning` request parameter** and, crucially,
   `offStep: null`) and `openRouterAdapter` never takes the off branch. This
   honesty is worth noting as a provider virtue: on the same model nano-gpt
   accepts the off, hides the trace, reports `reasoning_tokens: 0` and bills the
-  user for the reasoning anyway (see [[../models/grok-4.5]]).
+  user for the reasoning anyway (see [[../models/grok-4.5]]). **`moonshotai/kimi-k3`
+  joins this class (probed live 2026-07-16)** — same HTTP 400 on `{enabled:false}`
+  — but is modelled **`fixed-on`** rather than `steps`, because effort buckets do
+  **not** modulate its trace (low/medium/high all ~50–110 reasoning tokens on one
+  task); offering steps that steer nothing would be dishonest. See
+  [[../models/kimi-k3]].
 - Every *other* OpenRouter offering is a **`toggle`** (`defaultOn: true`), bar
   the two effort-steerable exceptions (Claude Sonnet 5, the ChatGPT family).
 
