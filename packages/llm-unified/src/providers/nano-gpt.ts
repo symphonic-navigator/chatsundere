@@ -499,6 +499,40 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'llm',
   },
+  // Inkling via nano-gpt (routed to Baseten) — Thinking Machines' first public
+  // model. Reasoning is a genuine toggle on the unified `reasoning` object
+  // (`{enabled:false}` → 0 reasoning tokens; default on; scales with difficulty —
+  // live-probed 2026-07-16). Tool calls arrive single-block; vision works.
+  // CRUCIAL QUIRK: nano-gpt does NOT surface the reasoning trace text on this
+  // route — it bills `reasoning_tokens` but streams no `reasoning` channel
+  // (`zai-org/glm-5.1:thinking` proves the mechanism works generally on the same
+  // route; Inkling is a provider-side passthrough gap for this new model, whose
+  // own web UI does show the trace). So it reuses the shared unified-reasoning
+  // adapter (openRouterAdapter) AND carries `reasoningTraceHidden: true`, which
+  // drives the client's terminal "(hidden reasoning, n tokens)" marker. Drop the
+  // flag once nano-gpt wires the passthrough. Context window unconfirmed (nano-gpt
+  // /models reports none; HF card unspecified) — conservative 128k pending
+  // confirmation. Baseten upstream → no ZDR/TEE, US jurisdiction. Freedom not yet
+  // assessed → the "Uncensored?" badge.
+  {
+    canonicalRef: 'inkling',
+    providerId: 'nano-gpt',
+    upstreamSlug: 'thinkingmachines/inkling',
+    adapter: { kind: 'catalogue', adapterId: 'nano-gpt:thinkingmachines/inkling' },
+    profile: {
+      reasoning: { mode: 'toggle', defaultOn: true },
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+      reasoningTraceHidden: true,
+    },
+    context: { recommended: 131_072, max: 131_072 },
+    trust: { tee: false, zdr: false, jurisdiction: 'US' },
+    freedomOrientedDeployment: true, // nano-gpt adds no censorship of its own
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  },
   // OpenAI (ChatGPT) family via nano-gpt (anonymising-router path). Onboarded
   // 2026-07-06 on explicit user request; CENSORED badge. gpt-4o/4.1 non-reasoning,
   // GPT-5 family reasons via the unified `reasoning` object (steps).
@@ -607,6 +641,19 @@ export function registerNanoGpt(): void {
       // OpenAI on nano-gpt honours the unified `reasoning` object (like Grok) and
       // surfaces its reasoning summary natively, so it reuses the shared adapter.
       // No `include_reasoning` flag needed here — that gate is OpenRouter-only.
+      registerAdapter(
+        o.adapter.adapterId,
+        openRouterAdapter(o.upstreamSlug, {
+          vision: o.profile.vision,
+          reasoning: o.profile.reasoning,
+        }),
+      );
+    } else if (o.canonicalRef === 'inkling') {
+      // Inkling honours the unified `reasoning` object (`{enabled:false}` is a
+      // genuine off), so it reuses the shared adapter. It never surfaces its
+      // reasoning trace on this route, so `include_reasoning` would be a no-op
+      // (probed 2026-07-16) — the offering's `reasoningTraceHidden` handles the
+      // display side instead.
       registerAdapter(
         o.adapter.adapterId,
         openRouterAdapter(o.upstreamSlug, {

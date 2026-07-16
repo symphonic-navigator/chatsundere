@@ -346,6 +346,24 @@ export const CANONICALS: CanonicalModel[] = [
     freedomNote:
       'xAI/Grok refuses near-nothing; Grok 4.5 is judged even more freedom-oriented than 4.3 (Chris, 2026-07-09, tested and approved).',
   },
+  {
+    id: 'inkling',
+    displayName: 'Inkling',
+    family: 'inkling',
+    // Thinking Machines' first public model (Mira Murati's lab). Sparse MoE,
+    // 975B total / 41B active, natively multimodal (vision + audio in — we surface
+    // vision), Apache-2.0. Reasoning is a genuine toggle on nano-gpt, but the trace
+    // text is withheld on our route today (a provider-side passthrough gap, not a
+    // model limit — see the offering and the Model Curation Record), so the
+    // offering carries `reasoningTraceHidden`.
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    // Freedom NOT yet assessed: a US model with present-but-leaky guardrails per
+    // its own card ("occasional tendency to comply with role-play ... on harmful
+    // topics"; recommends external filtering). We await an independent safety
+    // evaluation before judging, so effective freedom resolves to 'unknown' — the
+    // "Uncensored?" badge. See obsidian/models/inkling.md.
+    freedomOriented: null,
+  },
 ];
 
 /** Fresh array so callers may sort/filter freely. */
