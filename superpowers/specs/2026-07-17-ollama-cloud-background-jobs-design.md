@@ -356,6 +356,27 @@ It only has teeth once the binding sends a cap, hence `LiveBindingArgs.sampling`
 and the `composeWire` share (§5.2). The suite's failure to send sampling was not an
 oversight to route around — it was half the reason Fault C survived onboarding.
 
+**Correction (2026-07-17, found in review, ruled by Chris).** This spec originally
+put the cap turn in the shared `coreScenario` and hung the cap off the binding.
+Both were wrong, for one reason: **sampling is a property of the turn, not of the
+binding.**
+
+- `coreScenario` is shared by all 13 `run-*-suite.ts` runners, but only ollama's
+  wires a cap — so every other provider's next live run would have reported a
+  **false failure** on that turn. A harness that cries wolf is worse than none.
+- `binding.ts` applies `sampling` inside `runTurn`, i.e. to **every** turn. The cap
+  would have truncated ollama's own reasoning-probe, tool-call and memory-echo
+  turns to 16 tokens, turning those red too — it would have blown up at the live
+  run in §6.
+
+The cap turn therefore lives in its own `samplingCapScenario`, run by
+`run-ollama-suite.ts` with its own dedicated binding — the same shape as the
+one-shot coverage below. `coreScenario` is untouched for the other twelve
+providers. Modelling sampling per-turn (a `ScenarioTurn.sampling` field) is the
+cleaner model and was considered; it was rejected as a larger interface change
+than this fix warrants, and remains the right move if a second capped turn ever
+appears.
+
 **`RunnerBinding.runOneShot?`** — optional, wired for ollama. Honest accounting:
 once the parallel path is deleted, one-shot *is* `streamCompletion`, so this turn
 largely re-tests a pipe the suite already covers eleven times. It is kept as thin
