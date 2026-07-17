@@ -29,7 +29,7 @@ Probed against `ollama.com` with `keys/.ollama-test-key`. Local only, never CI.
 |---|---|---|
 | 1 | `POST /chat/completions` — what one-shot sends today | **HTTP 404** for `glm-5.2:cloud`, `glm-5.1` **and** `deepseek-v4-pro` |
 | 2 | `POST /api/chat`, `stream:false` | HTTP 200, native shape: `.message.content`, **no `.choices`** |
-| 3 | `POST /api/chat`, `think:false` | Clean content, **empty** thinking channel |
+| 3 | `POST /api/chat`, `think:false` | Clean content, **empty** thinking channel — **but see the retraction below; this probe was mis-designed** |
 
 ### The sampling leak
 
@@ -51,6 +51,28 @@ Native `options` accepts `seed`, `temperature`, `top_k`, `top_p`, `min_p`,
 > produce identical outputs. That inference was **invalid** — probe 8 showed
 > GLM is non-deterministic at `temperature:0` even on `/v1`, where temperature
 > demonstrably works. Determinism is not a test for whether a parameter arrives.
+
+> **Retracted — probe 3 was mis-designed (2026-07-17, later the same day).**
+> Probe 3 concluded `think:false` disables reasoning on GLM 5.2, and §9 built a
+> follow-up on it claiming `fixed-on` was wrong. **Both are withdrawn.** Probe 3
+> used a *title* prompt ("Reply with a short chat title only"), which never
+> triggers reasoning in the first place — so its clean, short answer showed
+> nothing about the flag. Re-probed with a prompt that genuinely warrants
+> reasoning, GLM 5.2's `think:false` empties the thinking channel but **relocates
+> the reasoning into the answer**: content 869 → 3265 chars, eval_count 526 →
+> **1010**. "Off" costs roughly twice as much and only lengthens the reply — the
+> textbook `fixed-on` / "off only hides" case. **The catalogue was right and the
+> original comment was right.**
+>
+> The generalisable lesson, which is worth more than the finding: *a negative
+> result only counts if the stimulus was present.* The same error shape as the
+> superseded determinism argument above — a test that cannot distinguish the two
+> hypotheses, read as if it had.
+>
+> The re-probe did surface a real, opposite finding: on **`glm-5.1`** and
+> **`deepseek-v4-pro`**, `think:false` IS a measured off-switch (eval_count −61%
+> / −41%, answer complete). Their `fixed-on` is now the questionable one. Logged
+> as a follow-up; not acted on here.
 
 ### Context is not truncated
 
@@ -434,20 +456,28 @@ three counts:
   tool-call arguments, and a smaller adapter than an OpenAI clone would be; the
   original defect is not reproducible as of 2026-07-17 and `/v1` is a viable
   fallback.
-- **Correct the `think:false` claim** at `ollama-cloud.ts:67` ("still streams
-  reasoning (leaks into content)"): probe 3 shows clean content and an empty
-  thinking channel natively. The claim likely dates from the `/v1` shim era —
-  and on `/v1` it is `think` that is ignored, `reasoning_effort` being the lever.
+- **Refine the `think:false` claim** at `ollama-cloud.ts:67` ("still streams
+  reasoning (leaks into content)"). It is **right for GLM 5.2** and wrong as a
+  blanket statement: re-probed 2026-07-17, `think:false` relocates GLM 5.2's
+  reasoning into the answer (eval_count 526 → 1010), but is a genuine off-switch
+  on `glm-5.1` (−61%) and `deepseek-v4-pro` (−41%). It is per-model. On `/v1`,
+  `think` is ignored outright and `reasoning_effort` is the lever.
 - **Qualify "live-verified, core 11/11"** — demonstrably not a statement of
   completeness.
 
 ## 9. Follow-ups (out of scope)
 
-- **GLM 5.2's `fixed-on` reasoning classification is probably wrong.** Reasoning
-  can be disabled on **both** endpoints (probe 3 natively; `reasoning_effort:'none'`
-  on `/v1`, which halves completion tokens 481 → 222). `fixed-on` is UX-visible —
-  a toggle may be owed to the user. Chris's judgement; needs a probe across
-  permutations.
+- ~~GLM 5.2's `fixed-on` reasoning classification is probably wrong.~~
+  **Retracted the same day — see the retraction in §2.** GLM 5.2's `fixed-on` is
+  **correct**; the follow-up rested on a mis-designed probe.
+- **`glm-5.1` / `deepseek-v4-pro`'s `fixed-on` is probably wrong** — the real
+  finding the retraction surfaced. `think:false` is a measured off-switch on both
+  (eval_count −61% / −41%, content length unchanged, answer complete), which
+  contradicts the 2026-06-03 "think:false is a no-op on these models" line. A
+  `toggle` would save users 40-60% of completion tokens on these two. UX-visible →
+  Chris's judgement. Needs a wider probe (n=2 so far) and, if it lands, a suite
+  re-run: a `toggle` produces two reasoning permutations, so `assertReasoningAbsent`
+  begins to apply.
 - **A shared `openAiCompatAdapter`** for the six near-duplicate OpenAI adapters
   (1 321 lines between them). The real lever against this duplication, and the
   thing that would make `/v1` nearly free. Own spec.

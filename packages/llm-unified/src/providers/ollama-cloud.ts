@@ -64,14 +64,17 @@ function ollamaOffering(spec: OllamaSpec): Offering {
 const SPECS: OllamaSpec[] = [
   { canonicalRef: 'glm-5.1', slug: 'glm-5.1', reasoning: FIXED_ON, vision: false, ctx: 200_000 },
   // GLM 5.2 is served under the `:cloud` slug (bare `glm-5.2` 404s on ollama.com).
-  // Classified fixed-on for the same reason as GLM 5.1: think:false was believed
-  // to still stream reasoning (leaking into content). Superseded 2026-07-17: on
-  // the native `/api/chat` endpoint, think:false yields clean content and an
-  // empty thinking channel — it genuinely disables reasoning, and this does not
-  // reproduce. Whether `fixed-on` should become a user-facing toggle is
-  // deferred to Chris (see obsidian/providers/ollama-cloud.md); the
-  // classification is unchanged for now. /api/show reports a 1,000,000
-  // ceiling; recommended capped at 200k. Live-probed 2026-06-17.
+  // fixed-on is CORRECT and re-confirmed 2026-07-17: `think:false` empties the
+  // thinking channel but does NOT stop the model reasoning — it relocates the
+  // reasoning into the answer. On a prompt that warrants reasoning, think:false
+  // measured content 869 → 3265 chars and eval_count 526 → 1010, i.e. "off"
+  // COSTS ~2x and only makes the reply longer. That is exactly the ReasoningControl
+  // `fixed-on` case ("off only hides"), so offering a toggle here would astonish.
+  // (An earlier 2026-07-17 note claiming think:false disables reasoning was wrong:
+  // it was probed with a title prompt that never triggers reasoning at all.)
+  // Unlike glm-5.1 / deepseek-v4-pro, where think:false IS a real off-switch.
+  // /api/show reports a 1,000,000 ceiling; recommended capped at 200k.
+  // Live-probed 2026-06-17.
   // ZDR: ollama states GLM 5.2 is hosted in the US and Europe "with zero data
   // retention. Your data is never trained on." It is enforced server-side with
   // no per-request flag, so the badge is purely a deployment property (cf. the

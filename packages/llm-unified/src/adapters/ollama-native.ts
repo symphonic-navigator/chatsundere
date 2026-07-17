@@ -109,11 +109,14 @@ export function ollamaNativeAdapter(
         model: slug,
         messages: req.messages.map(toNative),
         stream: true,
-        // Measured 2026-07-17: on this native endpoint `think:false` genuinely
-        // disables reasoning (clean content, empty thinking channel) — it is
-        // NOT a no-op here. (`think` being ignored is a `/v1` shim-only quirk.)
-        // Whether that should flip these models' `fixed-on` classification to a
-        // user-facing toggle is deferred to Chris; unchanged for now.
+        // `think:false` behaves PER MODEL on this native endpoint (measured
+        // 2026-07-17), so do not assume it from the flag alone:
+        //  - glm-5.1 / deepseek-v4-pro: a real off-switch (eval_count -61% / -41%,
+        //    answer still complete) — their `fixed-on` is under review.
+        //  - glm-5.2:cloud: NOT an off-switch. The thinking channel empties, but
+        //    the reasoning moves into the answer and eval_count roughly doubles.
+        // (`think` being ignored entirely is a `/v1` shim-only quirk — there
+        // `reasoning_effort: 'none'` is the lever.)
         think: req.reasoning.enabled,
       };
       if (req.tools && req.tools.length > 0) {

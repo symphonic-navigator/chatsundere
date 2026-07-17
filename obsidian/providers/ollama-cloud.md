@@ -154,14 +154,32 @@ survive contact with ollama.com:
 - **`gemma4:31b` dropped** — ollama serves a non-reasoning Gemma, which cannot
   satisfy the reasoning-required `gemma-4-31b` canonical.
 - **Reasoning corrected** — `think:false` is a no-op on these models → fixed-on.
-  **Superseded 2026-07-17:** natively, `think: false` yields clean content and an
-  **empty** thinking channel — it genuinely disables reasoning. The claim in
-  `ollama-cloud.ts:67` that it "still streams reasoning (leaks into content)" for
-  GLM 5.2 does not reproduce on `/api/chat`; it most likely dates from the `/v1`
-  shim era, where `think` *is* ignored. **This means the `fixed-on` classification
-  is probably wrong on both endpoints** (`/v1` disables via
-  `reasoning_effort: 'none'`). That is UX-visible — a toggle may be owed to the
-  user — so it is Chris's call and is tracked as a follow-up, not changed here.
+  **Refined 2026-07-17 — it is per-model, and the blanket "no-op" was wrong in
+  both directions:**
+
+  | Model | `think:false` | Verdict |
+  |---|---|---|
+  | `glm-5.2:cloud` | thinking channel empties, but content 869 → **3265** chars and eval_count 526 → **1010** | **NOT an off-switch.** Reasoning relocates into the answer; "off" costs ~2x. `fixed-on` is **correct**. |
+  | `glm-5.1` | eval_count 708 → **275** (−61%), content unchanged (761 → 814), `done_reason: stop`, answer complete | **A real off-switch.** `fixed-on` looks wrong. |
+  | `deepseek-v4-pro` | eval_count 348 → **205** (−41%), content 394 → 491 | **A real off-switch.** `fixed-on` looks wrong. |
+
+  So GLM 5.2 is the one model where the original "leaks into content" instinct
+  holds — turning reasoning off there would only make replies longer and dearer,
+  which is precisely the `fixed-on` ("off only hides") case. The other two look
+  like genuine toggles, contradicting the 2026-06-03 "think:false is a no-op on
+  these models" finding.
+
+  > **A correction worth keeping visible.** An earlier note in this same 2026-07-17
+  > pass claimed `think:false` disables reasoning on GLM 5.2 and that `fixed-on`
+  > was therefore probably wrong. **That was a bad experiment, not a bad
+  > provider:** it probed with a *title* prompt ("Reply with a short chat title
+  > only"), which never triggers reasoning at all, so the short clean answer proved
+  > nothing. Re-probed with a prompt that genuinely warrants reasoning, the
+  > opposite shows. The claim was propagated into the spec, this record and the
+  > follow-ups index before it was caught.
+
+  Reclassifying `glm-5.1` / `deepseek-v4-pro` to `toggle` is UX-visible and is
+  Chris's call — tracked as a follow-up, not changed here.
 
 ## Web interfacing (search + fetch)
 
@@ -201,8 +219,10 @@ default (`tiers[0]`) is the 5-result standard, not the cheapest.
   signal. Pre-existing; not fixed in the 2026-07-17 pass. The file's header comment
   is stale too: it claims ollama uses the generic path via `makeGenericLiveBinding`,
   while the code uses `makeLiveBinding` with the native adapter.
-- **GLM 5.2 `fixed-on` is probably wrong** — see the `think:false` correction above.
-  Needs a probe across permutations, then Chris's judgement.
+- **`glm-5.1` / `deepseek-v4-pro` `fixed-on` is probably wrong** — `think:false` is
+  a measured, real off-switch on both (−61% / −41% eval_count, answer complete), so
+  a `toggle` may be owed to the user. **GLM 5.2 is NOT in this** — there `fixed-on`
+  is correct and re-confirmed. See the `think:false` table above. Chris's judgement.
 - **`/v1` is a measured-viable fallback** (18/18 tool replay, reasoning, sampling).
   The native adapter's stated justification is gone; the remaining reasons are
   first-class API, atomic tool args and smaller code. Revisit deliberately if a
