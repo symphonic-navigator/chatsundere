@@ -469,3 +469,12 @@ three counts:
    provider-wide claim, not just GLM 5.2).
 5. Disconnect mid-job → the error surfaces as "upstream busy"/timeout copy, not a
    generic failure (proves `UpstreamHttpError` threading).
+6. **Start a new chat on a NON-ollama model (e.g. a nano-gpt one) and confirm a
+   real title appears.** Added after the whole-branch review flagged it, and it is
+   the one step that is not about Ollama at all: the reroute changes background
+   jobs on the *generic* (non-adapter) path from `stream: false` to `stream: true`
+   for **every** provider. The risk is low — the same `buildBody` already streams
+   for chat there, and the fold consumes the identical `parseOpenAiSseStream`
+   chunks — but the eleven deleted one-shot tests were the only nano-gpt one-shot
+   coverage, their replacements use a fake stream, and the live suite run was
+   Ollama-only. One title on one nano-gpt model closes the gap for a minute's work.
