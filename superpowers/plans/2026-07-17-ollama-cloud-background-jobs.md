@@ -160,7 +160,28 @@ git commit -m "Add mapSampling hook and nest ollama sampling under options"
 
 **Interfaces:**
 - Consumes: `ModelAdapter.mapSampling` (Task 1).
-- Produces: `export function composeWire(args: StreamCompletionArgs, adapter: ModelAdapter): { body: Record<string, unknown>; headers?: Record<string, string>; path?: string }` — used by Task 5.
+- Produces, both used by Task 5:
+
+```ts
+export interface WireCompositionInput {
+  messages: WireMessage[];
+  /** Sampling params PLUS the `reasoning` intent, exactly as the engine layer supplies them. */
+  bodyExtras: Record<string, unknown>;
+  tools?: ToolDef[];
+  cacheKey?: string;
+}
+
+export function composeWire(
+  input: WireCompositionInput,
+  adapter: ModelAdapter,
+): { body: Record<string, unknown>; headers?: Record<string, string>; path?: string };
+```
+
+`composeWire` takes a **narrow input**, not `StreamCompletionArgs`: composition
+reads only these four fields, and the transport fields (provider, apiKey,
+routing) are irrelevant to it. The suite binding is a second caller that has no
+`StreamCompletionArgs` to give — a narrow input lets it call the real composer
+without fabricating a fake args object or casting.
 
 **Context:** `buildWire` currently spreads sampling as top-level keys **outside** the adapter (`stream-completion.ts:196`), which is why ollama never sees it. Verification obligation §7.3 of the spec: with empty sampling the composed body must stay byte-identical for every existing adapter, or every provider record is invalidated at once.
 
@@ -170,55 +191,66 @@ Append to `packages/llm-unified/src/stream-completion.test.ts`:
 
 ```ts
 import { composeWire } from './stream-completion.js';
+import type { ModelAdapter } from './adapter-contract.js';
+
+/** Minimal adapter stub; `profile` is unused by composition. */
+function stubAdapter(over: Partial<ModelAdapter> = {}): ModelAdapter {
+  return {
+    profile: {
+      reasoning: { mode: 'fixed-on' },
+      toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+      vision: false,
+      replayReasoning: false,
+    },
+    buildRequest: () => ({ model: 'm', body: { model: 'm', stream: true } }),
+    parseChunk: () => ({ events: [], state: {} }),
+    ...over,
+  };
+}
+
+const messages = [{ role: 'user' as const, content: 'hi' }];
 
 describe('composeWire sampling', () => {
-  const base = {
-    provider: { id: 'ollama-cloud' },
-    providerConfig: { baseUrl: 'https://ollama.com', routing: { kind: 'direct' } },
-    apiKey: 'k',
-    target: { slug: 'glm-5.2:cloud', adapterId: 'x' },
-    messages: [{ role: 'user' as const, content: 'hi' }],
-  };
-
   it('uses the adapter mapSampling fragment instead of a top-level spread', () => {
-    const adapter = {
-      profile: {} as never,
-      buildRequest: () => ({ model: 'm', body: { model: 'm', stream: true } }),
-      parseChunk: () => ({ events: [], state: {} }),
-      mapSampling: (s: Record<string, unknown>) => ({ options: { num_predict: s.max_tokens } }),
-    };
+    const adapter = stubAdapter({
+      mapSampling: (s) => ({ options: { num_predict: s.max_tokens } }),
+    });
     const wire = composeWire(
-      { ...base, bodyExtras: { max_tokens: 8, reasoning: { enabled: false } } } as never,
-      adapter as never,
+      { messages, bodyExtras: { max_tokens: 8, reasoning: { enabled: false } } },
+      adapter,
     );
     expect(wire.body.options).toEqual({ num_predict: 8 });
     expect(wire.body.max_tokens).toBeUndefined();
   });
 
   it('spreads sampling top-level when the adapter has no mapSampling', () => {
-    const adapter = {
-      profile: {} as never,
-      buildRequest: () => ({ model: 'm', body: { model: 'm', stream: true } }),
-      parseChunk: () => ({ events: [], state: {} }),
-    };
     const wire = composeWire(
-      { ...base, bodyExtras: { temperature: 0.3, reasoning: { enabled: false } } } as never,
-      adapter as never,
+      { messages, bodyExtras: { temperature: 0.3, reasoning: { enabled: false } } },
+      stubAdapter(),
     );
     expect(wire.body.temperature).toBe(0.3);
   });
 
   it('lets adapter structural keys win over sampling on a clash', () => {
-    const adapter = {
-      profile: {} as never,
+    const adapter = stubAdapter({
       buildRequest: () => ({ model: 'adapter-model', body: { model: 'adapter-model' } }),
-      parseChunk: () => ({ events: [], state: {} }),
-    };
+    });
     const wire = composeWire(
-      { ...base, bodyExtras: { model: 'sampling-model', reasoning: { enabled: false } } } as never,
-      adapter as never,
+      { messages, bodyExtras: { model: 'sampling-model', reasoning: { enabled: false } } },
+      adapter,
     );
     expect(wire.body.model).toBe('adapter-model');
+  });
+
+  it('never passes the reasoning intent through as a sampling param', () => {
+    // `reasoning` is consumed into CanonicalRequest; leaking it into `options`
+    // would send ollama a field it rejects.
+    const adapter = stubAdapter({ mapSampling: (s) => ({ options: { ...s } }) });
+    const wire = composeWire(
+      { messages, bodyExtras: { reasoning: { enabled: true }, temperature: 0.3 } },
+      adapter,
+    );
+    expect(wire.body.options).toEqual({ temperature: 0.3 });
   });
 });
 ```
@@ -247,17 +279,25 @@ In `packages/llm-unified/src/stream-completion.ts`, replace the `buildWire` func
  * Shared with the conversation-suite's live binding so the harness verifies the
  * composition production uses rather than reimplementing it.
  */
+export interface WireCompositionInput {
+  messages: WireMessage[];
+  /** Sampling params plus the `reasoning` intent, as the engine layer supplies them. */
+  bodyExtras: Record<string, unknown>;
+  tools?: ToolDef[];
+  cacheKey?: string;
+}
+
 export function composeWire(
-  args: StreamCompletionArgs,
+  input: WireCompositionInput,
   adapter: ModelAdapter,
 ): { body: Record<string, unknown>; headers?: Record<string, string>; path?: string } {
-  const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
+  const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = input.bodyExtras;
   const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
   const req: CanonicalRequest = {
-    messages: args.messages,
+    messages: input.messages,
     reasoning: intent,
-    ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
-    ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
+    ...(input.tools && input.tools.length > 0 ? { tools: input.tools } : {}),
+    ...(input.cacheKey ? { cacheKey: input.cacheKey } : {}),
   };
   const wire = adapter.buildRequest(req);
   const mapped = adapter.mapSampling ? adapter.mapSampling(sampling) : sampling;
@@ -268,14 +308,34 @@ export function composeWire(
 }
 ```
 
+Add `WireMessage` and `ToolDef` to the existing type imports at the top of the
+file if they are not already there (`ToolDef` comes from `./adapter-contract.js`,
+`WireMessage` from `./types.js`).
+
 - [ ] **Step 4: Update the two internal callers**
 
 In the same file, replace the body of `buildAdapterBody` (line 204) and the `buildWire(args, adapter)` call at line 72 so both use the new name:
 
+All three internal callers now pass the narrow input. Add this private helper next
+to `composeWire` so the projection lives in one place:
+
 ```ts
-  // line 72 area
+/** Project the streaming args down to what composition actually needs. */
+function compositionInputFor(args: StreamCompletionArgs): WireCompositionInput {
+  return {
+    messages: args.messages,
+    bodyExtras: args.bodyExtras,
+    ...(args.tools ? { tools: args.tools } : {}),
+    ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
+  };
+}
+```
+
+Then, at line 72:
+
+```ts
   if (adapter) {
-    const wire = composeWire(args, adapter);
+    const wire = composeWire(compositionInputFor(args), adapter);
 ```
 
 ```ts
@@ -284,7 +344,7 @@ function buildAdapterBody(
   args: StreamCompletionArgs,
   adapter: ModelAdapter,
 ): Record<string, unknown> {
-  return composeWire(args, adapter).body;
+  return composeWire(compositionInputFor(args), adapter).body;
 }
 ```
 
@@ -293,7 +353,7 @@ And in `_buildWireForTests`:
 ```ts
 /** Test hook — exposes composeWire so cacheKey/header threading can be asserted. */
 export function _buildWireForTests(args: StreamCompletionArgs, adapter: ModelAdapter) {
-  return composeWire(args, adapter);
+  return composeWire(compositionInputFor(args), adapter);
 }
 ```
 
@@ -751,14 +811,10 @@ Replace lines 45-60 of `binding.ts` (the `const wire = args.adapter.buildRequest
       // exception (the MiMo/chutes 400 case).
       const wire = composeWire(
         {
-          provider: { id: 'suite' },
-          providerConfig: args.providerConfig,
-          apiKey: args.apiKey,
-          target: { slug: '', adapterId: args.offeringRef },
           messages,
           bodyExtras: { ...(args.sampling ?? {}), reasoning },
-          tools: args.tools,
-        } as unknown as StreamCompletionArgs,
+          ...(args.tools ? { tools: args.tools } : {}),
+        },
         args.adapter,
       );
 
@@ -774,16 +830,15 @@ Replace lines 45-60 of `binding.ts` (the `const wire = args.adapter.buildRequest
           }),
 ```
 
-Add the imports at the top of `binding.ts`:
+Add the import at the top of `binding.ts`:
 
 ```ts
-import { type StreamCompletionArgs, composeWire } from '../../src/stream-completion.js';
+import { composeWire } from '../../src/stream-completion.js';
 ```
 
-> **Why the `as unknown as StreamCompletionArgs` cast:** `composeWire` only reads
-> `messages`, `bodyExtras`, `tools` and `cacheKey`; the transport fields are
-> irrelevant to composition. Keep the cast local and commented — do not widen
-> `composeWire`'s signature to accommodate the suite.
+No cast is needed: `composeWire` takes `WireCompositionInput` (Task 2), which is
+exactly what the binding has. If you find yourself reaching for `as unknown as`
+here, re-read Task 2 — you are calling the wrong signature.
 
 - [ ] **Step 5: Run the binding tests**
 
