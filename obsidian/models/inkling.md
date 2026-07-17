@@ -3,80 +3,95 @@
 > Curation record. See [[../providers/nano-gpt]] for the shared provider
 > mechanics. Inkling is **Thinking Machines' first public model** (Mira Murati's
 > lab) — a community first for Chatsundere. Onboarded **2026-07-16**, curated
-> live against nano-gpt.
+> live against nano-gpt. **Re-curated 2026-07-17** after nano-gpt wired the
+> reasoning-trace passthrough and exposed a real effort ladder — see the update
+> note below.
 
 - **Identity:** Inkling · family `inkling`
 - **Architecture:** sparse MoE, **975B total / 41B active**, natively multimodal
   (vision + audio in; we surface vision, text out). Apache-2.0. Routed by
   nano-gpt to **Baseten** (`owned_by: baseten`).
-- **T/R/V:** tools ✅ · reasoning ✅ (a genuine toggle) · vision ✅ (image input;
-  output text-only)
-- **replayReasoning:** false — soft-CoT, and in any case there is no trace to
-  replay on this route (see the headline finding).
+- **T/R/V:** tools ✅ · reasoning ✅ (a four-band effort ladder, trace visible) ·
+  vision ✅ (image input; output text-only)
+- **replayReasoning:** false — soft-CoT; the trace now surfaces on this route but
+  is never replayed back into history.
 - **🕊️ Freedom:** **unknown** → the muted `Uncensored?` badge. `freedomOriented:
   null` (not yet assessed), `freedomOrientedDeployment: true` (nano-gpt adds no
   censorship of its own). See the freedom section.
 - **🔒 Privacy:** no TEE / no ZDR, **US jurisdiction** (Baseten upstream).
 
-## Headline finding — reasoning is billed but its trace is withheld (nano-gpt)
+## Update 2026-07-17 — the passthrough landed and it brought an effort ladder
 
-Inkling reasons internally — `usage.reasoning_tokens` scales cleanly with task
-difficulty (a trivial "hi" bills ~24; a hard logic puzzle bills ~1600) — but
-**nano-gpt does not surface the reasoning trace text on the OpenAI-compatible
-route.** Across streaming and non-streaming, and with every flag tried
-(`reasoning:{enabled/effort/exclude}`, top-level `reasoning_effort`,
-`include_reasoning`, `thinking`, `think`), the `reasoning` / `reasoning_content`
-channel stays **empty** while `reasoning_tokens > 0`.
+Chris pinged nano-gpt (Milan) on 2026-07-16 about the withheld trace; Milan
+replied *"oops, will fix asap"* and by 2026-07-17 had wired **more than** the
+trace. Two things changed, both re-probed live and serially:
 
-This is a **provider-side passthrough gap for this new model, not a model limit
-and not a client bug**:
+1. **The trace now surfaces** on the OpenAI-compatible route — on **both** the
+   base slug (production form `reasoning:{enabled:true}`) and a **newly-appeared
+   `thinkingmachines/inkling:thinking` sibling**. So `reasoningTraceHidden` was
+   dropped from the offering; Inkling is once again an ordinary visible-reasoning
+   model with full CoT reverb. The suite's `reasoning-hidden-billed` assertion
+   fired exactly as it was designed to and has been retired.
+2. **Effort genuinely modulates.** Inkling's HF card documents seven upstream
+   effort levels (`none/minimal/low/medium/high/xhigh/max`), and nano-gpt now
+   honours `effort` in the unified object — reasoning tokens span roughly a factor
+   of ten from the low band to the high band. It is modelled as **`steps`**, not
+   the interim toggle.
 
-- `zai-org/glm-5.1:thinking` surfaces 876 reasoning chars on **the very same
-  route with the same key** — so the mechanism (nano-gpt mapping upstream
-  thinking onto `delta.reasoning`) works generally; Inkling simply is not wired
-  for it yet.
-- nano-gpt's **own web UI does show** Inkling's trace ("Reasoned for 5s" with the
-  full monologue) — its native API has the trace; the OpenAI bridge drops it.
-- Likely cause: nano-gpt's passthrough is keyed to the `:thinking`-slug
-  convention (GLM/DeepSeek), and Inkling is a newer body-flag reasoning model
-  (`reasoning:{enabled}`) with no `:thinking` sibling.
+### The two slugs differ only in their default
 
-Chris pinged nano-gpt (Milan) on 2026-07-16; a fix is expected within days.
+`thinkingmachines/inkling` defaults reasoning **off** (no flags → 0 reasoning
+tokens even on a hard prompt); `thinkingmachines/inkling:thinking` defaults **on**
+(429 tokens on the same flagless prompt). Both honour explicit steering, and
+`{enabled:false}` is a genuine off on the `:thinking` slug too. Because our
+adapter **always** sends an explicit `reasoning` object for a reasoning-capable
+offering, the two slugs are behaviourally identical for us — so we stay on the
+**base slug** and do **not** add a second offering. (This corrects the original
+record's "default on, matching Inkling's native behaviour": native default on the
+base slug is *off*; our `defaultStep: 'medium'` is house style, not upstream.)
 
-### How we ship honestly in the meantime — `reasoningTraceHidden`
+The likely mechanism behind the earlier gap is now confirmed by the fix's shape:
+nano-gpt's passthrough was keyed to the `:thinking`-slug convention (GLM/DeepSeek),
+Inkling shipped without such a sibling, and Milan added both the sibling and
+body-flag passthrough together.
 
-The offering carries **`reasoningTraceHidden: true`** (a new `ModelProfile`
-flag). When reasoning ran but no trace surfaced, the client synthesises a
-terminal **`(hidden reasoning, n tokens)`** marker in the reasoning slot instead
-of an empty bubble — honest about the internal work and its cost without
-performing an inner life it cannot show here. Below a ~100-token floor
-(`HIDDEN_REASONING_FLOOR`) no marker shows, so trivial turns stay calm. Full
-design: [[../../superpowers/specs/2026-07-16-inkling-ux]] (Laura spec-passed).
+## Reasoning control — a four-band effort ladder
 
-**When nano-gpt wires the passthrough: drop `reasoningTraceHidden`** and Inkling
-becomes an ordinary visible-reasoning toggle with full CoT reverb — no other
-change. `run-inkling-suite.ts` self-signals this: its `reasoning-hidden-billed`
-assertion fails the day a trace surfaces, with a note to flip the flag.
-
-## Reasoning control — a genuine toggle
-
-Modelled as **`{ mode: 'toggle', defaultOn: true }`** on the unified `reasoning`
-object (reused via `openRouterAdapter`, exactly like Grok/OpenAI on nano-gpt):
+Modelled as **`{ mode: 'steps', steps: ['off','low','medium','high'], offStep:
+'off', defaultStep: 'medium' }`** on the unified `reasoning` object (reused via
+`openRouterAdapter`, exactly like Grok/OpenAI on nano-gpt). The catalogue constant
+`INKLING_STEPS` is deliberately **separate** from the shape-identical
+`OPENAI_STEPS`: the two describe unrelated upstreams that agree today, and one
+constant would assert a coupling that does not exist.
 
 - `reasoning:{enabled:false}` is a **genuine off** — `reasoning_tokens` drops to
-  **0** and the answer is direct (live-probed 2026-07-16). This is a real exit,
-  so the hidden-reasoning marker is never unavoidable.
-- Default **on**, matching Inkling's native behaviour and the catalogue house
-  style (GLM/DeepSeek/Claude/Grok all default reasoning on).
-- **Effort** is accepted but modelled as a plain binary toggle, **not** `steps`:
-  single-sample token counts were too noisy to claim modulation (and the trace is
-  hidden anyway). Revisit `steps` once the passthrough lands.
+  **0** and the answer is direct (re-probed 2026-07-17).
+- **Four bands, not seven.** The card's seven labels do not all separate under
+  measurement. Two samples per level in the production form
+  (`reasoning:{enabled:true,effort:X}`) gave, in reasoning tokens:
 
-Contrast with **Grok 4.5** (a superficially similar "billed-but-hidden" story):
-Grok 4.5's *normal fixed-on operation* **does** surface a reasoning summary on
-`delta.reasoning` (probed 2026-07-16, 53 chars) — its hiding only occurs on the
-unused `{enabled:false}` path. Grok 4.5 is therefore **not** a hidden-trace case
-and does **not** carry `reasoningTraceHidden`. Inkling is the sole consumer today.
+  | level | minimal | low | medium | high | xhigh | max |
+  |---|---|---|---|---|---|---|
+  | run a | 62 | 65 | 104 | 523 | 622 | 391 |
+  | run b | 53 | 81 | 219 | 817 | 745 | 435 |
+
+  Within-level spread exceeds between-level spacing for the fine gradations,
+  `minimal ≈ low`, `xhigh ≈ high`, and `max` measured **below** `high`. Only four
+  bands are honestly separable — off (0) · low (~70) · medium (~160) · high
+  (~670) — and those four are exactly the labels the client's
+  `resolveReasoningBodyExtras` already maps onto `effort` (`low|medium|high`;
+  others fall back to a bare enabled intent). We ship the four and under-claim
+  rather than offer positions that do nothing.
+- The top-level `reasoning_effort` param modulates too, but our adapter sends the
+  unified `reasoning:{enabled,effort}` object; both were probed and agree.
+
+Contrast with **Grok 4.5** (a superficially similar "billed-but-hidden" story
+from the earlier record): Grok 4.5's *normal fixed-on operation* **does** surface
+a reasoning summary on `delta.reasoning`; its hiding only occurred on the unused
+`{enabled:false}` path. Grok 4.5 was therefore never a `reasoningTraceHidden`
+case. With Inkling's flag dropped, **no offering carries `reasoningTraceHidden`
+today** — the mechanism is retained (a passthrough gap on a freshly-added model
+recurs) but has no current consumer.
 
 ## Context window — unconfirmed, conservative 128k
 
@@ -88,8 +103,10 @@ confirmation. Raise once the true window is known.
 ## Offering — nano-gpt
 
 - **slug:** `thinkingmachines/inkling` · **adapterId:**
-  `nano-gpt:thinkingmachines/inkling` (no `:thinking` sibling exists —
-  `...:thinking` returns `model_not_supported`).
+  `nano-gpt:thinkingmachines/inkling`. A `thinkingmachines/inkling:thinking`
+  sibling now exists (it did not on 2026-07-16) but we do **not** use it — it
+  differs only in its default (see the update note); the base slug plus our
+  always-explicit `reasoning` object covers both behaviours.
 - **adapter:** the shared `openRouterAdapter` — it emits
   `stream_options:{include_usage:true}` (required; without it Inkling sends only
   `x_nanogpt_pricing`, no OpenAI `usage`) and the unified `reasoning` object, and
@@ -100,7 +117,8 @@ confirmation. Raise once the true window is known.
 - **vision:** ✅ — a real photo's clothing colour named reliably (6/6 "green"
   once the image-gen tool is out of the way; see the quirk below).
 - 🔒 **Privacy:** no TEE / no ZDR, US jurisdiction (Baseten).
-- **confidence:** `verified` — `run-inkling-suite.ts` 2026-07-16.
+- **confidence:** `verified` — `run-inkling-suite.ts` re-run 2026-07-17
+  (core 44/44 across the four-band ladder, vision 4/4).
 
 ## Tool-calling — over-eagerness quirk
 
@@ -149,20 +167,27 @@ badge exists to express.
 
 ## Validation
 
-Live suite (`run-inkling-suite.ts`), run 2026-07-16, serially, with the exact
-production adapter (`openRouterAdapter('thinkingmachines/inkling', …)`):
+Live suite (`run-inkling-suite.ts`), re-run **2026-07-17**, serially, with the
+exact production adapter (`openRouterAdapter('thinkingmachines/inkling', …)`).
+The harness now derives its matrix from the offering's own `ReasoningControl`
+via `permutationsForReasoning`, so it exercises every effort band:
 
 | Scenario | Result |
 |---|---|
-| core (reasoning-off · reasoning-on) | **22/22** |
+| core (reasoning-off · effort:low · effort:medium · effort:high) | **44/44** |
 | vision (tools-free) | **4/4** |
 
 Confirmed:
 
 1. **Reasoning off** → genuine (`reasoning-absent` passes, `reasoning_tokens` 0).
-2. **Reasoning on** → billed but hidden (`reasoning-hidden-billed`: channel empty,
-   `reasoning_tokens > 0`) — the bespoke assertion that self-signals the flip.
-3. **Tools** → `generate_image` fires on a draw request, arguments valid JSON.
+2. **Each effort band** → `reasoning-present` passes; the trace now populates the
+   reasoning channel on every band (the passthrough landed 2026-07-17).
+3. **Tools** → `generate_image` fires on a draw request, arguments valid JSON, on
+   every band.
 4. **Vision** → test image described correctly (tools-free; see the quirk).
 5. **Memory/recall** → injected token echoed back through the protocol.
 6. **Usage** → normalised, `totalTokens > 0` on every turn.
+
+The earlier run (2026-07-16, core 22/22) used a bespoke `reasoning-hidden-billed`
+assertion for the then-withheld trace; it fired on the flip as designed and was
+retired.

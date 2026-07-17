@@ -71,6 +71,16 @@ both the red "Censored" danger pill and from any (future) positive all-clear.
 
 ## Unit 2 — Hidden-reasoning affordance
 
+> **Update 2026-07-17 — Inkling is no longer a consumer.** nano-gpt wired the
+> reasoning-trace passthrough the day after this spec landed (Milan's "will fix
+> asap"), so Inkling now streams its trace normally and its `reasoningTraceHidden`
+> flag was dropped. The fix also exposed a real `effort` ladder, so Inkling's
+> cockpit reasoning control moved from a toggle to the standard four-band `steps`
+> stepper — the same already-approved primitive the OpenAI/Claude reasoning models
+> use, not a new surface. **The affordance below is implemented and retained but
+> currently has no consumer** (a provider withholding a new model's trace recurs).
+> The unit as built is unchanged; only its applicability to Inkling ended.
+
 ### Today
 
 When a reasoning-capable offering runs with reasoning on, the adapter emits

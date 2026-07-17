@@ -366,10 +366,10 @@ export const CANONICALS: CanonicalModel[] = [
     family: 'inkling',
     // Thinking Machines' first public model (Mira Murati's lab). Sparse MoE,
     // 975B total / 41B active, natively multimodal (vision + audio in — we surface
-    // vision), Apache-2.0. Reasoning is a genuine toggle on nano-gpt, but the trace
-    // text is withheld on our route today (a provider-side passthrough gap, not a
-    // model limit — see the offering and the Model Curation Record), so the
-    // offering carries `reasoningTraceHidden`.
+    // vision), Apache-2.0. Reasoning is a genuine four-band effort ladder on
+    // nano-gpt (`steps`); the trace was briefly withheld on our route but nano-gpt
+    // wired the passthrough on 2026-07-17 — see the offering and the Model
+    // Curation Record.
     requiredCaps: { tools: true, reasoning: true, vision: true },
     // Freedom NOT yet assessed: a US model with present-but-leaky guardrails per
     // its own card ("occasional tendency to comply with role-play ... on harmful

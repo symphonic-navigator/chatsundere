@@ -18,9 +18,10 @@ export interface ModelProfile {
   /** The offering reasons internally (billed reasoning tokens) but the provider
    *  does not surface the trace text on our route — so there is nothing to stream
    *  into the reasoning group. When true, the client shows a terminal
-   *  "(hidden reasoning, n tokens)" marker instead of an empty bubble. The current
-   *  case is nano-gpt's Inkling, a provider-side passthrough gap for that new
-   *  model (expected to be fixed upstream; the flag is then dropped). Absent ⇒
+   *  "(hidden reasoning, n tokens)" marker instead of an empty bubble. No offering
+   *  carries this today — nano-gpt's Inkling was the original consumer until the
+   *  provider wired the passthrough on 2026-07-17; the mechanism is retained because
+   *  a provider-side passthrough gap on a freshly-added model recurs. Absent ⇒
    *  traces surface normally. */
   reasoningTraceHidden?: boolean;
 }

@@ -80,6 +80,17 @@ const OPENAI_STEPS: ReasoningControl = {
 };
 const OPENAI_NONE: ReasoningControl = { mode: 'none' };
 
+// Inkling's ladder. Deliberately a separate constant from OPENAI_STEPS despite the
+// identical shape: the two describe unrelated upstreams that happen to agree today,
+// and sharing one would assert a coupling that does not exist. Inkling accepts seven
+// effort labels but only these bands are separable — see the offering below.
+const INKLING_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
+
 interface ClaudeSpec {
   canonicalRef: string;
   base: string;
@@ -503,14 +514,13 @@ const offerings: Offering[] = [
   // model. Reasoning is a genuine toggle on the unified `reasoning` object
   // (`{enabled:false}` → 0 reasoning tokens; default on; scales with difficulty —
   // live-probed 2026-07-16). Tool calls arrive single-block; vision works.
-  // CRUCIAL QUIRK: nano-gpt does NOT surface the reasoning trace text on this
-  // route — it bills `reasoning_tokens` but streams no `reasoning` channel
-  // (`zai-org/glm-5.1:thinking` proves the mechanism works generally on the same
-  // route; Inkling is a provider-side passthrough gap for this new model, whose
-  // own web UI does show the trace). So it reuses the shared unified-reasoning
-  // adapter (openRouterAdapter) AND carries `reasoningTraceHidden: true`, which
-  // drives the client's terminal "(hidden reasoning, n tokens)" marker. Drop the
-  // flag once nano-gpt wires the passthrough. Context window unconfirmed (nano-gpt
+  // Reasoning is a genuine `steps` ladder on the unified reasoning object:
+  // `{enabled:false}` is a real off (0 reasoning tokens) and `effort` modulates
+  // roughly tenfold from low to high (re-probed 2026-07-17). Inkling's own card
+  // documents seven upstream levels (none/minimal/low/medium/high/xhigh/max), but
+  // only four bands are empirically separable — minimal≈low, xhigh≈high, and max
+  // measured BELOW high — so we ship the house-style four and under-claim rather
+  // than offer positions that do nothing. Context window unconfirmed (nano-gpt
   // /models reports none; HF card unspecified) — conservative 128k pending
   // confirmation. Baseten upstream → no ZDR/TEE, US jurisdiction. Freedom not yet
   // assessed → the "Uncensored?" badge.
@@ -520,11 +530,10 @@ const offerings: Offering[] = [
     upstreamSlug: 'thinkingmachines/inkling',
     adapter: { kind: 'catalogue', adapterId: 'nano-gpt:thinkingmachines/inkling' },
     profile: {
-      reasoning: { mode: 'toggle', defaultOn: true },
+      reasoning: INKLING_STEPS,
       toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
       vision: true,
       replayReasoning: false,
-      reasoningTraceHidden: true,
     },
     context: { recommended: 131_072, max: 131_072 },
     trust: { tee: false, zdr: false, jurisdiction: 'US' },
@@ -649,11 +658,13 @@ export function registerNanoGpt(): void {
         }),
       );
     } else if (o.canonicalRef === 'inkling') {
-      // Inkling honours the unified `reasoning` object (`{enabled:false}` is a
-      // genuine off), so it reuses the shared adapter. It never surfaces its
-      // reasoning trace on this route, so `include_reasoning` would be a no-op
-      // (probed 2026-07-16) — the offering's `reasoningTraceHidden` handles the
-      // display side instead.
+      // Inkling honours the unified `reasoning` object — `{enabled:false}` is a
+      // genuine off and `effort` modulates — so it reuses the shared adapter and
+      // streams its trace unprompted (no `include_reasoning` gate; that is
+      // OpenRouter-only). We bind the BASE slug on purpose: `:thinking` differs
+      // only in its default (base defaults reasoning off, `:thinking` on) and both
+      // honour explicit steering, so with the adapter always sending an explicit
+      // reasoning object the two are behaviourally identical. Re-probed 2026-07-17.
       registerAdapter(
         o.adapter.adapterId,
         openRouterAdapter(o.upstreamSlug, {

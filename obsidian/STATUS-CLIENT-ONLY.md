@@ -63,7 +63,35 @@ Spec + plan: `superpowers/{specs,plans}/2026-07-17-ollama-cloud-background-jobs*
 
 ---
 
-**Last updated:** 2026-07-16 — **INKLING CURATED (Thinking Machines' first
+**Last updated:** 2026-07-17 — **INKLING RE-CURATED: nano-gpt wired the trace
+passthrough AND exposed a real effort ladder — code + records updated on the
+working tree, NOT yet squashed/pushed.** The day after Inkling landed, Milan
+(nano-gpt) fixed the withheld trace ("oops, will fix asap") — and delivered more
+than asked. Re-probed live and serially 2026-07-17: **(a)** the reasoning trace
+now surfaces on the OpenAI-compatible route, on both the base slug and a
+newly-appeared `thinkingmachines/inkling:thinking` sibling, so
+**`reasoningTraceHidden` was dropped** from the offering (Inkling is again an
+ordinary visible-reasoning model with full CoT reverb). **(b)** Effort genuinely
+modulates (~10× low→high), so reasoning was re-modelled **`toggle` → four-band
+`steps`** (`INKLING_STEPS = off/low/medium/high`); the card documents seven upstream
+levels but only four separate under measurement (minimal≈low, xhigh≈high, max
+measured *below* high) so we ship four and under-claim. **(c)** The two slugs
+differ only in their default (base off, `:thinking` on); since our adapter always
+sends an explicit reasoning object we **stay on the base slug, no second
+offering**. Also fixed a latent harness defect: `permutationsForReasoning` iterated
+the `offStep` as an effort permutation (would assert reasoning-present on an off
+intent) — now skipped; this also silently fixed `chatgpt-*`. The
+`reasoningTraceHidden` **mechanism is retained** (stream-engine, ReasoningPill, DB)
+but now has **no consumer** — a provider withholding a new model's trace recurs.
+Gates: `run-inkling-suite.ts` re-run **core 44/44 + vision 4/4**; `pnpm typecheck
+--force` **14/14**; Biome clean. Files: `providers/nano-gpt.ts`,
+`catalogue/{types,canonical-registry}.ts`, `curation/{run-inkling-suite,conversation-suite/permutations}.ts`;
+records `[[models/inkling]]`, `[[insights/follow-ups-index]]`,
+`[[../superpowers/specs/2026-07-16-inkling-ux]]`. **Freedom still deferred** to
+Lex's bench (unchanged). **Restart the dev stack before testing** (Vite HMR ignores
+`packages/*`). — prior entry retained below —
+
+**2026-07-16 — INKLING CURATED (Thinking Machines' first
 public model — a community first) + TWO HONEST-SURFACING UX UNITS — on `master`
 (`a78ab8d6` / `1cc82386` / `c6d935b7`), NOT pushed — Chris pushes after his
 device check.** Three squashed units. **(1) Curate Inkling on nano-gpt**

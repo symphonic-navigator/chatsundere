@@ -38,6 +38,10 @@ export function permutationsForReasoning(control: ReasoningControl): ReasoningPe
         });
       }
       for (const step of control.steps) {
+        // The off step is already covered by the reasoning-off permutation above;
+        // running it again as an effort would assert reasoning-PRESENT on the very
+        // intent that means off.
+        if (step === control.offStep) continue;
         const effort = EFFORTS.has(step) ? (step as 'low' | 'medium' | 'high') : undefined;
         perms.push({
           label: `effort:${step}`,

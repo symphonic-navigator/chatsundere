@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 //
 // Live verification harness for the Inkling offering on nano-gpt (run via the
-// /curate skill, NEVER in CI — it needs keys/.nano-test-key). Inkling is the one
-// hidden-reasoning-trace case: it reasons internally (billed reasoning_tokens)
-// but nano-gpt withholds the trace text on the OpenAI-compatible route, so the
-// standard `reasoning-present` assertion does not apply on reasoning-on. Instead
-// this harness asserts, for reasoning-on, that reasoning is BILLED but the
-// channel stays EMPTY — and that assertion self-documents the flip: the day a
-// trace surfaces (nano-gpt wiring the passthrough), it fails with a note to drop
-// `reasoningTraceHidden` and revert to the ordinary `reasoning-present` matrix.
+// /curate skill, NEVER in CI — it needs keys/.nano-test-key). Inkling was briefly
+// the one hidden-reasoning-trace case — nano-gpt billed reasoning_tokens while
+// withholding the trace text — and this harness carried a bespoke
+// `reasoning-hidden-billed` assertion to prove it. nano-gpt wired the passthrough
+// on 2026-07-17 and that assertion fired exactly as designed, so the offering
+// dropped `reasoningTraceHidden` and this harness reverted to the standard matrix
+// derived from the offering's own ReasoningControl — now a four-band effort
+// ladder. See obsidian/models/inkling.md for the measured bands.
 //
 //   bun run curation/run-inkling-suite.ts            (from packages/llm-unified)
 import { readFileSync } from 'node:fs';
@@ -17,11 +17,10 @@ import { openRouterAdapter } from '../src/adapters/openrouter-openai.js';
 import { nanoGpt } from '../src/providers/nano-gpt.js';
 import type { ProviderConfig } from '../src/types.js';
 import {
-  type Assertion,
   type ReasoningPermutation,
-  assertReasoningAbsent,
   coreScenario,
   makeLiveBinding,
+  permutationsForReasoning,
   renderSuiteReport,
   runSuite,
   visionScenario,
@@ -50,31 +49,7 @@ const direct: (baseUrl: string) => ProviderConfig = (baseUrl) => ({
 const offering = nanoGpt.offerings.find((o) => o.canonicalRef === 'inkling');
 if (!offering) throw new Error('inkling offering not found on nano-gpt');
 
-/**
- * Reasoning-on assertion for a hidden-trace offering: the model must reason
- * (billed reasoning_tokens) while the reasoning channel stays empty. Fails with
- * a directive when a trace DOES surface — that is the signal nano-gpt has wired
- * the passthrough and the offering should drop `reasoningTraceHidden`.
- */
-const assertReasoningHiddenBilled: Assertion = (outcome) => {
-  const channelEmpty = outcome.reasoning.trim().length === 0;
-  const billed = (outcome.usage?.reasoningTokens ?? 0) > 0;
-  const ok = channelEmpty && billed;
-  return {
-    assertion: 'reasoning-hidden-billed',
-    status: ok ? 'pass' : 'fail',
-    detail: ok
-      ? `reasoning billed (${outcome.usage?.reasoningTokens} tokens), trace withheld by provider`
-      : !channelEmpty
-        ? 'a reasoning trace surfaced — nano-gpt may have wired the passthrough; drop reasoningTraceHidden and revert to the standard matrix'
-        : 'no reasoning billed (usage.reasoningTokens is 0)',
-  };
-};
-
-const inklingPerms: ReasoningPermutation[] = [
-  { label: 'reasoning-off', intent: { enabled: false }, assertions: [assertReasoningAbsent] },
-  { label: 'reasoning-on', intent: { enabled: true }, assertions: [assertReasoningHiddenBilled] },
-];
+const inklingPerms: ReasoningPermutation[] = permutationsForReasoning(offering.profile.reasoning);
 
 const VISION_PERM: ReasoningPermutation[] = [{ label: 'default', intent: { enabled: false } }];
 
@@ -106,9 +81,7 @@ const visionBinding = makeLiveBinding({
 });
 
 const bar = '='.repeat(72);
-console.log(
-  `\n${bar}\nOFFERING ${ref}  reasoning=${offering.profile.reasoning.mode} (trace hidden)\n${bar}`,
-);
+console.log(`\n${bar}\nOFFERING ${ref}  reasoning=${offering.profile.reasoning.mode}\n${bar}`);
 const core = await runSuite(coreScenario, inklingPerms, binding);
 console.log(renderSuiteReport(core));
 
