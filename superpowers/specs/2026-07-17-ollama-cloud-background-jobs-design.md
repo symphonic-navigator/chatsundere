@@ -323,10 +323,25 @@ mapSampling(s) {
 Scope of the mapping: the callers send only `temperature` and `max_tokens` today
 (verified by grep), so those two are what must work. `top_p`, `seed` and `stop`
 are included because they are in Ollama's documented `options` schema and cost one
-line each — the failure mode being fixed is *silent dropping*, and a hook that
-drops the next parameter added would repeat it. `num_ctx` is deliberately **not**
-sent: probes 18-20 show no truncation without it. `top_k` / `min_p` are omitted —
-no OpenAI-side equivalent we ever send.
+line each. `num_ctx` is deliberately **not** sent: probes 18-20 show no truncation
+without it.
+
+**`top_k` and `min_p` are deliberately omitted — decided by Chris, 2026-07-17.**
+This is a conscious call, not an oversight, and it was contested. The Task 1
+reviewer argued it should be reversed: both fields *are* in Ollama's documented
+`options` schema, `bodyExtras` is a generic `Record<string, unknown>`, so a future
+caller adding Ollama-specific tuning would have `top_k` **silently dropped** —
+precisely the failure class this spec exists to fix, reproduced in miniature. The
+counter-argument, which governs: neither is an OpenAI-side parameter, nothing in
+the codebase sends them, Chatsundere exposes no UI for them, and YAGNI (CLAUDE.md
+§14) says do not build for a hypothetical caller. Whoever needs them adds two
+lines and a test at that point.
+
+Consequence to keep in mind: the mapping rule is **"the params we send"**, not
+"the params Ollama accepts". The `ollama-native.test.ts` case named "drops keys
+ollama does not accept" therefore overstates its own premise — `frequency_penalty`
+is genuinely rejected by Ollama, whereas `top_k` is accepted and merely
+unimplemented. Logged as a Minor for the final review sweep.
 
 ### 5.6 The suite
 
