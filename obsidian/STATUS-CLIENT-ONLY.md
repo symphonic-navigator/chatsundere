@@ -8,6 +8,61 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-17 — **OLLAMA CLOUD BACKGROUND JOBS REPAIRED — on
+`master` (squash `77735264`), awaiting Chris's device verification (spec §10).**
+
+Reported as "GLM 5.2's background workers don't work on ollama". It was **not a
+GLM 5.2 problem**: title generation, memory extraction **and compaction** were
+broken for **every** ollama model and had been since onboarding. Chatting was
+unaffected, which is why it hid. Three faults, one class — an OpenAI-shaped
+assumption hard-wired **outside** the adapter:
+
+1. `runOneShotCompletion` composed its own wire, discarded the adapter's `path`
+   and hard-coded `/chat/completions`. Ollama's `baseUrl` is the bare host →
+   `https://ollama.com/chat/completions` → **HTTP 404** on all three slugs. Not
+   retryable → instant, silent failure (fallback title, no hang).
+2. It parsed the reply as an OpenAI envelope, which `/api/chat` never sends.
+3. Sampling was spread top-level, where ollama ignores it silently. **Ollama had
+   no working temperature control and no working token cap — on the chat path
+   too.** (`options.temperature: 5` → HTTP 400; the same value top-level → HTTP
+   200, ignored. The server validates what it reads.)
+
+**Fixed by deleting the parallel wire path**, not patching it a second time:
+`runOneShotCompletion` is now a fold over `streamCompletion`, so background jobs
+inherit every adapter hook by construction. New optional `ModelAdapter.mapSampling`
+hook (ollama nests sampling under `options`); `streamCompletion` gained an
+`operation` label and throws `UpstreamHttpError` so `classifyMemoryActionError`
+keeps its "upstream busy" copy.
+
+**The `/curate` lesson, and the sharper half of this landing:** the
+conversation-suite **reimplemented the wire it verifies**. It honoured `wire.path`
+*more correctly than production*, never touched the one-shot entry point, and sent
+no sampling at all — so it recorded "core 11/11, verified" while three jobs were
+dead. *A verification harness that rebuilds its subject cannot fail the way its
+subject fails.* It now shares the production composer (`composeWire`), sends
+sampling, and covers the background-job entry point via `makeOneShotBinding` +
+`assertUsageWithinCap`.
+
+**Live-verified:** all three LLM offerings green on `core` / `one-shot` /
+`sampling-cap`; real titles (24/23/23 chars); `usage-within-cap:16` = 16 tokens.
+
+**Chris's doc reading reshaped this**, and killed two of my claims: `/v1` works
+(18/18 tool replay across all three models with the real `buildPrompt` prompt — the
+2026-06-03 defect that justifies the native adapter **does not reproduce**), and my
+determinism-based temperature argument was invalid (replaced by the 400/200
+validation pair). Native is kept on reasons that stand alone (first-class API,
+atomic tool args, and it is the **smallest** adapter in the repo — a `/v1` adapter
+would be a 7th clone of the OpenAI SSE parse, net *more* code).
+
+**Owed:** Chris's device verification, incl. the new **non-ollama** step (a title
+on a nano-gpt model — the reroute flips generic-path background jobs from
+`stream:false` to `stream:true` for *every* provider; the live run was ollama-only).
+Follow-ups (GLM 5.2's likely-wrong `fixed-on`; the runner iterating web offerings;
+a shared `openAiCompatAdapter`) are in [[insights/follow-ups-index]].
+Spec + plan: `superpowers/{specs,plans}/2026-07-17-ollama-cloud-background-jobs*`.
+
+---
+
 **Last updated:** 2026-07-16 — **INKLING CURATED (Thinking Machines' first
 public model — a community first) + TWO HONEST-SURFACING UX UNITS — on `master`
 (`a78ab8d6` / `1cc82386` / `c6d935b7`), NOT pushed — Chris pushes after his
