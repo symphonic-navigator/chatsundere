@@ -126,3 +126,34 @@ describe('ollamaNativeAdapter.parseChunk', () => {
     expect(events[0]).toMatchObject({ type: 'tool-call', name: 'calc', toolCallId: 'call_calc_0' });
   });
 });
+
+describe('ollamaNativeAdapter mapSampling', () => {
+  const adapter = ollamaNativeAdapter('glm-5.2:cloud', {
+    vision: false,
+    reasoning: { mode: 'fixed-on' },
+  });
+
+  it('nests temperature and renames max_tokens to num_predict', () => {
+    // Ollama reads sampling ONLY under `options`; top-level keys are silently
+    // ignored (measured 2026-07-17), which is why this rename is load-bearing.
+    expect(adapter.mapSampling?.({ temperature: 0.3, max_tokens: 256 })).toEqual({
+      options: { temperature: 0.3, num_predict: 256 },
+    });
+  });
+
+  it('passes through the other documented options fields', () => {
+    expect(adapter.mapSampling?.({ top_p: 0.9, seed: 42, stop: ['\n\n'] })).toEqual({
+      options: { top_p: 0.9, seed: 42, stop: ['\n\n'] },
+    });
+  });
+
+  it('maps only the params we deliberately send, dropping the rest', () => {
+    // `frequency_penalty`/`presence_penalty` are not unmapped because ollama
+    // rejects them — they are simply not among the params we choose to send.
+    expect(adapter.mapSampling?.({ frequency_penalty: 1, presence_penalty: 1 })).toEqual({});
+  });
+
+  it('returns an empty fragment for empty sampling', () => {
+    expect(adapter.mapSampling?.({})).toEqual({});
+  });
+});

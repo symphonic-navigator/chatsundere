@@ -68,7 +68,12 @@ export {
 
 export { parseOpenAiSseStream, type ParseOpts } from './streaming.js';
 
-export { streamCompletion, type StreamCompletionArgs } from './stream-completion.js';
+export {
+  streamCompletion,
+  composeWire,
+  UpstreamHttpError,
+  type StreamCompletionArgs,
+} from './stream-completion.js';
 
 export type { ToolDef } from './adapter-contract.js';
 

@@ -6,7 +6,7 @@ import { parseWithAdapter, parseWithAdapterNdjson } from './adapter-stream.js';
 import type { CompletionTarget } from './catalogue/target.js';
 import { getProxyAuthSource } from './proxy-auth.js';
 import { ProxyRedirectError, isOpaqueRedirect } from './proxy-fetch.js';
-import { type OnRetry, withStreamingRetry } from './retry.js';
+import { type OnRetry, parseRetryAfter, withStreamingRetry } from './retry.js';
 import { parseOpenAiSseStream } from './streaming.js';
 import { type StreamDiagnosticsSink, buildRequest, pickResponseHeaders } from './transport.js';
 import type {
@@ -16,6 +16,22 @@ import type {
   StreamChunk,
   WireMessage,
 } from './types.js';
+
+/**
+ * A non-2xx upstream response. Carries `status` because callers classify on it —
+ * `classifyMemoryActionError` maps 429/5xx to the user-facing "upstream busy"
+ * copy, and a bare Error would silently degrade that to a generic failure.
+ */
+export class UpstreamHttpError extends Error {
+  readonly status: number;
+  readonly retryAfter: number | null;
+  constructor(status: number, retryAfter: number | null) {
+    super(`streamCompletion: upstream ${status}`);
+    this.name = 'UpstreamHttpError';
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
 
 export interface StreamCompletionArgs {
   provider: ProviderDefinition;
@@ -45,6 +61,12 @@ export interface StreamCompletionArgs {
   initialResponseTimeoutMs?: number;
   /** Optional sink for retry decisions. Caller (apps/) wires the console line. */
   onRetry?: OnRetry;
+  /**
+   * Retry-event label, surfaced to `onRetry` sinks. Defaults to
+   * 'stream-completion'; background jobs pass 'one-shot' so their retry lines
+   * stay distinguishable in the console.
+   */
+  operation?: string;
   /** Optional sink for observing the resolved request and response for debugging purposes. */
   onDiagnostics?: StreamDiagnosticsSink;
 }
@@ -69,7 +91,7 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
   let extraHeaders: Record<string, string> | undefined;
   let path = '/chat/completions';
   if (adapter) {
-    const wire = buildWire(args, adapter);
+    const wire = composeWire(compositionInputFor(args), adapter);
     body = wire.body;
     extraHeaders = wire.headers;
     if (wire.path) path = wire.path;
@@ -90,7 +112,7 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
         extraHeaders,
         onDiagnostics: args.onDiagnostics,
       }),
-    operation: 'stream-completion',
+    operation: args.operation ?? 'stream-completion',
     initialResponseTimeoutMs: timeoutMs,
     signal: args.signal,
     onRetry: args.onRetry,
@@ -113,7 +135,9 @@ export async function* streamCompletion(args: StreamCompletionArgs): AsyncIterab
   });
 
   if (!response.ok) {
-    throw new Error(`streamCompletion: upstream ${response.status}`);
+    const retryAfter = parseRetryAfter(response.headers);
+    await response.body?.cancel().catch(() => {});
+    throw new UpstreamHttpError(response.status, retryAfter);
   }
   if (!response.body) {
     throw new Error(`streamCompletion: upstream ${response.status} returned no body`);
@@ -155,7 +179,7 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
     // too; without it the generic path never surfaces normalised usage.
     stream_options: { include_usage: true },
     // Generic OpenAI-compatible providers (adapter.kind === 'generic') get tool
-    // definitions injected here — the catalogue path does this in `buildWire`,
+    // definitions injected here — the catalogue path does this in `composeWire`,
     // and without it a generic offering that declares `toolCalls.supported`
     // silently never receives the tools, so the model never calls them.
     ...(args.tools && args.tools.length > 0
@@ -171,29 +195,57 @@ function buildBody(args: StreamCompletionArgs): Record<string, unknown> {
 }
 
 /**
+ * Input shape for wire composition: messages, sampling params, optional tools
+ * and conversation-affinity cache key. Shared with the conversation-suite's
+ * live binding so the harness verifies the composition production uses.
+ */
+export interface WireCompositionInput {
+  messages: WireMessage[];
+  /** Sampling params plus the `reasoning` intent, as the engine layer supplies them. */
+  bodyExtras: Record<string, unknown>;
+  tools?: ToolDef[];
+  cacheKey?: string;
+}
+
+/**
  * Build the wire body AND any adapter-supplied headers via a ModelAdapter. The
  * adapter owns model/messages/stream/reasoning/tools and its own headers (e.g.
- * wafer's `Wafer-ZDR: required`); generic sampling params (e.g. temperature)
- * carried in bodyExtras are layered on afterwards so they are never lost, and
- * never override the adapter's keys.
+ * wafer's `Wafer-ZDR: required`).
+ *
+ * Sampling params (temperature, max_tokens, …) are OpenAI-shaped top-level keys
+ * by default, which is correct for every OpenAI-compatible provider. An adapter
+ * whose upstream wants them elsewhere implements `mapSampling` and owns the
+ * translation — otherwise the params are sent in a shape the upstream silently
+ * ignores (ollama's `options`; measured 2026-07-17).
  */
-function buildWire(
-  args: StreamCompletionArgs,
+export function composeWire(
+  input: WireCompositionInput,
   adapter: ModelAdapter,
 ): { body: Record<string, unknown>; headers?: Record<string, string>; path?: string } {
-  const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = args.bodyExtras;
+  const { thinking: _thinking, reasoning: rawReasoning, ...sampling } = input.bodyExtras;
   const intent = (rawReasoning as ReasoningIntent | undefined) ?? { enabled: false };
   const req: CanonicalRequest = {
-    messages: args.messages,
+    messages: input.messages,
     reasoning: intent,
-    ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
-    ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
+    ...(input.tools && input.tools.length > 0 ? { tools: input.tools } : {}),
+    ...(input.cacheKey ? { cacheKey: input.cacheKey } : {}),
   };
   const wire = adapter.buildRequest(req);
+  const mapped = adapter.mapSampling ? adapter.mapSampling(sampling) : sampling;
   // Sampling first, adapter body second: the adapter's structural keys
   // (model/messages/stream/reasoning/tools) always win on any clash, while
-  // generic sampling params (e.g. temperature) the adapter does not set survive.
-  return { body: { ...sampling, ...wire.body }, headers: wire.headers, path: wire.path };
+  // sampling params the adapter does not set survive.
+  return { body: { ...mapped, ...wire.body }, headers: wire.headers, path: wire.path };
+}
+
+/** Project the streaming args down to what composition actually needs. */
+function compositionInputFor(args: StreamCompletionArgs): WireCompositionInput {
+  return {
+    messages: args.messages,
+    bodyExtras: args.bodyExtras,
+    ...(args.tools ? { tools: args.tools } : {}),
+    ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
+  };
 }
 
 /** The wire body via a ModelAdapter (headers dropped). Retained for tests. */
@@ -201,7 +253,7 @@ function buildAdapterBody(
   args: StreamCompletionArgs,
   adapter: ModelAdapter,
 ): Record<string, unknown> {
-  return buildWire(args, adapter).body;
+  return composeWire(compositionInputFor(args), adapter).body;
 }
 
 // Test-only re-export so unit tests can exercise body composition without
@@ -212,7 +264,7 @@ export const buildBodyForTest = buildBody;
 // without the network.
 export const buildAdapterBodyForTest = buildAdapterBody;
 
-/** Test hook — exposes buildWire so cacheKey/header threading can be asserted. */
+/** Test hook — exposes composeWire so cacheKey/header threading can be asserted. */
 export function _buildWireForTests(args: StreamCompletionArgs, adapter: ModelAdapter) {
-  return buildWire(args, adapter);
+  return composeWire(compositionInputFor(args), adapter);
 }

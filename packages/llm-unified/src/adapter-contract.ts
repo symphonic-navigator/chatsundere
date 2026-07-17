@@ -61,6 +61,14 @@ export interface ModelAdapter {
    * NDJSON line (e.g. an ollama `/api/chat` chunk).
    */
   parseChunk(raw: unknown, state: ParseState): { events: StreamChunk[]; state: ParseState };
+  /**
+   * Translate canonical OpenAI-shaped sampling params (`temperature`,
+   * `max_tokens`, …) into this provider's wire form, returning a body fragment
+   * to merge. Absent → the params are spread as top-level keys, which is
+   * correct for every OpenAI-compatible provider. Implement it only when the
+   * upstream wants them elsewhere (ollama nests them under `options`).
+   */
+  mapSampling?(sampling: Record<string, unknown>): Record<string, unknown>;
   readonly profile: ModelProfile;
   /**
    * How the upstream frames its streamed response: `sse` (default, OpenAI

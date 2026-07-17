@@ -8,3 +8,5 @@ export * from './binding.js';
 export * from './permutations.js';
 export { coreScenario } from './scenarios/core.js';
 export { visionScenario } from './scenarios/vision.js';
+export { oneShotScenario } from './scenarios/one-shot.js';
+export { samplingCapScenario } from './scenarios/sampling-cap.js';

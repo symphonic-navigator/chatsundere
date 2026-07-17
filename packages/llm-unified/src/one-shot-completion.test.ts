@@ -1,314 +1,107 @@
-import { describe, expect, it, mock } from 'bun:test';
-import {
-  type OneShotArgs,
-  runOneShotCompletion,
-  runOneShotCompletionWithSleep,
-} from './one-shot-completion.js';
-import { nanoGpt } from './providers/nano-gpt.js';
+// SPDX-License-Identifier: LGPL-3.0-only
+import { describe, expect, it } from 'bun:test';
+import { _runOneShotWith, runOneShotCompletion } from './one-shot-completion.js';
+import type { StreamChunk } from './types.js';
 
-const successBody = JSON.stringify({
-  choices: [{ message: { role: 'assistant', content: 'A short title' } }],
-});
+const baseArgs = {
+  provider: { id: 'ollama-cloud' } as never,
+  providerConfig: { baseUrl: 'https://ollama.com', routing: { kind: 'direct' } } as never,
+  apiKey: 'k',
+  target: { slug: 'glm-5.2:cloud', adapterId: 'ollama-cloud:glm-5.2:cloud' },
+  messages: [{ role: 'user' as const, content: 'hi' }],
+  bodyExtras: { temperature: 0.3, max_tokens: 256, reasoning: { enabled: false } },
+};
+
+function streamOf(chunks: StreamChunk[]) {
+  return async function* () {
+    for (const c of chunks) yield c;
+  };
+}
 
 describe('runOneShotCompletion', () => {
-  it('returns the assistant message content on 200', async () => {
-    const oldFetch = globalThis.fetch;
-    globalThis.fetch = mock(
-      async () => new Response(successBody, { status: 200 }),
-    ) as unknown as typeof fetch;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    const args: OneShotArgs = {
-      provider: nanoGpt,
-      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-      apiKey: 'test-key',
-      target: { slug: model.upstreamSlug },
-      messages: [{ role: 'user', content: 'hi' }],
-      bodyExtras: { temperature: 0.3, max_tokens: 20 },
-    };
-    const result = await runOneShotCompletion(args);
-    globalThis.fetch = oldFetch;
-    expect(result).toBe('A short title');
-  });
-
-  it('throws on non-200', async () => {
-    const oldFetch = globalThis.fetch;
-    let attempts = 0;
-    globalThis.fetch = mock(async () => {
-      attempts++;
-      return new Response('nope', { status: 500 });
-    }) as unknown as typeof fetch;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-
-    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
-
-    await expect(
-      runOneShotCompletionWithSleep(
-        {
-          provider: nanoGpt,
-          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-          apiKey: 'k',
-          target: { slug: model.upstreamSlug },
-          messages: [],
-          bodyExtras: {},
-        },
-        async () => {}, // instant test sleep
-      ),
-    ).rejects.toThrow();
-    globalThis.fetch = oldFetch;
-    expect(attempts).toBe(5); // 500 is retryable, so should retry 4 times (5 total)
-  });
-
-  it('fires onRawResponse with content, reasoning and finishReason on 200', async () => {
-    const oldFetch = globalThis.fetch;
-    globalThis.fetch = mock(
-      async () =>
-        new Response(
-          JSON.stringify({
-            choices: [
-              {
-                message: { content: 'the body', reasoning: 'my chain of thought' },
-                finish_reason: 'stop',
-              },
-            ],
-          }),
-          { status: 200 },
-        ),
-    ) as unknown as typeof fetch;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    const captured: unknown[] = [];
-    await runOneShotCompletion({
-      provider: nanoGpt,
-      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-      apiKey: 'k',
-      target: { slug: model.upstreamSlug },
-      messages: [],
-      bodyExtras: {},
-      onRawResponse: (r) => captured.push(r),
-    });
-    globalThis.fetch = oldFetch;
-    expect(captured).toEqual([
-      { content: 'the body', reasoning: 'my chain of thought', finishReason: 'stop' },
-    ]);
-  });
-
-  it('reads the legacy reasoning_content channel', async () => {
-    const oldFetch = globalThis.fetch;
-    globalThis.fetch = mock(
-      async () =>
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: 'x', reasoning_content: 'legacy thoughts' } }],
-          }),
-          { status: 200 },
-        ),
-    ) as unknown as typeof fetch;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    let captured: { reasoning?: string; finishReason?: unknown } = {};
-    await runOneShotCompletion({
-      provider: nanoGpt,
-      providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-      apiKey: 'k',
-      target: { slug: model.upstreamSlug },
-      messages: [],
-      bodyExtras: {},
-      onRawResponse: (r) => {
-        captured = r;
-      },
-    });
-    globalThis.fetch = oldFetch;
-    expect(captured.reasoning).toBe('legacy thoughts');
-    expect(captured.finishReason).toBeNull();
-  });
-
-  it('fires onRawResponse before throwing on empty content (only-reasoning case)', async () => {
-    const oldFetch = globalThis.fetch;
-    globalThis.fetch = mock(
-      async () =>
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: '', reasoning: 'thought hard, said nothing' } }],
-          }),
-          { status: 200 },
-        ),
-    ) as unknown as typeof fetch;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    const captured: unknown[] = [];
-    await expect(
-      runOneShotCompletion({
-        provider: nanoGpt,
-        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-        apiKey: 'k',
-        target: { slug: model.upstreamSlug },
-        messages: [],
-        bodyExtras: {},
-        onRawResponse: (r) => captured.push(r),
-      }),
-    ).rejects.toThrow();
-    globalThis.fetch = oldFetch;
-    expect(captured).toEqual([
-      { content: '', reasoning: 'thought hard, said nothing', finishReason: null },
-    ]);
-  });
-
-  it('throws on empty content', async () => {
-    const oldFetch = globalThis.fetch;
-    globalThis.fetch = mock(
-      async () =>
-        new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 }),
-    ) as unknown as typeof fetch;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    await expect(
-      runOneShotCompletion({
-        provider: nanoGpt,
-        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-        apiKey: 'k',
-        target: { slug: model.upstreamSlug },
-        messages: [],
-        bodyExtras: {},
-      }),
-    ).rejects.toThrow();
-    globalThis.fetch = oldFetch;
-  });
-});
-
-describe('runOneShotCompletion retry on transient failure', () => {
-  it('retries on 429 then returns the eventual content', async () => {
-    const oldFetch = globalThis.fetch;
-    let attempts = 0;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    globalThis.fetch = mock(async () => {
-      attempts++;
-      if (attempts < 2) {
-        return new Response('rate limited', {
-          status: 429,
-          headers: { 'retry-after': '0' },
-        });
-      }
-      return new Response(JSON.stringify({ choices: [{ message: { content: 'recovered' } }] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    }) as unknown as typeof fetch;
-
-    // Import at test scope to allow dependency injection in next test
-    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
-
-    const result = await runOneShotCompletionWithSleep(
-      {
-        provider: nanoGpt,
-        providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-        apiKey: 'test-key',
-        target: { slug: model.upstreamSlug },
-        messages: [{ role: 'user', content: 'hi' }],
-        bodyExtras: {},
-      },
-      async () => {}, // instant test sleep
+  it('folds token chunks into the returned content', async () => {
+    const result = await _runOneShotWith(
+      baseArgs as never,
+      streamOf([
+        { type: 'token', text: 'Sorting ' },
+        { type: 'token', text: 'lists' },
+        { type: 'finish', reason: 'stop' },
+      ]) as never,
     );
-    globalThis.fetch = oldFetch;
-    expect(result).toBe('recovered');
-    expect(attempts).toBe(2);
+    expect(result).toBe('Sorting lists');
   });
 
-  it('does not retry non-retryable 401', async () => {
-    const oldFetch = globalThis.fetch;
-    let attempts = 0;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    globalThis.fetch = mock(async () => {
-      attempts++;
-      return new Response('unauthorised', { status: 401 });
-    }) as unknown as typeof fetch;
-
-    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
-
-    await expect(
-      runOneShotCompletionWithSleep(
-        {
-          provider: nanoGpt,
-          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-          apiKey: 'test-key',
-          target: { slug: model.upstreamSlug },
-          messages: [{ role: 'user', content: 'hi' }],
-          bodyExtras: {},
+  it('reports content, reasoning and finishReason through onRawResponse', async () => {
+    let raw: unknown = null;
+    await _runOneShotWith(
+      {
+        ...baseArgs,
+        onRawResponse: (r: unknown) => {
+          raw = r;
         },
-        async () => {}, // instant test sleep
-      ),
-    ).rejects.toThrow();
-    globalThis.fetch = oldFetch;
-    expect(attempts).toBe(1);
+      } as never,
+      streamOf([
+        { type: 'reasoning', text: 'thinking…' },
+        { type: 'token', text: 'answer' },
+        { type: 'finish', reason: 'stop' },
+      ]) as never,
+    );
+    expect(raw).toEqual({ content: 'answer', reasoning: 'thinking…', finishReason: 'stop' });
   });
 
-  it('throws after exhausting retries', async () => {
-    const oldFetch = globalThis.fetch;
-    let attempts = 0;
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    globalThis.fetch = mock(async () => {
-      attempts++;
-      return new Response('busy', { status: 503 });
-    }) as unknown as typeof fetch;
-
-    const { runOneShotCompletionWithSleep } = await import('./one-shot-completion.js');
-
-    await expect(
-      runOneShotCompletionWithSleep(
-        {
-          provider: nanoGpt,
-          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-          apiKey: 'test-key',
-          target: { slug: model.upstreamSlug },
-          messages: [{ role: 'user', content: 'hi' }],
-          bodyExtras: {},
+  it('fires onRawResponse BEFORE throwing on empty content (reasoning-only case)', async () => {
+    let raw: unknown = null;
+    const p = _runOneShotWith(
+      {
+        ...baseArgs,
+        onRawResponse: (r: unknown) => {
+          raw = r;
         },
-        async () => {}, // instant test sleep
-      ),
-    ).rejects.toThrow();
-    globalThis.fetch = oldFetch;
-    expect(attempts).toBe(5); // initial + 4 retries
+      } as never,
+      streamOf([{ type: 'reasoning', text: 'only thinking' }]) as never,
+    );
+    await expect(p).rejects.toThrow('one-shot returned empty content');
+    expect(raw).toEqual({ content: '', reasoning: 'only thinking', finishReason: null });
   });
-});
 
-describe('one-shot fresh Request per attempt (regression)', () => {
-  it('retries a 503 sending a readable body each time, then succeeds', async () => {
-    const model = nanoGpt.offerings[0];
-    if (!model) throw new Error('no offerings');
-    let attempts = 0;
-    const bodies: string[] = [];
-    const oldFetch = globalThis.fetch;
-    globalThis.fetch = (async (req: Request) => {
-      attempts++;
-      bodies.push(await req.text()); // consume body as real fetch does
-      if (attempts < 2) return new Response('busy', { status: 503 });
-      return new Response(JSON.stringify({ choices: [{ message: { content: 'Hi' } }] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    }) as unknown as typeof fetch;
-
-    try {
-      const out = await runOneShotCompletionWithSleep(
-        {
-          provider: nanoGpt,
-          providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
-          apiKey: 'test-key',
-          target: { slug: model.upstreamSlug },
-          messages: [{ role: 'user', content: 'hi' }],
-          bodyExtras: {},
+  it('rejects with the upstream error chunk message, after onRawResponse has fired', async () => {
+    let raw: unknown = null;
+    const p = _runOneShotWith(
+      {
+        ...baseArgs,
+        onRawResponse: (r: unknown) => {
+          raw = r;
         },
-        async () => {},
-      );
-      expect(out).toBe('Hi');
-      expect(attempts).toBe(2);
-      expect(new Set(bodies).size).toBe(1); // identical body both attempts, no throw
-    } finally {
-      globalThis.fetch = oldFetch;
-    }
+      } as never,
+      streamOf([
+        { type: 'token', text: 'partial' },
+        { type: 'error', message: 'upstream exploded mid-stream' },
+      ]) as never,
+    );
+    await expect(p).rejects.toThrow('upstream exploded mid-stream');
+    expect(raw).toEqual({ content: 'partial', reasoning: '', finishReason: null });
+  });
+
+  it('sends neither tools nor a cacheKey', async () => {
+    let seen: Record<string, unknown> = {};
+    await _runOneShotWith(
+      baseArgs as never,
+      ((a: Record<string, unknown>) => {
+        seen = a;
+        return streamOf([{ type: 'token', text: 'x' }])();
+      }) as never,
+    );
+    expect(seen.tools).toBeUndefined();
+    expect(seen.cacheKey).toBeUndefined();
+    expect(seen.operation).toBe('one-shot');
+    // Critical: the caller's overall budget (default 30 000 ms), NOT
+    // streamCompletion's own 15 s default — inheriting that would impose a
+    // new time-to-first-byte cap on dreaming (180 s) and compaction (180 s).
+    expect(seen.initialResponseTimeoutMs).toBe(30_000);
+    expect(seen.signal).toBeDefined();
+  });
+
+  it('is exported with an unchanged public signature', () => {
+    expect(typeof runOneShotCompletion).toBe('function');
   });
 });

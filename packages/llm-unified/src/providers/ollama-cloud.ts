@@ -64,9 +64,14 @@ function ollamaOffering(spec: OllamaSpec): Offering {
 const SPECS: OllamaSpec[] = [
   { canonicalRef: 'glm-5.1', slug: 'glm-5.1', reasoning: FIXED_ON, vision: false, ctx: 200_000 },
   // GLM 5.2 is served under the `:cloud` slug (bare `glm-5.2` 404s on ollama.com).
-  // think:false still streams reasoning (leaks into content) → fixed-on, as for
-  // GLM 5.1. /api/show reports a 1,000,000 ceiling; recommended capped at 200k.
-  // Live-probed 2026-06-17.
+  // Classified fixed-on for the same reason as GLM 5.1: think:false was believed
+  // to still stream reasoning (leaking into content). Superseded 2026-07-17: on
+  // the native `/api/chat` endpoint, think:false yields clean content and an
+  // empty thinking channel — it genuinely disables reasoning, and this does not
+  // reproduce. Whether `fixed-on` should become a user-facing toggle is
+  // deferred to Chris (see obsidian/providers/ollama-cloud.md); the
+  // classification is unchanged for now. /api/show reports a 1,000,000
+  // ceiling; recommended capped at 200k. Live-probed 2026-06-17.
   // ZDR: ollama states GLM 5.2 is hosted in the US and Europe "with zero data
   // retention. Your data is never trained on." It is enforced server-side with
   // no per-request flag, so the badge is purely a deployment property (cf. the

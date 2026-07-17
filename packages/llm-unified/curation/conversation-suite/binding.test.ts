@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 import { chutesAdapter } from '../../src/adapters/chutes-openai.js';
+import { ollamaNativeAdapter } from '../../src/adapters/ollama-native.js';
 import type { RetryEvent } from '../../src/retry.js';
 import type { ProviderConfig } from '../../src/types.js';
 import { makeLiveBinding } from './binding.js';
@@ -184,5 +185,29 @@ describe('makeLiveBinding', () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ status: 503, errorKind: 'status' });
     expect(outcome.httpStatus).toBe(200);
+  });
+
+  it('routes sampling through the adapter mapSampling rather than sending it top-level', async () => {
+    let sentBody: Record<string, unknown> = {};
+    const fetchImpl = (async (req: Request) => {
+      sentBody = (await req.json()) as Record<string, unknown>;
+      return new Response('{"done":true}\n', { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const binding = makeLiveBinding({
+      offeringRef: 'ollama-cloud:glm-5.2:cloud',
+      providerConfig: { baseUrl: 'https://ollama.com', routing: { kind: 'direct' } },
+      apiKey: 'k',
+      adapter: ollamaNativeAdapter('glm-5.2:cloud', {
+        vision: false,
+        reasoning: { mode: 'fixed-on' },
+      }),
+      sampling: { max_tokens: 8 },
+      fetchImpl,
+    });
+    await binding.runTurn([{ role: 'user', content: 'hi' }], { enabled: false });
+
+    expect(sentBody.options).toEqual({ num_predict: 8 });
+    expect(sentBody.max_tokens).toBeUndefined();
   });
 });

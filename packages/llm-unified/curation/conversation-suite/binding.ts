@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ModelAdapter, ToolDef } from '../../src/adapter-contract.js';
 import { parseWithAdapter, parseWithAdapterNdjson } from '../../src/adapter-stream.js';
+import type { CompletionTarget } from '../../src/catalogue/target.js';
+import { runOneShotCompletion } from '../../src/one-shot-completion.js';
 import {
   type OnRetry,
   type RetryEvent,
   formatRetryEvent,
   withStreamingRetry,
 } from '../../src/retry.js';
-import { buildBodyForTest } from '../../src/stream-completion.js';
+import { UpstreamHttpError, buildBodyForTest, composeWire } from '../../src/stream-completion.js';
 import { parseOpenAiSseStream } from '../../src/streaming.js';
 import { buildRequest } from '../../src/transport.js';
 import type { ProviderConfig, ProviderDefinition, StreamChunk } from '../../src/types.js';
@@ -22,6 +24,12 @@ export interface LiveBindingArgs {
   apiKey: string;
   adapter: ModelAdapter;
   tools?: ToolDef[];
+  /**
+   * Sampling params in canonical OpenAI shape (e.g. `{ max_tokens: 8 }`),
+   * translated by the adapter's `mapSampling`. The suite sent none until
+   * 2026-07-17, which is why a provider silently ignoring a cap went unseen.
+   */
+  sampling?: Record<string, unknown>;
   /** Injectable for key-free unit tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
   /** Injectable backoff (ms); defaults to a real setTimeout. Lets tests run instantly. */
@@ -42,11 +50,18 @@ export function makeLiveBinding(args: LiveBindingArgs): RunnerBinding {
   return {
     offeringRef: args.offeringRef,
     async runTurn(messages, reasoning) {
-      const wire = args.adapter.buildRequest({
-        messages,
-        reasoning,
-        ...(args.tools && args.tools.length > 0 ? { tools: args.tools } : {}),
-      });
+      // Share the production composer so the harness verifies the pipe production
+      // uses rather than a reimplementation of it. The fetch stays ours: the
+      // suite must capture a non-2xx status as a checkable outcome, not an
+      // exception (the MiMo/chutes 400 case).
+      const wire = composeWire(
+        {
+          messages,
+          bodyExtras: { ...(args.sampling ?? {}), reasoning },
+          ...(args.tools ? { tools: args.tools } : {}),
+        },
+        args.adapter,
+      );
 
       const response = await withStreamingRetry({
         buildRequest: () =>
@@ -142,6 +157,58 @@ export function makeGenericLiveBinding(args: GenericBindingArgs): RunnerBinding 
       const chunks: StreamChunk[] = [];
       for await (const c of parseOpenAiSseStream(response.body)) chunks.push(c);
       return assembleOutcome(response.status, chunks);
+    },
+    toolResultFor(call): ReturnType<RunnerBinding['toolResultFor']> {
+      return {
+        role: 'tool',
+        tool_call_id: call.id,
+        name: call.name,
+        content: JSON.stringify({ ok: true }),
+      };
+    },
+  };
+}
+
+export interface OneShotBindingArgs {
+  offeringRef: string;
+  provider: ProviderDefinition;
+  providerConfig: ProviderConfig;
+  apiKey: string;
+  target: CompletionTarget;
+  sampling?: Record<string, unknown>;
+  onRetry?: OnRetry;
+}
+
+/**
+ * Wire the suite to the BACKGROUND-JOB path (`runOneShotCompletion`) rather than
+ * the chat path. Mirrors what title generation sends. A non-2xx becomes a
+ * checkable outcome (like `makeLiveBinding`), not an exception, by unwrapping
+ * `UpstreamHttpError`.
+ */
+export function makeOneShotBinding(args: OneShotBindingArgs): RunnerBinding {
+  return {
+    offeringRef: args.offeringRef,
+    async runTurn(messages, reasoning) {
+      try {
+        const text = await runOneShotCompletion({
+          provider: args.provider,
+          providerConfig: args.providerConfig,
+          apiKey: args.apiKey,
+          target: args.target,
+          messages,
+          bodyExtras: { ...(args.sampling ?? {}), reasoning },
+          onRetry: args.onRetry ?? logRetryToConsole,
+        });
+        return { ...assembleOutcome(200, []), text };
+      } catch (e) {
+        const status = e instanceof UpstreamHttpError ? e.status : 0;
+        // A non-UpstreamHttpError (ProxyRedirectError, a network TypeError, a bug)
+        // collapses to status 0 below with no message of its own — log it here or
+        // the operator sees only "HTTP 0 (expected 2xx)" and has to re-run to learn
+        // anything.
+        if (status === 0) console.error(`one-shot ${args.offeringRef} failed:`, e);
+        return assembleOutcome(status, []);
+      }
     },
     toolResultFor(call): ReturnType<RunnerBinding['toolResultFor']> {
       return {

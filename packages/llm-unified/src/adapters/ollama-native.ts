@@ -89,12 +89,31 @@ export function ollamaNativeAdapter(
     profile,
     responseFraming: 'ndjson',
 
+    mapSampling(sampling: Record<string, unknown>): Record<string, unknown> {
+      // ollama reads sampling ONLY under `options` — top-level keys are accepted
+      // and silently ignored (an out-of-range `options.temperature` 400s, the
+      // same value top-level does not). Fields per ollama's documented
+      // ModelOptions schema. `num_ctx` is omitted deliberately: ollama.com
+      // applies no small default (no truncation measured to 25k prompt tokens).
+      const options: Record<string, unknown> = {};
+      if ('temperature' in sampling) options.temperature = sampling.temperature;
+      if ('max_tokens' in sampling) options.num_predict = sampling.max_tokens;
+      if ('top_p' in sampling) options.top_p = sampling.top_p;
+      if ('seed' in sampling) options.seed = sampling.seed;
+      if ('stop' in sampling) options.stop = sampling.stop;
+      return Object.keys(options).length > 0 ? { options } : {};
+    },
+
     buildRequest(req: CanonicalRequest): WireRequest {
       const body: Record<string, unknown> = {
         model: slug,
         messages: req.messages.map(toNative),
         stream: true,
-        // `think:false` is a no-op on reasoning-native models, but harmless.
+        // Measured 2026-07-17: on this native endpoint `think:false` genuinely
+        // disables reasoning (clean content, empty thinking channel) — it is
+        // NOT a no-op here. (`think` being ignored is a `/v1` shim-only quirk.)
+        // Whether that should flip these models' `fixed-on` classification to a
+        // user-facing toggle is deferred to Chris; unchanged for now.
         think: req.reasoning.enabled,
       };
       if (req.tools && req.tools.length > 0) {

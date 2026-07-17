@@ -126,3 +126,41 @@ export function assertMemoryEchoed(token: string): Assertion {
     };
   };
 }
+
+/**
+ * The model's completion stayed within the requested token cap — i.e. the cap
+ * actually reached the upstream. A provider that reads sampling from a different
+ * place silently ignores an OpenAI-shaped cap and overruns it; ollama did
+ * exactly this until 2026-07-17 (`eval_count: 120` against `max_tokens: 8`).
+ * Usage-absent is a fail: an unverifiable cap is not a passed cap.
+ */
+export function assertUsageWithinCap(maxTokens: number): Assertion {
+  return (outcome) => {
+    if (outcome.usage === null) {
+      return {
+        assertion: `usage-within-cap:${maxTokens}`,
+        status: 'fail',
+        detail: 'no usage surfaced, so the cap cannot be verified',
+      };
+    }
+    const used = outcome.usage.completionTokens;
+    const ok = used <= maxTokens;
+    return {
+      assertion: `usage-within-cap:${maxTokens}`,
+      status: ok ? 'pass' : 'fail',
+      detail: ok
+        ? `${used} completion tokens within the ${maxTokens} cap`
+        : `${used} completion tokens exceed the ${maxTokens} cap (the cap never reached the upstream)`,
+    };
+  };
+}
+
+/** The turn produced visible text at all. */
+export function assertTextPresent(outcome: TurnOutcome): AssertionResult {
+  const ok = outcome.text.trim().length > 0;
+  return {
+    assertion: 'text-present',
+    status: ok ? 'pass' : 'fail',
+    detail: ok ? `${outcome.text.length} chars` : 'no text returned',
+  };
+}

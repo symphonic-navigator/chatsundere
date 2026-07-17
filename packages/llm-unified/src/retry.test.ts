@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import {
+  MAX_RETRY_ATTEMPTS,
   RETRY_BASE_DELAY_SECONDS,
   RETRY_MAX_DELAY_SECONDS,
   type RetryEvent,
@@ -293,6 +294,22 @@ describe('withStreamingRetry', () => {
     });
     expect(res.ok).toBe(true);
     expect(bodies).toEqual(['{"n":1}', '{"n":1}']); // both attempts sent the same body, no throw
+  });
+
+  it('returns the final non-ok response after exhausting all retries on a retryable status', async () => {
+    let attempts = 0;
+    const res = await withStreamingRetry({
+      buildRequest: () => new Request('https://x.test', { method: 'POST', body: '{}' }),
+      doFetch: (async () => {
+        attempts++;
+        return new Response('busy', { status: 503 });
+      }) as unknown as typeof fetch,
+      operation: 'unit-stream',
+      initialResponseTimeoutMs: null,
+      sleepFn: async () => {},
+    });
+    expect(res.status).toBe(503);
+    expect(attempts).toBe(MAX_RETRY_ATTEMPTS + 1); // initial attempt + 4 retries, then give up
   });
 
   it('returns the final non-ok response on a non-retryable status (no throw)', async () => {

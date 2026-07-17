@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 import {
   assertMemoryEchoed,
   assertNoHttpError,
   assertNoStreamError,
   assertReasoningAbsent,
   assertReasoningPresent,
+  assertTextPresent,
   assertToolArgsValidJson,
   assertToolCallFired,
   assertUsagePresent,
+  assertUsageWithinCap,
   assertVisionDescribed,
 } from './assertions.js';
 import type { TurnOutcome } from './types.js';
@@ -135,5 +137,36 @@ describe('assertVisionDescribed', () => {
   test('fails when the content is absent (image not carried through)', () => {
     const r = assertVisionDescribed('red')(outcome({ text: "I can't see an image." }));
     expect(r.status).toBe('fail');
+  });
+});
+
+describe('assertUsageWithinCap', () => {
+  it('passes when the model honoured the cap', () => {
+    const r = assertUsageWithinCap(8)(
+      outcome({ usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 } }),
+    );
+    expect(r.status).toBe('pass');
+  });
+
+  it('fails when the cap was ignored — the ollama sampling leak', () => {
+    const r = assertUsageWithinCap(8)(
+      outcome({ usage: { promptTokens: 5, completionTokens: 120, totalTokens: 125 } }),
+    );
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain('120');
+  });
+
+  it('fails when usage is absent, since the cap cannot be verified', () => {
+    const r = assertUsageWithinCap(8)(outcome({ usage: null }));
+    expect(r.status).toBe('fail');
+  });
+});
+
+describe('assertTextPresent', () => {
+  it('fails on empty text', () => {
+    expect(assertTextPresent(outcome({ text: '' })).status).toBe('fail');
+  });
+  it('passes on non-empty text', () => {
+    expect(assertTextPresent(outcome({ text: 'hi' })).status).toBe('pass');
   });
 });
