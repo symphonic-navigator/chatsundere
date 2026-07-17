@@ -15,9 +15,12 @@
 
 | Canonical | Slug | Reasoning | Vision | Tools | ctx | Confidence |
 |---|---|---|---|---|---|---|
-| glm-5.1 | `glm-5.1` | fixed-on | no | yes | 200k | verified |
+| glm-5.1 | `glm-5.1` | **toggle** (default on) | no | yes | 200k | verified |
 | glm-5.2 | `glm-5.2:cloud` | fixed-on | no | yes | 200k (max 1M) | verified |
-| deepseek-v4-pro | `deepseek-v4-pro` | fixed-on | no | yes | 200k | verified |
+| deepseek-v4-pro | `deepseek-v4-pro` | **toggle** (default on) | no | yes | 200k | verified |
+
+Reasoning steerability is **per model here, not a provider trait** — see the
+`think:false` table below.
 
 Live conversation-suite 2026-07-17, **all three green on all three scenarios**:
 `core` (11 checks), `one-shot` (2), `sampling-cap` (3). The background-job path
@@ -157,17 +160,27 @@ survive contact with ollama.com:
   **Refined 2026-07-17 — it is per-model, and the blanket "no-op" was wrong in
   both directions:**
 
-  | Model | `think:false` | Verdict |
-  |---|---|---|
-  | `glm-5.2:cloud` | thinking channel empties, but content 869 → **3265** chars and eval_count 526 → **1010** | **NOT an off-switch.** Reasoning relocates into the answer; "off" costs ~2x. `fixed-on` is **correct**. |
-  | `glm-5.1` | eval_count 708 → **275** (−61%), content unchanged (761 → 814), `done_reason: stop`, answer complete | **A real off-switch.** `fixed-on` looks wrong. |
-  | `deepseek-v4-pro` | eval_count 348 → **205** (−41%), content 394 → 491 | **A real off-switch.** `fixed-on` looks wrong. |
+  Broad probe, **n=5 per cell × 2 reasoning-warranting prompts** (medians):
 
-  So GLM 5.2 is the one model where the original "leaks into content" instinct
-  holds — turning reasoning off there would only make replies longer and dearer,
-  which is precisely the `fixed-on` ("off only hides") case. The other two look
-  like genuine toggles, contradicting the 2026-06-03 "think:false is a no-op on
-  these models" finding.
+  | Model | `think:false` → eval_count | content | Classification |
+  |---|---|---|---|
+  | `glm-5.1` | 777 → **269** (−65%) · 842 → **234** (−72%) | unchanged (831→802, 786→838) | **`toggle`** — a real off-switch |
+  | `deepseek-v4-pro` | 343 → **170** (−50%) · 464 → **185** (−60%) | ~stable | **`toggle`** — a real off-switch |
+  | `glm-5.2:cloud` | 563 → **1055** (+87%) · 712 → 526 (−26%) | **3-4x longer** (735→3208, 497→1555) | **`fixed-on`** — NOT an off-switch |
+
+  Thinking channel empties on all three; `done_reason: stop`, no truncation
+  anywhere. **The discriminator is content length, not `eval_count`** — GLM 5.2's
+  eval_count also fell on one prompt (−26%), which alone reads as an off-switch. It
+  is not: the reasoning simply moves into the answer, so "off" buys a longer,
+  chattier reply rather than a cheaper one. That is exactly the `fixed-on` /
+  "off only hides" case, and a toggle there would astonish the user. GLM 5.2 is the
+  one model where the original "leaks into content" instinct holds.
+
+  The other two contradict the 2026-06-03 "think:false is a no-op on these models"
+  line, and are now `{ mode: 'toggle', defaultOn: true }` — on by default because
+  reasoning is the reason to pick a reasoning-native model, and quality degrades
+  without it. **The live suite now verifies this itself**: a `toggle` yields two
+  permutations, and `reasoning-absent` / `reasoning-present` both PASS on each.
 
   > **A correction worth keeping visible.** An earlier note in this same 2026-07-17
   > pass claimed `think:false` disables reasoning on GLM 5.2 and that `fixed-on`
@@ -219,10 +232,10 @@ default (`tiers[0]`) is the 5-result standard, not the cheapest.
   signal. Pre-existing; not fixed in the 2026-07-17 pass. The file's header comment
   is stale too: it claims ollama uses the generic path via `makeGenericLiveBinding`,
   while the code uses `makeLiveBinding` with the native adapter.
-- **`glm-5.1` / `deepseek-v4-pro` `fixed-on` is probably wrong** — `think:false` is
-  a measured, real off-switch on both (−61% / −41% eval_count, answer complete), so
-  a `toggle` may be owed to the user. **GLM 5.2 is NOT in this** — there `fixed-on`
-  is correct and re-confirmed. See the `think:false` table above. Chris's judgement.
+- ~~`glm-5.1` / `deepseek-v4-pro` `fixed-on` is probably wrong~~ — **Resolved
+  2026-07-17.** Both are now `{ mode: 'toggle', defaultOn: true }`; GLM 5.2 stays
+  `fixed-on`. Broad probe (n=5 × 2 reasoning-warranting prompts) and a live suite
+  run confirm it — see the table above.
 - **`/v1` is a measured-viable fallback** (18/18 tool replay, reasoning, sampling).
   The native adapter's stated justification is gone; the remaining reasons are
   first-class API, atomic tool args and smaller code. Revisit deliberately if a

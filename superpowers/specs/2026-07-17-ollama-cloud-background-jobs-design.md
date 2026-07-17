@@ -470,14 +470,15 @@ three counts:
 - ~~GLM 5.2's `fixed-on` reasoning classification is probably wrong.~~
   **Retracted the same day — see the retraction in §2.** GLM 5.2's `fixed-on` is
   **correct**; the follow-up rested on a mis-designed probe.
-- **`glm-5.1` / `deepseek-v4-pro`'s `fixed-on` is probably wrong** — the real
-  finding the retraction surfaced. `think:false` is a measured off-switch on both
-  (eval_count −61% / −41%, content length unchanged, answer complete), which
-  contradicts the 2026-06-03 "think:false is a no-op on these models" line. A
-  `toggle` would save users 40-60% of completion tokens on these two. UX-visible →
-  Chris's judgement. Needs a wider probe (n=2 so far) and, if it lands, a suite
-  re-run: a `toggle` produces two reasoning permutations, so `assertReasoningAbsent`
-  begins to apply.
+- ~~`glm-5.1` / `deepseek-v4-pro`'s `fixed-on` is probably wrong~~ — **Resolved
+  2026-07-17**, the real finding the retraction surfaced. Widened to n=5 × 2
+  reasoning-warranting prompts with GLM 5.2 as a control: glm-5.1 −65%/−72%,
+  deepseek −50%/−60% eval_count with content unchanged and no truncation → both are
+  now `{ mode: 'toggle', defaultOn: true }`. The control earned its keep: GLM 5.2's
+  eval_count *also* fell on one prompt (−26%), so `eval_count` alone would have
+  produced a third wrong classification — the discriminator is **content length**
+  (GLM 5.2's grows 3-4x, because its reasoning moves into the answer). Live suite
+  re-run: `reasoning-absent` and `reasoning-present` both PASS on each toggle.
 - **A shared `openAiCompatAdapter`** for the six near-duplicate OpenAI adapters
   (1 321 lines between them). The real lever against this duplication, and the
   thing that would make `/v1` nearly free. Own spec.

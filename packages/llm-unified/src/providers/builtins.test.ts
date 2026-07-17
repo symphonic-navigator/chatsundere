@@ -156,7 +156,25 @@ describe('built-in providers', () => {
       ]);
       expect(llm.every((o) => o.confidence === 'verified')).toBe(true);
       expect(llm.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
-      expect(llm.every((o) => o.profile.reasoning.mode === 'fixed-on')).toBe(true);
+      // Reasoning steerability is PER MODEL here, not a provider-wide trait
+      // (live-measured 2026-07-17, n=5 x 2 reasoning-warranting prompts).
+      // glm-5.1 / deepseek-v4-pro: `think:false` genuinely stops the thinking
+      // (eval_count -50%..-72%, answer length unchanged) → toggle.
+      // glm-5.2: `think:false` empties the thinking channel but moves the
+      // reasoning into the answer (content 3-4x longer) → fixed-on, since "off"
+      // would only make replies longer, never cheaper.
+      const modes = Object.fromEntries(llm.map((o) => [o.upstreamSlug, o.profile.reasoning.mode]));
+      expect(modes).toEqual({
+        'glm-5.1': 'toggle',
+        'deepseek-v4-pro': 'toggle',
+        'glm-5.2:cloud': 'fixed-on',
+      });
+      const toggles = llm.filter((o) => o.profile.reasoning.mode === 'toggle');
+      expect(
+        toggles.every(
+          (o) => o.profile.reasoning.mode === 'toggle' && o.profile.reasoning.defaultOn,
+        ),
+      ).toBe(true);
       // ZDR is scoped to GLM 5.2 only (deployment-level, US/EU hosting); the
       // other ollama models carry no such statement.
       expect(llm.find((o) => o.upstreamSlug === 'glm-5.2:cloud')?.trust.zdr).toBe(true);

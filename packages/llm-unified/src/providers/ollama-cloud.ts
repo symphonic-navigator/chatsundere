@@ -10,10 +10,25 @@ import type { ProviderDefinition } from '../types.js';
 import { ollamaWebFetchAdapter, ollamaWebSearchAdapter } from '../web-adapters/ollama-web.js';
 import { apiKeyField } from './_helpers.js';
 
-// ollama.com serves reasoning-native models that cannot disable thinking
-// (`think:false` still streams a `reasoning` channel) → fixed-on. Live-measured
-// 2026-06-03.
+// Reasoning steerability on ollama.com is PER MODEL — the 2026-06-03 blanket
+// "these models cannot disable thinking → fixed-on" was measured on one model and
+// generalised. Re-measured 2026-07-17 (n=5 × 2 reasoning-warranting prompts):
+//
+//   glm-5.1          think:false → eval_count -65% / -72%, content unchanged  → toggle
+//   deepseek-v4-pro  think:false → eval_count -50% / -60%, content unchanged  → toggle
+//   glm-5.2:cloud    think:false → content 3-4x LONGER (735→3208, 497→1555)   → fixed-on
+//
+// The discriminator is CONTENT LENGTH, not eval_count: GLM 5.2's eval_count also
+// fell on one prompt (-26%), which alone would read as an off-switch. It is not —
+// the reasoning simply moves into the answer, so "off" buys a longer, chattier
+// reply rather than a cheaper one. That is exactly ReasoningControl's `fixed-on`
+// ("off only hides"), and offering a toggle there would astonish the user.
 const FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
+
+// Reasoning genuinely stops when switched off; on by default because it is the
+// reason to pick a reasoning-native model at all, and these models get measurably
+// worse without it.
+const TOGGLE_ON: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
 interface OllamaSpec {
   canonicalRef: string;
@@ -62,7 +77,7 @@ function ollamaOffering(spec: OllamaSpec): Offering {
 // reasoning-native models re-call the tool instead of answering after a tool
 // result (live-measured); the native endpoint answers correctly.
 const SPECS: OllamaSpec[] = [
-  { canonicalRef: 'glm-5.1', slug: 'glm-5.1', reasoning: FIXED_ON, vision: false, ctx: 200_000 },
+  { canonicalRef: 'glm-5.1', slug: 'glm-5.1', reasoning: TOGGLE_ON, vision: false, ctx: 200_000 },
   // GLM 5.2 is served under the `:cloud` slug (bare `glm-5.2` 404s on ollama.com).
   // fixed-on is CORRECT and re-confirmed 2026-07-17: `think:false` empties the
   // thinking channel but does NOT stop the model reasoning — it relocates the
@@ -92,7 +107,7 @@ const SPECS: OllamaSpec[] = [
   {
     canonicalRef: 'deepseek-v4-pro',
     slug: 'deepseek-v4-pro',
-    reasoning: FIXED_ON,
+    reasoning: TOGGLE_ON,
     vision: false,
     ctx: 200_000,
   },
