@@ -11,7 +11,7 @@ import {
   Sparkles,
   Type,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AvatarCropModal } from '../../../components/AvatarCropModal.js';
 import { ModelSlotPicker } from '../../../components/ModelSlotPicker.js';
@@ -58,6 +58,15 @@ import { toastStore } from '../../../state/toast.store.js';
 import { InlineEditRow } from '../account/InlineEditRow.js';
 import { usePersonaEditing } from './use-persona-editing.js';
 
+// Lazy-loaded: it pulls in the parse worker host and third-party-import data
+// module, which otherwise tip the main chunk over workbox's precache limit
+// (see the `maximumFileSizeToCacheInBytes` comment in vite.config.ts).
+const ThirdPartyImportOverlay = lazy(() =>
+  import('../../../components/persona-editor/ThirdPartyImportOverlay.js').then((m) => ({
+    default: m.ThirdPartyImportOverlay,
+  })),
+);
+
 /**
  * Hub page for an existing persona — the home screen for configuring and
  * launching chats with a persona. Route: `/app/persona/:id`.
@@ -86,6 +95,7 @@ export function PersonaHub(): JSX.Element {
           .justImported
       : null;
   const [showExportOverlay, setShowExportOverlay] = useState(false);
+  const [showThirdPartyImport, setShowThirdPartyImport] = useState(false);
 
   const {
     persona,
@@ -573,7 +583,8 @@ export function PersonaHub(): JSX.Element {
         <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">
           <header className="mb-2 text-xs uppercase tracking-widest text-paper-soft">Import</header>
           <p className="mb-2 text-[11px] text-paper-soft">
-            Bring in a Chatsune persona export, blending it into this persona.
+            Bring things in from elsewhere: a Chatsune or Chatsundere persona export, or your chat
+            history from ChatGPT or Grok.
           </p>
           <ChatsuneImportControl
             mode="edit"
@@ -581,6 +592,16 @@ export function PersonaHub(): JSX.Element {
             existingNsfw={persona.adultPersona}
             onApply={(a) => void onApplyImport(a)}
           />
+          <p className="mb-2 mt-3 text-[11px] text-paper-soft">
+            Just the conversations — text and reasoning.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowThirdPartyImport(true)}
+            className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+          >
+            Import chats from ChatGPT or Grok…
+          </button>
         </section>
 
         <Button onClick={() => setShowExportOverlay(true)}>Export persona</Button>
@@ -607,6 +628,22 @@ export function PersonaHub(): JSX.Element {
           personaName={persona.name || 'Persona'}
           onClose={() => setShowExportOverlay(false)}
         />
+      ) : null}
+
+      {/* Third-party chat import overlay — rendered inline so it overlays the whole
+          hub. Code-split (see the lazy() above); Suspense has no fallback because
+          the dialog itself appears the instant the chunk resolves. A dialog-frame
+          fallback was tried (Laura soft) but reverted: it pushed the main chunk
+          past workbox's precache cap — deferred to the main-chunk code-split
+          (follow-ups-index.md). */}
+      {showThirdPartyImport && id ? (
+        <Suspense fallback={null}>
+          <ThirdPartyImportOverlay
+            personaId={id}
+            personaName={persona.name || 'Persona'}
+            onClose={() => setShowThirdPartyImport(false)}
+          />
+        </Suspense>
       ) : null}
     </PageScaffold>
   );

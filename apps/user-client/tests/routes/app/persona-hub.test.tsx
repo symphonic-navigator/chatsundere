@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { PersonaHub } from '../../../src/routes/app/persona/hub.js';
@@ -272,5 +272,22 @@ describe('PersonaHub — incomplete persona (empty instructions, no model)', () 
 
     // instructionsMeta returns 'Needs setup' when instructions are empty.
     expect(screen.getByText('Needs setup')).toBeInTheDocument();
+  });
+});
+
+describe('PersonaHub — third-party chat import entry point', () => {
+  it('offers the third-party chat import entry point', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    renderHub('p-complete');
+
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+
+    expect(
+      await screen.findByText('Just the conversations — text and reasoning.'),
+    ).toBeInTheDocument();
+    const btn = screen.getByRole('button', { name: 'Import chats from ChatGPT or Grok…' });
+    fireEvent.click(btn);
+    expect(await screen.findByRole('dialog', { name: 'Import chats' })).toBeInTheDocument();
   });
 });
