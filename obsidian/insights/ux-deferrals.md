@@ -593,3 +593,36 @@ later Laura sweep does not re-flag them:
   branch" improvement is ever made to `useBranchChat` itself.
 - **Chris sign-off:** advisory (soft) — recorded for the holistic-sweep and
   release-cut visibility.
+
+## Third-party chat import — Laura soft findings (2026-07-18, pre-squash)
+
+- **Affected flow / surface:** the ChatGPT/Grok import overlay
+  (`ThirdPartyImportOverlay.tsx`) and its hub entry (`hub.tsx`); feature squashed
+  to `master` as `48400988`.
+- **Findings (Laura pre-squash — no hard defects; 3 softs):**
+  (1) "Select all N" rendered as an active no-op link at zero importable rows —
+  **folded, not deferred** (now `disabled` + `title="No conversations to select."`,
+  consistent with the disabled Import button). (2) The lazy overlay loads under
+  `<Suspense fallback={null}>`, so a tap on the open control has no visual
+  acknowledgement for a beat on a cold cache. (3) The write phase shows a bare
+  "Importing…" though spec §3 said "a progress count is shown".
+- **Mode:** pre-squash.
+- **Criterion:** least-astonishment / constructive-never-hung ethos (2);
+  spec-fidelity / least-astonishment (3) — both soft, advisory.
+- **Rationale for deferral:**
+  (2) A dialog-frame "Opening…" fallback WAS built (Chris's call to fold it) but
+  **reverted**: adding that markup to `hub.tsx` re-tripped workbox's precache cap
+  (the main chunk had ~0 headroom after the parallel July-curation commit; the
+  fallback tipped it over). The clean fallback belongs after the main-chunk
+  code-split debt is fully paid (katex is split; shiki core remains) — until then
+  `fallback={null}` keeps the build green. (3) Laura ruled the progress-count drop
+  **defensible**: the write is a single atomic Dexie `rw` transaction, so there is
+  no meaningful mid-transaction count to surface without faking one; "Importing…"
+  is honest. Recorded so the divergence from spec §3 is a conscious acceptance.
+- **Follow-up commitment:** (2) add the Suspense loading fallback once the
+  user-client main chunk is code-split below the precache cap with headroom (see
+  [[follow-ups-index]] "Code-split the user-client main chunk"). (3) revisit only
+  if the writer is ever made non-atomic (slice-committing), at which point a real
+  per-slice count becomes meaningful.
+- **Chris sign-off:** (1) folded on his call; (2)+(3) advisory (soft) — accepted,
+  recorded for release-cut visibility.

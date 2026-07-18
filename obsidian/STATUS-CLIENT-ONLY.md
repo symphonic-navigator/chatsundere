@@ -37,26 +37,47 @@ user-flow). **Next:** squash + Chris's model-picker device check.
 
 ---
 
-**Last updated:** 2026-07-18 (later) — **THIRD-PARTY CHAT IMPORT (ChatGPT & Grok)
-SPEC'D + PLANNED, NOT built — execution hand-off to Opus is next (Chris's call,
-targeted at v0.2.9).** Users asked for third-party import back; a community fork
-commit (`symphonic-navigator/chatsundere@0918b949`) supplied the Grok format
-analysis (format knowledge adopted, code not — its branch-navigation/
-`parentMessageId` machinery consciously rejected in favour of
-flatten-to-newest-branch). Design: a client-only "Import chats from ChatGPT or
-Grok…" control in the persona hub's Import section → overlay (pick `.zip`/`.json`
-→ Web-Worker parse (cancellable) → selection list with disabled-with-reason rows
-→ import); two pure parsers onto one intermediate format; writer mirrors
-`importChatsuneSessions` (`importedFrom` namespaced dedup, Class-1 sync, no Dexie
-bump, extraction cursor untouched); new dependency fflate. **Laura spec-pass: no
-hard defects**, 6/8 softs folded (select-all scoped to search, persona-voice copy,
-worker-parse, pick-different-file, View-history, zero-state reason); Chris
-approved worker-parse and declined the first-run-discoverability note (both
-recorded in spec §13). Not a Larissa path. Spec/plan:
-`superpowers/{specs/2026-07-18-third-party-chat-import-design,plans/2026-07-18-third-party-chat-import}.md`
-(commits `49c147c1`→`367f4b70`, all `[skip ci]`). **Next:** hand the plan to
-Opus (worktree `feat/third-party-import`); after the build: opus whole-branch
-review + Laura pre-squash + squash + Chris's spec-§12 device verification.
+**Last updated:** 2026-07-18 (later) — **THIRD-PARTY CHAT IMPORT (ChatGPT &
+Grok) BUILT — squashed to `master` (`48400988`), NOT pushed; awaiting Chris's
+spec-§12 device verification (targeted at v0.2.9).** A client-only "Import chats
+from ChatGPT or Grok…" control in the persona hub's Import section → overlay
+(pick `.zip`/`.json` → cancellable **Web-Worker** parse → selection list with
+disabled-with-reason rows, per-row **date + message count**, title search >10
+rows → import). Two pure parsers (`chatgpt.ts` flatten-to-current-node,
+`grok.ts` flatten-to-newest-branch) onto one intermediate format; content
+detector (`parse-export.ts`, zip via **fflate**) dispatches inside the worker;
+writer mirrors `importChatsuneSessions` (`importedFrom` namespaced dedup, Class-1
+sync, **no Dexie bump**, extraction cursor untouched). The overlay is **code-split**
+(React.lazy) so its fflate/parser payload loads on demand. Built **subagent-driven
+(8 TDD tasks, per-task spec+quality review)**. **The gauntlet earned its keep:**
+the **opus whole-branch review** caught the spec-§3 row date/message-count gap the
+per-task briefs had under-specified (fixed); a Task-4 review caught a zip-branch
+`UnrecognisedExportError` contract gap the brief's own sample carried (fixed +
+test); a Task-2 review confirmed a necessary deviation from the brief's latent
+dropped-count aliasing bug. **Laura pre-squash: NO HARD DEFECTS** — all §13
+folded intents present; 3 softs, Chris-arbitrated: (1) disabled-select-all-at-zero
+**folded**, (2) Suspense-loading fallback **folded then reverted** (it re-tripped
+the precache cap — deferred, see below), (3) bare "Importing…" vs spec-§3
+progress-count **accepted** (single atomic Dexie tx, no meaningful mid-tx count).
+Both softs (2)+(3) logged in [[insights/ux-deferrals]]. **Not a Larissa path**
+(client-only; no crypto/auth/sync/proxy). **Build-blocker surfaced + fixed as a
+separate unit (`6714b14c`):** the parallel July-curation commit (`efe119bf`)
+independently pushed the user-client main chunk **past** workbox's 3 MiB precache
+cap (measured 3,148.69 kB on `efe119bf` alone), so `pnpm build` was already red
+before this squash landed — the long-tracked 36-byte-margin main-chunk debt come
+due. Fixed by splitting **katex** into its own rollup chunk (`manualChunks`); the
+index chunk drops to **2.88 MB** (~188 kB headroom); partly pays down
+[[insights/follow-ups-index]]. Gates on `master`: `pnpm typecheck --force`
+**14/14** (0 cached), `pnpm build` **9/9** (main chunk under cap), full
+user-client vitest **3142 pass / 8** known Node-localStorage baseline, Biome
+clean. Spec/plan:
+`superpowers/{specs/2026-07-18-third-party-chat-import-design,plans/2026-07-18-third-party-chat-import}.md`.
+Branch `feat/third-party-import` kept until Chris pushes. **Next:** Chris
+device-verifies (spec §12: real ChatGPT `.zip`, real Grok `.json`, re-import
+dedup shows "Already imported", junk file → constructive error, cancel mid-parse,
+sync an imported chat to a second device; **restart the dev stack first** — Vite
+HMR ignores `packages/*` and a fresh boot picks up the worker bundle + the katex
+chunk-split), then pushes.
 
 ---
 
