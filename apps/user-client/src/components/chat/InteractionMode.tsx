@@ -5,6 +5,7 @@ import type { AttachmentRow, ChatRow, PersonaRow } from '../../boot/client-data-
 import { resolveContextWindow } from '../../lib/context-window.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
+import { useEffectiveChatMode } from '../../state/effective-chat-mode.js';
 import { Cockpit } from './Cockpit.js';
 import { InteractionTopbar } from './InteractionTopbar.js';
 
@@ -13,7 +14,10 @@ interface Props {
   /** The active chat's id (empty string while a lazy chat has not yet been created on first send). */
   chatId: string;
   chat: ChatRow | null;
-  offering: Offering;
+  /** Null when the chat's model cannot be resolved (removed provider/model).
+   *  The topbar still mounts — it is the repair path — but the cockpit needs a
+   *  model to compose against and stays absent (spec 2026-07-18 §5.6). */
+  offering: Offering | null;
   usedTokens: number;
   draftValue: string;
   onDraftChange: (v: string) => void;
@@ -72,7 +76,7 @@ interface Props {
  * Pin (`isPinned`) blocks all three triggers.
  */
 export function InteractionMode(p: Props): JSX.Element {
-  const isPinned = useCurrentChatStore((s) => s.isPinned);
+  const { isPinned } = useEffectiveChatMode();
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const clearExpanded = useCurrentChatStore((s) => s.clearExpanded);
   // DimOverlay activation lives in the store and is rendered at chat-page level
@@ -170,7 +174,7 @@ export function InteractionMode(p: Props): JSX.Element {
         persona={p.persona}
         chat={p.chat}
         usedTokens={p.usedTokens}
-        contextWindow={resolveContextWindow(p.persona, p.offering)}
+        contextWindow={p.offering ? resolveContextWindow(p.persona, p.offering) : null}
         onExit={p.onExit}
         onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}
@@ -184,49 +188,51 @@ export function InteractionMode(p: Props): JSX.Element {
           column, which would drop the audio toolbar (order 998) below the
           cockpit. Focus/blur capture is unaffected (React events ignore CSS
           display). */}
-      <div
-        className="cockpit-focus-capture"
-        onFocusCapture={(e) => {
-          if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
-            setInputFocused(true);
-            blurArmedRef.current = false;
-            // Reading and writing are separate mental modes: the moment the
-            // user starts composing, drop any message they had expanded for
-            // reading. Tidies the surface and keeps the two intents distinct.
-            clearExpanded();
-          }
-        }}
-        onBlurCapture={(e) => {
-          if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
-            setInputFocused(false);
-            blurArmedRef.current = true;
-          }
-        }}
-      >
-        <Cockpit
-          chatId={p.chatId}
-          persona={p.persona}
-          offering={p.offering}
-          draftValue={p.draftValue}
-          onDraftChange={p.onDraftChange}
-          onSend={handleSend}
-          editingMessageId={p.editingMessageId}
-          canReplace={p.canReplace}
-          editAttachments={p.editAttachments}
-          onReplace={p.onReplace}
-          onBranchEdit={p.onBranchEdit}
-          onCancelEdit={p.onCancelEdit}
-          onStop={p.onStop}
-          isStreamLive={p.isStreamLive}
-          onAttachFromTreasury={p.onAttachFromTreasury}
-          onAttachFromLibrary={p.onAttachFromLibrary}
-          dictation={p.dictation}
-          autoReadAloud={p.autoReadAloud}
-          onToggleAutoRead={p.onToggleAutoRead}
-          voiceUnavailable={p.voiceUnavailable}
-          onEnterLiveVoice={p.onEnterLiveVoice}
-        />
-      </div>
+      {p.offering ? (
+        <div
+          className="cockpit-focus-capture"
+          onFocusCapture={(e) => {
+            if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
+              setInputFocused(true);
+              blurArmedRef.current = false;
+              // Reading and writing are separate mental modes: the moment the
+              // user starts composing, drop any message they had expanded for
+              // reading. Tidies the surface and keeps the two intents distinct.
+              clearExpanded();
+            }
+          }}
+          onBlurCapture={(e) => {
+            if ((e.target as HTMLElement).tagName === 'TEXTAREA') {
+              setInputFocused(false);
+              blurArmedRef.current = true;
+            }
+          }}
+        >
+          <Cockpit
+            chatId={p.chatId}
+            persona={p.persona}
+            offering={p.offering}
+            draftValue={p.draftValue}
+            onDraftChange={p.onDraftChange}
+            onSend={handleSend}
+            editingMessageId={p.editingMessageId}
+            canReplace={p.canReplace}
+            editAttachments={p.editAttachments}
+            onReplace={p.onReplace}
+            onBranchEdit={p.onBranchEdit}
+            onCancelEdit={p.onCancelEdit}
+            onStop={p.onStop}
+            isStreamLive={p.isStreamLive}
+            onAttachFromTreasury={p.onAttachFromTreasury}
+            onAttachFromLibrary={p.onAttachFromLibrary}
+            dictation={p.dictation}
+            autoReadAloud={p.autoReadAloud}
+            onToggleAutoRead={p.onToggleAutoRead}
+            voiceUnavailable={p.voiceUnavailable}
+            onEnterLiveVoice={p.onEnterLiveVoice}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

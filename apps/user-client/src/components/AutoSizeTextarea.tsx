@@ -39,6 +39,24 @@ export function AutoSizeTextarea(props: Props): JSX.Element {
   } = props;
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  // Imperative (not the native `autoFocus` attribute): React's native autoFocus
+  // steals focus unconditionally on mount, including from an input the user is
+  // already editing elsewhere (e.g. a chat rename in the topbar) — which can
+  // fire mid-edit now that the cockpit can mount after the topbar, once a
+  // broken-model chat's offering resolves (spec 2026-07-18 §5.6). Skipping the
+  // steal when another editable element already holds focus preserves the
+  // intended behaviour (land the caret when the cockpit first opens) without
+  // interrupting unrelated in-progress input.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only by design
+  useEffect(() => {
+    if (!autoFocus) return;
+    const active = document.activeElement;
+    const alreadyEditing =
+      active instanceof HTMLElement &&
+      (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+    if (!alreadyEditing) ref.current?.focus();
+  }, []);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: value is necessary for resize effect
   useEffect(() => {
     const el = ref.current;
@@ -63,8 +81,6 @@ export function AutoSizeTextarea(props: Props): JSX.Element {
       ref={ref}
       id={id}
       aria-label={props['aria-label']}
-      // biome-ignore lint/a11y/noAutofocus: deliberate — the cockpit opens precisely so the user can type
-      autoFocus={autoFocus}
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}

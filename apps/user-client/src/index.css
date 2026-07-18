@@ -530,6 +530,22 @@ h1 {
 .msg.from-persona {
   text-align: left;
 }
+/* Desktop message presentation (spec 2026-07-18 §4): user messages become
+   left-aligned, content-sized bubbles; persona text stays open across the
+   column (long-form Markdown reads best unboxed). Role remains doubly cued
+   by the msg-name prefix + colour. Mobile keeps the right-aligned
+   transparent treatment above. */
+@media (min-width: 1024px) {
+  .msg.from-user {
+    text-align: left;
+    width: fit-content;
+    max-width: 85%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.75rem;
+    padding: 0.6rem 0.9rem;
+  }
+}
 .msg-name {
   font-size: 0.95rem;
   font-weight: 600;
@@ -1936,7 +1952,10 @@ h1 {
 @media (min-width: 1024px) {
   .chat-page {
     top: 2.75rem;
-    max-width: 640px;
+    /* 56rem = 896px (Tailwind max-w-4xl) — the desktop chat column,
+       spec 2026-07-18 §3. Must stay in lock-step with the chat brand bar's
+       lg:max-w-4xl in root.tsx. */
+    max-width: 56rem;
   }
   .chat-page[data-mode="reading"] {
     top: 2.25rem;

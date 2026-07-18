@@ -11,7 +11,9 @@ interface Props {
   persona: PersonaRow;
   chat: ChatRow | null;
   usedTokens: number;
-  contextWindow: number;
+  /** Resolved context window, or null when no offering resolves (removed model —
+   *  the gauge shows an inert unavailable state, spec 2026-07-18 §5.6). */
+  contextWindow: number | null;
   onExit: () => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
@@ -30,7 +32,7 @@ interface Props {
 }
 
 export function InteractionTopbar(p: Props): JSX.Element {
-  const pct = contextUtilisation(p.usedTokens, p.contextWindow);
+  const pct = p.contextWindow === null ? null : contextUtilisation(p.usedTokens, p.contextWindow);
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -157,20 +159,26 @@ export function InteractionTopbar(p: Props): JSX.Element {
             type="button"
             className="context-gauge"
             aria-label={
-              p.compactable ? 'Compact conversation' : 'Compact conversation (unavailable)'
+              pct === null
+                ? 'Context unavailable — no model resolved'
+                : p.compactable
+                  ? 'Compact conversation'
+                  : 'Compact conversation (unavailable)'
             }
             title={
-              p.compactable
-                ? 'Compact the conversation'
-                : 'Nothing to compact yet — the conversation is still short'
+              pct === null
+                ? 'No model resolved for this chat — pick one from the persona page.'
+                : p.compactable
+                  ? 'Compact the conversation'
+                  : 'Nothing to compact yet — the conversation is still short'
             }
-            disabled={!p.compactable}
-            onClick={p.compactable ? p.onCompact : undefined}
+            disabled={pct === null || !p.compactable}
+            onClick={pct !== null && p.compactable ? p.onCompact : undefined}
           >
             <div className="context-gauge-bar">
-              <div className="context-gauge-fill" style={{ width: `${pct}%` }} />
+              <div className="context-gauge-fill" style={{ width: `${pct ?? 0}%` }} />
             </div>
-            <div className="context-gauge-text">{pct}%</div>
+            <div className="context-gauge-text">{pct === null ? '—' : `${pct}%`}</div>
           </button>
         </div>
       </div>

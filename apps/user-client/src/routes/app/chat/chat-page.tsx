@@ -61,6 +61,7 @@ import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
 import { useMonologuePlayback } from '../../../lib/voice/use-monologue-playback.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
+import { useEffectiveChatMode, useIsDesktop } from '../../../state/effective-chat-mode.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -96,9 +97,11 @@ export function ChatPage(): JSX.Element {
   const setLazy = useCurrentChatStore((s) => s.setLazy);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
-  const isInteractionMode = useCurrentChatStore((s) => s.isInteractionMode);
+  // Effective mode: desktop forces interaction+pinned at read time (spec
+  // 2026-07-18 §5.2). Store setters below still write the mobile truth.
+  const { isInteractionMode, isPinned } = useEffectiveChatMode();
+  const isDesktop = useIsDesktop();
   const inputFocused = useCurrentChatStore((s) => s.inputFocused);
-  const isPinned = useCurrentChatStore((s) => s.isPinned);
   const setChatPersonaIsAdult = useCurrentChatStore((s) => s.setChatPersonaIsAdult);
   const setChatHeader = useCurrentChatStore((s) => s.setChatHeader);
   const setAutoFollow = useCurrentChatStore((s) => s.setAutoFollow);
@@ -146,9 +149,13 @@ export function ChatPage(): JSX.Element {
   useEffect(() => {
     if (isLazy && personaIdFromQuery) {
       setLazy(personaIdFromQuery);
-      setInteractionMode(true);
-      // Pin on mount — idempotent guard avoids double-toggle on strict-mode re-renders.
-      if (!useCurrentChatStore.getState().isPinned) togglePin();
+      // Desktop derives interaction+pinned (spec §5.3 exception): writing them
+      // here would leak desktop state into mobile after a resize below 1024 px.
+      if (!isDesktop) {
+        setInteractionMode(true);
+        // Pin on mount — idempotent guard avoids double-toggle on strict-mode re-renders.
+        if (!useCurrentChatStore.getState().isPinned) togglePin();
+      }
     } else if (chatId) {
       setChatId(chatId);
       setAutoFollow(true);
@@ -1131,7 +1138,7 @@ export function ChatPage(): JSX.Element {
       {/* MCP tool-call approval — explicit modal, not tap-to-dismiss; z-50 renders above the cockpit */}
       <McpApprovalPrompt />
 
-      {isInteractionMode && effectivePersona && offering && (!isLiveVoice || isPinned) ? (
+      {isInteractionMode && effectivePersona && (!isLiveVoice || isPinned) ? (
         <InteractionMode
           persona={effectivePersona}
           chatId={chat?.id ?? activeChatId ?? ''}

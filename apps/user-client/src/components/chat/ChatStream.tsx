@@ -11,6 +11,7 @@ import { formatDateSepLabel } from '../../lib/date-separator-label.js';
 import { estimateTokens } from '../../lib/token-estimator.js';
 import { segmentMessage } from '../../lib/voice/segmentation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
+import { useEffectiveChatMode } from '../../state/effective-chat-mode.js';
 import type { ResolvedMindspace } from '../../state/mindspace-resolver.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import type { StreamHandle } from '../../state/stream-manager.store.js';
@@ -106,7 +107,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   const autoFollow = useCurrentChatStore((s) => s.autoFollowEnabled);
   const expandedId = useCurrentChatStore((s) => s.expandedMessageId);
   const toggleExpanded = useCurrentChatStore((s) => s.toggleExpanded);
-  const isPinned = useCurrentChatStore((s) => s.isPinned);
+  const { isPinned } = useEffectiveChatMode();
   // The resolved mindspace lives in a global store that ChatPage binds for
   // the active chat's persona. We forward it to MessageBlock so reasoning
   // pills can pick up the persona-accented palette (today via CSS var,

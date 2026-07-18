@@ -28,6 +28,11 @@ import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
+import {
+  DESKTOP_MEDIA_QUERY,
+  useEffectiveChatMode,
+  useIsDesktop,
+} from '../../state/effective-chat-mode.js';
 import { AutoSizeTextarea } from '../AutoSizeTextarea.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
 import { attachmentToViewable } from '../lightbox/viewable-item.js';
@@ -122,7 +127,8 @@ export function Cockpit(p: Props): JSX.Element {
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [voiceNote, setVoiceNote] = useState(false);
   const navigate = useNavigate();
-  const isPinned = useCurrentChatStore((s) => s.isPinned);
+  const { isPinned } = useEffectiveChatMode();
+  const isDesktop = useIsDesktop();
   const togglePin = useCurrentChatStore((s) => s.togglePin);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const reasoning = useCurrentChatStore((s) => s.reasoning);
@@ -229,7 +235,7 @@ export function Cockpit(p: Props): JSX.Element {
     if (e.key !== 'Enter') return;
     const ctrlEnter = e.ctrlKey || e.metaKey;
     const desktopPlainEnter =
-      !ctrlEnter && !e.shiftKey && window.matchMedia('(min-width: 1024px)').matches;
+      !ctrlEnter && !e.shiftKey && window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
     if (!ctrlEnter && !desktopPlainEnter) return;
     if (p.isStreamLive || p.draftValue.trim().length === 0) return;
     e.preventDefault();
@@ -564,26 +570,28 @@ export function Cockpit(p: Props): JSX.Element {
             </span>
           ) : null}
         </button>
-        <button
-          type="button"
-          className={`cockpit-icon-btn${isPinned ? ' active' : ''}`}
-          data-control="pin"
-          aria-label={isPinned ? 'Unpin cockpit' : 'Pin cockpit'}
-          aria-pressed={isPinned}
-          onClick={onTogglePin}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
+        {!isDesktop ? (
+          <button
+            type="button"
+            className={`cockpit-icon-btn${isPinned ? ' active' : ''}`}
+            data-control="pin"
+            aria-label={isPinned ? 'Unpin cockpit' : 'Pin cockpit'}
+            aria-pressed={isPinned}
+            onClick={onTogglePin}
           >
-            <path d="M12 2v10M8 14l4-4 4 4M6 22h12" />
-          </svg>
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <path d="M12 2v10M8 14l4-4 4 4M6 22h12" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       {shownAttachments.length > 0 && <div className="cockpit-divider" />}
       <AttachmentStrip attachments={shownAttachments} onOpen={(i) => setLightboxIndex(i)} />

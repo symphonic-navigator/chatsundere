@@ -9,6 +9,42 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import { ChatPage } from '../../src/routes/app/chat/chat-page';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
+import { DESKTOP_MEDIA_QUERY } from '../../src/state/effective-chat-mode.js';
+
+type ChangeListener = () => void;
+
+/** Replaces window.matchMedia with a controllable stub; returns a flip switch. */
+function installMatchMedia(initialMatches: boolean): { setMatches: (next: boolean) => void } {
+  const listeners = new Set<ChangeListener>();
+  let matches = initialMatches;
+  const mql = {
+    get matches() {
+      return matches;
+    },
+    media: DESKTOP_MEDIA_QUERY,
+    onchange: null,
+    addEventListener: (_type: string, cb: ChangeListener) => {
+      listeners.add(cb);
+    },
+    removeEventListener: (_type: string, cb: ChangeListener) => {
+      listeners.delete(cb);
+    },
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  };
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: () => mql,
+  });
+  return {
+    setMatches(next: boolean) {
+      matches = next;
+      for (const cb of listeners) cb();
+    },
+  };
+}
 
 function makeWrapper(qc: QueryClient, initial: string) {
   return ({ children }: { children: ReactNode }) => (
@@ -553,5 +589,122 @@ describe('ChatPage — cockpit stays reopenable (no dead-end)', () => {
     await waitFor(() => expect(container.querySelector('.persona-greeting')).not.toBeNull());
     expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
     expect(container.querySelector('.bottom-affordance')).not.toBeNull();
+  });
+});
+
+describe('desktop single mode (spec 2026-07-18 §5)', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  // The lazy-mount tests below hit loadLazyDraft (chat-page.tsx reads it on
+  // mount for the `/app/chat/new` route), which this jsdom build does not
+  // provide natively — same gap the "eager opener-chat creation" describe
+  // above stubs. Mirrored here rather than hoisted file-wide so the rest of
+  // this file's tests keep reproducing the documented no-localStorage baseline.
+  beforeEach(() => {
+    if (typeof globalThis.localStorage === 'undefined') {
+      const store = new Map<string, string>();
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: {
+          getItem: (k: string) => store.get(k) ?? null,
+          setItem: (k: string, v: string) => store.set(k, String(v)),
+          removeItem: (k: string) => store.delete(k),
+          clear: () => store.clear(),
+        },
+      });
+    }
+  });
+  afterEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: originalMatchMedia,
+    });
+    // biome-ignore lint/performance/noDelete: test teardown removing a global stub — perf is irrelevant
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+  });
+
+  it('renders interaction mode with no BottomAffordance on desktop, without store writes', async () => {
+    installMatchMedia(true);
+    const { db, personaId } = await seedPersonaWithMindspace();
+    const ms = await db.mindspaces.toArray();
+    const firstMs = ms[0];
+    if (!firstMs) throw new Error('No mindspace seeded');
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: 'Desktop chat',
+      resolvedMindspaceId: firstMs.id,
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Wrapper = makeWrapper(qc, `/app/chat/${chatId}`);
+    render(<ChatPage />, { wrapper: Wrapper });
+    await waitFor(() => {
+      expect(document.querySelector('.chat-page')).toHaveAttribute('data-mode', 'interaction');
+    });
+    expect(screen.queryByLabelText('Enter interaction mode')).not.toBeInTheDocument();
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
+  });
+
+  it('keeps reading mode with the BottomAffordance on mobile', async () => {
+    installMatchMedia(false);
+    const { db, personaId } = await seedPersonaWithMindspace();
+    const ms = await db.mindspaces.toArray();
+    const firstMs = ms[0];
+    if (!firstMs) throw new Error('No mindspace seeded');
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: 'Mobile chat',
+      resolvedMindspaceId: firstMs.id,
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Wrapper = makeWrapper(qc, `/app/chat/${chatId}`);
+    render(<ChatPage />, { wrapper: Wrapper });
+    await waitFor(() => {
+      expect(document.querySelector('.chat-page')).toHaveAttribute('data-mode', 'reading');
+    });
+    expect(screen.getByLabelText('Enter interaction mode')).toBeInTheDocument();
+  });
+
+  it('skips the lazy-mount interaction/pin store writes on desktop', async () => {
+    installMatchMedia(true);
+    const { personaId } = await seedPersonaWithMindspace();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Wrapper = makeWrapper(qc, `/app/chat/new?personaId=${personaId}`);
+    render(<ChatPage />, { wrapper: Wrapper });
+    await waitFor(() => {
+      expect(document.querySelector('.chat-page')).not.toBeNull();
+    });
+    // Derived-not-stored (spec §5.3 exception): the store must stay clean so a
+    // later narrow below 1024 px lands in reading mode, like every other chat.
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
+    expect(useCurrentChatStore.getState().isPinned).toBe(false);
+  });
+
+  it('performs the lazy-mount interaction/pin store writes on mobile (guard)', async () => {
+    installMatchMedia(false);
+    const { personaId } = await seedPersonaWithMindspace();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Wrapper = makeWrapper(qc, `/app/chat/new?personaId=${personaId}`);
+    render(<ChatPage />, { wrapper: Wrapper });
+    await waitFor(() => {
+      expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+    });
+    expect(useCurrentChatStore.getState().isPinned).toBe(true);
   });
 });

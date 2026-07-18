@@ -623,3 +623,48 @@ later Laura sweep does not re-flag them:
   (slice-committing), at which point a real per-slice count becomes meaningful.
 - **Chris sign-off:** (1) folded on his call; (2) folded on his call and now
   shipped; (3) advisory (soft) — accepted, recorded for release-cut visibility.
+
+## 2026-07-18 — Desktop single mode loses the zen/dim reading state (desktop UI iteration 1)
+
+- **Affected flow / surface:** Desktop chat surface — the `lg`-gated single
+  chat mode (ADR 0036), where the cockpit is permanently open instead of
+  toggling between an interaction mode and a zen/dim reading mode.
+- **Finding (Laura's summary):** With the cockpit permanently open, desktop
+  loses the zen/dim reading state — the one surface that was pure invitation;
+  a composer is always in view.
+- **Mode:** spec-pass.
+- **Criterion:** least astonishment / ND-friendly calm surface (spec §5.5).
+- **Rationale for deferral:** Consciously accepted — Chris's call, core to
+  "cockpit always open" on desktop (ADR 0036). Dwelling still survives via the
+  896 px column and open (non-truncated) persona text; what is lost is the
+  toggled zen/dim *state*, not the calm-reading experience itself.
+- **Follow-up commitment:** Revisit trigger — field reports reading the
+  permanent composer as nagging. Sketched remedy: a lightweight desktop
+  "focus read" affordance that hides composer chrome without reintroducing
+  the two-mode machinery.
+- **Chris sign-off:** ✅ Chris — accepted as core to "cockpit always open"
+  (soft, not a blocking hard defect; Laura spec-pass). Spec §5.5, ADR 0036.
+
+## 2026-07-18 — Desktop persona-removed-while-chat-persists exits to `/` not `/app` (desktop UI iteration 1, pre-squash)
+
+- **Affected flow / surface:** Desktop chat surface, the exit affordance when
+  a chat row survives but its persona no longer resolves (`effectivePersona`
+  null on a live chat). Feature branch `feat/desktop-ui-iteration-1`.
+- **Finding (Laura pre-squash — no hard defects; 1 soft):** On desktop
+  `isReadingChat` is always false, so the reading-mode brand-bar back-arrow
+  ("Leave chat" → `/app`) never renders, and `InteractionMode` does not mount
+  when the persona fails to resolve; with `BottomAffordance` also suppressed on
+  desktop, the only escape is the brand logo, which in interaction treatment
+  links to `/` (home) rather than `/app` (Entrance Hall).
+- **Mode:** pre-squash.
+- **Criterion:** dead-end / least astonishment (marginal).
+- **Rationale for deferral:** NOT a dead-end — a working exit exists (the brand
+  logo). Very likely unreachable under "defaults over delete" (personas are not
+  hard-deleted), and mobile is no better off in the identical edge, so this is a
+  pre-existing-adjacent corner surfaced by the single-mode merge, not introduced
+  by it. Recorded so it is a conscious, known corner rather than a silent one.
+- **Follow-up commitment:** Revisit only if it surfaces in field-testing. Cheapest
+  remedies: point the interaction-mode brand logo at `/app` on a chat route, or
+  mount a bare exit-only topbar when the persona fails to resolve.
+- **Chris sign-off:** ✅ Chris — logged on his call (soft, advisory; Laura
+  pre-squash). Spec §5.6-adjacent, ADR 0036.

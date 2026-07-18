@@ -17,6 +17,7 @@ import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
 import { useCurrentChatStore } from '../state/current-chat.store.js';
+import { useEffectiveChatMode } from '../state/effective-chat-mode.js';
 import { useStagingBannerStore } from '../state/staging-banner.store.js';
 
 /** True only for the chat surface itself (`/app/chat/:chatId` or `/app/chat/new`),
@@ -44,7 +45,10 @@ export function Root() {
   const dismissBanner = useStagingBannerStore((s) => s.dismiss);
   const location = useLocation();
   const navigate = useNavigate();
-  const isInteractionMode = useCurrentChatStore((s) => s.isInteractionMode);
+  // Effective, not raw store: on desktop the chat has a single (interaction)
+  // mode, so the brand bar must never present the reading-mode strip there
+  // (spec 2026-07-18 §5.3).
+  const { isInteractionMode } = useEffectiveChatMode();
   const chatHeader = useCurrentChatStore((s) => s.chatHeader);
 
   // Chrome trims down inside a chat: the username + connectivity badge drop
@@ -122,7 +126,7 @@ export function Root() {
                 // — see .chat-page top). Reading mode stays ultra-thin and
                 // transparent (a dark strip there reads oddly over the quiet
                 // reading surface). Paired with .chat-page top in index.css.
-                `mx-auto w-full max-w-[420px] px-3 lg:max-w-[640px] ${
+                `mx-auto w-full max-w-[420px] px-3 lg:max-w-4xl ${
                   isReadingChat ? 'py-1 lg:py-1.5' : 'bg-black/40 py-2 lg:py-2.5'
                 }`
               : 'px-4 py-3 lg:px-6 lg:py-4'

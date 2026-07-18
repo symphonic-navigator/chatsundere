@@ -32,7 +32,7 @@ Non-negotiable. Violating any of these is a stop-the-line event.
 1. **Zero-knowledge backend.** No plaintext keys, passphrases, or master keys ever cross the wire to the server. The server stores ciphertext blobs and verifies cryptographic proofs. Ever.
 2. **OPAQUE for passphrase auth** (RFC 9807). No `POST /login { password: "..." }`.
 3. **Passkey + PRF first-class.** WebAuthn with the PRF extension is the primary auth method; OPAQUE is the fallback. PRF-less passkeys are refused — see [ADR 0005](obsidian/decisions/0005-require-prf-for-passkey-mk-wrapping.md).
-4. **Mobile-first UI at 380 px.** Desktop is a constrained-width version of the same UI. Single `lg` breakpoint (1024 px) — tablets are phones.
+4. **Mobile-first UI at 380 px.** Desktop is the same UI with targeted `lg`-gated refinements (see [ADR 0036](obsidian/decisions/0036-desktop-refinements-within-single-ui.md)); single `lg` breakpoint (1024 px) — tablets are phones.
 5. **AGPLv3 for `apps/*`**, LGPLv3 for `packages/crypto` and `packages/llm-unified`, MIT for `packages/shared-types`. See [ADR 0002](obsidian/decisions/0002-agplv3-for-apps.md).
 6. **Prometheus from day one.** Every service exposes `/metrics`, `/healthz`, `/readyz`. No service ships without them.
 7. **Every text artefact in this repo is British English.** Code, comments, commit messages, ADRs, briefs, READMEs, docs, log strings, error messages, user-facing copy. The chat with Chris is the only German surface. No mixed-language strings.
