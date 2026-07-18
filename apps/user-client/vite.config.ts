@@ -59,6 +59,23 @@ function dbDumpReceiver(): Plugin {
 
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the heavyweight, eagerly-imported katex vendor into its own
+        // chunk so the app-shell index chunk stays under workbox's precache
+        // cap (obsidian/insights/follow-ups-index.md — main-chunk code-split).
+        // mermaid is already dynamically imported (MermaidBlock) and shiki's
+        // language grammars are already lazy chunks; katex is the largest
+        // remaining statically-imported dependency, so isolating it alone
+        // frees ample headroom without disturbing the existing lazy splits.
+        manualChunks(id) {
+          if (id.includes('node_modules/katex')) return 'katex';
+          return undefined;
+        },
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? 'dev'),
     __APP_SHA__: JSON.stringify(process.env.APP_SHA ?? 'dev'),
