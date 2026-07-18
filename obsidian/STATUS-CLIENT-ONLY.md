@@ -8,6 +8,29 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-18 (later) — **THIRD-PARTY CHAT IMPORT (ChatGPT & Grok)
+SPEC'D + PLANNED, NOT built — execution hand-off to Opus is next (Chris's call,
+targeted at v0.2.9).** Users asked for third-party import back; a community fork
+commit (`symphonic-navigator/chatsundere@0918b949`) supplied the Grok format
+analysis (format knowledge adopted, code not — its branch-navigation/
+`parentMessageId` machinery consciously rejected in favour of
+flatten-to-newest-branch). Design: a client-only "Import chats from ChatGPT or
+Grok…" control in the persona hub's Import section → overlay (pick `.zip`/`.json`
+→ Web-Worker parse (cancellable) → selection list with disabled-with-reason rows
+→ import); two pure parsers onto one intermediate format; writer mirrors
+`importChatsuneSessions` (`importedFrom` namespaced dedup, Class-1 sync, no Dexie
+bump, extraction cursor untouched); new dependency fflate. **Laura spec-pass: no
+hard defects**, 6/8 softs folded (select-all scoped to search, persona-voice copy,
+worker-parse, pick-different-file, View-history, zero-state reason); Chris
+approved worker-parse and declined the first-run-discoverability note (both
+recorded in spec §13). Not a Larissa path. Spec/plan:
+`superpowers/{specs/2026-07-18-third-party-chat-import-design,plans/2026-07-18-third-party-chat-import}.md`
+(commits `49c147c1`→`367f4b70`, all `[skip ci]`). **Next:** hand the plan to
+Opus (worktree `feat/third-party-import`); after the build: opus whole-branch
+review + Laura pre-squash + squash + Chris's spec-§12 device verification.
+
+---
+
 **Last updated:** 2026-07-18 — **MILD MESSAGE EDITING SHIPPED — squashed to
 `master` (`b60f78c1`), NOT pushed; awaiting Chris's device verification (spec
 §14).** The omnibus-update editing feature. A user can **Edit any of their own
