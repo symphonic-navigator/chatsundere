@@ -8,28 +8,55 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-18 (evening) — **DESKTOP UI ITERATION 1 SPECCED +
-PLANNED — spec/plan committed to `master` (`e0a91387`, doc-only); execution
-HANDED OFF to a smaller-model local session (Chris's call), NOT yet built.**
-Three `lg`-gated desktop refinements, mobile unchanged: chat column 640→**896
-px** (`.chat-page` CSS is the real width surface, not root's `<main>`);
-**user-message bubbles** (left-aligned, `fit-content`/85 %, persona text stays
-open — pattern (a)); **permanent cockpit** — desktop gets a single chat mode
-via a derived `useEffectiveChatMode()` (never written to the store; resize
-across 1024 px just works), pin button removed-not-disabled there (conscious
-§11 exception, recorded in the planned **ADR 0036** which also amends
-CLAUDE.md §3.4). **Laura spec-pass: no hard defects, 6 softs — all folded**;
-her best find: the `offering === null` broken-model state would have lost the
-repair path on desktop → spec §5.6 mounts the topbar without an offering
-(also fixes a pre-existing mobile dead-state); plus lazy-mount store writes
-now desktop-gated (resize trap). Sidebars deliberately deferred to a next
-iteration. Spec/plan:
-`superpowers/{specs/2026-07-18-desktop-ui-iteration-design,plans/2026-07-18-desktop-ui-iteration}.md`
-(plan is handoff-hardened: 9 TDD tasks, worktree `feat/desktop-ui-iteration-1`).
-**Next:** executor builds per plan → Liz: Laura pre-squash, squash (one
-feature unit), gates on master, STATUS → Chris device-verifies spec §8 (incl.
-resize ping-pong + broken-model state + 380 px spot-check). Not a Larissa
-path.
+**Last updated:** 2026-07-18 (later evening) — **DESKTOP UI ITERATION 1 BUILT
+— squashed to `master` (`1a0e9303`), NOT pushed; awaiting Chris's device
+verification (spec §8/§9).** Three `lg`-gated desktop refinements, mobile
+unchanged except the §5.6 repair: chat column 640→**896 px** (`.chat-page`
+CSS is the real width surface, not root's `<main>`; `.toast-stack`/`<main>`
+stay 640 px); **user-message bubbles** (left-aligned, `fit-content`/85 %,
+subtle tint+ring, persona text stays open — pattern (a)); **permanent
+cockpit** — desktop gets a single chat mode via a derived
+`useEffectiveChatMode()` (`isDesktop || store`, **never written to the
+store**; resize across 1024 px just works — narrowing lands back in reading
+mode), pin button **removed-not-disabled** there (conscious §11 exception,
+**ADR 0036**, which also reworded CLAUDE.md §3.4). Every behavioural read of
+`isInteractionMode`/`isPinned` routes through the hook; lazy-mount store
+writes are desktop-gated (resize-leak trap). **§5.6 broken-model repair
+(Laura's spec-pass find):** when a chat's model can't resolve
+(`offering === null`), `InteractionTopbar` still mounts on persona+chat so the
+repair path (exit + persona avatar → hub) stays reachable, the cockpit is
+absent (no model to compose against) and the context gauge degrades to an
+inert `—`; **also fixes a pre-existing mobile dead-state**. One in-scope
+side-fix: `AutoSizeTextarea` native `autoFocus` → imperative mount-focus that
+yields when another input holds focus (the topbar/cockpit decoupling could
+otherwise steal an in-progress rename; blast radius verified = Cockpit only).
+Sidebars deliberately deferred to a next iteration. **Built subagent-driven
+(9 TDD tasks, per-task spec+quality review, worktree
+`feat/desktop-ui-iteration-1`).** **Whole-branch review (opus): READY TO
+MERGE** — no Crit/Imp; 2 informational Minors, both spec-aligned (edit-entry
+`setInteractionMode(true)` desktop store write is the §5.3-blessed exemption,
+cleared on chat-leave; user-bubble CSS source-order note). **Laura pre-squash:
+CLEAN, no hard defects** — every mobile function reachable on desktop, gauge
+degrade praised as constructive-error done right; 1 advisory soft **logged**
+in [[insights/ux-deferrals]] (persona-removed-while-chat-persists exits to `/`
+not `/app` on desktop — marginal edge, likely unreachable under
+defaults-over-delete, mobile no better). **Not a Larissa path** (client-only;
+no auth/sync/proxy/crypto). Gates on `master` post-squash: `pnpm typecheck
+--force` **14/14** (0 cached), `pnpm run build` **9/9**, full user-client
+vitest **3155 pass / 8** Node-localStorage baseline (+1 known stream-manager
+parallel-load flake, isolated 38/38), Biome clean on touched files (the
+pre-existing `index.css` quote-selector Biome error is byte-identical on
+`master`/base — the [[STATUS-BACKEND]] CI-red item, not this work). **No Dexie
+bump.** Spec/plan:
+`superpowers/{specs/2026-07-18-desktop-ui-iteration-design,plans/2026-07-18-desktop-ui-iteration}.md`.
+Branch kept until Chris pushes. **Next:** Chris device-verifies (spec §8/§9:
+cockpit open on entry / no BottomAffordance / no pin icon; 896 px column vs
+640 px elsewhere; left-aligned user bubbles + open persona text; send keeps
+focus; edit a message; live voice; **resize ping-pong 1024↔narrow**;
+**380 px phone spot-check unchanged**; **broken-model state** — point a chat
+at a removed model, topbar+avatar stays reachable on both breakpoints), then
+pushes. **Restart the dev stack before testing** (Vite HMR ignores
+`packages/*`; a fresh boot also picks up the new state module cleanly).
 
 ---
 
