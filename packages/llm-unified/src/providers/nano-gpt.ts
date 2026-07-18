@@ -30,6 +30,16 @@ const STEPS: ReasoningControl = {
 // share the slug-swap adapter; only the declared control differs.
 const GLM_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 
+// July 2026 additions on nano-gpt (probed live 2026-07-18): Hy3 has NO
+// `:thinking` sibling (tencent/hy3:thinking 404s) and reasoning cannot be truly
+// disabled — `reasoning_effort:none` only HIDES the trace while still billing
+// reasoning tokens — so a fixed-on control, bound in registerNanoGpt with the
+// base slug AS its own thinking slug so the swap never targets a missing
+// endpoint. (Nemotron 3 Ultra was probed the same day but deferred: it never
+// self-invokes tools under `tool_choice:auto` — which the app always uses — so
+// it cannot deliver generate_image. See obsidian/insights/follow-ups-index.md.)
+const HY3_NANO_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
+
 // Mistral on nano-gpt: reasoning is a binary on/off via the `:thinking` slug
 // swap (no effort buckets — Mistral's reasoning toggle is binary), so a `toggle`
 // rather than `steps`. The bare slug is cleanly reasoning-off and the `:thinking`
@@ -406,6 +416,15 @@ const offerings: Offering[] = [
   slugSwapOffering('glm-5.2', 'zai-org/glm-5.2', STEPS, false, 200_000, 1_048_576),
   slugSwapOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', STEPS, true, 256_000),
   slugSwapOffering('gemma-4-31b', 'google/gemma-4-31b-it', STEPS, true, 262_144),
+  // --- Freedom additions, July 2026 (probed live 2026-07-18) ---
+  // Hy3: 295B/21B-active Tencent MoE, text-only, native 256k. fixed-on — no
+  // `:thinking` sibling and no true off (bound to the base slug in
+  // registerNanoGpt). Recommended capped at the 200k smart window.
+  slugSwapOffering('hy3', 'tencent/hy3', HY3_NANO_FIXED_ON, false, 200_000, 262_144),
+  // MiniMax M3: slug-swap reasoning (bare = off, `:thinking` = on). Multimodal
+  // (text+image) — vision confirmed live 2026-07-18. 1M ceiling, recommended
+  // capped at 200k.
+  slugSwapOffering('minimax-m3', 'minimax/minimax-m3', STEPS, true, 200_000, 1_000_000),
   // Mistral family on nano-gpt (anonymous-router path). Small 4 and Medium 3.5
   // have `:thinking` siblings → binary toggle; Large 3 has none → no reasoning.
   // Vision is supported across the family (matches the direct-Mistral offerings).
@@ -656,6 +675,19 @@ export function registerNanoGpt(): void {
           vision: o.profile.vision,
           reasoning: o.profile.reasoning,
         }),
+      );
+    } else if (o.canonicalRef === 'hy3') {
+      // Hy3 has no `:thinking` sibling on nano-gpt and cannot disable reasoning,
+      // so bind the base slug as its own thinking slug: a fixed-on model that
+      // always reasons on the base endpoint (reasoning_effort left unset).
+      registerAdapter(
+        o.adapter.adapterId,
+        nanoGptSlugSwapAdapter(
+          o.upstreamSlug,
+          o.profile.vision,
+          o.profile.reasoning,
+          o.upstreamSlug,
+        ),
       );
     } else if (o.canonicalRef === 'inkling') {
       // Inkling honours the unified `reasoning` object — `{enabled:false}` is a

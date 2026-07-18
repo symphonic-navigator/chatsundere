@@ -18,9 +18,9 @@
 
 A **2.5T** model trained with **QAT** (quantisation-aware training — native 4-bit
 weights, so quantised behaviour stays close to full precision; the family trait
-Chris values). Open weights are expected within days; until Western data centres
-can host a 1.25 TB (4-bit) brummer, the **only** route today is Moonshot's own API
-via OpenRouter.
+Chris values). Two routes are now curated: Moonshot's own API via **OpenRouter**
+(the original, `fixed-on`) and **novita** (added 2026-07-18, `steps` with a real
+off). novita reports a native 1M window and full text+image vision.
 
 ## Offering — openrouter — `fixed-on` (reasoning cannot be disabled)
 
@@ -57,6 +57,31 @@ via OpenRouter.
 - 🕊️ **Freedom (deployment):** `freedomOrientedDeployment: true` — OpenRouter itself
   routes verbatim and adds no censorship layer; the unknown lives on the **model**
   axis (Moonshot-PRC), so the composed 🕊️ badge is *unknown* (Chris, 2026-07-16).
+
+## Offering — novita — `steps` (`reasoning_effort`, `none` = off)
+
+Added 2026-07-18 (Chris). The interesting contrast to OpenRouter: on novita K3
+reasoning **can** be disabled.
+
+- **slug:** `moonshotai/kimi-k3` · **adapterId:** `novita:moonshotai/kimi-k3`
+- **context:** recommended **262 144** / max **1 048 576** (novita reports the 1M
+  ceiling; `recommended` matches the OpenRouter K3 sweet-spot — still no
+  long-context "stays smart" evidence).
+- **reasoning control:** **`steps`** (off/low/medium/high). `reasoning_effort: 'none'`
+  is a **clean off** — 0 reasoning tokens (probed 2026-07-18) — where OpenRouter
+  refuses `enabled:false` with a 400 and cannot be silenced. `enable_thinking:
+  false` is **ignored** on this newer novita slug (the newer-slug trap — see
+  [[../providers/novita]]); `reasoning_effort` is the switch. low/medium/high all
+  reason (202 / 97 / 101 tokens on a trivial prompt). Trace on `reasoning_content`,
+  handled by the `novitaReasoningEffortAdapter`.
+- **tool calls:** single block, concurrent with reasoning.
+- **vision:** ✅ — image-input pipe carries through (suite `vision` green,
+  reliably — no MiniMax-style channel dump).
+- 🔒 **Privacy:** no — `{ tee: false, zdr: false }`.
+- 🕊️ **Freedom (deployment):** `true` — novita routes verbatim. The unknown lives
+  on the model axis (Moonshot-PRC), so the composed 🕊️ badge stays *unknown*.
+- **Validation (2026-07-18):** core **PASS 44/44** (off + low/medium/high); vision
+  **PASS 4/4**.
 
 ## Validation (2026-07-16, live conversation-suite)
 

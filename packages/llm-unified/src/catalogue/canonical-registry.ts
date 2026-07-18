@@ -166,6 +166,42 @@ export const CANONICALS: CanonicalModel[] = [
       'Mistral flagship; judged freedom-oriented by Chris (2026-05-31): uncensored and notably liberal towards adult expression, with licences permissive enough for our API integration.',
     modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
   },
+  {
+    id: 'hy3',
+    displayName: 'Hy3',
+    family: 'hunyuan',
+    // Tencent Hunyuan 3 — a 295B total / 21B active MoE (192 experts, top-8
+    // routing), text-only, native 256k context. Tools + reasoning confirmed
+    // live across novita/nano-gpt/OpenRouter (2026-07-18). Vision NOT offered
+    // (the model is text-only upstream).
+    requiredCaps: { tools: true, reasoning: true, vision: false },
+    // Tencent is a PRC company (as is Moonshot, whose Kimi K3 we left `null`),
+    // but Chris judges Hy3 freedom-oriented on observed behaviour ("behaves like
+    // Grok", 2026-07-18) rather than deferring — an affirmative judgement, not an
+    // assumption from origin. See the freedom first-pass in the Model Curation
+    // Record.
+    freedomOriented: true,
+    freedomNote:
+      'Tencent (PRC) open-weight MoE. Judged freedom-oriented by Chris (2026-07-18) on behaviour — "behaves like Grok" — distinct from the PRC-origin caution applied to Kimi K3. Freedom first-pass recorded in obsidian/models/hy3.md.',
+  },
+  {
+    id: 'minimax-m3',
+    displayName: 'MiniMax M3',
+    family: 'minimax',
+    // Multimodal (text+image input); vision confirmed live across the
+    // deployments (2026-07-18). Caveat: on novita the model reasons
+    // unconditionally and its channel separation is imperfect — very terse
+    // replies (incl. one-word vision answers) sometimes land entirely in the
+    // reasoning channel with empty content. Kept as a vision model on Chris's
+    // call (2026-07-18); the quirk is documented in the Model Curation Record.
+    // Tools + reasoning confirmed live. 1M context.
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    // MiniMax is a PRC company; freedom orientation not yet assessed — `null`, not
+    // `false` (absence of evidence is not evidence of restriction).
+    freedomOriented: null,
+    freedomNote:
+      'MiniMax (PRC) open-weight model; freedom orientation not yet assessed — unknown pending eval (Chris, 2026-07-18).',
+  },
   // --- Claude (Anthropic) — censored at source → not freedom-oriented;
   // surfaced with the CENSORED badge. Delivered via nano-gpt (the anonymising
   // router) per ADR 0032, except Sonnet 5 which is curated on OpenRouter (the

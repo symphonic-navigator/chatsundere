@@ -38,8 +38,9 @@ describe('built-in providers', () => {
       expect(p.corsHint).toBe('inofficial');
       // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
       // + 8 Claude + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI, censored) + 4 web
-      // + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling = 36.
-      expect(p.offerings).toHaveLength(36);
+      // + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling + 2 July (Hy3, MiniMax M3)
+      // = 38. (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
+      expect(p.offerings).toHaveLength(38);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -61,8 +62,8 @@ describe('built-in providers', () => {
       expect(p.corsHint).toBe('direct');
       // 8 original + 1 Kimi K3 (freedom unknown) + 1 Inkling (freedom unknown,
       // Together-only) + 3 Grok (4.3, 4.5, 4.20 — all ZDR-enforced) + Claude
-      // Sonnet 5 + 6 ChatGPT (OpenAI, censored) = 20.
-      expect(p.offerings).toHaveLength(20);
+      // Sonnet 5 + 6 ChatGPT (OpenAI, censored) + 2 July (Hy3, MiniMax M3) = 22.
+      expect(p.offerings).toHaveLength(22);
       expect(p.sortPriority).toBe(45);
     }
   });
@@ -138,7 +139,9 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(9);
+      // 9 original (enable_thinking family) + 3 July reasoning_effort additions
+      // (Kimi K3, Hy3, MiniMax M3) = 12.
+      expect(p.offerings).toHaveLength(12);
     }
   });
 

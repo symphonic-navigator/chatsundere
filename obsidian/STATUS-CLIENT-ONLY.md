@@ -8,6 +8,35 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-18 — **JULY MODEL CURATION: Hy3, MiniMax M3, Kimi K3
+(2nd route) added; Nemotron 3 Ultra deferred.** Squashed as one unit (branch
+`feat/curate-july-models`), fast-forwarded to `master`, **NOT pushed**; awaiting
+Chris's model-picker device check. Adds three canonicals worth of offerings across novita,
+nano-gpt and OpenRouter, all live-suite green. **The headline finding:** novita's
+**newer** slugs (Hy3, Kimi K3, MiniMax M3) ignore the `enable_thinking` toggle
+the older families use and steer reasoning via **`reasoning_effort`** instead —
+so a new `novitaReasoningEffortAdapter` (sibling to `novita-thinking.ts`). Model
+notes: **Hy3** (Tencent Hunyuan, 295B/21B MoE, text-only) is freedom-oriented per
+Chris ("behaves like Grok") with a supporting freedom first-pass — reasoning is
+`steps` on novita, `fixed-on` on nano-gpt (no `:thinking` sibling; `none` only
+hides + bills), `toggle` on OpenRouter (per-offering control, cleanly
+illustrated). **MiniMax M3** (multimodal, 1M) surfaced with **vision on Chris's
+call** despite a documented **channel-dump quirk**: on the fixed-on deployments
+(novita, OR) very terse replies land the whole answer in the reasoning channel
+and leave `content` empty (novita vision perceived green 5/5 but into `content`
+only 3/5). **Kimi K3** gained a second route on novita (a real off via
+`reasoning_effort:none`, unlike OpenRouter's mandatory-reasoning fixed-on).
+**Nemotron 3 Ultra deferred** — the tool mechanism works only under
+`tool_choice:"required"`, but the app always sends `auto`, so it never
+self-invokes `generate_image` (suite red 4×); freedom also unverified. Logged in
+[[insights/follow-ups-index]]. Records: [[models/hy3]], [[models/minimax-m3]],
+[[models/kimi-k3]], new [[providers/novita]] (closed a nine-offering doc gap).
+Gates: llm-unified 448/448, typecheck 14/14, all `run-*-newmodels-suite.ts`
+green. No Larissa/Laura path (catalogue only, no security surface, no new
+user-flow). **Next:** squash + Chris's model-picker device check.
+
+---
+
 **Last updated:** 2026-07-18 (later) — **THIRD-PARTY CHAT IMPORT (ChatGPT & Grok)
 SPEC'D + PLANNED, NOT built — execution hand-off to Opus is next (Chris's call,
 targeted at v0.2.9).** Users asked for third-party import back; a community fork

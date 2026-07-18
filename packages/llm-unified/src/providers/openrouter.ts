@@ -16,6 +16,13 @@ import { apiKeyField } from './_helpers.js';
 // as a plain on/off toggle (effort buckets are not shown to modulate the trace).
 const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
+// MiniMax M3 is the exception to the clean OpenRouter toggle: probed live
+// 2026-07-18, `reasoning:{enabled:false}` does NOT reliably disable it — it
+// leaks 0–1 reasoning tokens intermittently (4 of 6 off-runs), so reasoning
+// cannot be truly switched off here → fixed-on, matching the novita deployment
+// (nano-gpt's bare slug, by contrast, IS a clean off).
+const FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
+
 // Sonnet 5 is the exception to the plain toggle: probed live 2026-06-30, effort
 // genuinely modulates the trace (low ≈ 17 reasoning tokens, high ≈ 270), so it
 // is a `steps` control. We mirror the Fable-family shape (off/low/medium/high,
@@ -324,6 +331,27 @@ const offerings: Offering[] = [
     recommended: 200_000,
     max: 1_050_000,
     confidence: 'partial',
+  }),
+  // --- Freedom additions, July 2026 (probed live 2026-07-18) ---
+  // Hy3: Tencent 295B/21B-active MoE, text-only. `reasoning:{enabled:false}` is a
+  // genuine off and the trace surfaces unprompted on the `reasoning` channel;
+  // effort modulates only marginally (low ≈ 125, high ≈ 154 reasoning tokens), so
+  // a plain toggle rather than steps. 256k window, recommended capped at 200k.
+  openRouterOffering('hy3', 'tencent/hy3', {
+    vision: false,
+    reasoning: TOGGLE,
+    recommended: 200_000,
+    max: 262_144,
+  }),
+  // MiniMax M3: multimodal (text+image). Reasoning is fixed-on here — the
+  // unified `{enabled:false}` leaks a token or two intermittently (probed
+  // 2026-07-18), so it cannot be cleanly disabled. Trace on the `reasoning`
+  // channel. 1M window, recommended capped at 200k.
+  openRouterOffering('minimax-m3', 'minimax/minimax-m3', {
+    vision: true,
+    reasoning: FIXED_ON,
+    recommended: 200_000,
+    max: 1_048_576,
   }),
 ];
 
