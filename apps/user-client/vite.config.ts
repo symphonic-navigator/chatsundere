@@ -62,15 +62,23 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Split the heavyweight, eagerly-imported katex vendor into its own
-        // chunk so the app-shell index chunk stays under workbox's precache
-        // cap (obsidian/insights/follow-ups-index.md — main-chunk code-split).
-        // mermaid is already dynamically imported (MermaidBlock) and shiki's
-        // language grammars are already lazy chunks; katex is the largest
-        // remaining statically-imported dependency, so isolating it alone
-        // frees ample headroom without disturbing the existing lazy splits.
+        // Split the heavyweight, eagerly-imported vendors (katex, shiki core)
+        // into their own chunks so the app-shell index chunk stays under
+        // workbox's precache cap (obsidian/insights/follow-ups-index.md —
+        // main-chunk code-split). mermaid is already dynamically imported
+        // (MermaidBlock). For shiki, match core + engines but NOT
+        // @shikijs/langs / @shikijs/themes: those grammar/theme modules are
+        // loaded on demand and already emit their own lazy chunks — forcing
+        // them into the shiki chunk here would collapse ~200 lazy grammars
+        // into one eager blob, defeating the split.
         manualChunks(id) {
           if (id.includes('node_modules/katex')) return 'katex';
+          if (
+            (id.includes('/node_modules/shiki/') || id.includes('/node_modules/@shikijs/')) &&
+            !id.includes('/@shikijs/langs/') &&
+            !id.includes('/@shikijs/themes/')
+          )
+            return 'shiki';
           return undefined;
         },
       },
