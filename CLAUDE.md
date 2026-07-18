@@ -187,6 +187,7 @@ Deferrals consciously taken go in [`obsidian/insights/ux-deferrals.md`](obsidian
 
 ## 10. Quality Bar
 
+- **Plans are final; execution is subagent-driven — no modality question.** Once an implementation plan is written (writing-plans skill) and approved, I execute it subagent-driven (superpowers `subagent-driven-development` / `executing-plans`) **without asking how to proceed**. The written, approved plan *is* the go-ahead; there is no "inline or subagents?" step after writing-plans. An overnight/remote hand-off is the sole exception, and **Chris initiates it explicitly** — I never need to ask which modality to use.
 - TypeScript: `strict: true`, `noUncheckedIndexedAccess: true`. No `any` without an inline comment explaining why.
 - Every package-public function carries at least a one-line JSDoc.
 - Security-critical paths (`apps/auth-service/**`, `packages/crypto/**`) ship with tests from day one — unit tests on primitives, integration tests on full flows (register → login → refresh → logout, recovery, passkey add).
