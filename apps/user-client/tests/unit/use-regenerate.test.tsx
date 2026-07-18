@@ -186,6 +186,9 @@ describe('useRegenerate (non-destructive)', () => {
     const arg = regenSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.targetMessageId).toBe(personaMsgId);
     expect(arg.userMessageText).toBe('tell me a joke');
+    // The prior user turn's id must travel so the stream manager can re-inject
+    // that turn's attachments (images), not just its text (spec §9 fix).
+    expect(arg.userMessageId).toBe(userMsgId);
     expect(arg.priorMessages).toEqual([]);
 
     const remaining = await db.messages.where('chatId').equals(chatId).count();

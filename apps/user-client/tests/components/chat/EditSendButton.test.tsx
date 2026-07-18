@@ -16,7 +16,7 @@ describe('EditSendButton', () => {
         busy={false}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Replace$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Replace message$/i }));
     expect(onReplace).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: /more/i })); // open the caret menu
     fireEvent.click(screen.getByText(/Branch to a new chat/i));

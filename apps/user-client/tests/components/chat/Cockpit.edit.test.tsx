@@ -137,7 +137,7 @@ describe('Cockpit edit mode', () => {
   it('shows the last-message edit banner and the split send button', () => {
     renderCockpit({ editingMessageId: 'u9', canReplace: true, editAttachments: [] });
     expect(screen.getByText(/editing your message/i)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Replace$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Replace message$/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /cancel/i })).toBeTruthy();
   });
 
@@ -164,7 +164,7 @@ describe('Cockpit edit mode', () => {
   it('renders the normal send control and no banner when not editing', () => {
     renderCockpit({ editingMessageId: null });
     expect(screen.queryByText(/editing your message/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Replace$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Replace message$/i })).toBeNull();
   });
 
   // Regression guard (review fix): the strip, the image-preview object URLs, and

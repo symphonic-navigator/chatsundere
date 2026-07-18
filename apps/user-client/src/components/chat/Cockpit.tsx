@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Offering } from '@chatsundere/llm-unified';
 import { useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Bookmark, Brain, Gem } from 'lucide-react';
+import { BookOpen, Bookmark, Brain, Gem, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { classifyFile } from '../../attachments/file-classify.js';
@@ -643,12 +643,9 @@ export function Cockpit(p: Props): JSX.Element {
               ? 'Editing your message'
               : 'Editing an earlier message — sending will start a new branch.'}
           </span>
-          <button type="button" className="cockpit-edit-cancel" onClick={onCancelEdit}>
-            Cancel
-          </button>
         </output>
       ) : null}
-      <div className="cockpit-row-input" ref={editRef}>
+      <div className="cockpit-row-input" data-editing={editing ? 'true' : undefined} ref={editRef}>
         <AutoSizeTextarea
           value={p.draftValue}
           onChange={p.onDraftChange}
@@ -665,17 +662,31 @@ export function Cockpit(p: Props): JSX.Element {
           onKeyDown={onInputKeyDown}
         />
         {editing ? (
-          <EditSendButton
-            canReplace={canReplace}
-            disabledReason={
-              canReplace
-                ? null
-                : 'There are newer messages after this — editing here starts a branch.'
-            }
-            onReplace={onReplace}
-            onBranch={onBranchEdit}
-            busy={p.isStreamLive}
-          />
+          // Editing stacks the cancel (X) above the send control so the send
+          // position stays bottom-right in both modes; the input keeps room for
+          // the two-button stack (see .cockpit-row-input[data-editing]).
+          <div className="edit-action-stack">
+            <button
+              type="button"
+              className="edit-cancel-btn"
+              onClick={onCancelEdit}
+              aria-label="Cancel editing"
+              title="Cancel editing"
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
+            <EditSendButton
+              canReplace={canReplace}
+              disabledReason={
+                canReplace
+                  ? null
+                  : 'There are newer messages after this — editing here starts a branch.'
+              }
+              onReplace={onReplace}
+              onBranch={onBranchEdit}
+              busy={p.isStreamLive}
+            />
+          </div>
         ) : (
           <DualActionBtn
             hasText={p.draftValue.trim().length > 0}

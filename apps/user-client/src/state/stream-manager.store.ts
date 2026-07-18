@@ -139,6 +139,10 @@ type StartArgs = Omit<StartStreamArgs, 'signal' | 'onChunk'> & {
 export type RegenerateStreamArgs = StartArgs & {
   /** Existing persona MessageRow to re-roll into (cleared, then streamed). */
   targetMessageId: string;
+  /** The user turn being replayed. Its bound attachments are re-injected into
+   *  the wire request so a re-roll (or edit-replace) keeps the turn's images,
+   *  not just its text (spec §9). Absent for opener re-rolls (no user turn). */
+  userMessageId?: string;
 };
 
 /** Arguments required to generate or re-generate an opener greeting. A strict
@@ -498,7 +502,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
       await db.chats.update(args.chatId, { lastMessageAt: now });
     });
 
-    runIntoDraft(args, args.targetMessageId, set, get, true);
+    runIntoDraft(args, args.targetMessageId, set, get, true, args.userMessageId ?? null);
   },
 
   startOpener: async (args) => {
@@ -782,11 +786,14 @@ async function runIntoDraft(
     return getCanonical(off?.canonicalRef ?? '')?.displayName ?? off?.upstreamSlug ?? ref;
   })();
 
-  // Resolve the fresh user turn's attachments into wire content, emitting a live
+  // Resolve the user turn's attachments into wire content, emitting a live
   // describe_image pill per uncached substitute image (ahead of the lore pill).
-  // Regenerate (reusedDraft) keeps args.userMessageText as-is (no re-describe).
+  // Runs whenever a userMessageId is supplied — for a fresh send AND for a
+  // re-roll/edit-replace (spec §9): a regenerate that skipped this replayed the
+  // turn text-only, silently dropping its images. Vision-capable models send the
+  // image directly (no pill); the substitute path reuses the cached description.
   let userMessageText = args.userMessageText;
-  if (!reusedDraft && userMessageId) {
+  if (userMessageId) {
     const rebuildBuffers = (): void => {
       set((s) => {
         const live = s.streams.get(args.chatId);

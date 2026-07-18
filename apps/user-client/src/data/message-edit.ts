@@ -7,6 +7,7 @@ import type { ReasoningState } from '../lib/reasoning-resolver.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { commitEditAttachmentsToMessage, copyEditAttachmentsToChat } from './attachments.js';
+import { QK } from './queryKeys.js';
 import { useRegenerate, useSendMessage } from './send-message.js';
 
 /** The highest-createdAt real user message (role 'user', not a pre-seed row). */
@@ -92,6 +93,11 @@ export function useEditAndReplace() {
     onSettled: (_d, _e, vars) => {
       void qc.invalidateQueries({ queryKey: ['chats', vars.chatId] });
       void qc.invalidateQueries({ queryKey: ['attachments', 'pending'] });
+      // The commit bound the edit's pending additions onto the edited message,
+      // so its per-message attachment query is now stale — invalidate it or the
+      // freshly-attached image never appears in the stream (MessageBlock reads
+      // useMessageAttachments, keyed per message, not under the pending prefix).
+      void qc.invalidateQueries({ queryKey: QK.attachmentsForMessage(vars.messageId) });
     },
   });
 }

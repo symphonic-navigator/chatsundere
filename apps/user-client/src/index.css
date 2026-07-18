@@ -1773,6 +1773,23 @@ h1 {
   align-items: flex-end;
   gap: 0.5rem;
 }
+/* While editing, keep the composer tall enough for the stacked cancel + send
+   buttons (two 2.5rem boxes + the 0.25rem gap) so the stack never overflows a
+   short single-line draft. */
+.cockpit-row-input[data-editing="true"] .cockpit-input {
+  min-height: 5.25rem;
+}
+/* Editing status line above the composer — the words for the icon-only edit
+   controls; a flex row so the copy never butts against its surroundings. */
+.cockpit-edit-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: rgba(232, 230, 245, 0.65);
+  padding: 0.2rem 0.4rem;
+}
 .cockpit-input {
   flex: 1;
   background: rgba(0, 0, 0, 0.3);
@@ -1808,6 +1825,44 @@ h1 {
   background: rgba(201, 168, 76, 0.28);
 }
 .dual-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Edit-mode controls: cancel (X) stacks above the send control, both mirroring
+   the dual-action send button so the send position stays visually consistent.
+   The ⋯ overflow is tucked to the left of the send button for the secondary
+   branch/replace path. */
+.edit-action-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+.edit-send {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+.edit-send-primary,
+.edit-cancel-btn {
+  background: rgba(201, 168, 76, 0.18);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+}
+.edit-send-primary:hover:not(:disabled),
+.edit-cancel-btn:hover:not(:disabled) {
+  background: rgba(201, 168, 76, 0.28);
+}
+.edit-send-primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -4898,6 +4953,12 @@ h1 {
   background: radial-gradient(120% 90% at 80% -10%, #21123f, #0a0518);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+/* Bottom-anchored triggers (e.g. the cockpit edit-send control) open the menu
+   upward so it stays on screen instead of dropping off the viewport bottom. */
+.cs-overflow-menu[data-placement="up"] {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 .cs-overflow-item {
   display: block;

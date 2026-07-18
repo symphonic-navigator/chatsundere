@@ -35,6 +35,14 @@ export interface OverflowMenuProps {
    *   action must be self-explanatory (e.g. the Documents "Add ▾" control).
    */
   variant?: 'icon' | 'labelled';
+  /**
+   * Which way the menu opens relative to the trigger.
+   * - `'down'` (default) — drops below; correct almost everywhere.
+   * - `'up'` — rises above; use where the trigger sits at the bottom of the
+   *   viewport (e.g. the cockpit's edit-send control), so the menu stays on
+   *   screen instead of opening off the bottom edge.
+   */
+  placement?: 'down' | 'up';
 }
 
 /**
@@ -49,6 +57,7 @@ export function OverflowMenu({
   items,
   triggerLabel = 'More actions',
   variant = 'icon',
+  placement = 'down',
 }: OverflowMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -106,7 +115,12 @@ export function OverflowMenu({
         {variant === 'labelled' ? triggerLabel : '⋯'}
       </button>
       {open ? (
-        <div ref={menuRef} role="menu" className="cs-overflow-menu cs-zoom-in">
+        <div
+          ref={menuRef}
+          role="menu"
+          className="cs-overflow-menu cs-zoom-in"
+          data-placement={placement}
+        >
           {items.map((item, i) => {
             if (isSeparator(item)) {
               return (

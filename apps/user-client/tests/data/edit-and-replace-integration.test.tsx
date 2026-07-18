@@ -196,4 +196,56 @@ describe('useEditAndReplace — real regenerate target selection (I1)', () => {
     expect(early?.streamingState).toBe('complete');
     expect(early?.contentBlocks).toEqual([{ type: 'text', text: 'first answer' }]);
   });
+
+  it('binds a pending addition to the edited message and invalidates its per-message query', async () => {
+    const { db, chatId, lastUserId } = await seedStalledTrailingReply();
+
+    // A screenshot attached DURING the edit — pending (messageId null) until commit.
+    const attId = uuidv7();
+    await db.attachments.add({
+      id: attId,
+      chatId,
+      messageId: null,
+      origin: 'upload',
+      kind: 'image',
+      fileName: 'shot.png',
+      mime: 'image/png',
+      order: 0,
+      state: 'active',
+      blob: new Blob(['x'], { type: 'image/png' }),
+      createdAt: 6,
+      updatedAt: 6,
+    } as never);
+
+    vi.spyOn(engine, 'runStreamEngine').mockResolvedValue({
+      finalContentBlocks: [{ type: 'text', text: 'fresh reply' }],
+      pillRows: [],
+      finishReason: 'stop',
+      usedTokens: 0,
+    } as never);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+    const { result } = renderHook(() => useEditAndReplace(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        chatId,
+        messageId: lastUserId,
+        text: 'second edited',
+        stagedRemovals: [],
+        reasoning: { kind: 'on' },
+      });
+    });
+
+    // The pending screenshot is now bound to the edited message…
+    const bound = await db.attachments.get(attId);
+    expect(bound?.messageId).toBe(lastUserId);
+
+    // …and the message's per-message attachment query was invalidated, so
+    // MessageBlock re-fetches and the screenshot shows in the stream (Bug fix).
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['attachments', 'message', lastUserId],
+    });
+  });
 });

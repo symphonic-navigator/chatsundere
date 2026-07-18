@@ -842,7 +842,12 @@ export function ChatPage(): JSX.Element {
             setBranchPointId(messageId);
           }}
           branchDisabled={isStreamLive}
-          onEdit={(m) => void enterEdit(m)}
+          onEdit={(m) => {
+            // Editing must always surface the composer — otherwise pressing Edit
+            // from reading mode sets the target but leaves the cockpit closed.
+            setInteractionMode(true);
+            void enterEdit(m);
+          }}
           onReadAloud={(message) => void voice.playMessage(message)}
           voiceDisabledReason={voice.disabledReason}
           voiceMode={settingsQuery.data?.voiceMode ?? 'paragraph'}

@@ -783,6 +783,9 @@ export function useRegenerate() {
       await useStreamManagerStore.getState().regenerate({
         chatId: args.chatId,
         targetMessageId: target.id,
+        // Replay the prior user turn's attachments (images) too — not just its
+        // text — so an edit-replace or plain re-roll keeps them (spec §9).
+        userMessageId: lastUser.id,
         userText: userMessageText,
         chat: ctx.chat,
         persona: ctx.persona,
