@@ -631,13 +631,22 @@ export function PersonaHub(): JSX.Element {
       ) : null}
 
       {/* Third-party chat import overlay — rendered inline so it overlays the whole
-          hub. Code-split (see the lazy() above); Suspense has no fallback because
-          the dialog itself appears the instant the chunk resolves. A dialog-frame
-          fallback was tried (Laura soft) but reverted: it pushed the main chunk
-          past workbox's precache cap — deferred to the main-chunk code-split
-          (follow-ups-index.md). */}
+          hub. Code-split (see the lazy() above); on a cold cache the chunk fetch
+          can take a beat, so the fallback echoes the dialog frame (same cs-dialog
+          backdrop/card as ExportOverlay) with a muted "Opening…" rather than
+          leaving the tap looking unacknowledged (Laura soft). Safe on the main
+          chunk again now that katex + shiki are split out (~400 kB headroom). */}
       {showThirdPartyImport && id ? (
-        <Suspense fallback={null}>
+        <Suspense
+          fallback={
+            <div className="cs-dialog-root" role="presentation">
+              <div className="cs-dialog-backdrop" aria-hidden="true" />
+              <div className="cs-dialog-card cs-zoom-in">
+                <p className="text-center text-[11px] text-paper-soft">Opening…</p>
+              </div>
+            </div>
+          }
+        >
           <ThirdPartyImportOverlay
             personaId={id}
             personaName={persona.name || 'Persona'}
