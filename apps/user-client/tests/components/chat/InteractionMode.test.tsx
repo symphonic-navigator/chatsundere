@@ -62,6 +62,12 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
           draftValue=""
           onDraftChange={() => {}}
           onSend={() => {}}
+          editingMessageId={null}
+          canReplace={false}
+          editAttachments={[]}
+          onReplace={() => {}}
+          onBranchEdit={() => {}}
+          onCancelEdit={() => {}}
           onStop={() => {}}
           isStreamLive={false}
           onExit={() => {}}

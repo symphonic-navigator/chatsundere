@@ -71,6 +71,12 @@ function renderCockpit(props: Partial<ComponentProps<typeof Cockpit>> = {}) {
           autoReadAloud={false}
           onToggleAutoRead={vi.fn()}
           voiceUnavailable={null}
+          editingMessageId={null}
+          canReplace={false}
+          editAttachments={[]}
+          onReplace={vi.fn()}
+          onBranchEdit={vi.fn()}
+          onCancelEdit={vi.fn()}
           {...props}
         />
       </MemoryRouter>

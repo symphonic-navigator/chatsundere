@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import type { PersonaRow } from '../../../src/boot/client-data-db.js';
+import type { AttachmentRow, PersonaRow } from '../../../src/boot/client-data-db.js';
 import { Cockpit } from '../../../src/components/chat/Cockpit.js';
 import { idleDictationStub } from '../../helpers/dictation-stub.js';
 
@@ -103,6 +103,12 @@ const baseProps = {
   autoReadAloud: false as boolean,
   onToggleAutoRead: vi.fn() as (next: boolean) => void,
   voiceUnavailable: null as 'no-provider' | 'no-voice' | null,
+  editingMessageId: null as string | null,
+  canReplace: false,
+  editAttachments: [] as AttachmentRow[],
+  onReplace: vi.fn(),
+  onBranchEdit: vi.fn(),
+  onCancelEdit: vi.fn(),
 };
 
 function renderCockpit(extra: Partial<typeof baseProps>) {

@@ -3,13 +3,17 @@ import { useState } from 'react';
 import type { MessageRow } from '../../boot/client-data-db.js';
 import { syncCopy } from '../../sync/copy.js';
 import { useClass2Gate } from '../../sync/gate.js';
-import { OverflowMenu } from '../ui/OverflowMenu.js';
+import { type OverflowItem, OverflowMenu } from '../ui/OverflowMenu.js';
 
 interface Props {
   message: MessageRow;
   onCopy: () => void;
   onBookmark: () => void;
   onRegenerate?: () => void;
+  /** Re-compose this user message in the prompt composer (user messages only). */
+  onEdit?: () => void;
+  /** Disable editing (e.g. while a stream is live for this chat). */
+  editDisabled?: boolean;
   /** Fork the chat at this message. */
   onBranch?: () => void;
   /** Disable branching (e.g. while a stream is live for this chat). */
@@ -50,9 +54,35 @@ export function MessageControls(p: Props): JSX.Element {
   // the gentlest copy in the catalogue (decision 5). A local-only user is never
   // gated. Mirrors the Read control's tap-to-reveal note for touch reachability.
   const bookmarkGate = useClass2Gate();
+  const isUser = p.message.role === 'user';
+
+  // On a user message the Save action lives in the overflow (spec §5.1 — keeps
+  // the flat row calm at 380px, mirroring the persona row's "Save as template").
+  const userOverflow: OverflowItem[] = [];
+  if (isUser && p.onSave) {
+    userOverflow.push({
+      label: 'Save as artefact',
+      onSelect: p.canSave ? p.onSave : undefined,
+      disabled: !p.canSave,
+      disabledReason: 'No text to save',
+    });
+  }
+
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: stop-propagation wrapper div — not an interactive element, buttons inside handle keyboard events
+    // biome-ignore lint/a11y/useKeyWithClickEvents: stop-propagation wrapper div — buttons inside handle keyboard events
     <div className="msg-controls" onClick={stop}>
+      {isUser && p.onEdit ? (
+        <button
+          type="button"
+          data-ctrl="edit"
+          onClick={p.editDisabled ? undefined : p.onEdit}
+          disabled={p.editDisabled}
+          title={p.editDisabled ? 'Editing paused while replying' : 'Edit this message'}
+          className="ctrl-btn"
+        >
+          ✎ Edit
+        </button>
+      ) : null}
       <button
         type="button"
         data-ctrl="branch"
@@ -61,7 +91,7 @@ export function MessageControls(p: Props): JSX.Element {
         title={p.branchDisabled ? 'Branching paused while replying' : 'Branch this chat from here'}
         className="ctrl-btn"
       >
-        ✎ Branch
+        ⎇ Branch
       </button>
       {p.onRegenerate ? (
         <button
@@ -99,16 +129,19 @@ export function MessageControls(p: Props): JSX.Element {
       {bookmarkNote && bookmarkGate.disabled ? (
         <output className="ctrl-note">{syncCopy.offlineBookmark}</output>
       ) : null}
-      <button
-        type="button"
-        data-ctrl="save"
-        onClick={p.onSave}
-        disabled={!p.canSave || !p.onSave}
-        title={p.canSave ? 'Save this message as an artefact' : 'No text to save'}
-        className="ctrl-btn"
-      >
-        ◆ Save
-      </button>
+      {!isUser ? (
+        <button
+          type="button"
+          data-ctrl="save"
+          onClick={p.onSave}
+          disabled={!p.canSave || !p.onSave}
+          title={p.canSave ? 'Save this message as an artefact' : 'No text to save'}
+          className="ctrl-btn"
+        >
+          ◆ Save
+        </button>
+      ) : null}
+      {isUser && userOverflow.length ? <OverflowMenu items={userOverflow} /> : null}
       {p.message.role === 'persona' ? (
         <>
           <button

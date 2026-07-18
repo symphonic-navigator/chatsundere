@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_SYNC_ALLOWLIST, restoreLocalFields, stripForSeal } from '../../src/sync/strip.js';
+import {
+  SETTINGS_SYNC_ALLOWLIST,
+  patchTouchesSyncedField,
+  restoreLocalFields,
+  stripForSeal,
+} from '../../src/sync/strip.js';
 
 describe('strip — settings allowlist polarity (§10, Larissa I-2)', () => {
   it('seals only allowlisted fields; device-local ones never leave', () => {
@@ -170,5 +175,32 @@ describe('strip — deny-list collections (§10)', () => {
     expect(restored.content).toBe('body v2');
     expect(restored.embeddingStatus).toBe('ready');
     expect(restored.chunkCount).toBe(3);
+  });
+});
+
+describe('chats deny-list — editingMessageId is device-local', () => {
+  it('strips editingMessageId before seal', () => {
+    const sealed = stripForSeal('chats', {
+      id: 'c1',
+      title: 'T',
+      draftInput: 'half typed',
+      editingMessageId: 'u7',
+    }) as Record<string, unknown>;
+    expect('editingMessageId' in sealed).toBe(false);
+    expect('draftInput' in sealed).toBe(false);
+    expect(sealed.title).toBe('T');
+  });
+
+  it('restores editingMessageId from the local row after a pull', () => {
+    const restored = restoreLocalFields(
+      'chats',
+      { id: 'c1', title: 'T' },
+      { id: 'c1', title: 'old', editingMessageId: 'u7' },
+    ) as Record<string, unknown>;
+    expect(restored.editingMessageId).toBe('u7');
+  });
+
+  it('a patch of only editingMessageId is not a synced mutation', () => {
+    expect(patchTouchesSyncedField('chats', ['editingMessageId'])).toBe(false);
   });
 });

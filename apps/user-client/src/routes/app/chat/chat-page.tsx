@@ -35,7 +35,13 @@ import {
   useSetArtefactTags,
   useUpdateArtefactContent,
 } from '../../../data/artefacts.js';
+import { clearPendingAttachments, useEditAttachments } from '../../../data/attachments.js';
 import { useBranchChat, useChat, useCreateChat, useUpdateChat } from '../../../data/chats.js';
+import {
+  canReplaceInPlace,
+  useEditAndBranch,
+  useEditAndReplace,
+} from '../../../data/message-edit.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { QK } from '../../../data/queryKeys.js';
 import { useFilteredSeedTemplates } from '../../../data/seed-templates.js';
@@ -60,6 +66,7 @@ import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { mutateSynced } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { buildEditOrchestration, resolveSendAction } from './use-edit-orchestration.js';
 
 const DRAFT_DEBOUNCE_MS = 250;
 
@@ -82,6 +89,8 @@ export function ChatPage(): JSX.Element {
   const createChat = useCreateChat();
   const startOpener = useStartOpener();
   const class2Gate = useClass2Gate();
+  const editAndReplace = useEditAndReplace();
+  const editAndBranch = useEditAndBranch();
 
   const setChatId = useCurrentChatStore((s) => s.setChatId);
   const setLazy = useCurrentChatStore((s) => s.setLazy);
@@ -99,6 +108,8 @@ export function ChatPage(): JSX.Element {
   const setArtefactExpertError = useCurrentChatStore((s) => s.setArtefactExpertError);
   const isLiveVoice = useCurrentChatStore((s) => s.isLiveVoice);
   const setLiveVoice = useCurrentChatStore((s) => s.setLiveVoice);
+  const editStagedRemovals = useCurrentChatStore((s) => s.editStagedRemovals);
+  const resetEditSession = useCurrentChatStore((s) => s.resetEditSession);
 
   const openArtefactId = useCurrentChatStore((s) => s.openArtefactId);
   const openArtefact = useCurrentChatStore((s) => s.openArtefact);
@@ -509,21 +520,6 @@ export function ChatPage(): JSX.Element {
     navigate(`/app/chat/${newChatId}`);
   };
 
-  const onSend = async (text: string): Promise<void> => {
-    if (!effectivePersona) return;
-    const newChatId = await sendMessage.mutateAsync({
-      chatId: activeChatId,
-      personaId: effectivePersona.id,
-      text,
-      reasoning,
-    });
-    setDraft('');
-    if (isLazy && personaIdFromQuery) clearLazyDraft(personaIdFromQuery);
-    if (isLazy && newChatId && newChatId !== activeChatId) {
-      navigate(`/app/chat/${newChatId}`, { replace: true });
-    }
-  };
-
   const onRenameChat = (next: string | null): void => {
     if (!chatId) return;
     void updateChat.mutateAsync({ id: chatId, patch: { title: next } });
@@ -544,6 +540,71 @@ export function ChatPage(): JSX.Element {
   const messages = chatQuery.data?.messages ?? [];
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
+
+  // ---- Mild message editing (spec 2026-07-18) ----
+  // The edit target lives on the ChatRow (device-local, never synced); whether
+  // Replace-in-place is offered is re-derived live from the current message
+  // list every render, so a cross-device continuation correctly downgrades an
+  // in-progress edit to branch-only (spec §6). editAttachments composes the
+  // surviving originals with this chat's pending additions.
+  const editingMessageId = chat?.editingMessageId ?? null;
+  const canReplace = editingMessageId ? canReplaceInPlace(messages, editingMessageId) : false;
+  const { data: editAttachments = [] } = useEditAttachments(
+    activeChatId ?? '',
+    editingMessageId,
+    editStagedRemovals,
+  );
+  const editOrchestration = buildEditOrchestration({
+    activeChatId,
+    personaId: effectivePersona?.id ?? null,
+    editingMessageId,
+    draft,
+    reasoning,
+    editStagedRemovals,
+    setDraft,
+    resetEditSession,
+    clearPendingAttachments,
+    updateChat,
+    editAndReplace,
+    editAndBranch,
+    navigate,
+  });
+  const enterEdit = editOrchestration.enterEdit;
+  const cancelEdit = editOrchestration.cancelEdit;
+  const onReplace = editOrchestration.onReplace;
+  const onBranchEdit = editOrchestration.onBranchEdit;
+
+  // Single send chokepoint (Laura HARD fix, spec 2026-07-18): every send
+  // trigger — desktop Enter/Ctrl+Enter (via Cockpit's onInputKeyDown), the
+  // touch DualActionBtn, dictation finishing, and live-voice finishing — all
+  // funnel through this one `onSend`. While an edit is in progress it must
+  // commit the same action the EditSendButton primary would (Replace when
+  // still reachable, else Branch) rather than appending a new message while
+  // `editingMessageId` stays set. Routing the decision through one function
+  // guarantees the keyboard and voice paths cannot drift out of sync again.
+  const onSend = async (text: string): Promise<void> => {
+    const action = resolveSendAction(editingMessageId, canReplace);
+    if (action === 'replace') {
+      await onReplace();
+      return;
+    }
+    if (action === 'branch') {
+      await onBranchEdit();
+      return;
+    }
+    if (!effectivePersona) return;
+    const newChatId = await sendMessage.mutateAsync({
+      chatId: activeChatId,
+      personaId: effectivePersona.id,
+      text,
+      reasoning,
+    });
+    setDraft('');
+    if (isLazy && personaIdFromQuery) clearLazyDraft(personaIdFromQuery);
+    if (isLazy && newChatId && newChatId !== activeChatId) {
+      navigate(`/app/chat/${newChatId}`, { replace: true });
+    }
+  };
 
   // ---- Context pre-seeding (seed templates) ----
   // A real user message is one the person actually sent (seed body turns carry a
@@ -781,6 +842,7 @@ export function ChatPage(): JSX.Element {
             setBranchPointId(messageId);
           }}
           branchDisabled={isStreamLive}
+          onEdit={(m) => void enterEdit(m)}
           onReadAloud={(message) => void voice.playMessage(message)}
           voiceDisabledReason={voice.disabledReason}
           voiceMode={settingsQuery.data?.voiceMode ?? 'paragraph'}
@@ -1074,6 +1136,12 @@ export function ChatPage(): JSX.Element {
           draftValue={draft}
           onDraftChange={setDraft}
           onSend={(t) => void onSend(t)}
+          editingMessageId={editingMessageId}
+          canReplace={canReplace}
+          editAttachments={editAttachments}
+          onReplace={() => void onReplace()}
+          onBranchEdit={() => void onBranchEdit()}
+          onCancelEdit={() => void cancelEdit()}
           onStop={() =>
             void useStreamManagerStore.getState().abortPreserve(chat?.id ?? activeChatId ?? '')
           }

@@ -1,7 +1,7 @@
 import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef } from 'react';
-import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
+import type { AttachmentRow, ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { resolveContextWindow } from '../../lib/context-window.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
@@ -18,6 +18,19 @@ interface Props {
   draftValue: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
+  /**
+   * Non-null when this chat's composer is editing an existing message (spec
+   * 2026-07-18). Required — see the matching doc comment on Cockpit's Props.
+   * Pure pass-through to Cockpit here.
+   */
+  editingMessageId: string | null;
+  /** Whether Replace-in-place is available (derived: the edited message is still last). */
+  canReplace: boolean;
+  /** The edit view of attachments (originals − staged removals + additions). */
+  editAttachments: AttachmentRow[];
+  onReplace: () => void;
+  onBranchEdit: () => void;
+  onCancelEdit: () => void;
   onStop: () => void;
   isStreamLive: boolean;
   onExit: () => void;
@@ -197,6 +210,12 @@ export function InteractionMode(p: Props): JSX.Element {
           draftValue={p.draftValue}
           onDraftChange={p.onDraftChange}
           onSend={handleSend}
+          editingMessageId={p.editingMessageId}
+          canReplace={p.canReplace}
+          editAttachments={p.editAttachments}
+          onReplace={p.onReplace}
+          onBranchEdit={p.onBranchEdit}
+          onCancelEdit={p.onCancelEdit}
           onStop={p.onStop}
           isStreamLive={p.isStreamLive}
           onAttachFromTreasury={p.onAttachFromTreasury}

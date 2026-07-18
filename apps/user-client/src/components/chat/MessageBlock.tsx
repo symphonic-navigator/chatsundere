@@ -52,6 +52,12 @@ export interface MessageBlockProps {
   onBranch?: () => void;
   /** Disable branching (stream live for this chat). */
   branchDisabled?: boolean;
+  /** Re-compose this user message in the prompt composer (spec 2026-07-18).
+   *  Pure pass-through to MessageControls — ChatStream gates it to real user
+   *  messages before wiring it here. */
+  onEdit?: () => void;
+  /** Disable editing (stream live for this chat). */
+  editDisabled?: boolean;
   /** True while this message is the active streaming draft. Marks the last
    *  reasoning group as live, and switches text rendering from Markdown to
    *  per-chunk fade-in spans (each arriving token mounts a fresh span and
@@ -507,6 +513,8 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
           onRegenerate={p.onRegenerate}
           onBranch={p.onBranch}
           branchDisabled={p.branchDisabled}
+          onEdit={p.onEdit}
+          editDisabled={p.editDisabled}
           onSave={handleSaveMessage}
           canSave={canSaveMessage}
           onSaveAsTemplate={

@@ -18,6 +18,22 @@ export const QK = {
   personaAvatar: (id: string) => ['persona-avatar', id] as const,
   attachmentsPending: (chatId: string) => ['attachments', 'pending', chatId] as const,
   attachmentsForMessage: (messageId: string) => ['attachments', 'message', messageId] as const,
+  /** Edit-view attachment set (spec 2026-07-18 §8). Nested UNDER the
+   *  `attachments/pending/<chatId>` prefix (not a sibling key) so that any
+   *  existing `invalidateQueries({ queryKey: attachmentsPending(chatId) })`
+   *  call — fired by every add/remove/rename mutation — also invalidates this
+   *  query via TanStack's default prefix-match invalidation. Without the
+   *  nesting, adding an attachment mid-edit would refresh the pending list but
+   *  leave the edit strip stale. */
+  attachmentsEdit: (chatId: string, editingMessageId: string | null, stagedRemovalsSig: string) =>
+    [
+      'attachments',
+      'pending',
+      chatId,
+      'edit',
+      editingMessageId ?? 'none',
+      stagedRemovalsSig,
+    ] as const,
   chatArtefacts: (chatId: string) => ['artefacts', 'chat', chatId] as const,
   artefact: (id: string) => ['artefacts', 'item', id] as const,
   allArtefacts: ['artefacts', 'all'] as const,

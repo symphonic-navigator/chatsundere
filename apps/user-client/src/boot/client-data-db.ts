@@ -263,6 +263,11 @@ export interface ChatRow {
    *  Only meaningful while a global artefact expert is configured.
    *  Non-indexed (schemaless) — no Dexie version bump. */
   useArtefactExpertModel?: boolean;
+  /** Message currently being re-composed in this chat's composer (spec
+   *  2026-07-18). Device-local edit-in-progress marker — never synced (on the
+   *  `chats` deny-list), never determines "is this the last message" (that is
+   *  always derived live). Non-indexed (schemaless) — no Dexie version bump. */
+  editingMessageId?: string | null;
 }
 
 export type ContentBlock =

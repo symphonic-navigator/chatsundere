@@ -132,6 +132,7 @@ export function OverflowMenu({
                 data-tone={item.tone ?? 'default'}
                 aria-disabled={item.disabled ? 'true' : undefined}
                 aria-describedby={reasonId}
+                title={item.disabled ? item.disabledReason : undefined}
                 onClick={() => activate(item)}
               >
                 <span>{item.label}</span>

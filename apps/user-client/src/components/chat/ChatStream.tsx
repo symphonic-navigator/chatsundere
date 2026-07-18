@@ -70,6 +70,10 @@ export interface ChatStreamProps {
   onBranch?: (messageId: string) => void;
   /** Disable branching across all messages (stream live for this chat). */
   branchDisabled?: boolean;
+  /** Re-compose a user message in the prompt composer (spec 2026-07-18).
+   *  Wired only to real user messages (`role === 'user' && !seedRole`) —
+   *  seed-primer turns and persona replies never carry an Edit control. */
+  onEdit?: (message: MessageRow) => void;
   /** Resolved context window (tokens) for the marker. Undefined = no marker. */
   contextBudget?: number;
   /** Estimated system-prompt tokens, reserved before fitting history. */
@@ -265,6 +269,10 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
                 onRegenerate={isLastPersona ? p.onRegenerate : undefined}
                 onBranch={p.onBranch ? () => p.onBranch?.(m.id) : undefined}
                 branchDisabled={p.branchDisabled}
+                onEdit={
+                  m.role === 'user' && !m.seedRole && p.onEdit ? () => p.onEdit?.(m) : undefined
+                }
+                editDisabled={!!p.streamHandle}
                 isStreamingDraft={isDraft}
                 isPinned={isPinned}
                 onReadAloud={

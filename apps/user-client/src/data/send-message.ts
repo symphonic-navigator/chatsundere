@@ -662,6 +662,14 @@ export function useSendMessage() {
 export interface RegenerateArgs {
   chatId: string;
   reasoning: ReasoningState;
+  /**
+   * Explicit persona message to re-roll, regardless of its `streamingState` or
+   * `kind`. When omitted (the Regenerate button), the target is the last
+   * complete non-opener persona reply (or the opener in an opener-only chat).
+   * Replace-in-place passes this so the reply that FOLLOWS the edited message is
+   * reset even when it is incomplete or failed (spec §6.1).
+   */
+  targetMessageId?: string;
 }
 
 /**
@@ -691,38 +699,61 @@ export function useRegenerate() {
       // Locate the answer to re-roll + the prompt to replay.
       const msgs = await db.messages.where('chatId').equals(args.chatId).sortBy('createdAt');
 
-      // Opener-only chat: no user message exists yet — re-roll the greeting instead.
-      const hasUserMessage = msgs.some((m) => m.role === 'user');
-      if (!hasUserMessage) {
-        const opener = [...msgs].reverse().find((m) => m.role === 'persona' && m.kind === 'opener');
-        if (!opener) throw new Error('useRegenerate: nothing to regenerate');
-        const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
-        await useStreamManagerStore.getState().regenerateOpener({
-          chatId: args.chatId,
-          targetMessageId: opener.id,
-          chat: ctx.chat,
-          persona: ctx.persona,
-          ...openerBundle(ctx),
-          reasoning: args.reasoning,
-          globalInstructions: ctx.globalInstructions,
-          globalAboutMe: ctx.globalAboutMe,
-          screenEffectsEnabled: ctx.screenEffectsEnabled,
-        });
-        return;
+      // Target/prompt SELECTION is the only branch; the wire-context tail below
+      // is shared. When an explicit target is given we re-roll THAT persona
+      // message whatever its state; otherwise the heuristic (last complete
+      // non-opener reply, or the opener in an opener-only chat) applies.
+      let target: MessageRow;
+      let lastUser: MessageRow;
+
+      if (args.targetMessageId) {
+        const explicit = msgs.find((m) => m.id === args.targetMessageId && m.role === 'persona');
+        if (!explicit) throw new Error('useRegenerate: target message not found');
+        target = explicit;
+        const user = [...msgs]
+          .reverse()
+          .find((m) => m.role === 'user' && m.createdAt < explicit.createdAt);
+        if (!user) throw new Error('useRegenerate: no prior user-message');
+        lastUser = user;
+      } else {
+        // Opener-only chat: no user message exists yet — re-roll the greeting instead.
+        const hasUserMessage = msgs.some((m) => m.role === 'user');
+        if (!hasUserMessage) {
+          const opener = [...msgs]
+            .reverse()
+            .find((m) => m.role === 'persona' && m.kind === 'opener');
+          if (!opener) throw new Error('useRegenerate: nothing to regenerate');
+          const ctx = await resolvePersonaContext(args.chatId, 'useRegenerate');
+          await useStreamManagerStore.getState().regenerateOpener({
+            chatId: args.chatId,
+            targetMessageId: opener.id,
+            chat: ctx.chat,
+            persona: ctx.persona,
+            ...openerBundle(ctx),
+            reasoning: args.reasoning,
+            globalInstructions: ctx.globalInstructions,
+            globalAboutMe: ctx.globalAboutMe,
+            screenEffectsEnabled: ctx.screenEffectsEnabled,
+          });
+          return;
+        }
+
+        // Normal chat: find the last complete persona reply that is not an opener.
+        const found = [...msgs]
+          .reverse()
+          .find(
+            (m) => m.role === 'persona' && m.streamingState === 'complete' && m.kind !== 'opener',
+          );
+        if (!found) throw new Error('useRegenerate: no last persona message');
+        target = found;
+
+        const user = [...msgs]
+          .reverse()
+          .find((m) => m.role === 'user' && m.createdAt < found.createdAt);
+        if (!user) throw new Error('useRegenerate: no prior user-message');
+        lastUser = user;
       }
 
-      // Normal chat: find the last complete persona reply that is not an opener.
-      const target = [...msgs]
-        .reverse()
-        .find(
-          (m) => m.role === 'persona' && m.streamingState === 'complete' && m.kind !== 'opener',
-        );
-      if (!target) throw new Error('useRegenerate: no last persona message');
-
-      const lastUser = [...msgs]
-        .reverse()
-        .find((m) => m.role === 'user' && m.createdAt < target.createdAt);
-      if (!lastUser) throw new Error('useRegenerate: no prior user-message');
       const userMessageText = lastUser.contentBlocks
         .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
         .map((b) => b.text)

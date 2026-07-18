@@ -6,9 +6,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { classifyFile } from '../../attachments/file-classify.js';
 import { normaliseImageForLlm } from '../../attachments/image-normalise.js';
-import type { PersonaRow } from '../../boot/client-data-db.js';
+import type { AttachmentRow, PersonaRow } from '../../boot/client-data-db.js';
 import {
   addAttachment,
+  attachmentRemovalRoute,
   usePendingAttachments,
   usePendingDocumentContents,
   useRemoveAttachment,
@@ -33,6 +34,7 @@ import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { CockpitMenu } from './CockpitMenu.js';
 import { DualActionBtn } from './DualActionBtn.js';
+import { EditSendButton } from './EditSendButton.js';
 
 interface Props {
   chatId: string;
@@ -41,6 +43,20 @@ interface Props {
   draftValue: string;
   onDraftChange: (v: string) => void;
   onSend: (text: string) => void;
+  /**
+   * Non-null when this chat's composer is editing an existing message (spec
+   * 2026-07-18). Required — chat-page.tsx's Task 9 orchestration always
+   * supplies these six props (null/false/[] when not editing), so a future
+   * caller that forgets to wire one is a compile error, not a silent no-op.
+   */
+  editingMessageId: string | null;
+  /** Whether Replace-in-place is available (derived: the edited message is still last). */
+  canReplace: boolean;
+  /** The edit view of attachments (originals − staged removals + additions). */
+  editAttachments: AttachmentRow[];
+  onReplace: () => void;
+  onBranchEdit: () => void;
+  onCancelEdit: () => void;
   onStop: () => void;
   isStreamLive: boolean;
   /** Open the Treasury attach picker (omitted → (+) opens the file dialog directly). */
@@ -126,6 +142,11 @@ export function Cockpit(p: Props): JSX.Element {
   // lightbox index.
   const qc = useQueryClient();
   const { data: pending = [] } = usePendingAttachments(p.chatId);
+  const { editingMessageId, canReplace, editAttachments, onReplace, onBranchEdit, onCancelEdit } =
+    p;
+  const editing = editingMessageId !== null;
+  const shownAttachments = editing ? editAttachments : pending;
+  const stageRemoval = useCurrentChatStore((s) => s.stageRemoval);
   const remove = useRemoveAttachment(p.chatId);
   const rename = useRenameAttachment(p.chatId);
   const editText = useUpdateAttachmentText(p.chatId);
@@ -139,16 +160,19 @@ export function Cockpit(p: Props): JSX.Element {
     await qc.invalidateQueries({ queryKey: QK.attachmentsPending(p.chatId) });
   };
 
-  // One object URL per pending image, rebuilt whenever the pending set changes
-  // and revoked on the next change / unmount so the browser never leaks blobs.
+  // One object URL per shown image (the same set feeding the attachment strip:
+  // editAttachments while editing, pending otherwise), rebuilt whenever that set
+  // changes and revoked on the next change / unmount so the browser never leaks
+  // blobs. Must track shownAttachments, not pending, so the strip's index space
+  // and the lightbox's index space always agree — see the Lightbox items map below.
   const objectUrls = useMemo(
     () =>
       new Map(
-        pending
+        shownAttachments
           .filter((a) => a.kind === 'image' && a.blob)
           .map((a) => [a.id, URL.createObjectURL(a.blob as Blob)]),
       ),
-    [pending],
+    [shownAttachments],
   );
   useEffect(
     () => () => {
@@ -160,6 +184,15 @@ export function Cockpit(p: Props): JSX.Element {
   useEffect(() => {
     if (!p.voiceUnavailable) setVoiceNote(false);
   }, [p.voiceUnavailable]);
+  // Focus the composer and scroll it into view whenever an edit begins — the
+  // user tapped Edit on a message that may be off-screen or above the fold.
+  // scrollIntoView is guarded for jsdom, which omits it (see scroll-to-message.ts).
+  const editRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editingMessageId === null) return;
+    editRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    editRef.current?.querySelector('textarea')?.focus();
+  }, [editingMessageId]);
   // Close the menu when the user clicks anywhere outside the wrap, or presses
   // Escape. Without this the menu had no close path: the toggle button only
   // toggled by re-clicking the same icon, and clicks on chips left it open.
@@ -258,7 +291,11 @@ export function Cockpit(p: Props): JSX.Element {
     () => new Map(allLibraries.map((l) => [l.id, l.name])),
     [allLibraries],
   );
-  const items = pending.map((row) => {
+  // Same set as the strip/objectUrls above (see the note there) — otherwise the
+  // strip's onOpen(i) index is looked up against the wrong array (editAttachments
+  // fed the strip, pending fed the lightbox), so a click either opens an empty
+  // lightbox (which self-closes, Lightbox.tsx) or the wrong image.
+  const items = shownAttachments.map((row) => {
     const provenance = row.kbRef
       ? `${libraryNameById.get(row.kbRef.libraryId) ?? 'Library'} › ${row.fileName.replace(/\.md$/, '')}`
       : undefined;
@@ -548,8 +585,8 @@ export function Cockpit(p: Props): JSX.Element {
           </svg>
         </button>
       </div>
-      {pending.length > 0 && <div className="cockpit-divider" />}
-      <AttachmentStrip attachments={pending} onOpen={(i) => setLightboxIndex(i)} />
+      {shownAttachments.length > 0 && <div className="cockpit-divider" />}
+      <AttachmentStrip attachments={shownAttachments} onOpen={(i) => setLightboxIndex(i)} />
       {p.dictation.failed ? (
         <div className="cockpit-dictation-note" role="alert">
           {/* A refusal (deterministic 4xx) names the provider as the actor; Retry
@@ -599,7 +636,19 @@ export function Cockpit(p: Props): JSX.Element {
           </button>
         </output>
       ) : null}
-      <div className="cockpit-row-input">
+      {editing ? (
+        <output className="cockpit-edit-banner">
+          <span>
+            {canReplace
+              ? 'Editing your message'
+              : 'Editing an earlier message — sending will start a new branch.'}
+          </span>
+          <button type="button" className="cockpit-edit-cancel" onClick={onCancelEdit}>
+            Cancel
+          </button>
+        </output>
+      ) : null}
+      <div className="cockpit-row-input" ref={editRef}>
         <AutoSizeTextarea
           value={p.draftValue}
           onChange={p.onDraftChange}
@@ -615,14 +664,28 @@ export function Cockpit(p: Props): JSX.Element {
           autoFocus
           onKeyDown={onInputKeyDown}
         />
-        <DualActionBtn
-          hasText={p.draftValue.trim().length > 0}
-          isStreamLive={p.isStreamLive}
-          personaName={p.persona.name}
-          onSend={() => p.onSend(p.draftValue)}
-          onStop={p.onStop}
-          dictation={p.dictation}
-        />
+        {editing ? (
+          <EditSendButton
+            canReplace={canReplace}
+            disabledReason={
+              canReplace
+                ? null
+                : 'There are newer messages after this — editing here starts a branch.'
+            }
+            onReplace={onReplace}
+            onBranch={onBranchEdit}
+            busy={p.isStreamLive}
+          />
+        ) : (
+          <DualActionBtn
+            hasText={p.draftValue.trim().length > 0}
+            isStreamLive={p.isStreamLive}
+            personaName={p.persona.name}
+            onSend={() => p.onSend(p.draftValue)}
+            onStop={p.onStop}
+            dictation={p.dictation}
+          />
+        )}
       </div>
       {dragging && <div className="cockpit-drop-overlay">Drop files to attach</div>}
       {reject && (
@@ -642,7 +705,18 @@ export function Cockpit(p: Props): JSX.Element {
           onRename={(id, patch) => {
             if (patch.fileName) rename.mutate({ id, fileName: patch.fileName });
           }}
-          onRemove={(id) => remove.mutate(id)}
+          onRemove={(id) => {
+            // While editing, an ORIGINAL (bound to the edited message) stages
+            // its removal — undo-able via Cancel — rather than deleting the
+            // row outright; a PENDING addition made during this edit session
+            // takes the ordinary delete path either way (spec §8).
+            const attMessageId = shownAttachments.find((a) => a.id === id)?.messageId ?? null;
+            if (attachmentRemovalRoute(attMessageId, editingMessageId) === 'stage') {
+              stageRemoval(id);
+            } else {
+              remove.mutate(id);
+            }
+          }}
           onEditText={(id, text) => editText.mutate({ id, text })}
           onClose={() => setLightboxIndex(null)}
         />

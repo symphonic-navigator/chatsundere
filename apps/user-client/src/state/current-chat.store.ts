@@ -39,6 +39,10 @@ interface CurrentChatStore {
   artefactExpertError: string | null;
   /** Artefact lightbox: the id of the artefact currently open, or null. */
   openArtefactId: string | null;
+  /** Edit-session transient state (spec 2026-07-18 §8). Never persisted; the
+   *  edit *target* lives on ChatRow.editingMessageId, but the staged
+   *  attachment removals are in-session only. */
+  editStagedRemovals: string[];
 
   /** Open a persisted chat by ID. Clears any pending lazy-open persona. */
   setChatId: (id: string | null) => void;
@@ -65,6 +69,12 @@ interface CurrentChatStore {
   openArtefact: (id: string) => void;
   /** Close the artefact lightbox. */
   closeArtefact: () => void;
+  /** Stage an attachment id for removal on commit (undo-able via unstageRemoval). */
+  stageRemoval: (id: string) => void;
+  /** Undo a staged attachment removal. */
+  unstageRemoval: (id: string) => void;
+  /** Clear all staged removals. Called on enter-edit, cancel, and commit. */
+  resetEditSession: () => void;
   /** Reset all ephemeral state to initial defaults. */
   reset: () => void;
 }
@@ -88,6 +98,9 @@ type InitialState = Omit<
   | 'setArtefactExpertError'
   | 'openArtefact'
   | 'closeArtefact'
+  | 'stageRemoval'
+  | 'unstageRemoval'
+  | 'resetEditSession'
   | 'reset'
 >;
 
@@ -107,6 +120,7 @@ const initial: InitialState = {
   askExpert: false,
   artefactExpertError: null,
   openArtefactId: null,
+  editStagedRemovals: [],
 };
 
 export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
@@ -141,5 +155,12 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   setArtefactExpertError: (message) => set({ artefactExpertError: message }),
   openArtefact: (id) => set({ openArtefactId: id }),
   closeArtefact: () => set({ openArtefactId: null }),
+  stageRemoval: (id) =>
+    set((s) =>
+      s.editStagedRemovals.includes(id) ? s : { editStagedRemovals: [...s.editStagedRemovals, id] },
+    ),
+  unstageRemoval: (id) =>
+    set((s) => ({ editStagedRemovals: s.editStagedRemovals.filter((x) => x !== id) })),
+  resetEditSession: () => set({ editStagedRemovals: [] }),
   reset: () => set({ ...initial }),
 }));

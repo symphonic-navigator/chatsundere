@@ -72,6 +72,7 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
   chats: [
     // Device-local / transient
     'draftInput',
+    'editingMessageId',
     'openerPending',
     'compactionToastShown',
     // Locally derived (never synced — recomputed on this device)

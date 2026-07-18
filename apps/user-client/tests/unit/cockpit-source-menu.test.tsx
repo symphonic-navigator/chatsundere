@@ -41,6 +41,12 @@ function renderCockpit(extra: Record<string, unknown> = {}) {
       autoReadAloud={false}
       onToggleAutoRead={() => {}}
       voiceUnavailable={null}
+      editingMessageId={null}
+      canReplace={false}
+      editAttachments={[]}
+      onReplace={() => {}}
+      onBranchEdit={() => {}}
+      onCancelEdit={() => {}}
       {...extra}
     />,
     { wrapper: wrap(qc) },

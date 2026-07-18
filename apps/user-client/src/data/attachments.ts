@@ -218,6 +218,53 @@ export async function listMessageAttachments(messageId: string): Promise<Attachm
   return rows.sort((a, b) => a.order - b.order);
 }
 
+/** Delete every pending (unsent, `messageId === null`) attachment for a chat.
+ *  Used to discard additions made during an edit session that is cancelled —
+ *  a pending row is device-local (never left this device), so this is a plain
+ *  local delete, no outbox row (mirrors `removeAttachment`'s pending branch). */
+export async function clearPendingAttachments(chatId: string): Promise<void> {
+  const db = getClientDataDb();
+  const keys = await db.attachments
+    .where('chatId')
+    .equals(chatId)
+    .filter((a) => a.messageId === null)
+    .primaryKeys();
+  if (keys.length > 0) await db.attachments.bulkDelete(keys);
+}
+
+/**
+ * The edit view of a chat's attachments (spec 2026-07-18 §8): the surviving
+ * originals bound to the edited message (active, minus staged removals),
+ * followed by this chat's pending additions. Empty while not editing.
+ */
+export async function listEditAttachments(
+  chatId: string,
+  editingMessageId: string | null,
+  stagedRemovals: string[],
+): Promise<AttachmentRow[]> {
+  if (editingMessageId === null) return [];
+  const originals = await listMessageAttachments(editingMessageId);
+  const survivingOriginals = originals.filter(
+    (a) => a.state === 'active' && !stagedRemovals.includes(a.id),
+  );
+  const pending = await listPendingAttachments(chatId);
+  return [...survivingOriginals, ...pending];
+}
+
+/**
+ * Whether removing an attachment shown in the edit strip should STAGE the
+ * removal (an original bound to the message being edited — undo-able via
+ * Cancel) or DELETE it outright (a pending addition made during this edit
+ * session — it never left the device either way). Pure decision, split out
+ * for direct unit testing.
+ */
+export function attachmentRemovalRoute(
+  attachmentMessageId: string | null,
+  editingMessageId: string | null,
+): 'stage' | 'delete' {
+  return editingMessageId !== null && attachmentMessageId === editingMessageId ? 'stage' : 'delete';
+}
+
 /**
  * Bind all pending attachments for a chat to a sent message, clearing their
  * pending state. This is the moment an attachment becomes syncable (WS-D §5): a
@@ -249,6 +296,69 @@ export async function attachPendingToMessage(chatId: string, messageId: string):
   });
 }
 
+/**
+ * Commit an in-progress edit's attachment changes onto the edited message
+ * (Replace path, spec §8). Deletes the originals the user staged for removal,
+ * then binds the chat's pending additions to the message.
+ */
+export async function commitEditAttachmentsToMessage(
+  chatId: string,
+  messageId: string,
+  stagedRemovals: string[],
+): Promise<void> {
+  const db = getClientDataDb();
+  // Scope must be a superset of attachPendingToMessage's inner transaction
+  // (db.attachments + db.syncOutbox) so it nests as a sub-transaction rather
+  // than opening a second, independent one.
+  await db.transaction('rw', [db.attachments, db.syncOutbox], async () => {
+    for (const id of stagedRemovals) await db.attachments.delete(id);
+    await attachPendingToMessage(chatId, messageId);
+  });
+}
+
+/**
+ * Stage an in-progress edit's attachments onto a fresh branch chat (Branch
+ * path, spec §8): copy each surviving original (bound to `editingMessageId`,
+ * minus `stagedRemovals`) as a new pending row on `targetChatId`, and re-home
+ * the source chat's pending additions onto `targetChatId`. The subsequent
+ * re-send binds them to the new user message. Blobs are duplicated — a branch
+ * is a genuine fork.
+ */
+export async function copyEditAttachmentsToChat(
+  sourceChatId: string,
+  editingMessageId: string,
+  stagedRemovals: string[],
+  targetChatId: string,
+): Promise<void> {
+  const db = getClientDataDb();
+  const removals = new Set(stagedRemovals);
+
+  // Scope must be a superset of addAttachment's inner transaction (db.attachments)
+  // so it nests as a sub-transaction rather than opening a second, independent one.
+  await db.transaction('rw', db.attachments, async () => {
+    const originals = await db.attachments.where('messageId').equals(editingMessageId).toArray();
+    for (const a of originals) {
+      if (removals.has(a.id)) continue;
+      if (a.state !== 'active') continue; // never resurrect a soft-deleted original
+      await addAttachment({
+        chatId: targetChatId,
+        kind: a.kind,
+        fileName: a.fileName,
+        mime: a.mime,
+        blob: a.blob,
+        text: a.text,
+        width: a.width,
+        height: a.height,
+        origin: a.origin,
+        kbRef: a.kbRef,
+      });
+    }
+
+    const additions = await listPendingAttachments(sourceChatId);
+    for (const a of additions) await db.attachments.update(a.id, { chatId: targetChatId });
+  });
+}
+
 // ---- React hooks ----
 
 /** Query hook that reactively lists all unsent attachments for the given chat. */
@@ -271,6 +381,28 @@ export function usePendingDocumentContents(rows: AttachmentRow[]) {
   return useQuery({
     queryKey: ['attachments', 'ref-contents', sig],
     queryFn: () => loadPendingDocumentContents(rows),
+  });
+}
+
+/**
+ * Query hook for the edit view of a chat's attachments (spec 2026-07-18 §8) —
+ * see `listEditAttachments`. Disabled (and empty) while `editingMessageId` is
+ * null. The query key is nested under the pending-attachments prefix so it
+ * refreshes off the same invalidation every add/remove/rename mutation
+ * already fires — see the `QK.attachmentsEdit` doc comment.
+ */
+export function useEditAttachments(
+  chatId: string,
+  editingMessageId: string | null,
+  stagedRemovals: string[],
+) {
+  // Order-independent signature: two staging orders of the same set must hit
+  // the same cache entry.
+  const stagedSig = [...stagedRemovals].sort().join(',');
+  return useQuery({
+    queryKey: QK.attachmentsEdit(chatId, editingMessageId, stagedSig),
+    queryFn: () => listEditAttachments(chatId, editingMessageId, stagedRemovals),
+    enabled: editingMessageId !== null,
   });
 }
 
