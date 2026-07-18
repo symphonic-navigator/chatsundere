@@ -1,7 +1,7 @@
 # Third-Party Chat Import (ChatGPT & Grok) — Design
 
 **Date:** 2026-07-18
-**Status:** Draft — awaiting Laura spec-pass + Chris review
+**Status:** Laura spec-pass done (no hard defects; soft findings folded below) — awaiting Chris review
 **Scope:** `apps/user-client` only (client-only; no server, no crypto — not a Larissa path)
 
 ## 1. Background & intent
@@ -54,25 +54,40 @@ branch, matching both our one-chat model and chatsune's ChatGPT behaviour.
 
 The persona hub's existing **Import** section (which hosts the chatsune/
 chatsundere pack control) gains a second control: **"Import chats from ChatGPT
-or Grok…"**. It opens an overlay with three states:
+or Grok…"** with a one-line descriptor of its narrower scope ("Just the
+conversations — text and reasoning"); the section intro is broadened so it no
+longer describes only the persona-pack import. The control opens an overlay
+with three states:
 
 1. **Pick** — a file picker, `accept=".zip,.json"`. A short line names exactly
    what to pick: the `.zip` downloaded from ChatGPT, or the `.json` from Grok.
-2. **Select** — after parsing (spinner while parsing), a scrollable list of the
+   A second line names the consequence: "These arrive as chats with
+   ‹persona name› and continue in their voice." (Laura: makes the
+   no-persona-picker omakase legible — imported threads are answered by *this*
+   companion, not a ChatGPT-alike.)
+2. **Select** — parsing runs **off the main thread in a dedicated Web Worker**
+   (unzip + parse + flatten), so the parsing state stays responsive and Cancel
+   genuinely works (terminates the worker). Then a scrollable list of the
    conversations found in the file. Each row: checkbox, title (fallback
-   "Untitled chat"), date, message count. A "Select all" toggle operates on
-   enabled rows. A title-search input sits above the list when it exceeds 10
-   rows (ChatGPT exports commonly contain hundreds of conversations).
-   Rows that cannot be imported are **disabled with a visible reason**, never
-   hidden:
+   "Untitled chat"), date, message count. A title-search input sits above the
+   list when it exceeds 10 rows (ChatGPT exports commonly contain hundreds of
+   conversations). **"Select all" is scoped to the current filter** and its
+   label says so: "Select all 3 matches" while a search is active, "Select all
+   412" otherwise. A "Pick a different file" affordance returns to the Pick
+   state without closing the overlay (a user with both a ChatGPT zip and a
+   Grok json in hand doesn't reopen twice). Rows that cannot be imported are
+   **disabled with a visible reason**, never hidden:
    - "Already imported" — the persona already has a chat with this
      conversation's `importedFrom` key (idempotent re-import).
    - "Nothing importable" — the conversation is empty after filtering (e.g.
      image-only).
 3. **Import** — a footer button labelled with the live count ("Import 12
-   chats"), disabled at zero. During the write a progress count is shown; on
-   completion the overlay shows "Imported N chats" with a Done action. Cancel
-   is available at any point before the write starts.
+   chats"); at zero it is disabled with the house-style visible reason
+   ("Select at least one chat to import"). During the write a progress count
+   is shown; on completion the overlay shows "Imported N chats" with **Done**
+   and **View history** (deep-link to `/app/history?personaId=…`) — the
+   natural next beat after a migration is seeing the chats. Cancel is
+   available at any point before the write starts.
 
 No persona picker anywhere — the hub *is* the persona.
 
@@ -200,9 +215,12 @@ Mirrors `importChatsuneSessions` (`data/chatsune-import.ts`) exactly:
   import lands or it doesn't; the error states that nothing was partially
   written and offers retry.
 - **Large files:** migration is realistically a desktop task; a ChatGPT export
-  can exceed 100 MB and `JSON.parse` of such a file on a phone may fail. We do
-  not guard memory explicitly; the failure path stays constructive. This
-  assumption is deliberate and recorded here.
+  can exceed 100 MB and parsing it on a phone may fail. We do not guard memory
+  explicitly, but because parsing runs in the Web Worker (§3), a crash or
+  out-of-memory kill hits the worker, not the tab: the overlay surfaces
+  "This export is very large — importing on a computer is more reliable." and
+  the picker stays usable. Never a spinner that can present as hung (the
+  worker also keeps Cancel clickable throughout).
 
 ## 10. Dependencies
 
@@ -228,8 +246,9 @@ pill-loss CRITICAL):
 - **Writer:** idempotent re-import (second run imports zero), strictly
   increasing `createdAt` under equal source timestamps, sync outbox entries
   enqueued, no cursor set.
-- **UI:** disabled-row reasons, select-all on enabled rows only, import-count
-  button gating.
+- **UI:** disabled-row reasons, select-all scoped to the active search filter
+  (and to enabled rows only), import-count button gating incl. the zero-state
+  reason, pick-a-different-file returning to Pick without losing the overlay.
 
 ## 12. Manual verification (Chris, on device)
 
@@ -247,6 +266,24 @@ pill-loss CRITICAL):
 5. Continue an imported chat → the reply streams normally; title stays; memory
    extraction runs only now (bounded), not at import time.
 6. On a linked second device: the imported chats arrive via sync.
-7. (If available) the community member's Grok export imports cleanly — the
+7. Cancel while a large file is still parsing → the overlay stays responsive,
+   the parse stops, the picker is immediately reusable.
+8. (If available) the community member's Grok export imports cleanly — the
    fixtures are built from format analysis; a second real-world file is the
    strongest check.
+
+## 13. Laura spec-pass record (2026-07-18)
+
+**No hard defects.** Eight soft findings; six folded directly into §3/§9/§11
+(select-all scoped to the search filter with a truthful label; pick-state copy
+naming the persona and its voice; Web-Worker parsing so Cancel genuinely works
+and a large-file failure is constructive, never a frozen spinner; in-overlay
+"Pick a different file"; "View history" beside Done; zero-state import button
+disabled with a visible reason; broadened Import-section intro). Open items:
+
+- **Worker-parse decision** — folded as design, flagged for Chris's
+  arbitration (it is the one folded finding that adds implementation weight).
+- **First-run discoverability** (Laura's product note): the headline audience —
+  migrants — meets this feature only after creating a persona and scrolling to
+  the hub's Import section. Out of this spec's scope; Chris decides whether an
+  onboarding hint is wanted (would be its own small spec).
