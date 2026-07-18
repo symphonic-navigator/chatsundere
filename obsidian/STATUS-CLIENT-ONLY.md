@@ -8,6 +8,31 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-18 (evening) — **DESKTOP UI ITERATION 1 SPECCED +
+PLANNED — spec/plan committed to `master` (`e0a91387`, doc-only); execution
+HANDED OFF to a smaller-model local session (Chris's call), NOT yet built.**
+Three `lg`-gated desktop refinements, mobile unchanged: chat column 640→**896
+px** (`.chat-page` CSS is the real width surface, not root's `<main>`);
+**user-message bubbles** (left-aligned, `fit-content`/85 %, persona text stays
+open — pattern (a)); **permanent cockpit** — desktop gets a single chat mode
+via a derived `useEffectiveChatMode()` (never written to the store; resize
+across 1024 px just works), pin button removed-not-disabled there (conscious
+§11 exception, recorded in the planned **ADR 0036** which also amends
+CLAUDE.md §3.4). **Laura spec-pass: no hard defects, 6 softs — all folded**;
+her best find: the `offering === null` broken-model state would have lost the
+repair path on desktop → spec §5.6 mounts the topbar without an offering
+(also fixes a pre-existing mobile dead-state); plus lazy-mount store writes
+now desktop-gated (resize trap). Sidebars deliberately deferred to a next
+iteration. Spec/plan:
+`superpowers/{specs/2026-07-18-desktop-ui-iteration-design,plans/2026-07-18-desktop-ui-iteration}.md`
+(plan is handoff-hardened: 9 TDD tasks, worktree `feat/desktop-ui-iteration-1`).
+**Next:** executor builds per plan → Liz: Laura pre-squash, squash (one
+feature unit), gates on master, STATUS → Chris device-verifies spec §8 (incl.
+resize ping-pong + broken-model state + 380 px spot-check). Not a Larissa
+path.
+
+---
+
 **Last updated:** 2026-07-18 — **JULY MODEL CURATION: Hy3, MiniMax M3, Kimi K3
 (2nd route) added; Nemotron 3 Ultra deferred.** Squashed as one unit (branch
 `feat/curate-july-models`), fast-forwarded to `master`, **NOT pushed**; awaiting
