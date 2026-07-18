@@ -281,9 +281,11 @@ and a large-file failure is constructive, never a frozen spinner; in-overlay
 "Pick a different file"; "View history" beside Done; zero-state import button
 disabled with a visible reason; broadened Import-section intro). Open items:
 
-- **Worker-parse decision** — folded as design, flagged for Chris's
-  arbitration (it is the one folded finding that adds implementation weight).
-- **First-run discoverability** (Laura's product note): the headline audience —
-  migrants — meets this feature only after creating a persona and scrolling to
-  the hub's Import section. Out of this spec's scope; Chris decides whether an
-  onboarding hint is wanted (would be its own small spec).
+- **Worker-parse decision** — folded as design; **Chris approved 2026-07-18**
+  (fits the v0.2.9 scope).
+- **First-run discoverability** (Laura's product note) — **Chris declined
+  2026-07-18**: users are familiar with the persona concept (the whole
+  application revolves around it) and he wants no advertising-pillar
+  onboarding; it is fine that the feature appears once a persona exists.
+  (Soft finding — recorded here, not in `ux-deferrals.md`, which logs only
+  hard defects.)
