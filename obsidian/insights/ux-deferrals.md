@@ -668,3 +668,32 @@ later Laura sweep does not re-flag them:
   mount a bare exit-only topbar when the persona fails to resolve.
 - **Chris sign-off:** ✅ Chris — logged on his call (soft, advisory; Laura
   pre-squash). Spec §5.6-adjacent, ADR 0036.
+
+## 2026-07-19 — Chat font tuning: three conscious softs (spec-pass + pre-squash)
+
+- **Affected flow / surface:** The per-device chat text-size control (cockpit ⋯ →
+  "Text size") and its placement. Feature branch `feat/chat-font-tuning`, squashed
+  to `master` as `8ea229bd`.
+- **Findings (all soft — no hard defects at spec-pass or pre-squash):**
+  1. **No home in My Settings.** A global display preference lives only in the
+     cockpit ⋯; a user wanting bigger text may look in Settings first and find
+     nothing (there is no display/appearance page at all).
+  2. **Read-aloud parity.** Read-aloud is a permanent controls-row icon while
+     text-size sits one tap deeper in ⋯. Whether an accessibility knob deserves
+     promotion to a visible icon is best judged on-device.
+  3. **`align-items: baseline` on the shared `.cockpit-menu-chips` selector**
+     (index.css) affects existing chip rows, not only the new Text-size row, and
+     the planned `gap: 0.4rem` was not applied.
+- **Mode:** (1)+(2) spec-pass; (3) whole-branch review Minor.
+- **Criterion:** (1) least astonishment; (2) omakase / affordance weighting; (3) cosmetic.
+- **Rationale for deferral:** (1)+(2) are open **by design** — Chris's call to keep
+  one in-context home in the ⋯ and add no Settings mirror (no second path to one
+  goal). (3) the effect on the pre-existing rows is provably nil (all one
+  font-size → baseline == the previous layout); whole-branch review adjudicated
+  ship-as-is.
+- **Follow-up commitment:** (1)+(2) resolve the same way *if* field feedback (e.g.
+  Ksena) shows people cannot find the control — **promote text-size to a visible
+  cockpit icon, not a Settings page.** (3) optional one-line tidy: scope the rule
+  to `[data-section="font-size"] .cockpit-menu-chips`.
+- **Chris sign-off:** ✅ Chris arbitrated (1)+(2) as designed; (3) logged for the
+  on-device pass. Spec §8.

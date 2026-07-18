@@ -8,6 +8,50 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-19 — **CHAT FONT TUNING BUILT — squashed to `master`
+(`8ea229bd`), NOT pushed; awaiting Chris's device verification (spec §10).** Two
+chat-reading refinements in one feature unit. **(1)** New personas now seed the
+**`sans`** font (was `serif`; existing personas untouched — content-axis, no
+migration). **(2)** A global, **per-device** chat **text-size** control —
+`Standard · Large · Larger` — as a new "Text size" section in the **cockpit ⋯
+menu** (one home, present on both breakpoints; Chris's call over a reading-mode
+affordance, since desktop has no reading mode). The chips **preview their own
+size** and picking one **does not close the menu** (deliberately unlike the
+reasoning/expert chips → a compare-the-steps stepper). Stored in a new
+device-local **`SettingsRow.chatFontScale`** — absent from
+`SETTINGS_SYNC_ALLOWLIST` (allowlist polarity ⇒ device-local by construction, so
+a phone and a desktop keep different sizes; **no Dexie bump**, default `'standard'`
+resolved at read) — applied as a single `--chat-font-scale` custom property on
+`.chat-page` scaling message body, names, reasoning (incl. the CoT monologue +
+hidden-reasoning marker) and pills uniformly (`.pill`/code fences ride the scaled
+base via `em`). Adding the section also **retires a latent dead affordance** — the
+⋯ menu previously opened *nothing* on a model with no reasoning/expert controls.
+Built brainstorm→spec→**Laura spec-pass (no hard defects)**→plan→**subagent-driven
+(5 TDD tasks, per-task spec+quality review)**→**opus whole-branch review READY TO
+SQUASH**→**Laura pre-squash (intent honoured; one soft fixed pre-squash — the CoT
+monologue text carried a fixed rem and would not scale, now on the var)**. **Not a
+Larissa path** (client-only; the `sync/strip.ts` touch is a doc comment recording
+the deliberate device-local omission — no polarity/sealing change). Gates on
+`master` post-squash: `pnpm typecheck --force` **14/14** (0 cached), `pnpm run
+build` **9/9**, full user-client vitest **3164 pass / 8** known Node-localStorage
+baseline (verified on the byte-identical branch tip; the post-review change was
+CSS-only), Biome clean (15 files), tree-parity master==branch confirmed. **Open,
+non-blocking:** a cosmetic Minor (`align-items: baseline` on the shared
+`.cockpit-menu-chips` selector — effect on other rows provably nil, whole-branch
+review adjudicated ship-as-is) and Laura's two spec-pass softs left open **by
+design** (no home in My Settings; read-aloud-parity promotion) — both resolve the
+same way *if* field feedback shows people can't find it: promote to a visible
+cockpit icon, not a Settings page. Logged in [[insights/ux-deferrals]]. Spec/plan:
+`superpowers/{specs/2026-07-18-chat-font-tuning-design,plans/2026-07-18-chat-font-tuning}.md`.
+Branch `feat/chat-font-tuning` kept until Chris pushes. **Next:** Chris
+device-verifies (spec §10: new persona renders in sans; ⋯ → Text size → *Larger*
+grows body/names/reasoning/pills live; the setting is per-device — desktop ≠ phone,
+does not sync; offline/unlinked change applies with no gate; bare-model ⋯ shows the
+Text-size section), then pushes. **Restart the dev stack before testing** (Vite HMR
+ignores `packages/*`; a fresh boot also loads the new `SettingsRow` field cleanly).
+
+---
+
 **Last updated:** 2026-07-18 (later evening) — **DESKTOP UI ITERATION 1 BUILT
 — squashed to `master` (`1a0e9303`), NOT pushed; awaiting Chris's device
 verification (spec §8/§9).** Three `lg`-gated desktop refinements, mobile
