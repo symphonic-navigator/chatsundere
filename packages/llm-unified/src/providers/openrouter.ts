@@ -173,6 +173,44 @@ const offerings: Offering[] = [
     reasoning: TOGGLE,
     recommended: 262_144,
   }),
+  // Inkling (Thinking Machines, Mira Murati's lab) via OpenRouter — onboarded
+  // 2026-07-18, its second route after nano-gpt. The SOLE OpenRouter endpoint is
+  // Together AI (US); no fallback route, so a user whose OpenRouter account
+  // disables "providers that may train on inputs" gets HTTP 404 "All providers
+  // have been ignored" (probed live 2026-07-18 — the block is account-level and a
+  // per-request `provider:{data_collection:'allow'}` does NOT override it). Two
+  // measured DIVERGENCES from the nano-gpt route, both re-probed live:
+  //   1. Reasoning is a plain TOGGLE here, NOT the four-band `steps` ladder it is
+  //      on nano-gpt. `{enabled:false}` is a genuine off (0 reasoning tokens);
+  //      the trace surfaces unprompted on `delta.reasoning` (no include_reasoning
+  //      needed, unlike OpenAI). But effort does NOT separate monotonically on
+  //      this route — three prompts gave low/med/high orderings that swap
+  //      (low<<med≈high; low≈med≈high; low≈med<<high), the between-level spacing
+  //      buried in within-level noise — so we model on/off honestly rather than
+  //      offer effort steps that do nothing (Chris, 2026-07-18). This mirrors
+  //      GLM-5.1 being fixed-on@wafer but a clean toggle here: each route is
+  //      measured independently.
+  //   2. Tool calls STREAM FRAGMENTED here (args arrive across ~28 SSE deltas,
+  //      reassembled by openRouterAdapter), whereas nano-gpt delivers them
+  //      single-block. Hence `streaming: true` (the offering default).
+  // Vision ✅ via data URL (the product path; a remote image URL fails because
+  // Together fetches it server-side and hotlink-protected hosts 403 — a probe
+  // artefact, not a product fault). The tool-eager quirk (fires generate_image
+  // instead of describing) is unchanged — the suite runs vision tools-free.
+  // Context: Together's endpoint ceiling is 524,288 (the model-level /models
+  // reports 1M but no endpoint serves it); `recommended` stays at the
+  // conservative nano-gpt sweet-spot (131,072) pending long-context evidence.
+  // Freedom UNKNOWN — the canonical carries `freedomOriented: null` (awaiting an
+  // independent safety evaluation now that Inkling has reached OpenRouter); this
+  // deployment adds no censorship of its own (`freedomOrientedDeployment: true`,
+  // the openRouterOffering default). No ZDR (Together via OR is the honest
+  // US-router baseline). See obsidian/models/inkling.md.
+  openRouterOffering('inkling', 'thinkingmachines/inkling', {
+    vision: true,
+    reasoning: TOGGLE,
+    recommended: 131_072,
+    max: 524_288,
+  }),
   // Grok via OpenRouter — the ZDR path (probed live 2026-06-28). With
   // `provider:{zdr:true}` OpenRouter routes to xAI's Zero-Data-Retention
   // endpoint (HTTP 200, `provider: "xAI"`); reasoning is a clean toggle on the

@@ -1,11 +1,12 @@
 # Model Curation Record — Inkling
 
-> Curation record. See [[../providers/nano-gpt]] for the shared provider
-> mechanics. Inkling is **Thinking Machines' first public model** (Mira Murati's
-> lab) — a community first for Chatsundere. Onboarded **2026-07-16**, curated
-> live against nano-gpt. **Re-curated 2026-07-17** after nano-gpt wired the
-> reasoning-trace passthrough and exposed a real effort ladder — see the update
-> note below.
+> Curation record. See [[../providers/nano-gpt]] and [[../providers/openrouter]]
+> for the shared provider mechanics. Inkling is **Thinking Machines' first public
+> model** (Mira Murati's lab) — a community first for Chatsundere. Onboarded
+> **2026-07-16**, curated live against nano-gpt. **Re-curated 2026-07-17** after
+> nano-gpt wired the reasoning-trace passthrough and exposed a real effort ladder
+> — see the update note below. **Second route added 2026-07-18**: OpenRouter (sole
+> upstream Together AI) — see the OpenRouter offering section.
 
 - **Identity:** Inkling · family `inkling`
 - **Architecture:** sparse MoE, **975B total / 41B active**, natively multimodal
@@ -120,6 +121,75 @@ confirmation. Raise once the true window is known.
 - **confidence:** `verified` — `run-inkling-suite.ts` re-run 2026-07-17
   (core 44/44 across the four-band ladder, vision 4/4).
 
+## Offering — OpenRouter (added 2026-07-18)
+
+Inkling's second route, added the day it reached OpenRouter (the moment the
+freedom section had been waiting for). Probed live and serially, 2026-07-18.
+
+- **slug:** `thinkingmachines/inkling` · **adapterId:**
+  `openrouter:thinkingmachines/inkling` · **adapter:** the shared
+  `openRouterAdapter` (no bespoke code — the generic OpenRouter adapter covers it:
+  `stream_options:{include_usage:true}`, the unified `reasoning` object, and
+  fragmented-tool-call reassembly).
+- **Sole upstream: Together AI (US).** There is **no second OpenRouter endpoint**
+  and no fallback route. The model-level `/models` reports a 1,048,576 ceiling,
+  but the only servable endpoint (Together) caps at **524 288** — empirical truth
+  over the aggregate. **context:** recommended **131 072** (the conservative
+  nano-gpt sweet-spot, kept pending long-context evidence) / max **524 288**.
+- **Account gotcha — "may train" blocks the only provider.** Because Together is
+  the *sole* endpoint, an OpenRouter account whose privacy settings disable
+  "providers that may train on inputs" gets **HTTP 404 "All providers have been
+  ignored"** on *every* Inkling request. A per-request
+  `provider:{data_collection:'allow'}` does **not** override an account-level
+  ignored provider (probed 2026-07-18) — it must be changed at
+  `openrouter.ai/settings/privacy`. This is a real product signal, not just a
+  probe artefact: a privacy-conservative end user will hit the same wall. Worth a
+  future onboarding hint if users report it.
+- **🔒 Privacy:** no TEE / no ZDR, **US jurisdiction** (Together). The honest
+  US-router baseline — no 🔒 badge. Note the may-train posture above.
+
+### Two measured divergences from the nano-gpt route
+
+Both re-probed live 2026-07-18; each route is measured independently (the same
+principle that makes GLM-5.1 fixed-on on wafer but a clean toggle on OpenRouter).
+
+1. **Reasoning is a plain `toggle` here, not the four-band `steps` ladder.**
+   `reasoning:{enabled:false}` is a **genuine off** (0 reasoning tokens, empty
+   channel); the trace surfaces **unprompted** on `delta.reasoning` (no
+   `include_reasoning` needed, unlike OpenAI on this router). But **effort does
+   not separate monotonically** on Together — three prompts, in reasoning tokens:
+
+   | prompt | low | medium | high |
+   |---|---|---|---|
+   | irrationality/Fibonacci/halting | 46 | 460 | 489 |
+   | snail-in-well (a) | 229 | 286 | 280 |
+   | snail-in-well (b) | 234 | 236 | 439 |
+
+   The ordering swaps across prompts (`low≪med≈high`, `low≈med≈high`,
+   `low≈med≪high`) — between-level spacing is buried in within-level noise. Only
+   **off vs on** is robustly separable, so the honest control is
+   `{ mode: 'toggle', defaultOn: true }` (Chris, 2026-07-18). Offering effort
+   steps that do nothing on this route is exactly what the nano-gpt section argues
+   against. The cockpit therefore shows a plain on/off switch on the OpenRouter
+   route and the four-band ladder on nano-gpt — same model, per-route regulator.
+2. **Tool calls stream fragmented.** On OpenRouter/Together the tool-call
+   arguments arrive across **~28 SSE deltas**, reassembled by the adapter into a
+   single valid-JSON call (`streaming: true`); nano-gpt delivers the same call
+   **single-block**. `concurrentWithReasoning: true` (the tool fires with
+   reasoning enabled). Vision is ✅ via a data URL exactly as on nano-gpt (a
+   *remote* image URL fails with `multimodal_processing_failed` — Together fetches
+   it server-side and hotlink-protected hosts 403 the fetcher; a probe artefact,
+   never the product path, which inlines the user's image as base64).
+
+### Freedom — the OpenRouter deployment axis
+
+`freedomOrientedDeployment: true` — OpenRouter routes verbatim and adds no
+censorship of its own. The **model-intrinsic** judgement stays deferred:
+`freedomOriented: null` on the canonical, so effective freedom is still
+**unknown → `Uncensored?`**. Reaching OpenRouter is precisely the trigger the
+freedom section names for Lex's independent safety evaluation; the judgement is
+revisited when his results land, not guessed here.
+
 ## Tool-calling — over-eagerness quirk
 
 Inkling is **tool-eager on image prompts**. Offered a `generate_image` tool *and*
@@ -172,10 +242,12 @@ exact production adapter (`openRouterAdapter('thinkingmachines/inkling', …)`).
 The harness now derives its matrix from the offering's own `ReasoningControl`
 via `permutationsForReasoning`, so it exercises every effort band:
 
-| Scenario | Result |
-|---|---|
-| core (reasoning-off · effort:low · effort:medium · effort:high) | **44/44** |
-| vision (tools-free) | **4/4** |
+| Route | Scenario | Result |
+|---|---|---|
+| nano-gpt | core (reasoning-off · effort:low · effort:medium · effort:high) | **44/44** |
+| nano-gpt | vision (tools-free) | **4/4** |
+| OpenRouter (`run-openrouter-suite.ts inkling`, 2026-07-18) | core (reasoning-off · reasoning-on — a `toggle`) | **22/22** |
+| OpenRouter | vision (tools-free) | **4/4** |
 
 Confirmed:
 

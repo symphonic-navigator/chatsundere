@@ -79,7 +79,20 @@ for (const o of targets) {
   console.log(renderSuiteReport(core));
 
   if (o.profile.vision) {
-    const vision = await runSuite(visionScenario, VISION_PERM, binding);
+    // Vision runs TOOLS-FREE on purpose. The vision scenario probes image INPUT
+    // carriage and carries no tool assertions, so tools are irrelevant to it —
+    // and for a tool-eager offering they actively confound it: Inkling, offered
+    // generate_image alongside a "what colour is the clothing?" prompt, fires the
+    // tool instead of answering (0/n with the tool present; 3/3 "Green" without —
+    // probed live 2026-07-18). Dropping the tool isolates the image pipe cleanly
+    // for every offering. Mirrors run-inkling-suite.ts's tools-free vision run.
+    const visionBinding = makeLiveBinding({
+      offeringRef: `openrouter:${o.upstreamSlug}`,
+      providerConfig,
+      apiKey,
+      adapter,
+    });
+    const vision = await runSuite(visionScenario, VISION_PERM, visionBinding);
     console.log(renderSuiteReport(vision));
   }
 }

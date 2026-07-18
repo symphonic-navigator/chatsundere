@@ -54,14 +54,15 @@ describe('built-in providers', () => {
     }
   });
 
-  it('openrouter has direct CORS hint, nineteen offerings, and sortPriority 45', () => {
+  it('openrouter has direct CORS hint, twenty offerings, and sortPriority 45', () => {
     const p = getProvider('openrouter');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      // 8 original + 1 Kimi K3 (freedom unknown) + 3 Grok (4.3, 4.5, 4.20 — all
-      // ZDR-enforced) + Claude Sonnet 5 + 6 ChatGPT (OpenAI, censored) = 19.
-      expect(p.offerings).toHaveLength(19);
+      // 8 original + 1 Kimi K3 (freedom unknown) + 1 Inkling (freedom unknown,
+      // Together-only) + 3 Grok (4.3, 4.5, 4.20 — all ZDR-enforced) + Claude
+      // Sonnet 5 + 6 ChatGPT (OpenAI, censored) = 20.
+      expect(p.offerings).toHaveLength(20);
       expect(p.sortPriority).toBe(45);
     }
   });
