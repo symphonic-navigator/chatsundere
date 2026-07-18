@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-18
 **Author:** Liz (with Chris)
-**Status:** Draft — awaiting Chris's spec review + Laura spec-pass
+**Status:** Draft — Laura spec-pass done (no hard defects, §12); awaiting Chris's spec review
 **Roadmap:** Omnibus update, client-only. Not a version gate.
 
 ---
@@ -90,14 +90,36 @@ From a full code survey (`apps/user-client/`):
 - A new **Edit** affordance appears in `MessageControls` on **real user
   messages** — `role === 'user' && !seedRole`. Not on persona/system messages,
   not on pre-seed rows.
-- **Gated off while a stream is live** (same gate as Branch, `isStreamLive`).
+- **Glyph:** Edit takes the **pencil** (the archetypal edit mark); the existing
+  **Branch** control — which currently carries the pencil ("✎ Branch",
+  `MessageControls.tsx:64`) — moves to a **branch/fork glyph** (a Git-branch-style
+  mark that fits "fork" better). Resolves the pencil collision Laura flagged.
+- **Row layout at 380 px:** with Edit the user-message row would reach five flat
+  controls. To keep it calm — mirroring the persona row, which already overflows
+  "Save as template" — **"Save as artefact" moves into the `⋯` overflow** on the
+  user row; **Edit / Branch / Copy / Bookmark stay flat**.
+- **Gated while a stream is live:** the Edit affordance is **disabled with a
+  tooltip** (not hidden), mirroring Branch's live-stream state exactly
+  (`branchDisabled` → "Branching paused while replying", `MessageControls.tsx:61`)
+  so the two adjacent controls behave identically.
 - Tapping Edit:
   - Loads the message's text into the composer draft.
   - Presents the message's existing attachments as the composer's starting
     attachment set (see §8).
   - Records **`editingMessageId`** on the `ChatRow` (device-local, §7).
-  - The composer enters an **editing state**: a calm banner ("You're editing your
-    message" — final copy is Laura/Chris's) and a **Cancel** affordance.
+  - The composer enters an **editing state** with a **Cancel** affordance and a
+    banner whose copy depends on the target (constructive foreshadowing, not a
+    late surprise at send):
+    - *Last user message:* "You're editing your message".
+    - *Earlier user message:* "You're editing an earlier message — sending will
+      start a new branch." (States the branch consequence at entry, cf. §6.)
+    - (Final wording is Laura/Chris's; the two-variant split is the requirement.)
+  - **Visible acknowledgement:** entering edit **explicitly focuses the composer**
+    (raising the mobile keyboard) and **scrolls it into view**, so on a long
+    transcript at 380 px the user gets an unmistakable "you are now here" beat
+    rather than silent below-the-fold changes. (`Cockpit`'s `autoFocus` fires only
+    on mount, and the component does not remount on entering edit — so this needs
+    an explicit focus call.)
   - The message being edited is **subtly marked** in the transcript.
 
 ### 5.2 The transcript stays put (Approach A)
@@ -211,6 +233,10 @@ A thin variant of `useBranchChat`:
     message; source rows untouched.
   - *Cancel:* discard staged-removes; delete the pending rows (and blobs) added
     during this edit.
+- **Optional, deferred unless cheap** (Laura soft): if a reload restores a set that
+  differs from what the user had staged, the banner could note "attachments reset
+  to the original". The honesty already holds without it (originals are still on
+  the visible message); build only if trivial.
 
 ## 9. Sync considerations
 
@@ -235,16 +261,39 @@ A thin variant of `useBranchChat`:
   `messages` LWW writes on the same row; last `updatedAt` wins — no corruption,
   standard convergence.
 
-## 11. Two small open points (for spec review / Laura)
+## 11. Resolved decisions (Laura spec-pass + Chris, 2026-07-18)
 
-1. **Send surface shape.** Baseline: a compact decision surface on send (Replace
-   / Branch, Replace disabled-with-reason when not last). Possible refinement: a
-   context-aware **split send button** so the 99% case (Replace on the last
-   message) is one tap, with Branch as the secondary. *Tendency: split-button for
-   low friction — Laura's terrain.*
-2. **Branch title.** Reuse the existing branch title dialog vs. auto-title the new
-   chat (smoother, no second modal after the branch/replace choice). *Tendency:
-   auto-title.*
+Both former open points are resolved — Laura endorsed the mechanics, Chris
+confirmed the taste calls.
+
+1. **Send surface — context-aware split send button** (not a decision-sheet on
+   every send; a modal on every edit-send taxes the 99% typo-fix case and reads as
+   naggy):
+   - **Last user message:** primary = **Replace** (one tap); a caret reveals the
+     secondary **"Branch to a new chat instead"**.
+   - **Not the last user message** (older message, or continued on another
+     device): primary = **Branch**; the honest reason shown inline, and **Replace
+     remains visibly listed in the caret, greyed, with the reason as its
+     tooltip.**
+   - **Hard constraint** (Laura, treated as a blocking invisible-affordance rule):
+     the split control must **never silently collapse to Branch-only** when Replace
+     is unavailable. Replace is always *visibly present but disabled with its
+     reason*; Branch is always a *visible* secondary. This is what keeps the
+     cross-device case (§6) honest rather than misdirecting. The decision-sheet
+     baseline (§6) is already fully compliant and remains the fallback if the split
+     control proves fiddly — that costs friction, not correctness.
+2. **Branch title — auto-title.** No second modal after the Replace/Branch choice;
+   the branched chat is auto-titled (title generation runs as for any new chat),
+   renameable later via the existing path. A name-your-branch modal would be two
+   decision surfaces for one intent.
+
+**Conscious divergence (watch item, not a blocker).** The user-message row now
+offers both **Branch** (fork as-is: prompts a title today, no auto-generation)
+and, via Edit, an **edit-then-Branch** (fork with edited content: auto-titled,
+auto-generated). Two branch behaviours differing in title handling and generation.
+Defensible — "explore-fork" and "edit-and-regenerate" are genuinely different
+intents — and the labels stay distinct. Flagged for Laura's holistic sweep;
+reconcile only if it starts to read as "why did naming behave differently?".
 
 ## 12. Audit relevance
 
@@ -253,12 +302,18 @@ A thin variant of `useBranchChat`:
   the client **deny-list** — a *keep-local* change, not a new wire field.
   Warrants a light courtesy check that transient compose state stays device-local;
   not a mandated gate.
-- **Laura:** a new user-reachable flow (edit → compose → decide) ⇒ **spec-pass is
-  her main lever** and runs before the plan; pre-squash pass before the squash.
+- **Laura:** spec-pass **done 2026-07-18 — no hard defects**. One hard-tier
+  constraint (the split-button must not collapse to Branch-only, §11.1) and six
+  soft findings, all folded or arbitrated: glyph collision (§5.1), row overflow
+  (§5.1), banner foreshadowing for older messages (§5.1), focus-on-enter (§5.1),
+  stream-gate tooltip (§5.1), and the Branch-vs-Edit divergence watch item (§11).
+  **Pre-squash pass** owed before the squash.
 
 ## 13. Files likely touched
 
-- `src/components/chat/MessageControls.tsx` — new Edit affordance (user messages).
+- `src/components/chat/MessageControls.tsx` — new Edit affordance (pencil glyph) on
+  user messages; Branch re-glyphed to a branch/fork mark; "Save as artefact" moved
+  into the `⋯` overflow on the user row.
 - `src/components/chat/Cockpit.tsx` — editing state (banner, cancel, attachment
   seed), send-decision surface.
 - `src/routes/**/chat-page.tsx` — wire `editingMessageId`, enter/cancel edit,
