@@ -35,6 +35,8 @@ import type { SyncCollection } from '@chatsundere/shared-types';
  *                         — per-device analyser render config (barCount is a
  *                           render-cost knob; aesthetic-per-device).
  *  - `voiceStopHintSeen`  — one-shot UI onboarding flag; per-device tutorial state.
+ *  - `chatFontScale`      — per-device reading-comfort size; a big-monitor and a
+ *                           phone want different sizes, so it must never sync.
  *  - `createdAt`          — device-specific row-creation timestamp; not meaningful
  *                           to overwrite across devices.
  * `updatedAt` IS sealed — the settings replay guard (§7.5, M-8) compares it

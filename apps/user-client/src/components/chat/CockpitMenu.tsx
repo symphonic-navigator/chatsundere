@@ -1,12 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReasoningControl, SearchTier } from '@chatsundere/llm-unified';
+import type { ChatFontScale } from '../../lib/chat-font-scale.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
+
+const FONT_SIZE_STEPS: readonly ChatFontScale[] = ['standard', 'large', 'larger'];
+const FONT_SIZE_LABEL: Record<ChatFontScale, string> = {
+  standard: 'Standard',
+  large: 'Large',
+  larger: 'Larger',
+};
 
 interface Props {
   control: ReasoningControl;
   reasoning: ReasoningState;
   onReasoningChange: (r: ReasoningState) => void;
   onClose: () => void;
+  chatFontScale: ChatFontScale;
+  onChatFontScaleChange: (scale: ChatFontScale) => void;
   searchTiers?: SearchTier[];
   searchTierId?: string | null;
   onSearchTierChange?: (id: string) => void;
@@ -18,15 +28,13 @@ interface Props {
   onArtefactExpertChange?: (on: boolean) => void;
 }
 
-export function CockpitMenu(p: Props): JSX.Element | null {
+export function CockpitMenu(p: Props): JSX.Element {
   const hasReasoning = p.control.mode !== 'none';
   const tiers = p.searchTiers ?? [];
   const hasDepth = tiers.length >= 2;
   // Highlight the stored tier, or fall back to the default when the stored id
   // belongs to a different backend (the id is global, not per-backend).
   const activeTierId = tiers.some((t) => t.id === p.searchTierId) ? p.searchTierId : tiers[0]?.id;
-  if (!hasReasoning && !hasDepth && !p.askExpertAvailable && !p.artefactExpertAvailable)
-    return null;
 
   return (
     <div className="cockpit-menu" role="menu">
@@ -73,6 +81,24 @@ export function CockpitMenu(p: Props): JSX.Element | null {
           </div>
         </div>
       ) : null}
+      <div className="cockpit-menu-section" data-section="font-size">
+        <div className="cockpit-menu-label">Text size</div>
+        <div className="cockpit-menu-chips">
+          {FONT_SIZE_STEPS.map((step) => (
+            <button
+              key={step}
+              type="button"
+              role="menuitemradio"
+              aria-checked={p.chatFontScale === step}
+              className={`cockpit-chip${p.chatFontScale === step ? ' active' : ''}`}
+              data-size={step}
+              onClick={() => p.onChatFontScaleChange(step)}
+            >
+              {FONT_SIZE_LABEL[step]}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

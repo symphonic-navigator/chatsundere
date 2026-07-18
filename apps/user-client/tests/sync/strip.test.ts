@@ -204,3 +204,13 @@ describe('chats deny-list — editingMessageId is device-local', () => {
     expect(patchTouchesSyncedField('chats', ['editingMessageId'])).toBe(false);
   });
 });
+
+describe('chatFontScale is device-local', () => {
+  it('is absent from the settings sync allowlist', () => {
+    expect(SETTINGS_SYNC_ALLOWLIST).not.toContain('chatFontScale');
+  });
+
+  it('a chatFontScale-only patch is a plain local write (not a synced field)', () => {
+    expect(patchTouchesSyncedField('settings', ['chatFontScale'])).toBe(false);
+  });
+});

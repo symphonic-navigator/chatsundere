@@ -47,6 +47,7 @@ import { QK } from '../../../data/queryKeys.js';
 import { useFilteredSeedTemplates } from '../../../data/seed-templates.js';
 import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
 import { useDisplayName, useSettings, useUpdateSettings } from '../../../data/settings.js';
+import { chatFontScaleValue } from '../../../lib/chat-font-scale.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
@@ -807,7 +808,15 @@ export function ChatPage(): JSX.Element {
   }, [focusId, messages.length]);
 
   return (
-    <div className="chat-page" data-mode={isInteractionMode ? 'interaction' : 'reading'}>
+    <div
+      className="chat-page"
+      data-mode={isInteractionMode ? 'interaction' : 'reading'}
+      style={
+        {
+          '--chat-font-scale': chatFontScaleValue(settings.data?.chatFontScale),
+        } as React.CSSProperties
+      }
+    >
       <SpectrumAnalyser
         transportState={monologueActive ? monologue.transportState : voice.transportState}
         getAnalyser={monologueActive ? monologue.getAnalyser : voice.getAnalyser}

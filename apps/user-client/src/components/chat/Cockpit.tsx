@@ -21,8 +21,9 @@ import { useFilteredLibraries } from '../../data/knowledge.js';
 import { useCurrentBody, useUncommittedCount } from '../../data/memory.js';
 import { usePersona } from '../../data/personas.js';
 import { QK } from '../../data/queryKeys.js';
-import { useSettings } from '../../data/settings.js';
+import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.js';
+import type { ChatFontScale } from '../../lib/chat-font-scale.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
@@ -141,6 +142,7 @@ export function Cockpit(p: Props): JSX.Element {
   const artefactExpertError = useCurrentChatStore((s) => s.artefactExpertError);
   const setArtefactExpertError = useCurrentChatStore((s) => s.setArtefactExpertError);
   const settings = useSettings();
+  const updateSettings = useUpdateSettings();
 
   // Attachments: the pending set for this chat, plus the mutation hooks the
   // lightbox drives (rename / remove / edit-text), and the local UI state for
@@ -465,6 +467,10 @@ export function Cockpit(p: Props): JSX.Element {
               artefactExpertAvailable={artefactExpertAvailable}
               artefactExpertOn={artefactExpertOn}
               onArtefactExpertChange={onArtefactExpertChange}
+              chatFontScale={settings.data?.chatFontScale ?? 'standard'}
+              onChatFontScaleChange={(scale: ChatFontScale) => {
+                void updateSettings.mutateAsync({ chatFontScale: scale });
+              }}
             />
           ) : null}
         </div>

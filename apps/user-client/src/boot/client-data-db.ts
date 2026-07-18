@@ -4,6 +4,7 @@ import type { ImageModelConfig } from '@chatsundere/llm-unified';
 import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { pickProviderSurvivor } from '../data/provider-dedup.js';
+import type { ChatFontScale } from '../lib/chat-font-scale.js';
 import type { EncryptedBlob } from '../lib/secrets.js';
 import type { TtsHighpassSetting } from '../lib/voice/voice-filter.js';
 import type { WebBackendSetting } from '../lib/web-backends.js';
@@ -42,6 +43,10 @@ export interface SettingsRow {
    *  this store belongs to a different identity and is wiped. Non-indexed
    *  (schemaless) — no Dexie version bump. */
   identityTag?: string;
+  /** Chat reading-text size (behaviour-axis, per-device — deliberately NOT
+   *  synced, see sync/strip.ts). Absent ⇒ 'standard' (today's baseline).
+   *  Non-indexed (schemaless) — no Dexie version bump. */
+  chatFontScale?: ChatFontScale;
   /** Global image-generation models. `ref` = "providerTemplateId:upstreamSlug".
    *  `primary` drives generate_image; `nsfw` is the NSFW-capable second slot
    *  (spec 2026-06-09 §6). Both null until the user picks. */

@@ -19,6 +19,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         askExpertAvailable={true}
         askExpert={false}
         onAskExpertChange={() => {}}
@@ -36,6 +38,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         askExpertAvailable={true}
         askExpert={true}
         onAskExpertChange={() => {}}
@@ -52,6 +56,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         askExpertAvailable={true}
         askExpert={false}
         onAskExpertChange={() => {}}
@@ -69,6 +75,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         askExpertAvailable={true}
         askExpert={false}
         onAskExpertChange={onChange}
@@ -87,6 +95,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         askExpertAvailable={true}
         askExpert={true}
         onAskExpertChange={onChange}
@@ -105,9 +115,11 @@ describe('CockpitMenu — ask expert section', () => {
         onReasoningChange={() => {}}
         onClose={() => {}}
         askExpertAvailable={false}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
       />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(container.querySelector('[data-section="ask-expert"]')).toBeNull();
     expect(screen.queryByText('Ask expert')).toBeNull();
   });
 
@@ -118,9 +130,11 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
       />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(container.querySelector('[data-section="ask-expert"]')).toBeNull();
     expect(screen.queryByText('Ask expert')).toBeNull();
   });
 
@@ -131,6 +145,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         artefactExpertAvailable
         artefactExpertOn
         onArtefactExpertChange={() => {}}
@@ -147,6 +163,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
       />,
     );
     expect(container.querySelector('[data-section="artefact-expert"]')).toBeNull();
@@ -159,6 +177,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         artefactExpertAvailable
         artefactExpertOn={true}
         onArtefactExpertChange={() => {}}
@@ -175,6 +195,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         artefactExpertAvailable
         onArtefactExpertChange={() => {}}
       />,
@@ -190,6 +212,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         artefactExpertAvailable
         artefactExpertOn={false}
         onArtefactExpertChange={() => {}}
@@ -207,6 +231,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         artefactExpertAvailable
         artefactExpertOn={false}
         onArtefactExpertChange={onChange}
@@ -225,6 +251,8 @@ describe('CockpitMenu — ask expert section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         artefactExpertAvailable
         artefactExpertOn={true}
         onArtefactExpertChange={onChange}
@@ -244,6 +272,8 @@ describe('CockpitMenu — web depth section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         searchTiers={twoTiers}
         searchTierId={null}
         onSearchTierChange={() => {}}
@@ -261,6 +291,8 @@ describe('CockpitMenu — web depth section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         searchTiers={twoTiers}
         searchTierId={null}
         onSearchTierChange={() => {}}
@@ -277,6 +309,8 @@ describe('CockpitMenu — web depth section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         searchTiers={twoTiers}
         searchTierId="neural"
         onSearchTierChange={() => {}}
@@ -294,6 +328,8 @@ describe('CockpitMenu — web depth section', () => {
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         searchTiers={twoTiers}
         searchTierId="quick"
         onSearchTierChange={onChange}
@@ -304,19 +340,21 @@ describe('CockpitMenu — web depth section', () => {
     expect(onChange).toHaveBeenCalledWith('neural');
   });
 
-  it('returns null when reasoning is none and fewer than 2 tiers', () => {
+  it('does NOT render the web-depth section when reasoning is none and fewer than 2 tiers', () => {
     const { container } = render(
       <CockpitMenu
         control={noReasoning}
         reasoning={{ kind: 'off' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         searchTiers={twoTiers.slice(0, 1)}
         searchTierId={null}
         onSearchTierChange={() => {}}
       />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(container.querySelector('[data-section="web-depth"]')).toBeNull();
   });
 
   it('renders both reasoning and depth sections when both are active', () => {
@@ -326,6 +364,8 @@ describe('CockpitMenu — web depth section', () => {
         reasoning={{ kind: 'on' }}
         onReasoningChange={() => {}}
         onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
         searchTiers={twoTiers}
         searchTierId={null}
         onSearchTierChange={() => {}}
@@ -333,5 +373,61 @@ describe('CockpitMenu — web depth section', () => {
     );
     expect(screen.getByText('Reasoning')).toBeInTheDocument();
     expect(screen.getByText('Web depth')).toBeInTheDocument();
+  });
+});
+
+describe('CockpitMenu — text size section', () => {
+  it('always renders the Text size section, even for a bare model', () => {
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={vi.fn()}
+        onClose={vi.fn()}
+        chatFontScale="standard"
+        onChatFontScaleChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Text size')).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'Large' })).toBeInTheDocument();
+  });
+
+  it('marks the active size chip', () => {
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={vi.fn()}
+        onClose={vi.fn()}
+        chatFontScale="large"
+        onChatFontScaleChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Large' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Standard' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('changing size reports the new value and does NOT close the menu', () => {
+    const onChange = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <CockpitMenu
+        control={noReasoning}
+        reasoning={{ kind: 'off' }}
+        onReasoningChange={vi.fn()}
+        onClose={onClose}
+        chatFontScale="standard"
+        onChatFontScaleChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Larger' }));
+    expect(onChange).toHaveBeenCalledWith('larger');
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

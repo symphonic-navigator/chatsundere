@@ -38,6 +38,7 @@ vi.mock('../../../src/data/chats.js', () => ({
 
 vi.mock('../../../src/data/settings.js', () => ({
   useSettings: () => ({ data: undefined }),
+  useUpdateSettings: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('../../../src/lib/use-active-search-tiers.js', () => ({

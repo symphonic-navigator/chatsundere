@@ -17,14 +17,17 @@ function renderMenu(
       reasoning={reasoning}
       onReasoningChange={onReasoningChange}
       onClose={noop}
+      chatFontScale="standard"
+      onChatFontScaleChange={noop}
     />,
   );
 }
 
 describe('CockpitMenu reasoning', () => {
-  it('none → renders nothing', () => {
-    const { container } = renderMenu({ mode: 'none' });
-    expect(container.firstChild).toBeNull();
+  it('none → renders no reasoning section (the menu itself stays meaningful via Text size)', () => {
+    renderMenu({ mode: 'none' });
+    expect(screen.queryByText('Reasoning')).toBeNull();
+    expect(screen.getByText('Text size')).toBeInTheDocument();
   });
   it('fixed-on → a single disabled lit On indicator', () => {
     renderMenu({ mode: 'fixed-on' }, { kind: 'on' });

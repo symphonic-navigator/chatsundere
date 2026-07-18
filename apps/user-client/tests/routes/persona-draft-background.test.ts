@@ -11,3 +11,9 @@ describe('defaultDraft — background helper', () => {
     expect(d.greetingUsesBackgroundModel).toBe(false);
   });
 });
+
+describe('defaultDraft font default', () => {
+  it('seeds a new persona with the sans font', () => {
+    expect(defaultDraft(undefined, undefined, undefined).font).toBe('sans');
+  });
+});

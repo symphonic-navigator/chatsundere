@@ -23,7 +23,7 @@ export function defaultDraft(
     name: '',
     tagline: '',
     colour: defaultMindspace?.palette.accent ?? '#c9a84c',
-    font: 'serif',
+    font: 'sans',
     instructions: '',
     canonicalId: null,
     providerId: firstEnabled?.id ?? '',

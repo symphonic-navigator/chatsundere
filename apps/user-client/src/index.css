@@ -550,7 +550,7 @@ h1 {
   }
 }
 .msg-name {
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--chat-font-scale, 1));
   font-weight: 600;
   margin-bottom: 0.35rem;
   opacity: 0.95;
@@ -582,7 +582,7 @@ h1 {
   align-self: center;
 }
 .msg-text {
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--chat-font-scale, 1));
   line-height: 1.5;
   word-wrap: break-word;
   min-width: 0;
@@ -663,7 +663,7 @@ h1 {
 .msg-text pre code {
   background: none;
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.82em;
 }
 .msg-text blockquote {
   border-left: 3px solid color-mix(in srgb, var(--color-aurora-500) 55%, transparent);
@@ -1698,6 +1698,7 @@ h1 {
   display: flex;
   gap: 0.25rem;
   flex-wrap: wrap;
+  align-items: baseline;
 }
 .cockpit-menu-chip {
   background: rgba(255, 255, 255, 0.05);
@@ -1715,6 +1716,34 @@ h1 {
 .cockpit-menu-chip[data-active="true"] {
   background: rgba(201, 168, 76, 0.2);
   border-color: rgba(201, 168, 76, 0.5);
+}
+
+/* Text-size chips: same pill styling as .cockpit-menu-chip (kept as a
+ * distinct class since these use .active + aria-checked, not data-active,
+ * to satisfy the menuitemradio semantics). Each chip also previews its own
+ * step via font-size, so the size is legible even when messages behind are
+ * dimmed. */
+.cockpit-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: inherit;
+}
+.cockpit-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.cockpit-chip.active {
+  background: rgba(201, 168, 76, 0.2);
+  border-color: rgba(201, 168, 76, 0.5);
+}
+.cockpit-chip[data-size="large"] {
+  font-size: 1.15em;
+}
+.cockpit-chip[data-size="larger"] {
+  font-size: 1.3em;
 }
 
 /* ===== Cockpit Shell =====
@@ -2142,7 +2171,7 @@ h1 {
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--chat-font-scale, 1));
   cursor: pointer;
   user-select: none;
   background: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 18%, var(--color-ink) 82%);
@@ -2163,7 +2192,7 @@ h1 {
   padding: 0.28rem 0.7rem;
   border-radius: 999px;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--chat-font-scale, 1));
   user-select: none;
   color: color-mix(in srgb, var(--color-paper) 55%, transparent);
   background: color-mix(in srgb, var(--color-paper) 7%, transparent);
@@ -2230,7 +2259,7 @@ h1 {
 
 .reasoning-pill-body {
   padding: 0.6rem 0.85rem;
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--chat-font-scale, 1));
   line-height: 1.55;
   background: color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 8%, var(--color-ink) 92%);
   border: 1px solid color-mix(in srgb, var(--mindspace-accent, #4a7eb3) 25%, transparent);
@@ -5533,7 +5562,7 @@ h1 {
   color: var(--color-paper-soft, #b9b4c7);
   white-space: nowrap;
 }
-.blob-marker[data-blob-marker='storage-full'] {
+.blob-marker[data-blob-marker="storage-full"] {
   color: var(--color-warning, #f0c674);
   border-color: rgba(240, 198, 116, 0.25);
 }
