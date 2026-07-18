@@ -56,18 +56,21 @@ per-task briefs had under-specified (fixed); a Task-4 review caught a zip-branch
 test); a Task-2 review confirmed a necessary deviation from the brief's latent
 dropped-count aliasing bug. **Laura pre-squash: NO HARD DEFECTS** — all §13
 folded intents present; 3 softs, Chris-arbitrated: (1) disabled-select-all-at-zero
-**folded**, (2) Suspense-loading fallback **folded then reverted** (it re-tripped
-the precache cap — deferred, see below), (3) bare "Importing…" vs spec-§3
+**folded**, (2) Suspense-loading fallback **folded → reverted (precache cap) →
+restored** once katex+shiki freed headroom, (3) bare "Importing…" vs spec-§3
 progress-count **accepted** (single atomic Dexie tx, no meaningful mid-tx count).
-Both softs (2)+(3) logged in [[insights/ux-deferrals]]. **Not a Larissa path**
+Soft (3) logged in [[insights/ux-deferrals]]. **Not a Larissa path**
 (client-only; no crypto/auth/sync/proxy). **Build-blocker surfaced + fixed as a
 separate unit (`6714b14c`):** the parallel July-curation commit (`efe119bf`)
 independently pushed the user-client main chunk **past** workbox's 3 MiB precache
 cap (measured 3,148.69 kB on `efe119bf` alone), so `pnpm build` was already red
 before this squash landed — the long-tracked 36-byte-margin main-chunk debt come
-due. Fixed by splitting **katex** into its own rollup chunk (`manualChunks`); the
-index chunk drops to **2.88 MB** (~188 kB headroom); partly pays down
-[[insights/follow-ups-index]]. Gates on `master`: `pnpm typecheck --force`
+due. Fixed by splitting **katex** (`6714b14c`) then **shiki core** (`0409a641`)
+into their own rollup chunks (`manualChunks`, excluding shiki's already-lazy
+`@shikijs/langs`/`themes`); the index chunk drops to **~2.67 MB** (~400 kB
+headroom); substantially pays down [[insights/follow-ups-index]]. With that
+headroom the reverted Laura soft (2) — the overlay's "Opening…" loading fallback
+— was **restored** (`90ec9418`). Gates on `master`: `pnpm typecheck --force`
 **14/14** (0 cached), `pnpm build` **9/9** (main chunk under cap), full
 user-client vitest **3142 pass / 8** known Node-localStorage baseline, Biome
 clean. Spec/plan:

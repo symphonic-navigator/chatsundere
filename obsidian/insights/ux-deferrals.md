@@ -609,20 +609,17 @@ later Laura sweep does not re-flag them:
 - **Mode:** pre-squash.
 - **Criterion:** least-astonishment / constructive-never-hung ethos (2);
   spec-fidelity / least-astonishment (3) — both soft, advisory.
-- **Rationale for deferral:**
-  (2) A dialog-frame "Opening…" fallback WAS built (Chris's call to fold it) but
-  **reverted**: adding that markup to `hub.tsx` re-tripped workbox's precache cap
-  (the main chunk had ~0 headroom after the parallel July-curation commit; the
-  fallback tipped it over). The clean fallback belongs after the main-chunk
-  code-split debt is fully paid (katex is split; shiki core remains) — until then
-  `fallback={null}` keeps the build green. (3) Laura ruled the progress-count drop
+- **Resolution / rationale:**
+  (2) **RESOLVED — shipped, not deferred.** A dialog-frame "Opening…" fallback was
+  built (Chris's call to fold it), briefly **reverted** when its markup re-tripped
+  the precache cap (the main chunk had ~0 headroom after the parallel July-curation
+  commit), then **restored** (`90ec9418`) once splitting katex + shiki core out of
+  the main chunk freed ~400 kB of headroom. Left here only as the trail of why it
+  round-tripped. (3) **Deferred — accepted.** Laura ruled the progress-count drop
   **defensible**: the write is a single atomic Dexie `rw` transaction, so there is
   no meaningful mid-transaction count to surface without faking one; "Importing…"
   is honest. Recorded so the divergence from spec §3 is a conscious acceptance.
-- **Follow-up commitment:** (2) add the Suspense loading fallback once the
-  user-client main chunk is code-split below the precache cap with headroom (see
-  [[follow-ups-index]] "Code-split the user-client main chunk"). (3) revisit only
-  if the writer is ever made non-atomic (slice-committing), at which point a real
-  per-slice count becomes meaningful.
-- **Chris sign-off:** (1) folded on his call; (2)+(3) advisory (soft) — accepted,
-  recorded for release-cut visibility.
+- **Follow-up commitment:** (3) revisit only if the writer is ever made non-atomic
+  (slice-committing), at which point a real per-slice count becomes meaningful.
+- **Chris sign-off:** (1) folded on his call; (2) folded on his call and now
+  shipped; (3) advisory (soft) — accepted, recorded for release-cut visibility.
