@@ -8,6 +8,51 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-18 — **MILD MESSAGE EDITING SHIPPED — squashed to
+`master` (`b60f78c1`), NOT pushed; awaiting Chris's device verification (spec
+§14).** The omnibus-update editing feature. A user can **Edit any of their own
+messages** — it loads the message (text **+ attachments**) back into the real
+prompt composer, as if freshly composed (no cramped in-place textarea, no forced
+diff — "regenerate as-is" is first-class). On send, a **context-aware split
+control**: *Replace in-place* (only while it is still the last user message) or
+*Branch to a new chat*. Older-message and cross-device-continued edits keep
+*Replace* **visibly disabled with its reason** (never collapsed away) and route to
+Branch — one mechanism (availability derived **live** from the transcript, never a
+stored flag) folds the older-message rule and the cross-device edge case together.
+Banner foreshadows the branch for older messages at entry; Cancel + focus-quittance
++ stream-gate all present. **`editingMessageId`** is a device-local `ChatRow` field
+(on the `chats` sync deny-list, **no Dexie bump**); Replace reuses `useRegenerate`
+(targeting the edited message's own reply whatever its state), Branch copies the
+messages *before* the edited one into a fresh chat then reuses `useSendMessage` —
+maximal reuse, minimal new surface. Built brainstorm→spec→**Laura spec-pass** (no
+hard defects; split-button + auto-title endorsed with the "never collapse Replace"
+hard constraint; glyph/overflow arbitrated by Chris)→plan→**subagent-driven (9 TDD
+tasks, per-task spec+quality review)**. **The gauntlet earned its keep — two real
+bugs the mocked per-task tests structurally could not see:** the **opus whole-branch
+review** caught Replace mis-firing onto the *previous* reply when the trailing reply
+was Stopped/failed (fixed + pinned with a non-mocked integration test), and
+**Laura's pre-squash pass** caught Enter/dictation/live-voice sends bypassing
+Replace/Branch to append a new message (fixed at one chokepoint —
+`resolveSendAction`). Gates on `master` post-squash: `pnpm typecheck --force`
+**14/14** (0 cached), `pnpm build` **9/9**, full user-client vitest **3099 pass / 8**
+known Node-localStorage baseline, Biome clean (36 files). **Not a Larissa path**
+(client-only; the sync touch is a *keep-local* deny-list entry, no new wire field).
+Deferred (non-blocking, in [[insights/ux-deferrals]] / [[insights/follow-ups-index]]):
+per-item undo of a staged attachment removal (Cancel-only for now); enterEdit clobbers
+a pre-existing new-message draft (rare); staged additions survive reload while removals
+don't (spec §8 wording); prior-message attachments not copied on Branch (matches
+`useBranchChat`); an end-to-end test on `chat-page.onSend` routing; disabled-Edit
+tooltip invisible on touch (mirrors Branch). Spec/plan:
+`superpowers/{specs/2026-07-18-last-message-edit-design,plans/2026-07-18-mild-message-edit}.md`.
+Branch `worktree-feat+mild-message-edit` kept until Chris pushes. **Next:** Chris
+device-verifies (spec §14: text-fix→Replace regenerates in place; attachments travel;
+Branch from last + older message; cross-device Replace disabled; Cancel; reload
+mid-edit; **Enter while editing triggers Replace, not a new message**; stream-gate),
+then pushes. **Restart the dev stack before testing** (Vite HMR ignores `packages/*`;
+here a fresh boot also loads the store/`ChatRow` changes cleanly).
+
+---
+
 **Last updated:** 2026-07-17 — **OLLAMA CLOUD BACKGROUND JOBS REPAIRED — on
 `master` (squash `77735264`), awaiting Chris's device verification (spec §10).**
 

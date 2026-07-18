@@ -563,3 +563,33 @@ later Laura sweep does not re-flag them:
   through the step-up interceptor so the copy's instruction is satisfiable.
 - **Chris sign-off:** advisory (soft) — not blocking; recorded for release-cut
   visibility per Chris's call.
+
+## Mild message editing — Laura soft findings (2026-07-18, pre-squash)
+
+- **Affected flow / surface:** The per-message control row and the edit composer
+  (`MessageControls.tsx`, `Cockpit.tsx`, `use-edit-orchestration.ts`); feature
+  squashed to `master` as `b60f78c1`.
+- **Findings (Laura's summary):** (1) the stream-gated **Edit** button uses native
+  `disabled` + `title`, so its reason ("Editing paused while replying") is
+  unreachable on touch at 380 px — this mirrors the **Branch** control exactly
+  (pre-existing), so it is consistent, not introduced here. (2) **Two Branch
+  behaviours** share the user-message row — the flat `⎇ Branch` (fork-as-is: title
+  prompt, no auto-generation) vs **Edit→Branch** (auto-titled, auto-generated) —
+  diverging in naming/generation; it does not yet read as "why did naming behave
+  differently?". (3) **Copied prior messages drop their own attachments** on
+  edit→Branch (only the edited message's attachments travel) — matches today's
+  `useBranchChat`, a conscious carry-over.
+- **Mode:** pre-squash.
+- **Criterion:** least-astonishment / disabled-over-hidden / single-uniform-flows
+  (all soft, advisory).
+- **Rationale for deferral:** each is either consistent with existing behaviour
+  (1, 3) or a flagged holistic-sweep watch item (2); none is a hard defect. The one
+  HARD defect Laura found — keyboard/dictation/live-voice send bypassing
+  Replace/Branch to append a new message — was **fixed before the squash**
+  (`resolveSendAction` chokepoint), not deferred.
+- **Follow-up commitment:** fold (1) into a project-wide disabled-reason-on-touch
+  pass (the `aria-disabled` + tap-to-reveal-note pattern Bookmark/Read already use);
+  carry (2) to the next holistic sweep; revisit (3) if a "copy all attachments on
+  branch" improvement is ever made to `useBranchChat` itself.
+- **Chris sign-off:** advisory (soft) — recorded for the holistic-sweep and
+  release-cut visibility.
