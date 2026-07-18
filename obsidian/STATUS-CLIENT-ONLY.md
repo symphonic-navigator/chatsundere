@@ -63,9 +63,10 @@ Spec + plan: `superpowers/{specs,plans}/2026-07-17-ollama-cloud-background-jobs*
 
 ---
 
-**Last updated:** 2026-07-17 — **INKLING RE-CURATED: nano-gpt wired the trace
-passthrough AND exposed a real effort ladder — code + records updated on the
-working tree, NOT yet squashed/pushed.** The day after Inkling landed, Milan
+**Last updated:** 2026-07-18 — **INKLING SECOND ROUTE ADDED: OpenRouter
+(Together-only) — squashed to `master` (`c2112bbd`), NOT pushed.** See the
+OpenRouter paragraph at the end of this entry; the nano-gpt re-curation below it
+is unchanged. — The 2026-07-17 re-curation: the day after Inkling landed, Milan
 (nano-gpt) fixed the withheld trace ("oops, will fix asap") — and delivered more
 than asked. Re-probed live and serially 2026-07-17: **(a)** the reasoning trace
 now surfaces on the OpenAI-compatible route, on both the base slug and a
@@ -87,9 +88,26 @@ Gates: `run-inkling-suite.ts` re-run **core 44/44 + vision 4/4**; `pnpm typechec
 --force` **14/14**; Biome clean. Files: `providers/nano-gpt.ts`,
 `catalogue/{types,canonical-registry}.ts`, `curation/{run-inkling-suite,conversation-suite/permutations}.ts`;
 records `[[models/inkling]]`, `[[insights/follow-ups-index]]`,
-`[[../superpowers/specs/2026-07-16-inkling-ux]]`. **Freedom still deferred** to
-Lex's bench (unchanged). **Restart the dev stack before testing** (Vite HMR ignores
-`packages/*`). — prior entry retained below —
+`[[../superpowers/specs/2026-07-16-inkling-ux]]`.
+
+**2026-07-18 — OpenRouter route added (`c2112bbd`).** Inkling's second route, the
+day it reached OpenRouter. Sole upstream **Together AI (US)** — no fallback, so an
+OpenRouter account with "may train on inputs" disabled gets **HTTP 404 "all
+providers ignored"** on every Inkling request (an account-level block a per-request
+`data_collection:'allow'` does NOT override; recorded as a product signal). Two
+measured divergences from nano-gpt, both re-probed live: reasoning is a plain
+**`toggle`** here (off is genuine, but effort does not separate monotonically on
+Together — ordering swaps across prompts), **not** the four-band ladder; and tool
+calls **stream fragmented** (~28 deltas reassembled) vs nano-gpt's single-block.
+Context ceiling is Together's real **524 288** (the aggregate /models 1M is not
+servable); recommended stays 131 072. Vision ✅ via data URL. Generic
+`openRouterAdapter`, no bespoke code. Gates: `run-openrouter-suite.ts inkling`
+**core 22/22 + vision 4/4** (harness now runs OR vision tools-free for every
+offering); `pnpm typecheck --force` **14/14**; tests **448/0**; Biome clean.
+**Freedom trigger now MET:** the deferral named "until Inkling reaches OpenRouter"
+— it has; Lex's independent safety bench is unblocked, `freedomOriented` stays
+`null` until his result lands. **Restart the dev stack before testing** (Vite HMR
+ignores `packages/*`). — prior entry retained below —
 
 **2026-07-16 — INKLING CURATED (Thinking Machines' first
 public model — a community first) + TWO HONEST-SURFACING UX UNITS — on `master`
@@ -1413,24 +1431,20 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**⏰ FIRST THING — INKLING: push + device-verify.** The three Inkling units are on
-`master` (`a78ab8d6` / `1cc82386` / `c6d935b7`), NOT pushed — Chris pushes after
-the device check. **Restart the dev stack first** (Vite HMR ignores `packages/*`,
-so a catalogue change needs a restart). Walk the spec's Manual-verification:
-picker shows Inkling's muted `Uncensored?` pill (not red, not absent); reasoning
-on + a real prompt → `(hidden reasoning, n tokens)` marker at the top; trivial
-"hi" → no marker; reasoning off → no marker; tools + vision work.
+**⏰ OMNIBUS UPDATE in progress (2026-07-18).** A grab-bag of small delightful
+features to ship this evening or tomorrow. **Done:** Inkling on OpenRouter
+(`c2112bbd`). **Next up — the "mild edit feature" (fresh context):** let the user
+edit **only their last message** (the full edit feature comes later), but *lead
+the edit beautifully* — many chat harnesses handle message-editing joylessly, and
+Chris has ideas for pampering the user through an edit (the *dere* half). Start
+this with a clean context and a brainstorm; Chris brings the concept.
 
-**Two Inkling follow-ups (tracked):**
-- **When nano-gpt (Milan) wires Inkling's reasoning passthrough** — expected
-  within days — **drop `reasoningTraceHidden`** on the offering and Inkling
-  becomes an ordinary visible-reasoning toggle with full CoT reverb. The suite's
-  `reasoning-hidden-billed` assertion fails the day a trace appears, self-
-  signalling the flip; re-run `run-inkling-suite.ts` to confirm.
-- **Lex's safetymaxxed bench** (once Inkling reaches OpenRouter) → revisit
-  Inkling's `freedomOriented` (currently `null` → `Uncensored?`) with his results
-  instead of guessing. The general `Uncensored?` badge now exists to carry that
-  honesty for any unassessed model.
+**Inkling status (both routes curated):** nano-gpt (four-band `steps` ladder, trace
+passthrough landed 07-17) + OpenRouter (plain `toggle`, Together-only, 07-18). The
+`reasoningTraceHidden` passthrough follow-up is **RESOLVED**. One follow-up remains:
+**Lex's safetymaxxed bench** — the "once Inkling reaches OpenRouter" trigger is now
+**met**, so ping Lex and revisit `freedomOriented` (currently `null` → `Uncensored?`)
+with his result instead of guessing.
 
 **Active workstream remains the backend** (Block 6, proxy + sync → v0.3.0) — see
 [[STATUS-BACKEND]]. Inkling was a curation by-catch on the client/catalogue side.
