@@ -13,8 +13,12 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 verification (spec §8/§9).** Three `lg`-gated desktop refinements, mobile
 unchanged except the §5.6 repair: chat column 640→**896 px** (`.chat-page`
 CSS is the real width surface, not root's `<main>`; `.toast-stack`/`<main>`
-stay 640 px); **user-message bubbles** (left-aligned, `fit-content`/85 %,
-subtle tint+ring, persona text stays open — pattern (a)); **permanent
+stay 640 px); **user-message bubbles** (right-edge `margin-left:auto`,
+`fit-content`/85 %, subtle tint+ring, text left-aligned inside, persona text
+stays open — pattern (a); right-edge is Chris's device-test call `cdf99214`,
+overriding the spec's left-edge, and he **loves** it — the whole iteration's
+felt goal is a **more "airy"/spacious desktop**, breathing room without
+emptiness); **permanent
 cockpit** — desktop gets a single chat mode via a derived
 `useEffectiveChatMode()` (`isDesktop || store`, **never written to the
 store**; resize across 1024 px just works — narrowing lands back in reading
@@ -51,12 +55,17 @@ bump.** Spec/plan:
 `superpowers/{specs/2026-07-18-desktop-ui-iteration-design,plans/2026-07-18-desktop-ui-iteration}.md`.
 Branch kept until Chris pushes. **Next:** Chris device-verifies (spec §8/§9:
 cockpit open on entry / no BottomAffordance / no pin icon; 896 px column vs
-640 px elsewhere; left-aligned user bubbles + open persona text; send keeps
+640 px elsewhere; right-edge user bubbles + open persona text; send keeps
 focus; edit a message; live voice; **resize ping-pong 1024↔narrow**;
 **380 px phone spot-check unchanged**; **broken-model state** — point a chat
 at a removed model, topbar+avatar stays reachable on both breakpoints), then
 pushes. **Restart the dev stack before testing** (Vite HMR ignores
 `packages/*`; a fresh boot also picks up the new state module cleanly).
+**Chris device-verified + LOVES it (2026-07-18)** — bubbles right-edge, the
+desktop now feels "airy"/spacious, which he'd been quietly wishing for on PC.
+**Next session (Chris's idea):** do "something nice on the left" for the
+desktop chat too — the left/right sidebars §9 deferred; keep the airy feel,
+don't crowd it. Needs its own brainstorm + spec + Laura pass.
 
 ---
 
