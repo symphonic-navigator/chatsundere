@@ -18,3 +18,6 @@ a brief and then a spec under `superpowers/specs/`.
 - [[2026-07-19-multiple-choice-tools]] — spill-over idea: structured
   multiple-choice questions as real chat UI (chat-agentic hybrid, claude.ai
   precedent). Not part of the prototype.
+- [[2026-07-19-group-chats-vs-cross-referencing]] — Ember & Zen round two:
+  the cross-ref composite model and its backfill problem, vs real group
+  chats (where backfill dissolves). Deferred, but the thinking is captured.
