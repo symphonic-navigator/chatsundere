@@ -65,6 +65,15 @@ Placed into the librarian's fresh context at spawn, costing no loop rounds:
    a persona-global layer was considered and rejected for the prototype.
 3. **The persona's brief** — the delegation argument, carrying the task and
    whatever conversational substance the persona chooses to pass along.
+4. **A recent transcript window** *(added after Chris's practicality
+   challenge, same day)* — the structural gap between the design and its
+   inspiration: when Liz writes a vault note in the coding harness, she holds
+   the full conversation in context; a librarian fed only a persona-distilled
+   brief plays Chinese whispers, and a thin brief makes a thin article no
+   matter how good the librarian is. Fix is cheap: frontload the recent
+   conversation window alongside the brief (all local, no privacy surface,
+   input tokens only). "Make an article out of what we just discussed"
+   becomes literal rather than brief-mediated. Window size is a spec knob.
 
 ## 3. Tool surface — two storeys
 
@@ -126,8 +135,62 @@ deleted-document fallback.
 - Unlocker parity (§5.6) is unchanged as an open spec question: the librarian
   system prompt must reuse the persona's content-axis unlockers verbatim;
   where they live in composable form is for the spec.
-- Model resolution as decided: the persona's own model, background-helper as
-  silent fallback.
+- Model resolution: the persona's own model by default, background-helper as
+  silent fallback — **plus the synthesis-expert option below (§5a)**.
+
+## 5a. Model quality is the load-bearing wall — and the plan for it
+
+*(Added after Chris's practicality challenge: "is this actually going to
+produce good results, or is it tools-plus-hope?")*
+
+Everything the design imitates (Liz in Claude Code, Claude Desktop + Obsidian
+as "extreme AI memory") runs on frontier-class models. Chatsundere personas
+run on arbitrary models, and a model can be a wonderful conversationalist and
+a poor librarian at once (whole-body rewrites that drop content, muddled
+filing decisions). The feature's result quality will track librarian-model
+quality. Three-part plan:
+
+1. **Chris's read of the model landscape (2026-07-19):** the open frontier —
+   GLM 5.2, Kimi from 2.5, DeepSeek from 3.2 — scores well on terminal-bench
+   and knowledge-work benchmarks and uses tools diligently; not
+   Claude/ChatGPT-class curated, but genuinely agentic. The counter-example
+   is also known first-hand: Gemma 4's notorious tool-call laziness
+   (reportedly fixed in newer versions). In an ideal world Opus would be the
+   librarian; that train has left for now — see
+   [[../FREEDOM-CRITERIA|freedom criteria]] — unless an "AI perestroika"
+   reaches San Francisco. Conclusion: viable librarian models exist within
+   our curated, freedom-oriented catalogue today.
+2. **A separate librarian-model slot (decided, Chris 2026-07-19):** the
+   librarian model can be set independently of the persona's — the
+   artefact-expert is the exact precedent (dedicated strong model for the
+   heavy lifting while the persona keeps the voice; for KB synthesis the
+   voice argument is weak anyway, since the brief is persona-authored).
+   Default remains the persona's own model. The librarian system prompt
+   carries the corresponding tool-use nudges either way — diligence is
+   prompted, not assumed.
+3. **A curation leg, eventually:** librarian competence is a per-model
+   capability like protocol compliance — the conversation-suite can grow a
+   librarian leg, and a model that cannot hold the loop gets flagged,
+   mirroring `unsuitableAsBackgroundWorker`. Not prototype scope; noted so
+   the capability-flag pattern is the expected home.
+
+**Accepted honestly:** there is no automated quality oracle for prose (no
+tests, no typecheck). The reviewer is the user, via pill link + version diff
++ rollback. The feature accelerates curation; it does not replace the
+curator's last mile.
+
+## 5b. De-risking before any spec: the synthesis probe
+
+The open question "will results be good enough?" is measurable, not
+guessable — empirical truth over docs, applied to our own design. Before a
+spec exists, run a **synthesis probe** in the curation-harness style: take a
+real slice of mythos conversation, hand a candidate model the frontloading
+package (generated index + conventions document + brief + transcript window)
+with mocked tools, and judge the output — serially, on two or three models of
+different strength (e.g. a GLM/Kimi/DeepSeek-class open frontier model vs a
+mid-tier one). An afternoon, zero UI, and the "is it good enough / from which
+model class up" question has data instead of feelings. This probe is the
+agreed next concrete step before Brief/spec work.
 
 ## 6. Open for the spec (new since session 1)
 
@@ -140,3 +203,8 @@ deleted-document fallback.
    Created by whom, when (lazily on first synthesis run vs by the user)?
 4. Whether the per-library run guard surfaces to the persona as a calm busy
    tool error (mirroring the memory-mutex busy toast) — probably yes.
+5. Transcript-window size for the librarian's frontloading (§2.4), and
+   whether whisper/roleplay filtering rules apply to that window.
+6. UI home of the librarian-model slot (§5a.2) — likely beside the
+   background-helper and artefact-expert slots in the persona hub, with the
+   same disabled-with-reason and freedom-filter conventions.
