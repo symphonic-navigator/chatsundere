@@ -79,8 +79,10 @@ export function PersonaMemory(): JSX.Element {
   const class2 = useClass2Gate();
 
   const { data: unextracted = 0 } = useUnextractedCount(chatId);
-  const { learnState, consolidateState, learnNow, consolidateNow, lastAttempted } =
-    useMemoryActions(chatId);
+  const { learnState, consolidateState, learnNow, consolidateNow } = useMemoryActions(
+    personaId,
+    chatId,
+  );
 
   // Local draft for memoryInstructions — held locally, persisted on blur.
   const [memInstructions, setMemInstructions] = useState('');
@@ -312,7 +314,7 @@ export function PersonaMemory(): JSX.Element {
           </div>
         </section>
 
-        {/* ── Chat actions (gated to ?chat= path) ───────────────────────── */}
+        {/* ── Learn from this chat (chat-scoped) ─────────────────────────── */}
         {chatId ? (
           <div className="memory-page-actions">
             <button
@@ -323,63 +325,39 @@ export function PersonaMemory(): JSX.Element {
             >
               {learnState.status === 'pending' ? 'Learning…' : 'Learn from this chat'}
             </button>
-            <button
-              type="button"
-              disabled={committed.length < 1 || consolidateState.status === 'pending'}
-              title={committed.length < 1 ? 'No committed memories to consolidate yet.' : undefined}
-              onClick={() => void consolidateNow()}
-            >
-              {consolidateState.status === 'pending' ? 'Consolidating…' : 'Consolidate now'}
-            </button>
-            {learnState.status === 'pending' || consolidateState.status === 'pending' ? (
+            {learnState.status === 'pending' ? (
               <p className="text-[11px] text-paper-soft">
-                This can take a minute or two for a large memory — you can leave this page; it keeps
-                going.
+                This can take a minute or two — you can leave this page; it keeps going.
               </p>
             ) : null}
-            {(() => {
-              // The slot shows the most-recently-attempted action's error, and Retry fires
-              // that same action — copy and button can never refer to different actions.
-              const candidates =
-                lastAttempted === 'consolidate'
-                  ? ([
-                      [consolidateState, consolidateNow],
-                      [learnState, learnNow],
-                    ] as const)
-                  : ([
-                      [learnState, learnNow],
-                      [consolidateState, consolidateNow],
-                    ] as const);
-              const active = candidates.find(([s]) => s.status === 'error');
-              if (!active) return null;
-              const [state, retry] = active;
-              const response = state.response;
-              return (
-                <>
-                  <div className="memory-page-action-error" role="alert">
-                    <span>{memoryErrorCopy(state)}</span>
-                    <button type="button" onClick={() => void retry()}>
-                      Retry
-                    </button>
-                  </div>
-                  {/* Shown only when a model answer was actually captured — a
-                      timeout or upstream error yields nothing to inspect. */}
-                  {response ? (
-                    <button
-                      type="button"
-                      className="memory-page-inspect"
-                      onClick={() => setInspecting(response)}
-                    >
-                      Show the model's answer
-                    </button>
-                  ) : null}
-                </>
-              );
-            })()}
+            {learnState.status === 'error'
+              ? (() => {
+                  const response = learnState.response;
+                  return (
+                    <>
+                      <div className="memory-page-action-error" role="alert">
+                        <span>{memoryErrorCopy(learnState)}</span>
+                        <button type="button" onClick={() => void learnNow()}>
+                          Retry
+                        </button>
+                      </div>
+                      {response ? (
+                        <button
+                          type="button"
+                          className="memory-page-inspect"
+                          onClick={() => setInspecting(response)}
+                        >
+                          Show the model's answer
+                        </button>
+                      ) : null}
+                    </>
+                  );
+                })()
+              : null}
           </div>
         ) : (
           <p className="memory-page-orient">
-            Open a chat with {persona.name} to learn new memories or consolidate.
+            Open a chat with {persona.name} to learn new memories.
           </p>
         )}
 
@@ -397,64 +375,110 @@ export function PersonaMemory(): JSX.Element {
           )}
         </div>
 
-        {/* ── Committed entries awaiting consolidation ───────────────────── */}
-        {visibleCommitted.length > 0 ? (
-          <div className="memory-page-section">
-            <h2 className="memory-page-subhead">Committed, awaiting consolidation</h2>
-            <ul className="memory-page-list">{visibleCommitted.map((e) => renderRow(e, false))}</ul>
+        {/* ── Committed entries + Consolidate (persona-scoped; control always shown, */}
+        {/*    committed-state language only when entries exist — Laura SOFT-2) ────── */}
+        <div className="memory-page-section">
+          {visibleCommitted.length > 0 ? (
+            <>
+              <h2 className="memory-page-subhead">Committed, awaiting consolidation</h2>
+              <ul className="memory-page-list">
+                {visibleCommitted.map((e) => renderRow(e, false))}
+              </ul>
+            </>
+          ) : null}
+          <div className="memory-page-actions">
+            <button
+              type="button"
+              disabled={visibleCommitted.length < 1 || consolidateState.status === 'pending'}
+              title={
+                visibleCommitted.length < 1
+                  ? 'No committed memories to consolidate yet.'
+                  : undefined
+              }
+              onClick={() => void consolidateNow()}
+            >
+              {consolidateState.status === 'pending' ? 'Consolidating…' : 'Consolidate now'}
+            </button>
+            {consolidateState.status === 'pending' ? (
+              <p className="text-[11px] text-paper-soft">
+                This can take a minute or two for a large memory — you can leave this page; it keeps
+                going.
+              </p>
+            ) : null}
+            {consolidateState.status === 'error'
+              ? (() => {
+                  const response = consolidateState.response;
+                  return (
+                    <>
+                      <div className="memory-page-action-error" role="alert">
+                        <span>{memoryErrorCopy(consolidateState)}</span>
+                        <button type="button" onClick={() => void consolidateNow()}>
+                          Retry
+                        </button>
+                      </div>
+                      {response ? (
+                        <button
+                          type="button"
+                          className="memory-page-inspect"
+                          onClick={() => setInspecting(response)}
+                        >
+                          Show the model's answer
+                        </button>
+                      ) : null}
+                    </>
+                  );
+                })()
+              : null}
           </div>
-        ) : null}
+        </div>
 
         {/* ── The memory body + version history ─────────────────────────── */}
         <div className="memory-page-section">
           <h2 className="memory-page-subhead">The memory itself</h2>
-          {versions.length === 0 ? (
-            <p className="memory-page-empty">Nothing remembered yet.</p>
-          ) : (
-            <>
-              <AutoSizeTextarea
-                aria-label="Memory body"
-                minRows={4}
-                maxRows={30}
-                value={bodyDraft}
-                onChange={setBodyDraft}
-              />
-              <button
-                type="button"
-                className="memory-page-save-body"
-                disabled={
-                  class2.disabled ||
-                  bodyDraft.trim() === '' ||
-                  bodyDraft === (currentBody?.content ?? '')
-                }
-                title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
-                onClick={() => saveBodyManual.mutate(bodyDraft)}
-              >
-                Save memory
-              </button>
-              <ul className="memory-page-version-list">
-                {versions.map((v) => (
-                  <li key={v.id}>
-                    <span>
-                      v{v.version} · {v.source}
-                    </span>
-                    {v.version !== (currentBody?.version ?? 0) ? (
-                      <button
-                        type="button"
-                        disabled={class2.disabled}
-                        title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
-                        onClick={() => rollback.mutate(v.version)}
-                      >
-                        Restore
-                      </button>
-                    ) : (
-                      <span className="memory-page-version-current">current</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          <AutoSizeTextarea
+            aria-label="Memory body"
+            placeholder={`Write what ${persona.name} should remember about you — this becomes the starting point the next consolidation builds on.`}
+            minRows={4}
+            maxRows={30}
+            value={bodyDraft}
+            onChange={setBodyDraft}
+          />
+          <button
+            type="button"
+            className="memory-page-save-body"
+            disabled={
+              class2.disabled ||
+              bodyDraft.trim() === '' ||
+              bodyDraft === (currentBody?.content ?? '')
+            }
+            title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+            onClick={() => saveBodyManual.mutate(bodyDraft)}
+          >
+            Save memory
+          </button>
+          {versions.length > 0 ? (
+            <ul className="memory-page-version-list">
+              {versions.map((v) => (
+                <li key={v.id}>
+                  <span>
+                    v{v.version} · {v.source}
+                  </span>
+                  {v.version !== (currentBody?.version ?? 0) ? (
+                    <button
+                      type="button"
+                      disabled={class2.disabled}
+                      title={class2.disabled ? (class2.tooltip ?? undefined) : undefined}
+                      onClick={() => rollback.mutate(v.version)}
+                    >
+                      Restore
+                    </button>
+                  ) : (
+                    <span className="memory-page-version-current">current</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
     </PageScaffold>

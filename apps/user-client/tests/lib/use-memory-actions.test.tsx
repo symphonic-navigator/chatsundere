@@ -3,10 +3,12 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const resolveMemoryPipelineArgs = vi.fn();
+const resolveMemoryConsolidationArgs = vi.fn();
 const runExtraction = vi.fn();
 const runDreaming = vi.fn();
 vi.mock('../../src/memory/resolve-args.js', () => ({
   resolveMemoryPipelineArgs: (...a: unknown[]) => resolveMemoryPipelineArgs(...a),
+  resolveMemoryConsolidationArgs: (...a: unknown[]) => resolveMemoryConsolidationArgs(...a),
 }));
 vi.mock('../../src/memory/pipeline.js', () => ({
   runExtraction: (...a: unknown[]) => runExtraction(...a),
@@ -39,10 +41,11 @@ describe('useMemoryActions', () => {
     resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(true);
     runExtraction.mockResolvedValue(2);
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.learnNow();
     });
+    expect(resolveMemoryPipelineArgs).toHaveBeenCalledWith('c1', 'memory-learn');
     expect(runExtraction).toHaveBeenCalledWith(
       { persona: { id: 'p1' } },
       { force: true, onRawResponse: expect.any(Function) },
@@ -51,7 +54,7 @@ describe('useMemoryActions', () => {
   });
 
   it('captures the last model answer onto the error state for the debug view', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    resolveMemoryConsolidationArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(true);
     const answer = { content: '', reasoning: 'thought but said nothing', finishReason: 'stop' };
     runDreaming.mockImplementation(
@@ -60,7 +63,7 @@ describe('useMemoryActions', () => {
         throw new Error('one-shot returned empty content');
       },
     );
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
@@ -69,12 +72,12 @@ describe('useMemoryActions', () => {
   });
 
   it('leaves response undefined when no model answer was captured (e.g. timeout)', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    resolveMemoryConsolidationArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(true);
     runDreaming.mockImplementation(async () => {
       throw new DOMException('The operation timed out.', 'TimeoutError');
     });
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
@@ -83,9 +86,9 @@ describe('useMemoryActions', () => {
   });
 
   it('consolidateNow sets error when resolution fails', async () => {
-    resolveMemoryPipelineArgs.mockRejectedValue(new Error('master key unavailable'));
+    resolveMemoryConsolidationArgs.mockRejectedValue(new Error('master key unavailable'));
     tryAcquireMemoryLock.mockReturnValue(true);
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
@@ -94,9 +97,9 @@ describe('useMemoryActions', () => {
   });
 
   it('shows the busy toast and stays idle when the mutex is held', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    resolveMemoryConsolidationArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(false);
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
@@ -108,26 +111,27 @@ describe('useMemoryActions', () => {
   });
 
   it('acquires and releases the mutex around a successful consolidate', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    resolveMemoryConsolidationArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(true);
     runDreaming.mockResolvedValue(true);
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
+    expect(resolveMemoryConsolidationArgs).toHaveBeenCalledWith('p1', 'memory-consolidate');
     expect(tryAcquireMemoryLock).toHaveBeenCalledWith('p1');
     expect(releaseMemoryLock).toHaveBeenCalledWith('p1');
   });
 
   it('invalidates the memory queries per slice via onSlice', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    resolveMemoryConsolidationArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(true);
     runDreaming.mockImplementation(async (_a: unknown, opts: { onSlice?: () => void }) => {
       opts.onSlice?.();
       opts.onSlice?.();
       return true;
     });
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
@@ -138,13 +142,13 @@ describe('useMemoryActions', () => {
   });
 
   it('classifies the failure, counts partial slices, and still invalidates on error', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
+    resolveMemoryConsolidationArgs.mockResolvedValue({ persona: { id: 'p1' } });
     tryAcquireMemoryLock.mockReturnValue(true);
     runDreaming.mockImplementation(async (_a: unknown, opts: { onSlice?: () => void }) => {
       opts.onSlice?.();
       throw new DOMException('The operation timed out.', 'TimeoutError');
     });
-    const { result } = renderHook(() => useMemoryActions('c1'));
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
       await result.current.consolidateNow();
     });
@@ -153,17 +157,5 @@ describe('useMemoryActions', () => {
     expect(result.current.consolidateState.partialSlices).toBe(1);
     expect(releaseMemoryLock).toHaveBeenCalledWith('p1');
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['memory', 'p1'] });
-  });
-
-  it('records lastAttempted for error-slot precedence', async () => {
-    resolveMemoryPipelineArgs.mockResolvedValue({ persona: { id: 'p1' } });
-    tryAcquireMemoryLock.mockReturnValue(true);
-    runExtraction.mockResolvedValue(1);
-    const { result } = renderHook(() => useMemoryActions('c1'));
-    expect(result.current.lastAttempted).toBeNull();
-    await act(async () => {
-      await result.current.learnNow();
-    });
-    expect(result.current.lastAttempted).toBe('learn');
   });
 });

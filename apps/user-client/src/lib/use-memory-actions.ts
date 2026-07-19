@@ -4,7 +4,10 @@ import { QK } from '../data/queryKeys.js';
 import { type MemoryActionError, classifyMemoryActionError } from '../memory/classify-error.js';
 import { releaseMemoryLock, tryAcquireMemoryLock } from '../memory/mutex.js';
 import { type MemoryRawResponse, runDreaming, runExtraction } from '../memory/pipeline.js';
-import { resolveMemoryPipelineArgs } from '../memory/resolve-args.js';
+import {
+  resolveMemoryConsolidationArgs,
+  resolveMemoryPipelineArgs,
+} from '../memory/resolve-args.js';
 import { toastStore } from '../state/toast.store.js';
 import { queryClient } from './queryClient.js';
 
@@ -24,27 +27,30 @@ export interface MemoryActionState {
 
 const IDLE: MemoryActionState = { status: 'idle' };
 
-/** On-demand "learn from this chat" / "consolidate now" actions for the memory
- *  page. Resolves credentials lazily on click; never on render. Takes the same
- *  per-persona mutex as the background pipeline so the two never interleave. */
-export function useMemoryActions(chatId: string): {
+/** On-demand "learn from this chat" (chat-scoped) / "consolidate now"
+ *  (persona-scoped, reachable from the hub) actions for the memory page.
+ *  Resolves credentials lazily on click; never on render. Takes the same
+ *  per-persona mutex as the background pipeline so the two never interleave.
+ *  Each action owns its own error state — no shared slot, so copy + Retry can
+ *  never refer to a different action. */
+export function useMemoryActions(
+  personaId: string,
+  chatId: string,
+): {
   learnState: MemoryActionState;
   consolidateState: MemoryActionState;
   learnNow: () => Promise<void>;
   consolidateNow: () => Promise<void>;
-  lastAttempted: 'learn' | 'consolidate' | null;
 } {
   const [learnState, setLearnState] = useState<MemoryActionState>(IDLE);
   const [consolidateState, setConsolidateState] = useState<MemoryActionState>(IDLE);
-  const [lastAttempted, setLastAttempted] = useState<'learn' | 'consolidate' | null>(null);
 
   const run = useCallback(
     async (
       kind: 'learn' | 'consolidate',
       setState: (s: MemoryActionState) => void,
     ): Promise<void> => {
-      setLastAttempted(kind);
-      let personaId: string | null = null;
+      let lockPersonaId: string | null = null;
       let slices = 0;
       // Last parsed model answer — held so the error path can offer a debug view
       // of what the model actually returned (chiefly: reasoning but no content).
@@ -53,22 +59,38 @@ export function useMemoryActions(chatId: string): {
         lastResponse = r;
       };
       try {
-        const args = await resolveMemoryPipelineArgs(chatId, `memory-${kind}`);
-        personaId = args.persona.id;
-        if (!tryAcquireMemoryLock(personaId)) {
-          toastStore.show({
-            message: 'Already working on this — give it a moment.',
-            tone: 'info',
-            durationMs: 4000,
-          });
-          return;
-        }
-        setState({ status: 'pending' });
-        try {
-          if (kind === 'learn') {
+        if (kind === 'learn') {
+          const args = await resolveMemoryPipelineArgs(chatId, 'memory-learn');
+          lockPersonaId = args.persona.id;
+          if (!tryAcquireMemoryLock(lockPersonaId)) {
+            toastStore.show({
+              message: 'Already working on this — give it a moment.',
+              tone: 'info',
+              durationMs: 4000,
+            });
+            return;
+          }
+          setState({ status: 'pending' });
+          try {
             await runExtraction(args, { force: true, onRawResponse });
-          } else {
-            const id = personaId;
+            setState(IDLE);
+          } finally {
+            releaseMemoryLock(lockPersonaId);
+          }
+        } else {
+          const args = await resolveMemoryConsolidationArgs(personaId, 'memory-consolidate');
+          lockPersonaId = args.persona.id;
+          if (!tryAcquireMemoryLock(lockPersonaId)) {
+            toastStore.show({
+              message: 'Already working on this — give it a moment.',
+              tone: 'info',
+              durationMs: 4000,
+            });
+            return;
+          }
+          setState({ status: 'pending' });
+          const id = lockPersonaId;
+          try {
             await runDreaming(args, {
               force: true,
               onRawResponse,
@@ -77,10 +99,10 @@ export function useMemoryActions(chatId: string): {
                 void queryClient.invalidateQueries({ queryKey: QK.memory(id) });
               },
             });
+            setState(IDLE);
+          } finally {
+            releaseMemoryLock(lockPersonaId);
           }
-          setState(IDLE);
-        } finally {
-          releaseMemoryLock(personaId);
         }
       } catch (e) {
         setState({
@@ -92,15 +114,16 @@ export function useMemoryActions(chatId: string): {
       } finally {
         // Error paths must refresh too: a mid-drain failure has already archived
         // slices, and the committed list must show the true remainder (Laura HARD-1).
-        if (personaId) void queryClient.invalidateQueries({ queryKey: QK.memory(personaId) });
+        if (lockPersonaId)
+          void queryClient.invalidateQueries({ queryKey: QK.memory(lockPersonaId) });
         void queryClient.invalidateQueries({ queryKey: QK.unextractedCount(chatId) });
       }
     },
-    [chatId],
+    [personaId, chatId],
   );
 
   const learnNow = useCallback(() => run('learn', setLearnState), [run]);
   const consolidateNow = useCallback(() => run('consolidate', setConsolidateState), [run]);
 
-  return { learnState, consolidateState, learnNow, consolidateNow, lastAttempted };
+  return { learnState, consolidateState, learnNow, consolidateNow };
 }

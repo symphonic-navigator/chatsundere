@@ -49,6 +49,10 @@ export interface MemoryPipelineArgs {
   offering: Offering;
 }
 
+/** The subset of args a persona-scoped consolidation needs — no chat. Extraction
+ *  ("Learn from this chat") is the only path that reads `args.chat`. */
+export type MemoryConsolidationArgs = Omit<MemoryPipelineArgs, 'chat'>;
+
 /**
  * Optional diagnostics hook: fired with the raw model response (content +
  * reasoning, split) on every parsed call. The manual memory actions use it to
@@ -58,7 +62,7 @@ export interface MemoryPipelineArgs {
 export type MemoryRawResponse = OneShotRawResponse;
 
 async function callModel(
-  args: MemoryPipelineArgs,
+  args: MemoryConsolidationArgs,
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
@@ -161,7 +165,7 @@ export class MemoryInvalidOutputError extends Error {
  * failure loses nothing. Returns true when at least one body was written.
  */
 export async function runDreaming(
-  args: MemoryPipelineArgs,
+  args: MemoryConsolidationArgs,
   opts: {
     force?: boolean;
     onSlice?: () => void;

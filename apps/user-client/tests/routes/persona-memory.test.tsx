@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import 'fake-indexeddb/auto';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -28,7 +28,6 @@ function mockMemoryActions(
   overrides: {
     learnState?: MemoryActionState;
     consolidateState?: MemoryActionState;
-    lastAttempted?: 'learn' | 'consolidate' | null;
     learnNow?: () => Promise<void>;
     consolidateNow?: () => Promise<void>;
   } = {},
@@ -38,7 +37,6 @@ function mockMemoryActions(
     consolidateState: overrides.consolidateState ?? { status: 'idle' },
     learnNow: overrides.learnNow ?? vi.fn(),
     consolidateNow: overrides.consolidateNow ?? vi.fn(),
-    lastAttempted: overrides.lastAttempted ?? null,
   });
 }
 
@@ -146,7 +144,7 @@ describe('PersonaMemory — entries', () => {
     const box = screen.getByLabelText(/edit memory/i);
     await userEvent.clear(box);
     await userEvent.type(box, 'new text');
-    await userEvent.click(screen.getByRole('button', { name: /save/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
     expect(await screen.findByText('new text')).toBeInTheDocument();
   });
 
@@ -195,9 +193,20 @@ describe('PersonaMemory — body', () => {
     await waitFor(() => expect(screen.getByText(/v3 ·/i)).toBeInTheDocument());
   });
 
-  it('shows an empty state when nothing is remembered yet', async () => {
+  it('renders an empty editable body when nothing is remembered yet', async () => {
     setup('/app/persona/p1/memory');
-    expect(await screen.findByText(/nothing remembered yet/i)).toBeInTheDocument();
+    const box = await screen.findByLabelText(/memory body/i);
+    expect(box).toHaveValue('');
+    expect(screen.getByRole('button', { name: /save memory/i })).toBeDisabled();
+    expect(screen.queryByText(/nothing remembered yet/i)).not.toBeInTheDocument();
+  });
+
+  it('saves a first body authored from empty as v1', async () => {
+    setup('/app/persona/p1/memory');
+    const box = await screen.findByLabelText(/memory body/i);
+    await userEvent.type(box, 'seed memory');
+    await userEvent.click(screen.getByRole('button', { name: /save memory/i }));
+    await waitFor(() => expect(screen.getByText(/v1 ·/i)).toBeInTheDocument());
   });
 });
 
@@ -210,11 +219,51 @@ describe('PersonaMemory — actions gating', () => {
     expect(screen.getByRole('button', { name: /consolidate now/i })).toBeInTheDocument();
   });
 
-  it('omits the actions block and shows an orientation line on the hub path', async () => {
+  it('on the hub path shows no Learn button, the shortened orient line, and a disabled Consolidate control', async () => {
     setup('/app/persona/p1/memory');
     await screen.findByRole('heading', { level: 1, name: /memory/i });
     expect(screen.queryByRole('button', { name: /learn from this chat/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/open a chat with fable/i)).toBeInTheDocument();
+    expect(screen.getByText(/open a chat with fable to learn new memories\./i)).toBeInTheDocument();
+    const consolidate = screen.getByRole('button', { name: /consolidate now/i });
+    expect(consolidate).toBeInTheDocument();
+    expect(consolidate).toBeDisabled();
+  });
+
+  it('on the hub path enables Consolidate once a committed entry exists', async () => {
+    await addJournalEntries('p1', [{ content: 'known', category: 'fact', isCorrection: false }]);
+    const [row] = await import('../../src/memory/repo.js').then((m) =>
+      m.listJournal('p1', 'uncommitted'),
+    );
+    if (row) await commitEntry(row.id);
+    setup('/app/persona/p1/memory');
+    await screen.findByRole('heading', { level: 1, name: /memory/i });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /consolidate now/i })).toBeEnabled(),
+    );
+  });
+
+  it('greys out Consolidate in lockstep when the last committed entry is set aside', async () => {
+    await addJournalEntries('p1', [{ content: 'known', category: 'fact', isCorrection: false }]);
+    const [row] = await import('../../src/memory/repo.js').then((m) =>
+      m.listJournal('p1', 'uncommitted'),
+    );
+    if (row) await commitEntry(row.id);
+    setup('/app/persona/p1/memory');
+    await screen.findByRole('heading', { level: 1, name: /memory/i });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /consolidate now/i })).toBeEnabled(),
+    );
+    // Set the sole committed entry aside → it leaves visibleCommitted immediately, so
+    // Consolidate must disable in lockstep with the vanishing section (Chris's call).
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /consolidate now/i })).toBeDisabled(),
+    );
+    // Undo restores the entry, re-enables Consolidate, and clears the pending-delete timer.
+    await userEvent.click(await screen.findByRole('button', { name: /undo/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /consolidate now/i })).toBeEnabled(),
+    );
   });
 });
 
@@ -225,7 +274,6 @@ describe('PersonaMemory — action error copy', () => {
   it('renders the timeout copy for a consolidate timeout', async () => {
     mockMemoryActions({
       consolidateState: { status: 'error', error: 'timeout', partialSlices: 0 },
-      lastAttempted: 'consolidate',
     });
     renderPage({ chat: 'c1' });
     expect(
@@ -238,7 +286,6 @@ describe('PersonaMemory — action error copy', () => {
   it('renders the partial-progress copy when slices were checkpointed', async () => {
     mockMemoryActions({
       consolidateState: { status: 'error', error: 'timeout', partialSlices: 2 },
-      lastAttempted: 'consolidate',
     });
     renderPage({ chat: 'c1' });
     expect(
@@ -248,32 +295,39 @@ describe('PersonaMemory — action error copy', () => {
     ).toBeInTheDocument();
   });
 
-  it('error slot and Retry follow the most recently attempted action', async () => {
+  it('shows learn and consolidate errors in independent slots, each Retry firing its own action', async () => {
     const learnNow = vi.fn();
     const consolidateNow = vi.fn();
     mockMemoryActions({
       learnState: { status: 'error', error: 'failed' },
       consolidateState: { status: 'error', error: 'upstream-busy' },
-      lastAttempted: 'consolidate',
       learnNow,
       consolidateNow,
     });
     renderPage({ chat: 'c1' });
+    // Both copies present, each in its own alert region.
     expect(
-      await screen.findByText(
+      await screen.findByText("That didn't work — but nothing was lost. Try again."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
         'Your AI provider is having trouble right now. Nothing was lost — try again in a few minutes.',
       ),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts).toHaveLength(2);
+    const [learnAlert, consolidateAlert] = alerts;
+    if (!learnAlert || !consolidateAlert) throw new Error('expected two error alerts');
+    await userEvent.click(within(learnAlert).getByRole('button', { name: 'Retry' }));
+    expect(learnNow).toHaveBeenCalled();
+    await userEvent.click(within(consolidateAlert).getByRole('button', { name: 'Retry' }));
     expect(consolidateNow).toHaveBeenCalled();
-    expect(learnNow).not.toHaveBeenCalled();
   });
 
   it('offers the debug view only when a model answer was captured', async () => {
     // No captured response → no inspect affordance (e.g. a timeout).
     mockMemoryActions({
       consolidateState: { status: 'error', error: 'timeout' },
-      lastAttempted: 'consolidate',
     });
     const first = renderPage({ chat: 'c1' });
     await screen.findByRole('button', { name: 'Retry' });
@@ -287,7 +341,6 @@ describe('PersonaMemory — action error copy', () => {
         error: 'invalid-output',
         response: { content: '', reasoning: 'I thought a lot', finishReason: 'stop' },
       },
-      lastAttempted: 'consolidate',
     });
     renderPage({ chat: 'c1' });
     expect(
@@ -306,7 +359,6 @@ describe('PersonaMemory — action error copy', () => {
           finishReason: 'stop',
         },
       },
-      lastAttempted: 'consolidate',
     });
     renderPage({ chat: 'c1' });
     await userEvent.click(await screen.findByRole('button', { name: /show the model's answer/i }));
@@ -325,7 +377,7 @@ describe('PersonaMemory — action error copy', () => {
   });
 
   it('shows the long-run sub-line while consolidating', async () => {
-    mockMemoryActions({ consolidateState: { status: 'pending' }, lastAttempted: 'consolidate' });
+    mockMemoryActions({ consolidateState: { status: 'pending' } });
     renderPage({ chat: 'c1' });
     expect(
       await screen.findByText(
