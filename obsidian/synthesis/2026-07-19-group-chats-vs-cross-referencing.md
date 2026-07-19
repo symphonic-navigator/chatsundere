@@ -1,36 +1,36 @@
-# Ember & Zen, round two: cross-referencing vs group chats
+# Alice & Bob, round two: cross-referencing vs group chats
 
 Captured 2026-07-19, same session as the initial idea map. Chris's follow-up
-thinking on the Juliet request — and the question "why not *real* group chats?"
+thinking on the Users request — and the question "why not *real* group chats?"
 
 ## The cross-referencing model (composite persona)
 
 Chris's refinement of "finger of god": no persona synthesis at all. Instead:
 
-- Juliet creates a persona named *"Ember and Zen"*;
-- that persona **references** Ember's and Zen's memories, and every fresh chat
+- User creates a persona named *"Alice and Bob"*;
+- that persona **references** Alice's and Bob's memories, and every fresh chat
   injects both referenced personas' collected memories into its system prompt
   on the fly.
 
 **The problem Chris immediately spotted: backfill.** The composite persona's
 new conversations generate new memories — where do they go? Into the
-composite's own store, diverging from the sources? Written back into Ember's
-and Zen's individual memories (and if so, attributed how)? Both answers are
+composite's own store, diverging from the sources? Written back into Alice's
+and Bob's individual memories (and if so, attributed how)? Both answers are
 ugly. Backfill is the big theme of this model; recorded as a "constructive
 hurdle".
 
 ## The group-chat alternative — and why backfill dissolves
 
 Liz's analysis: **group chat is not a workaround for the merge — it makes the
-merge unnecessary.** If Ember and Zen are both *actually present* in one chat
+merge unnecessary.** If Alice and Bob are both *actually present* in one chat
 (rather than impersonated by a composite):
 
 - each persona keeps running its **own** memory pipeline over its own view of
   the conversation — memories stay per-persona, correct, and attributable;
 - there is nothing to merge and nothing to backfill — the problem doesn't get
   solved, it **stops existing**;
-- whispers even add something the composite could never do: Juliet can tell
-  Ember something Zen doesn't know.
+- whispers even add something the composite could never do: User can tell
+  Amber something Bob doesn't know.
 
 Second strong argument: **mental model.** Everyone on earth knows messenger
 group chats. "Don't make me think" is satisfied for free — unlike composite
@@ -95,7 +95,7 @@ Liz's refinements (working notes, all spec-level):
    the conversation-suite grows a group-chat leg, and a model that cannot
    hold the protocol gets flagged, mirroring `unsuitableAsBackgroundWorker`.
 
-- **Persona-to-persona replies** (Ember reacts to Zen) — desirable for the
+- **Persona-to-persona replies** (Alice reacts to Bob) — desirable for the
   theatre, but needs a hard chain-length cap (e.g. one follow-up) or two
   personas can burn tokens talking to each other forever. Note: refinement 3
   (sequential evaluation) already gives a bounded version of this for free —
@@ -123,7 +123,7 @@ transcript UI (attribution, avatars), title generation, transfer/export.
 This is a **deep architectural feature** — likely bigger than the entire
 Synthesis prototype.
 
-## Where this leaves the three contenders for Juliet
+## Where this leaves the three contenders for User
 
 | Approach | Solves the ask | Conceptual cleanliness | Cost |
 |---|---|---|---|
