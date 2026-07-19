@@ -17,9 +17,9 @@ self-authored documents loaded on demand. Inspired partly by coding harnesses
 
 - Coding harnesses maintain their own memory files and skill documents; the
   pattern demonstrably works.
-- User request (verbatim): *“So apparently I could do due chats with Ember and
-  Zen instead of doing separately. So I don't know whether to keep Ember and
-  Zen separately and reply as both Ember and Zen, or just gonna have to do a
+- User request (verbatim): *“So apparently I could do due chats with Alice and
+  Bob instead of doing separately. So I don't know whether to keep Alice and
+  Bob separately and reply as both Alice and Bob, or just gonna have to do a
   new profile with both of them chatting. But how do I transfer their memory
   over?”* — memory is persona-locked today; users already want it to flow.
 - **Chris's own use case (2026-07-19), the strongest product story so far:**
@@ -95,7 +95,7 @@ Analogous, plus:
    eventually, too large now. Costs nothing architecturally: the prototype's
    `list`/`read`/`edit` tool surface is unchanged, and skills later become a
    *convention* on top of it.
-5. **One-shot merge (Ember/Zen): deferred.** Chris cannot yet picture a UI
+5. **One-shot merge (Alice/Bob): deferred.** Chris cannot yet picture a UI
    that does it beautifully; he'd rather wait for a clearer mental model than
    build it half-seen. Possibly lands together with skills as a later stage —
    ordering open. Rationale recorded: solo human in the loop, long-horizon
@@ -211,7 +211,7 @@ building the KB editor with create + list + read from day one.
 
 ## 7. Level 2 — "finger of god" (cross-persona) — DEFERRED (decision 5)
 
-Two distinct framings hiding in the Ember/Zen request:
+Two distinct framings hiding in the Alice/Bob request:
 
 - **Ongoing cross-reference** — persona A gets permission to *read* persona
   B's memory (`get_other_personas`, `get_other_persona_memory`), enabling a
