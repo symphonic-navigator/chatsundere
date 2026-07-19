@@ -95,6 +95,13 @@ In "The memory itself" (`persona-memory.tsx:409-458`), drop the
 - The textarea gains a guiding `placeholder` (empty state only) — exact wording
   is Laura/Chris copy territory; the mechanic is: an empty-but-editable body with
   a hint that what you write becomes the seed for the next consolidation.
+- **Guardrail (Laura SOFT-3, folded).** The empty-state placeholder MUST name the
+  consequence: what the user writes is the *seed* the next consolidation builds
+  on, and a later dream may fold it in and re-express it as `v… · dream` — their
+  words are an input, not a permanent authored document. Save-then-silently-
+  rewritten is a textbook astonishment; the copy defuses it. Tone: invitational
+  and empowering ("shape the memory directly"), **not** a warning. Exact wording
+  is Chris's call; the requirement (consequence-naming) is fixed.
 
 No behavioural change when a body already exists.
 
@@ -163,6 +170,14 @@ two consolidation-path functions:
     vanishes. Exact heading/framing when the list is empty (e.g. a compact
     "Consolidate memory" control above/within the section) is Laura/Chris copy
     territory; the mechanic is: control always visible, list conditional.
+  - **Guardrail (Laura SOFT-2, folded — borders active-misdirection).** When the
+    committed list is empty, the screen MUST NOT show committed-implying language:
+    the heading "Committed, awaiting consolidation" would assert entries that do
+    not exist (a false statement of state). So the committed-state heading + list
+    render only at `visibleCommitted.length > 0`; the always-visible control uses
+    neutral framing (e.g. a "Consolidate memory" control carrying the disabled
+    tooltip) when there is nothing committed yet. Control always visible,
+    committed-state language conditional.
 
 ### 4.4 Interaction between the two gaps
 
@@ -192,10 +207,28 @@ in, saving `v2 · dream`. No ordering constraint, no data-model conflict.
   `proxy-service` / `packages/crypto` change. Body save and consolidation write
   through existing Class-2 / pipeline paths; no new wire field, no polarity
   change.
-- **Laura:** **spec-pass required** — the reachability of a function changes
-  (consolidation now reachable from the hub; body authorable from empty) and a
-  dead affordance ("Nothing remembered yet.") is replaced by an active one. Run
-  the spec-pass on this document before the plan; pre-squash pass before squash.
+- **Laura:** **spec-pass done 2026-07-19 — NO HARD DEFECTS.** She affirms the
+  change is a net UX win: it removes a real dead-end (committed entries with no
+  hub-reachable consolidate, while the old orient copy said "or consolidate"
+  without offering one — latent misdirection) and replaces a dead affordance with
+  a live one; consolidate is *relocated, not duplicated*, so single-uniform-flows
+  stays clean. Four soft findings:
+  - **SOFT-2** (empty committed section must not assert committed entries) —
+    **folded** as a build guardrail (§4.3): committed-state heading/list only at
+    `visibleCommitted.length > 0`; neutral control framing when empty.
+  - **SOFT-3** (empty-body copy must name the consequence — seed for next
+    consolidation, may re-express as `v… · dream`) — **folded** as a copy
+    requirement (§4.1); exact wording Chris's call.
+  - **SOFT-1** (muscle-memory astonishment for users returning from a chat, where
+    Learn+Consolidate were side-by-side) — she leans **accept, no change**; the
+    new order mirrors the pipeline (input → control → output). Advisory only.
+  - **SOFT-4** (visual weight of the extra empty/disabled scaffolding on a fresh
+    persona — keep empty states quiet) — **flagged for the design-language pass**;
+    render empty/disabled states low-contrast so the screen still breathes.
+    Advisory only.
+  - Both SOFT-1 and SOFT-4 are advisory, not hard defects, so they are recorded
+    here rather than in `ux-deferrals.md` (which logs hard defects only).
+  - **Pre-squash pass** owed before squash.
 
 ## 7. Testing
 
