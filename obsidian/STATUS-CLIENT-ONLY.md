@@ -8,6 +8,55 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-19 — **MEMORY: EARLY BODY AUTHORING & HUB-REACHABLE
+CONSOLIDATION BUILT + FIELD-CONFIRMED — squashed to `master` (`f2cc1e2a`), NOT
+pushed (release pending). Chris device-confirmed the core flow 2026-07-19 —
+authored a memory body from empty on-device ("hätte vorher auch selbst eins
+schreiben können") — the headline of both gaps works.** Two memory-page UX gaps
+closed, one
+feature unit. **(1)** The **memory body is now editable from an empty state** —
+before the first consolidation ("dreaming") has ever produced one; the dead
+"Nothing remembered yet." placeholder is gone, replaced by an always-rendered
+editor whose placeholder names the consequence (a hand-written body is carried
+into the next consolidation as its **seed** — SOFT-3, invitational not a
+warning). **(2)** **"Consolidate now" is now persona-scoped and reachable from
+the persona hub**, not only from within a chat, whenever ≥1 committed journal
+entry exists. It is **relocated (not duplicated)** into the committed region as
+an **always-rendered control, disabled-with-reason at zero committed** (B2 /
+"disabled over hidden" — Chris's call), with committed-implying language shown
+only when entries exist (SOFT-2 guardrail); "Learn from this chat" stays
+chat-scoped. **Mechanism:** a chat-free `MemoryConsolidationArgs =
+Omit<MemoryPipelineArgs,'chat'>` + a persona-based `resolveMemoryConsolidationArgs`
+(shares one bundle helper with the chat resolver); `useMemoryActions` rewired to
+**`(personaId, chatId)`** with **independent per-action error slots**
+(`lastAttempted` shared-slot machinery removed — copy+Retry can never name the
+wrong action). **No Dexie bump** (no schema/store/index change). Built
+brainstorm→spec→**Laura spec-pass (no hard defects; SOFT-2 heading + SOFT-3
+consequence-copy folded as build guardrails)**→plan→**subagent-driven (3 TDD
+tasks, per-task spec+quality review)**→**opus whole-branch review READY TO MERGE**
+(3 advisory Minors, none blocking; one is a spec-vs-code divergence that *improves*
+on the spec)→**Laura pre-squash PASS** (no hard defects; the "button gates on
+`committed` while its section gates on `visibleCommitted`" soft was **fixed on
+Chris's call** — Consolidate now gates on `visibleCommitted` so it greys out in
+lockstep during the 5 s set-aside window; a copy-refinement soft left advisory).
+**Not a Larissa path** (client-only; no auth/sync/proxy/crypto — only existing
+Class-2 gates). Gates on `master` post-squash: `pnpm typecheck --force` **14/14**
+(0 cached), full user-client vitest **3169 pass / 8** known Node-localStorage
+baseline (exact — the `chat-page`/`chat-route`/`cockpit-draft` trio), `pnpm run
+build` **9/9**, Biome clean, **tree-parity master==branch confirmed**. Spec/plan:
+`superpowers/{specs/2026-07-19-memory-early-body-and-hub-consolidation-design,plans/2026-07-19-memory-early-body-and-hub-consolidation}.md`.
+Branch `worktree-memory-early-body-consolidation` kept until Chris pushes.
+**Next:** Chris device-confirmed authoring a body from empty (2026-07-19) — the
+headline flow is live; the remaining spec-§8 spot-checks (hub-consolidate ticks
+the body to `v… · dream`, mid-consolidate error slot + Retry, lockstep grey-out)
+are his to run at leisure, then **release**. The Laura copy-refinement soft
+(placeholder names the seed but not the later `v… · dream` re-expression) is
+**kept as-is by Chris's call** — he's happy with the current copy; advisory only.
+**Restart the dev stack before testing** (fresh boot loads the new resolver +
+hook cleanly).
+
+---
+
 **Last updated:** 2026-07-19 — **CHAT FONT TUNING BUILT — squashed to `master`
 (`8ea229bd`), NOT pushed; awaiting Chris's device verification (spec §10).** Two
 chat-reading refinements in one feature unit. **(1)** New personas now seed the
