@@ -8,6 +8,22 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-19 (evening) — **KNOWLEDGE-LIBRARIAN BRAINSTORMING
+COMPLETE — no code yet.** Two synthesis sessions
+([[synthesis/2026-07-19-initial-idea-map]],
+[[synthesis/2026-07-19-librarian-architecture]]) landed the agentic-librarian
+architecture; an external Codex review ("four AI eyes") was verified against
+the real code and folded into the architecture doc (source record:
+[[synthesis/librarian-architecture-codex-review]]). **Agreed next step: the
+synthesis probe** (architecture doc §5b) — curation-harness style, one-shot
+baseline vs agentic librarian on two or three models, *before* any Brief/spec.
+Three review points await Chris's arbitration (architecture doc §7: silent
+model fallback vs visible failure, conventions-document persona-editability,
+read-broadly-write-narrowly default). Discord interest in the announced
+feature is high; work continues in the next session.
+
+---
+
 **Last updated:** 2026-07-19 — **MEMORY: EARLY BODY AUTHORING & HUB-REACHABLE
 CONSOLIDATION BUILT + FIELD-CONFIRMED — squashed to `master` (`f2cc1e2a`), NOT
 pushed (release pending). Chris device-confirmed the core flow 2026-07-19 —
