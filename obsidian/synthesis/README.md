@@ -15,6 +15,10 @@ a brief and then a spec under `superpowers/specs/`.
 - [[2026-07-19-initial-idea-map]] — first braindump session (Chris + Liz):
   the two prototype tools, the substrate we already have, open questions,
   and the "finger of god" cross-persona level.
+- [[2026-07-19-librarian-architecture]] — session 2 (same day): the KB
+  editor becomes an agentic librarian (tool loop à la `runToolLoop`,
+  generated index + per-library conventions document frontloaded,
+  whole-body rewrite v1); supersedes the context-poor one-shot of §4b.
 - [[2026-07-19-multiple-choice-tools]] — spill-over idea: structured
   multiple-choice questions as real chat UI (chat-agentic hybrid, claude.ai
   precedent). Not part of the prototype.

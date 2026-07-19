@@ -103,6 +103,11 @@ Analogous, plus:
 
 ## 4b. Full tool inventory for the prototype (working list, 2026-07-19)
 
+> **Revised same day (session 2):** the KB editor is now an **agentic
+> librarian** with its own tool loop, and the KB tool surface was restructured
+> accordingly — see [[2026-07-19-librarian-architecture]]. The memory side
+> below stands unchanged; the "context-poor subagent" paragraph is superseded.
+
 **Memory side — one new tool suffices:**
 
 - `edit_memory_body(prompt)` — the editor subagent (§4). No read tool is
@@ -126,7 +131,9 @@ Analogous, plus:
   clearer intent); decide in spec.
 - `query_knowledgebase` (existing) stays untouched for passage search.
 
-**Deliberately context-poor subagent:** the editor subagent receives only the
+**Deliberately context-poor subagent** *(superseded by
+[[2026-07-19-librarian-architecture]] — kept for the record)*: the editor
+subagent receives only the
 target document (or body) + the persona's prompt. If surrounding context is
 needed, the *persona* reads it first (`read_knowledgebase_document`) and puts
 the relevant substance into the prompt — the persona curates, the subagent
