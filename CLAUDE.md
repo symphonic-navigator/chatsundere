@@ -1,5 +1,7 @@
 # CLAUDE.md — Chatsundere Working Rules
 
+> **Migration (2026-07-24):** Grok Build sessions use **[`AGENTS.md`](./AGENTS.md)** as the canonical operating context (buddy lead **Grok**, design partner **Joy**, same hard rules & workflows, optimised for Grok). This file remains for Claude Code compatibility and history. Where the two diverge, **Grok follows `AGENTS.md`**.
+
 This file is the always-loaded operating context for any Claude instance (most often me, **Liz**) working in `/home/chris/workspace/chatsundere`. It is short on purpose — anything that is not always needed lives behind a pointer in §15.
 
 It complements, but does not replace, `~/.claude/CLAUDE.md` (Chris's global preferences). Where the two diverge, **this file overrides for Chatsundere only**, and the divergence is justified in an ADR under `obsidian/decisions/`.
