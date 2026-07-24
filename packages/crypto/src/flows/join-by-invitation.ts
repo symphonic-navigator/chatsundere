@@ -18,6 +18,7 @@ import type { ServerClient } from '../server-client.js';
 import { createMasterKeySession } from '../session.js';
 import type { MasterKeySession } from '../session.js';
 import { ARGON2ID_PARAMS, type MasterKey, asMasterKey, asRecoveryKey } from '../types.js';
+import { validateUsername } from './create-local-account.js';
 
 // ---------------------------------------------------------------------------
 // Public argument / result types
@@ -161,6 +162,11 @@ export async function finishJoinByInvitation(
       'a local account already exists on this device; unlock it and link instead',
     );
   }
+
+  // Same platform rules as createLocalAccount / auth-service join finish.
+  // Refuse before keygen or network so a UI gap never burns an invitation
+  // session on a name the server would 400.
+  validateUsername(args.username);
 
   const serverId = opaqueServerIdentity(args.baseUrl);
 

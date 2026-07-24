@@ -5,6 +5,8 @@ import {
   changeUsername,
   getLocalAccount,
   listPasskeyCredentials,
+  sanitiseUsernameInput,
+  validateUsername,
 } from '@chatsundere/crypto';
 import { useAccountLinkStore, useDiscoveryStore, useSessionStore } from '@chatsundere/ui-shared';
 import { Fingerprint, Info, KeyRound, Link2, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
@@ -170,9 +172,21 @@ export function AccountPage(): JSX.Element {
           <InlineEditRow
             label="Username"
             value={username}
+            transform={sanitiseUsernameInput}
+            inputProps={{
+              autoComplete: 'username',
+              autoCapitalize: 'none',
+              autoCorrect: 'off',
+              spellCheck: false,
+            }}
             validate={(v) => {
               if (!v.trim()) return 'Username cannot be empty.';
-              return null;
+              try {
+                validateUsername(v);
+                return null;
+              } catch {
+                return copy.errors.usernameInvalid;
+              }
             }}
             onSave={handleSaveUsername}
           />

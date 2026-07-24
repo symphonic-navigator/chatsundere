@@ -88,4 +88,15 @@ describe('InvitationConfirm — suggested-username pre-fill (Bug 2)', () => {
     expect(usernameField).toHaveValue('');
     expect(screen.queryByText(/suggested by your operator/i)).not.toBeInTheDocument();
   });
+
+  it('live-sanitises uppercase and disallowed characters while typing', async () => {
+    useOnboardingStore.setState({
+      state: { kind: 'invitation_input', baseUrl: 'https://server.example', code: 'ABCDEFGHij' },
+    });
+
+    renderConfirm();
+    const usernameField = await screen.findByLabelText('Username');
+    fireEvent.change(usernameField, { target: { value: 'Chris!' } });
+    expect(usernameField).toHaveValue('chris');
+  });
 });

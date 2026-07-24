@@ -276,6 +276,34 @@ describe('finishJoinByInvitation', () => {
     db.close();
   });
 
+  it('rejects an invalid username before keygen or join/finish (uppercase)', async () => {
+    const db = await openLocalDb(DB);
+    const serverSetup = opaqueServer.createSetup();
+    const client = makeServerClient({ serverSetup });
+    const joinFinishSpy = spyOn(client, 'joinFinish');
+
+    const joinState = await startJoinByInvitation({
+      serverClient: client,
+      baseUrl: BASE_URL,
+      code: CODE,
+      passphrase: PASSPHRASE,
+    });
+
+    await expect(
+      finishJoinByInvitation({
+        db,
+        serverClient: client,
+        baseUrl: BASE_URL,
+        joinState,
+        username: 'Chris',
+        passphrase: PASSPHRASE,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(joinFinishSpy).not.toHaveBeenCalled();
+
+    db.close();
+  });
+
   it('refuses to run over an existing local account — before any server call (spec §4.2)', async () => {
     const db = await openLocalDb(DB);
     const serverSetup = opaqueServer.createSetup();

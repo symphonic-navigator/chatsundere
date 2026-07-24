@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PassphrasePair,
   RecoveryKeyLike,
+  sanitiseUsernameInput,
   scorePassphrase,
   validateUsername,
 } from '../../src/lib/validators.js';
@@ -16,6 +17,12 @@ describe('validateUsername (re-export)', () => {
   it('throws on a clearly invalid username', () => {
     // Leading digit is not permitted by the crypto package rules.
     expect(() => validateUsername('1invalid')).toThrow();
+  });
+});
+
+describe('sanitiseUsernameInput (re-export)', () => {
+  it('lowercases and strips invalid characters for live field hygiene', () => {
+    expect(sanitiseUsernameInput('Chris!')).toBe('chris');
   });
 });
 

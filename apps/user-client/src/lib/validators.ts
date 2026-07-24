@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { validateUsername } from '@chatsundere/crypto';
+import { sanitiseUsernameInput, validateUsername } from '@chatsundere/crypto';
 import * as v from 'valibot';
 
 /**
- * Re-export — keeps validation logic in exactly one place.
- * Throws `CryptoError('invalid_input', ...)` on failure.
+ * Re-exports — username rules live in `@chatsundere/crypto` (single source of truth).
+ * `validateUsername` throws `CryptoError('invalid_input', ...)` on failure.
+ * `sanitiseUsernameInput` is for live field hygiene (lowercase + strip + length cap).
  */
-export { validateUsername };
+export { validateUsername, sanitiseUsernameInput };
 
 export const PassphrasePair = v.pipe(
   v.object({

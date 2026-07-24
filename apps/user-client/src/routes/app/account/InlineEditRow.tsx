@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useId, useRef, useState } from 'react';
+import { type InputHTMLAttributes, useEffect, useId, useRef, useState } from 'react';
 
 export interface InlineEditRowProps {
   label: string;
@@ -8,6 +8,16 @@ export interface InlineEditRowProps {
   placeholder?: string;
   /** Return an error message to block the save, or null when the value is valid. */
   validate?: (next: string) => string | null;
+  /**
+   * Optional live transform applied on every keystroke (e.g. username
+   * lowercase + strip). The draft always stores the transformed value.
+   */
+  transform?: (raw: string) => string;
+  /** Extra props for the underlying input (autoCapitalize, spellCheck, …). */
+  inputProps?: Pick<
+    InputHTMLAttributes<HTMLInputElement>,
+    'autoCapitalize' | 'autoCorrect' | 'autoComplete' | 'spellCheck' | 'inputMode'
+  >;
   /** Persist the new value; throw to signal a failed save (value + focus kept). */
   onSave: (next: string) => Promise<void>;
 }
@@ -23,6 +33,8 @@ export function InlineEditRow({
   value,
   placeholder,
   validate,
+  transform,
+  inputProps,
   onSave,
 }: InlineEditRowProps): JSX.Element {
   const id = useId();
@@ -81,8 +93,10 @@ export function InlineEditRow({
         className="rounded-lg border border-paper-soft/15 bg-white/5 px-3 py-2 text-paper"
         value={draft}
         placeholder={placeholder}
+        {...inputProps}
         onChange={(e) => {
-          setDraft(e.target.value);
+          const next = transform ? transform(e.target.value) : e.target.value;
+          setDraft(next);
           if (error) setError(null);
         }}
         onBlur={() => void commit()}

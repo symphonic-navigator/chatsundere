@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { sanitiseUsernameInput } from '@chatsundere/crypto';
 import type { AdminCreateInvitationResponse } from '@chatsundere/shared-types';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -29,7 +30,9 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
       role,
       expires_in_days: expiresIn,
       ...(issuerLabel ? { issuer_label: issuerLabel } : {}),
-      ...(suggestedUsername ? { suggested_username: suggestedUsername } : {}),
+      ...(suggestedUsername
+        ? { suggested_username: sanitiseUsernameInput(suggestedUsername) }
+        : {}),
       ...(note ? { note } : {}),
     };
     create.mutate(input);
@@ -82,7 +85,10 @@ export function InvitationCreateModal({ onCreated, onCancel }: Props) {
         {copy.invitations.modal.suggestedUsername}
         <input
           value={suggestedUsername}
-          onChange={(e) => setSuggestedUsername(e.target.value)}
+          onChange={(e) => setSuggestedUsername(sanitiseUsernameInput(e.target.value))}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           className="mt-1 w-full rounded-md border border-[var(--color-surface-0)] bg-[var(--color-crust)] px-3 py-2 font-mono"
         />
       </label>

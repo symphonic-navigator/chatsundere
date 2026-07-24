@@ -40,6 +40,26 @@ export interface CreateLocalAccountResult {
 const USERNAME_RE = /^[a-z][a-z0-9_-]{2,31}$/;
 const RESERVED = new Set(['admin', 'root', 'system', 'me', 'you']);
 
+/** Maximum username length (platform rule: 3–32 chars). */
+export const USERNAME_MAX_LENGTH = 32;
+
+/**
+ * Live input hygiene for username fields: lowercase, drop disallowed
+ * characters, strip leading non-letters, cap length. Does **not** enforce
+ * minimum length or reserved words — call {@link validateUsername} on submit.
+ *
+ * Intent: mobile auto-capitalise and casual typing ("Chris", "Alice!") never
+ * produce a string that the server would reject with 400 at join/finish.
+ */
+export function sanitiseUsernameInput(raw: string): string {
+  const lower = raw.toLowerCase();
+  // Keep only characters that can appear anywhere in a valid username.
+  let s = lower.replace(/[^a-z0-9_-]/g, '');
+  // First character must be a letter — drop leading digits / _ / -.
+  s = s.replace(/^[^a-z]+/, '');
+  return s.slice(0, USERNAME_MAX_LENGTH);
+}
+
 /**
  * Validates a candidate username against the platform rules: must match
  * `^[a-z][a-z0-9_-]{2,31}$` and must not be a reserved word.
