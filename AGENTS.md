@@ -143,6 +143,7 @@ Source code only under `apps/`, `packages/`, `infra/`. Nothing executable in `do
 - **`[skip ci]`** only on pure doc/text commits (GitHub form with space). Never on mixed code+text. **Never tag a release on a `[skip ci]` commit** — tag push would skip image builds silently. Habit: **squash → tag → STATUS commit**.
 - **Co-author on Grok-authored commits:** `Co-Authored-By: Grok (Grok Build) <noreply@x.ai>` (adjust if Chris standardises a different address).
 - **Subagents never merge, push, or switch branches.**
+- **While the Claude→Grok transition is open:** dual-land product work and keep Grok-only knowledge off `master` — see **§17** (non-negotiable for this phase).
 
 ---
 
@@ -325,9 +326,41 @@ Discipline is Grok's. No hook fallback.
 
 ---
 
-## 17. Migration note (temporary)
+## 17. Migration note (temporary) — dual-land until cutover
 
-- Branch `migrate-to-grok` introduces this file as the Grok-optimised rule surface.
-- `CLAUDE.md` may still load under Claude compatibility — keep it from contradicting hard product rules; prefer pointing readers here for Grok work.
+Branch `migrate-to-grok` is the Grok home base for this transition. `CLAUDE.md` stays the Claude surface on `master`; this file is the Grok-optimised rule set. Where they diverge for tooling/identity, Grok follows **this file**. Hard product rules must not contradict each other across the two.
+
+### 17.1 Branch base
+
+Until Chris declares the migration complete:
+
+- **Every unit of Grok-led work branches from `migrate-to-grok`**, not from `master`.
+- That includes **code, specs, plans, STATUS updates, insights, ADRs, and any other knowledge gains** produced in a Grok session.
+- Worktree path still under `.claude/worktrees/<name>`; the **parent tip is `migrate-to-grok`**.
+
+### 17.2 Dual merge (product work)
+
+When a unit is ready to land:
+
+1. Merge (or cherry-pick / squash-land) **into `migrate-to-grok`** first — keeps the Grok line current.
+2. Land the **same product payload** onto **`master`** as well (cherry-pick or selective merge), so deploy tags and any remaining Claude sessions see the real product state.
+
+Do **not** leave product fixes only on `migrate-to-grok` while `master` ships tags — that was the lesson from the username fix: release path is still `master` + tags.
+
+### 17.3 Keep Grok-only knowledge off `master`
+
+**Do not merge** onto `master` artefacts that exist only so Grok can work well, or that would confuse Claude if the fallback path is still needed:
+
+| Keep on `migrate-to-grok` only (examples) | Land on both lines |
+|---|---|
+| `AGENTS.md` and Grok identity/process notes | Application code under `apps/`, `packages/`, `infra/` |
+| Grok-specific CLAUDE.md banners / tooling pointers | Product specs & plans that describe shipped behaviour |
+| Transition process write-ups that talk about Claude vs Grok | STATUS / insights that record product truth |
+
+Rationale: if something goes wrong mid-migration, Claude (and Opus under its own guardrails) must not load a second, conflicting operating identity from `master`. Shared **product** knowledge dual-lands; **buddy/tooling** knowledge stays on the Grok line until cutover.
+
+### 17.4 Other temporary notes
+
 - Audit persona names, co-author email, and agent-file paths (`.claude/agents/…`) may move under `.grok/` later without changing the gates themselves.
 - Product chat persona **Joy** (in-app) and design-partner **Joy** share a name; do not confuse either with this terminal Grok instance.
+- When cutover is done: fold `AGENTS.md` (or its successor) onto `master`, retire the dual-merge rule, and delete this section.
