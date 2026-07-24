@@ -87,4 +87,11 @@ describe('InvitationConfirm mapSubmitError — username conflict (Defect A)', ()
       message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
     });
   });
+
+  it('maps an HttpError invalid_input (server join/finish reject) to an inline username error', () => {
+    expect(mapSubmitError(new HttpError(400, 'invalid_input', 'Invalid username'))).toEqual({
+      kind: 'username_inline',
+      message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
+    });
+  });
 });

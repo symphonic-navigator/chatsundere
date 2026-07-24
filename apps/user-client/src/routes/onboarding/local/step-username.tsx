@@ -3,7 +3,7 @@ import { CryptoError } from '@chatsundere/crypto';
 import { motion } from '@chatsundere/ui-shared';
 import { type FormEvent, useMemo, useState } from 'react';
 import { copy } from '../../../lib/copy.js';
-import { validateUsername } from '../../../lib/validators.js';
+import { sanitiseUsernameInput, validateUsername } from '../../../lib/validators.js';
 
 export interface StepUsernameProps {
   value: string;
@@ -57,9 +57,11 @@ export function StepUsername({ value, setValue, onNext }: StepUsernameProps) {
           type="text"
           autoComplete="username"
           autoCapitalize="none"
+          autoCorrect="off"
           spellCheck={false}
+          inputMode="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => setValue(sanitiseUsernameInput(e.target.value))}
           placeholder={c.placeholder}
           className="w-full rounded-[var(--radius-card)] bg-ink-soft px-4 py-3 font-mono text-base text-paper outline-none ring-1 ring-inset ring-aurora-700/40 focus:ring-aurora-500 placeholder:text-paper-soft/40"
         />

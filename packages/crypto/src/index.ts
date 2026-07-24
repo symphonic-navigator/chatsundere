@@ -121,7 +121,12 @@ export type {
   MasterKeySessionInit,
   RegisterLocalBiometricArgs,
 } from './session.js';
-export { createLocalAccount, validateUsername } from './flows/create-local-account.js';
+export {
+  createLocalAccount,
+  validateUsername,
+  sanitiseUsernameInput,
+  USERNAME_MAX_LENGTH,
+} from './flows/create-local-account.js';
 export type {
   CreateLocalAccountArgs,
   CreateLocalAccountResult,

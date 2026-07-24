@@ -21,8 +21,10 @@ import { activateSession } from '../../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
+import { copy } from '../../../lib/copy.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
+import { sanitiseUsernameInput, validateUsername } from '../../../lib/validators.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
 import { runSyncCycle } from '../../../sync/worker.js';
@@ -113,7 +115,10 @@ function InvitationConfirmInner() {
   // Pre-fill from the operator's suggested username (carried in from the QR/link
   // via invitation_input, or an invitation_confirm session). Empty for manual
   // code entry, which never carries a suggestion. The field stays editable.
-  const [username, setUsername] = useState(storeCtx.suggestedUsername ?? '');
+  // Sanitise on init so a future looser QR path cannot seed invalid casing.
+  const [username, setUsername] = useState(() =>
+    sanitiseUsernameInput(storeCtx.suggestedUsername ?? ''),
+  );
   const [passphrase, setPassphrase] = useState('');
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [passphraseError, setPassphraseError] = useState<string | null>(null);
@@ -171,9 +176,18 @@ function InvitationConfirmInner() {
     // The username field is shown for a fresh PWA and, in the late-link path,
     // once rename mode has opened on a conflict.
     const usernameShown = !isLateLink || latelinkRename;
-    if (usernameShown && username.trim().length === 0) {
-      setUsernameError('Pick a username.');
-      return;
+    const cleanUsername = sanitiseUsernameInput(username);
+    if (usernameShown) {
+      if (cleanUsername.length === 0) {
+        setUsernameError('Pick a username.');
+        return;
+      }
+      try {
+        validateUsername(cleanUsername);
+      } catch {
+        setUsernameError(copy.errors.usernameInvalid);
+        return;
+      }
     }
     if (passphrase.length === 0) {
       setPassphraseError('Enter your passphrase.');
@@ -190,11 +204,9 @@ function InvitationConfirmInner() {
         // attempt below is the uniqueness check. `linkToServer` reads the
         // username from the local account, so no other threading is needed.
         const renamed =
-          latelinkRename &&
-          username.trim().length > 0 &&
-          username.trim() !== localSession?.username;
+          latelinkRename && cleanUsername.length > 0 && cleanUsername !== localSession?.username;
         if (renamed) {
-          await changeUsername({ db: getDb(), newUsername: username.trim() });
+          await changeUsername({ db: getDb(), newUsername: cleanUsername });
         }
         // `linkToServer` runs its own OPAQUE round internally.
         await linkToServer({
@@ -211,7 +223,7 @@ function InvitationConfirmInner() {
         // renamed username so the session reflects the new local identity.
         useSessionStore.getState().setSession({
           ...localSession,
-          username: renamed ? username.trim() : (localSession?.username ?? ''),
+          username: renamed ? cleanUsername : (localSession?.username ?? ''),
           mode: 'linked',
         });
         useOnboardingStore.getState().reset();
@@ -247,7 +259,7 @@ function InvitationConfirmInner() {
           serverClient: httpServerClient,
           baseUrl: storeCtx.baseUrl,
           joinState,
-          username: username.trim(),
+          username: cleanUsername,
           passphrase,
           issuerLabel: null,
         });
@@ -277,7 +289,7 @@ function InvitationConfirmInner() {
         // (the v1 HARD #1 failure mode), so mode-entry comes first (spec §3.5).
         if (isLateLink && !latelinkRename) {
           setLatelinkRename(true);
-          setUsername(localSession?.username ?? '');
+          setUsername(sanitiseUsernameInput(localSession?.username ?? ''));
           setScreen({ kind: 'ready' });
           return;
         }
@@ -429,10 +441,13 @@ function InvitationConfirmInner() {
               ref={usernameInputRef}
               type="text"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
               spellCheck={false}
+              inputMode="text"
               value={username}
               onChange={(e) => {
-                setUsername(e.target.value);
+                setUsername(sanitiseUsernameInput(e.target.value));
                 if (usernameError) setUsernameError(null);
               }}
               placeholder="your name"
@@ -535,6 +550,14 @@ export function mapSubmitError(err: unknown): SubmitMapped {
       return {
         kind: 'username_inline',
         message: 'This username is taken on this server. Choose another.',
+      };
+    }
+    // Server join/finish rejects malformed names with 400 invalid_input — surface
+    // inline so a UI gap never looks like a mysterious fatal failure.
+    if (err.code === 'invalid_input') {
+      return {
+        kind: 'username_inline',
+        message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
       };
     }
     if (err.code === 'code_not_found_or_expired') {
