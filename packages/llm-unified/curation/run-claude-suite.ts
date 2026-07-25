@@ -6,9 +6,10 @@
 // two-turn cache check that asserts Anthropic prompt-cache engages (cached
 // prompt tokens > 0 on the second turn). Prints a Markdown report.
 //
-// Claude is delivered via nano-gpt, NOT OpenRouter — OpenRouter's limited-keys
-// convention routes Anthropic to Amazon Bedrock, which does not honour Anthropic
-// cache_control (see ADR 0032).
+// nano-gpt is the DEFAULT Claude route (ADR 0032). The OpenRouter offerings
+// (Sonnet 5, Opus 5) are covered by run-openrouter-suite.ts instead — they are a
+// permissible second route since ADR 0037, and this harness's bespoke cache
+// check is written against nano-gpt's usage envelope.
 //
 //   bun run curation/run-claude-suite.ts            (from packages/llm-unified)
 //   bun run curation/run-claude-suite.ts opus-4.8   (substring-filter offerings)

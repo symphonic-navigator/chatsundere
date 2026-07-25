@@ -7,8 +7,11 @@
 > **Claude Fable 5 has different mechanics** (flag-mode reasoning, mandatory
 > effort) and lives in its own record: [[claude-fable-5]].
 
-- **Family:** `claude` · **Provider:** nano-gpt only (ADR 0032 — OpenRouter is
-  excluded for Anthropic; its limited-keys path routes to Bedrock, no caching).
+- **Family:** `claude` · **Provider:** nano-gpt only. These seven are curated on
+  nano-gpt alone — not because OpenRouter is excluded (that exclusion lapsed on
+  2026-07-25, see [[../decisions/0037-openrouter-is-no-longer-excluded-for-anthropic]])
+  but because nobody has asked for a second route for them. Adding one is a
+  per-model call with its own live suite run.
 - **T/R/V:** tools ✅ · reasoning ✅ · vision ✅ (all seven).
 - **replayReasoning:** false — extended-thinking signature replay is deferred
   build-when-needed (no live tool-loop consumer yet; spec §5.2). Plain chat does

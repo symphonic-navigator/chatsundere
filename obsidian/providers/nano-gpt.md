@@ -31,10 +31,13 @@ to absorb this. Thinking streams on the `reasoning` delta channel;
 
 ## Claude (Anthropic) — the premium path (ADR 0032)
 
-Claude is delivered **here, not via OpenRouter** — OpenRouter's limited-keys
-convention routes Anthropic to Amazon Bedrock, which does not honour Anthropic
-`cache_control`. nano-gpt does. Live-probed 2026-06-01 across all seven curated
-Claude models:
+Claude is delivered **here by default**. The original reason — OpenRouter's
+limited-keys convention routes Anthropic to Amazon Bedrock, which could not
+honour Anthropic `cache_control` — **expired**: Bedrock caches as of 2026-07-25,
+so OpenRouter is no longer excluded and Sonnet 5 / Opus 5 are curated on both.
+nano-gpt stays the default on the reason that survives, its anonymising-router
+role. See [[../decisions/0037-openrouter-is-no-longer-excluded-for-anthropic]].
+Live-probed 2026-06-01 across all seven curated Claude models:
 
 - **Prompt caching works.** A `cache_control`-marked stable prefix is written and
   **read back on the next turn** (`cache_read ≈ full prefix`; e.g. Opus 4.8
@@ -49,6 +52,30 @@ Claude models:
   `claude-sonnet-4-5-20250929`, `claude-opus-4-5-20251101`) and `anthropic/`-
   prefixed (`anthropic/claude-{sonnet-4.6,opus-4.6,opus-4.7,opus-4.8}`). See
   [[../models/claude-4]].
+- **Claude cache reporting CHANGED after 2026-06-01, and it changed silently.**
+  As of 2026-07-25 nano-gpt reports Claude cache reads **only** as
+  `cache_read_input_tokens` / `cache_creation_input_tokens`, leaves
+  `prompt_tokens_details.cached_tokens` at 0, and **excludes the cached prefix
+  from `prompt_tokens`** — an 11,213-token cached prefix reports
+  `prompt_tokens: 2`, plus an `x_nanogpt_cache` object
+  (`{status: "hit", readTokens, writeTokens}`) that is nano-gpt's own. Our
+  adapter read only the OpenAI-shaped field, so from that change onward the
+  whole Claude family reported `cachedTokens: 0` and an input count short by the
+  entire cached prefix. The caching itself never broke. Fixed in
+  `nano-gpt-slug-swap.ts` — both Anthropic counters are folded back into
+  `promptTokens`, but **only when populated**, so OpenAI-shaped routes are never
+  double-counted. Standing rule for this provider: **the usage envelope is not
+  a stable contract; re-read it when a route's numbers look implausible.**
+- **Claude Opus 5 is the second body-flag Claude** (probed 2026-07-25): no
+  thinking sibling, and — unlike Fable — **no genuine off**. `{enabled:false}`
+  and `thinking:{type:"disabled"}` both blank the trace while the tokens are
+  still spent and billed. Curated as `steps` low/medium/high with
+  `offStep: null`. Same "off only hides" pattern as Grok 4.5 on this provider.
+  See [[../models/claude-opus-5]].
+- **MiMo V2.5 Pro comes in two upstreams here** (2026-07-25):
+  `xiaomi/mimo-v2.5-pro` (Xiaomi's own backend, HTTP 400 on the mildest prompt)
+  and `xiaomi/mimo-v2.5-pro-crof` (CROF, a Western neocloud, advertised
+  filter-free). Only the CROF pair is curated. See [[../models/mimo-v2.5-pro]].
 - **Claude Fable 5 is the slug-swap exception** (probed 2026-06-10): NO thinking
   sibling exists — reasoning is a **body flag** `reasoning: { enabled, effort }`
   with **mandatory effort** when on (`{ enabled: true }` alone is a silent

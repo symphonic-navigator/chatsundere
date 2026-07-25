@@ -50,9 +50,13 @@ const HY3_NANO_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 const MISTRAL_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: false };
 const MISTRAL_NONE: ReasoningControl = { mode: 'none' };
 
-// Claude on nano-gpt (the anonymising-router path; OpenRouter is OUT for
-// Anthropic — its limited-keys convention routes to Amazon Bedrock, which does
-// not honour Anthropic prompt caching. See ADR 0032). Reasoning is a slug swap
+// Claude on nano-gpt (the anonymising-router path, and the DEFAULT route for
+// Anthropic). OpenRouter was originally excluded because its limited-keys
+// convention routes to Amazon Bedrock, which could not honour Anthropic prompt
+// caching — that premise expired on 2026-07-25 (Bedrock caches now), so
+// OpenRouter is a permissible second route per model, but nano-gpt stays the
+// default on the reason that survives: anonymisation. See ADR 0032 + ADR 0037.
+// Reasoning is a slug swap
 // (base = off, the thinking sibling = on); effort does NOT modulate the trace
 // (live-probed), so the control is a clean toggle. nano-gpt's Claude thinking
 // slugs are inconsistent — the dated Haiku/Sonnet 4.5 use a `-thinking` suffix,
@@ -168,6 +172,31 @@ const FABLE_STEPS: ReasoningControl = {
   mode: 'steps',
   steps: ['off', 'low', 'medium', 'high'],
   offStep: 'off',
+  defaultStep: 'medium',
+};
+
+// Claude Opus 5 follows Fable's body-flag shape (no `:thinking` sibling —
+// `anthropic/claude-opus-5:thinking` answers `model_not_supported`), but with a
+// crucial difference: there is NO genuine off. Probed live 2026-07-25 with a
+// hard sum and a forced one-word answer, three runs per variant:
+// `reasoning:{enabled:false}` and `thinking:{type:'disabled'}` both blank the
+// trace while completion_tokens stay at 35 — identical to the no-flag baseline,
+// whose visible trace accounts for exactly those tokens (a trivial prompt under
+// the same off bills 4). The textbook "off only hides", i.e. the Grok-4.5
+// signature. `reasoning_effort:'none'` is rejected outright (HTTP 400), and the
+// error names the real ladder: low/medium/high/xhigh/max. Effort does modulate
+// (max ≈ 4× low) so this is `steps`, not `fixed-on` — but with `offStep: null`
+// so no off chip is ever offered, and the adapter's own guard stops the
+// cockpit's default-off intent reaching the wire. We ship the house three and
+// under-claim: xhigh/max separate most cleanly but low/medium/high overlap
+// across runs, and a calm cockpit beats an honest-but-noisy five-chip ladder
+// (Chris, 2026-07-25 — same call as Sonnet 5).
+const OPUS5_SLUG = 'anthropic/claude-opus-5';
+const OPUS5_CANONICAL = 'claude-opus-5';
+const OPUS5_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'medium', 'high'],
+  offStep: null,
   defaultStep: 'medium',
 };
 
@@ -425,6 +454,18 @@ const offerings: Offering[] = [
   // (text+image) — vision confirmed live 2026-07-18. 1M ceiling, recommended
   // capped at 200k.
   slugSwapOffering('minimax-m3', 'minimax/minimax-m3', STEPS, true, 200_000, 1_000_000),
+  // MiMo V2.5 Pro on nano-gpt, deliberately via the CROF upstream rather than
+  // Xiaomi's own. nano-gpt carries both (`xiaomi/mimo-v2.5-pro` and
+  // `…-pro-crof`, each with a `:thinking` sibling); we curate ONLY the CROF
+  // route. The weights are freedom-oriented either way, but Xiaomi's own
+  // backend answers HTTP 400 on the mildest prompt, so the deployment — not the
+  // model — is what censors there. CROF is a Western neocloud that nano-gpt
+  // keeps upstream and advertises as filter-free, so this route earns
+  // `freedomOrientedDeployment: true` and, with the canonical already judged
+  // freedom-oriented, the 🕊️ badge (Chris, 2026-07-25). Text-only like the
+  // novita offering; slug swap probed live 2026-07-25 (bare = 0 reasoning,
+  // `:thinking` = trace on the reasoning channel).
+  slugSwapOffering('mimo-v2.5-pro', 'xiaomi/mimo-v2.5-pro-crof', STEPS, false, 200_000, 1_048_576),
   // Mistral family on nano-gpt (anonymous-router path). Small 4 and Medium 3.5
   // have `:thinking` siblings → binary toggle; Large 3 has none → no reasoning.
   // Vision is supported across the family (matches the direct-Mistral offerings).
@@ -450,6 +491,33 @@ const offerings: Offering[] = [
     262_144,
   ),
   ...CLAUDE_SPECS.map(claudeOffering),
+  // Claude Opus 5 via nano-gpt. Body-flag reasoning like Fable (no thinking
+  // sibling) but with no genuine off — see OPUS5_STEPS above. Vision + tools
+  // confirmed live; 200k recommended like the family, 1M ceiling per Anthropic.
+  // Anthropic prompt caching engages here (11,587 cached prompt tokens on the
+  // suite's two-turn check) — it had merely been INVISIBLE to us until
+  // 2026-07-25, because nano-gpt reports Claude cache reads only as
+  // `cache_read_input_tokens`; see the accounting note in
+  // `nano-gpt-slug-swap.ts`.
+  {
+    canonicalRef: OPUS5_CANONICAL,
+    providerId: 'nano-gpt',
+    upstreamSlug: OPUS5_SLUG,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${OPUS5_SLUG}` },
+    profile: {
+      reasoning: OPUS5_STEPS,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      // Signature replay deferred like the rest of the family (spec §5.2).
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_000_000 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'verified',
+    serviceKind: 'llm',
+  },
   {
     canonicalRef: FABLE_CANONICAL,
     providerId: 'nano-gpt',
@@ -638,7 +706,11 @@ export function registerNanoGpt(): void {
     if (o.adapter.kind !== 'catalogue') continue;
     if (o.serviceKind === 'web') continue;
     if (o.serviceKind === 'tti') continue;
-    if (o.canonicalRef === FABLE_CANONICAL) {
+    // Fable 5 and Opus 5 share the body-flag shape (neither has a `:thinking`
+    // sibling), so both take the effort adapter; the rest of the family is a
+    // slug swap. The adapter derives from each offering's control whether an
+    // off may reach the wire, so Opus 5's `offStep: null` is honoured here.
+    if (o.canonicalRef === FABLE_CANONICAL || o.canonicalRef === OPUS5_CANONICAL) {
       registerAdapter(
         o.adapter.adapterId,
         claudeEffortAdapter(o.upstreamSlug, {

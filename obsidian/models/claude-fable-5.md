@@ -6,8 +6,10 @@
 > shared nano-gpt mechanics.
 
 - **Canonical:** `claude-fable-5` · **Family:** `claude` · **Provider:** nano-gpt
-  only (ADR 0032 — OpenRouter is excluded for Anthropic; its limited-keys path
-  routes to Bedrock, no caching).
+  only. Not because OpenRouter is excluded for Anthropic — that exclusion lapsed
+  on 2026-07-25
+  ([ADR 0037](../decisions/0037-openrouter-is-no-longer-excluded-for-anthropic.md))
+  — but because no second route has been asked for.
 - **T/R/V:** tools ✅ · reasoning ✅ · vision ✅ (vision live-probed 2026-06-10:
   a magenta test PNG correctly read as "Pink").
 - **replayReasoning:** false — consistent with the family deferral (spec §5.2).

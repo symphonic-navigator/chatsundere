@@ -31,10 +31,12 @@ export interface ClaudeAdapterOptions {
  * nano-gpt passes cache_control through to Anthropic — verified live: a stable
  * prefix is read back on the next turn (cache_read ≈ full prefix).
  *
- * We deliver Claude via nano-gpt, NOT OpenRouter: OpenRouter is used with
- * privacy-limited keys (the community "limited keys" convention), which exclude
- * the Anthropic-direct endpoint and route to Amazon Bedrock — which does not
- * honour Anthropic cache_control. See ADR 0032.
+ * nano-gpt is the DEFAULT Claude route (ADR 0032), originally also because
+ * OpenRouter's privacy-limited keys exclude the Anthropic-direct endpoint and
+ * route to Amazon Bedrock, which then could not honour Anthropic cache_control.
+ * That last part expired on 2026-07-25 — Bedrock caches, so OpenRouter is a
+ * permissible second route (ADR 0037) — but the anonymising-router reason for
+ * defaulting here is unchanged.
  *
  * Extended-thinking signature replay for the tool-use loop is intentionally NOT
  * implemented — deferred build-when-needed (spec §5.2): no live tool-loop
@@ -78,21 +80,39 @@ export interface ClaudeEffortAdapterOptions {
  * `completion_tokens`. SSE parsing is identical to the rest of the nano-gpt
  * surface (thinking on the `reasoning` delta channel), so it is reused from
  * the slug-swap adapter, as is the Anthropic `cache_control` injection.
+ *
+ * Whether an off may reach the wire at all is derived from the OFFERING's own
+ * control, mirroring the openRouter/xAI adapters: a control with no off
+ * (`fixed-on`, or `steps` with `offStep: null`) never emits `{enabled:false}`.
+ * This matters because the cockpit emits no reasoning intent for such controls
+ * and the caller then defaults to disabled — which on Opus 5 would send an off
+ * nano-gpt merely PRETENDS to honour (trace hidden, tokens still billed; the
+ * Grok-4.5 lesson of 2026-07-15). Fable, whose `offStep` is a real `'off'`,
+ * is unaffected.
  */
 export function claudeEffortAdapter(slug: string, opts: ClaudeEffortAdapterOptions): ModelAdapter {
   const base = nanoGptSlugSwapAdapter(slug, opts.vision, opts.reasoning, slug);
+  const canDisableReasoning =
+    opts.reasoning.mode === 'toggle' ||
+    (opts.reasoning.mode === 'steps' && opts.reasoning.offStep !== null);
+  const defaultEffort = opts.reasoning.mode === 'steps' ? opts.reasoning.defaultStep : 'medium';
 
   return {
     profile: base.profile,
 
     buildRequest(req: CanonicalRequest): WireRequest {
+      const reasoningOn = req.reasoning.enabled || !canDisableReasoning;
+      // Read the effort off the intent only in its `enabled` shape; a forced-on
+      // request (off intent on a control with no off) carries none, so it falls
+      // back to the control's own default step.
+      const effort = req.reasoning.enabled ? req.reasoning.effort : undefined;
       const body: Record<string, unknown> = {
         model: slug,
         messages: applyCacheControl(req.messages, opts.cache),
         stream: true,
         stream_options: { include_usage: true },
-        reasoning: req.reasoning.enabled
-          ? { enabled: true, effort: req.reasoning.effort ?? 'medium' }
+        reasoning: reasoningOn
+          ? { enabled: true, effort: effort ?? defaultEffort }
           : { enabled: false },
       };
       if (req.tools?.length) {

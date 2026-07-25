@@ -204,8 +204,9 @@ export const CANONICALS: CanonicalModel[] = [
   },
   // --- Claude (Anthropic) — censored at source → not freedom-oriented;
   // surfaced with the CENSORED badge. Delivered via nano-gpt (the anonymising
-  // router) per ADR 0032, except Sonnet 5 which is curated on OpenRouter (the
-  // user owns the upstream route there). ---
+  // router) per ADR 0032, except Sonnet 5 and Opus 5, which are also curated on
+  // OpenRouter (the user owns the upstream route there). Opus 5 is the family's
+  // one exception on freedom: `null`, not `false` — see its entry below. ---
   {
     id: 'claude-haiku-4.5',
     displayName: 'Claude Haiku 4.5',
@@ -277,6 +278,24 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: false,
     freedomNote:
       'Anthropic aligns/censors the model at source → not freedom-oriented. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  // Claude Opus 5 breaks the family's blanket `false` — the first Anthropic
+  // model we surface as UNKNOWN rather than CENSORED. Lex's SM-Bench grades it
+  // B+ / 85.8%; recomputing from his own per-axis data puts it at 90.67%, above
+  // the bar the rest of the family misses (compare Fable 5's Overfit 34.43% /
+  // EQ Boundaries 53.65% below). That is enough to withdraw the confident
+  // `false` but NOT enough to assert `true`: the warmth / user-alignment /
+  // SFW-roleplay axes are not yet evaluated (Chris, 2026-07-25). `null` is the
+  // honest state — absence of evidence is not evidence of restriction — and
+  // resolves to the "Uncensored?" badge until the eval lands.
+  {
+    id: 'claude-opus-5',
+    displayName: 'Claude Opus 5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: null,
+    freedomNote:
+      'Freedom orientation NOT yet assessed — deliberately unknown, unlike the rest of the Claude family. Lex\'s SM-Bench grades Opus 5 B+ / 85.8% (90.67% recomputed from the same per-axis data), clearing the bar every other Anthropic model here misses; the warmth / user-alignment / SFW-roleplay axes remain unevaluated (Chris, 2026-07-25). Pending that eval the badge reads "Uncensored?", not CENSORED.',
   },
   {
     id: 'claude-fable-5',

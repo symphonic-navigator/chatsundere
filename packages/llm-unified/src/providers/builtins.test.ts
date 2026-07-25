@@ -37,10 +37,11 @@ describe('built-in providers', () => {
     if (p) {
       expect(p.corsHint).toBe('inofficial');
       // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
-      // + 8 Claude + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI, censored) + 4 web
-      // + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling + 2 July (Hy3, MiniMax M3)
-      // = 38. (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(38);
+      // + 9 Claude (incl. Opus 5) + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI,
+      // censored) + 4 web + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling
+      // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream) = 40.
+      // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
+      expect(p.offerings).toHaveLength(40);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -55,15 +56,16 @@ describe('built-in providers', () => {
     }
   });
 
-  it('openrouter has direct CORS hint, twenty offerings, and sortPriority 45', () => {
+  it('openrouter has direct CORS hint, twenty-three offerings, and sortPriority 45', () => {
     const p = getProvider('openrouter');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
       // 8 original + 1 Kimi K3 (freedom unknown) + 1 Inkling (freedom unknown,
       // Together-only) + 3 Grok (4.3, 4.5, 4.20 — all ZDR-enforced) + Claude
-      // Sonnet 5 + 6 ChatGPT (OpenAI, censored) + 2 July (Hy3, MiniMax M3) = 22.
-      expect(p.offerings).toHaveLength(22);
+      // Sonnet 5 + Claude Opus 5 (freedom unknown; the caching route) + 6 ChatGPT
+      // (OpenAI, censored) + 2 July (Hy3, MiniMax M3) = 23.
+      expect(p.offerings).toHaveLength(23);
       expect(p.sortPriority).toBe(45);
     }
   });
@@ -84,7 +86,7 @@ describe('built-in providers', () => {
     expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
   });
 
-  it('registers the eight Claude offerings on nano-gpt with the cache adapter and CENSORED freedom', () => {
+  it('registers the nine Claude offerings on nano-gpt with the cache adapter, eight CENSORED and Opus 5 unknown', () => {
     const p = getProvider('nano-gpt');
     expect(p).toBeDefined();
     const claude = p?.offerings.filter((o) => o.canonicalRef?.startsWith('claude-')) ?? [];
@@ -95,6 +97,7 @@ describe('built-in providers', () => {
       'claude-opus-4.6',
       'claude-opus-4.7',
       'claude-opus-4.8',
+      'claude-opus-5',
       'claude-sonnet-4.5',
       'claude-sonnet-4.6',
     ]);
@@ -105,11 +108,62 @@ describe('built-in providers', () => {
       }
       expect(o.freedomOrientedDeployment).toBe(true);
       const canonical = getCanonical(o.canonicalRef ?? '');
-      expect(canonical?.freedomOriented).toBe(false);
-      expect(
-        effectiveFreedom(canonical?.freedomOriented ?? null, o.freedomOrientedDeployment),
-      ).toBe('restricted');
+      const freedom = effectiveFreedom(
+        canonical?.freedomOriented ?? null,
+        o.freedomOrientedDeployment,
+      );
+      // Opus 5 is the family's deliberate exception: freedom NOT yet assessed
+      // (SM-Bench clears the bar, the warmth/roleplay axes are unevaluated), so
+      // it resolves to 'unknown' → "Uncensored?" badge, not CENSORED.
+      if (o.canonicalRef === 'claude-opus-5') {
+        expect(canonical?.freedomOriented).toBeNull();
+        expect(freedom).toBe('unknown');
+      } else {
+        expect(canonical?.freedomOriented).toBe(false);
+        expect(freedom).toBe('restricted');
+      }
     }
+  });
+
+  it('offers Opus 5 with no reasoning off on nano-gpt but a genuine off on OpenRouter', () => {
+    // The route divergence is the headline finding of the 2026-07-25 curation:
+    // nano-gpt only HIDES the trace while still billing it, so no off is
+    // offered there; OpenRouter's off is real.
+    const nano = getProvider('nano-gpt')?.offerings.find((o) => o.canonicalRef === 'claude-opus-5');
+    expect(nano?.upstreamSlug).toBe('anthropic/claude-opus-5');
+    expect(nano?.profile.reasoning).toEqual({
+      mode: 'steps',
+      steps: ['low', 'medium', 'high'],
+      offStep: null,
+      defaultStep: 'medium',
+    });
+
+    const or = getProvider('openrouter')?.offerings.find((o) => o.canonicalRef === 'claude-opus-5');
+    expect(or?.upstreamSlug).toBe('anthropic/claude-opus-5');
+    expect(or?.profile.reasoning).toEqual({
+      mode: 'steps',
+      steps: ['off', 'low', 'medium', 'high'],
+      offStep: 'off',
+      defaultStep: 'medium',
+    });
+  });
+
+  it('routes MiMo V2.5 Pro on nano-gpt through the CROF upstream, not Xiaomi', () => {
+    // Xiaomi's own backend 400s on the mildest prompt; CROF is the filter-free
+    // Western neocloud nano-gpt keeps upstream, so only that slug is curated.
+    const mimo = getProvider('nano-gpt')?.offerings.filter(
+      (o) => o.canonicalRef === 'mimo-v2.5-pro',
+    );
+    expect(mimo).toHaveLength(1);
+    expect(mimo?.[0]?.upstreamSlug).toBe('xiaomi/mimo-v2.5-pro-crof');
+    expect(mimo?.[0]?.profile.vision).toBe(false);
+    const canonical = getCanonical('mimo-v2.5-pro');
+    expect(
+      effectiveFreedom(
+        canonical?.freedomOriented ?? null,
+        mimo?.[0]?.freedomOrientedDeployment ?? null,
+      ),
+    ).toBe('free');
   });
 
   it('chutes has direct CORS hint, six TEE models, and sortPriority 10', () => {

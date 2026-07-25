@@ -36,6 +36,20 @@ const SONNET5_STEPS: ReasoningControl = {
   defaultStep: 'medium',
 };
 
+// Opus 5 here is the mirror image of Opus 5 on nano-gpt: `{enabled:false}` is a
+// GENUINE off (0 reasoning tokens, and the model visibly does the arithmetic in
+// `content` instead of in a trace), where nano-gpt only hides it. Effort
+// modulates in the upper half — high ≈ 2× low/medium in reasoning tokens
+// (probed live 2026-07-25) — while low and medium do not separate; we keep the
+// family's four-position shape anyway rather than invent a per-route ladder,
+// and the Model Curation Record states the overlap honestly.
+const OPUS5_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
+
 // OpenAI (ChatGPT) on OpenRouter. The GPT-5 family reasons with a genuinely
 // steerable effort surface (probed live 2026-07-06: `reasoning:{enabled:false}`
 // is a real off with 0 reasoning tokens, effort low ≈ 4 reasoning tokens, high
@@ -271,6 +285,24 @@ const offerings: Offering[] = [
   openRouterOffering('claude-sonnet-5', 'anthropic/claude-sonnet-5', {
     vision: true,
     reasoning: SONNET5_STEPS,
+    recommended: 200_000,
+    max: 1_000_000,
+  }),
+  // Claude Opus 5 — curated on BOTH routes (Chris, 2026-07-25). Notable on the
+  // metric ADR 0032 was written around: Anthropic prompt caching ENGAGES here
+  // even though OpenRouter routes Anthropic to Amazon Bedrock — probed live,
+  // 11,203 cached prompt tokens on turn 2 of an 11k stable prefix, cutting that
+  // turn's cost roughly twelvefold. Bedrock's inability to honour cache_control
+  // was the ADR's sole reason to exclude OpenRouter for Anthropic, and it no
+  // longer holds; nano-gpt caches too and stays the default route, so this is a
+  // second first-class route rather than a replacement. See ADR 0037.
+  // Reasoning has a real off here, unlike nano-gpt. 1M ceiling,
+  // recommended at the 200k Claude sweet-spot. Vision ✅. No ZDR (honest
+  // US-router baseline). Freedom is `unknown` on this canonical, so it carries
+  // the "Uncensored?" badge rather than CENSORED.
+  openRouterOffering('claude-opus-5', 'anthropic/claude-opus-5', {
+    vision: true,
+    reasoning: OPUS5_STEPS,
     recommended: 200_000,
     max: 1_000_000,
   }),
