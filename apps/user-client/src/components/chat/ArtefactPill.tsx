@@ -4,12 +4,17 @@ import { useArtefact } from '../../data/artefacts.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 
 interface ArtefactPayload {
+  name?: string;
   title?: string;
   argumentsJson?: string;
   artefactId?: string;
   charCount?: number;
+  format?: string;
+  phase?: string;
   error?: string;
 }
+
+type ArtefactToolName = 'create_artefact' | 'modify_artefact' | 'inspect_artefact';
 
 function titleOf(p: ArtefactPayload): string {
   if (p.title) return p.title;
@@ -24,7 +29,49 @@ function titleOf(p: ArtefactPayload): string {
   return 'Artefact';
 }
 
-/** Variant-C pill for create_artefact tool-calls: building / ready / tombstone. */
+function toolNameOf(p: ArtefactPayload): ArtefactToolName {
+  if (p.name === 'modify_artefact' || p.name === 'inspect_artefact') return p.name;
+  return 'create_artefact';
+}
+
+/** Format badge label: payload → row → default HTML. */
+function formatBadge(payloadFormat: string | undefined, rowFormat: string | undefined): string {
+  const raw = payloadFormat ?? rowFormat;
+  if (raw === 'markdown') return 'MD';
+  if (raw === 'html') return 'HTML';
+  return 'HTML';
+}
+
+function pendingSubtitle(tool: ArtefactToolName, p: ArtefactPayload): string {
+  const phase = p.phase;
+  const chars = (p.charCount ?? 0).toLocaleString();
+
+  if (tool === 'create_artefact') {
+    return `building · ${chars} chars`;
+  }
+
+  if (tool === 'modify_artefact') {
+    if (phase === 'reading') return 'reading';
+    if (phase === 'writing') return `writing · ${chars} chars`;
+    if (phase && phase !== 'starting' && phase !== 'done' && phase !== 'building') {
+      return phase;
+    }
+    return 'working…';
+  }
+
+  // inspect_artefact
+  if (phase === 'explaining') return 'explaining';
+  if (phase === 'reading') return 'reading';
+  return 'inspecting…';
+}
+
+function readySubtitle(tool: ArtefactToolName): string {
+  if (tool === 'modify_artefact') return 'updated · tap to open ↗';
+  if (tool === 'inspect_artefact') return 'explained · tap to open ↗';
+  return 'tap to open ↗';
+}
+
+/** Variant-C pill for create / modify / inspect artefact tool-calls. */
 export function ArtefactPill({ row }: { row: PillRow }): JSX.Element {
   const p = (row.payload ?? {}) as ArtefactPayload;
   const openArtefact = useCurrentChatStore((s) => s.openArtefact);
@@ -32,6 +79,8 @@ export function ArtefactPill({ row }: { row: PillRow }): JSX.Element {
   // Only query existence once we have an id (completed).
   const { data: artefact, isFetched } = useArtefact(artefactId);
   const title = titleOf(p);
+  const tool = toolNameOf(p);
+  const badge = formatBadge(p.format, artefact?.format);
   const building = row.status === 'pending';
   const failed = row.status === 'failed';
   const missing = artefactId !== null && isFetched && artefact === undefined;
@@ -43,10 +92,8 @@ export function ArtefactPill({ row }: { row: PillRow }): JSX.Element {
           ⬡
         </span>
         <span className="artefact-pill-ttl">{title}</span>
-        <span className="artefact-pill-badge">HTML</span>
-        <span className="artefact-pill-sub">
-          building · {(p.charCount ?? 0).toLocaleString()} chars
-        </span>
+        <span className="artefact-pill-badge">{badge}</span>
+        <span className="artefact-pill-sub">{pendingSubtitle(tool, p)}</span>
         <span className="artefact-pill-bar">
           <i />
         </span>
@@ -76,8 +123,8 @@ export function ArtefactPill({ row }: { row: PillRow }): JSX.Element {
         ⬡
       </span>
       <span className="artefact-pill-ttl">{title}</span>
-      <span className="artefact-pill-badge">HTML</span>
-      <span className="artefact-pill-sub">tap to open ↗</span>
+      <span className="artefact-pill-badge">{badge}</span>
+      <span className="artefact-pill-sub">{readySubtitle(tool)}</span>
     </button>
   );
 }

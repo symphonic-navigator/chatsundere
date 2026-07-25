@@ -27,6 +27,8 @@ function webOffering(meta: Offering['web']): Offering {
 function ctx(over: Partial<IntegrationContext>): IntegrationContext {
   return {
     nsfwAllowed: false,
+    tonalityEnabled: false,
+    globalInstructions: '',
     location: null,
     webSearch: null,
     webFetch: null,

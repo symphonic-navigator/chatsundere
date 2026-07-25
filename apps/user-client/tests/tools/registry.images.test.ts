@@ -6,6 +6,8 @@ import { resolveActiveTools } from '../../src/tools/registry.js';
 
 const dormantCtx: IntegrationContext = {
   nsfwAllowed: false,
+  tonalityEnabled: false,
+  globalInstructions: '',
   location: null,
   webSearch: null,
   webFetch: null,

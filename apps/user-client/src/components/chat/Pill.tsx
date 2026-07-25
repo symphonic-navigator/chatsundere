@@ -66,9 +66,12 @@ function codeOf(p: PillPayloadShape | undefined): string | null {
 export function Pill({ row }: { row: PillRow }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
 
+  const toolName = (row.payload as { name?: string } | undefined)?.name;
   if (
     row.kind === 'tool-call' &&
-    (row.payload as { name?: string } | undefined)?.name === 'create_artefact'
+    (toolName === 'create_artefact' ||
+      toolName === 'modify_artefact' ||
+      toolName === 'inspect_artefact')
   ) {
     return <ArtefactPill row={row} />;
   }

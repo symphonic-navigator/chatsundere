@@ -3,9 +3,11 @@ import { expect, test } from 'vitest';
 import type { IntegrationContext } from '../../src/integrations/types.js';
 import { resolveActiveTools } from '../../src/tools/registry.js';
 
-test('create_artefact is among the active tools', () => {
+test('artefact tools are among the active tools in stable order', () => {
   const ctx: IntegrationContext = {
     nsfwAllowed: false,
+    tonalityEnabled: false,
+    globalInstructions: '',
     location: null,
     webSearch: null,
     webFetch: null,
@@ -17,5 +19,14 @@ test('create_artefact is among the active tools', () => {
     personaOffering: { providerId: 'nano-gpt', upstreamSlug: 'glm-5.1' },
     getKey: async () => null,
   };
-  expect(resolveActiveTools(ctx).map((t) => t.name)).toContain('create_artefact');
+  const names = resolveActiveTools(ctx).map((t) => t.name);
+  const artefactNames = names.filter((n) =>
+    ['list_artefacts', 'create_artefact', 'modify_artefact', 'inspect_artefact'].includes(n),
+  );
+  expect(artefactNames).toEqual([
+    'list_artefacts',
+    'create_artefact',
+    'modify_artefact',
+    'inspect_artefact',
+  ]);
 });

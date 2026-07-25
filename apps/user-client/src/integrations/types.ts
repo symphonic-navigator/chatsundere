@@ -14,6 +14,10 @@ export interface OfferingRef {
 export interface IntegrationContext {
   /** Explicit content permitted — from the active persona's adultPersona flag. */
   nsfwAllowed: boolean;
+  /** Chatsundere tonality unlocker — from the active persona's chatsundereTonality. */
+  tonalityEnabled: boolean;
+  /** Global user craft/chat instructions (settings); may be empty. */
+  globalInstructions: string;
   /** Optional location hint; shape defined, source deferred (null today). */
   location: WebLocation | null;
   /** Selected web search backend, or null when none chosen. */

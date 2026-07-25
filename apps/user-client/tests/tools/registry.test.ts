@@ -23,6 +23,8 @@ const fakeTool: Tool = {
 
 const dormantCtx: IntegrationContext = {
   nsfwAllowed: false,
+  tonalityEnabled: false,
+  globalInstructions: '',
   location: null,
   webSearch: null,
   webFetch: null,
@@ -36,9 +38,15 @@ const dormantCtx: IntegrationContext = {
 };
 
 describe('tool registry composition', () => {
-  it('always includes calculate_js and create_artefact, and nothing web-side when dormant', () => {
+  it('always includes calculate_js and the four artefact tools, and nothing web-side when dormant', () => {
     const tools = resolveActiveTools(dormantCtx);
-    expect(tools.map((t) => t.name)).toEqual(['calculate_js', 'create_artefact']);
+    expect(tools.map((t) => t.name)).toEqual([
+      'calculate_js',
+      'list_artefacts',
+      'create_artefact',
+      'modify_artefact',
+      'inspect_artefact',
+    ]);
   });
 
   it('appends query_knowledgebase when a knowledge context has libraries', () => {

@@ -860,6 +860,8 @@ async function runIntoDraft(
       },
       artefactExpert: args.artefactExpert ?? null,
     },
+    undefined,
+    args.globalInstructions,
   );
   const knowledge = args.knowledge ?? null;
   const expert = args.expertBase
@@ -936,7 +938,10 @@ async function runIntoDraft(
     maxRounds: MAX_TOOL_ROUNDS,
     dispatch: async (name, toolArgs, signal, onProgress) => {
       const r = await dispatchTool(activeTools, name, toolArgs, signal, onProgress);
-      if (name === 'create_artefact' && r.meta?.artefactExpertUnavailable === true) {
+      if (
+        (name === 'create_artefact' || name === 'modify_artefact' || name === 'inspect_artefact') &&
+        r.meta?.artefactExpertUnavailable === true
+      ) {
         useCurrentChatStore
           .getState()
           .setArtefactExpertError(r.error ?? 'Artefact expert unavailable.');
