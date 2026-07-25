@@ -8,19 +8,29 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-24 — **ARTEFACT SYNTHESIS PILOT SHIPPED** (squashed
+feature unit, dual-landed `migrate-to-grok` + `master`). Persona tools
+`list_artefacts` / `create_artefact` (html|markdown + content-axis unlockers) /
+`modify_artefact` / `inspect_artefact`; headless agent loop; craft
+list/read/replace tools; ArtefactPill phases + format badges. Spec + plan:
+[[../superpowers/specs/2026-07-24-artefact-synthesis-pilot-design]],
+[[../superpowers/plans/2026-07-24-artefact-synthesis-pilot]]; idea vault
+[[synthesis/2026-07-24-artefact-pilot-toolkit]]. Pre-squash gates: focused
+vitest green, user-client tsc + build green. **Next:** Chris device verification
+(spec §16); Laura advisory pass optional post-land if field UX surprises.
+
+---
+
 **Last updated:** 2026-07-19 (evening) — **KNOWLEDGE-LIBRARIAN BRAINSTORMING
 COMPLETE — no code yet.** Two synthesis sessions
 ([[synthesis/2026-07-19-initial-idea-map]],
 [[synthesis/2026-07-19-librarian-architecture]]) landed the agentic-librarian
 architecture; an external Codex review ("four AI eyes") was verified against
 the real code and folded into the architecture doc (source record:
-[[synthesis/librarian-architecture-codex-review]]). **Agreed next step: the
-synthesis probe** (architecture doc §5b) — curation-harness style, one-shot
-baseline vs agentic librarian on two or three models, *before* any Brief/spec.
-Three review points await Chris's arbitration (architecture doc §7: silent
-model fallback vs visible failure, conventions-document persona-editability,
-read-broadly-write-narrowly default). Discord interest in the announced
-feature is high; work continues in the next session.
+[[synthesis/librarian-architecture-codex-review]]). **Superseded as next step
+on 2026-07-24** by the artefact pilot (above); librarian probe deferred with
+the KB stage. Three review points in architecture doc §7 remain for when KB
+work resumes.
 
 ---
 

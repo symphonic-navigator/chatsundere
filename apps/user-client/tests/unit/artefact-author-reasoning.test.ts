@@ -21,6 +21,8 @@ describe('authorArtefact reasoning + budget', () => {
     await authorArtefact({
       base,
       brief: 'b',
+      format: 'html',
+      contentAxisPrompt: '',
       reasoning: { enabled: true, effort: 'medium' },
       streamFn,
     });
@@ -35,7 +37,14 @@ describe('authorArtefact reasoning + budget', () => {
       return emit('<html></html>');
     }) as unknown as typeof import('@chatsundere/llm-unified').streamCompletion;
 
-    await authorArtefact({ base, brief: 'b', reasoning: { enabled: false }, streamFn });
+    await authorArtefact({
+      base,
+      brief: 'b',
+      format: 'html',
+      contentAxisPrompt: '',
+      reasoning: { enabled: false },
+      streamFn,
+    });
     expect(captured?.reasoning).toEqual({ enabled: false });
     expect(captured?.max_tokens).toBe(8192);
   });

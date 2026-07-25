@@ -3,10 +3,21 @@
 /** Incremental progress a tool may report while executing (for live pills). */
 export interface ToolProgress {
   charCount: number;
-  /** Multi-phase tools report which phase the count belongs to. ask_expert uses
-   *  'reasoning'/'answer' and, when the expert has web access, 'searching'/'fetching'.
-   *  Optional — single-phase tools (artefact author) omit it. */
-  phase?: 'reasoning' | 'answer' | 'searching' | 'fetching';
+  /** Multi-phase tools report which phase the count belongs to.
+   *  ask_expert: 'reasoning'/'answer' (+ 'searching'/'fetching' with web).
+   *  artefact craft (modify/inspect): 'starting'/'reading'/'writing'/'explaining'/'building'/'done'.
+   *  Optional — single-phase tools (create author) may omit it. */
+  phase?:
+    | 'reasoning'
+    | 'answer'
+    | 'searching'
+    | 'fetching'
+    | 'reading'
+    | 'writing'
+    | 'explaining'
+    | 'building'
+    | 'starting'
+    | 'done';
   /** Optional human-readable detail for the phase (search query, fetched host). */
   detail?: string;
 }

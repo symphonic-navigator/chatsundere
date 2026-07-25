@@ -31,6 +31,44 @@ describe('buildIntegrationContext', () => {
     expect(ctx.webFetch).toBeNull();
   });
 
+  it('maps tonality and global instructions into the context', () => {
+    const withTonality = buildIntegrationContext(
+      { adultPersona: false, chatsundereTonality: true },
+      { search: null, fetch: null },
+      fakeMk,
+      noRoute,
+      noArtefact,
+      async () => 'k',
+      'Always cite sources.',
+    );
+    expect(withTonality.tonalityEnabled).toBe(true);
+    expect(withTonality.globalInstructions).toBe('Always cite sources.');
+
+    const tonalityOff = buildIntegrationContext(
+      { adultPersona: false, chatsundereTonality: false },
+      { search: null, fetch: null },
+      fakeMk,
+      noRoute,
+      noArtefact,
+      undefined,
+      '',
+    );
+    expect(tonalityOff.tonalityEnabled).toBe(false);
+    expect(tonalityOff.globalInstructions).toBe('');
+  });
+
+  it('defaults tonalityEnabled to true when chatsundereTonality is omitted', () => {
+    const ctx = buildIntegrationContext(
+      { adultPersona: false },
+      { search: null, fetch: null },
+      fakeMk,
+      noRoute,
+      noArtefact,
+    );
+    expect(ctx.tonalityEnabled).toBe(true);
+    expect(ctx.globalInstructions).toBe('');
+  });
+
   it('maps route fields into the context', () => {
     const route: IntegrationRoute = {
       useProxy: true,

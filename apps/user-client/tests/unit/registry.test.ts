@@ -11,6 +11,8 @@ import {
 // (calculate_js), so these concrete projection checks exercise the real tool.
 const dormantCtx: IntegrationContext = {
   nsfwAllowed: false,
+  tonalityEnabled: false,
+  globalInstructions: '',
   location: null,
   webSearch: null,
   webFetch: null,

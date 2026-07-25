@@ -54,12 +54,16 @@ export interface AddGeneratedArtefactInput {
   personaId: string;
   title: string;
   content: string;
+  /** Generated text format; defaults to `html` when omitted. */
+  format?: 'html' | 'markdown';
 }
 
-/** Insert a new AI-generated HTML artefact and return its id. */
+/** Insert a new AI-generated text artefact (HTML or Markdown) and return its id. */
 export async function addGeneratedArtefact(input: AddGeneratedArtefactInput): Promise<string> {
   const id = uuidv7();
   const now = Date.now();
+  const format = input.format === 'markdown' ? 'markdown' : 'html';
+  const isMarkdown = format === 'markdown';
   const row: ArtefactRow = {
     id,
     chatId: input.chatId,
@@ -67,10 +71,10 @@ export async function addGeneratedArtefact(input: AddGeneratedArtefactInput): Pr
     projectId: null,
     origin: 'generated',
     kind: 'text',
-    format: 'html',
+    format,
     title: input.title,
-    fileName: `${slugify(input.title)}.html`,
-    mime: 'text/html',
+    fileName: `${slugify(input.title)}.${isMarkdown ? 'md' : 'html'}`,
+    mime: isMarkdown ? 'text/markdown' : 'text/html',
     content: input.content,
     tags: [],
     favourite: false,

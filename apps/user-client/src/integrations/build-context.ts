@@ -4,8 +4,10 @@ import { getCredentialKey } from '../credentials/credential-bus.js';
 import type { IntegrationContext, OfferingRef } from './types.js';
 
 /** The subset of the persona this builder reads. */
-interface PersonaNsfw {
+interface PersonaFlags {
   adultPersona: boolean;
+  /** Defaults to true when omitted (matches persona-create default). */
+  chatsundereTonality?: boolean;
 }
 
 /** The web-interfacing settings block. */
@@ -35,21 +37,25 @@ export interface ArtefactTarget {
 }
 
 /**
- * Assemble the per-send IntegrationContext. NSFW comes from the active persona;
- * location is deferred (null today); the web backends come from settings; the
- * key accessor is MasterKey-gated via the credential bus and resolves keys only
- * at call time. `getKeyFn` is injectable for tests (defaults to the real bus).
+ * Assemble the per-send IntegrationContext. NSFW and tonality come from the
+ * active persona; global instructions from settings; location is deferred
+ * (null today); the web backends come from settings; the key accessor is
+ * MasterKey-gated via the credential bus and resolves keys only at call time.
+ * `getKeyFn` is injectable for tests (defaults to the real bus).
  */
 export function buildIntegrationContext(
-  persona: PersonaNsfw,
+  persona: PersonaFlags,
   web: WebSettings,
   mk: MasterKey | null,
   route: IntegrationRoute,
   artefact: ArtefactTarget,
   getKeyFn: (id: string, mk: MasterKey) => Promise<string | null> = getCredentialKey,
+  globalInstructions = '',
 ): IntegrationContext {
   return {
     nsfwAllowed: persona.adultPersona,
+    tonalityEnabled: persona.chatsundereTonality ?? true,
+    globalInstructions,
     location: null,
     webSearch: web.search,
     webFetch: web.fetch,

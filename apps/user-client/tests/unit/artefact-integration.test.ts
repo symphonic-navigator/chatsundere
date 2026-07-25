@@ -19,6 +19,8 @@ afterEach(async () => {
 function ctx(over: Partial<IntegrationContext> = {}): IntegrationContext {
   return {
     nsfwAllowed: false,
+    tonalityEnabled: false,
+    globalInstructions: '',
     location: null,
     webSearch: null,
     webFetch: null,
@@ -35,12 +37,14 @@ function ctx(over: Partial<IntegrationContext> = {}): IntegrationContext {
 
 test('execute authors a file, persists it, returns the id via meta + progress', async () => {
   const onProgress = vi.fn();
+  const author = vi.fn(async (a: { onProgress?: (n: number) => void; format?: string }) => {
+    expect(a.format).toBe('html');
+    a.onProgress?.(42);
+    return '<!doctype html><title>x</title>';
+  });
   const tool = makeArtefactTool(ctx(), {
     // inject the author + the provider/offering resolver so no network/registry is touched
-    author: async (a) => {
-      a.onProgress?.(42);
-      return '<!doctype html><title>x</title>';
-    },
+    author,
     resolveBase: () => ({
       base: {
         provider: {} as never,
@@ -54,12 +58,94 @@ test('execute authors a file, persists it, returns the id via meta + progress', 
   const r = await tool.execute({ title: 'Calc', brief: 'a calculator' }, undefined, onProgress);
   expect(r.ok).toBe(true);
   expect(r.meta?.title).toBe('Calc');
+  expect(r.meta?.format).toBe('html');
   expect(typeof r.meta?.artefactId).toBe('string');
   expect(r.output).not.toContain('<!doctype'); // never the file body
   expect(onProgress).toHaveBeenCalledWith({ charCount: 42 });
   const rows = await listChatArtefacts('c1');
   expect(rows).toHaveLength(1);
   expect(rows[0]?.content).toContain('<!doctype');
+  expect(rows[0]?.format).toBe('html');
+  expect(rows[0]?.mime).toBe('text/html');
+  expect(rows[0]?.fileName).toMatch(/\.html$/);
+});
+
+test('format markdown authors markdown, persists .md / text/markdown, meta.format', async () => {
+  const author = vi.fn(async (a: { format?: string; contentAxisPrompt?: string }) => {
+    expect(a.format).toBe('markdown');
+    return '# Hello\n\nBody.';
+  });
+  const tool = makeArtefactTool(ctx(), {
+    author,
+    resolveBase: () => ({
+      base: {
+        provider: {} as never,
+        providerConfig: {} as never,
+        apiKey: 'k',
+        target: { slug: 'glm-5.1' } as never,
+      },
+      reasoning: { enabled: false },
+    }),
+  });
+  const r = await tool.execute({
+    title: 'Notes',
+    brief: 'a note',
+    format: 'markdown',
+  });
+  expect(r.ok).toBe(true);
+  expect(r.meta?.format).toBe('markdown');
+  const rows = await listChatArtefacts('c1');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.format).toBe('markdown');
+  expect(rows[0]?.mime).toBe('text/markdown');
+  expect(rows[0]?.fileName).toMatch(/\.md$/);
+  expect(rows[0]?.content).toContain('# Hello');
+});
+
+test('invalid format returns constructive tool error and persists nothing', async () => {
+  const author = vi.fn(async () => '<x>');
+  const tool = makeArtefactTool(ctx(), {
+    author,
+    resolveBase: () => ({
+      base: {
+        provider: {} as never,
+        providerConfig: {} as never,
+        apiKey: 'k',
+        target: { slug: 'glm-5.1' } as never,
+      },
+      reasoning: { enabled: false },
+    }),
+  });
+  const r = await tool.execute({ title: 'X', brief: 'y', format: 'pdf' });
+  expect(r.ok).toBe(false);
+  expect(r.error).toMatch(/html|markdown/i);
+  expect(author).not.toHaveBeenCalled();
+  expect(await listChatArtefacts('c1')).toHaveLength(0);
+});
+
+test('passes content-axis unlockers from context into the author', async () => {
+  const author = vi.fn(async () => '<!doctype html><title>x</title>');
+  const tool = makeArtefactTool(
+    ctx({ nsfwAllowed: true, tonalityEnabled: false, globalInstructions: 'BE BOLD' }),
+    {
+      author,
+      resolveBase: () => ({
+        base: {
+          provider: {} as never,
+          providerConfig: {} as never,
+          apiKey: 'k',
+          target: { slug: 'glm-5.1' } as never,
+        },
+        reasoning: { enabled: false },
+      }),
+    },
+  );
+  await tool.execute({ title: 'T', brief: 'B' });
+  expect(author).toHaveBeenCalled();
+  const arg = author.mock.calls[0]?.[0] as { contentAxisPrompt: string };
+  expect(arg.contentAxisPrompt).toContain('uncensored');
+  expect(arg.contentAxisPrompt).toContain('BE BOLD');
+  expect(arg.contentAxisPrompt).not.toMatch(/Encourage creativity/); // tonality off
 });
 
 test('invalidates the chat artefacts query so the lightbox sees the new row', async () => {
@@ -102,6 +188,8 @@ test('missing key → failed result, nothing persisted', async () => {
 function baseCtx(over: Partial<IntegrationContext> = {}): IntegrationContext {
   return {
     nsfwAllowed: false,
+    tonalityEnabled: false,
+    globalInstructions: '',
     location: null,
     webSearch: null,
     webFetch: null,
