@@ -28,6 +28,25 @@ vi.mock('@chatsundere/crypto', () => ({
     created_at: new Date('2026-01-01'),
   })),
   listPasskeyCredentials: vi.fn(async () => [{ credential_id: new Uint8Array(1) }]),
+  // Mirrors the real helper (crypto/flows/create-local-account.ts): lowercase,
+  // drop characters outside [a-z0-9_-], drop leading non-letters, cap at 32.
+  sanitiseUsernameInput: (raw: string) =>
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+      .replace(/^[^a-z]+/, '')
+      .slice(0, 32),
+  // Same source: throws on a name failing the platform rule or reserved.
+  // AccountPage calls this inside a try/catch, so a missing mock export is
+  // swallowed and silently blocks every save — keep it in step with crypto.
+  validateUsername: (u: string) => {
+    if (
+      !/^[a-z][a-z0-9_-]{2,31}$/.test(u) ||
+      ['admin', 'root', 'system', 'me', 'you'].includes(u)
+    ) {
+      throw new Error('invalid username');
+    }
+  },
 }));
 
 vi.mock('@chatsundere/ui-shared', () => ({

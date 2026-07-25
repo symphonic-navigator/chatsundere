@@ -140,7 +140,11 @@ describe('buildPickerData', () => {
       expect(famBg).toContain('glm'); // 'free' stays
     });
 
-    // nano-gpt additionally offers Claude + ChatGPT, both 'restricted' (Censored).
+    // nano-gpt additionally offers Claude + ChatGPT. Every ChatGPT deployment is
+    // 'restricted', as is most of the Claude family — but Claude Opus 5 carries
+    // freedomOriented: null ('unknown'), so it survives exactly like Qwen above.
+    // Assert the rule, not a snapshot of the catalogue: the family thins out, and
+    // nothing restricted gets through.
     it('excludes restricted (censored) deployments, keeping the survivors non-restricted', () => {
       const all = buildPickerData([providerRow('pr-nano', 'nano-gpt')], ['nano-gpt'], 'all');
       const bg = buildPickerData(
@@ -152,9 +156,15 @@ describe('buildPickerData', () => {
         expect.arrayContaining(['claude', 'chatgpt', 'deepseek']),
       );
       const bgFam = bg.groups.map((g) => g.family);
-      expect(bgFam).not.toContain('claude');
       expect(bgFam).not.toContain('chatgpt');
       expect(bgFam).not.toContain('deepseek');
+
+      // Claude survives only through its non-restricted deployments, so the
+      // family must come through strictly thinner than under 'all'.
+      const claudeAll = all.groups.find((g) => g.family === 'claude')?.models.length ?? 0;
+      const claudeBg = bg.groups.find((g) => g.family === 'claude')?.models.length ?? 0;
+      expect(claudeAll).toBeGreaterThan(0);
+      expect(claudeBg).toBeLessThan(claudeAll);
 
       // Invariant: every surviving offering resolves as non-restricted.
       for (const g of bg.groups) {
