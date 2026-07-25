@@ -8,6 +8,53 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-25 — **CLAUDE OPUS 5 CURATED ON BOTH ROUTES + MIMO
+V2.5 PRO ON CROF + A CACHE-ACCOUNTING FIX** — two feature units squashed to
+`master` (`819e4728` fix, `5c38972a` curation), **NOT pushed**; awaiting Chris's
+model-picker device check. **(1) Claude Opus 5** (`anthropic/claude-opus-5`) on
+nano-gpt *and* OpenRouter — the **first Anthropic model here with
+`freedomOriented: null`** rather than `false` (Lex's SM-Bench B+ / 85.8%, 90.67%
+recomputed; warmth/roleplay axes unevaluated → the **"Uncensored?"** badge, with
+a `true` flip explicitly on the table). The headline mechanic: **the two routes
+disagree about whether reasoning can be switched off.** nano-gpt has no thinking
+sibling *and no genuine off* — `{enabled:false}` and `thinking:{type:"disabled"}`
+both blank the trace while the tokens are still spent and billed (forced
+one-word answer: 35 completion tokens hidden vs 32–35 visible, against 4 for a
+trivial control) — the Grok-4.5 "off only hides" pattern, so `steps`
+low/medium/high with **`offStep: null`** and a new off-guard in
+`claudeEffortAdapter`. On OpenRouter the off is real → off/low/medium/high.
+**(2) MiMo V2.5 Pro** gains a second route via nano-gpt's **CROF** upstream,
+deliberately *not* Xiaomi's own (same weights, but Xiaomi's backend 400s on the
+mildest prompt — there the *deployment* censors; CROF is filter-free →
+🕊️ badge). **(3) The cache fix, which is the sharper half:** nano-gpt changed
+its usage envelope after 2026-06-01 — Claude cache reads now arrive only as
+`cache_read_input_tokens` and the cached prefix is **excluded** from
+`prompt_tokens` (11,213 cached tokens report `prompt_tokens: 2`). Our adapter
+read only the OpenAI-shaped field, so the whole Claude family had been reporting
+`cachedTokens: 0` and a short input count, and the suite logged "cache NOT
+engaged" without anyone reading it as a defect. Fixed + three unit tests; cache
+check reads **ENGAGED ✅** again. **(4) [ADR 0037]** records what the curation
+overturned: Bedrock caches now and the 2026-06 multi-turn tool 400 is gone, so
+ADR 0032's OpenRouter exclusion for Anthropic has **no premise left** —
+nano-gpt stays the default on anonymisation alone. *An intermediate finding of
+mine that nano-gpt had stopped caching was **wrong** and is logged as such: that
+probe set no rolling-tail breakpoint, so it measured a request shape we never
+send — the ollama-harness failure mode in mirror image.* Live suites: nano-gpt
+Opus 5 **34/34** + cache engaged, OpenRouter Opus 5 **50/50** (core + vision),
+MiMo CROF **44/44** (new `run-mimo-crof-suite.ts`, which resolves its adapter
+through `registerNanoGpt` rather than rebuilding one). Gates: llm-unified
+**456/456**, `pnpm typecheck --force` **14/14** (0 cached), Biome clean. **Not a
+Larissa path** (catalogue + adapters; no crypto/auth/sync/proxy). **No Laura**
+(no new user-flow — the absent Off chip on nano-gpt *is* the honesty). Records:
+[[models/claude-opus-5]], [[models/mimo-v2.5-pro]], [[providers/nano-gpt]],
+[ADR 0037](decisions/0037-openrouter-is-no-longer-excluded-for-anthropic.md).
+**Next:** Chris's model-picker device check (Opus 5 appears on both providers
+with the right badge and the right chips — no Off chip on nano-gpt, an Off chip
+on OpenRouter; MiMo V2.5 Pro shows a nano-gpt route with the 🕊️ badge), then
+push. **Restart the dev stack first** (Vite HMR ignores `packages/*`).
+
+---
+
 **Last updated:** 2026-07-24 — **ARTEFACT SYNTHESIS PILOT SHIPPED** (squashed
 feature unit, dual-landed `migrate-to-grok` + `master`). Persona tools
 `list_artefacts` / `create_artefact` (html|markdown + content-axis unlockers) /
