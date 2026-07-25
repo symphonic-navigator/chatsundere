@@ -5,7 +5,7 @@ import {
   type WireMessage,
   streamCompletion,
 } from '@chatsundere/llm-unified';
-import type { SubagentBase } from './subagent-base.js';
+import { SUBAGENT_INITIAL_RESPONSE_TIMEOUT_MS, type SubagentBase } from './subagent-base.js';
 
 /** Output formats supported by `create_artefact` / the author subagent. */
 export type ArtefactCreateFormat = 'html' | 'markdown';
@@ -83,6 +83,7 @@ export async function authorArtefact(args: AuthorArtefactArgs): Promise<string> 
       reasoning: args.reasoning,
     },
     signal: args.signal,
+    initialResponseTimeoutMs: SUBAGENT_INITIAL_RESPONSE_TIMEOUT_MS,
   } as Parameters<typeof streamCompletion>[0])) {
     const c = chunk as StreamChunk;
     if (c.type === 'token') {

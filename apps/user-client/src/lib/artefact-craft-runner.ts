@@ -21,7 +21,7 @@ import {
 import { makeCraftTools } from './artefact-craft-tools.js';
 import { artefactExpertUnavailableResult, resolveArtefactBase } from './artefact-model-resolve.js';
 import { queryClient } from './queryClient.js';
-import type { SubagentBase } from './subagent-base.js';
+import { SUBAGENT_INITIAL_RESPONSE_TIMEOUT_MS, type SubagentBase } from './subagent-base.js';
 
 export type CraftMode = 'modify' | 'inspect';
 
@@ -175,6 +175,7 @@ export async function craftStreamOnce(opts: {
     },
     tools: opts.tools.length > 0 ? opts.tools : undefined,
     signal: opts.signal,
+    initialResponseTimeoutMs: SUBAGENT_INITIAL_RESPONSE_TIMEOUT_MS,
   } as Parameters<typeof streamCompletion>[0])) {
     const c = chunk as StreamChunk;
     if (c.type === 'token') {
