@@ -8,6 +8,53 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-25 (evening) — **ARTEFACT SUBAGENT TIMEOUT RAISED +
+FIFTEEN STALE TEST FAILURES CLEARED** — two units squashed to `master`
+(`b4a620fb` timeout, `8f302ae5` tests), **NOT pushed**; Chris confirmed the
+timeout works on device. **(1) The timeout.** `create_artefact`,
+`modify_artefact` and `inspect_artefact` were dying on the **15 s streaming
+default** because neither the author nor the craft runner ever set
+`initialResponseTimeoutMs` — a reasoning model prefilling a whole artefact body
+routinely needs longer before the first chunk. Note this is a **TTFB** cap, not
+a wall-clock one: once headers arrive the body streams freely. Every other
+headless subagent had already opted out (compaction 180 s, memory 60/180 s, the
+curation suite disabling it entirely), so the artefact pair was simply the one
+missed. New `SUBAGENT_INITIAL_RESPONSE_TIMEOUT_MS` (120 s) in
+`subagent-base.ts`, beside the type both already share. The main chat keeps
+15 s, where failing fast on a stalled provider is the more useful behaviour.
+**(2) The suite went 23 → 8**, and the interesting part is that the extra
+fifteen were **two unrelated regressions**, not more of the known baseline —
+which is unchanged at exactly 8 (`cockpit-draft` 6 + `chat-page` 1 +
+`chat-route` 1, Node `localStorage` under jsdom). *account-page (14):* the
+invite-username-casing commit (`37899470`) added two crypto imports to
+AccountPage without extending the explicit factory mock. **Only one was
+visible.** AccountPage calls `validateUsername` inside a `try/catch`, so
+vitest's "no export defined" was **swallowed** and surfaced as a permanent
+validation failure that blocked every save before `onSave` — the symptom was
+"rename does nothing", never "mock is missing". Worth remembering: *a missing
+mock export inside a `try/catch` masquerades as a behaviour bug.*
+*model-picker-data (1):* production is **correct** here; the test premise had
+expired. The background-worker filter excludes only `restricted`, keeping
+`free` and `unknown` (Chris, 2026-07-15) — and Opus 5's `freedomOriented: null`
+means it survives exactly as Qwen does. The test now asserts the rule (the
+Claude family must come through thinner under `background-worker` than under
+`all`) rather than a snapshot of the catalogue. **Open for Chris:** that makes
+**Claude Opus 5 selectable as a background worker** (title-gen, memory) — a
+correct consequence of the 2026-07-15 rule, but an unremarked side effect of
+the Opus 5 curation. If `unknown` is too generous for the helper slot, that is
+a product decision, not a test one. **Also noted, untouched:** a **wandering
+flake** — in roughly two runs in three, exactly one extra test fails, a
+different one each time (`sync/doorbell`, then `stream-manager-store`); both
+pass 3/3 in isolation and one full run had none. Expect **8, occasionally 9**.
+Gates: `pnpm typecheck --force` **14/14** (0 cached), Biome clean, lefthook
+green on both commits. **Not a Larissa path** (`user-client/lib` + tests; no
+crypto/auth/sync/proxy). **No Laura** (no user-reachable flow changed).
+**Next:** push when Chris is ready; the localStorage 8 remain open (a
+`tests/setup.ts` shim would clear them — deliberately not taken unilaterally,
+it is test-infrastructure surgery).
+
+---
+
 **Last updated:** 2026-07-25 — **CLAUDE OPUS 5 CURATED ON BOTH ROUTES + MIMO
 V2.5 PRO ON CROF + A CACHE-ACCOUNTING FIX** — two feature units squashed to
 `master` (`819e4728` fix, `5c38972a` curation), **NOT pushed**; awaiting Chris's
@@ -1778,6 +1825,19 @@ something that delights and doesn't annoy).
 ---
 
 ## Next session
+
+**▶ Resuming 2026-07-26.** `master` sits **5 commits ahead of `origin/master`,
+unpushed** — the Opus 5 / MiMo curation (`819e4728`, `5c38972a`), its STATUS
+note (`6f85b3dd`), and yesterday evening's pair (`b4a620fb` artefact subagent
+timeout, `8f302ae5` test repairs). The timeout is **confirmed working on
+device**. Two threads are parked, both explicitly Chris's call rather than
+mine: **(a)** whether `unknown` freedom is too generous for the background-
+worker slot, now that Claude Opus 5 qualifies for it; **(b)** the eight
+environmental `localStorage` failures, clearable with a `tests/setup.ts` shim.
+The **wandering flake** (one extra failure in ~2 runs of 3, a different test
+each time) is unowned and would make a tidy standalone unit. Still pending from
+the curation unit: Chris's **model-picker device check**, then push.
+**Restart the dev stack first** (Vite HMR ignores `packages/*`).
 
 **⏰ OMNIBUS UPDATE in progress (2026-07-18).** A grab-bag of small delightful
 features to ship this evening or tomorrow. **Done:** Inkling on OpenRouter
