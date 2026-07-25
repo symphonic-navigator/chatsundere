@@ -28,6 +28,13 @@ interface NanoGptUsage {
   reasoning_tokens?: number | null;
   completion_tokens_details?: { reasoning_tokens?: number | null } | null;
   prompt_tokens_details?: { cached_tokens?: number } | null;
+  // Anthropic-style cache accounting, which nano-gpt forwards for the Claude
+  // family alongside the OpenAI-shaped fields (probed live 2026-07-25). Cached
+  // input is reported ONLY here — `prompt_tokens_details.cached_tokens` stays 0
+  // on this route — and the cached portion is EXCLUDED from `prompt_tokens`
+  // (an 11,213-token cached prefix reports `prompt_tokens: 2`).
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
 }
 
 interface NanoGptDelta {
@@ -64,17 +71,35 @@ function normaliseFinish(reason: string): FinishReason {
 }
 
 function normaliseUsage(u: NanoGptUsage): NormalisedUsage {
+  // Anthropic-style cache accounting (Claude family): the cached prefix is
+  // billed separately and left OUT of `prompt_tokens`, so reading that field
+  // alone understates the real input by the whole cached prefix. Fold both
+  // Anthropic counters back in — but only when they are actually populated, so
+  // OpenAI-shaped routes (where `prompt_tokens` already includes cached input)
+  // are never double-counted.
+  const cacheRead = u.cache_read_input_tokens ?? 0;
+  const cacheWrite = u.cache_creation_input_tokens ?? 0;
+  const anthropicCacheAccounting = cacheRead > 0 || cacheWrite > 0;
+  const promptTokens =
+    (u.prompt_tokens ?? 0) + (anthropicCacheAccounting ? cacheRead + cacheWrite : 0);
   const usage: NormalisedUsage = {
-    promptTokens: u.prompt_tokens ?? 0,
+    promptTokens,
     completionTokens: u.completion_tokens ?? 0,
-    totalTokens: u.total_tokens ?? 0,
+    totalTokens: anthropicCacheAccounting
+      ? promptTokens + (u.completion_tokens ?? 0)
+      : (u.total_tokens ?? 0),
   };
   // nano-gpt reports reasoning_tokens BOTH top-level and under
   // completion_tokens_details (probed live). Prefer top-level, fall back.
   const reasoning = u.reasoning_tokens ?? u.completion_tokens_details?.reasoning_tokens;
   if (reasoning !== undefined && reasoning !== null) usage.reasoningTokens = reasoning;
-  const cached = u.prompt_tokens_details?.cached_tokens;
-  if (cached !== undefined) usage.cachedTokens = cached;
+  // Cached input: OpenAI-shaped routes report it under `prompt_tokens_details`,
+  // the Claude family only as `cache_read_input_tokens`. Prefer whichever is
+  // non-zero — reading the OpenAI field alone reported 0 for every cached
+  // Claude turn, which is why the cache looked dead until 2026-07-25.
+  const cachedOpenAi = u.prompt_tokens_details?.cached_tokens;
+  if (cacheRead > 0) usage.cachedTokens = cacheRead;
+  else if (cachedOpenAi !== undefined) usage.cachedTokens = cachedOpenAi;
   return usage;
 }
 
