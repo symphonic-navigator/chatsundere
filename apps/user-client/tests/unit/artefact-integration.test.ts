@@ -141,8 +141,10 @@ test('passes content-axis unlockers from context into the author', async () => {
     },
   );
   await tool.execute({ title: 'T', brief: 'B' });
-  expect(author).toHaveBeenCalled();
-  const arg = author.mock.calls[0]?.[0] as { contentAxisPrompt: string };
+  const calls = author.mock.calls as unknown as Array<[{ contentAxisPrompt: string }]>;
+  const arg = calls[0]?.[0];
+  expect(arg).toBeDefined();
+  if (!arg) return;
   expect(arg.contentAxisPrompt).toContain('uncensored');
   expect(arg.contentAxisPrompt).toContain('BE BOLD');
   expect(arg.contentAxisPrompt).not.toMatch(/Encourage creativity/); // tonality off
