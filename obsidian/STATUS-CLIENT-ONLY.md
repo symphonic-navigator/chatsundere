@@ -8,6 +8,115 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-26 — **GLM 5.2 ON OLLAMA REASONS AGAIN — A PROVIDER
+CHANGED THE MEANING OF A REQUEST WE NEVER CHANGED.** Built in the working tree,
+**not committed** (Chris's call on squash + a Laura pass, see Next). Field report
+was "GLM 5.2 denkt nicht mehr nach". It was neither a model regression nor a bug
+we introduced: **ollama turned `think` from a boolean into a validated level**
+during their compute build-out — the server now answers a bad value with
+`HTTP 400 must be "high", "medium", "low", "max", true, or false` — and in doing
+so turned `think:false` from a no-op into a **genuine off-switch**. We had been
+sending `think:false` on every GLM 5.2 request all along, because the offering
+was `fixed-on`, a `fixed-on` control makes the cockpit emit **no** intent
+(`reasoning-resolver.ts:37`), and `composeWire` then defaults to
+`{enabled:false}` (`stream-completion.ts:226`). Harmless for five weeks, fatal
+the day the byte changed meaning. **The `fixed-on` classification was correct on
+2026-07-17 and expired without anyone touching it** — a classification has a
+shelf life, and the provider can end it silently. **What landed:** (1) the
+offering is now **`steps` off/low/medium/high/max, default medium**, the step
+labels being ollama's own level names mapped straight onto the wire; (2)
+`ReasoningIntent.effort` gained **`'max'`** and the ollama path stopped dropping
+effort (`think` now carries the level, not a bare bool); (3) **the Grok-4.5 guard
+of 2026-07-15 was finally ported into `ollama-native.ts`** — it existed in the
+OpenRouter, xAI and Anthropic adapters but never here, which is precisely the
+hole this fell through; a control with no off can no longer put one on the wire;
+(4) `run-ollama-suite.ts` stopped iterating the two **web** offerings as if they
+were LLMs (closes a follow-up open since 2026-07-17). **The ladder shape was settled by
+Laura's pre-squash pass, and she was right:** the fork put to Chris (`toggle` vs
+the full five rungs) was **false-binary** — `toggle` would have thrown away
+`max`, the one level that measurably *is* real, so of course the five-rung
+version won. Her third option is what shipped: **`off · on · max`**, every rung
+defensible by probe (`off` → `think:false`, 0 thinking chars 8/8; `on` →
+`think:true`, the model's own default; `max` → `think:"max"`, +47% / +170%).
+`low`/`medium`/`high` are **not offered** — they do not separate under n=4 × 2
+prompts (`high` lands *below* `low` on both) — the same discipline that shipped
+Inkling's seven upstream levels as four. It also dissolves her second point: a lit
+`Medium` with two unused rungs above it reads as throttling and invites a tap that
+buys nothing, whereas `On` is a resting state. **One honesty note stands
+recorded:** the **Off step means "no visible trace", not "cheaper"** — on a hard
+prompt the model still reasons into the answer text at a *higher* eval_count
+(923) than any level. Laura confirmed `Off` is nonetheless the honest label (the
+feature really stops; the UI makes no cost claim) and warned that a future
+cost-flavoured rename — "Fast", "Economy" — would turn this into a hard defect. Swept the other two curated models in the same run:
+**glm-5.1 shows no `max` effect, deepseek-v4-pro only a weak single-prompt hint**
+— both keep `toggle`, both retain a genuine off, both re-measured green. Also
+noted: bare `glm-5.2` now resolves (identical deployment to `:cloud`; we keep
+`:cloud`), and ollama's catalogue has grown to 18 models incl. three we removed
+in June as non-existent — **none onboarded**, no Krämerladen. Gates: live
+`run-ollama-suite.ts` **123/123 green, 0 failed** (glm-5.2 **63/63** across all
+five permutations with `reasoning-present` green on every on-permutation; glm-5.1
+**30/30**; deepseek-v4-pro **30/30**), `pnpm typecheck --force` **14/14** (0
+cached), llm-unified **461/461**, full user-client vitest **3217 pass / 8** known
+Node-localStorage baseline (exact), Biome clean. **Not a Larissa path**
+(catalogue + adapters; no crypto/auth/sync/proxy). Records:
+[[models/glm-5.2]] (measurement tables + the semantics-change write-up),
+[[providers/ollama-cloud]], [[insights/follow-ups-index]] (4 new rows, 1 closed).
+**A SECOND, WIDER DEFECT FELL OUT OF CHRIS'S DEVICE CHECK — a chip labelled
+"Off" switched reasoning ON, on 13 offerings.** His screenshot showed GLM 5.2's
+new ladder rendering **two** chips reading "Off". Cause is not the new
+curation: `renderReasoning` (`CockpitMenu.tsx`) rendered **every** `steps` entry
+as a chip **plus** a separate Off chip derived from `offStep` — while `offStep`
+is by convention a **member** of `steps` (both `maxReasoningIntent` and the
+curation suite's `permutationsForReasoning` filter it out that way). The surplus
+chip was not cosmetic: it emitted `{kind:'step', step:'off'}`, and since `'off'`
+is not an effort, `resolveReasoningBodyExtras` mapped it to **`{enabled:true}`**.
+Enumerated against the live catalogue: **13 offerings affected** — GLM 5.2,
+Opus 5 + Sonnet 5 (OpenRouter), the GPT-5.1/5.4/5.5 family on *both* routes,
+Inkling, Fable, Hy3, Kimi K3 — i.e. every ladder curated with the `['off', …]`
+convention, in the field since the first of them landed. **Fixed at the source**
+(`c.steps.filter((s) => s !== c.offStep)`), not by trimming the new GLM 5.2
+array, so all 13 are repaired at once; pinned by two tests (exactly one Off chip;
+the Off chip routes through `{kind:'off'}`). Worth keeping: **only a device
+screenshot caught this.** Every unit test, the typecheck, the live suite and two
+review passes were green — the suite validates the wire, and the wire was never
+wrong; the defect lived entirely between the control and the chip. **LAURA PRE-SQUASH: NO BLOCKING HARD DEFECT.** She verified `renderReasoning` is
+the only place in `src/` that renders a `steps` control, so the repair really
+does reach all 13 offerings, and judged the two pinning tests the right pair. She
+also found **a hard-class a11y defect older than this diff**, and Chris chose to
+**fix rather than defer** it: the shared `chip()` helper carried selection in
+`data-active` + CSS alone — visible to sighted users, silent to assistive tech,
+and invalid ARIA besides (bare buttons as direct children of `role="menu"`),
+while the Text size section 60 lines away had always done it correctly. Chips now
+carry `role="menuitemradio"` + `aria-checked`, which repairs **four** sections at
+once (Reasoning, Web depth, Ask expert, Artefact expert). Two further calls of
+hers were taken: the ladder shape (above), and **Off now leads the row** — on a
+ladder it is the bottom rung, so intensity climbs left to right, while the binary
+On/Off rows keep Off on the right (no intensity axis to order). **Two soft
+findings deferred** to [[insights/ux-deferrals]], both pre-existing and
+project-wide: the reasoning row never explains an *absence* (a `fixed-on` control
+renders a dead grey pill with no reason; an `offStep: null` offering silently
+drops the Off chip — §11 wants disabled-with-reason), and the reasoning selection
+**has a scope nobody can name** ("until you leave this chat", because state lives
+in the unpersisted `current-chat.store`) while both sibling sections label theirs.
+**The test sweep this forced:** `role="menuitemradio"` means the chips are no
+longer matched by `getByRole('button')`, so 30 queries across the two menu test
+files moved over — `cockpit.test.tsx`'s five were left alone, they are real
+buttons (stop / Retry / Discard). Gates after all of it: live
+`run-ollama-suite.ts` re-run **92/92 green, 0 failed** (glm-5.2 **38/38** across
+`reasoning-off` / `effort:on` / `effort:max`), chip-to-wire verified end-to-end
+(`off`→`false`, `on`→`true`, `max`→`"max"`, default `on`), cockpit tests
+**55/55**, `pnpm typecheck --force` **14/14** (0 cached), llm-unified
+**461/461**, full user-client vitest **3220 pass / 8** known baseline (exact — an
+earlier run showed the documented `stream-manager-store` wanderer, isolated
+**38/38**), Biome clean. **Next:** **(a)** Chris's device check — GLM 5.2 shows
+**Off · On · Max** with `On` lit, the trace is back, `Max` visibly deepens it;
+spot-check Opus 5 / GPT-5.x for a **single** Off now leading the row —
+**restart the dev stack first**, Vite HMR ignores `packages/*`; **(b)** then
+squash as **three** units: the re-curation, the Off-chip repair, and the chip
+a11y fix (each stands alone; the last two touch no catalogue data).
+
+---
+
 **Last updated:** 2026-07-25 (evening) — **ARTEFACT SUBAGENT TIMEOUT RAISED +
 FIFTEEN STALE TEST FAILURES CLEARED** — two units squashed to `master`
 (`b4a620fb` timeout, `8f302ae5` tests), **NOT pushed**; Chris confirmed the
