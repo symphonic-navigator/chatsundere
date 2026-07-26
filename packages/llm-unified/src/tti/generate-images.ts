@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { b64ToBlob } from '../b64.js';
 import { fetchWithProxyAuth } from '../proxy-fetch.js';
-import { buildRequest } from '../transport.js';
+import { buildRequest, buildSignedUrlGet } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 import type { ImageModelConfig } from './config.js';
 import { parseImagesResponse } from './parse.js';
@@ -35,7 +35,11 @@ export interface GenerateImagesArgs extends ImageRequestBase {
 
 export type ImageGenItem =
   | { kind: 'image'; bytes: Blob; mime: string }
-  | { kind: 'moderated'; reason: string | null };
+  /** The provider refused to draw it — a content decision, the user's prompt. */
+  | { kind: 'moderated'; reason: string | null }
+  /** The image exists upstream but we could not fetch its bytes — our problem,
+   *  never the user's prompt. Kept distinct so the copy can stay honest. */
+  | { kind: 'failed'; reason: string };
 
 export interface GenerateImagesResult {
   items: ImageGenItem[];
@@ -124,10 +128,16 @@ export async function generateImages(args: GenerateImagesArgs): Promise<Generate
       const urlSignal = args.signal
         ? AbortSignal.any([args.signal, AbortSignal.timeout(URL_FETCH_TIMEOUT_MS)])
         : AbortSignal.timeout(URL_FETCH_TIMEOUT_MS);
-      // Bare GET, deliberately header-free (R2 signed URL — Bearer token clashes with AWS-V4 sig).
-      const blobResponse = await fetchFn(item.url, { signal: urlSignal });
+      // Bare GET, deliberately header-free (R2 signed URL — Bearer token clashes
+      // with AWS-V4 sig), but routed exactly like the generation call: the bucket
+      // sends no CORS headers to a non-localhost Origin, so a direct browser
+      // fetch cannot read the bytes on a deployed domain.
+      const blobResponse = await fetchWithProxyAuth(
+        () => buildSignedUrlGet(item.url, { proxied }),
+        { proxied, signal: urlSignal, doFetch: fetchFn },
+      );
       if (!blobResponse.ok) {
-        items.push({ kind: 'moderated', reason: `image fetch returned ${blobResponse.status}` });
+        items.push({ kind: 'failed', reason: `image fetch returned ${blobResponse.status}` });
         continue;
       }
       const bytes = await blobResponse.blob();
@@ -136,7 +146,11 @@ export async function generateImages(args: GenerateImagesArgs): Promise<Generate
     } catch {
       // Deliberate: any per-URL failure (including a caller abort mid-loop)
       // degrades only this item — partial results beat a wholesale failure.
-      items.push({ kind: 'moderated', reason: 'image fetch failed' });
+      // `failed`, never `moderated`: the provider produced an image, we could
+      // not collect it. Calling that content moderation told the user their
+      // prompt had been blocked and hid this very defect for as long as it
+      // existed.
+      items.push({ kind: 'failed', reason: 'image fetch failed' });
     }
   }
   return { items, modelId };

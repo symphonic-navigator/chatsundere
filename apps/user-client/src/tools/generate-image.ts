@@ -115,9 +115,17 @@ export function contributeImageTool(ctx: ImageToolContext): Tool[] {
 
         const artefactIds: string[] = [];
         const moderatedReasons: string[] = [];
+        const failedReasons: string[] = [];
         for (const item of result.items) {
           if (item.kind === 'moderated') {
             moderatedReasons.push(item.reason ?? 'no reason given');
+            continue;
+          }
+          // Distinct from moderation: the provider drew the image, we could not
+          // collect it. Blaming the prompt here would be a lie and would send
+          // the user rewriting something that was never the problem.
+          if (item.kind === 'failed') {
+            failedReasons.push(item.reason);
             continue;
           }
           artefactIds.push(
@@ -126,10 +134,25 @@ export function contributeImageTool(ctx: ImageToolContext): Tool[] {
         }
 
         if (artefactIds.length === 0) {
+          // Two different failures, two different next steps for the user. Only
+          // a moderation refusal is about the prompt; a collection failure is
+          // ours, and telling them to rephrase would send them chasing a fault
+          // they cannot fix.
+          if (moderatedReasons.length === 0) {
+            return {
+              ok: false,
+              output: '',
+              error: `The image was generated but could not be downloaded (${failedReasons.join('; ')}). Tell the user this is a connection problem on our side, not their prompt, and that trying again usually works.`,
+            };
+          }
+          const failedNote =
+            failedReasons.length > 0
+              ? ` A further ${failedReasons.length} could not be downloaded (${failedReasons.join('; ')}) — a connection problem, not the prompt.`
+              : '';
           return {
             ok: false,
             output: '',
-            error: `Every image was blocked by the provider's content filter (${moderatedReasons.join('; ')}). Tell the user and suggest rephrasing the prompt.`,
+            error: `Every image was blocked by the provider's content filter (${moderatedReasons.join('; ')}). Tell the user and suggest rephrasing the prompt.${failedNote}`,
           };
         }
 
@@ -139,6 +162,11 @@ export function contributeImageTool(ctx: ImageToolContext): Tool[] {
         if (moderatedReasons.length > 0) {
           lines.push(
             `${moderatedReasons.length} image was blocked by the provider's content filter (reason: ${moderatedReasons.join('; ')}).`,
+          );
+        }
+        if (failedReasons.length > 0) {
+          lines.push(
+            `${failedReasons.length} image could not be downloaded (${failedReasons.join('; ')}) — a connection problem on our side, not the prompt.`,
           );
         }
         return {

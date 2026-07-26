@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, test } from 'bun:test';
+import { setProxyAuthSource } from '../proxy-auth.js';
 import type { ProviderConfig } from '../types.js';
 import { ImageGenerationError, generateImages } from './generate-images.js';
 
@@ -57,7 +58,11 @@ describe('generateImages — nano-gpt url flow', () => {
     expect(calls[1]?.hasAuth).toBe(false);
   });
 
-  test('a failed url fetch degrades that item to moderated, not the whole call', async () => {
+  // `failed`, not `moderated`: the provider drew the image, we could not collect
+  // it. Reporting that as content moderation blamed the user's prompt for our
+  // own transport fault — and hid the missing CORS routing for as long as it
+  // existed, because "blocked by the content filter" reads like a normal day.
+  test('a failed url fetch degrades that item to failed, not the whole call', async () => {
     const fetchFn = asMockFetch(async (input) => {
       const req = input instanceof Request ? input : new Request(String(input));
       if (req.url.endsWith('/images/generations')) {
@@ -75,7 +80,51 @@ describe('generateImages — nano-gpt url flow', () => {
       count: 2,
       fetchFn,
     });
-    expect(result.items.map((i) => i.kind)).toEqual(['moderated', 'image']);
+    expect(result.items.map((i) => i.kind)).toEqual(['failed', 'image']);
+  });
+
+  // The defect Chris hit in the field: nano-gpt's R2 bucket answers a
+  // cross-origin GET with no CORS headers unless the Origin is localhost
+  // (measured 2026-07-26), so on a deployed domain the browser cannot read the
+  // bytes. The signed URL must therefore travel the same route as the call that
+  // produced it — origin in `x-cors-proxy-target`, path AND signed query on the
+  // request line, and no `Authorization` (it would collide with the AWS-V4 sig).
+  test('fetches the signed url through the proxy when the provider is proxied', async () => {
+    const seen: Request[] = [];
+    const fetchFn = asMockFetch(async (input) => {
+      const req = input instanceof Request ? input : new Request(String(input));
+      seen.push(req);
+      if (req.headers.get('x-cors-proxy-target') === 'https://api.nano-gpt.com') {
+        return jsonResponse({ data: [{ url: 'https://r2.example/a.jpg?X-Amz-Signature=abc' }] });
+      }
+      return new Response(new Blob([new Uint8Array([1])], { type: 'image/jpeg' }), { status: 200 });
+    });
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'tok',
+      refreshToken: async () => 'tok',
+    });
+    try {
+      const result = await generateImages({
+        ...base,
+        providerConfig: {
+          baseUrl: 'https://api.nano-gpt.com',
+          routing: { kind: 'cors-proxy' },
+        } as ProviderConfig,
+        config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+        prompt: 'a fox',
+        count: 1,
+        fetchFn,
+      });
+      expect(result.items.map((i) => i.kind)).toEqual(['image']);
+      const blobReq = seen[seen.length - 1] as Request;
+      expect(blobReq.url).toBe('https://proxy.example/a.jpg?X-Amz-Signature=abc');
+      expect(blobReq.headers.get('x-cors-proxy-target')).toBe('https://r2.example');
+      expect(blobReq.headers.get('x-chatsundere-authorization')).toBe('Bearer tok');
+      expect(blobReq.headers.get('authorization')).toBeNull();
+    } finally {
+      setProxyAuthSource(null);
+    }
   });
 });
 

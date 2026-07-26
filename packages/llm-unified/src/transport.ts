@@ -63,6 +63,53 @@ export class ProxyUnavailableError extends Error {
   }
 }
 
+/**
+ * Build a header-free GET for an ABSOLUTE url that is already authorised by its
+ * own signature — today the pre-signed R2 links nano-gpt returns from
+ * `/images/generations`.
+ *
+ * Deliberately carries **no `Authorization`**: the URL is AWS-V4 signed and a
+ * Bearer token collides with the signature (spec §5.2). Only `host` is inside
+ * `X-Amz-SignedHeaders`, so routing through the proxy leaves the signature
+ * intact — the proxy forwards to `target.origin + request-path`, which
+ * reproduces the host exactly.
+ *
+ * Proxying is not optional on a deployed origin: nano-gpt's R2 bucket answers a
+ * cross-origin GET with **no CORS headers at all** unless the Origin is
+ * localhost (measured 2026-07-26), so a browser on any real domain cannot read
+ * the bytes. Routing follows the provider row, exactly like the generation call
+ * that produced the URL.
+ */
+export function buildSignedUrlGet(absoluteUrl: string, opts: { proxied: boolean }): Request {
+  if (!opts.proxied) return new Request(absoluteUrl, { method: 'GET' });
+
+  const source = getProxyAuthSource();
+  const proxyUrl = source?.getUrl() ?? null;
+  const token = source?.getToken() ?? null;
+  if (proxyUrl === null) {
+    throw new ProxyUnavailableError(
+      'proxy_url',
+      'transport: cors-proxy routing selected but no proxy is available',
+    );
+  }
+  if (token === null) {
+    throw new ProxyUnavailableError(
+      'account_token',
+      'transport: cors-proxy routing selected but no account token is available',
+    );
+  }
+  const upstream = new URL(absoluteUrl);
+  return new Request(joinUrl(proxyUrl, `${upstream.pathname}${upstream.search}`), {
+    method: 'GET',
+    headers: new Headers({
+      'x-chatsundere-authorization': `Bearer ${token}`,
+      'x-cors-proxy-target': upstream.origin,
+    }),
+    // The browser must never chase an upstream redirect off-proxy (spec §5).
+    redirect: 'manual',
+  });
+}
+
 export interface BuildRequestArgs {
   provider: ProviderConfig;
   apiKey: string;
