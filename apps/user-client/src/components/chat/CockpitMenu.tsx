@@ -41,6 +41,11 @@ export function CockpitMenu(p: Props): JSX.Element {
       {hasReasoning ? (
         <div className="cockpit-menu-section" data-section="reasoning">
           <div className="cockpit-menu-label">Reasoning</div>
+          {/* Scope named like its siblings. It is only true for a steerable
+              control — an unsteerable one has nothing to remember. */}
+          {p.control.mode === 'toggle' || p.control.mode === 'steps' ? (
+            <div className="cockpit-menu-sublabel">for this chat</div>
+          ) : null}
           {renderReasoning(p)}
         </div>
       ) : null}

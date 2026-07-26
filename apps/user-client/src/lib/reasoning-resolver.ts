@@ -62,6 +62,45 @@ export function resolveReasoningBodyExtras(
 }
 
 /**
+ * Flatten a reasoning state into the single string persisted on `ChatRow`:
+ * the step label for a step, otherwise `'off'` / `'on'`.
+ */
+export function reasoningChoiceOf(state: ReasoningState): string {
+  return state.kind === 'step' ? state.step : state.kind;
+}
+
+/**
+ * Restore a persisted choice against the offering's CURRENT control, falling
+ * back to the control's default whenever the stored value no longer fits.
+ *
+ * The fallback is the point, not an edge case: a chat keeps its choice while its
+ * model changes underneath it, so a step may vanish (`max` exists on GLM 5.2 and
+ * nowhere else) or an off may become unavailable. Restoring a stored `off` onto
+ * a model that cannot be silenced would put an off on the wire that the adapter
+ * has to refuse anyway — the Grok-4.5 guard, one layer earlier.
+ */
+export function reasoningStateFromChoice(
+  choice: string | null | undefined,
+  control: ReasoningControl,
+): ReasoningState {
+  const fallback = initialReasoningState(control);
+  if (!choice) return fallback;
+
+  switch (control.mode) {
+    case 'none':
+    case 'fixed-on':
+      // Unsteerable: the control alone decides, a stored choice cannot override.
+      return fallback;
+    case 'toggle':
+      return choice === 'on' || choice === 'off' ? { kind: choice } : fallback;
+    case 'steps': {
+      if (choice === control.offStep) return { kind: 'off' };
+      return control.steps.includes(choice) ? { kind: 'step', step: choice } : fallback;
+    }
+  }
+}
+
+/**
  * The strongest reasoning intent a control allows — used by the ask_expert tool
  * to run the expert at full effort regardless of any UI step. `none` stays off;
  * `steps` picks the last non-`offStep` step and maps standard labels onto effort.

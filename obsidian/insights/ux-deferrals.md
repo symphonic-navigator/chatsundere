@@ -708,6 +708,21 @@ later Laura sweep does not re-flag them:
   `role="menuitemradio"` + `aria-checked`), the ladder shape (five rungs → the three
   measurable ones), and the Off chip's position (now leads the ladder). What
   remains open is listed here.
+- **STATUS 2026-07-26 (same day): BOTH DEFERRALS CLOSED.** Chris took them
+  immediately — "gehen wir die auch gleich an". (1) shipped exactly as Laura
+  proposed: `chip()` gained a `title`, a `fixed-on` control now reads *"This
+  model always reasons"*, and an `offStep: null` offering renders a **disabled Off
+  chip** saying *"This model cannot turn reasoning off"* instead of dropping it —
+  so the row no longer changes shape between models. (2) shipped as **persisted
+  per chat** (Chris's call between the two scopes Laura offered): a new
+  non-indexed `ChatRow.reasoningChoice` (no Dexie bump), synced by deny-list
+  omission because the level belongs to the chat rather than the device, plus the
+  matching *"for this chat"* sublabel. The restore path is the interesting half —
+  `reasoningStateFromChoice` validates the stored choice against the offering's
+  **current** control and falls back to its default, because a chat outlives the
+  model it was started on (`max` exists on GLM 5.2 and nowhere else, and a stored
+  `off` must never reach a model that cannot be silenced — the Grok-4.5 guard,
+  one layer earlier). Kept below for the record.
 - **Findings deferred (all soft):**
   1. **The reasoning row never explains an absence.** Two cases, one remedy:
      a `fixed-on` control renders a dead grey "On" pill with no `title` and no
@@ -737,4 +752,5 @@ later Laura sweep does not re-flag them:
 - **Follow-up commitment:** (1) is a cheap, self-contained win — fold it into the
   next cockpit touch. (2) pick "for this turn" or "for this chat", make the state
   match it, then add the sublabel; needs Chris's call first.
-- **Chris sign-off:** ⏳ pending — logged for his review alongside the squash.
+- **Chris sign-off:** ✅ both taken the same day rather than deferred — see the
+  STATUS block above. Nothing from this pass remains open.

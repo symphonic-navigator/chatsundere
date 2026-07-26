@@ -273,6 +273,14 @@ export interface ChatRow {
    *  `chats` deny-list), never determines "is this the last message" (that is
    *  always derived live). Non-indexed (schemaless) — no Dexie version bump. */
   editingMessageId?: string | null;
+  /** The reasoning level chosen for this chat: a step label, or `'off'`/`'on'`
+   *  (`reasoningChoiceOf`). Absent ⇒ the offering's own default. Restored
+   *  through `reasoningStateFromChoice`, which drops a choice the current model
+   *  no longer offers — a chat may outlive the model it was started on.
+   *  Synced by deny-list omission: the level belongs to the chat, not the
+   *  device, so a phone and a desktop agree. Non-indexed (schemaless) — no
+   *  Dexie version bump. */
+  reasoningChoice?: string | null;
 }
 
 export type ContentBlock =

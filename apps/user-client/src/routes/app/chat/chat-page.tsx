@@ -51,7 +51,7 @@ import { chatFontScaleValue } from '../../../lib/chat-font-scale.js';
 import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
-import { initialReasoningState } from '../../../lib/reasoning-resolver.js';
+import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
@@ -280,10 +280,17 @@ export function ChatPage(): JSX.Element {
   });
   const offering = modelQuery.data ?? null;
 
-  // Initialise reasoning state once the offering resolves.
+  // Restore this chat's reasoning level once the offering resolves. The choice
+  // is persisted per chat, so returning to a chat brings back the level it was
+  // left on rather than the model default. `reasoningStateFromChoice` drops a
+  // stored choice the current model no longer offers — a chat outlives the model
+  // it was started on, and `max` (say) exists on GLM 5.2 and nowhere else.
+  const storedReasoningChoice = chatQuery.data?.chat?.reasoningChoice ?? null;
   useEffect(() => {
-    if (offering) setReasoning(initialReasoningState(offering.profile.reasoning));
-  }, [offering, setReasoning]);
+    if (offering) {
+      setReasoning(reasoningStateFromChoice(storedReasoningChoice, offering.profile.reasoning));
+    }
+  }, [offering, storedReasoningChoice, setReasoning]);
 
   // Initialise the ask-expert runtime toggle from the persona's default.
   useEffect(() => {

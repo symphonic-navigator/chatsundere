@@ -24,7 +24,7 @@ import { QK } from '../../data/queryKeys.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.js';
 import type { ChatFontScale } from '../../lib/chat-font-scale.js';
-import type { ReasoningState } from '../../lib/reasoning-resolver.js';
+import { type ReasoningState, reasoningChoiceOf } from '../../lib/reasoning-resolver.js';
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
@@ -210,11 +210,18 @@ export function Cockpit(p: Props): JSX.Element {
   const plusWrapRef = useRef<HTMLDivElement>(null);
   useDismissOnOutside(sourceMenuOpen, plusWrapRef, () => setSourceMenuOpen(false));
 
+  const updateChat = useUpdateChat();
+
   // Selecting a reasoning option also dismisses the menu — the user has made
   // their choice; keeping it open is busy-noise.
+  //
+  // The choice persists on the chat (spec: "for this chat"), so it survives a
+  // trip through history rather than resetting to the model default on the next
+  // mount. The store stays the runtime source; the row is the memory.
   const onReasoningChange = (r: ReasoningState): void => {
     setReasoning(r);
     setMenuOpen(false);
+    updateChat.mutate({ id: p.chatId, patch: { reasoningChoice: reasoningChoiceOf(r) } });
   };
 
   const onAskExpertChange = (on: boolean): void => {
@@ -284,8 +291,8 @@ export function Cockpit(p: Props): JSX.Element {
 
   // Artefact expert opt-out (absent ⇒ on): unlike askExpert (transient,
   // per-turn), this is a persisted per-chat preference — a synced Class-2
-  // chat patch, exactly like a title rename.
-  const updateChat = useUpdateChat();
+  // chat patch, exactly like a title rename. `updateChat` is declared above,
+  // beside the reasoning handler that shares it.
   const artefactExpertOn = chatData?.chat.useArtefactExpertModel !== false;
   const onArtefactExpertChange = (on: boolean): void => {
     void updateChat.mutateAsync({ id: p.chatId, patch: { useArtefactExpertModel: on } });
