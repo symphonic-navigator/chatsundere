@@ -108,12 +108,34 @@ buttons (stop / Retry / Discard). Gates after all of it: live
 **55/55**, `pnpm typecheck --force` **14/14** (0 cached), llm-unified
 **461/461**, full user-client vitest **3220 pass / 8** known baseline (exact — an
 earlier run showed the documented `stream-manager-store` wanderer, isolated
-**38/38**), Biome clean. **Next:** **(a)** Chris's device check — GLM 5.2 shows
+**38/38**), Biome clean. **BOTH OF LAURA'S DEFERRALS WERE THEN CLOSED THE SAME DAY** (Chris: "gehen wir
+die auch gleich an"), as two further units — `709f8739` and `31be0bba`. **(1)
+The reasoning row now explains an absence:** `chip()` gained a `title`, a
+`fixed-on` control reads *"This model always reasons"*, and an offering with no
+off renders a **disabled Off chip** saying *"This model cannot turn reasoning
+off"* instead of dropping it — so the row stops changing shape as the user moves
+between models (§11, disabled over hidden). **(2) The reasoning level now
+persists per chat** — Chris's pick between the two scopes Laura offered. A new
+non-indexed **`ChatRow.reasoningChoice`** (**no Dexie bump**), **synced by
+deny-list omission** because the level belongs to the chat rather than the
+device, plus the matching *"for this chat"* sublabel, shown only for a steerable
+control. The store stays the runtime source; the row is the memory. **The
+restore path is the load-bearing half:** `reasoningStateFromChoice` validates a
+stored choice against the offering's **current** control and falls back to its
+default — a chat outlives the model it was started on, `max` exists on GLM 5.2
+and nowhere else, and a stored `off` must never be restored onto a model that
+cannot be silenced (the Grok-4.5 guard, one layer earlier). Pinned by 6 resolver
+tests + 2 wiring tests that assert the choice actually reaches the chat row.
+Gates after both: `pnpm typecheck --force` **14/14** (0 cached), full
+user-client vitest **3229 pass / 8** known baseline (exact), Biome clean, working
+tree empty. [[insights/ux-deferrals]] now records this pass as fully closed.
+**Next:** **(a)** Chris's device check — GLM 5.2 shows
 **Off · On · Max** with `On` lit, the trace is back, `Max` visibly deepens it;
-spot-check Opus 5 / GPT-5.x for a **single** Off now leading the row —
+spot-check Opus 5 / GPT-5.x for a **single** Off now leading the row, and that a
+level picked in a chat **survives leaving and re-entering it** —
 **restart the dev stack first**, Vite HMR ignores `packages/*`; **(b)** then
-squash as **three** units: the re-curation, the Off-chip repair, and the chip
-a11y fix (each stands alone; the last two touch no catalogue data).
+**push**. All five units are squashed to `master` (`25855ed9`, `805d92d9`,
+`644c895c`, `709f8739`, `31be0bba`) and **not pushed**.
 
 ---
 
