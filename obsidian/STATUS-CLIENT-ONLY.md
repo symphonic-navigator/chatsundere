@@ -37,7 +37,23 @@ now a distinct **`failed`** kind with honest copy naming a connection problem on
 our side. Covers every URL-returning image group (`zimage`, `seedream`,
 `gpt-image-2` — all nano-gpt); xAI returns b64 inline and never took this path.
 Verified there is no second site of this class: `blob-transport`/`lib/fetch`
-address our own backend, not provider CDNs. Gates: llm-unified **462/462**
+address our own backend, not provider CDNs. **CORRECTED IN A SECOND UNIT (`898b1b2a`) — the first fix shipped in `v0.2.14`
+and changed nothing.** Chris re-tested on the live domain and got the identical
+CORS error. Cause: the proxy branch was conditioned on **the provider's own
+routing**, and nano-gpt routes `direct` — correctly, since its API sets
+permissive CORS (`corsHint: 'inofficial'`). The signed links, however, point at
+a **storage bucket on a different host with a different policy**. Provider
+routing and bucket routing are not the same question, so the branch never ran.
+The image fetch now proxies whenever a proxy exists at all
+(`canRouteThroughProxy`), independent of the provider row; with no proxy it
+still tries direct, which is right for a local-only user on localhost. **The
+lesson is about the test, not the code:** the first test asserted the proxied
+path using a `cors-proxy` providerConfig — *a shape production never has for
+this provider* — so it passed while the real path was untouched. It is replaced
+by the actual case (provider direct + proxy present → generation POST direct,
+bucket fetch proxied) plus the local-only fallback. A live probe through the
+real client path, rather than curl, would have caught it before the deploy.
+Gates: llm-unified **464/464**
 (incl. a new test pinning the exact wire form — proxy URL, target header, token,
 and the *absence* of `Authorization`), `pnpm typecheck --force` **14/14** (0
 cached), full user-client vitest **3228 pass / 8** known baseline (the 9th was
