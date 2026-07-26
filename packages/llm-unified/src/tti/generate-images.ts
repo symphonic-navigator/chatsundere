@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { b64ToBlob } from '../b64.js';
 import { fetchWithProxyAuth } from '../proxy-fetch.js';
-import { buildRequest, buildSignedUrlGet } from '../transport.js';
+import { buildRequest, buildSignedUrlGet, canRouteThroughProxy } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
 import type { ImageModelConfig } from './config.js';
 import { parseImagesResponse } from './parse.js';
@@ -129,12 +129,17 @@ export async function generateImages(args: GenerateImagesArgs): Promise<Generate
         ? AbortSignal.any([args.signal, AbortSignal.timeout(URL_FETCH_TIMEOUT_MS)])
         : AbortSignal.timeout(URL_FETCH_TIMEOUT_MS);
       // Bare GET, deliberately header-free (R2 signed URL — Bearer token clashes
-      // with AWS-V4 sig), but routed exactly like the generation call: the bucket
-      // sends no CORS headers to a non-localhost Origin, so a direct browser
-      // fetch cannot read the bytes on a deployed domain.
+      // with AWS-V4 sig), routed through the proxy WHENEVER ONE EXISTS rather
+      // than when the provider row says so. The bucket is a different host from
+      // the API with a different CORS policy: nano-gpt's API allows any origin
+      // (hence `direct`), the bucket allows only localhost. Tying this to the
+      // provider's routing meant the proxy branch never ran for the one provider
+      // that needs it. Without a proxy we still try direct — correct for a
+      // local-only user on localhost, and the failure is now honest elsewhere.
+      const viaProxy = canRouteThroughProxy();
       const blobResponse = await fetchWithProxyAuth(
-        () => buildSignedUrlGet(item.url, { proxied }),
-        { proxied, signal: urlSignal, doFetch: fetchFn },
+        () => buildSignedUrlGet(item.url, { proxied: viaProxy }),
+        { proxied: viaProxy, signal: urlSignal, doFetch: fetchFn },
       );
       if (!blobResponse.ok) {
         items.push({ kind: 'failed', reason: `image fetch returned ${blobResponse.status}` });

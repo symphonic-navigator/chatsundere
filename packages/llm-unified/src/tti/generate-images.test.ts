@@ -89,6 +89,74 @@ describe('generateImages — nano-gpt url flow', () => {
   // bytes. The signed URL must therefore travel the same route as the call that
   // produced it — origin in `x-cors-proxy-target`, path AND signed query on the
   // request line, and no `Authorization` (it would collide with the AWS-V4 sig).
+  // THE production case, and the one the first fix missed. nano-gpt's API is
+  // CORS-friendly, so the provider is routed `direct` (corsHint 'inofficial') —
+  // but its storage bucket is a different host that allows localhost only. The
+  // image fetch must therefore proxy on the strength of a proxy EXISTING, not on
+  // the provider row. Keying it to the row left the bug fully intact in
+  // production (v0.2.14 shipped the fix and the browser still went direct).
+  test('proxies the image fetch even when the provider itself routes direct', async () => {
+    const seen: Request[] = [];
+    const fetchFn = asMockFetch(async (input) => {
+      const req = input instanceof Request ? input : new Request(String(input));
+      seen.push(req);
+      if (req.url.includes('/images/generations')) {
+        return jsonResponse({ data: [{ url: 'https://r2.example/a.jpg?X-Amz-Signature=abc' }] });
+      }
+      return new Response(new Blob([new Uint8Array([1])], { type: 'image/jpeg' }), { status: 200 });
+    });
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'tok',
+      refreshToken: async () => 'tok',
+    });
+    try {
+      const result = await generateImages({
+        ...base, // providerConfig routing: 'direct'
+        config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+        prompt: 'a fox',
+        count: 1,
+        fetchFn,
+      });
+      expect(result.items.map((i) => i.kind)).toEqual(['image']);
+      // The generation POST went direct...
+      expect(seen[0]?.url).toContain('/images/generations');
+      expect(seen[0]?.headers.get('x-cors-proxy-target')).toBeNull();
+      // ...while the bucket fetch was proxied.
+      const blobReq = seen[seen.length - 1] as Request;
+      expect(blobReq.url).toBe('https://proxy.example/a.jpg?X-Amz-Signature=abc');
+      expect(blobReq.headers.get('x-cors-proxy-target')).toBe('https://r2.example');
+    } finally {
+      setProxyAuthSource(null);
+    }
+  });
+
+  // A local-only user has no proxy at all; the direct attempt is right for them
+  // (it works on localhost, the one origin the bucket allows).
+  test('falls back to a direct fetch when no proxy is registered', async () => {
+    const seen: Request[] = [];
+    const fetchFn = asMockFetch(async (input) => {
+      const req = input instanceof Request ? input : new Request(String(input));
+      seen.push(req);
+      if (req.url.includes('/images/generations')) {
+        return jsonResponse({ data: [{ url: 'https://r2.example/a.jpg?X-Amz-Signature=abc' }] });
+      }
+      return new Response(new Blob([new Uint8Array([1])], { type: 'image/jpeg' }), { status: 200 });
+    });
+    setProxyAuthSource(null);
+    const result = await generateImages({
+      ...base,
+      config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+      prompt: 'a fox',
+      count: 1,
+      fetchFn,
+    });
+    expect(result.items.map((i) => i.kind)).toEqual(['image']);
+    const blobReq = seen[seen.length - 1] as Request;
+    expect(blobReq.url).toBe('https://r2.example/a.jpg?X-Amz-Signature=abc');
+    expect(blobReq.headers.get('x-cors-proxy-target')).toBeNull();
+  });
+
   test('fetches the signed url through the proxy when the provider is proxied', async () => {
     const seen: Request[] = [];
     const fetchFn = asMockFetch(async (input) => {

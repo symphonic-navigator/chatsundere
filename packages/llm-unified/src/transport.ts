@@ -64,6 +64,16 @@ export class ProxyUnavailableError extends Error {
 }
 
 /**
+ * Whether a proxy round-trip is possible right now — a URL and an account token
+ * are both registered. Used where proxying is decided by the TARGET rather than
+ * by the provider row (see `buildSignedUrlGet`).
+ */
+export function canRouteThroughProxy(): boolean {
+  const source = getProxyAuthSource();
+  return (source?.getUrl() ?? null) !== null && (source?.getToken() ?? null) !== null;
+}
+
+/**
  * Build a header-free GET for an ABSOLUTE url that is already authorised by its
  * own signature — today the pre-signed R2 links nano-gpt returns from
  * `/images/generations`.
@@ -77,8 +87,14 @@ export class ProxyUnavailableError extends Error {
  * Proxying is not optional on a deployed origin: nano-gpt's R2 bucket answers a
  * cross-origin GET with **no CORS headers at all** unless the Origin is
  * localhost (measured 2026-07-26), so a browser on any real domain cannot read
- * the bytes. Routing follows the provider row, exactly like the generation call
- * that produced the URL.
+ * the bytes.
+ *
+ * Crucially, `proxied` here is decided by the **target**, not by the provider
+ * row. nano-gpt's own API is CORS-friendly and therefore correctly routed
+ * `direct` (`corsHint: 'inofficial'`) — but its storage bucket is a different
+ * host with a different policy. Keying this off the provider's routing was the
+ * first fix's mistake and left the bug fully intact in production: the branch
+ * simply never ran.
  */
 export function buildSignedUrlGet(absoluteUrl: string, opts: { proxied: boolean }): Request {
   if (!opts.proxied) return new Request(absoluteUrl, { method: 'GET' });
