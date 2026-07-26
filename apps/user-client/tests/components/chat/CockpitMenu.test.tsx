@@ -431,3 +431,74 @@ describe('CockpitMenu — text size section', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe('CockpitMenu — steps reasoning control', () => {
+  // `offStep` is a MEMBER of `steps` by convention — `maxReasoningIntent` and the
+  // curation suite's `permutationsForReasoning` both filter it out of the ladder.
+  // The menu did not, so it rendered every step AND an extra Off chip: 13 curated
+  // offerings (GLM 5.2, Opus 5, Sonnet 5, the GPT-5.x family, Inkling, Fable, Hy3,
+  // Kimi K3) showed two chips reading "Off" (field report, 2026-07-26).
+  const ladder = {
+    mode: 'steps' as const,
+    steps: ['off', 'low', 'medium', 'high', 'max'],
+    offStep: 'off',
+    defaultStep: 'medium',
+  };
+
+  it('renders exactly one Off chip when offStep is also listed in steps', () => {
+    render(
+      <CockpitMenu
+        control={ladder}
+        reasoning={{ kind: 'step', step: 'medium' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
+      />,
+    );
+    expect(screen.getAllByRole('button', { name: /^off$/i })).toHaveLength(1);
+    for (const label of ['low', 'medium', 'high', 'max']) {
+      expect(screen.getAllByRole('button', { name: new RegExp(`^${label}$`, 'i') })).toHaveLength(
+        1,
+      );
+    }
+  });
+
+  // Off is the bottom rung of a ladder, so it leads the row and intensity climbs
+  // left to right. (Binary On/Off rows keep Off on the right — no intensity axis.)
+  it('renders Off first on a ladder, ahead of the steps', () => {
+    const { container } = render(
+      <CockpitMenu
+        control={ladder}
+        reasoning={{ kind: 'step', step: 'medium' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
+      />,
+    );
+    const row = container.querySelector('[data-section="reasoning"] .cockpit-menu-chips');
+    const labels = Array.from(row?.querySelectorAll('button') ?? []).map((b) => b.textContent);
+    expect(labels).toEqual(['Off', 'low', 'medium', 'high', 'max']);
+  });
+
+  // The sharper half: the surplus chip was not merely duplicated furniture. It
+  // emitted `{kind:'step', step:'off'}`, which `resolveReasoningBodyExtras` maps
+  // to `{enabled:true}` because 'off' is not an effort — so a chip labelled "Off"
+  // switched reasoning ON.
+  it('routes the Off chip through the off state, never through a step named off', () => {
+    const onReasoningChange = vi.fn();
+    render(
+      <CockpitMenu
+        control={ladder}
+        reasoning={{ kind: 'step', step: 'medium' }}
+        onReasoningChange={onReasoningChange}
+        onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    expect(onReasoningChange).toHaveBeenCalledWith({ kind: 'off' });
+  });
+});

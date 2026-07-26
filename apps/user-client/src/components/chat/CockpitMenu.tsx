@@ -148,21 +148,31 @@ function renderReasoning(p: Props): JSX.Element {
     );
   }
 
-  // steps
+  // steps. `offStep` is a MEMBER of `steps` by convention (`maxReasoningIntent`
+  // and the curation suite's `permutationsForReasoning` both filter it out the
+  // same way), so it must not also be rendered as an ordinary step: it would
+  // draw a second chip reading "Off" — and the surplus one emitted
+  // `{kind:'step', step:'off'}`, which resolves to `{enabled:true}` because
+  // 'off' is not an effort. A chip labelled "Off" that switched reasoning ON.
+  // Off leads the row: on a ladder it is the bottom rung, so intensity climbs
+  // monotonically from left to right. (The binary On/Off rows elsewhere in this
+  // menu keep Off on the right — there is no intensity axis to order there.)
   return (
     <div className="cockpit-menu-chips">
-      {c.steps.map((s) =>
-        chip(s, p.reasoning.kind === 'step' && p.reasoning.step === s, {
-          onClick: () => p.onReasoningChange({ kind: 'step', step: s }),
-          dataAttr: ['data-bucket', s],
-        }),
-      )}
       {c.offStep !== null
         ? chip('Off', p.reasoning.kind === 'off', {
             onClick: () => p.onReasoningChange({ kind: 'off' }),
             dataAttr: ['data-action', 'off'],
           })
         : null}
+      {c.steps
+        .filter((s) => s !== c.offStep)
+        .map((s) =>
+          chip(s, p.reasoning.kind === 'step' && p.reasoning.step === s, {
+            onClick: () => p.onReasoningChange({ kind: 'step', step: s }),
+            dataAttr: ['data-bucket', s],
+          }),
+        )}
     </div>
   );
 }
