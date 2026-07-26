@@ -106,13 +106,20 @@ export function CockpitMenu(p: Props): JSX.Element {
 function chip(
   label: string,
   active: boolean,
-  opts: { disabled?: boolean; onClick?: () => void; dataAttr?: [string, string] },
+  opts: {
+    disabled?: boolean;
+    onClick?: () => void;
+    dataAttr?: [string, string];
+    /** Why this chip is unavailable — rendered as the native tooltip. */
+    title?: string;
+  },
 ): JSX.Element {
   const [attrKey, attrVal] = opts.dataAttr ?? [];
   return (
     <button
       key={label}
       type="button"
+      title={opts.title}
       // Every chip row is a single-choice group inside `role="menu"`, so each
       // chip is a menuitemradio carrying its own selected state. Without this
       // the selection was conveyed by `data-active` and CSS alone — visible to
@@ -136,9 +143,15 @@ function renderReasoning(p: Props): JSX.Element {
   const c = p.control;
   if (c.mode === 'none') return <></>;
 
-  // fixed-on: a lit, non-interactive affirmation that the model reasons.
+  // fixed-on: a lit, non-interactive affirmation that the model reasons. The
+  // reason is spelled out — a dead grey pill alone cannot tell the user whether
+  // the control is intrinsic, broken, or misconfigured (CLAUDE.md §11).
   if (c.mode === 'fixed-on') {
-    return <div className="cockpit-menu-chips">{chip('On', true, { disabled: true })}</div>;
+    return (
+      <div className="cockpit-menu-chips">
+        {chip('On', true, { disabled: true, title: 'This model always reasons' })}
+      </div>
+    );
   }
 
   if (c.mode === 'toggle') {
@@ -172,7 +185,14 @@ function renderReasoning(p: Props): JSX.Element {
             onClick: () => p.onReasoningChange({ kind: 'off' }),
             dataAttr: ['data-action', 'off'],
           })
-        : null}
+        : // Disabled over hidden: a model that cannot stop reasoning still shows
+          // the Off rung, greyed out and saying why. Dropping it silently made
+          // the row change shape as the user moved between models.
+          chip('Off', false, {
+            disabled: true,
+            title: 'This model cannot turn reasoning off',
+            dataAttr: ['data-action', 'off'],
+          })}
       {c.steps
         .filter((s) => s !== c.offStep)
         .map((s) =>

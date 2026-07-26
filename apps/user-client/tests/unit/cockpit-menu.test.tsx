@@ -54,14 +54,26 @@ describe('CockpitMenu reasoning', () => {
     }
     expect(screen.getByRole('menuitemradio', { name: /^off$/i })).toBeInTheDocument();
   });
-  it('steps with offStep null → no Off chip', () => {
+  // Disabled over hidden (CLAUDE.md §11): a model that cannot stop reasoning
+  // still shows the Off rung, greyed out and saying why. Dropping it made the
+  // row silently change shape as the user moved between models.
+  it('steps with offStep null → a disabled Off chip explaining itself', () => {
     renderMenu({
       mode: 'steps',
       steps: ['low', 'medium', 'high'],
       offStep: null,
       defaultStep: 'medium',
     });
-    expect(screen.queryByRole('menuitemradio', { name: /^off$/i })).toBeNull();
+    const off = screen.getByRole('menuitemradio', { name: /^off$/i });
+    expect(off).toBeDisabled();
+    expect(off).toHaveAttribute('title', 'This model cannot turn reasoning off');
+  });
+
+  it('fixed-on → the lit On chip says why it cannot be changed', () => {
+    renderMenu({ mode: 'fixed-on' });
+    const on = screen.getByRole('menuitemradio', { name: /^on$/i });
+    expect(on).toBeDisabled();
+    expect(on).toHaveAttribute('title', 'This model always reasons');
   });
 });
 
