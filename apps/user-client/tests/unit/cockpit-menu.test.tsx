@@ -31,14 +31,14 @@ describe('CockpitMenu reasoning', () => {
   });
   it('fixed-on → a single disabled lit On indicator', () => {
     renderMenu({ mode: 'fixed-on' }, { kind: 'on' });
-    const on = screen.getByRole('button', { name: /on/i });
+    const on = screen.getByRole('menuitemradio', { name: /on/i });
     expect(on).toBeDisabled();
     expect(on.getAttribute('data-active')).toBe('true');
   });
   it('toggle → On/Off chips', () => {
     renderMenu({ mode: 'toggle', defaultOn: true });
-    expect(screen.getByRole('button', { name: /^on$/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^off$/i })).toBeEnabled();
+    expect(screen.getByRole('menuitemradio', { name: /^on$/i })).toBeEnabled();
+    expect(screen.getByRole('menuitemradio', { name: /^off$/i })).toBeEnabled();
   });
   it('steps → one chip per step plus Off', () => {
     renderMenu({
@@ -48,9 +48,11 @@ describe('CockpitMenu reasoning', () => {
       defaultStep: 'medium',
     });
     for (const s of ['low', 'medium', 'high']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${s}$`, 'i') })).toBeInTheDocument();
+      expect(
+        screen.getByRole('menuitemradio', { name: new RegExp(`^${s}$`, 'i') }),
+      ).toBeInTheDocument();
     }
-    expect(screen.getByRole('button', { name: /^off$/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^off$/i })).toBeInTheDocument();
   });
   it('steps with offStep null → no Off chip', () => {
     renderMenu({
@@ -59,7 +61,7 @@ describe('CockpitMenu reasoning', () => {
       offStep: null,
       defaultStep: 'medium',
     });
-    expect(screen.queryByRole('button', { name: /^off$/i })).toBeNull();
+    expect(screen.queryByRole('menuitemradio', { name: /^off$/i })).toBeNull();
   });
 });
 
@@ -67,13 +69,13 @@ describe('CockpitMenu reasoning — interaction', () => {
   it('toggle On click fires onReasoningChange({ kind: "on" })', () => {
     const onChange = vi.fn();
     renderMenu({ mode: 'toggle', defaultOn: false }, { kind: 'off' }, onChange);
-    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^on$/i }));
     expect(onChange).toHaveBeenCalledWith({ kind: 'on' });
   });
   it('toggle Off click fires onReasoningChange({ kind: "off" })', () => {
     const onChange = vi.fn();
     renderMenu({ mode: 'toggle', defaultOn: true }, { kind: 'on' }, onChange);
-    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^off$/i }));
     expect(onChange).toHaveBeenCalledWith({ kind: 'off' });
   });
   it('steps bucket click fires onReasoningChange({ kind: "step", step })', () => {
@@ -83,7 +85,7 @@ describe('CockpitMenu reasoning — interaction', () => {
       { kind: 'step', step: 'medium' },
       onChange,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^high$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^high$/i }));
     expect(onChange).toHaveBeenCalledWith({ kind: 'step', step: 'high' });
   });
   it('steps Off click fires onReasoningChange({ kind: "off" })', () => {
@@ -93,13 +95,13 @@ describe('CockpitMenu reasoning — interaction', () => {
       { kind: 'step', step: 'medium' },
       onChange,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^off$/i }));
     expect(onChange).toHaveBeenCalledWith({ kind: 'off' });
   });
   it('fixed-on On chip is non-interactive (no handler fires)', () => {
     const onChange = vi.fn();
     renderMenu({ mode: 'fixed-on' }, { kind: 'on' }, onChange);
-    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^on$/i }));
     expect(onChange).not.toHaveBeenCalled();
   });
 });

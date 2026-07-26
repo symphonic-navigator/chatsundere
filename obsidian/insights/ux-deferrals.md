@@ -697,3 +697,44 @@ later Laura sweep does not re-flag them:
   to `[data-section="font-size"] .cockpit-menu-chips`.
 - **Chris sign-off:** ✅ Chris arbitrated (1)+(2) as designed; (3) logged for the
   on-device pass. Spec §8.
+
+## 2026-07-26 — GLM 5.2 re-curation + the duplicate-Off repair (Laura pre-squash)
+
+- **Unit:** GLM 5.2 on ollama-cloud re-curated `fixed-on` → `steps` (off/on/max),
+  plus the repair of a duplicate Off chip affecting 13 offerings. Not yet squashed
+  at the time of writing.
+- **Verdict:** no blocking hard defect. Three of Laura's findings were **fixed
+  rather than deferred** on Chris's call: the a11y defect below-the-line (chips now
+  `role="menuitemradio"` + `aria-checked`), the ladder shape (five rungs → the three
+  measurable ones), and the Off chip's position (now leads the ladder). What
+  remains open is listed here.
+- **Findings deferred (all soft):**
+  1. **The reasoning row never explains an absence.** Two cases, one remedy:
+     a `fixed-on` control renders a dead grey "On" pill with no `title` and no
+     reason string in the DOM, and an offering with `offStep: null` (Grok 4.5;
+     Opus 5 on nano-gpt) simply drops the Off chip, so a user switching models
+     watches the row silently change shape. CLAUDE.md §11 is explicit — show the
+     capability, grey it out, say why. Remedy is one string each:
+     `title="This model always reasons"` and a disabled Off chip reading
+     `title="This model cannot turn reasoning off"`. The cockpit already has the
+     idiom (`Cockpit.tsx` live-voice button).
+  2. **The reasoning selection has a scope nobody can name.** Ask expert says
+     "for this turn", Artefact expert "for this chat"; reasoning says nothing —
+     and its real scope is *"until you leave this chat"*, because the state lives
+     in the unpersisted `current-chat.store` and `chat-page` re-runs
+     `initialReasoningState` on every mount. A user who picks Off to stop the
+     trace finds the default lit again after a round-trip through history. That
+     the scope is awkward to phrase in a sublabel *is* the signal: "per visit" is
+     not a scope users model. Pre-existing; this unit made it reachable for
+     GLM 5.2, which had no state to lose while it was `fixed-on`.
+- **Mode:** pre-squash pass.
+- **Criterion:** (1) disabled-over-hidden / constructive error; (2) least
+  astonishment, ND-friendly.
+- **Rationale for deferral:** both are pre-existing and project-wide, not
+  properties of this unit — (1) spans every `fixed-on` and `offStep: null`
+  offering, (2) needs a decision about which of the two existing scopes reasoning
+  should adopt, which is a design question for Chris rather than a repair.
+- **Follow-up commitment:** (1) is a cheap, self-contained win — fold it into the
+  next cockpit touch. (2) pick "for this turn" or "for this chat", make the state
+  match it, then add the sublabel; needs Chris's call first.
+- **Chris sign-off:** ⏳ pending — logged for his review alongside the squash.

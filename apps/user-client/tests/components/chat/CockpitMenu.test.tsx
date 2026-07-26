@@ -27,8 +27,8 @@ describe('CockpitMenu — ask expert section', () => {
       />,
     );
     expect(screen.getByText('Ask expert')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^on$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^off$/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^on$/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^off$/i })).toBeInTheDocument();
   });
 
   it('marks On chip as active when askExpert is true', () => {
@@ -45,8 +45,12 @@ describe('CockpitMenu — ask expert section', () => {
         onAskExpertChange={() => {}}
       />,
     );
-    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBe('true');
-    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBeNull();
+    expect(screen.getByRole('menuitemradio', { name: /^on$/i }).getAttribute('data-active')).toBe(
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitemradio', { name: /^off$/i }).getAttribute('data-active'),
+    ).toBeNull();
   });
 
   it('marks Off chip as active when askExpert is false', () => {
@@ -63,8 +67,12 @@ describe('CockpitMenu — ask expert section', () => {
         onAskExpertChange={() => {}}
       />,
     );
-    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBe('true');
-    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBeNull();
+    expect(screen.getByRole('menuitemradio', { name: /^off$/i }).getAttribute('data-active')).toBe(
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitemradio', { name: /^on$/i }).getAttribute('data-active'),
+    ).toBeNull();
   });
 
   it('clicking On chip calls onAskExpertChange(true)', () => {
@@ -82,7 +90,7 @@ describe('CockpitMenu — ask expert section', () => {
         onAskExpertChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^on$/i }));
     expect(onChange).toHaveBeenCalledOnce();
     expect(onChange).toHaveBeenCalledWith(true);
   });
@@ -102,7 +110,7 @@ describe('CockpitMenu — ask expert section', () => {
         onAskExpertChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^off$/i }));
     expect(onChange).toHaveBeenCalledOnce();
     expect(onChange).toHaveBeenCalledWith(false);
   });
@@ -184,8 +192,12 @@ describe('CockpitMenu — ask expert section', () => {
         onArtefactExpertChange={() => {}}
       />,
     );
-    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBe('true');
-    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBeNull();
+    expect(screen.getByRole('menuitemradio', { name: /^on$/i }).getAttribute('data-active')).toBe(
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitemradio', { name: /^off$/i }).getAttribute('data-active'),
+    ).toBeNull();
   });
 
   it('marks the artefact-expert On chip as active by default when artefactExpertOn is omitted (absent means On)', () => {
@@ -201,8 +213,12 @@ describe('CockpitMenu — ask expert section', () => {
         onArtefactExpertChange={() => {}}
       />,
     );
-    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBe('true');
-    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBeNull();
+    expect(screen.getByRole('menuitemradio', { name: /^on$/i }).getAttribute('data-active')).toBe(
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitemradio', { name: /^off$/i }).getAttribute('data-active'),
+    ).toBeNull();
   });
 
   it('marks the artefact-expert Off chip as active when artefactExpertOn is false', () => {
@@ -219,8 +235,12 @@ describe('CockpitMenu — ask expert section', () => {
         onArtefactExpertChange={() => {}}
       />,
     );
-    expect(screen.getByRole('button', { name: /^off$/i }).getAttribute('data-active')).toBe('true');
-    expect(screen.getByRole('button', { name: /^on$/i }).getAttribute('data-active')).toBeNull();
+    expect(screen.getByRole('menuitemradio', { name: /^off$/i }).getAttribute('data-active')).toBe(
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitemradio', { name: /^on$/i }).getAttribute('data-active'),
+    ).toBeNull();
   });
 
   it('clicking the artefact-expert On chip calls onArtefactExpertChange(true)', () => {
@@ -238,7 +258,7 @@ describe('CockpitMenu — ask expert section', () => {
         onArtefactExpertChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^on$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^on$/i }));
     expect(onChange).toHaveBeenCalledOnce();
     expect(onChange).toHaveBeenCalledWith(true);
   });
@@ -258,7 +278,7 @@ describe('CockpitMenu — ask expert section', () => {
         onArtefactExpertChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^off$/i }));
     expect(onChange).toHaveBeenCalledOnce();
     expect(onChange).toHaveBeenCalledWith(false);
   });
@@ -456,11 +476,11 @@ describe('CockpitMenu — steps reasoning control', () => {
         onChatFontScaleChange={() => {}}
       />,
     );
-    expect(screen.getAllByRole('button', { name: /^off$/i })).toHaveLength(1);
+    expect(screen.getAllByRole('menuitemradio', { name: /^off$/i })).toHaveLength(1);
     for (const label of ['low', 'medium', 'high', 'max']) {
-      expect(screen.getAllByRole('button', { name: new RegExp(`^${label}$`, 'i') })).toHaveLength(
-        1,
-      );
+      expect(
+        screen.getAllByRole('menuitemradio', { name: new RegExp(`^${label}$`, 'i') }),
+      ).toHaveLength(1);
     }
   });
 
@@ -482,6 +502,30 @@ describe('CockpitMenu — steps reasoning control', () => {
     expect(labels).toEqual(['Off', 'low', 'medium', 'high', 'max']);
   });
 
+  // Selection was carried by `data-active` + CSS alone: visible to sighted users,
+  // silent to assistive tech, and invalid ARIA (bare buttons inside role="menu").
+  it('exposes each chip as a menuitemradio carrying its own checked state', () => {
+    render(
+      <CockpitMenu
+        control={ladder}
+        reasoning={{ kind: 'step', step: 'medium' }}
+        onReasoningChange={() => {}}
+        onClose={() => {}}
+        chatFontScale="standard"
+        onChatFontScaleChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole('menuitemradio', { name: /^medium$/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    for (const label of ['off', 'low', 'high', 'max']) {
+      expect(
+        screen.getByRole('menuitemradio', { name: new RegExp(`^${label}$`, 'i') }),
+      ).toHaveAttribute('aria-checked', 'false');
+    }
+  });
+
   // The sharper half: the surplus chip was not merely duplicated furniture. It
   // emitted `{kind:'step', step:'off'}`, which `resolveReasoningBodyExtras` maps
   // to `{enabled:true}` because 'off' is not an effort — so a chip labelled "Off"
@@ -498,7 +542,7 @@ describe('CockpitMenu — steps reasoning control', () => {
         onChatFontScaleChange={() => {}}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^off$/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^off$/i }));
     expect(onReasoningChange).toHaveBeenCalledWith({ kind: 'off' });
   });
 });

@@ -113,6 +113,14 @@ function chip(
     <button
       key={label}
       type="button"
+      // Every chip row is a single-choice group inside `role="menu"`, so each
+      // chip is a menuitemradio carrying its own selected state. Without this
+      // the selection was conveyed by `data-active` and CSS alone — visible to
+      // sighted users, silent to assistive tech, and invalid ARIA besides (bare
+      // buttons as direct children of a menu). The Text size section above has
+      // always done this correctly; these four sections now match it.
+      role="menuitemradio"
+      aria-checked={active}
       className="cockpit-menu-chip"
       disabled={opts.disabled}
       data-active={active ? 'true' : undefined}
