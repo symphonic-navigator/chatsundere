@@ -9,6 +9,16 @@ import type { ReasoningControl, ReasoningIntent } from '@chatsundere/llm-unified
  */
 export type ReasoningState = { kind: 'off' } | { kind: 'on' } | { kind: 'step'; step: string };
 
+type Effort = NonNullable<Extract<ReasoningIntent, { enabled: true }>['effort']>;
+
+/**
+ * Step labels that carry a canonical effort. `max` is ollama's level above
+ * `high`; every other step label falls back to a bare enabled intent.
+ */
+function isEffort(step: string): step is Effort {
+  return step === 'low' || step === 'medium' || step === 'high' || step === 'max';
+}
+
 /** Derive the initial UI reasoning state from the offering's control. */
 export function initialReasoningState(control: ReasoningControl): ReasoningState {
   switch (control.mode) {
@@ -45,10 +55,9 @@ export function resolveReasoningBodyExtras(
     return { reasoning: intent };
   }
   const step = state.kind === 'step' ? state.step : control.defaultStep;
-  const intent: ReasoningIntent =
-    step === 'low' || step === 'medium' || step === 'high'
-      ? { enabled: true, effort: step }
-      : { enabled: true };
+  const intent: ReasoningIntent = isEffort(step)
+    ? { enabled: true, effort: step }
+    : { enabled: true };
   return { reasoning: intent };
 }
 
@@ -66,7 +75,7 @@ export function maxReasoningIntent(control: ReasoningControl): ReasoningIntent {
       return { enabled: true };
     case 'steps': {
       const max = control.steps.filter((s) => s !== control.offStep).at(-1);
-      return max === 'low' || max === 'medium' || max === 'high'
+      return max !== undefined && isEffort(max)
         ? { enabled: true, effort: max }
         : { enabled: true };
     }

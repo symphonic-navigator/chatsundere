@@ -116,7 +116,10 @@ describe('applyReasoningToBody', () => {
   });
 
   describe('ollama-cloud', () => {
-    it('writes body.think = true when enabled (effort silently dropped)', () => {
+    // ollama validates `think` server-side ("must be high, medium, low, max,
+    // true, or false"), so an effort travels as the level rather than collapsing
+    // to a bare boolean.
+    it('writes the effort as an ollama think level when enabled', () => {
       const result = applyReasoningToBody(
         'ollama-cloud',
         OLLAMA_MODEL,
@@ -124,8 +127,18 @@ describe('applyReasoningToBody', () => {
         baseBody(),
       );
       expect(result.modelId).toBe(OLLAMA_MODEL);
-      expect(result.body.think).toBe(true);
+      expect(result.body.think).toBe('high');
       expect(result.body).not.toHaveProperty('reasoning');
+    });
+
+    it('writes body.think = true when enabled without an effort', () => {
+      const result = applyReasoningToBody(
+        'ollama-cloud',
+        OLLAMA_MODEL,
+        { enabled: true },
+        baseBody(),
+      );
+      expect(result.body.think).toBe(true);
     });
 
     it('writes body.think = false when disabled', () => {

@@ -102,7 +102,11 @@ export type StreamChunk =
  */
 export type ReasoningIntent =
   | { enabled: false }
-  | { enabled: true; effort?: 'low' | 'medium' | 'high' };
+  // `max` exists because ollama.com's native `think` accepts it as a level
+  // above `high` and GLM 5.2 measurably honours it (2026-07-26: thinking chars
+  // +47% / +170% over the low/medium/high band, which does not separate). No
+  // other provider is offered a `max` step, so no other adapter ever sees it.
+  | { enabled: true; effort?: 'low' | 'medium' | 'high' | 'max' };
 
 export interface ProbeResult {
   ok: boolean;

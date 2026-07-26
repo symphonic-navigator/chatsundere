@@ -85,6 +85,25 @@ export function ollamaNativeAdapter(
     replayReasoning: false,
   };
 
+  // Whether an off may reach the wire at all — the Grok-4.5 guard of 2026-07-15,
+  // which this adapter never received. A `fixed-on` control (and a `steps`
+  // control with no off step) describes a model that always reasons, and the
+  // cockpit deliberately emits NO intent for such a control, so `composeWire`
+  // hands us `{enabled:false}` by default. Sending that verbatim is how GLM 5.2
+  // silently stopped reasoning on 2026-07-26: ollama had turned `think:false`
+  // from a no-op into a real off-switch, and nothing on our side had changed.
+  const canDisableReasoning =
+    opts.reasoning.mode === 'toggle' ||
+    (opts.reasoning.mode === 'steps' && opts.reasoning.offStep !== null);
+
+  /** The `think` value for one intent: a level, a plain on, or a guarded off. */
+  function reasoningValue(intent: CanonicalRequest['reasoning']): boolean | string {
+    // An off the control does not offer is refused, not forwarded — the model
+    // always reasons, so `think:true` is the honest wire value.
+    if (!intent.enabled) return !canDisableReasoning;
+    return intent.effort ?? true;
+  }
+
   return {
     profile,
     responseFraming: 'ndjson',
@@ -109,15 +128,14 @@ export function ollamaNativeAdapter(
         model: slug,
         messages: req.messages.map(toNative),
         stream: true,
-        // `think:false` behaves PER MODEL on this native endpoint (measured
-        // 2026-07-17), so do not assume it from the flag alone:
-        //  - glm-5.1 / deepseek-v4-pro: a real off-switch (eval_count -61% / -41%,
-        //    answer still complete) — their `fixed-on` is under review.
-        //  - glm-5.2:cloud: NOT an off-switch. The thinking channel empties, but
-        //    the reasoning moves into the answer and eval_count roughly doubles.
+        // `think` accepts a boolean OR one of ollama's levels (`low`, `medium`,
+        // `high`, `max`); the server validates the value and 400s on anything
+        // else. Levels arrived with ollama's 2026-07 build-out — before that it
+        // was boolean-only. An off is emitted only where the offering's control
+        // actually offers one; see `canDisableReasoning` above.
         // (`think` being ignored entirely is a `/v1` shim-only quirk — there
         // `reasoning_effort: 'none'` is the lever.)
-        think: req.reasoning.enabled,
+        think: reasoningValue(req.reasoning),
       };
       if (req.tools && req.tools.length > 0) {
         body.tools = req.tools.map((t) => ({

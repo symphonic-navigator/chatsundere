@@ -97,22 +97,89 @@ zai-org 1M ceiling (inferred — nano-gpt does not report a window).
 - A `TEE/glm-5.2` deployment also exists on nano-gpt; not curated here (separate
   offering, future work — mirrors the GLM 5.1 deferral).
 
-## Offering — ollama-cloud — `fixed-on` (native API)
+## Offering — ollama-cloud — `steps` (native API)
+
+> **Re-curated 2026-07-26** after a field report ("GLM 5.2 denkt nicht mehr
+> nach"). Was `fixed-on`; ollama changed the semantics of `think` underneath us.
+> The whole story is in *The 2026-07-26 semantics change* below — it is the
+> sharpest instance so far of a provider changing the **meaning** of a request we
+> never changed.
 
 - **slug:** `glm-5.2:cloud` · **adapterId:** `ollama-cloud:glm-5.2:cloud`
 - **context:** recommended 200 000 / max 1 000 000
-- **slug note:** the cloud model is served under the **`:cloud`** suffix; bare
-  `glm-5.2` 404s/over-loads on ollama.com (probed live). Differs from GLM 5.1,
-  which is served as bare `glm-5.1`.
-- **reasoning control:** **`fixed-on`.** Talks to ollama's **native `/api/chat`**
-  (NDJSON) via `ollamaNativeAdapter`, NOT the OpenAI-compat shim (the shim makes
-  these reasoning-native models re-call the tool after a tool result — GLM 5.1
-  finding, carried). `think: true` streams reasoning on the native **`thinking`**
-  field; `think: false` does **not** disable it (the reasoning leaks into
-  `content`) → fixed-on. `/api/show` capabilities: `thinking, completion, tools`.
+- **slug note:** the cloud model is served under the **`:cloud`** suffix. Bare
+  `glm-5.2` 404'd at curation time (2026-06-17) but **now resolves** — as of
+  2026-07-26 `/api/show` reports an identical deployment for both slugs (756 B
+  parameters, 1 M context, `thinking, completion, tools`). We stay on `:cloud`,
+  which never stopped working.
+- **reasoning control:** **`steps`** — `off / on / max`, `offStep: 'off'`,
+  `defaultStep: 'on'`. Each rung maps to a distinct wire value and nothing else
+  does: `off` → `think:false`, `on` → `think:true` (the model's own default —
+  `on` is not an effort label, so the resolver yields a bare `{enabled:true}`),
+  `max` → `think:"max"` verbatim. **Renaming a step therefore changes the wire.**
+  Talks to ollama's **native `/api/chat`** (NDJSON) via `ollamaNativeAdapter`,
+  NOT the OpenAI-compat shim (the shim makes these reasoning-native models
+  re-call the tool after a tool result — GLM 5.1 finding, carried). Reasoning
+  streams on the native **`thinking`** field.
+- **why three rungs and not five:** ollama also accepts `low` / `medium` /
+  `high`, and they were briefly shipped. They **do not separate** — at n=4 × 2
+  prompts `high` produced *less* reasoning than `low` on both prompts, with
+  heavily overlapping ranges. Only `max` separates cleanly (+47% / +170%). The
+  ladder therefore offers exactly what the probes can defend, which also keeps
+  the one genuinely useful affordance (`max`) that a plain `toggle` would have
+  thrown away. Same discipline as [[inkling]], where seven upstream levels ship
+  as four. Laura's pre-squash finding; Chris's call, 2026-07-26.
 - **tool calls:** native tool_calls, concurrent with reasoning.
 - 🔒 **Privacy:** no TEE / no ZDR. 🕊️ `freedomOrientedDeployment: null` (not yet
   assessed — pending Chris, mirrors GLM 5.1 on ollama).
+
+### The 2026-07-26 semantics change
+
+Reported from the field as "GLM 5.2 denkt nicht mehr nach". It was not a model
+regression and not a bug we introduced — **ollama changed what our unchanged
+request means.**
+
+The chain:
+
+1. The offering was `fixed-on`, on the then-correct 2026-07-17 finding that
+   `think:false` did not stop the reasoning but only relocated it into the answer.
+2. A `fixed-on` control makes the cockpit emit **no** reasoning intent
+   (`reasoning-resolver.ts`), so `composeWire` falls back to `{enabled:false}`
+   and `ollamaNativeAdapter` put **`think:false`** on the wire — every request.
+3. Harmless while `false` was a no-op. Then ollama's build-out turned `think`
+   into a **validated level** — the server now answers an invalid value with
+   `HTTP 400: must be "high", "medium", "low", "max", true, or false` — and the
+   trace stopped appearing.
+4. The **Grok-4.5 guard of 2026-07-15** ("derive from the offering's own control
+   whether an off may reach the wire") existed in the OpenRouter, xAI and
+   Anthropic adapters — but had never been ported to `ollama-native.ts`. It is
+   now, so no future ollama offering can repeat this.
+
+Re-measured serially, 2 prompts × 6 values × **n=4**, thinking-channel chars
+(P1 = a one-line riddle, P2 = the three-switches puzzle):
+
+| `think` | P1 thinking | P2 thinking | P1 eval | P2 eval |
+|---|---|---|---|---|
+| `false` | **0** | **0** | 83 | 923 |
+| `low` | 674 | 1314 | 276 | 612 |
+| `medium` | 757 | 2022 | 303 | 840 |
+| `high` | 615 | 986 | 252 | 494 |
+| `max` | **1213** | **3462** | 434 | 1344 |
+| `true` | 994 | 1671 | 394 | 729 |
+
+Two things this table says that the catalogue entry cannot:
+
+- **`low`/`medium`/`high` are noise** — which is why the shipped ladder is
+  `off / on / max` and not the five-rung version. `high` lands *below* `low` on
+  both prompts; the per-run ranges overlap heavily. Only `max` separates cleanly
+  (every one of its four P2 runs exceeded every other value's best run).
+- **`off` is not a clean off.** The trace disappears in 8/8 runs, but on the
+  *hard* prompt the model still reasons — into the answer text (content 3963
+  chars vs ≈1200 with the trace on) at a **higher** eval_count (923) than `low`,
+  `medium` or `high`. On the easy prompt it is a genuine saving (83 vs ≈300).
+  So the `off` step honestly means *"no visible trace"*, not *"cheaper"*. The
+  residue of the old `fixed-on` behaviour is still there on hard inputs — worth
+  revisiting if we ever want the Off chip to carry a cost promise.
 
 ## Validation
 
@@ -131,6 +198,17 @@ present/absent on the correct channel per permutation, memory carried through:
   streamed `thinking` correctly first).
 
 **Total: 110/110 green** across the five offerings (2026-06-17).
+
+**Re-validated 2026-07-26** after the semantics change, via
+`curation/run-ollama-suite.ts` (core + one-shot + sampling-cap per offering):
+
+- **ollama-cloud glm-5.2:cloud** — **63/63** green across all five permutations
+  (`reasoning-off`, `effort:low|medium|high|max`); `reasoning-present` green on
+  every on-permutation, i.e. the trace is back.
+- **ollama-cloud glm-5.1** — **30/30** green (regression check, unchanged).
+- **ollama-cloud deepseek-v4-pro** — **30/30** green (regression check, unchanged).
+
+**Total: 123/123 green**, 0 failed.
 
 All offerings text-only (no vision scenario). Entry validated against
 `parseCatalogueEntry` (Valibot) — gate green.

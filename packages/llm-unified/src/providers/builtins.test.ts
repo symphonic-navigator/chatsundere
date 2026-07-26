@@ -218,14 +218,26 @@ describe('built-in providers', () => {
       // (live-measured 2026-07-17, n=5 x 2 reasoning-warranting prompts).
       // glm-5.1 / deepseek-v4-pro: `think:false` genuinely stops the thinking
       // (eval_count -50%..-72%, answer length unchanged) → toggle.
-      // glm-5.2: `think:false` empties the thinking channel but moves the
-      // reasoning into the answer (content 3-4x longer) → fixed-on, since "off"
-      // would only make replies longer, never cheaper.
+      // glm-5.2: `steps` since 2026-07-26, when ollama turned `think` into a
+      // validated level and `false` into a genuine off (it previously only
+      // relocated the reasoning into the answer, which is why it was fixed-on).
       const modes = Object.fromEntries(llm.map((o) => [o.upstreamSlug, o.profile.reasoning.mode]));
       expect(modes).toEqual({
         'glm-5.1': 'toggle',
         'deepseek-v4-pro': 'toggle',
-        'glm-5.2:cloud': 'fixed-on',
+        'glm-5.2:cloud': 'steps',
+      });
+      // Only measurably-distinct rungs are offered: off, the model's own default
+      // (`on` → a bare think:true), and `max`. Ollama accepts low/medium/high too
+      // but they do not separate (high fell below low at n=4), so offering them
+      // would promise steerability we could not demonstrate. A rename here
+      // changes the wire — `max` rides through as the ollama level verbatim.
+      const glm52 = llm.find((o) => o.upstreamSlug === 'glm-5.2:cloud');
+      expect(glm52?.profile.reasoning).toEqual({
+        mode: 'steps',
+        steps: ['off', 'on', 'max'],
+        offStep: 'off',
+        defaultStep: 'on',
       });
       const toggles = llm.filter((o) => o.profile.reasoning.mode === 'toggle');
       expect(

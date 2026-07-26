@@ -48,6 +48,16 @@ describe('resolveReasoningBodyExtras', () => {
     expect(resolveReasoningBodyExtras(STEPS, { kind: 'off' })).toEqual({
       reasoning: { enabled: false },
     }));
+  // `max` is ollama's level above `high` (GLM 5.2 on ollama-cloud). It must
+  // survive as an effort — collapsing it to a bare enabled intent would send a
+  // plain `think:true` and silently drop the level the user picked.
+  it('steps max → enabled true + effort max', () =>
+    expect(
+      resolveReasoningBodyExtras(
+        { mode: 'steps', steps: ['off', 'high', 'max'], offStep: 'off', defaultStep: 'high' },
+        { kind: 'step', step: 'max' },
+      ),
+    ).toEqual({ reasoning: { enabled: true, effort: 'max' } }));
 });
 
 describe('maxReasoningIntent', () => {

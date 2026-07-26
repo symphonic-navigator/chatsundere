@@ -6,6 +6,57 @@ import { ollamaNativeAdapter } from './ollama-native.js';
 const FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 const adapter = ollamaNativeAdapter('glm-5.1', { vision: false, reasoning: FIXED_ON });
 
+const STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'low', 'medium', 'high', 'max'],
+  offStep: 'off',
+  defaultStep: 'medium',
+};
+const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
+
+describe('ollamaNativeAdapter reasoning value', () => {
+  const stepped = ollamaNativeAdapter('glm-5.2:cloud', { vision: false, reasoning: STEPS });
+
+  it('puts an effort on the wire as an ollama think level', () => {
+    for (const effort of ['low', 'medium', 'high', 'max'] as const) {
+      const wire = stepped.buildRequest({ messages: [], reasoning: { enabled: true, effort } });
+      expect(wire.body.think).toBe(effort);
+    }
+  });
+
+  it('sends a plain on when enabled without an effort', () => {
+    const wire = stepped.buildRequest({ messages: [], reasoning: { enabled: true } });
+    expect(wire.body.think).toBe(true);
+  });
+
+  it('sends a real off when the control offers one', () => {
+    const wire = stepped.buildRequest({ messages: [], reasoning: { enabled: false } });
+    expect(wire.body.think).toBe(false);
+    const toggled = ollamaNativeAdapter('glm-5.1', { vision: false, reasoning: TOGGLE });
+    expect(toggled.buildRequest({ messages: [], reasoning: { enabled: false } }).body.think).toBe(
+      false,
+    );
+  });
+
+  // The 2026-07-26 field defect: a `fixed-on` control makes the cockpit emit no
+  // intent, so `composeWire` defaults to `{enabled:false}`. Once ollama made
+  // `think:false` a genuine off, forwarding that verbatim silently stopped the
+  // model reasoning. A control with no off must never put one on the wire.
+  it('never sends an off for a control that offers none', () => {
+    const fixedOn = ollamaNativeAdapter('some-model', { vision: false, reasoning: FIXED_ON });
+    expect(fixedOn.buildRequest({ messages: [], reasoning: { enabled: false } }).body.think).toBe(
+      true,
+    );
+    const noOffStep = ollamaNativeAdapter('some-model', {
+      vision: false,
+      reasoning: { mode: 'steps', steps: ['low', 'high'], offStep: null, defaultStep: 'low' },
+    });
+    expect(noOffStep.buildRequest({ messages: [], reasoning: { enabled: false } }).body.think).toBe(
+      true,
+    );
+  });
+});
+
 describe('ollamaNativeAdapter.buildRequest', () => {
   it('targets /api/chat with native NDJSON framing', () => {
     const wire = adapter.buildRequest({ messages: [], reasoning: { enabled: true } });

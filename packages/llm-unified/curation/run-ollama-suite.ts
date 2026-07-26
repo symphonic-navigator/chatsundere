@@ -63,7 +63,11 @@ const tools: ToolDef[] = [
 // Vision is orthogonal to reasoning — exercise it once.
 const VISION_PERM: ReasoningPermutation[] = [{ label: 'default', intent: { enabled: false } }];
 
-for (const o of ollamaCloud.offerings) {
+// LLM offerings only — the provider also carries the two web (search / fetch)
+// offerings, which have no chat surface at all: driving them through the
+// conversation suite asserts tool calls and reasoning against an endpoint that
+// answers neither. Tracked in follow-ups-index since 2026-07-17.
+for (const o of ollamaCloud.offerings.filter((o) => o.serviceKind === 'llm')) {
   const adapter = ollamaNativeAdapter(o.upstreamSlug, {
     vision: o.profile.vision,
     reasoning: o.profile.reasoning,

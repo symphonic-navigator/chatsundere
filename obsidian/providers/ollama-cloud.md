@@ -16,11 +16,62 @@
 | Canonical | Slug | Reasoning | Vision | Tools | ctx | Confidence |
 |---|---|---|---|---|---|---|
 | glm-5.1 | `glm-5.1` | **toggle** (default on) | no | yes | 200k | verified |
-| glm-5.2 | `glm-5.2:cloud` | fixed-on | no | yes | 200k (max 1M) | verified |
+| glm-5.2 | `glm-5.2:cloud` | **steps** (off/on/max, default on) | no | yes | 200k (max 1M) | verified |
 | deepseek-v4-pro | `deepseek-v4-pro` | **toggle** (default on) | no | yes | 200k | verified |
 
 Reasoning steerability is **per model here, not a provider trait** — see the
 `think:false` table below.
+
+## `think` became a level (2026-07-26)
+
+Ollama's compute build-out came with a wire-semantics change that **no
+release note announced and that our code could not detect**: `think` is no
+longer a boolean but a validated enum. The server states its own contract when
+you break it:
+
+```
+HTTP 400  invalid think value: "banana"
+          (must be "high", "medium", "low", "max", true, or false)
+```
+
+Two consequences, both live-measured 2026-07-26:
+
+1. **`think:false` became meaningful on GLM 5.2.** It previously only relocated
+   the reasoning into the answer; it now empties the thinking channel in 8/8
+   runs. Since a `fixed-on` control makes the cockpit emit no intent — and
+   `composeWire` then defaults to `{enabled:false}` — we had been sending
+   `think:false` on every GLM 5.2 request all along. The day the byte changed
+   meaning, reasoning disappeared in the field. **Our code never changed.**
+   Full measurement table and the repair: [[../models/glm-5.2]].
+2. **`max` is a real level above `high`** — on GLM 5.2. Measured n=4 × 2
+   prompts: `max` separates cleanly (+47% / +170% thinking chars), while
+   `low`/`medium`/`high` do not separate at all from one another. GLM 5.2 is
+   therefore curated as `off / on / max`: every rung the probes can defend, and
+   no rung they cannot. Offering ollama's full level set would promise a
+   steerability we measured and did not find.
+
+Checked on the other two curated models in the same sweep (n=2 × 2 prompts):
+**glm-5.1 shows no `max` effect** (1493 vs 1536 chars for plain `true` on P1;
+all four levels within noise on both prompts) and **deepseek-v4-pro only a weak,
+single-prompt hint** (P2 max 2042 vs ≈700–1200, nothing on P1). Neither is
+reclassified — both keep `toggle`, and both still have a genuine off
+(`think:false` → 0 thinking chars, 4/4 runs each). Re-measure with a larger n
+before offering either a ladder.
+
+**The standing lesson:** a provider can change the meaning of a request you have
+been sending unchanged for weeks. Nothing in our repo could have caught this —
+no test, no type, no review. Only a live probe against the real endpoint does,
+which is why the curation harness exists (CLAUDE.md §13, "empirical truth over
+docs").
+
+**Catalogue also grew.** `/v1/models` on 2026-07-26 lists 18 models, including
+three that were removed in 2026-06 as non-existent (`deepseek-v4-flash`,
+`kimi-k2.6`, `gemma4:31b`) and several new ones (`minimax-m3`, `minimax-m2.7`,
+`nemotron-3-ultra`, `nemotron-3-super`, `qwen3.5:397b`, `mistral-large-3:675b`,
+`kimi-k2.7-code`, `gpt-oss:20b|120b`). None onboarded — no Krämerladen; onboard
+on request, per model. Also noted: bare **`glm-5.2` now resolves** and
+`/api/show` reports it identical to `glm-5.2:cloud`, so the `:cloud` suffix is no
+longer load-bearing (we keep it; it never broke).
 
 Live conversation-suite 2026-07-17, **all three green on all three scenarios**:
 `core` (11 checks), `one-shot` (2), `sampling-cap` (3). The background-job path
@@ -166,7 +217,7 @@ survive contact with ollama.com:
   |---|---|---|---|
   | `glm-5.1` | 777 → **269** (−65%) · 842 → **234** (−72%) | unchanged (831→802, 786→838) | **`toggle`** — a real off-switch |
   | `deepseek-v4-pro` | 343 → **170** (−50%) · 464 → **185** (−60%) | ~stable | **`toggle`** — a real off-switch |
-  | `glm-5.2:cloud` | 563 → **1055** (+87%) · 712 → 526 (−26%) | **3-4x longer** (735→3208, 497→1555) | **`fixed-on`** — NOT an off-switch |
+  | `glm-5.2:cloud` | 563 → **1055** (+87%) · 712 → 526 (−26%) | **3-4x longer** (735→3208, 497→1555) | **`fixed-on`** — NOT an off-switch *(superseded 2026-07-26 → `steps`, see above)* |
 
   Thinking channel empties on all three; `done_reason: stop`, no truncation
   anywhere. **The discriminator is content length, not `eval_count`** — GLM 5.2's
@@ -233,9 +284,10 @@ default (`tiers[0]`) is the 5-result standard, not the cheapest.
   is stale too: it claims ollama uses the generic path via `makeGenericLiveBinding`,
   while the code uses `makeLiveBinding` with the native adapter.
 - ~~`glm-5.1` / `deepseek-v4-pro` `fixed-on` is probably wrong~~ — **Resolved
-  2026-07-17.** Both are now `{ mode: 'toggle', defaultOn: true }`; GLM 5.2 stays
-  `fixed-on`. Broad probe (n=5 × 2 reasoning-warranting prompts) and a live suite
-  run confirm it — see the table above.
+  2026-07-17.** Both are now `{ mode: 'toggle', defaultOn: true }`; GLM 5.2 was
+  kept `fixed-on` — **and that is what broke it five weeks later**, when ollama
+  turned `think:false` into a genuine off. It is now `steps`
+  (off/low/medium/high/max); see *"`think` became a level"* above.
 - **`/v1` is a measured-viable fallback** (18/18 tool replay, reasoning, sampling).
   The native adapter's stated justification is gone; the remaining reasons are
   first-class API, atomic tool args and smaller code. Revisit deliberately if a

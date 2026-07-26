@@ -18,12 +18,38 @@ import { apiKeyField } from './_helpers.js';
 //   deepseek-v4-pro  think:false → eval_count -50% / -60%, content unchanged  → toggle
 //   glm-5.2:cloud    think:false → content 3-4x LONGER (735→3208, 497→1555)   → fixed-on
 //
-// The discriminator is CONTENT LENGTH, not eval_count: GLM 5.2's eval_count also
-// fell on one prompt (-26%), which alone would read as an off-switch. It is not —
-// the reasoning simply moves into the answer, so "off" buys a longer, chattier
-// reply rather than a cheaper one. That is exactly ReasoningControl's `fixed-on`
-// ("off only hides"), and offering a toggle there would astonish the user.
-const FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
+// The discriminator was CONTENT LENGTH, not eval_count: GLM 5.2's eval_count also
+// fell on one prompt (-26%), which alone would read as an off-switch. It was not —
+// the reasoning simply moved into the answer, so "off" bought a longer, chattier
+// reply rather than a cheaper one.
+//
+// SUPERSEDED 2026-07-26 for GLM 5.2: ollama's build-out changed `think` from a
+// boolean into a validated level (`low` / `medium` / `high` / `max` / bool), and
+// `false` became a genuine off — the model stopped reasoning in the field while
+// nothing on our side had changed. Re-measured per model below; a provider
+// changing the MEANING of an unchanged request is why this block records dates.
+// GLM 5.2's ladder, re-measured 2026-07-26 after ollama turned `think` from a
+// boolean into a validated level ("must be high, medium, low, max, true, or
+// false").
+//
+// Every rung here is one the probes can defend, and no more: `off` (0 thinking
+// chars, 8/8 runs), `on` (the model's own default — a bare `think:true`), and
+// `max` (the one level that separates: +47% / +170% thinking output over the
+// low/medium/high band, on every run). Ollama also accepts `low`/`medium`/`high`
+// but they do NOT separate under measurement — `high` landed *below* `low` on
+// both prompts at n=4 — so they are deliberately not offered. Same discipline as
+// Inkling, where seven upstream levels ship as four (Laura's pre-squash finding,
+// Chris's call 2026-07-26).
+//
+// `on` is not an effort label, so `resolveReasoningBodyExtras` yields a bare
+// `{enabled:true}` → `think:true`. `max` IS an effort, and rides through as the
+// ollama level verbatim. Renaming a step therefore changes the wire.
+const GLM52_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['off', 'on', 'max'],
+  offStep: 'off',
+  defaultStep: 'on',
+};
 
 // Reasoning genuinely stops when switched off; on by default because it is the
 // reason to pick a reasoning-native model at all, and these models get measurably
@@ -78,18 +104,30 @@ function ollamaOffering(spec: OllamaSpec): Offering {
 // result (live-measured); the native endpoint answers correctly.
 const SPECS: OllamaSpec[] = [
   { canonicalRef: 'glm-5.1', slug: 'glm-5.1', reasoning: TOGGLE_ON, vision: false, ctx: 200_000 },
-  // GLM 5.2 is served under the `:cloud` slug (bare `glm-5.2` 404s on ollama.com).
-  // fixed-on is CORRECT and re-confirmed 2026-07-17: `think:false` empties the
-  // thinking channel but does NOT stop the model reasoning — it relocates the
-  // reasoning into the answer. On a prompt that warrants reasoning, think:false
-  // measured content 869 → 3265 chars and eval_count 526 → 1010, i.e. "off"
-  // COSTS ~2x and only makes the reply longer. That is exactly the ReasoningControl
-  // `fixed-on` case ("off only hides"), so offering a toggle here would astonish.
-  // (An earlier 2026-07-17 note claiming think:false disables reasoning was wrong:
-  // it was probed with a title prompt that never triggers reasoning at all.)
-  // Unlike glm-5.1 / deepseek-v4-pro, where think:false IS a real off-switch.
+  // GLM 5.2 is served under `:cloud`; bare `glm-5.2` 404'd until ollama's
+  // 2026-07 build-out and now resolves to the same deployment (`/api/show`
+  // reports an identical 756B / 1M-context model for both slugs, 2026-07-26).
+  // We stay on `:cloud`, which never stopped working.
+  //
+  // Was `fixed-on` until 2026-07-26 on the then-correct finding that `think:false`
+  // only RELOCATED the reasoning into the answer (content 869 → 3265 chars,
+  // eval_count 526 → 1010). Ollama has since changed the semantics — `think` is
+  // now a validated level and `false` is a genuine off. Re-measured serially
+  // (2 prompts x 6 values x 4 repetitions, thinking-channel chars):
+  //   false → 0 / 0        (a real off, 8/8 runs)
+  //   low   → 705 / 1246
+  //   medium→ 792 / 1358   (low/medium/high do NOT separate — high fell below
+  //   high  → 744 / 1052    low on both prompts; the band is within noise)
+  //   max   → 1103 / 3288  (separates clearly on every run: +47% / +170%)
+  // The full ladder is shipped on Chris's call (2026-07-26) despite low/medium/
+  // high being indistinguishable under measurement — recorded in the Model
+  // Curation Record so the claim stays honest.
+  //
+  // This is what broke reasoning in the field: `fixed-on` makes the cockpit emit
+  // no intent, `composeWire` then defaults to `{enabled:false}`, and the adapter
+  // put `think:false` on the wire — harmless while off was a no-op, a real off
+  // afterwards. Our code never changed; the meaning of the byte did.
   // /api/show reports a 1,000,000 ceiling; recommended capped at 200k.
-  // Live-probed 2026-06-17.
   // ZDR: ollama states GLM 5.2 is hosted in the US and Europe "with zero data
   // retention. Your data is never trained on." It is enforced server-side with
   // no per-request flag, so the badge is purely a deployment property (cf. the
@@ -98,7 +136,7 @@ const SPECS: OllamaSpec[] = [
   {
     canonicalRef: 'glm-5.2',
     slug: 'glm-5.2:cloud',
-    reasoning: FIXED_ON,
+    reasoning: GLM52_STEPS,
     vision: false,
     ctx: 200_000,
     maxCtx: 1_000_000,

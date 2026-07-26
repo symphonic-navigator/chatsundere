@@ -20,7 +20,8 @@ export interface ApplyResult {
  *    model. Engine-side `composeReasoningExtras` is responsible for
  *    skipping non-optional models — this function unconditionally writes
  *    the field for the novita provider.
- *  - ollama-cloud uses `{ think: bool }`. Effort is silently dropped.
+ *  - ollama-cloud uses `{ think: bool | level }`, where the level is one of
+ *    ollama's own `low` / `medium` / `high` / `max`.
  */
 export function applyReasoningToBody(
   providerId: ProviderId,
@@ -57,7 +58,10 @@ export function applyReasoningToBody(
   }
 
   if (providerId === 'ollama-cloud') {
-    out.think = intent.enabled;
+    // ollama's native `think` takes a level as well as a boolean — it validates
+    // the value server-side ("must be high, medium, low, max, true, or false",
+    // HTTP 400 otherwise), so an effort is passed through rather than dropped.
+    out.think = intent.enabled ? (intent.effort ?? true) : false;
     return { modelId, body: out };
   }
 
