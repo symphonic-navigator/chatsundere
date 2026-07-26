@@ -8,6 +8,46 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-26 (later) — **GENERATED IMAGES NOW COME THROUGH THE
+CORS PROXY — and a lying error message that hid it.** Squashed to `master`
+(`f66825c0`), **not pushed**. nano-gpt returns **pre-signed R2 links** from
+`/images/generations` and we fetched them straight from the browser. Measured
+2026-07-26: the bucket answers a cross-origin GET with **no CORS headers at all**
+unless the Origin is localhost — `http://localhost:3000` gets
+`Access-Control-Allow-Origin`, `https://app.chatsundere.me` gets nothing. **Dev
+was the one environment where this could not fail**, which is why it went
+unnoticed. The signed URL now travels the same route as the call that produced
+it: new **`buildSignedUrlGet`** splits it as the transport already splits
+provider calls (origin → `x-cors-proxy-target`, path **and signed query** → the
+request line, account token → `x-chatsundere-authorization`) and carries **no
+`Authorization`**, which would collide with the AWS-V4 signature. **Two
+measurements made this safe:** the signed URL answers **200 directly** (no
+redirect, so the proxy's `redirect: 'manual'` is not in the way) and
+`X-Amz-SignedHeaders` is **`host` alone**, which the proxy reproduces exactly by
+forwarding to `target.origin + request-path`. **No proxy-service change** —
+`known-hosts.ts` is explicitly *not* an allow-list (Prometheus cardinality only)
+and the blocked-range SSRF guard is untouched; **Larissa consciously skipped on
+Chris's call** (client-side routing change, the path itself already audited).
+**The second defect is the sharper one:** a failed fetch degraded the item to
+**`moderated`**, so the user read *"every image was blocked by the provider's
+content filter"* — a transport fault reported as a content decision. It sent
+people rewriting a prompt that was never at fault **and it camouflaged this very
+bug**, because "blocked by the filter" reads like an ordinary day. Failures are
+now a distinct **`failed`** kind with honest copy naming a connection problem on
+our side. Covers every URL-returning image group (`zimage`, `seedream`,
+`gpt-image-2` — all nano-gpt); xAI returns b64 inline and never took this path.
+Verified there is no second site of this class: `blob-transport`/`lib/fetch`
+address our own backend, not provider CDNs. Gates: llm-unified **462/462**
+(incl. a new test pinning the exact wire form — proxy URL, target header, token,
+and the *absence* of `Authorization`), `pnpm typecheck --force` **14/14** (0
+cached), full user-client vitest **3228 pass / 8** known baseline (the 9th was
+again `stream-manager-store`, isolated **38/38**), Biome clean. **Next:** device
+check **on `app.chatsundere.me`, not locally** — localhost is precisely the
+origin the bucket still allows, so a local run proves nothing. Generate an image
+and confirm it appears; then push.
+
+---
+
 **Last updated:** 2026-07-26 — **GLM 5.2 ON OLLAMA REASONS AGAIN — A PROVIDER
 CHANGED THE MEANING OF A REQUEST WE NEVER CHANGED.** Built in the working tree,
 **not committed** (Chris's call on squash + a Laura pass, see Next). Field report
