@@ -8,6 +8,54 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-27 — **KIMI K3 CURATED ON OLLAMA CLOUD — and the
+first `fixed-on` that is a policy, not an inability.** Built in the working
+tree, **not committed** (awaiting Chris). Moonshot's open weights dropped today
+(the community had run an eleven-day countdown); ollama served the model within
+the hour, so K3 gains a **third route** beside OpenRouter and novita — the
+canonical already existed, no new `CanonicalModel`. `/api/show`: vision +
+thinking + tools, **2.812T** params at MXFP4, 1 048 576 ceiling (recommended
+stays 262 144, the Kimi-family sweet-spot — still no long-context evidence).
+**Access is gated:** ollama serves K3 as *extra usage only* (Pro/Max + credits),
+and an empty balance answers `your extra usage balance is empty` **with HTTP
+200**, which reads exactly like a bad key. Chris topped up; probing followed.
+**The reasoning finding is the substance.** `think:false` is a *genuine* off (0
+thinking chars, 6/6) and the answer length is unchanged (217 → 211), so unlike
+GLM 5.2 the reasoning does not relocate into the content. The levels do not
+separate (2 prompts × 6 values × 3 reps: `max` 248 landed **below** `low` 306 on
+P1; within-cell spread 514/666/605 exceeds every between-cell difference), so no
+ladder — same discipline as GLM 5.2's off/on/max. That left a clean `toggle` —
+**and it was rejected on measurement.** With reasoning off, tools fire in
+**10/20** runs vs **19/20** with it on (`generate_image` 2/5 bare *and* 2/5 with
+the real 3 680-char system prompt, `calculate_js` 4/5, `write_memory` 2/5), and
+every miss **narrates the result it never produced** — *"Got it! I'll remember
+that you're allergic…"* with no `write_memory` call, once even a Markdown image
+link for an image that never existed. On memory that is invisible: nothing
+stored, the reply says otherwise. So the offering is **`fixed-on` by policy**
+(Chris's call): `canDisableReasoning` stays false, `think:false` never reaches
+the wire. Side effect: title generation went from a 644-character paragraph to a
+**24-character** title. **Second finding, provider-level:** K3 reports **no
+token counts at all** — no `prompt_eval_count`/`eval_count`, streaming or not —
+while glm-5.1/5.2, deepseek-v4-pro and even kimi-k2.6 still do on the same key
+the same day; the `/v1` shim fabricates `{0,0,0}`, an absence dressed as a
+measurement. Runtime impact today is **none** (the Context-Gauge runs on
+`estimateTokens`, `stream-engine` reads only `reasoningTokens`), but every
+`usage` red in the suite traces to it, and the sampling cap had to be proven by
+`done_reason` instead (`num_predict:16` → `length` at 16 chars; no cap → `stop`
+at 110; top-level `max_tokens` ignored → `stop` at 368). **Live suite
+(`run-ollama-suite.ts kimi`):** core 8/11, one-shot **2/2**, vision **3/4**
+(names "green"), sampling-cap 1/3 — **every single red is that one usage
+absence**, nothing else. Runner gained an argv[2] slug filter (mirrors the
+OpenRouter runner) so curating one model no longer re-verifies all four. Gates:
+`parseCatalogueEntry` **OK**, llm-unified **464/464**, `pnpm typecheck --force`
+**14/14** (0 cached), full user-client vitest **3229 pass / 8** known baseline,
+Biome clean. No Larissa (no auth/sync/proxy/crypto surface); no Laura (a
+catalogue addition reusing the existing `fixed-on` cockpit state). **Next:**
+Chris's own ERP/smut evals against the unlocker to settle
+`freedomOriented: null` — the reason this route was wanted.
+
+---
+
 **Last updated:** 2026-07-26 (later) — **GENERATED IMAGES NOW COME THROUGH THE
 CORS PROXY — and a lying error message that hid it.** Squashed to `master`
 (`f66825c0`), **not pushed**. nano-gpt returns **pre-signed R2 links** from

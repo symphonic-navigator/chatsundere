@@ -149,6 +149,68 @@ const SPECS: OllamaSpec[] = [
     vision: false,
     ctx: 200_000,
   },
+  // Kimi K3, onboarded 2026-07-27 — the third curated route after OpenRouter
+  // (`fixed-on`) and novita (`steps`), and the only one where the model both
+  // reasons and can be silenced. Bare `kimi-k3` resolves identically (same
+  // `/api/show`); we keep `:cloud`, the tag ollama's library page documents.
+  //
+  // `think` ladder, measured serially 2026-07-27 (2 reasoning-warranting prompts
+  // x 6 values x 3 repetitions, thinking-channel chars, medians):
+  //   false → 0 / 0        a genuine off, 6/6 runs
+  //   true  → 605 / 190
+  //   low   → 306 / 156    the levels do NOT separate: on P1 `max` (248) lands
+  //   medium→ 345 / 172    BELOW `low` (306), and the within-cell spread
+  //   high  → 557 / 130    (e.g. 514/666/605 for a single cell) exceeds every
+  //   max   → 248 / 186    difference between cells.
+  // So `toggle`, not `steps` — a ladder here would promise steering we measured
+  // and did not find, the same discipline that keeps GLM 5.2 at off/on/max. It
+  // also matches the OpenRouter K3 finding that effort does not modulate the
+  // trace; what differs is that ollama HAS an off where OpenRouter 400s on one.
+  //
+  // Off is genuine rather than hidden: answer length is unchanged with reasoning
+  // off (217 → 211 chars on P1), so the thinking is not merely relocating into
+  // the content — the failure mode that made GLM 5.2 `fixed-on`.
+  //
+  // AND YET THIS IS `fixed-on` — the one offering here where the control is a
+  // deliberate POLICY rather than a measured inability. Every other `fixed-on`
+  // in the catalogue means "the upstream refuses or fakes an off"; this one
+  // means "we decline to send an off that works", because of what off does to
+  // tool calls (measured 2026-07-27, n=5 per cell):
+  //
+  //   generate_image (no system prompt)     think:false 2/5   think:true 5/5
+  //   generate_image (real 3 680-char prompt) 2/5             5/5
+  //   calculate_js                            4/5             5/5
+  //   write_memory                            2/5             4/5
+  //   ---------------------------------------------------------------
+  //   aggregate                              10/20 (50%)     19/20 (95%)
+  //
+  // The misses are not silent refusals — the model NARRATES the tool result it
+  // never produced ("Got it! I'll remember that you're allergic…", and once a
+  // Markdown image link for an image that was never generated). A silent no-op
+  // that reports success is worse than a visible failure, and on `write_memory`
+  // it is invisible: the memory is simply absent while the reply says it was
+  // stored. A realistic system prompt does not rescue it (identical 2/5), so
+  // prompt composition is not the lever.
+  //
+  // `fixed-on` sets `canDisableReasoning = false`, so the adapter never puts
+  // `think:false` on the wire and the cockpit shows reasoning as always-on.
+  // Chris's call, 2026-07-27. Revisit if Moonshot or ollama change the
+  // behaviour — the off-switch itself works and would cost nothing to re-enable.
+  //
+  // NO ZDR: ollama states US/EU zero-retention for GLM 5.2 only; the K3 library
+  // page makes no retention statement at all.
+  //
+  // recommended 262 144 matches the other two K3 routes (the Kimi-family
+  // sweet-spot) — the 1M ceiling is real but we still have no long-context
+  // "stays smart" evidence for K3.
+  {
+    canonicalRef: 'kimi-k3',
+    slug: 'kimi-k3:cloud',
+    reasoning: { mode: 'fixed-on' },
+    vision: true,
+    ctx: 262_144,
+    maxCtx: 1_048_576,
+  },
 ];
 
 // Ollama's /api/web_search takes max_results (1–10). Listed recommended-first so

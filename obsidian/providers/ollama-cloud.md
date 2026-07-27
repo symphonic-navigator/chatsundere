@@ -11,16 +11,44 @@
 - **Key:** `keys/.ollama-test-key` (never in CI)
 - **Adapter:** catalogue (`ollama-cloud:<slug>`), `responseFraming: 'ndjson'`
 
-## Curated offerings (3)
+## Curated offerings (4)
 
 | Canonical | Slug | Reasoning | Vision | Tools | ctx | Confidence |
 |---|---|---|---|---|---|---|
 | glm-5.1 | `glm-5.1` | **toggle** (default on) | no | yes | 200k | verified |
 | glm-5.2 | `glm-5.2:cloud` | **steps** (off/on/max, default on) | no | yes | 200k (max 1M) | verified |
 | deepseek-v4-pro | `deepseek-v4-pro` | **toggle** (default on) | no | yes | 200k | verified |
+| kimi-k3 | `kimi-k3:cloud` | **fixed-on** (by policy — see below) | **yes** | yes | 262k (max 1M) | verified |
 
 Reasoning steerability is **per model here, not a provider trait** — see the
 `think:false` table below.
+
+## Kimi K3 (2026-07-27) — two provider traits worth knowing
+
+Onboarded the day Moonshot's open weights dropped; ollama served it within the
+hour. Full measurements in [[../models/kimi-k3]]; two findings belong to the
+provider rather than the model.
+
+1. **Extra-usage gating has its own error shape.** K3 is served as *"extra usage
+   only"* (Pro/Max subscription, tier "Extra High Usage"). With an empty
+   balance every request answers HTTP 200 with
+   `{"error":"this model uses extra usage only … your extra usage balance is
+   empty, add extra usage or turn on auto reload"}` — **not** a 401 or a 404. It
+   is easy to misread as a bad key or a wrong slug; it is a billing state.
+2. **Token counts can be missing per model.** K3 reports **no**
+   `prompt_eval_count` / `eval_count` at all, streaming or not, while glm-5.1,
+   glm-5.2, deepseek-v4-pro and **kimi-k2.6** all report them on the same key on
+   the same day. The `/v1` shim fabricates `{prompt_tokens: 0,
+   completion_tokens: 0, total_tokens: 0}` rather than omitting the object,
+   which is the worse failure: an absence dressed as a measurement. Any
+   assertion or feature that reads `usage` must therefore treat it as optional
+   **per offering**, not per provider. The sampling cap still had to be proven —
+   `done_reason` is the substitute witness (`length` at `num_predict: 16`,
+   `stop` without a cap and `stop` for the ignored top-level `max_tokens`).
+
+`run-ollama-suite.ts` now takes an optional argv[2] substring filter (e.g.
+`bun run curation/run-ollama-suite.ts kimi`), mirroring the OpenRouter runner —
+verifying one new offering no longer re-runs every curated model.
 
 ## `think` became a level (2026-07-26)
 
@@ -277,12 +305,15 @@ default (`tiers[0]`) is the 5-result standard, not the cheapest.
 ## Open / follow-ups
 
 - `freedomOrientedDeployment: null` — pending Chris (ollama is open-weight / self-hostable infra).
-- **`run-ollama-suite.ts` iterates ALL offerings**, including the two web ones, and
-  builds an LLM adapter for `web-ollama-search` / `web-ollama-fetch`. Both
-  consequently report FAIL (HTTP 404) on every scenario in a live run — noise, not
-  signal. Pre-existing; not fixed in the 2026-07-17 pass. The file's header comment
-  is stale too: it claims ollama uses the generic path via `makeGenericLiveBinding`,
-  while the code uses `makeLiveBinding` with the native adapter.
+- ~~**`run-ollama-suite.ts` iterates ALL offerings**, including the two web ones,
+  which report FAIL (HTTP 404) as noise; header comment stale too~~ — **both
+  resolved.** Verified 2026-07-27: the runner filters `serviceKind === 'llm'`, so
+  the web offerings are never driven through the chat suite, and the header
+  comment describes `makeLiveBinding` with the native adapter, which is what the
+  code does. The bullet outlived its defect.
+- **`usage` is optional per offering, not per provider** (Kimi K3 reports none).
+  Anything downstream that will read token counts — the usage-display slice
+  above all — needs a "this model reports nothing" state rather than a zero.
 - ~~`glm-5.1` / `deepseek-v4-pro` `fixed-on` is probably wrong~~ — **Resolved
   2026-07-17.** Both are now `{ mode: 'toggle', defaultOn: true }`; GLM 5.2 was
   kept `fixed-on` — **and that is what broke it five weeks later**, when ollama

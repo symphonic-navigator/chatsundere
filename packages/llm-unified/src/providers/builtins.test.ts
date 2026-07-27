@@ -199,18 +199,19 @@ describe('built-in providers', () => {
     }
   });
 
-  it('ollama-cloud has 3 LLM offerings + 2 web offerings (search/fetch)', () => {
+  it('ollama-cloud has 4 LLM offerings + 2 web offerings (search/fetch)', () => {
     const p = getProvider('ollama-cloud');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(5);
+      expect(p.offerings).toHaveLength(6);
 
       const llm = p.offerings.filter((o) => o.serviceKind === 'llm');
       expect(llm.map((o) => o.upstreamSlug).sort()).toEqual([
         'deepseek-v4-pro',
         'glm-5.1',
         'glm-5.2:cloud',
+        'kimi-k3:cloud',
       ]);
       expect(llm.every((o) => o.confidence === 'verified')).toBe(true);
       expect(llm.every((o) => o.adapter.kind === 'catalogue')).toBe(true);
@@ -221,11 +222,17 @@ describe('built-in providers', () => {
       // glm-5.2: `steps` since 2026-07-26, when ollama turned `think` into a
       // validated level and `false` into a genuine off (it previously only
       // relocated the reasoning into the answer, which is why it was fixed-on).
+      // kimi-k3: `fixed-on` although the off-switch demonstrably WORKS — the one
+      // offering here where the control is policy, not a measured inability.
+      // With `think:false` the model fires tools in only 10/20 runs and narrates
+      // the result it never produced (a stored memory that was never stored),
+      // so the off is withheld rather than offered (Chris, 2026-07-27).
       const modes = Object.fromEntries(llm.map((o) => [o.upstreamSlug, o.profile.reasoning.mode]));
       expect(modes).toEqual({
         'glm-5.1': 'toggle',
         'deepseek-v4-pro': 'toggle',
         'glm-5.2:cloud': 'steps',
+        'kimi-k3:cloud': 'fixed-on',
       });
       // Only measurably-distinct rungs are offered: off, the model's own default
       // (`on` → a bare think:true), and `max`. Ollama accepts low/medium/high too

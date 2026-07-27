@@ -11,6 +11,7 @@
 // the wire, each with its own binding.
 //
 //   bun run curation/run-ollama-suite.ts        (from packages/llm-unified)
+//   bun run curation/run-ollama-suite.ts kimi   (substring-filter offerings)
 import { readFileSync } from 'node:fs';
 import type { ToolDef } from '../src/adapter-contract.js';
 import { ollamaNativeAdapter } from '../src/adapters/ollama-native.js';
@@ -63,11 +64,20 @@ const tools: ToolDef[] = [
 // Vision is orthogonal to reasoning — exercise it once.
 const VISION_PERM: ReasoningPermutation[] = [{ label: 'default', intent: { enabled: false } }];
 
+// Optional argv[2] substring filter, e.g. `bun run … kimi` runs only the Kimi
+// offering — mirrors run-openrouter-suite.ts. Without it every curated model is
+// re-verified, which is right at a milestone and wasteful when curating one.
+const slugFilter = process.argv[2];
+
 // LLM offerings only — the provider also carries the two web (search / fetch)
 // offerings, which have no chat surface at all: driving them through the
 // conversation suite asserts tool calls and reasoning against an endpoint that
 // answers neither. Tracked in follow-ups-index since 2026-07-17.
-for (const o of ollamaCloud.offerings.filter((o) => o.serviceKind === 'llm')) {
+const selected = ollamaCloud.offerings.filter(
+  (o) => o.serviceKind === 'llm' && (!slugFilter || o.upstreamSlug.includes(slugFilter)),
+);
+
+for (const o of selected) {
   const adapter = ollamaNativeAdapter(o.upstreamSlug, {
     vision: o.profile.vision,
     reasoning: o.profile.reasoning,

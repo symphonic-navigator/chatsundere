@@ -18,9 +18,17 @@
 
 A **2.5T** model trained with **QAT** (quantisation-aware training — native 4-bit
 weights, so quantised behaviour stays close to full precision; the family trait
-Chris values). Two routes are now curated: Moonshot's own API via **OpenRouter**
-(the original, `fixed-on`) and **novita** (added 2026-07-18, `steps` with a real
-off). novita reports a native 1M window and full text+image vision.
+Chris values). Three routes are now curated: Moonshot's own API via **OpenRouter**
+(the original, `fixed-on`), **novita** (added 2026-07-18, `steps` with a real
+off) and **ollama Cloud** (added 2026-07-27, `fixed-on` — by policy, not by
+inability). novita reports a native 1M window and full text+image vision.
+
+> **The open weights landed on 2026-07-27**, eleven days after the API-only
+> onboarding above (the community ran a public countdown to the drop). ollama
+> served the model within the hour, which is what prompted this third route.
+> `/api/show` reports **2.812T** parameters at **MXFP4** — worth noting against
+> the "2.5T" figure the OpenRouter onboarding recorded from Moonshot's own
+> material.
 
 ## Offering — openrouter — `fixed-on` (reasoning cannot be disabled)
 
@@ -82,6 +90,104 @@ reasoning **can** be disabled.
   on the model axis (Moonshot-PRC), so the composed 🕊️ badge stays *unknown*.
 - **Validation (2026-07-18):** core **PASS 44/44** (off + low/medium/high); vision
   **PASS 4/4**.
+
+## Offering — ollama-cloud — `fixed-on` (a policy, not an inability)
+
+Added 2026-07-27 (Chris), the day the open weights dropped. This is the **only**
+`fixed-on` in the catalogue that does not describe an upstream refusal: ollama
+offers a working off-switch and **we decline to use it**. The reason is measured
+below, and it is the interesting part of this route.
+
+- **slug:** `kimi-k3:cloud` · **adapterId:** `ollama-cloud:kimi-k3:cloud` ·
+  native `/api/chat` (NDJSON) via `ollamaNativeAdapter`, like every ollama
+  offering. Bare `kimi-k3` resolves to an identical `/api/show`; we keep
+  `:cloud`, the tag the library page documents (the same situation as GLM 5.2).
+- **context:** recommended **262 144** / max **1 048 576** — matching the other
+  two K3 routes. `/api/show` reports the 1M ceiling; we still have no
+  long-context "stays smart" evidence for K3, so `recommended ≠ max` stands.
+- **Access:** ollama serves K3 as **extra usage only** — *"Currently Kimi K3
+  requires a Pro or Max subscription, and consumes extra usage credits"*, tier
+  *"Extra High Usage"*. With an empty extra-usage balance every request answers
+  `this model uses extra usage only … your extra usage balance is empty`, not a
+  401 or 404. Worth recognising: it reads like a broken key or a wrong slug.
+- **vision:** ✅ — `/api/show` lists `vision`, and the suite's `vision` scenario
+  names the colour "green" on the test image. The native adapter already sends
+  images as raw base64, so no adapter change was needed.
+- **tools:** fire reliably **with reasoning on** (19/20 across three tools);
+  arguments arrive atomically, as on every ollama route.
+- 🔒 **Privacy:** **no** — `{ tee: false, zdr: false }`. ollama states US/EU
+  zero-retention for **GLM 5.2 only**; the K3 library page makes no retention
+  statement at all, so nothing is claimed here.
+- 🕊️ **Freedom (deployment):** `null` — the provider-wide open question for
+  ollama (see [[../providers/ollama-cloud]]). The 🕊️ badge is *unknown* either
+  way, because the model axis is `null`.
+
+### The reasoning-off defect that decided the control
+
+`think` on this model is a genuine off — 0 thinking chars in 6/6 runs, and the
+answer length is **unchanged** (217 → 211 chars), so the reasoning is not merely
+relocating into the content the way GLM 5.2's did. The levels, however, do not
+separate: measured 2 reasoning-warranting prompts × 6 values × 3 repetitions,
+`max` (248) landed **below** `low` (306) on P1, and the spread within one cell
+(514 / 666 / 605) exceeded every difference between cells. So no ladder — the
+same discipline that keeps GLM 5.2 at off/on/max, and consistent with the
+OpenRouter finding that effort does not modulate K3's trace.
+
+That left a clean `toggle`. What ruled it out is what reasoning-off does to tool
+calls (n=5 per cell, 2026-07-27):
+
+| Tool | `think:false` | `think:true` |
+|---|---|---|
+| `generate_image`, no system prompt | 2/5 | 5/5 |
+| `generate_image`, real 3 680-char prompt | 2/5 | 5/5 |
+| `calculate_js` | 4/5 | 5/5 |
+| `write_memory` | 2/5 | 4/5 |
+| **aggregate** | **10/20 (50%)** | **19/20 (95%)** |
+
+The failures are the dangerous kind: the model **narrates the result it never
+produced** — *"Got it! I'll remember that you're allergic…"* with no
+`write_memory` call, and once a Markdown image link for an image that was never
+generated. On `write_memory` this is invisible to the user: the memory is simply
+absent while the reply says it was stored. A realistic system prompt does not
+rescue it (identical 2/5), so prompt composition is not the lever.
+
+`fixed-on` sets `canDisableReasoning = false`, so `think:false` never reaches
+the wire and the cockpit shows reasoning as always-on. **Chris's call,
+2026-07-27**, taking the honest-but-broken option off the table rather than
+documenting a trap. Revisit if the behaviour changes upstream — re-enabling
+costs one line, since the off-switch itself works.
+
+A pleasant side effect: title generation improved from a **644-character**
+paragraph to a **24-character** title, because the background-job path now
+reasons too.
+
+### The usage gap
+
+**K3 on ollama reports no token counts at all.** No `prompt_eval_count`, no
+`eval_count`, on `/api/chat` — non-streaming and streaming alike. It is
+model-specific, not a provider regression: glm-5.1, glm-5.2, deepseek-v4-pro and
+even **kimi-k2.6** all still report them on the same key, the same day. The `/v1`
+shim is worse than silent — it emits `{prompt_tokens: 0, completion_tokens: 0,
+total_tokens: 0}`, dressing an absence as a measurement.
+
+Consequences, in order of who cares:
+
+- **Runtime: none today.** The Context-Gauge and the compaction valve run on
+  `estimateTokens` client-side, not on provider usage (`chat-page.tsx`), and
+  `stream-engine.ts` reads only `reasoningTokens`, for the hidden-reasoning
+  marker — which K3 does not need, since it streams its trace. Usage *display*
+  is a later slice; when it lands, this model will have nothing to show.
+- **Suite: every remaining red is this one cause.** Core 8/11, vision 3/4,
+  sampling-cap 1/3 — all six failures are `usage-present` or derived from it.
+- **The sampling cap still works**, and had to be proven another way. With
+  `usage` unavailable, `done_reason` is the witness: no cap → `stop` at 110
+  chars; `options.num_predict: 16` (the shape our adapter sends) → **`length`**
+  at 16 chars; top-level `max_tokens: 16` → `stop` at 368 chars, ignored. The
+  cap reaches the wire; only its *verification through usage* is impossible.
+
+The offering is kept at `confidence: 'verified'`: everything measurable was
+measured live, and the one gap is an upstream absence recorded here rather than
+a claim we could not test.
 
 ## Validation (2026-07-16, live conversation-suite)
 
