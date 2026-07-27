@@ -38,10 +38,12 @@ and nano-gpt (40). That ordering test is updated with the why. The two ollama
 results are filtered, which is what the axis would mean for them. Gates:
 llm-unified **464/464**, `pnpm typecheck --force` **14/14** (0 cached), full
 user-client vitest **3229 pass / 8** known baseline, Biome clean. **Next:** free
-— the Ollama K3 route is field-ready. Metering note: Chris's 10 USD extra-usage
-balance was **untouched** by roughly 100 probe calls plus the evals, so ollama
-either has not switched K3 metering on yet or bills GPU-time in a way short
-turns never reach. Worth re-checking before anyone assumes it is free.
+— the Ollama K3 route is field-ready. **Metering is live and is GPU-time based**
+(confirmed 2026-07-27): roughly 100 short probe calls moved the extra-usage
+balance by nothing measurable, while Chris's long-context story evals cost a few
+cents. So the price scales with **context length**, not with request count — which
+makes the Context-Gauge and compaction economically meaningful on this provider,
+not merely tidy. Do not assume a cheap probe run predicts the cost of real use.
 
 ---
 
