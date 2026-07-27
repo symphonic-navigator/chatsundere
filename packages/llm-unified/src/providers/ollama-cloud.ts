@@ -85,7 +85,16 @@ function ollamaOffering(spec: OllamaSpec): Offering {
     },
     context: { recommended: spec.ctx, max: spec.maxCtx ?? spec.ctx },
     trust: { tee: false, zdr: spec.zdr ?? false },
-    freedomOrientedDeployment: null,
+    // `null` from onboarding until 2026-07-27 — the axis asks whether the
+    // PROVIDER layers censorship on top of the model, and we had never measured
+    // it. Chris's Kimi K3 eval did: explicit prose and adult roleplay were
+    // delivered on ollama's own compute, so nothing sits between the weights and
+    // the user here. Judged provider-wide on that evidence (Chris, 2026-07-27),
+    // which is a generalisation from ONE model — recorded as such in the
+    // Provider Curation Record. It also unblocks glm-5.1, glm-5.2 and
+    // deepseek-v4-pro, all `freedomOriented: true` on the model axis and stuck
+    // at an 'unknown' badge purely because of this `null`.
+    freedomOrientedDeployment: true,
     source: 'curated',
     confidence: 'verified',
     serviceKind: 'llm',

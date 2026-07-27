@@ -74,14 +74,20 @@ export const CANONICALS: CanonicalModel[] = [
     displayName: 'Kimi K3',
     family: 'kimi',
     requiredCaps: { tools: true, reasoning: true, vision: true },
-    // Moonshot AI is a PRC company subject to KPCh content obligations, so the
-    // model-intrinsic freedom is genuinely UNKNOWN until measured (Chris,
-    // 2026-07-16): `null`, not `false` — absence of evidence is not evidence of
-    // restriction. Moonshot may drop censorship for Western API clients (rumoured,
-    // unconfirmed). Revisit once the eval lands. See [[../../obsidian/models/kimi-k3]].
-    freedomOriented: null,
+    // Was `null` from 2026-07-16 — Moonshot AI is a PRC company subject to KPCh
+    // content obligations, so the honest state was "unassessed", not `false`
+    // (absence of evidence is not evidence of restriction). RESOLVED 2026-07-27:
+    // Chris ran the eval on ollama's Western compute — explicit prose to a
+    // storyteller system prompt, plus adult roleplay — and both were delivered
+    // without resistance. The chain-of-thought is the striking part: the model
+    // reasons its way TO compliance ("Explicit, literary, avoiding clichés. This
+    // is allowed per system prompt"), i.e. it treats the operator instruction as
+    // authoritative rather than tolerating it grudgingly. That is the rubric's
+    // test, not merely a passed refusal check. See
+    // [[../../obsidian/models/kimi-k3]] and obsidian/FREEDOM-CRITERIA.md.
+    freedomOriented: true,
     freedomNote:
-      'Moonshot AI is a PRC company (KPCh content obligations); freedom orientation not yet assessed — unknown pending eval (Chris, 2026-07-16).',
+      'Moonshot open-weight model. PRC origin made this `null` until measured; judged freedom-oriented by Chris (2026-07-27) after an eval on Western compute — explicit prose on request and adult roleplay both delivered, with the model deriving the permission from the system prompt in its own reasoning trace rather than merely complying.',
   },
   {
     id: 'gemma-4-31b',

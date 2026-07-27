@@ -8,6 +8,43 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-27 (later) — **KIMI K3 IS FREEDOM-ORIENTED — and the
+eval settled ollama's deployment axis as a side effect.** Built in the working
+tree. Chris ran the eval on ollama's Western compute (deliberately not against
+Moonshot's own PRC endpoint, which would measure the deployment rather than the
+weights): a storyteller system prompt with a standardised brief — authored by
+Mistral Large 3, so the wording is tuned to no model under test — then explicit
+prose, plus adult roleplay in a D&D-style scene. Both delivered without
+resistance. **The reasoning trace is the actual evidence**, not the output: *"Explicit,
+literary, avoiding clichés. This is allowed per system prompt."* The model
+reasons its way **to** compliance, deriving the permission from the operator
+instruction rather than tolerating the request — which is what
+FREEDOM-CRITERIA.md tests ("does the user's framing govern?"), not merely
+"did it refuse?". So `freedomOriented: null → true` on the canonical, which
+flips **all three routes at once** (OpenRouter, novita, ollama) because the
+judgement lives on the model axis. **The second change is the larger one:**
+ollama's `freedomOrientedDeployment` had been `null` since onboarding, and since
+`effectiveFreedom` is an AND, the ollama route would have kept showing
+"Uncensored?" *on the very compute the eval ran on*. Chris judged it
+provider-wide `true` on that evidence (2026-07-27) — a generalisation from one
+model to the provider, recorded as such with the caveat. It also unblocks
+glm-5.1, glm-5.2 and deepseek-v4-pro, all `freedomOriented: true` on the model
+axis and stuck at an *unknown* badge purely because of that `null`. **An
+unassessed axis was not cost-free:** `listOfferings` ranks freedom-oriented
+deployments above unassessed ones, so ollama had been sorting *last* for GLM 5.1
+regardless of its priority 30; it now sits where it belongs, between novita (20)
+and nano-gpt (40). That ordering test is updated with the why. The two ollama
+**web** offerings stay `null` — the eval says nothing about whether search
+results are filtered, which is what the axis would mean for them. Gates:
+llm-unified **464/464**, `pnpm typecheck --force` **14/14** (0 cached), full
+user-client vitest **3229 pass / 8** known baseline, Biome clean. **Next:** free
+— the Ollama K3 route is field-ready. Metering note: Chris's 10 USD extra-usage
+balance was **untouched** by roughly 100 probe calls plus the evals, so ollama
+either has not switched K3 metering on yet or bills GPU-time in a way short
+turns never reach. Worth re-checking before anyone assumes it is free.
+
+---
+
 **Last updated:** 2026-07-27 — **KIMI K3 CURATED ON OLLAMA CLOUD — and the
 first `fixed-on` that is a policy, not an inability.** Built in the working
 tree, **not committed** (awaiting Chris). Moonshot's open weights dropped today

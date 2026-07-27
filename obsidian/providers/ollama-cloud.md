@@ -304,7 +304,20 @@ default (`tiers[0]`) is the 5-result standard, not the cheapest.
 
 ## Open / follow-ups
 
-- `freedomOrientedDeployment: null` — pending Chris (ollama is open-weight / self-hostable infra).
+- ~~`freedomOrientedDeployment: null` — pending Chris~~ — **resolved 2026-07-27:
+  `true` on all four LLM offerings.** The axis asks whether the *provider* layers
+  censorship on top of the model, and until now we had simply never measured it.
+  Chris's Kimi K3 freedom eval did, on ollama's own compute: explicit prose to a
+  storyteller system prompt and adult roleplay were both delivered, so nothing
+  sits between the weights and the user here. **Stated plainly: this generalises
+  from one model to the provider.** It is the right generalisation — ollama is
+  hosting infrastructure, not a curated product surface — but if a future model
+  behaves differently here, this line is the assumption to re-test first.
+  Unblocking effect: glm-5.1, glm-5.2 and deepseek-v4-pro are all
+  `freedomOriented: true` on the model axis and had been showing an *unknown*
+  badge purely because of this `null`; they now resolve to 🕊️ free.
+  **The two web offerings stay `null`** — the eval says nothing about whether
+  search results are filtered, which is what the axis would mean for them.
 - ~~**`run-ollama-suite.ts` iterates ALL offerings**, including the two web ones,
   which report FAIL (HTTP 404) as noise; header comment stale too~~ — **both
   resolved.** Verified 2026-07-27: the runner filters `serviceKind === 'llm'`, so

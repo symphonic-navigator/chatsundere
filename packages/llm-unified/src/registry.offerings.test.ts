@@ -23,15 +23,20 @@ afterEach(() => _resetRegistryForTests());
 describe('listOfferings', () => {
   test('returns offerings for a canonical: TEE, then freedom-oriented, then priority', () => {
     const offers = listOfferings('glm-5.1');
-    // chutes is TEE → first. novita + nano-gpt are freedomOrientedDeployment:true
-    // (Chris, 2026-05-30) so they rank ahead of ollama-cloud (freedom-unassessed,
-    // `null`), and within that freedom group sort by provider priority (novita 20
-    // < nano-gpt 40). ollama-cloud's GLM 5.1 is verified now but freedom-null → last.
+    // chutes is TEE → first. All three others are now freedomOrientedDeployment:
+    // true, so the freedom tier no longer separates them and they sort purely by
+    // provider priority: novita 20 < ollama-cloud 30 < nano-gpt 40.
+    //
+    // ollama-cloud used to rank LAST here, demoted by a `null` freedom axis that
+    // meant "never assessed" rather than "restricted". The Kimi K3 eval assessed
+    // it (Chris, 2026-07-27) and the demotion disappeared — a reminder that an
+    // unassessed axis is not cost-free: it silently ranks a provider below its
+    // priority until someone measures it.
     expect(offers.map((o) => o.providerId)).toEqual([
       'chutes',
       'novita',
-      'nano-gpt',
       'ollama-cloud',
+      'nano-gpt',
     ]);
     expect(offers[0]?.trust.tee).toBe(true);
   });

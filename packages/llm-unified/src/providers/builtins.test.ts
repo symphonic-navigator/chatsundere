@@ -61,7 +61,8 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      // 8 original + 1 Kimi K3 (freedom unknown) + 1 Inkling (freedom unknown,
+      // 8 original + 1 Kimi K3 (freedom-oriented since 2026-07-27) + 1 Inkling
+      // (freedom unknown,
       // Together-only) + 3 Grok (4.3, 4.5, 4.20 — all ZDR-enforced) + Claude
       // Sonnet 5 + Claude Opus 5 (freedom unknown; the caching route) + 6 ChatGPT
       // (OpenAI, censored) + 2 July (Hy3, MiniMax M3) = 23.
