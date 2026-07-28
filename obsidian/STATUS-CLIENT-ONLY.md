@@ -8,6 +8,71 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-07-28 — **KIMI K3 CURATED ON TENSORIX — and a routine ZDR
+re-probe found two wafer offerings that had been dead in the field.** Squashed to
+`master` (`28e56b0d`), **not pushed**. Chris asked for two things (DeepSeek V4 Pro
+on wafer is ZDR now; integrate Kimi K3 on Tensorix). The first was true — and the
+probe that confirmed it turned up three neighbouring defects, which are the larger
+half. **The mechanism is the thing to remember:** on wafer `trust.zdr` is **not a
+badge, it is part of the request** — the adapter sends `Wafer-ZDR: required`
+whenever the flag is true, and wafer answers that header with **HTTP 422
+`model_zdr_not_supported`** on a model that has lost ZDR. So a stale `true` does
+not mislabel an offering, **it kills it**: no degraded mode, no fallback, and
+nothing our own tests can see, because the catalogue stays internally consistent
+and `parseCatalogueEntry` passes. Measured 2026-07-28, wafer's partition had moved
+**in both directions** since May: **DeepSeek V4 Pro gained ZDR** (we were
+under-claiming — no 🔒 on a route that earned one), while **Kimi K2.6 lost it**
+(`disabled_reason: self_hosted_backend_decommissioned`) and **Qwen3.5 lost it**
+with its entire `wafer` capability object stripped — **both 422 on every single
+request**. `deepseek-v4-flash` is gone from wafer altogether and **404s**. Verified
+on the wire, not from the listing: a 200 *with* the header sent is the proof, since
+wafer rejects it wherever ZDR is absent. **Chris's calls:** K2.6 stays as an honest
+non-ZDR route (vision flagship, other routes exist), **Qwen3.5 and
+deepseek-v4-flash removed** (neither orphans a canonical), and **GLM 5.2 curated**
+— newly on wafer with ZDR and a 1M ceiling. GLM 5.2 there is a **clean toggle**
+(0/6 off-leak, unique prompts; 3/3 on medium) while the *same model on Tensorix
+cannot be silenced at all* — the sharpest illustration yet that `ReasoningControl`
+belongs to the deployment, not the weights. **Kimi K3 on Tensorix needed no new
+adapter** and is the **fourth route, and the only one with a real, offered off**:
+OpenRouter refuses (HTTP 400), ollama withholds it by policy (tools collapse to
+10/20 without reasoning), and here `reasoning_effort:'none'` genuinely silences it
+(**0/6** unique prompts, `reasoning_tokens: 0` corroborating) **while its sibling
+K2.6 leaks 6/6 through the same adapter on the same provider** — the property is
+the model's, not Tensorix's. **No ladder:** effort was measured and does not
+separate (2 prompts × low/medium/high × 3 reps; the ranking *contradicts itself
+between prompts* — P1 `low` 617 mean vs `medium` 461, P2 `medium` 770 vs `high`
+388 — and within-cell spread reaches **1250**, exceeding every between-level
+difference). Every probe used a **unique** prompt: Tensorix response-caches
+identical ones and has mismodelled a Kimi on exactly that before. **Two test gaps
+closed:** `offerings.test.ts` ran the capability gate over **five** providers only
+— **tensorix, openrouter, xai and mistral were never visited**, so offerings on
+them reached the field without any test putting them through
+`parseCatalogueEntry`, including the new K3 one until this commit (all nine in
+now, all pass unchanged); and `model-picker-data` asserted the background-worker
+rule by **naming Qwen** as its unknown-freedom example, which expired the moment
+that offering went — now structural, the *same* repair this test needed on
+2026-07-25 for the same reason. Also corrected: the Tensorix Record **contradicted
+itself**, claiming K2.6 was a clean toggle there while its own probe table two
+paragraphs above recorded 6/6 leaks (likely predates the response-cache
+discovery). Gates: live **tensorix K3 core 22/22 + vision 4/4**, **wafer 81/81**
+across all four offerings (incl. the repaired K2.6 and the new GLM 5.2),
+llm-unified **465/465**, `pnpm typecheck --force` **14/14** (0 cached), full
+user-client vitest **3229 pass / 8** known baseline (exact), Biome clean. **No
+Larissa** (catalogue + adapters; no auth/sync/proxy/crypto). **No Laura** — the two
+removals do change what a user can reach, but both were already unreachable
+upstream (422/404) and the broken-model state they land in is built and previously
+audited. Records: [[models/kimi-k3]], [[models/glm-5.2]], [[models/kimi-k2.6]],
+[[models/deepseek-v4-pro]], [[models/qwen3.5-397b-a17b]],
+[[models/deepseek-v4-flash]], [[providers/wafer]], [[providers/tensorix]].
+**Next:** Chris's model-picker device check — Kimi K3 shows a **Tensorix** route
+with a 🔒 badge and a working **Off** chip; wafer shows **DeepSeek V4 Pro with 🔒**,
+a new **GLM 5.2**, **Kimi K2.6 without** 🔒, and **no Qwen3.5 / V4 Flash**.
+**Restart the dev stack first** (Vite HMR ignores `packages/*`). Then push. Open,
+non-blocking: `glm5.2-fast` on wafer (ZDR, 1M) is the obvious next candidate if
+another ZDR route is wanted — deliberately not curated, no Krämerladen.
+
+---
+
 **Last updated:** 2026-07-27 (later) — **KIMI K3 IS FREEDOM-ORIENTED — and the
 eval settled ollama's deployment axis as a side effect.** Built in the working
 tree. Chris ran the eval on ollama's Western compute (deliberately not against
