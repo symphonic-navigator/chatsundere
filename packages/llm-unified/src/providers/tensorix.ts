@@ -108,6 +108,25 @@ const offerings: Offering[] = [
     reasoning: FIXED_ON,
     recommended: 262_144,
   }),
+  // Kimi K3 — the fourth route beside OpenRouter, novita and ollama, and the
+  // only one of the four where reasoning is BOTH steerable and genuinely
+  // silenceable: `reasoning_effort:'none'` yields 0 reasoning chars and 0
+  // reasoning_tokens across 6 unique prompts (probed 2026-07-28), unlike K2.6
+  // one entry above. Contrast the siblings — OpenRouter refuses to disable it at
+  // all (HTTP 400), ollama is fixed-on by policy (tool reliability collapses
+  // with reasoning off). Effort does NOT modulate the trace and is therefore not
+  // offered as a ladder: across 2 prompts × 3 levels × 3 reps the ranking
+  // contradicts itself (P1 `low` 617 chars mean vs `medium` 461; P2 `medium` 770
+  // vs `high` 388) and the within-cell spread (up to 1250) exceeds every
+  // between-level difference — the same discipline that kept GLM 5.2 off a
+  // five-rung ladder. Vision-capable; 1M ceiling with recommended at the
+  // Kimi-family 262k sweet-spot, matching the other three routes.
+  tensorixOffering('kimi-k3', 'moonshotai/kimi-k3', {
+    vision: true,
+    reasoning: TOGGLE,
+    recommended: 262_144,
+    max: 1_048_576,
+  }),
 ];
 
 export const tensorix: ProviderDefinition = {

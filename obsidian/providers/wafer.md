@@ -1,7 +1,7 @@
 # Provider Curation Record — Wafer (wafer.ai)
 
 **Onboarded:** 2026-05-31 (Liz, via `/curate` Mode 1) · **Status:** live-curated,
-three ZDR offerings.
+four offerings (three ZDR) · **Last trust re-probe:** 2026-07-28.
 
 Wafer is a privacy-forward inference pass/router. Its headline feature is **ZDR
 (zero data retention)** as a first-class, badge-worthy property — the trust
@@ -40,7 +40,40 @@ freedom/privacy thesis.
 - Kimi-K2.6's own `/models` description states it plainly: a *"ZDR-safe
   self-hosted NVFP4 deployment for `Wafer-ZDR: required` requests"* with the
   upstream Moonshot API for non-ZDR — single model id, single price, transparent
-  partition.
+  partition. *(That self-hosted deployment was **decommissioned** before
+  2026-07-28 — see below.)*
+
+### A stale `zdr` flag here does not mislabel an offering, it kills it
+
+**The load-bearing consequence of the design above, learnt on 2026-07-28.**
+Because the adapter sends `Wafer-ZDR: required` **whenever `trust.zdr` is true**,
+and wafer answers that header with HTTP **422** on a model that lacks ZDR, the
+flag is not a badge — it is part of the request. A `true` that has gone stale
+turns every single call through that offering into a 422. There is no degraded
+mode, no fallback, and nothing in our own tests can see it: the catalogue is
+internally consistent, the gate passes, the unit suite is green, and the offering
+is simply dead in the field.
+
+**wafer moves its ZDR partition without notice, in both directions.** Measured on
+2026-07-28 against the `/models` listing *and* a live request per model:
+
+| model | 2026-05-31 | 2026-07-28 | what it meant |
+|---|---|---|---|
+| DeepSeek-V4-Pro | `false` | **`true`** | gained ZDR — we were under-claiming (no 🔒 badge on a route that deserved one) |
+| Kimi-K2.6 | `true` | **`false`** (`disabled_reason: self_hosted_backend_decommissioned`) | **every request 422 — dead** |
+| Qwen3.5-397B-A17B | `true` | **`false`** (whole `wafer` capability object stripped) | **every request 422 — dead** |
+| deepseek-v4-flash | listed | **absent** — direct request 404s | model withdrawn entirely |
+
+Two of four curated offerings had been silently broken. **A ZDR verdict has a
+shelf life on this provider**, exactly as the `fixed-on` reasoning classification
+did on ollama (2026-07-26): the classification was correct when made and expired
+without anyone touching the code.
+
+**Standing practice:** re-probe `zdr_supported` for every wafer offering whenever
+this provider is touched, and verify it on the wire (send the header and read the
+status) rather than trusting the listing — the listing is what the header check
+confirms, not a substitute for it. `/models` alone would not have revealed that
+the 404'd `deepseek-v4-flash` was gone, only that it was unlisted.
 
 ## Slug conventions
 
@@ -50,12 +83,19 @@ object on each entry carries `display_name`, `tier`, `provider`, `context_length
 `capabilities { vision, tools, reasoning }`, and `pricing`. The scanner
 (`groupWaferModels`) is correspondingly trivial.
 
-Current catalogue (7): **ZDR ✅** GLM-5.1, Kimi-K2.6, Qwen3.5-397B-A17B ·
-**ZDR ❌** Qwen3.6-35B-A3B, deepseek-v4-flash, qwen3.7-max, deepseek-v4-pro. We
-curated the three ZDR flagships, then the two **DeepSeek V4** offerings
-(deepseek-v4-flash, deepseek-v4-pro — non-ZDR serverless, not China-routed; no
-🔒 badge, `reasoning_effort` toggle with a clean off). The remaining two non-ZDR
-models (Qwen3.6-35B-A3B, qwen3.7-max) are deferred.
+**Upstream catalogue as of 2026-07-28 (7):** **ZDR ✅** GLM-5.1, GLM-5.2,
+DeepSeek-V4-Pro, glm5.2-fast · **ZDR ❌** Kimi-K2.6, MiniMax-M3,
+Qwen3.5-397B-A17B. Note how little of this matches the 2026-05-31 listing
+recorded previously (Qwen3.6-35B-A3B, qwen3.7-max and deepseek-v4-flash have all
+disappeared; GLM-5.2, glm5.2-fast and MiniMax-M3 are new).
+
+**Our curation (4):** GLM-5.1 (ZDR), DeepSeek-V4-Pro (ZDR since 2026-07-28),
+GLM-5.2 (ZDR, added 2026-07-28), Kimi-K2.6 (ZDR lost, kept as a non-ZDR route).
+Removed 2026-07-28: Qwen3.5-397B-A17B (lost ZDR, still on OpenRouter) and
+deepseek-v4-flash (404s upstream). **Not curated, deliberately:** `glm5.2-fast`
+and `MiniMax-M3` — neither was asked for, and we do not bulk-import catalogues.
+`glm5.2-fast` is the more tempting of the two (ZDR, 1M) and is the obvious next
+candidate should Chris want another ZDR route.
 
 ## Reasoning mechanism (empirical)
 

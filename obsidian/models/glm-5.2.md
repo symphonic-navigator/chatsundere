@@ -52,6 +52,30 @@ zai-org 1M ceiling (inferred — nano-gpt does not report a window).
   (`prompt_tokens_details: null`); `chutesAdapter` reads the top-level field.
 - 🔒 **Privacy:** yes (chutes TEE). 🕊️ free.
 
+## Offering — wafer — `toggle` (clean off, unlike tensorix)
+
+Added **2026-07-28** (Chris), when a routine re-probe of wafer's trust posture
+surfaced GLM 5.2 as newly available there **with ZDR**.
+
+- **slug:** `GLM-5.2` · **adapterId:** `wafer:GLM-5.2`
+- **context:** recommended 200 000 / max 1 048 576 — wafer reports the full 1M
+  `max_model_len`; recommended is held at the 200k sweet-spot the other GLM 5.2
+  routes use, so the Context-Gauge reads the same wherever the user is.
+- **reasoning control:** **`toggle`** (defaultOn). `reasoning_effort: 'none'` is a
+  **genuine** off — **0/6** unique prompts leaked a trace, with
+  `reasoning_tokens: 0` corroborating; `'medium'` reasons **3/3** (101–264 chars).
+  **This is a direct per-deployment contradiction with the Tensorix offering
+  below, where the identical model cannot be silenced at all** — the clearest
+  illustration in the catalogue that `ReasoningControl` is a property of the
+  deployment, not of the weights.
+- **tool calls:** streaming, concurrent with reasoning. Valid JSON.
+- 🔒 **Privacy:** **ZDR** — `zdr_supported: true` with `same_capabilities: true`,
+  and the `Wafer-ZDR: required` header answered **200** on the wire (wafer 422s
+  that header where ZDR is absent, so this is a positive proof, not a listing
+  claim). No TEE. See [[../providers/wafer]]. 🕊️ free.
+- **Validation (2026-07-28):** conversation-suite core **22/22 PASS** across both
+  permutations.
+
 ## Offering — tensorix — `fixed-on` (reasoning cannot be disabled)
 
 - **slug:** `z-ai/glm-5.2` · **adapterId:** `tensorix:z-ai/glm-5.2`

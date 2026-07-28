@@ -122,9 +122,12 @@ describe('buildPickerData', () => {
   });
 
   describe('background-worker filter', () => {
-    // wafer offers DeepSeek (flagged), GLM/Kimi (free) and Qwen (unknown freedom:
-    // modelFreedom null on a freedom-oriented deployment) — no censored models.
-    it('excludes flagged models but keeps free AND unknown-freedom ones', () => {
+    // wafer offers DeepSeek (flagged) and GLM/Kimi (free) — no censored models.
+    // It carried Qwen (unknown freedom) as the third case until 2026-07-28, when
+    // the offering was removed after wafer withdrew its ZDR. The "unknown
+    // survives" half of the rule therefore lives in the nano-gpt test below,
+    // asserted structurally so it cannot expire with the catalogue again.
+    it('excludes flagged models but keeps the free ones', () => {
       const all = buildPickerData([providerRow('pr-wafer', 'wafer')], ['wafer'], 'all');
       const bg = buildPickerData(
         [providerRow('pr-wafer', 'wafer')],
@@ -136,7 +139,6 @@ describe('buildPickerData', () => {
 
       expect(famAll).toContain('deepseek'); // wafer offers it under 'all'
       expect(famBg).not.toContain('deepseek'); // …a think-then-stop model can't be its own helper
-      expect(famBg).toContain('qwen'); // 'unknown' freedom stays (Chris 2026-07-15)
       expect(famBg).toContain('glm'); // 'free' stays
     });
 
@@ -176,13 +178,33 @@ describe('buildPickerData', () => {
           }
         }
       }
+
+      // The other half of the rule (Chris 2026-07-15): an UNASSESSED model is
+      // not excluded — absence of evidence is not evidence of restriction. Stated
+      // structurally rather than by naming a model, because the previous version
+      // of this assertion named Qwen and expired when that offering was removed.
+      const unknownIds = all.groups
+        .flatMap((g) => g.models)
+        .filter((m) =>
+          m.offers.some(
+            (o) =>
+              effectiveFreedom(
+                m.canonical.freedomOriented,
+                o.offering.freedomOrientedDeployment,
+              ) === 'unknown',
+          ),
+        )
+        .map((m) => m.canonical.id);
+      expect(unknownIds.length).toBeGreaterThan(0); // the fixture must still exercise the case
+      const bgIds = new Set(bg.groups.flatMap((g) => g.models).map((m) => m.canonical.id));
+      for (const id of unknownIds) expect(bgIds).toContain(id);
     });
 
     it("leaves the 'all' filter's model set unchanged", () => {
       const allWafer = buildPickerData([providerRow('pr-wafer', 'wafer')], ['wafer'], 'all');
-      // 'all' keeps the DeepSeek + Qwen it always did (byte-unchanged behaviour).
+      // 'all' keeps every family wafer offers, flagged ones included.
       expect(allWafer.groups.map((g) => g.family)).toEqual(
-        expect.arrayContaining(['deepseek', 'qwen', 'glm']),
+        expect.arrayContaining(['deepseek', 'glm', 'kimi']),
       );
     });
   });

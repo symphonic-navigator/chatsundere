@@ -5,8 +5,8 @@
 > `.claude/skills/curate/references/conventions.md`.
 
 **Onboarded:** 2026-05-31 (Liz, via `/curate` Mode 1) · **Status:** live-curated,
-five EU-sovereign ZDR offerings (DeepSeek V4 Flash deliberately excluded — see
-Reasoning mechanism).
+seven EU-sovereign ZDR offerings (DeepSeek V4 Flash deliberately excluded — see
+Reasoning mechanism) · **Last addition:** Kimi K3, 2026-07-28.
 
 - **id:** `tensorix` · **displayName:** Tensorix
 - **Base URL:** `https://api.tensorix.ai/v1` (OpenAI-compatible Chat Completions)
@@ -104,11 +104,27 @@ vary, so the cache rarely bites; but it must never drive the curation verdict.)
 | DeepSeek V4 Pro | 0/6 | **`toggle`** — genuine off |
 | GLM-5 | 0/6 | **`toggle`** — genuine off |
 | GLM-5.1 | **6/6** | **`fixed-on`** — off does not suppress |
+| GLM-5.2 | **6/6** (720-char trace, 2026-06-17) | **`fixed-on`** — off does not suppress |
 | Kimi-K2.6 | **6/6** | **`fixed-on`** — off does not suppress (as on wafer) |
+| Kimi-K3 | 0/6 (2026-07-28) | **`toggle`** — genuine off, `reasoning_tokens: 0` |
 
 `fixed-on` is the honest "off only hides" model — a toggle would falsely promise
 an off. On unique prompts every curated model reasons reliably with
 `reasoning_effort` (4/4); the on-default is `medium`.
+
+**The split runs through the Kimi family itself:** K2.6 cannot be silenced here
+while K3 can, on the same provider, through the same adapter, with the same
+parameter. Whatever governs the off lives in the model, not in Tensorix's
+plumbing — which is why the probe is per offering and never inherited from a
+sibling.
+
+**Effort never modulates the trace — re-confirmed for K3 (2026-07-28).** The
+provider-wide `toggle`-not-`steps` choice was an assumption carried since
+onboarding; it was measured properly for Kimi K3 (2 prompts × low/medium/high ×
+3 reps, unique prompts) and held: the ranking *contradicts itself between the two
+prompts* (P1 `low` 617 chars mean vs `medium` 461; P2 `medium` 770 vs `high` 388)
+and the within-cell spread reaches 1250 chars, exceeding every between-level
+difference. A ladder would promise steerability we cannot demonstrate.
 
 ### DeepSeek V4 Flash — excluded
 
@@ -119,9 +135,14 @@ low/med/high, `chat_template_kwargs.enable_thinking`, `thinking`, none; 0/12). I
 steerable channel it does not fit the channel-based reasoning model the canonical
 requires, and adds nothing over the wafer/nano-gpt/novita V4-Flash offerings that
 expose a real channel. So it is **not** curated on Tensorix.
-- **Per-deployment divergence (the curation lesson):** Kimi-K2.6 is `fixed-on`
-  on wafer (off does not suppress) but a **clean toggle on tensorix** — the same
-  model, measured per offering, not assumed.
+- **Per-deployment divergence (the curation lesson):** **GLM 5.2** is `fixed-on`
+  here (off leaks 6/6) but a **clean toggle on wafer** (0/6, measured 2026-07-28)
+  — the same model, measured per offering, not assumed. *(This bullet previously
+  claimed the divergence for Kimi-K2.6 with the polarity reversed — that K2.6 was
+  a clean toggle on Tensorix. It was wrong and contradicted the probe table
+  directly above it, which records 6/6 leaks; corrected 2026-07-28. The claim
+  likely predates the response-cache discovery that invalidated the first round
+  of Kimi measurements.)*
 - **Reasoning channel varies by model.** GLM and Kimi surface reasoning on
   `reasoning_content` only. **DeepSeek (V3.2, V4-pro, V4-flash) emit the SAME
   text on BOTH `reasoning` and `reasoning_content`** (probed: `'We'` = `'We'`).
@@ -142,17 +163,24 @@ OpenAI-standard shape (contrast chutes' top-level `reasoning_tokens`):
 
 ## Context windows (from `GET /model/info`, `max_input_tokens`)
 
-DeepSeek V3.2 / V4-pro: **163 840** · GLM-5 / GLM-5.1: **131 072** ·
-Kimi-K2.6: **262 144** (vision). `recommended = max` for all — no Tensorix-specific
-degradation data to justify a lower recommended.
+DeepSeek V3.2 / V4-pro: **163 840** · GLM-5 / GLM-5.1 / GLM-5.2: **131 072** ·
+Kimi-K2.6: **262 144** (vision). `recommended = max` for these — no
+Tensorix-specific degradation data to justify a lower recommended.
+
+**Kimi K3 is the one exception**, and deliberately so: `recommended` **262 144**
+under a **1 048 576** ceiling. The `/models` objects are minimal here (no window
+at all — `{id, object, created, owned_by}`), so nothing was measured; the figures
+are inherited from the model's other three routes so the Context-Gauge reads
+identically wherever the user runs K3.
 
 ## Curated offerings
 
-Five EU-sovereign ZDR offerings — see the model records:
+Seven EU-sovereign ZDR offerings — see the model records:
 [[../models/deepseek-v3.2]] (toggle), [[../models/deepseek-v4-pro]] (toggle),
 [[../models/glm-5]] (toggle), [[../models/glm-5.1]] (fixed-on),
-[[../models/kimi-k2.6]] (fixed-on, vision). DeepSeek V4 Flash excluded
-([[../models/deepseek-v4-flash]] — bare-content reasoning, no channel).
+[[../models/glm-5.2]] (fixed-on), [[../models/kimi-k2.6]] (fixed-on, vision),
+[[../models/kimi-k3]] (toggle, vision — added 2026-07-28). DeepSeek V4 Flash
+excluded ([[../models/deepseek-v4-flash]] — bare-content reasoning, no channel).
 
 ## Documentation
 

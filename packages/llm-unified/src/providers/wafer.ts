@@ -53,48 +53,58 @@ function waferOffering(canonicalRef: string, slug: string, args: WaferOfferingAr
   };
 }
 
+// A ZDR verdict has a shelf life, and wafer moves its partition without notice.
+// Re-probed 2026-07-28 against `/models` AND a live request per offering, because
+// `trust.zdr` is not merely a badge here: the adapter sends `Wafer-ZDR: required`
+// whenever it is true, and wafer answers that header with HTTP 422
+// `model_zdr_not_supported` on a model that has lost ZDR. A stale `true` does not
+// mislabel the offering — it kills it. Both directions had drifted since May.
 const offerings: Offering[] = [
-  // --- ZDR-capable flagships (wafer /models, zdr_supported:true) ---
+  // --- ZDR-capable (wafer /models `zdr_supported:true`, live-confirmed 200) ---
   waferOffering('glm-5.1', 'GLM-5.1', {
     vision: false,
     zdr: true,
     reasoning: TOGGLE,
     recommended: 202_752,
   }),
-  // Kimi reasoning-off does not suppress on the adapter path (suite-confirmed) —
-  // see FIXED_ON above.
-  waferOffering('kimi-k2.6', 'Kimi-K2.6', {
-    vision: true,
-    zdr: true,
-    reasoning: FIXED_ON,
-    recommended: 262_144,
-  }),
-  // Qwen3.5 reasons despite /models claiming reasoning:false — toggle confirmed
-  // live (none=off, medium=~4.7k reasoning tokens). The adapter ALWAYS sends an
-  // explicit reasoning_effort: omitting it made the model hang (90 s timeout).
-  waferOffering('qwen3.5-397b-a17b', 'Qwen3.5-397B-A17B', {
-    vision: true,
-    zdr: true,
-    reasoning: TOGGLE,
-    recommended: 262_144,
-  }),
-  // --- Non-ZDR serverless DeepSeek V4 (zdr_supported:false) ---
-  // Serverless, NOT China-routed (Chris 2026-05-31). No ZDR/TEE → no 🔒 badge,
-  // but freedom-oriented. wafer exposes a 1M ceiling; recommended stays at our
-  // DeepSeek-V4 sweet-spot of 200k (Chris). Reasoning toggle (suite-verified).
-  waferOffering('deepseek-v4-flash', 'deepseek-v4-flash', {
-    vision: false,
-    zdr: false,
-    reasoning: TOGGLE,
-    recommended: 200_000,
-    max: 1_000_000,
-  }),
+  // DeepSeek V4 Pro GAINED ZDR since onboarding (was `zdr_supported:false` on
+  // 2026-05-31, `true` on 2026-07-28, live-confirmed: the request carrying
+  // `Wafer-ZDR: required` answers 200). Serverless, NOT China-routed (Chris
+  // 2026-05-31). The upstream slug stayed lower-case-addressable even though
+  // /models now lists it as `DeepSeek-V4-Pro` — wafer normalises, so no slug
+  // change is needed (probed both spellings). wafer exposes a 1M ceiling;
+  // recommended stays at our DeepSeek-V4 sweet-spot of 200k (Chris).
   waferOffering('deepseek-v4-pro', 'deepseek-v4-pro', {
     vision: false,
-    zdr: false,
+    zdr: true,
     reasoning: TOGGLE,
     recommended: 200_000,
     max: 1_000_000,
+  }),
+  // GLM 5.2 — ZDR-capable, 1M ceiling; recommended held at the 200k GLM-5.2
+  // sweet-spot the other routes use. Reasoning is a GENUINE toggle here
+  // (`reasoning_effort:'none'` → 0 reasoning chars and 0 reasoning_tokens, 0/6
+  // unique prompts; `medium` → 3/3 present), which is a per-deployment
+  // divergence worth naming: the same model is `fixed-on` on Tensorix, where
+  // off only hides.
+  waferOffering('glm-5.2', 'GLM-5.2', {
+    vision: false,
+    zdr: true,
+    reasoning: TOGGLE,
+    recommended: 200_000,
+    max: 1_048_576,
+  }),
+  // --- Lost ZDR upstream (wafer /models `zdr_supported:false`) ---
+  // Kimi K2.6 was ZDR-capable at onboarding; wafer has since decommissioned the
+  // backend that carried it (`disabled_reason: self_hosted_backend_decommissioned`,
+  // 2026-07-28). It answers normally WITHOUT the header (live-confirmed 200), so
+  // the offering stays — it simply loses the 🔒 badge, which is now the honest
+  // state. Reasoning-off still does not suppress here — see FIXED_ON above.
+  waferOffering('kimi-k2.6', 'Kimi-K2.6', {
+    vision: true,
+    zdr: false,
+    reasoning: FIXED_ON,
+    recommended: 262_144,
   }),
 ];
 

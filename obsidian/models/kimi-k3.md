@@ -222,6 +222,50 @@ The offering is kept at `confidence: 'verified'`: everything measurable was
 measured live, and the one gap is an upstream absence recorded here rather than
 a claim we could not test.
 
+## Offering — tensorix — `toggle` (the only route with a real, offered off)
+
+Added **2026-07-28** (Chris). Fourth route, and the one that finally gives K3 a
+usable off-switch: the other three either refuse it (OpenRouter), withhold it
+(ollama) or bury it in a ladder (novita).
+
+- **slug:** `moonshotai/kimi-k3` · **adapterId:** `tensorix:moonshotai/kimi-k3`
+- **context:** recommended **262 144** / max **1 048 576** — the Kimi-family
+  sweet-spot carried across all four routes. Tensorix's `/models` reports no
+  window at all (minimal objects, see [[../providers/tensorix]]), so the figure
+  is inherited rather than measured; still no long-context "stays smart"
+  evidence for K3 anywhere.
+- **reasoning control:** **`toggle`**, default on. `reasoning_effort: 'none'` is
+  a **genuine** off — **0/6** unique prompts leaked a trace, and `usage` confirms
+  it independently with `reasoning_tokens: 0`. That the sibling **K2.6 on this
+  very provider leaks 6/6** is the point: this is a per-model property, not a
+  Tensorix trait. Trace arrives on `reasoning_content`; no adapter change was
+  needed — the existing `tensorixAdapter` already covers it.
+- **why not `steps`:** effort does **not** modulate the trace, measured rather
+  than assumed (2 prompts × low/medium/high × 3 reps, unique prompts throughout).
+  The ranking **contradicts itself between the two prompts** — P1 `low` 617 chars
+  mean vs `medium` 461 vs `high` 1030; P2 `low` 203 vs `medium` 770 vs `high`
+  388 — and the within-cell spread (up to **1250** chars) exceeds every
+  between-level difference. Offering a ladder here would promise a steerability
+  we cannot demonstrate; the same discipline kept GLM 5.2 off a five-rung ladder
+  and shipped Inkling's seven upstream levels as four.
+- **the cache trap was respected:** Tensorix response-caches identical prompts,
+  which once made a leaking model look silent. Every probe above used a
+  *unique* prompt — a repeated one would have measured the cache, not the model.
+- **tool calls:** fired in **both** permutations with valid JSON args — worth
+  contrasting with ollama, where reasoning-off collapsed tool reliability to
+  10/20 and made the off unusable. Here the off costs nothing measurable.
+- **vision:** ✅ — suite `vision` green, "green" named.
+- 🔒 **Privacy:** **yes** — `{ tee: false, zdr: true, jurisdiction: 'EU' }`.
+  Tensorix ZDR is architectural and always on (no per-request header), so this is
+  the **only** K3 route carrying the 🔒 badge, and an EU-sovereign one at that.
+- 🕊️ **Freedom (deployment):** `true` — adult-friendly AUP, no added censorship.
+  Composed with the model axis (settled 2026-07-27) the badge reads 🕊️ **free**.
+- **Validation (2026-07-28):** core **PASS 22/22** across both permutations
+  (`reasoning-absent` green on off, `reasoning-present` green on on,
+  `generate_image` fired with valid args in both, memory echoed, usage
+  normalised); vision **PASS 4/4**. Run via
+  `curation/run-tensorix-suite.ts kimi-k3`.
+
 ## Validation (2026-07-16, live conversation-suite)
 
 Run via `curation/run-openrouter-suite.ts kimi-k3` (`makeLiveBinding`,

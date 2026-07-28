@@ -42,9 +42,21 @@ Curated on nano-gpt and novita with hand-written catalogue adapters
   does not modulate → toggle. `reasoning_content` channel. (wafer reports
   `reasoning_tokens: 0` even when a trace is present.) Shares `waferAdapter`.
 - **tool calls:** streaming, concurrent with reasoning.
-- 🔒 **Privacy:** **none** — non-ZDR serverless deployment, no TEE. Serverless,
+- 🔒 **Privacy:** **ZDR since 2026-07-28** — `trust.zdr` flipped `false → true`.
+  **This deployment gained a guarantee it did not have at onboarding.** On
+  2026-05-31 wafer's `/models` reported `zdr_supported: false` for it; on
+  2026-07-28 the same field reads `true` with `same_capabilities: true`, and the
+  claim was verified on the wire rather than taken from the listing: a request
+  carrying `Wafer-ZDR: required` answers **HTTP 200** (wafer 422s that header on
+  any model without ZDR, so a 200 *is* the proof). Still no TEE. Serverless,
   **not** China-routed (Chris, 2026-05-31). 🕊️ free (model + deployment). See
   [[../providers/wafer]].
+- **slug note:** wafer's listing now spells it `DeepSeek-V4-Pro`, but the
+  lower-case `deepseek-v4-pro` we curated still resolves (both spellings probed
+  2026-07-28; the reply echoes `model: "DeepSeek-V4-Pro"` either way). No slug
+  change was needed — worth recording so the next reader does not "fix" it.
+- **Validation (2026-07-28):** conversation-suite core **22/22 PASS** with the
+  ZDR header on the wire.
 
 ## Offering — tensorix
 

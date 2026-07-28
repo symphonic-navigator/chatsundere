@@ -24,10 +24,25 @@ the 🕊️ badge resolves to *unknown* until judged.
 
 ## Offerings
 
-### wafer — `Qwen3.5-397B-A17B` · `confidence: verified`
+### wafer — `Qwen3.5-397B-A17B` · **REMOVED 2026-07-28**
 
-- **Trust:** 🔒 **ZDR** (zero data retention). `trust: { tee: false, zdr: true }`.
-  The adapter sends `Wafer-ZDR: required`, so the badge is truthful. ZDR is the
+**Withdrawn, not deprecated by us.** On 2026-07-28 wafer's `/models` reported
+`zdr_supported: false` for this model and had stripped its whole `wafer`
+capability object (no `context_length`, no `capabilities` — the other entries
+still carry theirs), which reads as an abandoned deployment rather than a
+deliberate tier change. Because the adapter sends `Wafer-ZDR: required` whenever
+`trust.zdr` is true, the offering had stopped working altogether: every request
+answered **HTTP 422 `model_zdr_not_supported`**. It still responds without the
+header, so the alternative was to keep it as a plain non-ZDR route — but wafer is
+curated *for* its ZDR (sortPriority 15), and Qwen3.5 is reachable on OpenRouter
+regardless, so Chris removed it (2026-07-28). The canonical survives on the
+OpenRouter offering below.
+
+The measured behaviour below is retained as the historical record of the wafer
+deployment while it existed.
+
+- **Trust (while it existed):** 🔒 **ZDR**. `trust: { tee: false, zdr: true }`.
+  The adapter sent `Wafer-ZDR: required`, so the badge was truthful. ZDR was the
   always-on, omakase default (Chris, 2026-05-31).
 - **Reasoning control:** `toggle` (default on). `reasoning_effort: 'none'`
   suppresses cleanly (suite `reasoning-absent` green), `'medium'` enables (suite

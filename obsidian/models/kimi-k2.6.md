@@ -59,10 +59,25 @@ is input-side.
 - **tool calls:** streaming, concurrent with reasoning.
 - **usage:** OpenAI-standard — `reasoning_tokens` under `completion_tokens_details`,
   cached under `prompt_tokens_details`.
-- 🔒 **Privacy:** **ZDR** — adapter sends `Wafer-ZDR: required` (always on). No TEE.
+- 🔒 **Privacy:** **ZDR LOST 2026-07-28** — `trust.zdr` flipped `true → false`.
+  wafer's `/models` now answers `zdr_supported: false` with
+  `disabled_reason: self_hosted_backend_decommissioned`: the hardware that
+  carried the ZDR-safe partition for this model is gone. **This was not a
+  cosmetic badge problem — the offering was dead.** Because the adapter sends
+  `Wafer-ZDR: required` whenever `trust.zdr` is true, and wafer answers that
+  header with **HTTP 422 `model_zdr_not_supported`** on a model that has lost
+  ZDR, *every* request through this offering had been failing. Dropping the flag
+  stops the header and the offering answers **200** again (live-confirmed
+  2026-07-28), so it stays on as a plain non-ZDR route (Chris's call — K2.6 is a
+  vision-capable flagship with several other routes, so an honest downgrade beats
+  removal). No TEE either. The 🔒 badge is correctly gone.
+  **The general lesson, recorded in [[../providers/wafer]]:** on this provider a
+  stale `trust.zdr: true` does not merely mislabel an offering, it kills it.
   See [[../providers/wafer]].
 - **Vision:** verified (suite `vision` green — names the clothing colour "green"
-  on the Sylvir test image).
+  on the Sylvir test image; re-confirmed 4/4 on 2026-07-28).
+- **Validation (2026-07-28):** core **11/11 PASS** (one permutation — `fixed-on`
+  has no off to assert absent) + vision **4/4 PASS**, i.e. the route works again.
 
 ## Offering — tensorix — `fixed-on` (reasoning cannot be disabled)
 

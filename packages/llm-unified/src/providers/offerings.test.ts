@@ -3,12 +3,20 @@ import { describe, expect, test } from 'bun:test';
 import { getCanonical } from '../catalogue/canonical-registry.js';
 import { parseCatalogueEntry } from '../catalogue/schema.js';
 import { chutes } from './chutes.js';
+import { mistral } from './mistral.js';
 import { nanoGpt } from './nano-gpt.js';
 import { novita } from './novita.js';
 import { ollamaCloud } from './ollama-cloud.js';
+import { openrouter } from './openrouter.js';
+import { tensorix } from './tensorix.js';
 import { wafer } from './wafer.js';
+import { xai } from './xai.js';
 
-const PROVIDERS = [chutes, wafer, nanoGpt, novita, ollamaCloud];
+// Every built-in provider, so a new offering cannot be curated onto a provider
+// the capability gate never visits. tensorix, openrouter, xai and mistral were
+// missing here until 2026-07-28 — their offerings were reaching the field
+// without ever being run through `parseCatalogueEntry` by a test.
+const PROVIDERS = [chutes, wafer, nanoGpt, novita, ollamaCloud, tensorix, openrouter, xai, mistral];
 
 describe('provider offerings', () => {
   test('every offering references a known canonical and passes the capability gate', () => {

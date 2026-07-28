@@ -177,15 +177,19 @@ describe('built-in providers', () => {
     }
   });
 
-  it('wafer requires a proxy (no CORS), has five offerings (3 ZDR), and sortPriority 15', () => {
+  it('wafer requires a proxy (no CORS), has four offerings (3 ZDR), and sortPriority 15', () => {
     const p = getProvider('wafer');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(5);
+      // Re-probed 2026-07-28: Qwen3.5 lost ZDR and deepseek-v4-flash 404s
+      // upstream — both removed; GLM-5.2 added. GLM-5.1, DeepSeek-V4-Pro and
+      // GLM-5.2 are ZDR; Kimi-K2.6 lost it (backend decommissioned) and stays
+      // on as a non-ZDR route.
+      expect(p.offerings).toHaveLength(4);
       expect(p.sortPriority).toBe(15);
-      // GLM-5.1, Kimi-K2.6, Qwen3.5 are ZDR; the two DeepSeek V4 are not.
       expect(p.offerings.filter((o) => o.trust.zdr).length).toBe(3);
+      expect(p.offerings.find((o) => o.canonicalRef === 'kimi-k2.6')?.trust.zdr).toBe(false);
     }
   });
 
@@ -197,6 +201,37 @@ describe('built-in providers', () => {
       // 9 original (enable_thinking family) + 3 July reasoning_effort additions
       // (Kimi K3, Hy3, MiniMax M3) = 12.
       expect(p.offerings).toHaveLength(12);
+    }
+  });
+
+  it('tensorix is direct EU-sovereign ZDR; Kimi K3 is its one silenceable Kimi', () => {
+    const p = getProvider('tensorix');
+    expect(p).toBeDefined();
+    if (p) {
+      expect(p.corsHint).toBe('direct');
+      // 6 original (2 DeepSeek + 3 GLM + Kimi K2.6) + Kimi K3 (2026-07-28) = 7.
+      expect(p.offerings).toHaveLength(7);
+      expect(p.sortPriority).toBe(12);
+      // ZDR is architectural here (policy-default, every request), so it holds
+      // for the whole provider — unlike wafer, where it is per-model and can be
+      // withdrawn upstream.
+      expect(p.offerings.every((o) => o.trust.zdr && o.trust.jurisdiction === 'EU')).toBe(true);
+
+      // Reasoning steerability is per model, and K3 is the interesting case:
+      // `reasoning_effort:'none'` genuinely silences it (0/6 unique prompts,
+      // 0 reasoning_tokens), whereas K2.6 on this very provider leaks 6/6. It is
+      // also the only one of K3's four routes with a real off — OpenRouter
+      // refuses outright (HTTP 400) and ollama withholds it by policy.
+      const modes = Object.fromEntries(
+        p.offerings.map((o) => [o.upstreamSlug, o.profile.reasoning.mode]),
+      );
+      expect(modes['moonshotai/kimi-k3']).toBe('toggle');
+      expect(modes['moonshotai/kimi-k2.6']).toBe('fixed-on');
+      // K3 carries the canonical's required vision capability and the
+      // Kimi-family 262k recommended window under a 1M ceiling.
+      const k3 = p.offerings.find((o) => o.upstreamSlug === 'moonshotai/kimi-k3');
+      expect(k3?.profile.vision).toBe(true);
+      expect(k3?.context).toEqual({ recommended: 262_144, max: 1_048_576 });
     }
   });
 

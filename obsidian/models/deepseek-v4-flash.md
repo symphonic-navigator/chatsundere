@@ -27,7 +27,16 @@ Curated on nano-gpt and novita with hand-written catalogue adapters
   `enable_thinking: false` (probed). `reasoning_content` channel. Shares
   `novitaThinkingAdapter`. 🔒 no TEE / no ZDR.
 
-## Offering — wafer
+## Offering — wafer — **REMOVED 2026-07-28**
+
+**The model is gone from wafer, not deprioritised by us.** Re-probed 2026-07-28:
+`deepseek-v4-flash` is absent from wafer's `/models` and a direct request answers
+**HTTP 404** — *"Model 'deepseek-v4-flash' is not available on this endpoint"*,
+listing the seven that are. A catalogue entry that is guaranteed to 404 is worse
+than no entry: it advertises a route that cannot exist. Removed on Chris's call
+(2026-07-28); V4 Flash stays reachable on OpenRouter, novita and nano-gpt.
+
+The measurements below are kept as the historical record of the wafer deployment.
 
 - **slug:** `deepseek-v4-flash` · **adapterId:** `wafer:deepseek-v4-flash`
 - **context:** **recommended 200 000 · max 1 000 000** (they differ here — wafer
