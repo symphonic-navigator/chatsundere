@@ -2096,6 +2096,27 @@ Progressive discovery: open a chapter only when digging into that area's history
 
 ## Briefed, awaiting implementation
 
+- **Project Émile — curation-as-data** (spec written 2026-08-04,
+  `superpowers/specs/2026-08-04-project-emile-design.md`, committed
+  `62fe9b37`, **awaiting Chris's review after he sleeps on it**). The
+  sub-project that turns model curation from hand-written code into data
+  and from a developer ritual into an agent-assisted flow across two
+  front-ends (browser + Claude Code). Decomposed into six units: **E1**
+  declarative adapter factory (strategy-pattern per axis, two-tier
+  declarative/strategy, off-guard non-overridable) — the foundation,
+  needed regardless; **E2a** base-set JSON seed + upstream metadata
+  parser; **E2b** backend catalogue schema + ADR (new backend data class,
+  privacy gradient draft→proposal→published); **E3** probe-harness +
+  token-accounting crosscheck (`billingProbe` catches the off-only-hides
+  defect class); **E4** agentic curation loop, two modes sharing one
+  `packages/curation-engine` (user-self non-interactive best-effort →
+  draft; admin/expert interactive → published, can lock); **E5** admin
+  review-queue UI (accept/reject/escalate-as-task-brief); **E6** drift &
+  re-verification (shelf-life, probe-diff). **Two open items parked**:
+  proposer attribution on published (Chris thinking), end-user
+  presentation UX (deferred). **Future:** user-reported defect channel
+  feeds E6. Sequencing: E1 first (test "curation is data-driven"),
+  rest phased. Next step after Chris's review → writing-plans for E1.
 - **Phase 5 — Bookmarks tab + Setup-Hints** (gated on Lyra's wireframe
   + invited-alpha-tester feedback). The simple-history surface now
   covers list/search/rename/delete; Bookmarks is the second tab; Setup-
