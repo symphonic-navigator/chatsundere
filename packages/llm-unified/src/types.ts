@@ -104,8 +104,8 @@ export type ReasoningIntent =
   | { enabled: false }
   // `max` exists because ollama.com's native `think` accepts it as a level
   // above `high` and GLM 5.2 measurably honours it (2026-07-26: thinking chars
-  // +47% / +170% over the low/medium/high band, which does not separate). No
-  // other provider is offered a `max` step, so no other adapter ever sees it.
+  // +47% / +170% over the low/medium/high band, which does not separate).
+  // NanoGPT's GLM 5.3 Flash also publishes `max` in its reasoning-effort ladder.
   | { enabled: true; effort?: 'low' | 'medium' | 'high' | 'max' };
 
 export interface ProbeResult {

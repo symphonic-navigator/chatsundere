@@ -7,7 +7,7 @@ import type {
   WireRequest,
 } from '../adapter-contract.js';
 import type { ReasoningControl } from '../catalogue/types.js';
-import type { NormalisedUsage, StreamChunk } from '../types.js';
+import type { NormalisedUsage, ReasoningIntent, StreamChunk } from '../types.js';
 
 /** One fragmented tool call, accumulated across SSE events. */
 interface PendingToolCall {
@@ -193,6 +193,50 @@ export function nanoGptSlugSwapAdapter(
         events.push({ type: 'finish', reason: normaliseFinish(choice.finish_reason) });
       }
       return { events, state };
+    },
+  };
+}
+
+/**
+ * NanoGPT reasoning-effort route with no sibling slug. This preserves the
+ * offering's off semantics before delegating to the shared NanoGPT request and
+ * stream implementation: mandatory controls stay enabled when a caller sends
+ * an off intent, while a steps control falls back to its declared default.
+ */
+export function nanoGptReasoningEffortAdapter(
+  slug: string,
+  vision: boolean,
+  reasoning: ReasoningControl,
+): ModelAdapter {
+  const base = nanoGptSlugSwapAdapter(slug, vision, reasoning, slug);
+  const canDisableReasoning =
+    reasoning.mode === 'toggle' || (reasoning.mode === 'steps' && reasoning.offStep !== null);
+  type ReasoningEffort = Extract<ReasoningIntent, { enabled: true }>['effort'];
+  let defaultEffort: ReasoningEffort;
+  if (reasoning.mode === 'steps') {
+    const candidate = reasoning.defaultStep;
+    if (!['low', 'medium', 'high', 'max'].includes(candidate)) {
+      throw new Error(`Unsupported NanoGPT reasoning effort: ${candidate}`);
+    }
+    defaultEffort = candidate as Exclude<ReasoningEffort, undefined>;
+  }
+
+  return {
+    profile: base.profile,
+
+    buildRequest(req: CanonicalRequest): WireRequest {
+      const reasoningOn = req.reasoning.enabled || !canDisableReasoning;
+      const requestedEffort = req.reasoning.enabled ? req.reasoning.effort : undefined;
+      return base.buildRequest({
+        ...req,
+        reasoning: reasoningOn
+          ? { enabled: true, effort: requestedEffort ?? defaultEffort }
+          : { enabled: false },
+      });
+    },
+
+    parseChunk(raw: unknown, state: ParseState): { events: StreamChunk[]; state: ParseState } {
+      return base.parseChunk(raw, state);
     },
   };
 }

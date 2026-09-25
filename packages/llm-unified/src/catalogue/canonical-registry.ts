@@ -33,6 +33,19 @@ export const CANONICALS: CanonicalModel[] = [
     unsuitableAsBackgroundWorker: true,
   },
   {
+    id: 'deepseek-v4.1-flash',
+    displayName: 'DeepSeek V4.1 Flash',
+    family: 'deepseek',
+    // The weights are multimodal and nano-gpt documents image input, but
+    // Ollama's native route ignored the image in two independent live suite
+    // runs (2026-09-25). Vision therefore remains an offering-level bonus, not
+    // a capability every route may promise.
+    requiredCaps: { tools: true, reasoning: true, vision: false },
+    freedomOriented: true,
+    freedomNote:
+      'DeepSeek open-weight multimodal model; the family freedom judgement (Chris, 2026-05-30) carried forward to V4.1 Flash.',
+  },
+  {
     id: 'glm-5',
     displayName: 'GLM 5',
     family: 'glm',
@@ -60,6 +73,33 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: true,
     freedomNote:
       'z-ai/Zhipu open-weight model; the GLM-family freedom judgement (Chris, 2026-05-30) carried forward to 5.2.',
+  },
+  {
+    id: 'glm-5.3',
+    displayName: 'GLM 5.3',
+    family: 'glm',
+    requiredCaps: { tools: true, reasoning: true, vision: false },
+    freedomOriented: true,
+    freedomNote:
+      'z-ai/Zhipu open-weight model; the GLM-family freedom judgement (Chris, 2026-05-30) carried forward to 5.3.',
+  },
+  {
+    id: 'glm-5.3-flash',
+    displayName: 'GLM 5.3 Flash',
+    family: 'glm',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'z-ai/Zhipu open-weight multimodal model; the GLM-family freedom judgement (Chris, 2026-05-30) carried forward to 5.3 Flash.',
+  },
+  {
+    id: 'glm-5.3-flash-uncensored',
+    displayName: 'GLM 5.3 Flash Uncensored',
+    family: 'glm',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      "Explicit lower-refusal fine-tune of the open-weight GLM 5.3 Flash model; curated as freedom-oriented on Chris's request (2026-09-25).",
   },
   {
     id: 'kimi-k2.6',
@@ -134,6 +174,33 @@ export const CANONICALS: CanonicalModel[] = [
     requiredCaps: { tools: true, reasoning: true, vision: false },
     freedomOriented: true,
     freedomNote: 'Xiaomi open-weight agentic model; judged freedom-oriented by Chris (2026-05-31).',
+  },
+  {
+    id: 'mimo-v2.6-pro',
+    displayName: 'MiMo V2.6 Pro',
+    family: 'mimo',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'Xiaomi open-weight omnimodal model; the MiMo-family freedom judgement (Chris, 2026-05-31) carried forward to V2.6 Pro.',
+  },
+  {
+    id: 'mimo-v2.6-flash',
+    displayName: 'MiMo V2.6 Flash',
+    family: 'mimo',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: true,
+    freedomNote:
+      'Xiaomi open-weight omnimodal model; the MiMo-family freedom judgement (Chris, 2026-05-31) carried forward to V2.6 Flash.',
+  },
+  {
+    id: 'mimo-v2.6-flash-uncensored',
+    displayName: 'MiMo V2.6 Flash Uncensored',
+    family: 'mimo',
+    requiredCaps: { tools: true, reasoning: true, vision: false },
+    freedomOriented: true,
+    freedomNote:
+      "Explicit lower-refusal, text-only fine-tune of MiMo V2.6 Flash; curated as freedom-oriented on Chris's request (2026-09-25).",
   },
   {
     id: 'mistral-small-4',
@@ -304,6 +371,15 @@ export const CANONICALS: CanonicalModel[] = [
       'Freedom orientation NOT yet assessed — deliberately unknown, unlike the rest of the Claude family. Lex\'s SM-Bench grades Opus 5 B+ / 85.8% (90.67% recomputed from the same per-axis data), clearing the bar every other Anthropic model here misses; the warmth / user-alignment / SFW-roleplay axes remain unevaluated (Chris, 2026-07-25). Pending that eval the badge reads "Uncensored?", not CENSORED.',
   },
   {
+    id: 'claude-opus-5.5',
+    displayName: 'Claude Opus 5.5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: null,
+    freedomNote:
+      'Lex\'s SafetyMaxxed benchmark indicates unusually low censorship, but Anthropic can change alignment behaviour without notice. Kept deliberately unknown pending Chatsundere\'s own freedom eval (Chris, 2026-09-25), so the badge reads "Uncensored?".',
+  },
+  {
     id: 'claude-fable-5',
     displayName: 'Claude Fable 5',
     family: 'claude',
@@ -311,6 +387,15 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: false,
     freedomNote:
       'Anthropic aligns/censors the model at source → not freedom-oriented. SM-Bench run 2adbdf74 (2026-06-09): NSFW (System Prompt) 98.62% clears the canary, but Overfit 34.43%, EQ Boundaries 53.65% and Adversarial (Hostile Logic) 79.51% all miss the 90% bar. Integrated via an anonymising router (LLM-VPN) per ADR 0032; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-fable-5.1',
+    displayName: 'Claude Fable 5.1',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'Anthropic aligns/censors the model at source. Fable 5.1 inherits the family classification until a model-specific freedom eval provides contrary evidence; effectiveFreedom is "restricted" → CENSORED badge.',
   },
   // --- ChatGPT (OpenAI) — censored at source → not freedom-oriented; surfaced
   // with the CENSORED badge. Onboarded 2026-07-06 on explicit user request
@@ -390,6 +475,24 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: false,
     freedomNote:
       'OpenAI aligns/censors the model at source → not freedom-oriented. Both curated deployments (nano-gpt, OpenRouter) route verbatim and add no censorship of their own, so effectiveFreedom is "restricted" → CENSORED badge (Chris, 2026-07-06). Onboarded on explicit user request.',
+  },
+  {
+    id: 'chatgpt-5.6-sol',
+    displayName: 'GPT 5.6 Sol',
+    family: 'chatgpt',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source. Curated via nano-gpt on explicit user request with effectiveFreedom "restricted" → CENSORED badge (Chris, 2026-09-25).',
+  },
+  {
+    id: 'chatgpt-6-astra',
+    displayName: 'GPT 6 Astra',
+    family: 'chatgpt',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: false,
+    freedomNote:
+      'OpenAI aligns/censors the model at source. Curated via nano-gpt on explicit user request with effectiveFreedom "restricted" → CENSORED badge (Chris, 2026-09-25).',
   },
   {
     id: 'grok-4.3',

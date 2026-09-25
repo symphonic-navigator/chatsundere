@@ -30,6 +30,11 @@ export const NANO_GPT_PAIRS: Record<string, NanoGptPair> = {
     thinkingSlug: 'deepseek/deepseek-v4-pro:thinking',
     switchingMode: 'slug',
   },
+  'deepseek/deepseek-v4.1-flash': {
+    nonThinkingSlug: 'deepseek/deepseek-v4.1-flash',
+    thinkingSlug: 'deepseek/deepseek-v4.1-flash:thinking',
+    switchingMode: 'slug',
+  },
   'zai-org/glm-5': {
     nonThinkingSlug: 'zai-org/glm-5',
     thinkingSlug: 'zai-org/glm-5:thinking',
@@ -43,6 +48,11 @@ export const NANO_GPT_PAIRS: Record<string, NanoGptPair> = {
   'zai-org/glm-5.2': {
     nonThinkingSlug: 'zai-org/glm-5.2',
     thinkingSlug: 'zai-org/glm-5.2:thinking',
+    switchingMode: 'slug',
+  },
+  'z-ai/glm-5.3': {
+    nonThinkingSlug: 'z-ai/glm-5.3',
+    thinkingSlug: 'z-ai/glm-5.3:thinking',
     switchingMode: 'slug',
   },
   'moonshotai/kimi-k2.6': {

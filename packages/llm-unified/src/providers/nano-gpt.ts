@@ -2,7 +2,10 @@
 
 import { registerAdapter } from '../adapter-registry.js';
 import { claudeAdapter, claudeEffortAdapter } from '../adapters/anthropic-claude.js';
-import { nanoGptSlugSwapAdapter } from '../adapters/nano-gpt-slug-swap.js';
+import {
+  nanoGptReasoningEffortAdapter,
+  nanoGptSlugSwapAdapter,
+} from '../adapters/nano-gpt-slug-swap.js';
 import { openRouterAdapter } from '../adapters/openrouter-openai.js';
 import type {
   Offering,
@@ -29,6 +32,13 @@ const STEPS: ReasoningControl = {
 // regardless (probed live), so reasoning cannot be disabled → fixed-on. Both
 // share the slug-swap adapter; only the declared control differs.
 const GLM_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
+const GLM53_FLASH_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'high', 'max'],
+  offStep: null,
+  defaultStep: 'max',
+};
+const MIMO26_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 
 // July 2026 additions on nano-gpt (probed live 2026-07-18): Hy3 has NO
 // `:thinking` sibling (tencent/hy3:thinking 404s) and reasoning cannot be truly
@@ -200,6 +210,11 @@ const OPUS5_STEPS: ReasoningControl = {
   defaultStep: 'medium',
 };
 
+const FABLE51_SLUG = 'anthropic/claude-fable-5.1';
+const FABLE51_CANONICAL = 'claude-fable-5.1';
+const OPUS55_SLUG = 'anthropic/claude-opus-5.5';
+const OPUS55_CANONICAL = 'claude-opus-5.5';
+
 /**
  * A Claude offering on nano-gpt. The model is censored by Anthropic
  * (`canonical.freedomOriented=false`) while nano-gpt routes verbatim
@@ -243,6 +258,10 @@ function slugSwapOffering(
   // Optional hard ceiling distinct from the recommended window. Defaults to
   // `ctx` (recommended === max).
   maxCtx: number = ctx,
+  options: {
+    confidence?: Offering['confidence'];
+    freedomOrientedDeployment?: boolean | null;
+  } = {},
 ): Offering {
   return {
     canonicalRef,
@@ -257,9 +276,10 @@ function slugSwapOffering(
     },
     context: { recommended: ctx, max: maxCtx },
     trust: { tee: false, zdr: false },
-    freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
+    freedomOrientedDeployment:
+      options.freedomOrientedDeployment === undefined ? true : options.freedomOrientedDeployment,
     source: 'curated',
-    confidence: 'verified',
+    confidence: options.confidence ?? 'verified',
     serviceKind: 'llm',
   };
 }
@@ -275,6 +295,7 @@ function openaiOffering(
   reasoning: ReasoningControl,
   ctx: number,
   maxCtx: number = ctx,
+  confidence: Offering['confidence'] = 'verified',
 ): Offering {
   return {
     canonicalRef,
@@ -292,7 +313,7 @@ function openaiOffering(
     trust: { tee: false, zdr: false, jurisdiction: 'US' },
     freedomOrientedDeployment: true, // nano-gpt adds no censorship of its own
     source: 'curated',
-    confidence: 'verified',
+    confidence,
     serviceKind: 'llm',
   };
 }
@@ -443,6 +464,48 @@ const offerings: Offering[] = [
   // channel). 1M ceiling from the upstream zai-org model; recommended capped at
   // 200k (nano-gpt /models reports no window).
   slugSwapOffering('glm-5.2', 'zai-org/glm-5.2', STEPS, false, 200_000, 1_048_576),
+  // September 2026 NanoGPT additions. Slugs and documented capabilities were
+  // confirmed against `/models` and NanoGPT's model cards on 2026-09-25, but
+  // completion probes were blocked by the provider-wide key rotation (`401
+  // Invalid session`). Keep confidence partial until the renewed test key runs
+  // the conversation suite.
+  slugSwapOffering('glm-5.3', 'z-ai/glm-5.3', STEPS, false, 200_000, 1_048_576, {
+    confidence: 'partial',
+  }),
+  // No `:thinking` sibling is published. The base model documents
+  // reasoning_effort low/high/max and no off, so the adapter stays on the base
+  // slug and exposes only that mandatory-reasoning ladder.
+  slugSwapOffering(
+    'glm-5.3-flash',
+    'z-ai/glm-5.3-flash',
+    GLM53_FLASH_STEPS,
+    true,
+    200_000,
+    1_048_576,
+    { confidence: 'partial' },
+  ),
+  // The uncensored fine-tune publishes reasoning output but no switchable
+  // sibling or documented effort contract. Model it fixed-on until a live probe
+  // can prove more. Vision support is provider-dependent and NanoGPT lists the
+  // model as multimodal, so this route carries vision with partial confidence.
+  slugSwapOffering(
+    'glm-5.3-flash-uncensored',
+    'z-ai/glm-5.3-flash-uncensored',
+    GLM_FIXED_ON,
+    true,
+    200_000,
+    1_048_576,
+    { confidence: 'partial' },
+  ),
+  slugSwapOffering(
+    'deepseek-v4.1-flash',
+    'deepseek/deepseek-v4.1-flash',
+    STEPS,
+    true,
+    200_000,
+    1_048_576,
+    { confidence: 'partial' },
+  ),
   slugSwapOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', STEPS, true, 256_000),
   slugSwapOffering('gemma-4-31b', 'google/gemma-4-31b-it', STEPS, true, 262_144),
   // --- Freedom additions, July 2026 (probed live 2026-07-18) ---
@@ -466,6 +529,37 @@ const offerings: Offering[] = [
   // novita offering; slug swap probed live 2026-07-25 (bare = 0 reasoning,
   // `:thinking` = trace on the reasoning channel).
   slugSwapOffering('mimo-v2.5-pro', 'xiaomi/mimo-v2.5-pro-crof', STEPS, false, 200_000, 1_048_576),
+  // MiMo V2.6 exposes reasoning on the base slugs and publishes no `:thinking`
+  // siblings. Bind the base slug as always-on until NanoGPT completion probes
+  // can establish an actual off control. The regular routes are omnimodal; the
+  // explicitly uncensored fine-tune is documented as text-only.
+  slugSwapOffering(
+    'mimo-v2.6-pro',
+    'xiaomi/mimo-v2.6-pro',
+    MIMO26_FIXED_ON,
+    true,
+    200_000,
+    1_048_576,
+    { confidence: 'partial', freedomOrientedDeployment: null },
+  ),
+  slugSwapOffering(
+    'mimo-v2.6-flash',
+    'xiaomi/mimo-v2.6-flash',
+    MIMO26_FIXED_ON,
+    true,
+    200_000,
+    1_048_576,
+    { confidence: 'partial', freedomOrientedDeployment: null },
+  ),
+  slugSwapOffering(
+    'mimo-v2.6-flash-uncensored',
+    'xiaomi/mimo-v2.6-flash-uncensored',
+    MIMO26_FIXED_ON,
+    false,
+    200_000,
+    1_048_576,
+    { confidence: 'partial' },
+  ),
   // Mistral family on nano-gpt (anonymous-router path). Small 4 and Medium 3.5
   // have `:thinking` siblings → binary toggle; Large 3 has none → no reasoning.
   // Vision is supported across the family (matches the direct-Mistral offerings).
@@ -537,6 +631,42 @@ const offerings: Offering[] = [
     freedomOrientedDeployment: true,
     source: 'curated',
     confidence: 'verified',
+    serviceKind: 'llm',
+  },
+  {
+    canonicalRef: OPUS55_CANONICAL,
+    providerId: 'nano-gpt',
+    upstreamSlug: OPUS55_SLUG,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${OPUS55_SLUG}` },
+    profile: {
+      reasoning: OPUS5_STEPS,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_048_576 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'partial',
+    serviceKind: 'llm',
+  },
+  {
+    canonicalRef: FABLE51_CANONICAL,
+    providerId: 'nano-gpt',
+    upstreamSlug: FABLE51_SLUG,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${FABLE51_SLUG}` },
+    profile: {
+      reasoning: FABLE_STEPS,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_048_576 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    confidence: 'partial',
     serviceKind: 'llm',
   },
   // Grok 4.3 via nano-gpt (the anonymising-router path). Reasoning is a clean
@@ -638,6 +768,22 @@ const offerings: Offering[] = [
   openaiOffering('chatgpt-5', 'openai/gpt-5.1', OPENAI_STEPS, 200_000, 400_000),
   openaiOffering('chatgpt-5.4', 'openai/gpt-5.4', OPENAI_STEPS, 200_000, 1_048_576),
   openaiOffering('chatgpt-5.5', 'openai/gpt-5.5', OPENAI_STEPS, 200_000, 1_048_576),
+  openaiOffering(
+    'chatgpt-5.6-sol',
+    'openai/gpt-5.6-sol',
+    OPENAI_STEPS,
+    200_000,
+    1_048_576,
+    'partial',
+  ),
+  openaiOffering(
+    'chatgpt-6-astra',
+    'openai/gpt-6-astra',
+    OPENAI_STEPS,
+    200_000,
+    1_048_576,
+    'partial',
+  ),
   ...webOfferings,
   ...ttiOfferings,
   // Grok TTS via nano-gpt's xAI wrapper — text-to-speech; bypasses the chat
@@ -710,7 +856,12 @@ export function registerNanoGpt(): void {
     // sibling), so both take the effort adapter; the rest of the family is a
     // slug swap. The adapter derives from each offering's control whether an
     // off may reach the wire, so Opus 5's `offStep: null` is honoured here.
-    if (o.canonicalRef === FABLE_CANONICAL || o.canonicalRef === OPUS5_CANONICAL) {
+    if (
+      o.canonicalRef === FABLE_CANONICAL ||
+      o.canonicalRef === FABLE51_CANONICAL ||
+      o.canonicalRef === OPUS5_CANONICAL ||
+      o.canonicalRef === OPUS55_CANONICAL
+    ) {
       registerAdapter(
         o.adapter.adapterId,
         claudeEffortAdapter(o.upstreamSlug, {
@@ -748,18 +899,21 @@ export function registerNanoGpt(): void {
           reasoning: o.profile.reasoning,
         }),
       );
-    } else if (o.canonicalRef === 'hy3') {
-      // Hy3 has no `:thinking` sibling on nano-gpt and cannot disable reasoning,
-      // so bind the base slug as its own thinking slug: a fixed-on model that
-      // always reasons on the base endpoint (reasoning_effort left unset).
+    } else if (
+      o.canonicalRef === 'hy3' ||
+      o.canonicalRef === 'glm-5.3-flash' ||
+      o.canonicalRef === 'glm-5.3-flash-uncensored' ||
+      o.canonicalRef === 'mimo-v2.6-pro' ||
+      o.canonicalRef === 'mimo-v2.6-flash' ||
+      o.canonicalRef === 'mimo-v2.6-flash-uncensored'
+    ) {
+      // These routes have no published `:thinking` sibling. Keep them on the
+      // base slug and preserve their declared off semantics: GLM 5.3 Flash
+      // falls back to its mandatory default effort, while fixed-on routes stay
+      // enabled without inventing an effort value.
       registerAdapter(
         o.adapter.adapterId,
-        nanoGptSlugSwapAdapter(
-          o.upstreamSlug,
-          o.profile.vision,
-          o.profile.reasoning,
-          o.upstreamSlug,
-        ),
+        nanoGptReasoningEffortAdapter(o.upstreamSlug, o.profile.vision, o.profile.reasoning),
       );
     } else if (o.canonicalRef === 'inkling') {
       // Inkling honours the unified `reasoning` object — `{enabled:false}` is a

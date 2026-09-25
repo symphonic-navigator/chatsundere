@@ -28,10 +28,10 @@ afterAll(() => {
 });
 
 describe('canonical-registry', () => {
-  test('lists thirty-seven canonicals with unique ids', () => {
+  test('lists forty-eight canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(37);
-    expect(new Set(ids).size).toBe(37);
+    expect(ids).toHaveLength(48);
+    expect(new Set(ids).size).toBe(48);
     expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('claude-opus-5');
     expect(ids).toContain('hy3');
@@ -60,6 +60,17 @@ describe('canonical-registry', () => {
     expect(ids).toContain('chatgpt-5');
     expect(ids).toContain('chatgpt-5.4');
     expect(ids).toContain('chatgpt-5.5');
+    expect(ids).toContain('chatgpt-5.6-sol');
+    expect(ids).toContain('chatgpt-6-astra');
+    expect(ids).toContain('claude-fable-5.1');
+    expect(ids).toContain('claude-opus-5.5');
+    expect(ids).toContain('glm-5.3');
+    expect(ids).toContain('glm-5.3-flash');
+    expect(ids).toContain('glm-5.3-flash-uncensored');
+    expect(ids).toContain('deepseek-v4.1-flash');
+    expect(ids).toContain('mimo-v2.6-pro');
+    expect(ids).toContain('mimo-v2.6-flash');
+    expect(ids).toContain('mimo-v2.6-flash-uncensored');
   });
 
   test('getCanonical returns by id and undefined for unknown', () => {
@@ -82,13 +93,19 @@ describe('canonical-registry', () => {
 });
 
 describe('unsuitableAsBackgroundWorker', () => {
-  test('every DeepSeek canonical is flagged', () => {
+  test('legacy DeepSeek canonicals remain flagged', () => {
     for (const id of ['deepseek-v3.2', 'deepseek-v4-flash', 'deepseek-v4-pro']) {
       const c = getCanonical(id);
       expect(c).toBeDefined();
       // biome-ignore lint/style/noNonNullAssertion: asserted defined above
       expect(isUnsuitableAsBackgroundWorker(c!)).toBe(true);
     }
+  });
+
+  test('DeepSeek V4.1 Flash keeps only capabilities and caveats shared by all routes', () => {
+    const c = getCanonical('deepseek-v4.1-flash');
+    expect(c?.requiredCaps).toEqual({ tools: true, reasoning: true, vision: false });
+    expect(c?.unsuitableAsBackgroundWorker).toBeUndefined();
   });
 
   test('non-DeepSeek canonicals are suitable (flag absent)', () => {

@@ -143,8 +143,10 @@ describe('buildPickerData', () => {
     });
 
     // nano-gpt additionally offers Claude + ChatGPT. Every ChatGPT deployment is
-    // 'restricted', as is most of the Claude family — but Claude Opus 5 carries
-    // freedomOriented: null ('unknown'), so it survives exactly like Qwen above.
+    // 'restricted', as is most of the Claude family — but the unassessed Claude
+    // Opus deployments carry freedomOriented: null ('unknown'), so they survive
+    // exactly like Qwen above. Legacy DeepSeek models remain unsuitable as
+    // helpers; V4.1 Flash passed the one-shot probe and is deliberately eligible.
     // Assert the rule, not a snapshot of the catalogue: the family thins out, and
     // nothing restricted gets through.
     it('excludes restricted (censored) deployments, keeping the survivors non-restricted', () => {
@@ -159,7 +161,12 @@ describe('buildPickerData', () => {
       );
       const bgFam = bg.groups.map((g) => g.family);
       expect(bgFam).not.toContain('chatgpt');
-      expect(bgFam).not.toContain('deepseek');
+
+      const bgIds = new Set(bg.groups.flatMap((g) => g.models).map((m) => m.canonical.id));
+      expect(bgIds).toContain('deepseek-v4.1-flash');
+      for (const id of ['deepseek-v3.2', 'deepseek-v4-flash', 'deepseek-v4-pro']) {
+        expect(bgIds).not.toContain(id);
+      }
 
       // Claude survives only through its non-restricted deployments, so the
       // family must come through strictly thinner than under 'all'.
@@ -196,7 +203,6 @@ describe('buildPickerData', () => {
         )
         .map((m) => m.canonical.id);
       expect(unknownIds.length).toBeGreaterThan(0); // the fixture must still exercise the case
-      const bgIds = new Set(bg.groups.flatMap((g) => g.models).map((m) => m.canonical.id));
       for (const id of unknownIds) expect(bgIds).toContain(id);
     });
 

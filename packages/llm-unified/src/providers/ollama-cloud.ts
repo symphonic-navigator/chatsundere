@@ -151,6 +151,41 @@ const SPECS: OllamaSpec[] = [
     maxCtx: 1_000_000,
     zdr: true,
   },
+  // September 2026 additions. All three were exercised against Ollama's native
+  // `/api/chat` endpoint on 2026-09-25: `think:false` yielded no thinking
+  // channel, while `think:true` emitted one. Ollama documents a 1M window and
+  // ZDR for every cloud deployment. GLM 5.3 is text-only; the Flash models are
+  // multimodal.
+  {
+    canonicalRef: 'glm-5.3',
+    slug: 'glm-5.3',
+    reasoning: TOGGLE_ON,
+    vision: false,
+    ctx: 200_000,
+    maxCtx: 1_048_576,
+    zdr: true,
+  },
+  {
+    canonicalRef: 'glm-5.3-flash',
+    slug: 'glm-5.3-flash',
+    reasoning: TOGGLE_ON,
+    vision: true,
+    ctx: 200_000,
+    maxCtx: 1_048_576,
+    zdr: true,
+  },
+  {
+    canonicalRef: 'deepseek-v4.1-flash',
+    slug: 'deepseek-v4.1-flash',
+    reasoning: TOGGLE_ON,
+    // Ollama advertises vision, but the native route ignored the suite image in
+    // two consecutive runs (2026-09-25). Keep it off until the routed
+    // deployment actually carries image input through.
+    vision: false,
+    ctx: 200_000,
+    maxCtx: 1_048_576,
+    zdr: true,
+  },
   {
     canonicalRef: 'deepseek-v4-pro',
     slug: 'deepseek-v4-pro',

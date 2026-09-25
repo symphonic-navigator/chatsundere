@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { beforeAll, describe, expect, it } from 'bun:test';
-import { _resetAdapterRegistryForTests } from '../adapter-registry.js';
+import { _resetAdapterRegistryForTests, getAdapter } from '../adapter-registry.js';
 import { effectiveFreedom, getCanonical } from '../catalogue/index.js';
 import { _resetRegistryForTests, getProvider, listProviders } from '../registry.js';
 import { registerBuiltinProviders } from './_register-builtins.js';
@@ -39,9 +39,10 @@ describe('built-in providers', () => {
       // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
       // + 9 Claude (incl. Opus 5) + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI,
       // censored) + 4 web + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling
-      // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream) = 40.
+      // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream)
+      // + 11 September 2026 additions = 51.
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(40);
+      expect(p.offerings).toHaveLength(51);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -87,18 +88,20 @@ describe('built-in providers', () => {
     expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
   });
 
-  it('registers the nine Claude offerings on nano-gpt with the cache adapter, eight CENSORED and Opus 5 unknown', () => {
+  it('registers eleven Claude offerings on nano-gpt with censored Fables and unknown Opus 5/5.5', () => {
     const p = getProvider('nano-gpt');
     expect(p).toBeDefined();
     const claude = p?.offerings.filter((o) => o.canonicalRef?.startsWith('claude-')) ?? [];
     expect(claude.map((o) => o.canonicalRef).sort()).toEqual([
       'claude-fable-5',
+      'claude-fable-5.1',
       'claude-haiku-4.5',
       'claude-opus-4.5',
       'claude-opus-4.6',
       'claude-opus-4.7',
       'claude-opus-4.8',
       'claude-opus-5',
+      'claude-opus-5.5',
       'claude-sonnet-4.5',
       'claude-sonnet-4.6',
     ]);
@@ -116,7 +119,7 @@ describe('built-in providers', () => {
       // Opus 5 is the family's deliberate exception: freedom NOT yet assessed
       // (SM-Bench clears the bar, the warmth/roleplay axes are unevaluated), so
       // it resolves to 'unknown' → "Uncensored?" badge, not CENSORED.
-      if (o.canonicalRef === 'claude-opus-5') {
+      if (o.canonicalRef === 'claude-opus-5' || o.canonicalRef === 'claude-opus-5.5') {
         expect(canonical?.freedomOriented).toBeNull();
         expect(freedom).toBe('unknown');
       } else {
@@ -165,6 +168,142 @@ describe('built-in providers', () => {
         mimo?.[0]?.freedomOrientedDeployment ?? null,
       ),
     ).toBe('free');
+  });
+
+  it('curates the requested September 2026 nano-gpt models without removing predecessors', () => {
+    const p = getProvider('nano-gpt');
+    const expected = {
+      'chatgpt-6-astra': 'openai/gpt-6-astra',
+      'chatgpt-5.6-sol': 'openai/gpt-5.6-sol',
+      'claude-fable-5.1': 'anthropic/claude-fable-5.1',
+      'claude-opus-5.5': 'anthropic/claude-opus-5.5',
+      'glm-5.3': 'z-ai/glm-5.3',
+      'glm-5.3-flash': 'z-ai/glm-5.3-flash',
+      'glm-5.3-flash-uncensored': 'z-ai/glm-5.3-flash-uncensored',
+      'deepseek-v4.1-flash': 'deepseek/deepseek-v4.1-flash',
+      'mimo-v2.6-pro': 'xiaomi/mimo-v2.6-pro',
+      'mimo-v2.6-flash': 'xiaomi/mimo-v2.6-flash',
+      'mimo-v2.6-flash-uncensored': 'xiaomi/mimo-v2.6-flash-uncensored',
+    } as const;
+
+    for (const [canonicalRef, upstreamSlug] of Object.entries(expected)) {
+      const offering = p?.offerings.find((o) => o.canonicalRef === canonicalRef);
+      expect(offering?.upstreamSlug).toBe(upstreamSlug);
+      expect(offering?.confidence).toBe('partial');
+      expect(offering?.context).toEqual({ recommended: 200_000, max: 1_048_576 });
+    }
+
+    for (const predecessor of [
+      'glm-5.2',
+      'claude-fable-5',
+      'claude-opus-5',
+      'mimo-v2.5-pro',
+      'deepseek-v4-flash',
+    ]) {
+      expect(p?.offerings.some((o) => o.canonicalRef === predecessor)).toBe(true);
+    }
+  });
+
+  it('models nano-gpt reasoning and modalities without inventing missing thinking slugs', () => {
+    const offerings = getProvider('nano-gpt')?.offerings ?? [];
+    const byCanonical = (id: string) => offerings.find((o) => o.canonicalRef === id);
+
+    expect(byCanonical('glm-5.3')?.profile).toMatchObject({
+      reasoning: { mode: 'steps', offStep: 'off' },
+      vision: false,
+    });
+    expect(byCanonical('deepseek-v4.1-flash')?.profile).toMatchObject({
+      reasoning: { mode: 'steps', offStep: 'off' },
+      vision: true,
+    });
+    expect(byCanonical('glm-5.3-flash')?.profile).toMatchObject({
+      reasoning: {
+        mode: 'steps',
+        steps: ['low', 'high', 'max'],
+        offStep: null,
+        defaultStep: 'max',
+      },
+      vision: true,
+    });
+    expect(byCanonical('glm-5.3-flash-uncensored')?.profile).toMatchObject({
+      reasoning: { mode: 'fixed-on' },
+      vision: true,
+    });
+    expect(byCanonical('mimo-v2.6-pro')?.profile).toMatchObject({
+      reasoning: { mode: 'fixed-on' },
+      vision: true,
+    });
+    expect(byCanonical('mimo-v2.6-flash')?.profile).toMatchObject({
+      reasoning: { mode: 'fixed-on' },
+      vision: true,
+    });
+    expect(byCanonical('mimo-v2.6-flash-uncensored')?.profile).toMatchObject({
+      reasoning: { mode: 'fixed-on' },
+      vision: false,
+    });
+  });
+
+  it('keeps base-only nano-gpt reasoning models on their published slugs', () => {
+    for (const slug of [
+      'z-ai/glm-5.3-flash',
+      'z-ai/glm-5.3-flash-uncensored',
+      'xiaomi/mimo-v2.6-pro',
+      'xiaomi/mimo-v2.6-flash',
+      'xiaomi/mimo-v2.6-flash-uncensored',
+    ]) {
+      const adapter = getAdapter(`nano-gpt:${slug}`);
+      expect(adapter).toBeDefined();
+      const wire = adapter?.buildRequest({
+        messages: [],
+        reasoning: { enabled: true, effort: 'high' },
+      });
+      expect(wire?.model).toBe(slug);
+      expect(wire?.body.model).toBe(slug);
+    }
+  });
+
+  it('steers Fable 5.1 and Opus 5.5 with body flags rather than sibling slugs', () => {
+    for (const slug of ['anthropic/claude-fable-5.1', 'anthropic/claude-opus-5.5']) {
+      const adapter = getAdapter(`nano-gpt:${slug}`);
+      expect(adapter).toBeDefined();
+      const wire = adapter?.buildRequest({
+        messages: [],
+        reasoning: { enabled: true, effort: 'high' },
+      });
+      expect(wire?.model).toBe(slug);
+      expect(wire?.body.model).toBe(slug);
+      expect(wire?.body.reasoning).toEqual({ enabled: true, effort: 'high' });
+    }
+  });
+
+  it('keeps GPT censored, Opus 5.5 unknown, and explicit uncensored finetunes free', () => {
+    expect(getCanonical('chatgpt-6-astra')?.freedomOriented).toBe(false);
+    expect(getCanonical('chatgpt-5.6-sol')?.freedomOriented).toBe(false);
+    expect(getCanonical('claude-fable-5.1')?.freedomOriented).toBe(false);
+    expect(getCanonical('claude-opus-5.5')?.freedomOriented).toBeNull();
+    expect(getCanonical('glm-5.3-flash-uncensored')?.freedomOriented).toBe(true);
+    expect(getCanonical('mimo-v2.6-flash-uncensored')?.freedomOriented).toBe(true);
+
+    const nano = getProvider('nano-gpt');
+    const freedomFor = (canonicalRef: string) => {
+      const offering = nano?.offerings.find((o) => o.canonicalRef === canonicalRef);
+      const canonical = getCanonical(canonicalRef);
+      if (!offering || !canonical) throw new Error(`Missing curated offering: ${canonicalRef}`);
+      return {
+        deployment: offering.freedomOrientedDeployment,
+        effective: effectiveFreedom(canonical.freedomOriented, offering.freedomOrientedDeployment),
+      };
+    };
+    expect(freedomFor('mimo-v2.6-pro')).toEqual({ deployment: null, effective: 'unknown' });
+    expect(freedomFor('mimo-v2.6-flash')).toEqual({ deployment: null, effective: 'unknown' });
+    expect(freedomFor('mimo-v2.6-flash-uncensored')).toEqual({
+      deployment: true,
+      effective: 'free',
+    });
+    expect(freedomFor('glm-5.3-flash-uncensored')).toEqual({
+      deployment: true,
+      effective: 'free',
+    });
   });
 
   it('chutes has direct CORS hint, six TEE models, and sortPriority 10', () => {
@@ -235,18 +374,21 @@ describe('built-in providers', () => {
     }
   });
 
-  it('ollama-cloud has 4 LLM offerings + 2 web offerings (search/fetch)', () => {
+  it('ollama-cloud has 7 LLM offerings + 2 web offerings (search/fetch)', () => {
     const p = getProvider('ollama-cloud');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('requires-proxy');
-      expect(p.offerings).toHaveLength(6);
+      expect(p.offerings).toHaveLength(9);
 
       const llm = p.offerings.filter((o) => o.serviceKind === 'llm');
       expect(llm.map((o) => o.upstreamSlug).sort()).toEqual([
         'deepseek-v4-pro',
+        'deepseek-v4.1-flash',
         'glm-5.1',
         'glm-5.2:cloud',
+        'glm-5.3',
+        'glm-5.3-flash',
         'kimi-k3:cloud',
       ]);
       expect(llm.every((o) => o.confidence === 'verified')).toBe(true);
@@ -269,6 +411,9 @@ describe('built-in providers', () => {
         'deepseek-v4-pro': 'toggle',
         'glm-5.2:cloud': 'steps',
         'kimi-k3:cloud': 'fixed-on',
+        'glm-5.3': 'toggle',
+        'glm-5.3-flash': 'toggle',
+        'deepseek-v4.1-flash': 'toggle',
       });
       // Only measurably-distinct rungs are offered: off, the model's own default
       // (`on` → a bare think:true), and `max`. Ollama accepts low/medium/high too
@@ -288,10 +433,24 @@ describe('built-in providers', () => {
           (o) => o.profile.reasoning.mode === 'toggle' && o.profile.reasoning.defaultOn,
         ),
       ).toBe(true);
-      // ZDR is scoped to GLM 5.2 only (deployment-level, US/EU hosting); the
-      // other ollama models carry no such statement.
+      // The legacy ZDR evidence is scoped to GLM 5.2; Ollama's current cloud
+      // documentation also marks each newly curated deployment as ZDR.
       expect(llm.find((o) => o.upstreamSlug === 'glm-5.2:cloud')?.trust.zdr).toBe(true);
-      expect(llm.filter((o) => o.trust.zdr).map((o) => o.upstreamSlug)).toEqual(['glm-5.2:cloud']);
+      expect(llm.filter((o) => o.trust.zdr).map((o) => o.upstreamSlug)).toEqual([
+        'glm-5.2:cloud',
+        'glm-5.3',
+        'glm-5.3-flash',
+        'deepseek-v4.1-flash',
+      ]);
+
+      for (const slug of ['glm-5.3', 'glm-5.3-flash', 'deepseek-v4.1-flash']) {
+        const offering = llm.find((o) => o.upstreamSlug === slug);
+        expect(offering?.context).toEqual({ recommended: 200_000, max: 1_048_576 });
+        expect(offering?.trust.zdr).toBe(true);
+      }
+      expect(llm.find((o) => o.upstreamSlug === 'glm-5.3')?.profile.vision).toBe(false);
+      expect(llm.find((o) => o.upstreamSlug === 'glm-5.3-flash')?.profile.vision).toBe(true);
+      expect(llm.find((o) => o.upstreamSlug === 'deepseek-v4.1-flash')?.profile.vision).toBe(false);
 
       const web = p.offerings.filter((o) => o.serviceKind === 'web');
       expect(web.map((o) => o.upstreamSlug).sort()).toEqual([

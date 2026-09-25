@@ -2,10 +2,17 @@
 import { describe, expect, it } from 'bun:test';
 import type { ParseState } from '../adapter-contract.js';
 import type { ReasoningControl } from '../catalogue/types.js';
-import { nanoGptSlugSwapAdapter } from './nano-gpt-slug-swap.js';
+import { nanoGptReasoningEffortAdapter, nanoGptSlugSwapAdapter } from './nano-gpt-slug-swap.js';
 
 const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: false };
 const adapter = nanoGptSlugSwapAdapter('vendor/model', false, TOGGLE);
+
+const MANDATORY_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'high', 'max'],
+  offStep: null,
+  defaultStep: 'max',
+};
 
 /** Feed one raw SSE payload through the adapter and return the usage it emits. */
 function usageFor(payload: unknown) {
@@ -73,5 +80,31 @@ describe('nano-gpt usage normalisation', () => {
 
     expect(usage?.promptTokens).toBe(11_215);
     expect(usage?.cachedTokens).toBe(0);
+  });
+});
+
+describe('nano-gpt base-slug reasoning effort', () => {
+  const effortAdapter = nanoGptReasoningEffortAdapter(
+    'vendor/mandatory-reasoner',
+    true,
+    MANDATORY_STEPS,
+  );
+
+  it('keeps a mandatory reasoner on at its declared default for an off intent', () => {
+    const wire = effortAdapter.buildRequest({ messages: [], reasoning: { enabled: false } });
+    expect(wire.model).toBe('vendor/mandatory-reasoner');
+    expect(wire.body.reasoning_effort).toBe('max');
+  });
+
+  it('emits each requested effort without fabricating a sibling slug', () => {
+    for (const effort of ['low', 'high', 'max'] as const) {
+      const wire = effortAdapter.buildRequest({
+        messages: [],
+        reasoning: { enabled: true, effort },
+      });
+      expect(wire.model).toBe('vendor/mandatory-reasoner');
+      expect(wire.body.model).toBe('vendor/mandatory-reasoner');
+      expect(wire.body.reasoning_effort).toBe(effort);
+    }
   });
 });

@@ -34,15 +34,16 @@ describe('provider offerings', () => {
     }
   });
 
-  test('chutes is all TEE; adapter kind tracks confidence (verified↔catalogue, heuristic↔generic)', () => {
+  test('chutes is all TEE; curated confidence uses catalogue adapters, heuristic uses generic', () => {
     for (const o of chutes.offerings) {
       expect(o.trust.tee).toBe(true);
       expect(o.adapter).toEqual({ kind: 'catalogue', adapterId: `chutes:${o.upstreamSlug}` });
     }
     // The non-TEE providers are mixed: live-curated GLM offerings carry a
-    // hand-written catalogue adapter and `confidence: 'verified'`; the rest are
-    // still on the generic path at `confidence: 'heuristic'`. ollama-cloud now
-    // carries a native catalogue adapter (`/api/chat`), so it follows the rule.
+    // hand-written catalogue adapter and `confidence: 'verified'` or `partial`;
+    // the rest are still on the generic path at `confidence: 'heuristic'`.
+    // ollama-cloud carries a native catalogue adapter (`/api/chat`), so it
+    // follows the same rule.
     for (const o of [
       ...wafer.offerings,
       ...nanoGpt.offerings,
@@ -50,7 +51,7 @@ describe('provider offerings', () => {
       ...ollamaCloud.offerings,
     ]) {
       expect(o.trust.tee).toBe(false);
-      if (o.confidence === 'verified') {
+      if (o.confidence !== 'heuristic') {
         // TTI and voice offerings are verified but use the generic adapter
         // (image and speech calls bypass the chat-adapter pipeline entirely).
         if (o.serviceKind === 'tti' || o.serviceKind === 'tts' || o.serviceKind === 'stt') {
