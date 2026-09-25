@@ -48,6 +48,11 @@ Unit tests:
 pnpm --filter @chatsundere/auth-service test
 ```
 
+The test runner ignores service `.env` values, resets the dedicated
+`auth_test_db`, uses Redis DB 15, and serialises test files because the
+integration fixtures share global database invariants. Override those defaults
+with `AUTH_TEST_DATABASE_URL` and `AUTH_TEST_REDIS_URL` when needed.
+
 ### Running integration tests
 
 The full-lifecycle integration test truncates every table in `beforeAll`.
@@ -66,7 +71,6 @@ Then run integration tests:
 
 ```bash
 TEST_DATABASE_URL=postgres://chatsundere:dev@localhost:5432/auth_db_test \
-  REDIS_URL=redis://localhost:6379/0 \
   pnpm --filter @chatsundere/auth-service test:integration
 ```
 

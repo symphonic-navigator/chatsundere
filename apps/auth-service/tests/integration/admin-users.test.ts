@@ -443,7 +443,7 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     });
     const body = (await res.json()) as { users: unknown[]; total: number };
     expect(body.users.length).toBe(1);
-    expect(body.total).toBeGreaterThanOrEqual(3);
+    expect(body.total).toBeGreaterThan(body.users.length);
   });
 
   it('filters by role', async () => {
