@@ -199,6 +199,46 @@ describe('stream-manager.store', () => {
     await store.abortDiscard(chatId);
   });
 
+  it('a delayed cleanup from an old attempt cannot delete a replacement handle', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    const run = vi.spyOn(engine, 'runStreamEngine');
+    run.mockResolvedValueOnce({
+      finalContentBlocks: [{ type: 'text', text: 'First response' }],
+      pillRows: [],
+      finishReason: 'stop',
+      usedTokens: 0,
+    });
+
+    const store = useStreamManagerStore.getState();
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    await vi.waitFor(() => {
+      expect(useStreamManagerStore.getState().streams.get(chatId)?.status).toBe('done');
+    });
+
+    // Reproduce a test boundary (or any external store reset) while the first
+    // attempt's 200ms cleanup callback is still pending, then reuse the chat.
+    useStreamManagerStore.setState({ streams: new Map() });
+    run.mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          /* never */
+        }),
+    );
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    await vi.waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+      expect(useStreamManagerStore.getState().streams.get(chatId)?.status).toBe('streaming');
+    });
+    const replacement = useStreamManagerStore.getState().streams.get(chatId);
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    expect(useStreamManagerStore.getState().streams.get(chatId)).toBe(replacement);
+    await store.abortDiscard(chatId);
+  });
+
   it('mirrors reasoning chunks into the live content buffer as reasoning blocks', async () => {
     // Phase 4: reasoning chunks must mirror into the live buffer just like
     // token chunks — each one its own sub-block so the ReasoningPill body

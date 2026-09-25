@@ -1070,6 +1070,8 @@ async function runIntoDraft(
 
       setTimeout(() => {
         set((s) => {
+          const live = s.streams.get(args.chatId);
+          if (live?.controller !== controller) return s;
           const m = new Map(s.streams);
           m.delete(args.chatId);
           return { streams: m };
@@ -1289,6 +1291,8 @@ async function runOpenerStream(
 
       setTimeout(() => {
         set((s) => {
+          const live = s.streams.get(args.chatId);
+          if (live?.controller !== controller) return s;
           const m = new Map(s.streams);
           m.delete(args.chatId);
           return { streams: m };
