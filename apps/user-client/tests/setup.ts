@@ -4,6 +4,29 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
+// Node 26 exposes an experimental `localStorage` getter that returns undefined
+// without --localstorage-file and shadows jsdom's implementation. Do not read
+// that getter: each test realm gets deterministic, isolated in-memory storage.
+const localStorageValues = new Map<string, string>();
+const localStorageStub: Storage = {
+  get length() {
+    return localStorageValues.size;
+  },
+  clear: () => localStorageValues.clear(),
+  getItem: (key: string) => localStorageValues.get(key) ?? null,
+  key: (index: number) => Array.from(localStorageValues.keys())[index] ?? null,
+  removeItem: (key: string) => {
+    localStorageValues.delete(key);
+  },
+  setItem: (key: string, value: string) => {
+    localStorageValues.set(key, String(value));
+  },
+};
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  value: localStorageStub,
+});
+
 // jsdom does not implement window.matchMedia; stub it so components that call
 // respectsReducedMotion() (e.g. BreathingOrb) do not throw in tests.
 if (typeof window !== 'undefined' && !window.matchMedia) {

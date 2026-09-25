@@ -9,5 +9,7 @@ process.env.PORT ??= '0';
 process.env.OPS_PORT ??= '0';
 process.env.TEST_DATABASE_URL ??= 'postgres://chatsundere:dev@localhost:5432/sync_db_test';
 process.env.DATABASE_URL ??= process.env.TEST_DATABASE_URL;
-process.env.REDIS_URL ??= 'redis://localhost:6379/15';
+// Keep sync tests isolated from auth-service tests. Both suites run in parallel
+// under Turbo and sync integration tests intentionally flush their Redis DB.
+process.env.REDIS_URL ??= 'redis://localhost:6379/14';
 process.env.AUTH_JWKS_URL ??= 'http://localhost:3100/api/v1/jwks';
