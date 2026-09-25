@@ -57,7 +57,7 @@ import {
   resolveBlobFieldById,
 } from './blob-transform.js';
 import { type PutBlobResult, deleteBlob, putBlob } from './blob-transport.js';
-import { markDead } from './dead-keys.js';
+import { clearDeadKey, markDead } from './dead-keys.js';
 import { enqueueBlobPut } from './enqueue.js';
 import { resetEngineStateForNewLink } from './link-reset.js';
 import { isEnginePaused } from './recovery.js';
@@ -268,6 +268,8 @@ interface OutboxGroup {
   /** True when ANY delete op joined this group (audit #2): a later background
    *  upsert must never silently cancel a queued deletion. */
   hasDelete: boolean;
+  /** True when an explicit provider re-add joined this upsert group. */
+  providerResurrection?: true;
 }
 
 /**
@@ -276,7 +278,13 @@ interface OutboxGroup {
  * upserts, and the covered `seq`s are deleted together on success.
  */
 function coalesce(
-  rows: { seq?: number; collection: SyncCollection; key: string; op: 'upsert' | 'delete' }[],
+  rows: {
+    seq?: number;
+    collection: SyncCollection;
+    key: string;
+    op: 'upsert' | 'delete';
+    providerResurrection?: true;
+  }[],
 ): OutboxGroup[] {
   const groups = new Map<string, OutboxGroup>();
   for (const row of rows) {
@@ -289,6 +297,7 @@ function coalesce(
       existing.seqs.push(row.seq);
       existing.op = row.op; // latest op wins (delete-after-upsert → delete)
       existing.hasDelete = existing.hasDelete || row.op === 'delete';
+      existing.providerResurrection ||= row.providerResurrection;
     } else {
       groups.set(id, {
         collection: row.collection,
@@ -296,6 +305,7 @@ function coalesce(
         op: row.op,
         seqs: [row.seq],
         hasDelete: row.op === 'delete',
+        providerResurrection: row.providerResurrection,
       });
     }
   }
@@ -515,7 +525,7 @@ export async function drainOutbox(): Promise<DrainResult> {
         } else if (result.status === 'conflict') {
           needsPull = (await applyConflict(mk, prep, result.current, generation)) || needsPull;
         } else if (result.status === 'tombstoned') {
-          await applyTombstoned(prep, generation);
+          await applyTombstoned(prep, result.current.rev, generation);
         } else {
           if (result.code === 'record_too_large') await markTerminal(prep);
           await applyError(result);
@@ -852,7 +862,11 @@ async function isDecryptable(
  * Route the local row (if any) to trash with its 30-day grace, remove the
  * `syncRows` entry, and drop the outbox entries — all in one transaction.
  */
-async function applyTombstoned(prep: PreparedRecord, generation: number): Promise<void> {
+async function applyTombstoned(
+  prep: PreparedRecord,
+  tombstoneRev: number,
+  generation: number,
+): Promise<void> {
   const db = getClientDataDb();
   const now = Date.now();
 
@@ -861,6 +875,29 @@ async function applyTombstoned(prep: PreparedRecord, generation: number): Promis
   // (same local key, pending backfill) into the trash. The in-transaction re-check
   // below closes the residual window across the `readLocalRow` await.
   if (!(await generationStillCurrent(generation))) return;
+
+  // Provider ids became deterministic after some accounts had already hard-
+  // deleted them. Preserve an intentional re-add, adopt the tombstone's exact
+  // CAS revision, and keep its upsert queued for the server's repair path.
+  if (
+    prep.collection === 'providers' &&
+    prep.op === 'upsert' &&
+    prep.providerResurrection === true
+  ) {
+    await db.transaction('rw', [db.syncRows, db.deadKeys, db.syncState], async () => {
+      if (!(await generationStillCurrent(generation))) return;
+      const existing = await db.syncRows.get([prep.collection, prep.key]);
+      if (existing && tombstoneRev < existing.rev) return;
+      await db.syncRows.put({
+        collection: prep.collection,
+        key: prep.key,
+        rev: tombstoneRev,
+        ciphertextHash: '',
+      });
+      await clearDeadKey(prep.collection, prep.key);
+    });
+    return;
+  }
 
   if (prep.collection === 'vectors') {
     // Vectors live in the separate knowledge database and ride their document's

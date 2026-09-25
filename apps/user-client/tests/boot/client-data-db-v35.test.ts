@@ -114,9 +114,10 @@ describe('client-data-db v35 (provider id → templateId)', () => {
     const [row] = rows;
     expect(row?.id).toBe('nano-gpt');
     expect(row?.keySlot).toBe(survivorId);
+    expect(row?.apiKey).not.toBeNull();
     // The preserved blob still opens under the keySlot-derived context.
     // biome-ignore lint/style/noNonNullAssertion: row's presence is asserted via toHaveLength(1) above
-    expect(await openSecret(row!.apiKey, mk, providerApiKeySlot(row!))).toBe('real-key');
+    expect(await openSecret(row!.apiKey!, mk, providerApiKeySlot(row!))).toBe('real-key');
     expect(await db.providers.get('uuid-disabled')).toBeUndefined();
     expect(await db.providers.get('uuid-enabled')).toBeUndefined();
   });

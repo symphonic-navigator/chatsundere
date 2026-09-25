@@ -34,8 +34,10 @@ export async function resolveVoiceTransportMaterial(
 
   // Invariant: the selector's isConfigured already guaranteed an enabled row
   // exists for this offering — this guard is defence-in-depth.
-  const providerRow = providerRows.find((p) => p.templateId === offering.providerId && p.enabled);
-  if (!providerRow) return null;
+  const providerRow = providerRows.find(
+    (p) => p.templateId === offering.providerId && p.enabled && p.apiKey !== null,
+  );
+  if (!providerRow || providerRow.apiKey === null) return null;
 
   // Resolve mk from the session store — same pattern as send-message.ts.
   const mk = useSessionStore.getState().mk;

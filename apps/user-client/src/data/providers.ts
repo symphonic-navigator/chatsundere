@@ -20,14 +20,17 @@ export function useProviders() {
     queryKey: QK.providers,
     queryFn: async () => {
       const db = getClientDataDb();
-      return await db.providers.toArray();
+      return (await db.providers.toArray()).filter(
+        (row): row is ProviderRow & { apiKey: NonNullable<ProviderRow['apiKey']> } =>
+          row.apiKey !== null,
+      );
     },
   });
 }
 
 export interface UpsertArgs {
   templateId: string;
-  apiKey: ProviderRow['apiKey'];
+  apiKey: NonNullable<ProviderRow['apiKey']>;
   enabled: boolean;
   /**
    * The AAD slot the caller sealed `apiKey` under. Callers must derive this from
@@ -49,12 +52,15 @@ export async function upsertProviderRow(args: UpsertArgs): Promise<ProviderRow> 
   const db = getClientDataDb();
   const now = Date.now();
   const existing = await db.providers.get(args.templateId);
+  const providerResurrection =
+    existing === undefined || existing.apiKey === null ? true : undefined;
   const row: ProviderRow = existing
     ? {
         ...existing,
         apiKey: args.apiKey,
         enabled: args.enabled,
         keySlot: args.keySlot,
+        lifecycleVersion: 1,
         updatedAt: now,
       }
     : {
@@ -66,6 +72,7 @@ export async function upsertProviderRow(args: UpsertArgs): Promise<ProviderRow> 
         routing: { kind: 'direct' },
         enabled: args.enabled,
         keySlot: args.keySlot,
+        lifecycleVersion: 1,
         createdAt: now,
         updatedAt: now,
       };
@@ -76,6 +83,7 @@ export async function upsertProviderRow(args: UpsertArgs): Promise<ProviderRow> 
       collection: 'providers',
       key: row.id,
       tables: ['providers'],
+      providerResurrection,
       write: async (tx) => {
         await tx.table('providers').put(row);
       },
@@ -85,7 +93,7 @@ export async function upsertProviderRow(args: UpsertArgs): Promise<ProviderRow> 
     // Class-1 creation-insert: row + outbox row are atomic.
     await db.transaction('rw', [db.providers, db.syncOutbox], async (tx) => {
       await db.providers.add(row);
-      if (linked) enqueueSync(tx, 'providers', row.id, 'upsert');
+      if (linked) enqueueSync(tx, 'providers', row.id, 'upsert', { providerResurrection });
     });
     if (linked) scheduleClass1Sync();
   }
@@ -101,19 +109,28 @@ export function useUpsertProvider() {
   });
 }
 
-/** Delete a provider row by id. */
+/** Remove a provider without tombstoning its deterministic sync identity. */
 export function useDeleteProvider() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      // Class-2 delete (spec §5): enqueue a `delete` tombstone.
+      const existing = await getClientDataDb().providers.get(id);
+      if (!existing) return;
+      const removed: ProviderRow = {
+        ...existing,
+        apiKey: null,
+        enabled: false,
+        lifecycleVersion: 1,
+        updatedAt: Date.now(),
+      };
+      // Provider ids are deterministic and reusable. Removal is therefore a
+      // Class-2 lifecycle update, never a terminal sync tombstone.
       await mutateSynced({
         collection: 'providers',
         key: id,
-        op: 'delete',
         tables: ['providers'],
         write: async (tx) => {
-          await tx.table('providers').delete(id);
+          await tx.table('providers').put(removed);
         },
       });
     },

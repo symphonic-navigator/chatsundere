@@ -13,7 +13,7 @@ import { useServerGate } from './server-gate.js';
  */
 export function usableTemplateIds(providers: ProviderRow[], hasProxy: boolean): string[] {
   return providers
-    .filter((p) => p.enabled)
+    .filter((p) => p.enabled && p.apiKey !== null)
     .filter((p) => getProvider(p.templateId)?.corsHint !== 'requires-proxy' || hasProxy)
     .sort((a, b) => a.createdAt - b.createdAt) // first-configured first (first-come default)
     .map((p) => p.templateId);

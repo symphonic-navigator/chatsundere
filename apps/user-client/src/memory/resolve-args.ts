@@ -22,7 +22,7 @@ async function resolvePersonaBundle(
   mk: MasterKey,
 ): Promise<Omit<MemoryPipelineArgs, 'persona' | 'chat'>> {
   const provider = await db.providers.get(persona.providerId);
-  if (!provider) throw new Error(`${who}: provider not found`);
+  if (!provider || provider.apiKey === null) throw new Error(`${who}: provider not found`);
 
   const providerDef = getProvider(provider.templateId);
   if (!providerDef) throw new Error(`${who}: unknown provider template "${provider.templateId}"`);

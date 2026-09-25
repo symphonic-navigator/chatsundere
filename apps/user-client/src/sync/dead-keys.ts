@@ -16,3 +16,8 @@ export async function markDead(collection: SyncCollection, key: string): Promise
 export async function isDeadKey(collection: SyncCollection, key: string): Promise<boolean> {
   return (await getClientDataDb().deadKeys.get(`${collection}:${key}`)) !== undefined;
 }
+
+/** Retire a legacy terminal marker for a deliberately reusable identity. */
+export async function clearDeadKey(collection: SyncCollection, key: string): Promise<void> {
+  await getClientDataDb().deadKeys.delete(`${collection}:${key}`);
+}

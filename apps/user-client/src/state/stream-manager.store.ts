@@ -327,7 +327,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     if (!persona) throw new Error('compactNow: persona not found');
 
     const provider = await db.providers.get(persona.providerId);
-    if (!provider) throw new Error('compactNow: provider not found');
+    if (!provider || provider.apiKey === null) throw new Error('compactNow: provider not found');
 
     const providerDef = getProvider(provider.templateId);
     if (!providerDef)

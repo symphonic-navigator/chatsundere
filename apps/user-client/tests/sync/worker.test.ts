@@ -16,8 +16,10 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { upsertProviderRow } from '../../src/data/providers.js';
 import { isDeadKey } from '../../src/sync/dead-keys.js';
 import { batchByBytes } from '../../src/sync/seal-batch.js';
+import { _resetTriggersForTests } from '../../src/sync/triggers.js';
 import {
   advanceWatermark,
   checkEpoch,
@@ -78,12 +80,18 @@ function seedLinkedOnline(): void {
   useSessionStore.setState({ session: { accessToken: 'tok' } as never, mk: {} as never });
 }
 
-async function addOutbox(collection: string, key: string, op: 'upsert' | 'delete'): Promise<void> {
+async function addOutbox(
+  collection: string,
+  key: string,
+  op: 'upsert' | 'delete',
+  providerResurrection?: true,
+): Promise<void> {
   await getClientDataDb().syncOutbox.add({
     // biome-ignore lint/suspicious/noExplicitAny: SyncCollection narrowed by callers
     collection: collection as any,
     key,
     op,
+    providerResurrection,
     enqueuedAt: Date.now(),
   });
 }
@@ -106,6 +114,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   _resetWorkerForTests();
+  _resetTriggersForTests();
   await _resetClientDataDbForTests();
   useAccountLinkStore.setState({ linkStatus: 'unknown', baseUrl: null });
   useDiscoveryStore.setState({ status: 'unknown', config: null });
@@ -369,6 +378,93 @@ describe('drainOutbox — tombstoned (spec §6.4, I-1)', () => {
     await drainOutbox();
 
     expect(await isDeadKey('chats', 'c1')).toBe(true);
+  });
+
+  it('repairs a legacy provider tombstone from a fresh-device explicit add', async () => {
+    const db = getClientDataDb();
+    expect(await db.providers.get('nano-gpt')).toBeUndefined();
+    expect(await isDeadKey('providers', 'nano-gpt')).toBe(false);
+
+    await upsertProviderRow({
+      templateId: 'nano-gpt',
+      apiKey: { ciphertext: new Uint8Array([1]), nonce: new Uint8Array([2]), version: 1 },
+      enabled: true,
+      keySlot: 'nano-gpt',
+    });
+    expect(await outbox()).toEqual([expect.objectContaining({ providerResurrection: true })]);
+    const pushed: SyncPushRecord[][] = [];
+    _setPushTransport(async (records) => {
+      pushed.push(records);
+      if (pushed.length === 1) {
+        return {
+          head: 7,
+          epoch: 'E1',
+          results: [
+            {
+              status: 'tombstoned',
+              current: {
+                blindId: toBase64Url(new TextEncoder().encode('bid:providers:nano-gpt')),
+                collection: 'providers',
+                rev: 7,
+                deleted: true,
+              },
+            },
+          ],
+        };
+      }
+      return okResponse([8], 8);
+    });
+
+    await drainOutbox();
+
+    expect(await db.providers.get('nano-gpt')).toBeDefined();
+    expect(await db.syncRows.get(['providers', 'nano-gpt'])).toMatchObject({ rev: 7 });
+    expect(await outbox()).toHaveLength(1);
+    expect(await isDeadKey('providers', 'nano-gpt')).toBe(false);
+
+    await drainOutbox();
+
+    expect(pushed[1]?.[0]?.baseRev).toBe(7);
+    expect(await outbox()).toHaveLength(0);
+    expect(await db.syncRows.get(['providers', 'nano-gpt'])).toMatchObject({ rev: 8 });
+  });
+
+  it('does not promote a stale provider upsert into a tombstone repair', async () => {
+    const db = getClientDataDb();
+    await db.providers.put({
+      id: 'nano-gpt',
+      templateId: 'nano-gpt',
+      displayName: 'NanoGPT',
+      baseUrl: '',
+      apiKey: { ciphertext: new Uint8Array([1]), nonce: new Uint8Array([2]), version: 1 },
+      routing: { kind: 'direct' },
+      enabled: true,
+      lifecycleVersion: 1,
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    await addOutbox('providers', 'nano-gpt', 'upsert');
+    _setPushTransport(async () => ({
+      head: 7,
+      epoch: 'E1',
+      results: [
+        {
+          status: 'tombstoned',
+          current: {
+            blindId: toBase64Url(new TextEncoder().encode('bid:providers:nano-gpt')),
+            collection: 'providers',
+            rev: 7,
+            deleted: true,
+          },
+        },
+      ],
+    }));
+
+    await drainOutbox();
+
+    expect(await db.providers.get('nano-gpt')).toBeUndefined();
+    expect(await outbox()).toHaveLength(0);
+    expect(await isDeadKey('providers', 'nano-gpt')).toBe(true);
   });
 });
 

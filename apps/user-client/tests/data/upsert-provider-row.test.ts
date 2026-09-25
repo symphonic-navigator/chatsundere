@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
 import { asMasterKey, getRandomBytes } from '@chatsundere/crypto';
+import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetClientDataDbForTests,
@@ -9,6 +10,8 @@ import {
 } from '../../src/boot/client-data-db.js';
 import { upsertProviderRow } from '../../src/data/providers.js';
 import { sealSecret } from '../../src/lib/secrets.js';
+import { markDead } from '../../src/sync/dead-keys.js';
+import { _resetTriggersForTests } from '../../src/sync/triggers.js';
 
 const mk = asMasterKey(getRandomBytes(32));
 const seal = (v: string) => sealSecret(v, mk, 'provider/nano-gpt/api-key');
@@ -18,7 +21,11 @@ describe('upsertProviderRow (keyed by templateId)', () => {
     await _resetClientDataDbForTests();
     await openClientDataDb();
   });
-  afterEach(async () => await _resetClientDataDbForTests());
+  afterEach(async () => {
+    _resetTriggersForTests();
+    useAccountLinkStore.setState({ linkStatus: 'unknown', baseUrl: null });
+    await _resetClientDataDbForTests();
+  });
 
   it('creates a row whose id equals its templateId, with keySlot = templateId', async () => {
     const row = await upsertProviderRow({
@@ -48,5 +55,48 @@ describe('upsertProviderRow (keyed by templateId)', () => {
     const db = getClientDataDb();
     expect(await db.providers.where('templateId').equals('nano-gpt').count()).toBe(1);
     expect((await db.providers.get('nano-gpt'))?.enabled).toBe(true);
+  });
+
+  it('marks a re-add of a known legacy dead key with explicit resurrection intent', async () => {
+    const db = getClientDataDb();
+    await markDead('providers', 'nano-gpt');
+    useAccountLinkStore.setState({ linkStatus: 'linked', baseUrl: 'https://server.example' });
+
+    await upsertProviderRow({
+      templateId: 'nano-gpt',
+      apiKey: await seal('new-key'),
+      enabled: true,
+      keySlot: 'nano-gpt',
+    });
+
+    expect(await db.syncOutbox.toArray()).toEqual([
+      expect.objectContaining({
+        collection: 'providers',
+        key: 'nano-gpt',
+        op: 'upsert',
+        providerResurrection: true,
+      }),
+    ]);
+  });
+
+  it('marks an explicit add on a fresh device with resurrection intent', async () => {
+    const db = getClientDataDb();
+    useAccountLinkStore.setState({ linkStatus: 'linked', baseUrl: 'https://server.example' });
+
+    await upsertProviderRow({
+      templateId: 'nano-gpt',
+      apiKey: await seal('new-key'),
+      enabled: true,
+      keySlot: 'nano-gpt',
+    });
+
+    expect(await db.syncOutbox.toArray()).toEqual([
+      expect.objectContaining({
+        collection: 'providers',
+        key: 'nano-gpt',
+        op: 'upsert',
+        providerResurrection: true,
+      }),
+    ]);
   });
 });

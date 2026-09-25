@@ -32,7 +32,7 @@ export interface SelectedOffering {
 }
 
 function isConfigured(o: Offering, rows: readonly ProviderRow[]): boolean {
-  return rows.some((r) => r.templateId === o.providerId && r.enabled);
+  return rows.some((r) => r.templateId === o.providerId && r.enabled && r.apiKey !== null);
 }
 
 function select(

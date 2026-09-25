@@ -72,7 +72,9 @@ export async function importPersonaPack(
   const { modelRef } = payload.persona;
   if (modelRef !== null) {
     const providers = await db.providers.toArray();
-    const provider = providers.find((p) => p.templateId === modelRef.providerTemplateId);
+    const provider = providers.find(
+      (p) => p.templateId === modelRef.providerTemplateId && p.apiKey !== null,
+    );
     if (provider) {
       resolvedProviderId = provider.id;
       resolvedModelId = modelRef.modelId;

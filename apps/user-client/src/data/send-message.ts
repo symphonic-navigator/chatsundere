@@ -141,7 +141,7 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
   if (!persona) throw new Error(`${who}: persona not found`);
 
   const provider = await db.providers.get(persona.providerId);
-  if (!provider) throw new Error(`${who}: provider not found`);
+  if (!provider || provider.apiKey === null) throw new Error(`${who}: provider not found`);
 
   const settings = await db.settings.get(1);
   if (!settings) throw new Error(`${who}: settings row missing`);
@@ -258,9 +258,9 @@ async function resolveSubstituteVision(
 
   const db = getClientDataDb();
   const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
-    (p) => p.enabled,
+    (p) => p.enabled && p.apiKey !== null,
   );
-  if (!providerRow) return null;
+  if (!providerRow || providerRow.apiKey === null) return null;
 
   let apiKey: string;
   try {
@@ -312,9 +312,9 @@ async function resolveImageSlot(
 
   const db = getClientDataDb();
   const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
-    (p) => p.enabled,
+    (p) => p.enabled && p.apiKey !== null,
   );
-  if (!providerRow) return null;
+  if (!providerRow || providerRow.apiKey === null) return null;
 
   let apiKey: string;
   try {
@@ -423,9 +423,9 @@ export async function resolveExpert(
 
   const db = getClientDataDb();
   const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
-    (p) => p.enabled,
+    (p) => p.enabled && p.apiKey !== null,
   );
-  if (!providerRow) return null;
+  if (!providerRow || providerRow.apiKey === null) return null;
 
   let apiKey: string;
   try {

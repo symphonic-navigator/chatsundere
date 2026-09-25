@@ -169,6 +169,33 @@ describe('applyBatch CAS matrix', () => {
     expect(upd.results[0]?.status).toBe('tombstoned');
   });
 
+  test('provider upsert with the exact tombstone rev repairs a legacy hard delete', async () => {
+    await applyBatch(t.db, ACC, [await rec(5, { collection: 'providers', deleted: true })], allow);
+
+    const repaired = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(5, { collection: 'providers', baseRev: 1 })],
+      allow,
+    );
+
+    expect(repaired.results[0]).toEqual({ status: 'ok', rev: 2 });
+    expect(repaired.accepted).toBe(true);
+  });
+
+  test('provider upsert cannot repair a tombstone with a stale base rev', async () => {
+    await applyBatch(t.db, ACC, [await rec(5, { collection: 'providers', deleted: true })], allow);
+
+    const stale = await applyBatch(
+      t.db,
+      ACC,
+      [await rec(5, { collection: 'providers', baseRev: 0 })],
+      allow,
+    );
+
+    expect(stale.results[0]?.status).toBe('tombstoned');
+  });
+
   test('per-record atomicity: [ok, conflict, ok] aligned, both inserts persisted', async () => {
     await applyBatch(t.db, ACC, [await rec(2)], allow); // rev 1, makes rec(2) conflict on re-insert
     const { results } = await applyBatch(

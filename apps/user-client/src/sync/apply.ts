@@ -20,7 +20,7 @@ import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
 import { applyPulledBlobRow, blobFieldsOf, isBlobCollection } from './blob-transform.js';
 import { putBlob } from './blob-transport.js';
 import { hashRow } from './content-hash.js';
-import { isDeadKey, markDead } from './dead-keys.js';
+import { clearDeadKey, isDeadKey, markDead } from './dead-keys.js';
 import { enqueueBlobPut } from './enqueue.js';
 import { resolveConflict } from './resolution.js';
 import { restoreLocalFields } from './strip.js';
@@ -828,7 +828,11 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
         // survives trash purge and restore — not the ephemeral 30-day trash
         // snapshot.
         if (await isDeadKey(collection, key)) {
-          return { outcome: { kind: 'tamper' }, tamper: true };
+          const isProviderRepair =
+            collection === 'providers' &&
+            (row as { lifecycleVersion?: number }).lifecycleVersion === 1;
+          if (!isProviderRepair) return { outcome: { kind: 'tamper' }, tamper: true };
+          await clearDeadKey(collection, key);
         }
         // §7.4 L-3 — a pending local delete wins locally too; suppress the
         // insert. Audit #3/#5: establish the CAS base (so a recovery drain

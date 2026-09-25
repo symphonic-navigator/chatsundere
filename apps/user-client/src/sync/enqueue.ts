@@ -34,8 +34,9 @@ export function enqueueSync(
   collection: SyncCollection,
   key: string,
   op: 'upsert' | 'delete',
+  options?: { providerResurrection?: true },
 ): void {
-  const row: SyncOutboxRow = { collection, key, op, enqueuedAt: Date.now() };
+  const row: SyncOutboxRow = { collection, key, op, ...options, enqueuedAt: Date.now() };
   void tx.table<SyncOutboxRow, number>('syncOutbox').add(row);
 }
 
@@ -157,8 +158,19 @@ export async function mutateSynced(args: {
    * affordances leave this false so the disabled-UI backstop throws instead.
    */
   deferWhenOffline?: boolean;
+  /** Explicit one-shot permission to repair a known legacy provider tombstone. */
+  providerResurrection?: true;
 }): Promise<void> {
-  const { collection, key, write, tables, cascade, blobOps, deferWhenOffline } = args;
+  const {
+    collection,
+    key,
+    write,
+    tables,
+    cascade,
+    blobOps,
+    deferWhenOffline,
+    providerResurrection,
+  } = args;
   const op = args.op ?? 'upsert';
   const db = getClientDataDb();
 
@@ -187,7 +199,7 @@ export async function mutateSynced(args: {
   const scope = [...new Set([...tables, 'syncOutbox'])];
   await db.transaction('rw', scope, async (tx) => {
     await write(tx);
-    enqueueSync(tx, collection, key, op);
+    enqueueSync(tx, collection, key, op, { providerResurrection });
     if (cascade)
       for (const child of cascade) enqueueSync(tx, child.collection, child.key, 'delete');
     blobOps?.(tx);

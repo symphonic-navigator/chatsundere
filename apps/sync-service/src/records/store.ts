@@ -114,10 +114,19 @@ export async function applyBatch(
         continue;
       }
 
-      // 2. Insert/update against a tombstone → terminal.
+      // 2. Insert/update against a tombstone → terminal. Providers are the
+      // one reusable deterministic identity: a client that proves knowledge of
+      // the tombstone's exact rev may repair a legacy hard delete. A stale
+      // client cannot resurrect it with baseRev=0 or an older live revision.
       if (current?.deleted && !record.deleted) {
-        results.push({ status: 'tombstoned', current: toStored(current) });
-        continue;
+        const providerRepair =
+          current.collection === 'providers' &&
+          record.collection === 'providers' &&
+          record.baseRev === current.rev;
+        if (!providerRepair) {
+          results.push({ status: 'tombstoned', current: toStored(current) });
+          continue;
+        }
       }
 
       // 3. Delete — unconditional (skips CAS), bounded by the delete-rate window.

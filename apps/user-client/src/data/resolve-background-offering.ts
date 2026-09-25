@@ -73,7 +73,7 @@ export async function resolveBackgroundBundle(
 
   try {
     const row = await db.providers.get(providerRowId);
-    if (!row) return fallback;
+    if (!row || row.apiKey === null) return fallback;
     const providerDef = getProvider(row.templateId);
     if (!providerDef) return fallback;
     const offering = getOffering(row.templateId, upstreamSlug);

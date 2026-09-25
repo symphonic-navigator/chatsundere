@@ -43,6 +43,8 @@ export interface CoalescedEntry {
   op: 'upsert' | 'delete';
   /** Every outbox `seq` this unit covers — deleted together on `ok`. */
   seqs: number[];
+  /** Explicit local intent to repair a known legacy provider tombstone. */
+  providerResurrection?: true;
   /** The live local row (undefined for deletes — a tombstone carries no body). */
   row: unknown;
   /** The CAS base: the row's `syncRows.rev`, or 0 when the server never knew it. */
@@ -55,6 +57,7 @@ export interface PreparedRecord {
   key: string;
   op: 'upsert' | 'delete';
   seqs: number[];
+  providerResurrection?: true;
   /** The base64url record posted to the server. */
   record: SyncPushRecord;
   /**
@@ -112,7 +115,7 @@ export async function prepareRecord(
   mk: MasterKey,
   entry: CoalescedEntry,
 ): Promise<PreparedRecord> {
-  const { collection, key, op, seqs, baseRev } = entry;
+  const { collection, key, op, seqs, baseRev, providerResurrection } = entry;
 
   if (op === 'delete') {
     const blindId = await deps.computeBlindId(mk, collection, key);
@@ -128,6 +131,7 @@ export async function prepareRecord(
       key,
       op,
       seqs,
+      providerResurrection,
       record,
       ciphertextHashB64: null,
       contentHashB64: null,
@@ -187,6 +191,7 @@ export async function prepareRecord(
     key,
     op,
     seqs,
+    providerResurrection,
     record,
     ciphertextHashB64,
     contentHashB64,

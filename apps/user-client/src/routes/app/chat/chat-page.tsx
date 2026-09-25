@@ -273,7 +273,7 @@ export function ChatPage(): JSX.Element {
     queryFn: async () => {
       if (!effectivePersona) return null;
       const provider = await getClientDataDb().providers.get(effectivePersona.providerId);
-      if (!provider) return null;
+      if (!provider || provider.apiKey === null) return null;
       const slug = effectivePersona.modelId;
       return slug ? (getOffering(provider.templateId, slug) ?? null) : null;
     },

@@ -75,9 +75,10 @@ export async function exportPersona(
   // the provider no longer exists or no model is configured — the importer will
   // prompt for a re-pick.
   const provider = await db.providers.get(persona.providerId);
-  const modelRef: ExportedPersona['modelRef'] = provider
-    ? { providerTemplateId: provider.templateId, modelId: persona.modelId }
-    : null;
+  const modelRef: ExportedPersona['modelRef'] =
+    provider && provider.apiKey !== null
+      ? { providerTemplateId: provider.templateId, modelId: persona.modelId }
+      : null;
 
   // Strip device-local and sensitive fields from the persona row. These are
   // either private (apiKey lives on the ProviderRow and never touches this

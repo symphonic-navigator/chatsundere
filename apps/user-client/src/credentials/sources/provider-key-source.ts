@@ -12,11 +12,12 @@ import type { CredentialId, CredentialSource } from '../types.js';
  * duplicate enabled rows for one `templateId` should not occur.
  */
 async function findEnabledRow(id: CredentialId): Promise<ProviderRow | undefined> {
-  return await getClientDataDb()
+  const row = await getClientDataDb()
     .providers.where('templateId')
     .equals(id)
-    .filter((row) => row.enabled)
+    .filter((row) => row.enabled && row.apiKey !== null)
     .first();
+  return row?.apiKey ? row : undefined;
 }
 
 /**
@@ -37,7 +38,7 @@ export const providerKeySource: CredentialSource = {
 
   async get(id: CredentialId, mk: MasterKey): Promise<string | null> {
     const row = await findEnabledRow(id);
-    if (!row) return null;
+    if (!row?.apiKey) return null;
     return await openSecret(row.apiKey, mk, providerApiKeySlot(row));
   },
 };

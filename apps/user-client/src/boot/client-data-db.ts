@@ -97,7 +97,11 @@ export interface ProviderRow {
   templateId: string;
   displayName: string;
   baseUrl: string;
-  apiKey: EncryptedBlob;
+  /** Null is the synced, reversible "not configured" state. The previous
+   * credential ciphertext is removed from both local storage and sync. */
+  apiKey: EncryptedBlob | null;
+  /** Marks rows written by the reversible provider lifecycle. Legacy rows omit it. */
+  lifecycleVersion?: 1;
   /** The AAD slot the `apiKey` blob is sealed under: `provider/<keySlot>/api-key`.
    *  Decoupled from `id` so the v35 id→templateId rekey preserves existing sealed
    *  blobs without a re-seal (spec §4). Absent on pre-v35 rows → callers fall back
@@ -611,6 +615,9 @@ export interface SyncOutboxRow {
   op: 'upsert' | 'delete' | 'blob-put' | 'blob-delete';
   /** WS-D §5 — set for `blob-put`/`blob-delete` only; the blob the op acts on. */
   blobId?: string;
+  /** One-shot intent set only when a user re-adds a provider whose reversible
+   * lifecycle is removed or whose legacy hard tombstone is known locally. */
+  providerResurrection?: true;
   enqueuedAt: number;
   /**
    * Backfill spec §3.4 (Larissa L-6): the server refused this record terminally

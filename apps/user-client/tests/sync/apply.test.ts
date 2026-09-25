@@ -290,6 +290,32 @@ describe('applyRecord — §7.4 H-1 dead-key-anchored terminality (Larissa H-1, 
     expect(await db.chats.get('c1')).toBeUndefined();
     expect((await getSyncState()).attention).toEqual({ kind: 'tamper' });
   });
+
+  it('accepts a server-authorised provider resurrection and retires its legacy dead key', async () => {
+    const db = getClientDataDb();
+    await markDead('providers', 'nano-gpt');
+    openReturns({
+      id: 'nano-gpt',
+      templateId: 'nano-gpt',
+      displayName: 'NanoGPT',
+      baseUrl: '',
+      apiKey: { ciphertext: [1], nonce: [2], version: 1 },
+      routing: { kind: 'direct' },
+      enabled: true,
+      lifecycleVersion: 1,
+      createdAt: 1,
+      updatedAt: 9,
+    });
+
+    const outcome = await applyRecord(
+      pulledUpsert('providers', 'nano-gpt', new Uint8Array([7, 7]), 8),
+    );
+
+    expect(outcome).toEqual({ kind: 'inserted' });
+    expect(await db.providers.get('nano-gpt')).toBeDefined();
+    expect(await isDeadKey('providers', 'nano-gpt')).toBe(false);
+    expect((await getSyncState()).attention).toBeNull();
+  });
 });
 
 // ===== §7.4 L-3 pending-delete suppression =====
