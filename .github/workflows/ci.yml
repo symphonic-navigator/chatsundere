@@ -13,6 +13,32 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The auth- and sync-service suites run real integration tests against
+    # Postgres and Redis on localhost (their tests/setup.ts defaults). Mirrors
+    # infra/compose.dev.yml; the credentials are throwaway CI-only values.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chatsundere
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: auth_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chatsundere"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +64,18 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Same test databases the dev compose creates on first start. The sync
+      # suite migrates its own database per test; auth's only truncates, so
+      # its schema has to exist up front.
+      - name: Prepare test databases
+        run: |
+          docker exec -i ${{ job.services.postgres.id }} \
+            psql -v ON_ERROR_STOP=1 -U chatsundere -d postgres \
+            < infra/postgres/init/02-create-test-db.sql
+          pnpm --filter @chatsundere/auth-service db:migrate
+        env:
+          DATABASE_URL: postgres://chatsundere:dev@localhost:5432/auth_test_db
 
       - name: Test
         run: pnpm test
