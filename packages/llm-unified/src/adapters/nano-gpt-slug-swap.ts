@@ -227,12 +227,16 @@ export function nanoGptReasoningEffortAdapter(
     buildRequest(req: CanonicalRequest): WireRequest {
       const reasoningOn = req.reasoning.enabled || !canDisableReasoning;
       const requestedEffort = req.reasoning.enabled ? req.reasoning.effort : undefined;
-      return base.buildRequest({
+      const wire = base.buildRequest({
         ...req,
         reasoning: reasoningOn
           ? { enabled: true, effort: requestedEffort ?? defaultEffort }
           : { enabled: false },
       });
+      // With no sibling slug to swap to, the base slug reasons by default, so an
+      // off has to be spelled out (MiMo V2.6 Flash Uncensored, probed 2026-09-26).
+      if (!reasoningOn) wire.body.reasoning_effort = 'none';
+      return wire;
     },
 
     parseChunk(raw: unknown, state: ParseState): { events: StreamChunk[]; state: ParseState } {

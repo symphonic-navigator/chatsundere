@@ -189,7 +189,8 @@ describe('built-in providers', () => {
     for (const [canonicalRef, upstreamSlug] of Object.entries(expected)) {
       const offering = p?.offerings.find((o) => o.canonicalRef === canonicalRef);
       expect(offering?.upstreamSlug).toBe(upstreamSlug);
-      expect(offering?.confidence).toBe('partial');
+      const partial = canonicalRef === 'chatgpt-6-astra' || canonicalRef === 'claude-fable-5.1';
+      expect(offering?.confidence).toBe(partial ? 'partial' : 'verified');
       expect(offering?.context).toEqual({ recommended: 200_000, max: 1_048_576 });
     }
 
@@ -209,7 +210,7 @@ describe('built-in providers', () => {
     const byCanonical = (id: string) => offerings.find((o) => o.canonicalRef === id);
 
     expect(byCanonical('glm-5.3')?.profile).toMatchObject({
-      reasoning: { mode: 'steps', offStep: 'off' },
+      reasoning: { mode: 'steps', steps: ['low', 'high', 'max'], offStep: null },
       vision: false,
     });
     expect(byCanonical('deepseek-v4.1-flash')?.profile).toMatchObject({
@@ -226,7 +227,7 @@ describe('built-in providers', () => {
       vision: true,
     });
     expect(byCanonical('glm-5.3-flash-uncensored')?.profile).toMatchObject({
-      reasoning: { mode: 'fixed-on' },
+      reasoning: { mode: 'steps', steps: ['low', 'high'], offStep: null, defaultStep: 'high' },
       vision: true,
     });
     expect(byCanonical('mimo-v2.6-pro')?.profile).toMatchObject({
@@ -238,13 +239,19 @@ describe('built-in providers', () => {
       vision: true,
     });
     expect(byCanonical('mimo-v2.6-flash-uncensored')?.profile).toMatchObject({
-      reasoning: { mode: 'fixed-on' },
+      reasoning: { mode: 'toggle', defaultOn: true },
       vision: false,
     });
+    // Probed 2026-09-26: an off only hides the trace on these, so none offers one.
+    for (const id of ['claude-fable-5.1', 'claude-opus-5.5', 'chatgpt-6-astra']) {
+      expect(byCanonical(id)?.profile.reasoning).toMatchObject({ mode: 'steps', offStep: null });
+    }
+    expect(byCanonical('chatgpt-5.6-sol')?.profile.reasoning).toMatchObject({ offStep: 'off' });
   });
 
   it('keeps base-only nano-gpt reasoning models on their published slugs', () => {
     for (const slug of [
+      'z-ai/glm-5.3',
       'z-ai/glm-5.3-flash',
       'z-ai/glm-5.3-flash-uncensored',
       'xiaomi/mimo-v2.6-pro',
@@ -294,8 +301,9 @@ describe('built-in providers', () => {
         effective: effectiveFreedom(canonical.freedomOriented, offering.freedomOrientedDeployment),
       };
     };
-    expect(freedomFor('mimo-v2.6-pro')).toEqual({ deployment: null, effective: 'unknown' });
-    expect(freedomFor('mimo-v2.6-flash')).toEqual({ deployment: null, effective: 'unknown' });
+    // Chris (2026-09-26): nano-gpt adds no censorship to the MiMo routes either.
+    expect(freedomFor('mimo-v2.6-pro')).toEqual({ deployment: true, effective: 'free' });
+    expect(freedomFor('mimo-v2.6-flash')).toEqual({ deployment: true, effective: 'free' });
     expect(freedomFor('mimo-v2.6-flash-uncensored')).toEqual({
       deployment: true,
       effective: 'free',

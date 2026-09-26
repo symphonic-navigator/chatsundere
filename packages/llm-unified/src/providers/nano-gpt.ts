@@ -32,13 +32,31 @@ const STEPS: ReasoningControl = {
 // regardless (probed live), so reasoning cannot be disabled → fixed-on. Both
 // share the slug-swap adapter; only the declared control differs.
 const GLM_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
-const GLM53_FLASH_STEPS: ReasoningControl = {
+// GLM 5.3, GLM 5.3 Flash and the Flash uncensored fine-tune always reason: nano-gpt rejects
+// every off spelling (`reasoning_effort:'none'`, `reasoning:{enabled:false}`,
+// `thinking:{type:'disabled'}`) with HTTP 400 `reasoning_required`, and there is
+// no `:thinking` sibling (probed live 2026-09-26). Effort is accepted, so both
+// are `steps` without an off. The fine-tune publishes only low/high, and low
+// genuinely shortens its trace (70 vs ~1100 reasoning tokens on the same sum).
+const GLM53_STEPS: ReasoningControl = {
   mode: 'steps',
   steps: ['low', 'high', 'max'],
   offStep: null,
   defaultStep: 'max',
 };
+const GLM53_FLASH_UNCENSORED_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'high'],
+  offStep: null,
+  defaultStep: 'high',
+};
+// MiMo V2.6 Pro/Flash: `reasoning:{enabled:false}` blanks the trace but the
+// thinking still happens (1131 completion tokens for a 210-character answer),
+// and `reasoning_effort:'none'` does not even blank it — "off only hides", so
+// fixed-on. The uncensored fine-tune differs: `reasoning_effort:'none'` is a
+// genuine off (23 completion tokens), so it is a toggle (probed live 2026-09-26).
 const MIMO26_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
+const MIMO26_UNCENSORED_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
 // July 2026 additions on nano-gpt (probed live 2026-07-18): Hy3 has NO
 // `:thinking` sibling (tencent/hy3:thinking 404s) and reasoning cannot be truly
@@ -103,6 +121,16 @@ const OPENAI_STEPS: ReasoningControl = {
   defaultStep: 'medium',
 };
 const OPENAI_NONE: ReasoningControl = { mode: 'none' };
+// GPT 6 Astra breaks the family's off: `reasoning:{enabled:false}` blanks the
+// summary but still bills 118 reasoning tokens, and `reasoning_effort:'none'` is
+// rejected (HTTP 400, ladder low/medium/high/xhigh/max). Probed live 2026-09-26.
+// GPT 5.6 Sol keeps a genuine off (50 completion tokens) and stays on OPENAI_STEPS.
+const OPENAI_NO_OFF_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'medium', 'high'],
+  offStep: null,
+  defaultStep: 'medium',
+};
 
 // Inkling's ladder. Deliberately a separate constant from OPENAI_STEPS despite the
 // identical shape: the two describe unrelated upstreams that happen to agree today,
@@ -210,6 +238,17 @@ const OPUS5_STEPS: ReasoningControl = {
   defaultStep: 'medium',
 };
 
+// Fable 5.1 does NOT inherit Fable 5's genuine off: `reasoning:{enabled:false}`
+// and `thinking:{type:'disabled'}` blank the trace while completion_tokens stay
+// at 64 for an 8-character answer — identical to the reasoning-on runs (probed
+// live 2026-09-26). The Opus 5 signature, so the same ladder without an off.
+// Opus 5.5 behaves the same (88-101 completion tokens off vs 88-107 on).
+const FABLE51_STEPS: ReasoningControl = {
+  mode: 'steps',
+  steps: ['low', 'medium', 'high'],
+  offStep: null,
+  defaultStep: 'medium',
+};
 const FABLE51_SLUG = 'anthropic/claude-fable-5.1';
 const FABLE51_CANONICAL = 'claude-fable-5.1';
 const OPUS55_SLUG = 'anthropic/claude-opus-5.5';
@@ -258,10 +297,6 @@ function slugSwapOffering(
   // Optional hard ceiling distinct from the recommended window. Defaults to
   // `ctx` (recommended === max).
   maxCtx: number = ctx,
-  options: {
-    confidence?: Offering['confidence'];
-    freedomOrientedDeployment?: boolean | null;
-  } = {},
 ): Offering {
   return {
     canonicalRef,
@@ -276,10 +311,9 @@ function slugSwapOffering(
     },
     context: { recommended: ctx, max: maxCtx },
     trust: { tee: false, zdr: false },
-    freedomOrientedDeployment:
-      options.freedomOrientedDeployment === undefined ? true : options.freedomOrientedDeployment,
+    freedomOrientedDeployment: true, // Chris (2026-05-30): nano-gpt adds no censorship
     source: 'curated',
-    confidence: options.confidence ?? 'verified',
+    confidence: 'verified',
     serviceKind: 'llm',
   };
 }
@@ -464,39 +498,26 @@ const offerings: Offering[] = [
   // channel). 1M ceiling from the upstream zai-org model; recommended capped at
   // 200k (nano-gpt /models reports no window).
   slugSwapOffering('glm-5.2', 'zai-org/glm-5.2', STEPS, false, 200_000, 1_048_576),
-  // September 2026 NanoGPT additions. Slugs and documented capabilities were
-  // confirmed against `/models` and NanoGPT's model cards on 2026-09-25, but
-  // completion probes were blocked by the provider-wide key rotation (`401
-  // Invalid session`). Keep confidence partial until the renewed test key runs
-  // the conversation suite.
-  slugSwapOffering('glm-5.3', 'z-ai/glm-5.3', STEPS, false, 200_000, 1_048_576, {
-    confidence: 'partial',
-  }),
-  // No `:thinking` sibling is published. The base model documents
-  // reasoning_effort low/high/max and no off, so the adapter stays on the base
-  // slug and exposes only that mandatory-reasoning ladder.
-  slugSwapOffering(
-    'glm-5.3-flash',
-    'z-ai/glm-5.3-flash',
-    GLM53_FLASH_STEPS,
-    true,
-    200_000,
-    1_048_576,
-    { confidence: 'partial' },
-  ),
-  // The uncensored fine-tune publishes reasoning output but no switchable
-  // sibling or documented effort contract. Model it fixed-on until a live probe
-  // can prove more. Vision support is provider-dependent and NanoGPT lists the
-  // model as multimodal, so this route carries vision with partial confidence.
+  // September 2026 NanoGPT additions, probed live 2026-09-26 (the 2026-09-25
+  // onboarding ran against a revoked key and could not probe). GLM 5.3 looks
+  // like a slug swap (`:thinking` is published) but is not one: the bare slug
+  // still reasons briefly (25-36 reasoning tokens on the suite's word problem)
+  // and every off spelling is rejected with `reasoning_required`, exactly like
+  // Flash. So it shares Flash's ladder on the base slug, `:thinking` unused.
+  slugSwapOffering('glm-5.3', 'z-ai/glm-5.3', GLM53_STEPS, false, 200_000, 1_048_576),
+  // No `:thinking` sibling and no off (see GLM53_STEPS); the adapter stays
+  // on the base slug and exposes only the mandatory-reasoning ladder.
+  slugSwapOffering('glm-5.3-flash', 'z-ai/glm-5.3-flash', GLM53_STEPS, true, 200_000, 1_048_576),
   slugSwapOffering(
     'glm-5.3-flash-uncensored',
     'z-ai/glm-5.3-flash-uncensored',
-    GLM_FIXED_ON,
+    GLM53_FLASH_UNCENSORED_STEPS,
     true,
     200_000,
     1_048_576,
-    { confidence: 'partial' },
   ),
+  // Clean slug swap like V4 Flash: bare = 29 completion tokens, `:thinking`
+  // reasons and effort modulates (max longest).
   slugSwapOffering(
     'deepseek-v4.1-flash',
     'deepseek/deepseek-v4.1-flash',
@@ -504,7 +525,6 @@ const offerings: Offering[] = [
     true,
     200_000,
     1_048_576,
-    { confidence: 'partial' },
   ),
   slugSwapOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', STEPS, true, 256_000),
   slugSwapOffering('gemma-4-31b', 'google/gemma-4-31b-it', STEPS, true, 262_144),
@@ -529,10 +549,9 @@ const offerings: Offering[] = [
   // novita offering; slug swap probed live 2026-07-25 (bare = 0 reasoning,
   // `:thinking` = trace on the reasoning channel).
   slugSwapOffering('mimo-v2.5-pro', 'xiaomi/mimo-v2.5-pro-crof', STEPS, false, 200_000, 1_048_576),
-  // MiMo V2.6 exposes reasoning on the base slugs and publishes no `:thinking`
-  // siblings. Bind the base slug as always-on until NanoGPT completion probes
-  // can establish an actual off control. The regular routes are omnimodal; the
-  // explicitly uncensored fine-tune is documented as text-only.
+  // MiMo V2.6 publishes no `:thinking` siblings; see MIMO26_FIXED_ON for the
+  // off behaviour. The regular routes are omnimodal; the uncensored fine-tune is
+  // text-only per nano-gpt's /models.
   slugSwapOffering(
     'mimo-v2.6-pro',
     'xiaomi/mimo-v2.6-pro',
@@ -540,7 +559,6 @@ const offerings: Offering[] = [
     true,
     200_000,
     1_048_576,
-    { confidence: 'partial', freedomOrientedDeployment: null },
   ),
   slugSwapOffering(
     'mimo-v2.6-flash',
@@ -549,16 +567,14 @@ const offerings: Offering[] = [
     true,
     200_000,
     1_048_576,
-    { confidence: 'partial', freedomOrientedDeployment: null },
   ),
   slugSwapOffering(
     'mimo-v2.6-flash-uncensored',
     'xiaomi/mimo-v2.6-flash-uncensored',
-    MIMO26_FIXED_ON,
+    MIMO26_UNCENSORED_TOGGLE,
     false,
     200_000,
     1_048_576,
-    { confidence: 'partial' },
   ),
   // Mistral family on nano-gpt (anonymous-router path). Small 4 and Medium 3.5
   // have `:thinking` siblings → binary toggle; Large 3 has none → no reasoning.
@@ -648,7 +664,7 @@ const offerings: Offering[] = [
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: true,
     source: 'curated',
-    confidence: 'partial',
+    confidence: 'verified',
     serviceKind: 'llm',
   },
   {
@@ -657,7 +673,7 @@ const offerings: Offering[] = [
     upstreamSlug: FABLE51_SLUG,
     adapter: { kind: 'catalogue', adapterId: `nano-gpt:${FABLE51_SLUG}` },
     profile: {
-      reasoning: FABLE_STEPS,
+      reasoning: FABLE51_STEPS,
       toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
       vision: true,
       replayReasoning: false,
@@ -666,6 +682,8 @@ const offerings: Offering[] = [
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: true,
     source: 'curated',
+    // Partial: adaptive thinking leaves the suite's reasoning-present check red
+    // on easy prompts (Chris, 2026-09-26).
     confidence: 'partial',
     serviceKind: 'llm',
   },
@@ -768,18 +786,14 @@ const offerings: Offering[] = [
   openaiOffering('chatgpt-5', 'openai/gpt-5.1', OPENAI_STEPS, 200_000, 400_000),
   openaiOffering('chatgpt-5.4', 'openai/gpt-5.4', OPENAI_STEPS, 200_000, 1_048_576),
   openaiOffering('chatgpt-5.5', 'openai/gpt-5.5', OPENAI_STEPS, 200_000, 1_048_576),
-  openaiOffering(
-    'chatgpt-5.6-sol',
-    'openai/gpt-5.6-sol',
-    OPENAI_STEPS,
-    200_000,
-    1_048_576,
-    'partial',
-  ),
+  openaiOffering('chatgpt-5.6-sol', 'openai/gpt-5.6-sol', OPENAI_STEPS, 200_000, 1_048_576),
+  // GPT 6 Astra has no genuine off (see OPENAI_NO_OFF_STEPS). Partial: the
+  // reasoning summary is sometimes omitted at low/medium, so the suite's
+  // reasoning-present check is not reliably green (Chris, 2026-09-26).
   openaiOffering(
     'chatgpt-6-astra',
     'openai/gpt-6-astra',
-    OPENAI_STEPS,
+    OPENAI_NO_OFF_STEPS,
     200_000,
     1_048_576,
     'partial',
@@ -901,6 +915,7 @@ export function registerNanoGpt(): void {
       );
     } else if (
       o.canonicalRef === 'hy3' ||
+      o.canonicalRef === 'glm-5.3' ||
       o.canonicalRef === 'glm-5.3-flash' ||
       o.canonicalRef === 'glm-5.3-flash-uncensored' ||
       o.canonicalRef === 'mimo-v2.6-pro' ||

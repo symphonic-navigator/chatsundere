@@ -108,3 +108,24 @@ describe('nano-gpt base-slug reasoning effort', () => {
     }
   });
 });
+
+describe('nano-gpt base-slug reasoning toggle', () => {
+  const toggleAdapter = nanoGptReasoningEffortAdapter('vendor/switchable', false, {
+    mode: 'toggle',
+    defaultOn: true,
+  });
+
+  // With no `:thinking` sibling the base slug reasons by default, so an off
+  // must be spelled out on the wire or it silently stays on.
+  it('sends an explicit none effort for an off intent', () => {
+    const wire = toggleAdapter.buildRequest({ messages: [], reasoning: { enabled: false } });
+    expect(wire.model).toBe('vendor/switchable');
+    expect(wire.body.reasoning_effort).toBe('none');
+  });
+
+  it('leaves the effort unset for an on intent without one', () => {
+    const wire = toggleAdapter.buildRequest({ messages: [], reasoning: { enabled: true } });
+    expect(wire.model).toBe('vendor/switchable');
+    expect(wire.body.reasoning_effort).toBeUndefined();
+  });
+});
