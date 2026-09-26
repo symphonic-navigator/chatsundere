@@ -183,8 +183,9 @@ describe('stream-manager.store', () => {
     }) as never);
     const store = useStreamManagerStore.getState();
     void store.start(baseStartArgs(chatId, persona, model) as never);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(captured).not.toBeNull();
+    // Wait for start() to reach the engine rather than sleeping a fixed time —
+    // a slow CI runner outlasts any fixed delay.
+    await vi.waitFor(() => expect(captured).not.toBeNull());
     const fire = captured as unknown as OnChunk;
     fire({ type: 'token', text: 'Hi' });
     fire({ type: 'token', text: ' there' });
@@ -275,8 +276,9 @@ describe('stream-manager.store', () => {
     }) as never);
     const store = useStreamManagerStore.getState();
     void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(captured).not.toBeNull();
+    // Wait for start() to reach the engine rather than sleeping a fixed time —
+    // a slow CI runner outlasts any fixed delay.
+    await vi.waitFor(() => expect(captured).not.toBeNull());
     const fire = captured as unknown as OnChunk;
     fire({ type: 'reasoning', text: 'planning' });
     const handle = useStreamManagerStore.getState().streams.get(myChatId);
@@ -315,8 +317,9 @@ describe('stream-manager.store', () => {
     });
     const store = useStreamManagerStore.getState();
     void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(captured).not.toBeNull();
+    // Wait for start() to reach the engine rather than sleeping a fixed time —
+    // a slow CI runner outlasts any fixed delay.
+    await vi.waitFor(() => expect(captured).not.toBeNull());
     const fire = captured as unknown as OnChunk;
     fire({ type: 'reasoning', text: 'aa' });
     fire({ type: 'reasoning', text: 'bb' });
@@ -358,8 +361,9 @@ describe('stream-manager.store', () => {
     });
     const store = useStreamManagerStore.getState();
     void store.start({ ...baseStartArgs(chatId, persona, model), chatId: myChatId } as never);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(captured).not.toBeNull();
+    // Wait for start() to reach the engine rather than sleeping a fixed time —
+    // a slow CI runner outlasts any fixed delay.
+    await vi.waitFor(() => expect(captured).not.toBeNull());
     const fire = captured as unknown as OnChunk;
     const h0 = useStreamManagerStore.getState().streams.get(myChatId);
     expect(h0).toBeDefined();
@@ -1857,8 +1861,9 @@ describe('stream-manager.store', () => {
       ...baseOpenerArgs(myChatId, persona, model),
       chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
     } as never);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(captured).not.toBeNull();
+    // Wait for start() to reach the engine rather than sleeping a fixed time —
+    // a slow CI runner outlasts any fixed delay.
+    await vi.waitFor(() => expect(captured).not.toBeNull());
     (captured as unknown as OnChunk)({ type: 'token', text: 'Hello' });
 
     await store.abortPreserve(myChatId);
@@ -2013,8 +2018,9 @@ describe('stream-manager.store', () => {
       ...baseOpenerArgs(myChatId, persona, model),
       chat: { ...(baseOpenerArgs(myChatId, persona, model).chat as object), id: myChatId },
     } as never);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(captured).not.toBeNull();
+    // Wait for start() to reach the engine rather than sleeping a fixed time —
+    // a slow CI runner outlasts any fixed delay.
+    await vi.waitFor(() => expect(captured).not.toBeNull());
     (captured as unknown as OnChunk)({ type: 'token', text: 'partial' });
 
     await store.abortPreserve(myChatId);
