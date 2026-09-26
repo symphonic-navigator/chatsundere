@@ -735,6 +735,24 @@ describe('stream-manager.store', () => {
     expect(useStreamManagerStore.getState().streams.size).toBe(0);
   });
 
+  it('abortAll stops every stream and keeps the partial draft as incomplete', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(
+      () =>
+        new Promise(() => {
+          /* never */
+        }),
+    );
+    const store = useStreamManagerStore.getState();
+    await store.start(baseStartArgs(chatId, persona, model) as never);
+    const draftId = useStreamManagerStore.getState().streams.get(chatId)?.draftMessageId ?? '';
+    await store.abortAll();
+    expect(useStreamManagerStore.getState().streams.size).toBe(0);
+    expect((await db.messages.get(draftId))?.streamingState).toBe('incomplete');
+  });
+
   it('offers query_knowledgebase and awareness when knowledge libraries are present', async () => {
     // Kept last in the file: the abortAllForPersonaDiscard test above asserts an
     // exact streams.size, so it must not race a lingering handle from here.

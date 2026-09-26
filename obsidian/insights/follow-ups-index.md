@@ -19,6 +19,7 @@ Canonical source: [[security-deferrals]]
 
 | ID | Item | Trigger | Severity |
 |---|---|---|---|
+| App-update L-1 | ≤5 s apply-latch window could reload a session created via another route | A one-tap session-creating route from the login screen | Low |
 | H-1 / M-1 | Recovery wrap accepted without server-side integrity attestation | Phase 1 sync-service brief | Medium (re-classified) |
 | M-3 | `changePassphraseLinkedOnline` atomicity edge case lacks crash regression test | Sync-service staging logic in Phase 1 | Low |
 | M-7 | WebAuthn local-verify test does not exercise a real signed assertion | Squash D device-test scripts | Low |
@@ -60,6 +61,8 @@ Items that have been decided but not yet implemented in code.
 
 | Item | Trigger | Notes |
 |---|---|---|
+| App-update: `abortAll` aborts streams sequentially — one throwing `abortPreserve` skips the rest (tokens keep flowing until the DB close fails their writes) | Next touch of `stream-manager.store.ts` | Abort every controller first, then persist. From the 2026-09-26 app-update re-review. |
+| App-update: boot-time controller capture — a tab still booting misses a concurrent `controllerchange` and the presence ping | If a stranded-tab report surfaces | Capture the controller / start the responder at the top of `main.tsx`. |
 | **Claude Opus 5 freedom judgement is `null` pending a warmth/roleplay eval** (2026-07-25) | When the warmth / user-alignment / SFW-roleplay axes are evaluated | The first Anthropic model in the catalogue to reach `unknown` rather than CENSORED. Lex's SM-Bench grades it B+ / 85.8% (90.67% recomputed from his per-axis data), clearing the bar the rest of the family misses — enough to withdraw the confident `false`, not enough to assert `true`. A `freedomOriented: true` flip is explicitly on the table (Chris, 2026-07-25). Until then the picker shows `Uncensored?`. Source: [[../models/claude-opus-5]] |
 | **A second OpenRouter route for the rest of the Claude family** (2026-07-25) | Per model, on demand — never as a sweep | [ADR 0037](../decisions/0037-openrouter-is-no-longer-excluded-for-anthropic.md) removed the blanket exclusion (Bedrock caches now; the multi-turn tool 400 is gone). Sonnet 5 and Opus 5 have both routes; Haiku 4.5 / Sonnet 4.5-4.6 / Opus 4.5-4.8 / Fable 5 remain nano-gpt-only. Adding one is a per-model call with its own live suite run, not a batch (no bulk catalogue imports). |
 | **`x_nanogpt_cache` is a richer cache signal than we consume** (2026-07-25) | If cache diagnostics ever need to be user- or dev-visible | nano-gpt emits `{requested, enabledForDispatch, supported, status: "hit"/"write_only"/"hit_and_write", ttl, readTokens, writeTokens}` on the final SSE event. We now read the Anthropic counters correctly but ignore this object entirely. It would make "is caching actually working on this route" answerable without a bespoke probe. Source: [[../providers/nano-gpt]] |

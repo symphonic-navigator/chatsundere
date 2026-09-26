@@ -3,10 +3,12 @@ import type { Offering } from '@chatsundere/llm-unified';
 import { useEffect, useRef } from 'react';
 import type { AttachmentRow, ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { resolveContextWindow } from '../../lib/context-window.js';
+import type { OfferingResolution } from '../../lib/resolve-offering.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { useEffectiveChatMode } from '../../state/effective-chat-mode.js';
 import { Cockpit } from './Cockpit.js';
+import { CockpitUnavailable } from './CockpitUnavailable.js';
 import { InteractionTopbar } from './InteractionTopbar.js';
 
 interface Props {
@@ -16,8 +18,14 @@ interface Props {
   chat: ChatRow | null;
   /** Null when the chat's model cannot be resolved (removed provider/model).
    *  The topbar still mounts — it is the repair path — but the cockpit needs a
-   *  model to compose against and stays absent (spec 2026-07-18 §5.6). */
+   *  model to compose against, so its slot renders CockpitUnavailable
+   *  (spec 2026-09-26) — see `resolution`. */
   offering: Offering | null;
+  /** Why the offering did or did not resolve; null while the query is loading,
+   *  when neither the cockpit nor the unavailable card renders (no flash). */
+  resolution: OfferingResolution | null;
+  /** Opens the provider set-up page for a missing or removed provider. */
+  onSetUpProvider: (templateId: string) => void;
   usedTokens: number;
   draftValue: string;
   onDraftChange: (v: string) => void;
@@ -232,6 +240,18 @@ export function InteractionMode(p: Props): JSX.Element {
             onEnterLiveVoice={p.onEnterLiveVoice}
           />
         </div>
+      ) : p.resolution && p.resolution.kind !== 'ok' ? (
+        <CockpitUnavailable
+          // A different unresolved model must start fresh: new auto-check, new focus rule.
+          key={
+            p.resolution.kind === 'model-unknown'
+              ? `${p.resolution.kind}:${p.resolution.templateId}:${p.resolution.modelId}`
+              : `${p.resolution.kind}:${p.resolution.templateId}`
+          }
+          resolution={p.resolution}
+          onSetUpProvider={p.onSetUpProvider}
+          onChooseModel={() => p.onOpenPersonaEditor?.()}
+        />
       ) : null}
     </div>
   );

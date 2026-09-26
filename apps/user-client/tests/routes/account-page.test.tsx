@@ -101,6 +101,7 @@ import { changeUsername } from '@chatsundere/crypto';
 import { HttpError } from '../../src/lib/fetch.js';
 import { httpServerClient } from '../../src/lib/server-client.js';
 import { AccountPage } from '../../src/routes/app/account.js';
+import { _resetAppUpdateForTests, useAppUpdateStore } from '../../src/sw/app-update.store.js';
 
 const changeUsernameMock = vi.mocked(changeUsername);
 const patchMeMock = vi.mocked(httpServerClient.patchMe);
@@ -227,6 +228,9 @@ describe('AccountPage', () => {
     stores.role = null;
     stores.adminUrl = undefined;
     mockNavigate.mockClear();
+    // Reset here (not an inner afterEach) — an afterEach runs before RTL
+    // cleanup and would trip act() warnings on the still-mounted page.
+    _resetAppUpdateForTests();
   });
 
   it('renders all six matrix tiles with the correct destinations', async () => {
@@ -300,6 +304,18 @@ describe('AccountPage', () => {
     renderPage();
     // listPasskeyCredentials mock returns 1 row — expect "Configured (1)"
     expect(await screen.findByText('Configured (1)')).toBeInTheDocument();
+  });
+
+  it('shows the update-ready pill once an update has downloaded', async () => {
+    useAppUpdateStore.setState({ updateReady: true });
+    renderPage();
+    expect(await screen.findByText('update ready · installs at next unlock')).toBeInTheDocument();
+  });
+
+  it('omits the update-ready pill while no update is pending', async () => {
+    renderPage();
+    await screen.findByRole('button', { name: 'Logout' });
+    expect(screen.queryByText('update ready · installs at next unlock')).not.toBeInTheDocument();
   });
 });
 

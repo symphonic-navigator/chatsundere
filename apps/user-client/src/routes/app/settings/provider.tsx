@@ -8,7 +8,7 @@ import {
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
 import {
@@ -26,6 +26,7 @@ import {
   useUpsertProvider,
 } from '../../../data/providers.js';
 import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { useClass2Gate } from '../../../sync/gate.js';
@@ -40,6 +41,9 @@ export function SettingsProviderPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings-providers');
   const navigate = useNavigate();
   const { templateId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  // A repair trip from the cockpit fallback returns to its chat (spec §3.3).
+  const backTo = safeReturnPath(searchParams.get('return'), '/app/settings/providers');
   const definition = getProvider(templateId);
 
   const providers = useProviders();
@@ -55,7 +59,8 @@ export function SettingsProviderPage(): JSX.Element {
   // "Test a model" can only reach the transport when a key is saved and, for
   // proxy-required providers, the account relay is available. Otherwise a
   // precondition failure would masquerade as a model failure (spec §7).
-  const hasSavedKey = existing != null;
+  // apiKey === null is the synced "removed" state: the row survives, the key does not.
+  const hasSavedKey = existing?.apiKey != null;
   const proxyReady = !requiresProxy || proxyGate.enabled;
   const testDisabledReason = !hasSavedKey
     ? 'Save a key first'
@@ -70,13 +75,13 @@ export function SettingsProviderPage(): JSX.Element {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
 
-  const back = () => navigate('/app/settings/providers');
+  const back = () => navigate(backTo);
 
   // ── Ported verbatim from ProviderSheet.tsx:46-133 ────────────────────────────
   //    Changes: (1) onClose() → back(); (2) needs-proxy reason text updated to
   //    reference "AI Providers" rather than "Upstream Providers".
   async function onSave() {
-    if (!apiKey && !existing) {
+    if (!apiKey && !hasSavedKey) {
       setStatus({ kind: 'error', reason: 'API key required' });
       return;
     }
@@ -103,7 +108,8 @@ export function SettingsProviderPage(): JSX.Element {
       const slotId = providerApiKeySlot({ id: templateId, keySlot });
       const sealedKey = apiKey ? await sealSecret(apiKey, mk, slotId) : freshExisting?.apiKey;
       if (!sealedKey) {
-        setSaving(false);
+        // The cached list still showed a key the fresh read no longer has.
+        setStatus({ kind: 'error', reason: 'API key required' });
         return;
       }
       await upsert.mutateAsync({ templateId, apiKey: sealedKey, enabled: false, keySlot });
@@ -170,7 +176,7 @@ export function SettingsProviderPage(): JSX.Element {
           { label: 'AI Providers', to: '/app/settings/providers' },
           { label: 'Unknown' },
         ]}
-        back="/app/settings/providers"
+        back={backTo}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -190,7 +196,7 @@ export function SettingsProviderPage(): JSX.Element {
         { label: 'AI Providers', to: '/app/settings/providers' },
         { label: displayName },
       ]}
-      back="/app/settings/providers"
+      back={backTo}
       onHelp={onHelp}
       dirty={apiKey !== ''}
     >

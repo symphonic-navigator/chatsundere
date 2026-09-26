@@ -4,12 +4,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../../src/boot/client-data-db.js';
 import type { PersonaRow } from '../../../src/boot/client-data-db.js';
 import { InteractionMode } from '../../../src/components/chat/InteractionMode.js';
 import { useCurrentChatStore } from '../../../src/state/current-chat.store.js';
 import { DESKTOP_MEDIA_QUERY } from '../../../src/state/effective-chat-mode.js';
+import { _resetAppUpdateForTests, useAppUpdateStore } from '../../../src/sw/app-update.store.js';
 import { idleDictationStub } from '../../helpers/dictation-stub.js';
 
 type ChangeListener = () => void;
@@ -102,6 +103,8 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
           chatId="c1"
           chat={null}
           offering={offering}
+          resolution={{ kind: 'ok', offering }}
+          onSetUpProvider={() => {}}
           usedTokens={32_768}
           draftValue=""
           onDraftChange={() => {}}
@@ -159,9 +162,16 @@ const persona = {
 
 function renderInteractionMode(
   overrides: Partial<ComponentProps<typeof InteractionMode>> = {},
-): void {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+): ReturnType<typeof render> {
+  return render(interactionModeTree(overrides, qc));
+}
+
+function interactionModeTree(
+  overrides: Partial<ComponentProps<typeof InteractionMode>>,
+  qc: QueryClient,
+): JSX.Element {
+  return (
     <QueryClientProvider client={qc}>
       <MemoryRouter>
         <InteractionMode
@@ -169,6 +179,8 @@ function renderInteractionMode(
           chatId="c1"
           chat={null}
           offering={offering}
+          resolution={{ kind: 'ok', offering }}
+          onSetUpProvider={() => {}}
           usedTokens={32_768}
           draftValue=""
           onDraftChange={() => {}}
@@ -191,7 +203,7 @@ function renderInteractionMode(
           {...overrides}
         />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 
@@ -218,11 +230,61 @@ it('does not close on an outside tap on desktop (pinned semantics, spec §7.5)',
 
 it('mounts the topbar without a cockpit when no offering resolves (spec §5.6)', () => {
   installMatchMedia(false);
-  renderInteractionMode({ offering: null });
+  renderInteractionMode({ offering: null, resolution: null });
   // The repair path stays reachable: exit + persona avatar are in the topbar.
   expect(screen.getByLabelText('Exit to Entrance Hall')).toBeInTheDocument();
   // No model — no composer.
   expect(document.querySelector('.cockpit-focus-capture')).toBeNull();
   // The gauge degrades to an explicit unavailable state, not a fake 0 %.
   expect(screen.getByText('—')).toBeInTheDocument();
+});
+
+it('renders the unavailable card in the cockpit slot when the model is unknown (incident regression)', () => {
+  installMatchMedia(false);
+  _resetAppUpdateForTests();
+  // Never settles, so the card's mount-time check lands no state update after the test.
+  useAppUpdateStore.getState().bind({
+    apply: vi.fn(() => true),
+    check: () => new Promise<'none'>(() => {}),
+    peek: () => 'none',
+  });
+  renderInteractionMode({
+    offering: null,
+    resolution: { kind: 'model-unknown', templateId: 'nano-gpt', modelId: 'x/y' },
+  });
+  expect(document.querySelector('.cockpit-unavailable')).not.toBeNull();
+  expect(document.querySelector('.cockpit-focus-capture')).toBeNull();
+});
+
+it('renders neither cockpit nor card while the resolution is still loading', () => {
+  installMatchMedia(false);
+  renderInteractionMode({ offering: null, resolution: null });
+  expect(document.querySelector('textarea')).toBeNull();
+  expect(document.querySelector('.cockpit-unavailable')).toBeNull();
+});
+
+it('remounts the card with a fresh update check when the unresolved model changes', () => {
+  installMatchMedia(false);
+  _resetAppUpdateForTests();
+  // Never settles, so the card stays in its checking row without late state updates.
+  const check = vi.fn(() => new Promise<'none'>(() => {}));
+  useAppUpdateStore.getState().bind({ apply: vi.fn(() => true), check, peek: () => 'none' });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const first = {
+    offering: null,
+    resolution: { kind: 'model-unknown', templateId: 'nano-gpt', modelId: 'x/y' },
+  } as const;
+  const { rerender } = renderInteractionMode(first, qc);
+  expect(check).toHaveBeenCalledTimes(1);
+  rerender(
+    interactionModeTree(
+      {
+        offering: null,
+        resolution: { kind: 'model-unknown', templateId: 'nano-gpt', modelId: 'a/b' },
+      },
+      qc,
+    ),
+  );
+  expect(check).toHaveBeenCalledTimes(2);
+  _resetAppUpdateForTests();
 });

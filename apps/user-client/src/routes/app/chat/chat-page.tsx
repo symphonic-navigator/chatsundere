@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { buildPrompt, getOffering, resolveModelInstructions } from '@chatsundere/llm-unified';
+import { buildPrompt, resolveModelInstructions } from '@chatsundere/llm-unified';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -52,6 +52,7 @@ import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockp
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
+import { resolveOffering } from '../../../lib/resolve-offering.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
@@ -263,22 +264,22 @@ export function ChatPage(): JSX.Element {
     // changing a persona's model mid-chat (same id) does not change the key,
     // so the offering (and the reasoning UI derived from it) stays stale until
     // a remount. See reasoning-UI-not-updating bug.
-    queryKey: [
-      'offering-for-persona',
+    queryKey: QK.offeringForPersona(
       effectivePersona?.id,
       effectivePersona?.providerId,
       effectivePersona?.modelId,
-    ],
+    ),
     enabled: !!effectivePersona,
     queryFn: async () => {
       if (!effectivePersona) return null;
-      const provider = await getClientDataDb().providers.get(effectivePersona.providerId);
-      if (!provider || provider.apiKey === null) return null;
-      const slug = effectivePersona.modelId;
-      return slug ? (getOffering(provider.templateId, slug) ?? null) : null;
+      return resolveOffering(
+        effectivePersona,
+        (await getClientDataDb().providers.get(effectivePersona.providerId)) ?? undefined,
+      );
     },
   });
-  const offering = modelQuery.data ?? null;
+  const offeringResolution = modelQuery.data ?? null;
+  const offering = offeringResolution?.kind === 'ok' ? offeringResolution.offering : null;
 
   // Restore this chat's reasoning level once the offering resolves. The choice
   // is persisted per chat, so returning to a chat brings back the level it was
@@ -1160,6 +1161,13 @@ export function ChatPage(): JSX.Element {
           chatId={chat?.id ?? activeChatId ?? ''}
           chat={chat}
           offering={offering}
+          resolution={offeringResolution}
+          onSetUpProvider={(templateId) => {
+            const returnUrl = `${location.pathname}${location.search}`;
+            navigate(
+              `/app/settings/providers/${encodeURIComponent(templateId)}?return=${encodeURIComponent(returnUrl)}`,
+            );
+          }}
           usedTokens={usedTokens}
           draftValue={draft}
           onDraftChange={setDraft}

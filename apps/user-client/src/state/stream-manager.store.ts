@@ -181,6 +181,8 @@ interface StreamManagerStore {
   abortAllForPersonaDiscard: (personaId: string) => Promise<void>;
   abortPreserve: (chatId: string) => Promise<void>;
   abortAllForPersonaPreserve: (personaId: string) => Promise<void>;
+  /** Stops every in-flight stream, keeping partial output as incomplete. */
+  abortAll: () => Promise<void>;
   has: (chatId: string) => boolean;
   getDraftMessage: (chatId: string) => { id: string; contentBlocks: ContentBlock[] } | null;
   /**
@@ -623,6 +625,10 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   abortAllForPersonaPreserve: async (personaId) => {
     const matching = [...get().streams.values()].filter((h) => h.personaId === personaId);
     for (const h of matching) await get().abortPreserve(h.chatId);
+  },
+
+  abortAll: async () => {
+    for (const h of [...get().streams.values()]) await get().abortPreserve(h.chatId);
   },
 }));
 

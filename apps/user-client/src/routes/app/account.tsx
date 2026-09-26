@@ -22,6 +22,7 @@ import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { APP_VERSION } from '../../lib/version.js';
+import { useAppUpdateStore } from '../../sw/app-update.store.js';
 import { InlineEditRow } from './account/InlineEditRow.js';
 import { SECURITY_TILE_LABEL, adminLaunchUrl, openAdminConsole } from './account/admin-tile.js';
 
@@ -58,6 +59,7 @@ export function AccountPage(): JSX.Element {
   const role = useAccountLinkStore((s) => s.role);
   const adminUrl = useDiscoveryStore((s) => s.config?.adminUrl);
   const adminHref = adminLaunchUrl(role, adminUrl);
+  const updateReady = useAppUpdateStore((s) => s.updateReady);
 
   const [accountState, setAccountState] = useState<AccountLoadState>({ kind: 'loading' });
   const [biometricState, setBiometricState] = useState<BiometricLoadState>({ kind: 'loading' });
@@ -218,6 +220,10 @@ export function AccountPage(): JSX.Element {
             <Badge tone="neutral">{copy.serverLinking.localOnlyTitle}</Badge>
           )}
           {linkStatus === 'unknown' && <Badge tone="neutral">{copy.serverLinking.checking}</Badge>}
+
+          {/* Update-ready — a quiet pill; the reload itself only ever happens
+              from the pristine Login screen, never mid-session (spec §4). */}
+          {updateReady && <Badge tone="neutral">update ready · installs at next unlock</Badge>}
 
           {/* Version */}
           <span className="font-mono text-xs text-paper-soft">

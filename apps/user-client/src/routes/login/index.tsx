@@ -21,6 +21,9 @@ import { copy } from '../../lib/copy.js';
 import { safeReturnPath } from '../../lib/safe-return.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
+import { useAppUpdateStore } from '../../sw/app-update.store.js';
+import { consumeReturnPath } from '../../sw/post-update-return.js';
+import { useApplyUpdateWhenPristine } from '../../sw/use-apply-update-when-pristine.js';
 
 /**
  * Login screen.
@@ -33,16 +36,20 @@ import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 /**
  * Validate a ?return= target (spec §4.1): only a same-origin relative path may
  * round-trip through the unlock — anything else falls back to /app. Guards the
- * guard: a crafted link must not turn the login into an open redirect.
+ * guard: a crafted link must not turn the login into an open redirect, nor
+ * send a fresh unlock straight back to the login screen.
  */
 export function safeReturnTarget(raw: string | null): string {
-  return safeReturnPath(raw, '/app');
+  const target = safeReturnPath(raw, '/app');
+  return target.startsWith('/login') ? '/app' : target;
 }
 
 export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const returnTarget = safeReturnTarget(searchParams.get('return'));
+  // Read once per mount: the key is single-use and must not be re-consumed on re-render.
+  const [postUpdateReturn] = useState(consumeReturnPath);
+  const returnTarget = safeReturnTarget(searchParams.get('return') ?? postUpdateReturn);
 
   const [username, setUsername] = useState<string | null>(null);
   // Whether a linked account exists — drives which login flow to call. Sourced
@@ -62,6 +69,12 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passphraseRef = useRef<HTMLInputElement>(null);
+
+  // A visible error counts as not pristine so an update reload never wipes it unread.
+  useApplyUpdateWhenPristine(passphrase === '' && !busy && error === null);
+  // An update is taking over and will reload this page; an unlock started now
+  // would be thrown away mid-derivation, so the controls wait it out.
+  const applying = useAppUpdateStore((s) => s.applying);
 
   // Once the cold-start intro is over, drop focus into the passphrase field so
   // the keyboard opens and the user can type straight away — unlocking is what
@@ -122,6 +135,7 @@ export function Login() {
   const passkeyUnlockAvailable = passkeys.length > 0 && webAuthnAvailable;
 
   async function handlePassphraseUnlock() {
+    if (applying) return;
     setError(null);
     setBusy(true);
     try {
@@ -186,7 +200,7 @@ export function Login() {
     // Guarded: passkeyUnlockAvailable being true implies passkeys.length > 0,
     // but noUncheckedIndexedAccess requires an explicit check before indexing.
     const firstPasskey = passkeys[0];
-    if (!firstPasskey) return;
+    if (!firstPasskey || applying) return;
 
     setError(null);
     setBusy(true);
@@ -273,7 +287,7 @@ export function Login() {
             <button
               type="button"
               onClick={() => void handleBiometricUnlock()}
-              disabled={busy}
+              disabled={busy || applying}
               className="w-full rounded-[var(--radius-card)] bg-aurora-600 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy ? copy.login.unlockingCta : copy.login.passkeyUnlockCta}
@@ -305,7 +319,7 @@ export function Login() {
 
             <button
               type="submit"
-              disabled={busy || passphrase.length === 0}
+              disabled={busy || applying || passphrase.length === 0}
               className="w-full rounded-[var(--radius-card)] bg-aurora-700 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy ? copy.login.unlockingCta : copy.login.unlockCta}

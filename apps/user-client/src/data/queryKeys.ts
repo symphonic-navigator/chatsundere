@@ -11,6 +11,10 @@ export const QK = {
   persona: (id: string) => ['personas', id] as const,
   providers: ['providers'] as const,
   credential: (id: string) => ['providers', 'credential', id] as const,
+  /** A persona's offering resolution; the bare prefix invalidates every persona's. */
+  offeringForPersonaAll: ['offering-for-persona'] as const,
+  offeringForPersona: (personaId?: string, providerId?: string, modelId?: string) =>
+    ['offering-for-persona', personaId, providerId, modelId] as const,
   mindspaces: ['mindspaces'] as const,
   chats: ['chats'] as const,
   chat: (id: string) => ['chats', id] as const,

@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ErrorScreen } from './components/ErrorScreen.js';
 import { MindspaceLayer } from './components/MindspaceLayer.js';
 import { StepUpModalHost } from './components/StepUpModalHost.js';
+import { UpdatedElsewhereOverlay } from './components/UpdatedElsewhereOverlay.js';
 import { queryClient } from './lib/queryClient.js';
 import { AccountPage } from './routes/app/account.js';
 import { AboutPage } from './routes/app/account/about.js';
@@ -104,6 +105,7 @@ export function App() {
         <QueryClientProvider client={queryClient}>
           <MindspaceLayer />
           <StepUpModalHost />
+          <UpdatedElsewhereOverlay />
           <BrowserRouter>
             <Routes>
               <Route element={<Root />}>

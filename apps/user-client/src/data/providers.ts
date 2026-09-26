@@ -105,7 +105,13 @@ export function useUpsertProvider() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: upsertProviderRow,
-    onSuccess: () => qc.invalidateQueries({ queryKey: QK.providers }),
+    // The chat's offering query caches a provider-unavailable resolution; refresh it so a
+    // provider set up from the cockpit fallback resolves on return (spec 2026-09-26 §3.3).
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: QK.providers }),
+        qc.invalidateQueries({ queryKey: QK.offeringForPersonaAll }),
+      ]),
   });
 }
 
@@ -134,6 +140,13 @@ export function useDeleteProvider() {
         },
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: QK.providers }),
+    // The chat's offering query caches an 'ok' resolution; refresh it so removing the
+    // provider surfaces the cockpit fallback card instead of a cockpit that can no
+    // longer compose (spec 2026-09-26 §3.1).
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: QK.providers }),
+        qc.invalidateQueries({ queryKey: QK.offeringForPersonaAll }),
+      ]),
   });
 }

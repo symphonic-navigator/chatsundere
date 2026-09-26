@@ -819,3 +819,31 @@ still moves only on a `v*.*.*` tag). Consciously deferred:
   `wud.watch.digest` comparison on the mutable `:latest` silently stops applying
   updates → a missed-patch availability gap. Covered by manual-verification (spec §8
   step 3); if digest tracking needs `wud.tag.include=^latest$`, add it per service.
+
+## 2026-09-26 — App update delivery (Larissa light pre-squash; High fixed, one Low deferred)
+
+Larissa audited the app-update branch (active SW update checks, pristine-login
+auto-apply, updated-elsewhere overlay, cockpit fallback). **HIGH-1 was fixed before
+the squash:** vite-plugin-pwa's prompt-mode `registerSW` attached a
+`controlling → location.reload()` listener in every tab, so one tab's
+`SKIP_WAITING` would have force-reloaded unlocked sessions elsewhere. We now own the
+registration (`injectRegister: false`, raw `navigator.serviceWorker`), the only
+automatic reload is the applying tab's own `controllerchange`, and a stranded tab
+fails closed (portal overlay, `#root` inert, streams aborted, client-data DB closed).
+MEDIUM-1/-2 and LOW-1/-2 were fixed as well; a scoped re-review confirmed the
+"never reload an unlocked session automatically" invariant holds. Consciously
+deferred:
+
+- **L-1 (Low) — ≤5 s apply-latch window.** After the pristine-login apply sets the
+  latch, a user who deliberately leaves `/login` and creates a session through
+  another route (e.g. `/onboarding`) within 5 s would have that fresh session
+  reloaded by the pending `controllerchange`. Narrow, needs deliberate navigation,
+  fails closed (mk is dropped, nothing persists). **Follow-up commitment:** if
+  onboarding or another session-creating route ever gains an entry point reachable
+  from the login screen in one tap, gate it on `!applying`. Tracked in
+  [[follow-ups-index]].
+- **I-1 (Informational) — deployment headers.** Serve `sw.js` with
+  `Cache-Control: no-cache` and send `frame-ancestors 'none'`; optional future
+  hardening: embed `APP_VERSION` in the worker and refuse `SKIP_WAITING` on a lower
+  SemVer (downgrade pinning by a stale edge cache).
+

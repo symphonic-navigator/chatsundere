@@ -1770,6 +1770,67 @@ h1 {
   border-top: 1px solid var(--mindspace-accent-border-active, rgba(201, 168, 76, 0.6));
   box-shadow: 0 0 8px 0 color-mix(in srgb, var(--mindspace-accent, #c9a84c) 15%, transparent);
 }
+/* Stands in the cockpit's slot when no model resolves (spec 2026-09-26 §3.2):
+ * same flex position and box as .cockpit so the layout does not jump. */
+.cockpit-unavailable {
+  position: relative;
+  flex-shrink: 0;
+  order: 1000;
+  background: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.75rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+  outline: none;
+}
+.cockpit-unavailable-text {
+  color: var(--color-paper);
+  font-size: 0.9rem;
+}
+.cockpit-unavailable-subline {
+  color: var(--color-paper-soft);
+  font-size: 0.8rem;
+}
+.cockpit-unavailable-slug {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.3rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+.cockpit-unavailable-action {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8rem;
+  color: var(--color-paper-soft);
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.cockpit-unavailable-action:hover {
+  border-color: color-mix(in srgb, var(--color-paper-soft) 50%, transparent);
+  color: var(--color-paper);
+}
+.cockpit-unavailable-secondary {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--color-paper-soft);
+  cursor: pointer;
+}
+.cockpit-unavailable-secondary:hover:not(:disabled) {
+  color: var(--color-paper);
+}
+.cockpit-unavailable-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .cockpit-row-controls {
   display: flex;
   align-items: center;
@@ -2068,6 +2129,35 @@ h1 {
   .toast {
     animation: none;
   }
+}
+
+/* ===== Updated-elsewhere overlay ===== */
+.updated-elsewhere-scrim {
+  /* z-index is set inline by UpdatedElsewhereOverlay (topmost layer). */
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.5);
+}
+.updated-elsewhere-card {
+  max-width: 26rem;
+  width: 100%;
+  background: rgba(10, 10, 10, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+.updated-elsewhere-reload {
+  margin-top: 1.25rem;
+  padding: 0.6rem 1.5rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: inherit;
+  font-size: 0.9rem;
 }
 
 /* ===== Background Stream Badge ===== */

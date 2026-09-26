@@ -13,6 +13,10 @@ describe('safeReturnTarget (spec §4.1, U-3)', () => {
     expect(safeReturnTarget('//evil.example')).toBe('/app');
     expect(safeReturnTarget('https://evil.example')).toBe('/app');
   });
+  it('never returns to the login screen itself', () => {
+    expect(safeReturnTarget('/login')).toBe('/app');
+    expect(safeReturnTarget('/login/recovery')).toBe('/app');
+  });
   it('defaults to /app', () => {
     expect(safeReturnTarget(null)).toBe('/app');
   });

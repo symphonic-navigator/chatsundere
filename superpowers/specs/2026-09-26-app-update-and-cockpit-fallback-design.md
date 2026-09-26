@@ -40,7 +40,9 @@ The original "never update mid-session" intent is sound: applying an update relo
 
 ### 2.1 Mechanism
 
-We keep `registerType: 'prompt'` and drive `vite-plugin-pwa`'s `registerSW` ourselves:
+> **Superseded at pre-squash (2026-09-26, Larissa HIGH-1 + final review).** `vite-plugin-pwa`'s prompt-mode `registerSW` attaches a `controlling → location.reload()` listener in *every* tab that has seen a waiting worker, so one tab's `SKIP_WAITING` would force-reload unlocked sessions elsewhere; its `updateSW(reload)` also ignores its argument. We therefore keep `registerType: 'prompt'` (for the generated worker's `SKIP_WAITING` message handler) but set `injectRegister: false` and own the registration with raw `navigator.serviceWorker` in `sw/update-wiring.ts`: detection via `reg.waiting` / `updatefound → installed`, apply by posting `SKIP_WAITING` to the waiting worker, and a `controllerchange` handler that reloads only the applying tab and strands (overlay + fail-closed quiesce) any other. The original text below is kept for the record.
+
+Original design — we keep `registerType: 'prompt'` and drive `vite-plugin-pwa`'s `registerSW` ourselves:
 
 - `onNeedRefresh()` marks the update as ready in a new store (§2.2).
 - The `updateSW(reloadPage = true)` function returned by `registerSW` is kept as the single way to apply an update: it posts `SKIP_WAITING` to the waiting worker and reloads once the new worker controls the page.
@@ -113,7 +115,7 @@ The doc comment in `sw/register.ts` changes from "activates silently on the next
 
 ### 3.1 Data: `OfferingResolution`
 
-The offering query in `chat-page.tsx` returns a discriminated result instead of `Offering | null`, via a pure function `resolveOfferingForPersona` in `apps/user-client/src/lib/resolve-offering.ts`:
+The offering query in `chat-page.tsx` returns a discriminated result instead of `Offering | null`, via a pure function `resolveOffering` in `apps/user-client/src/lib/resolve-offering.ts`:
 
 ```ts
 export type OfferingResolution =

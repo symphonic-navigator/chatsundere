@@ -10,6 +10,7 @@ const {
   openSecretMock,
   upsertMock,
   proxyGate,
+  providerRows,
 } = vi.hoisted(() => {
   // Mutated in beforeEach / per-test to drive the proxy-gate branches.
   const proxyGate: { enabled: boolean; reason: string | null; tooltip: string | null } = {
@@ -28,6 +29,8 @@ const {
     openSecretMock: vi.fn(async (..._a: unknown[]) => 'decrypted-secret'),
     upsertMock: vi.fn(async (row: { id?: string }) => ({ id: row.id ?? 'r-new' })),
     proxyGate,
+    // Rows seen by both useProviders and the fresh DB read in onSave.
+    providerRows: [] as Array<{ id: string; templateId: string; apiKey: unknown }>,
   };
 });
 
@@ -55,7 +58,7 @@ vi.mock('@chatsundere/ui-shared', () => ({
 }));
 
 vi.mock('../../src/data/providers.js', () => ({
-  useProviders: () => ({ data: [] }),
+  useProviders: () => ({ data: providerRows }),
   useUpsertProvider: () => ({ mutateAsync: upsertMock }),
   useDeleteProvider: () => ({ mutateAsync: vi.fn() }),
   providerApiKeySlot: (row: { id: string; keySlot?: string }) =>
@@ -63,11 +66,11 @@ vi.mock('../../src/data/providers.js', () => ({
 }));
 
 // `onSave` reads the stored row fresh from the DB (rather than trusting the
-// cached `useProviders` list) to derive the seal slot — see Larissa M-1. No row
-// is ever stored in these tests, mirroring the always-empty `useProviders` mock.
+// cached `useProviders` list) to derive the seal slot — see Larissa M-1. It
+// reads the same `providerRows` the `useProviders` mock serves.
 vi.mock('../../src/boot/client-data-db.js', () => ({
   getClientDataDb: () => ({
-    providers: { get: async (_id: string) => undefined },
+    providers: { get: async (id: string) => providerRows.find((r) => r.id === id) },
   }),
 }));
 
@@ -88,7 +91,7 @@ vi.mock('../../src/lib/secrets.js', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SettingsProviderPage } from '../../src/routes/app/settings/provider.js';
 
@@ -106,10 +109,18 @@ function wrapAt(path: string) {
         <Routes>
           <Route path="/app/settings/providers/:templateId" element={<SettingsProviderPage />} />
           <Route path="/app/settings/providers" element={<div>providers list</div>} />
+          <Route path="/app/chat/:id" element={<ChatMarker />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+/** Marker route standing in for a real chat page, so `?return=` navigation
+ * back to a specific chat can be asserted without a full chat-page render. */
+function ChatMarker(): JSX.Element {
+  const { id } = useParams<{ id: string }>();
+  return <div data-testid="chat-marker">{id}</div>;
 }
 
 describe('SettingsProviderPage', () => {
@@ -126,10 +137,12 @@ describe('SettingsProviderPage', () => {
     probeProviderMock.mockReset();
     sealSecretMock.mockImplementation(async (..._a: unknown[]) => ({ blob: 'sealed' }));
     openSecretMock.mockImplementation(async (..._a: unknown[]) => 'decrypted-secret');
+    upsertMock.mockClear();
     upsertMock.mockImplementation(async (row: { id?: string }) => ({ id: row.id ?? 'r-new' }));
     proxyGate.enabled = true;
     proxyGate.reason = null;
     proxyGate.tooltip = null;
+    providerRows.length = 0;
   });
 
   // ── Existing render tests ─────────────────────────────────────────────────
@@ -226,5 +239,43 @@ describe('SettingsProviderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByText(/discard unsaved changes/i)).toBeInTheDocument();
     expect(screen.queryByText('providers list')).not.toBeInTheDocument();
+  });
+
+  // ── `?return=` honouring (spec §3.3 — cockpit fallback repair trip) ───────────
+
+  it('returns to the originating chat via a valid ?return=', async () => {
+    wrapAt('/app/settings/providers/chutes?return=%2Fapp%2Fchat%2Fc1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
+    expect(await screen.findByTestId('chat-marker')).toHaveTextContent('c1');
+  });
+
+  it('falls back to the providers list for an open-redirect ?return=', async () => {
+    wrapAt('/app/settings/providers/chutes?return=%2F%2Fevil.example');
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('providers list')).toBeInTheDocument();
+  });
+
+  // ── A removed provider (apiKey: null) has no saved key (final-fix J) ─────────
+
+  it('treats a removed provider row as having no saved key', async () => {
+    providerRows.push({ id: 'chutes', templateId: 'chutes', apiKey: null });
+    wrapAt('/app/settings/providers/chutes');
+    expect(await screen.findByRole('button', { name: 'Test a model' })).toBeDisabled();
+    expect(screen.getByText('Save a key first')).toBeInTheDocument();
+  });
+
+  it('asks for a key when saving an empty field on a removed provider row', async () => {
+    providerRows.push({ id: 'chutes', templateId: 'chutes', apiKey: null });
+    wrapAt('/app/settings/providers/chutes');
+    fireEvent.click(await screen.findByRole('button', { name: /test & save/i }));
+    expect(await screen.findByText('✗ API key required')).toBeInTheDocument();
+    expect(upsertMock).not.toHaveBeenCalled();
+    expect(probeProviderMock).not.toHaveBeenCalled();
+  });
+
+  it('enables model tests once a key is saved', async () => {
+    providerRows.push({ id: 'chutes', templateId: 'chutes', apiKey: { blob: 'sealed' } });
+    wrapAt('/app/settings/providers/chutes');
+    expect(await screen.findByRole('button', { name: 'Test a model' })).toBeEnabled();
   });
 });

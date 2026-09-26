@@ -754,3 +754,23 @@ later Laura sweep does not re-flag them:
   match it, then add the sublabel; needs Chris's call first.
 - **Chris sign-off:** ✅ both taken the same day rather than deferred — see the
   STATUS block above. Nothing from this pass remains open.
+
+## 2026-09-26 — App update delivery + cockpit fallback (Laura spec-pass + pre-squash)
+
+- **Unit:** replace the silent missing composer with the `CockpitUnavailable` card;
+  deliver updates at a pristine unlock; updated-elsewhere overlay.
+- **Verdict:** spec-pass found 3 hard defects (return path, tri-state check, multiple
+  clients), all folded into the spec; pre-squash found no hard defect. Her
+  borderline-hard softs were **fixed rather than deferred**: the downloading row now
+  peeks read-only (a failing install no longer reads "downloading…" forever), and an
+  unknown provider template routes to the update path instead of a dead-end
+  "Set up". Check-again focus and the "No newer version yet." line also shipped.
+- **Deferred (soft):**
+  - The Account pill reads "update ready · installs at next unlock", which is not
+    guaranteed while another Chatsundere window is open (sole-client rule). Wording is
+    Chris's call.
+  - `inert` covers `#root` only; body-portalled surfaces (step-up modal, toasts) that
+    are already open stay keyboard-reachable behind the updated-elsewhere scrim.
+  - An activation slower than 5 s makes the applying tab show the overlay instead of
+    reloading — fails safe with one Reload tap.
+

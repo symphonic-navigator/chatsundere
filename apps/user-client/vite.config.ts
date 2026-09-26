@@ -94,7 +94,11 @@ export default defineConfig({
     tailwindcss(),
     dbDumpReceiver(),
     VitePWA({
+      // 'prompt' keeps the generated sw.js waiting until it receives SKIP_WAITING.
+      // injectRegister: false because src/sw/register.ts owns registration: the
+      // plugin's registerSW reloads every tab once any tab applies an update.
       registerType: 'prompt',
+      injectRegister: false,
       base: process.env.VITE_BASE ?? '/',
       scope: process.env.VITE_BASE ?? '/',
       devOptions: { enabled: true },
