@@ -64,6 +64,21 @@ logged: ollama-cloud GLM 5.3 / Flash / DeepSeek V4.1 Flash `think:false` off is
 unverified and probably only hides. Unscouted: nano-gpt `TEE/` variants of GLM
 5.3, GLM 5.3 Flash and DeepSeek V4.1 Flash (🔒 candidates).
 
+**Also 2026-09-26 — CONVERSATION-SUITE NOW CHECKS THE REPLY TO TOOL RESULTS.**
+`master` (`0ac1bc92`), **pushed, no tag** (curation tooling only, nothing in the
+app bundle). Found in Citizen Compute (Project Hecate) while analysing Gemma 4
+26B A4B on self-hosted vLLM: every tool result was answered with ReAct-style JSON
+and the core suite still scored 15/15, because no turn ever asked for the reply
+to a tool result and the memory token `cat` was echo-able from the calico-cat
+request. New core turn `tool-result-continuation` (`requiresToolResult`) with
+`continuation-not-tool-shaped`; memory fact now "plays the bassoon"; `/curate`
+playbook gained a continuation probe and a template step for self-hosted
+offerings. Verified by running the real suite against the local vLLM node: the
+new turn goes red in both permutations. Insight:
+[[insights/2026-09-26-suite-missed-broken-tool-continuation]]. **Next:** existing
+green records predate the turn — re-run the core suite per provider at the next
+curation pass (follow-up logged).
+
 **Previously:** 2026-07-28 — **KIMI K3 CURATED ON TENSORIX — and a routine ZDR
 re-probe found two wafer offerings that had been dead in the field.** Squashed to
 `master` (`28e56b0d`), **not pushed**. Chris asked for two things (DeepSeek V4 Pro
