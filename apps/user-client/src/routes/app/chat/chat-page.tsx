@@ -48,7 +48,7 @@ import { useFilteredSeedTemplates } from '../../../data/seed-templates.js';
 import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
 import { useDisplayName, useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { chatFontScaleValue } from '../../../lib/chat-font-scale.js';
-import { clearLazyDraft, loadLazyDraft, saveLazyDraft } from '../../../lib/cockpit-draft.js';
+import { clearLazyDraft, loadLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
@@ -69,9 +69,8 @@ import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { mutateSynced } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { useComposerDraft } from './use-composer-draft.js';
 import { buildEditOrchestration, resolveSendAction } from './use-edit-orchestration.js';
-
-const DRAFT_DEBOUNCE_MS = 250;
 
 export function ChatPage(): JSX.Element {
   const { chatId } = useParams<{ chatId?: string }>();
@@ -331,38 +330,16 @@ export function ChatPage(): JSX.Element {
     });
   }, [effectivePersona, settingsQuery.data, mindspaces.data, setMindspaceStore]);
 
-  // Draft persistence — chat-mode reads ChatRow.draftInput; lazy mode reads localStorage.
-  const dbDraft = chatQuery.data?.chat?.draftInput ?? '';
-  const [draft, setDraft] = useState<string>(() =>
-    isLazy && personaIdFromQuery ? loadLazyDraft(personaIdFromQuery) : '',
-  );
-
-  // Reconcile chat-mode draft once the chat loads.
-  useEffect(() => {
-    if (!isLazy) setDraft(dbDraft);
-  }, [isLazy, dbDraft]);
-
-  // Debounced save — lazy mode → localStorage; chat-mode → DB.
-  // The lazy-mode callback guards against firing after eager creation has already
-  // called clearLazyDraft (eagerCreateFiredRef is true by that point), closing
-  // the narrow window between clearLazyDraft and React's effect cleanup.
-  useEffect(() => {
-    if (isLazy) {
-      if (!personaIdFromQuery) return;
-      const t = setTimeout(() => {
-        if (eagerCreateFiredRef.current) return;
-        saveLazyDraft(personaIdFromQuery, draft);
-      }, DRAFT_DEBOUNCE_MS);
-      return () => clearTimeout(t);
-    }
-    if (activeChatId && draft !== dbDraft) {
-      const t = setTimeout(() => {
-        void updateChat.mutateAsync({ id: activeChatId, patch: { draftInput: draft } });
-      }, DRAFT_DEBOUNCE_MS);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [draft, isLazy, personaIdFromQuery, activeChatId, dbDraft, updateChat]);
+  const [draft, setDraft] = useComposerDraft({
+    isLazy,
+    personaId: personaIdFromQuery,
+    activeChatId,
+    chatRow: chatQuery.data?.chat,
+    persist: (id, text) => void updateChat.mutateAsync({ id, patch: { draftInput: text } }),
+    // Guards against firing after eager creation has already called
+    // clearLazyDraft, closing the window before React's effect cleanup.
+    skipLazySave: () => eagerCreateFiredRef.current,
+  });
 
   // Stream handle for the active chat.
   const streamHandle = useStreamManagerStore((s) =>
