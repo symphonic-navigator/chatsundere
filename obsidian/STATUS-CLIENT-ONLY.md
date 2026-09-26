@@ -8,7 +8,35 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-07-28 — **KIMI K3 CURATED ON TENSORIX — and a routine ZDR
+**Last updated:** 2026-09-26 — **APP UPDATES NOW REACH LONG-LIVED CLIENTS, AND A
+MISSING MODEL NO LONGER HIDES THE COMPOSER.** Squashed to `master` (`3daf98fb`),
+**not pushed, not tagged**. Field incident: on the server deploy (`v0.2.18`) the
+Opus 5.5 persona's chat showed the topbar but **no composer**. Root cause: the
+browser still ran **`v0.2.17`** from the service-worker cache (prompt mode, no
+`skipWaiting` → a waiting update only activated once *every* client closed, which
+never happens for someone who keeps the PWA open; a hard reload bypasses the SW
+once, hence "it worked yesterday"), that bundle's catalogue did not know Opus 5.5,
+and `InteractionMode` silently omitted the cockpit when `offering === null`. Shipped
+(spec `superpowers/specs/2026-09-26-app-update-and-cockpit-fallback-design.md`,
+plan alongside): **own SW registration** (`injectRegister: false`; boot, visibility
+and hourly checks); a waiting update **applies from a pristine, session-less login
+screen only when no other client answers a BroadcastChannel presence ping**; **an
+unlocked session is never reloaded automatically** — only the applying tab reloads,
+and a tab stranded by another window's update **fails closed** behind a blocking
+overlay (inert root, streams aborted, client-data DB closed); the
+**`CockpitUnavailable` card** replaces the silent omission (provider not set up /
+model not in this version → auto-check → **Update now** / downloading / no model),
+with return paths surviving the reload and provider set-up; an Account **"update
+ready"** pill. Audits: Laura spec-pass (3 hard, folded in) + pre-squash (no hard);
+Larissa found **HIGH-1** — vite-plugin-pwa's `registerSW` would have force-reloaded
+every other tab on `SKIP_WAITING` — fixed by owning the registration; one Low
+deferred ([[insights/security-deferrals]]). Also: CI lint was red on `v0.2.18`
+(admin-client CSS formatting) — fixed and pushed (`34d04bac`).
+**Next:** Chris runs spec §6.2 manual verification on the server deploy (multi-tab
+and the Android PWA + browser combination matter most), then push + tag. A second,
+unrelated fix follows in this session.
+
+**Previously:** 2026-07-28 — **KIMI K3 CURATED ON TENSORIX — and a routine ZDR
 re-probe found two wafer offerings that had been dead in the field.** Squashed to
 `master` (`28e56b0d`), **not pushed**. Chris asked for two things (DeepSeek V4 Pro
 on wafer is ZDR now; integrate Kimi K3 on Tensorix). The first was true — and the
