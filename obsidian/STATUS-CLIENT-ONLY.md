@@ -36,7 +36,7 @@ deferred ([[insights/security-deferrals]]). Also: CI lint was red on `v0.2.18`
 and the Android PWA + browser combination matter most), then push + tag.
 
 **Also 2026-09-26 — COMPOSER NO LONGER SWALLOWS LETTERS OR WORDS.** Squashed to
-`master` (`c754a918`), **not pushed, not tagged**. Field report (Chris in Vivaldi,
+`master` (`c754a918`), **pushed and tagged `v0.2.20`**. Field report (Chris in Vivaldi,
 some phones, Ann's Cyrillic keyboard): typed letters and, with autocorrect, whole
 words vanished. Root cause: `chat-page.tsx` re-read `ChatRow.draftInput` into the
 composer on *every* change, so each 250 ms debounced save echoed back through the
@@ -48,6 +48,21 @@ wrong chat. Regression tests in `tests/routes/use-composer-draft.test.tsx`. No
 audit: frontend internals, no flow change. **Next:** Chris verifies in Vivaldi
 (type, pause ~¼ s, keep typing) and on a phone with autocorrect, together with
 the app-update verification above, then push + tag.
+
+**Also 2026-09-26 — SEPTEMBER NANO-GPT MODELS RE-CURATED.** `master` (`f5a60c3f`),
+**pushed and tagged `v0.2.21`**. The 2026-09-25 onboarding (Codex) of 11 nano-gpt
+models ran against a revoked key and shipped documented defaults at `partial`.
+Live probes + conversation-suite (new harness
+`curation/run-nano-sept2026-suite.ts`, resolves adapters via `registerNanoGpt`)
+corrected five reasoning controls: GLM 5.3 has no off (bare slug still reasons,
+`reasoning_required`), GPT 6 Astra and Fable 5.1 only *hide* when off, GLM 5.3
+Flash Uncensored steers low/high, MiMo V2.6 Flash Uncensored has a genuine off
+(adapter now sends `reasoning_effort:'none'`). Nine verified; Astra + Fable 5.1
+stay `partial` (omitted/adaptive reasoning, Chris). MiMo V2.6 Pro/Flash
+deployment → uncensored (Chris). Eleven Model Curation Records added. Follow-up
+logged: ollama-cloud GLM 5.3 / Flash / DeepSeek V4.1 Flash `think:false` off is
+unverified and probably only hides. Unscouted: nano-gpt `TEE/` variants of GLM
+5.3, GLM 5.3 Flash and DeepSeek V4.1 Flash (🔒 candidates).
 
 **Previously:** 2026-07-28 — **KIMI K3 CURATED ON TENSORIX — and a routine ZDR
 re-probe found two wafer offerings that had been dead in the field.** Squashed to
