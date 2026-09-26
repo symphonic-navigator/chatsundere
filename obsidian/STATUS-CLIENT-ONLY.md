@@ -33,8 +33,21 @@ every other tab on `SKIP_WAITING` — fixed by owning the registration; one Low
 deferred ([[insights/security-deferrals]]). Also: CI lint was red on `v0.2.18`
 (admin-client CSS formatting) — fixed and pushed (`34d04bac`).
 **Next:** Chris runs spec §6.2 manual verification on the server deploy (multi-tab
-and the Android PWA + browser combination matter most), then push + tag. A second,
-unrelated fix follows in this session.
+and the Android PWA + browser combination matter most), then push + tag.
+
+**Also 2026-09-26 — COMPOSER NO LONGER SWALLOWS LETTERS OR WORDS.** Squashed to
+`master` (`c754a918`), **not pushed, not tagged**. Field report (Chris in Vivaldi,
+some phones, Ann's Cyrillic keyboard): typed letters and, with autocorrect, whole
+words vanished. Root cause: `chat-page.tsx` re-read `ChatRow.draftInput` into the
+composer on *every* change, so each 250 ms debounced save echoed back through the
+refetched chat query and overwrote text typed during the round-trip; resetting the
+value mid-IME-composition made keyboards drop whole words. Fix: new
+`use-composer-draft.ts` hook — the row is read once per chat, local state stays
+authoritative, and hydration gates saving so a chat switch never writes into the
+wrong chat. Regression tests in `tests/routes/use-composer-draft.test.tsx`. No
+audit: frontend internals, no flow change. **Next:** Chris verifies in Vivaldi
+(type, pause ~¼ s, keep typing) and on a phone with autocorrect, together with
+the app-update verification above, then push + tag.
 
 **Previously:** 2026-07-28 — **KIMI K3 CURATED ON TENSORIX — and a routine ZDR
 re-probe found two wafer offerings that had been dead in the field.** Squashed to
