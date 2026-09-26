@@ -4,6 +4,7 @@ import {
   assertMemoryEchoed,
   assertNoHttpError,
   assertNoStreamError,
+  assertNotToolShaped,
   assertReasoningAbsent,
   assertReasoningPresent,
   assertTextPresent,
@@ -120,11 +121,11 @@ describe('reasoning presence', () => {
 
 describe('assertMemoryEchoed', () => {
   test('passes when the memory token appears in the reply', () => {
-    const r = assertMemoryEchoed('cat lover')(outcome({ text: 'As a cat lover, you...' }));
+    const r = assertMemoryEchoed('bassoon')(outcome({ text: 'You play the Bassoon.' }));
     expect(r.status).toBe('pass');
   });
   test('fails when the memory token is absent', () => {
-    const r = assertMemoryEchoed('cat lover')(outcome({ text: 'Hello there.' }));
+    const r = assertMemoryEchoed('bassoon')(outcome({ text: 'Hello there.' }));
     expect(r.status).toBe('fail');
   });
 });
@@ -168,5 +169,41 @@ describe('assertTextPresent', () => {
   });
   it('passes on non-empty text', () => {
     expect(assertTextPresent(outcome({ text: 'hi' })).status).toBe('pass');
+  });
+});
+
+describe('assertNotToolShaped', () => {
+  // Real replies from Gemma 4 26B A4B on vLLM after a tool result (2026-09-26):
+  // the model re-emitted its tool call as ReAct-style JSON text.
+  const reactJson =
+    '{\n  "action": "generate_image",\n  "action_input": "{\'prompt\': \'A calico cat\'}"\n}';
+
+  it('fails on a ReAct-style tool call in the text', () => {
+    const r = assertNotToolShaped(outcome({ text: reactJson }));
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain('action');
+  });
+  it('fails on a fenced JSON tool call', () => {
+    const text = '```json\n{"name": "generate_image", "arguments": {"prompt": "a fox"}}\n```';
+    expect(assertNotToolShaped(outcome({ text })).status).toBe('fail');
+  });
+  it('fails on an OpenAI-shaped tool_calls object in the text', () => {
+    const text = '{"tool_calls": [{"function": {"name": "generate_image"}}]}';
+    expect(assertNotToolShaped(outcome({ text })).status).toBe('fail');
+  });
+  it('fails on leaked native tool-call markup', () => {
+    const text = '<|tool_call>call:generate_image{prompt:<|"|>a fox<|"|>}<tool_call|>';
+    expect(assertNotToolShaped(outcome({ text })).status).toBe('fail');
+  });
+  it('passes on a prose confirmation', () => {
+    const text = 'An image of a calico cat asleep on a windowsill has been created for you.';
+    expect(assertNotToolShaped(outcome({ text })).status).toBe('pass');
+  });
+  it('passes on a Markdown image reply', () => {
+    const text = '![A calico cat asleep on a sunny windowsill](https://example.invalid/img-001)';
+    expect(assertNotToolShaped(outcome({ text })).status).toBe('pass');
+  });
+  it('passes on unrelated JSON the user might legitimately get', () => {
+    expect(assertNotToolShaped(outcome({ text: '{"ok": true}' })).status).toBe('pass');
   });
 });

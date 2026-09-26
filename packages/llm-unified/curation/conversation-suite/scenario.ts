@@ -13,6 +13,12 @@ export interface ScenarioTurn {
    * result for the following turn so the conversation can continue.
    */
   expectToolCall?: string;
+  /**
+   * The turn continues a tool round trip: it only runs when the history ends
+   * in a tool result. Otherwise the runner does not send it and records one
+   * failing `tool-result-available` result instead of noise.
+   */
+  requiresToolResult?: boolean;
 }
 
 export interface ReasoningPermutation {

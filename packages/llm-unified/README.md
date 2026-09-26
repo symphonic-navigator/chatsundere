@@ -83,12 +83,12 @@ model list) and `model-file.ts` (read/write the per-model catalogue files under
 ### 3. Deterministic conversation-suite (`curation/conversation-suite/`)
 
 The behavioural oracle that replaces byte-level fixture replay. It runs a model
-through a scripted conversation — plain completion, a `generate_image` tool call
-with a tool-result round-trip, and a mid-conversation memory echo — and applies
-pure, deterministic assertions to each turn's outcome (`assertNoHttpError`,
-`assertToolCallFired`, `assertToolArgsValidJson`, `assertUsagePresent`,
-`assertReasoningPresent` / `assertReasoningAbsent`, `assertMemoryEchoed`,
-`assertNoStreamError`).
+through a scripted conversation — plain completion, a `generate_image` tool call,
+the model's reply to the tool result, and a mid-conversation memory echo — and
+applies pure, deterministic assertions to each turn's outcome
+(`assertNoHttpError`, `assertToolCallFired`, `assertToolArgsValidJson`,
+`assertNotToolShaped`, `assertUsagePresent`, `assertReasoningPresent` /
+`assertReasoningAbsent`, `assertMemoryEchoed`, `assertNoStreamError`).
 
 The suite has two roles:
 

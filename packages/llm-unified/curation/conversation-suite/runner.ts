@@ -45,6 +45,19 @@ async function runPermutation(
   const history: WireMessage[] = [];
   const turns: TurnRun[] = [];
   for (const [i, turn] of scenario.turns.entries()) {
+    if (turn.requiresToolResult && history.at(-1)?.role !== 'tool') {
+      turns.push({
+        turnId: turn.id,
+        results: [
+          {
+            assertion: 'tool-result-available',
+            status: 'fail',
+            detail: 'not sent: the previous turn produced no tool result to continue from',
+          },
+        ],
+      });
+      continue;
+    }
     history.push(...turn.send);
     const outcome = await binding.runTurn(history, perm.intent);
     const results = turn.assertions.map((a) => a(outcome));

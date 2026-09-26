@@ -3,6 +3,8 @@ import {
   assertMemoryEchoed,
   assertNoHttpError,
   assertNoStreamError,
+  assertNotToolShaped,
+  assertTextPresent,
   assertToolArgsValidJson,
   assertToolCallFired,
   assertUsagePresent,
@@ -57,6 +59,25 @@ export const coreScenario: ConversationScenario = {
       ],
     },
     {
+      // Sends nothing new: the history already ends in the synthesised tool
+      // result, so this asks for the model's reply TO that result. Before
+      // 2026-09-26 no turn did; the next turn appended system + user messages
+      // straight after the tool result. Gemma 4 via vLLM then answered tool
+      // results with ReAct-style JSON (a chat-template defect) while every
+      // assertion stayed green. `continuation-not-tool-shaped` is a pipe check:
+      // a call written as text instead of sent through the tool channel.
+      id: 'tool-result-continuation',
+      send: [],
+      requiresToolResult: true,
+      assertions: [
+        assertNoHttpError,
+        assertNoStreamError,
+        assertTextPresent,
+        assertNotToolShaped,
+        assertUsagePresent,
+      ],
+    },
+    {
       // This turn injects a `system` message mid-conversation (third in the
       // accumulated history) deliberately, to exercise memory carry, then asks
       // a DIRECT recall question. The directness is the point: it keeps the
@@ -70,17 +91,19 @@ export const coreScenario: ConversationScenario = {
       // OpenAI-compatible providers accept `system` only as the FIRST message
       // and may 400 (caught by `no-http-error`) or silently strip a later one
       // — a stripped fact now deterministically fails `memory-echoed`, which is
-      // exactly the protocol fault we want surfaced.
+      // exactly the protocol fault we want surfaced. The fact must use a word no
+      // other turn mentions: the earlier "cat lover" fact was echo-able from the
+      // calico-cat image request, so a stripped system message could still pass.
       id: 'memory-echo',
       send: [
-        { role: 'system', content: 'Known fact about the user: the user is a cat lover.' },
+        { role: 'system', content: 'Known fact about the user: the user plays the bassoon.' },
         {
           role: 'user',
           content:
             'What is the single fact you have been told about me? Reply in one short sentence.',
         },
       ],
-      assertions: [assertNoHttpError, assertMemoryEchoed('cat'), assertUsagePresent],
+      assertions: [assertNoHttpError, assertMemoryEchoed('bassoon'), assertUsagePresent],
     },
   ],
 };

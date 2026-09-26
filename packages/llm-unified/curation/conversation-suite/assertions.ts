@@ -155,6 +155,57 @@ export function assertUsageWithinCap(maxTokens: number): Assertion {
   };
 }
 
+// Keys that mark a JSON object as a tool invocation rather than an answer:
+// ReAct (`action`/`action_input`), OpenAI (`tool_calls`, `function_call`) and
+// generic (`tool`, `tool_name`) shapes.
+const TOOL_KEYS = ['action', 'action_input', 'tool', 'tool_name', 'tool_calls', 'function_call'];
+// Native tool-call markup leaking into content (Gemma 4, Hermes/Qwen, Llama, Mistral).
+const TOOL_MARKUP = /<\|?tool_call\|?>|<\/?tool_call>|<function=|\[TOOL_CALLS\]/i;
+
+function toolKeysIn(value: unknown): string[] {
+  const objects = Array.isArray(value) ? value : [value];
+  return objects.flatMap((o) => {
+    if (typeof o !== 'object' || o === null) return [];
+    const keys = Object.keys(o);
+    const found = keys.filter((k) => TOOL_KEYS.includes(k));
+    if (keys.includes('name') && (keys.includes('arguments') || keys.includes('parameters'))) {
+      found.push('name+arguments');
+    }
+    return found;
+  });
+}
+
+/**
+ * The reply is not a tool call written out as text. After a tool result the
+ * model must answer through the content channel; re-emitting the call as JSON
+ * or raw markup means the tool round trip broke in the pipe (e.g. a chat
+ * template that renders tool results in a shape the model does not recognise).
+ * Found on Gemma 4 via vLLM on 2026-09-26, where every other check stayed green.
+ */
+export function assertNotToolShaped(outcome: TurnOutcome): AssertionResult {
+  const text = outcome.text.trim();
+  const fail = (why: string): AssertionResult => ({
+    assertion: 'continuation-not-tool-shaped',
+    status: 'fail',
+    detail: `reply is a tool call written as text (${why})`,
+  });
+  if (TOOL_MARKUP.test(text)) return fail('native tool-call markup');
+  const unfenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  if (unfenced.startsWith('{') || unfenced.startsWith('[')) {
+    try {
+      const keys = toolKeysIn(JSON.parse(unfenced));
+      if (keys.length > 0) return fail(`JSON with ${keys.join(', ')}`);
+    } catch {
+      // Not JSON: prose that happens to start with a bracket.
+    }
+  }
+  return {
+    assertion: 'continuation-not-tool-shaped',
+    status: 'pass',
+    detail: 'reply is not tool-call shaped',
+  };
+}
+
 /** The turn produced visible text at all. */
 export function assertTextPresent(outcome: TurnOutcome): AssertionResult {
   const ok = outcome.text.trim().length > 0;

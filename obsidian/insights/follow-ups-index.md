@@ -61,6 +61,7 @@ Items that have been decided but not yet implemented in code.
 
 | Item | Trigger | Notes |
 |---|---|---|
+| **Re-run the core suite for every curated offering after the tool-continuation turn landed** (2026-09-26) | Next curation pass per provider, or any report of conversations derailing after an image/tool call | The core scenario gained `tool-result-continuation` (`continuation-not-tool-shaped`) and a decontaminated memory token. Existing "green" records predate the turn, so a broken tool round trip there would have passed unseen. See [[2026-09-26-suite-missed-broken-tool-continuation]]. |
 | ollama-cloud GLM 5.3 / GLM 5.3 Flash / DeepSeek V4.1 Flash: `think:false` off unverified (added 2026-09-25 as `toggle`) | Next ollama-cloud curation pass, or a field report of hidden thinking | nano-gpt refuses every off for GLM 5.3 (`reasoning_required`), so ollama's empty channel very likely hides rather than disables. Re-probe with completion-token accounting; see [[../models/glm-5.3]]. From the 2026-09-26 nano-gpt re-curation. |
 | App-update: `abortAll` aborts streams sequentially — one throwing `abortPreserve` skips the rest (tokens keep flowing until the DB close fails their writes) | Next touch of `stream-manager.store.ts` | Abort every controller first, then persist. From the 2026-09-26 app-update re-review. |
 | App-update: boot-time controller capture — a tab still booting misses a concurrent `controllerchange` and the presence ping | If a stranded-tab report surfaces | Capture the controller / start the responder at the top of `main.tsx`. |

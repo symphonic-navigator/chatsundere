@@ -58,6 +58,11 @@ from the retired probe-suite; do not lose it.
   `{ mode: 'steps' }` `ReasoningControl`; a single on/off to `{ mode: 'toggle' }`.
 - **Reasoning + tools concurrency.** Can the model reason **and** call a tool in
   the same turn? Sets `profile.toolCalls.concurrentWithReasoning`.
+- **Tool-result continuation.** Feed a tool result back and read the reply
+  itself, not just its status: prose (or a follow-up tool call through the tool
+  channel) is right; the call re-written as JSON text or raw markup is a broken
+  round trip. The suite's `continuation-not-tool-shaped` catches it; probe it by
+  hand when a model's tool calls look fine but conversations derail after them.
 - **Tool-invocation reliability.** Some models call a tool only when it is named
   explicitly in the prompt. Observed in chatsune: Gemma 4 and DeepSeek V4 Flash
   with `generate_image` — DSv4 Flash *produced the prompt text* but did not fire
@@ -65,6 +70,25 @@ from the retired probe-suite; do not lose it.
   `tool-call-fired:generate_image`. Record the mitigation (explicit
   tool-mention in prompt composition) in the Model Curation Record so the
   behaviour is documented, not silently worked around.
+
+## Self-hosted offerings (vLLM and similar engines)
+
+When we run the engine ourselves, the chat template is ours to check — a
+provider hides it, a self-hosted engine inherits it from the model repository.
+Derivatives (abliterated, fine-tuned, quantised) can ship a stale one silently.
+Before the suite:
+
+1. Diff the repository's chat template against the base model's current one.
+2. Render one full tool round trip (call + tool result + generation prompt) via
+   the engine's `/tokenize` + `/detokenize` and read it.
+3. If behaviour looks wrong, bypass the chat layer with raw `/v1/completions` on
+   the rendered prompt, and A/B the base model's weights on the same pipeline to
+   separate template defects from weight defects.
+
+Record the engine facts with the offering: image digest, template hash, parser
+flags. For a self-hosted node the offering is model × engine × template ×
+hardware. Worked example: Citizen Compute's Gemma 4 26B A4B analysis
+(`dcra-poc/docs/curation/2026-09-26-gemma-4-26b-a4b-abliterated-vllm.md`).
 
 ## `usage` normalisation
 

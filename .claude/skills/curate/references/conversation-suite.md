@@ -76,7 +76,25 @@ All checks are pure functions over a `TurnOutcome` — mechanical/protocol only:
 - `assertReasoningPresent` / `assertReasoningAbsent` — reasoning on the correct
   channel for the permutation.
 - `assertMemoryEchoed(token)` — a memory token injected via a system message is
-  echoed back through the protocol into the reply.
+  echoed back through the protocol into the reply. The token must appear in no
+  other turn (the core scenario uses "bassoon"; the old "cat" was echo-able from
+  the calico-cat image request).
+- `assertNotToolShaped` — `continuation-not-tool-shaped`: after a tool result the
+  reply is not a tool call written out as text (ReAct `action`/`action_input`,
+  `name`+`arguments`, `tool_calls` JSON, or leaked native markup such as
+  `<|tool_call>`). A call re-emitted as text instead of through the tool channel
+  is a pipe failure, not a judgement of the answer.
+
+## The tool round trip is checked end to end
+
+The core scenario's `tool-result-continuation` turn sends nothing new: the
+history already ends in the synthesised tool result, so the turn asks for the
+model's reply **to** that result. It is marked `requiresToolResult`; when the
+previous turn fired no tool, the runner does not send it and records one failing
+`tool-result-available` result instead. Before 2026-09-26 no turn observed this
+reply, and a broken round trip (Gemma 4 via vLLM answering tool results with
+ReAct JSON, caused by its chat template) passed every assertion. See
+[`obsidian/insights/2026-09-26-suite-missed-broken-tool-continuation.md`](../../../../obsidian/insights/2026-09-26-suite-missed-broken-tool-continuation.md).
 
 ## The rule: validate the pipe, never the intelligence
 
