@@ -8,7 +8,26 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-09-26 — **APP UPDATES NOW REACH LONG-LIVED CLIENTS, AND A
+**Last updated:** 2026-09-27 — **SLOW STREAM STARTS NO LONGER ABORT OR COST THE
+PROMPT CACHE.** Squashed to `master` (`0e38315f`), **not pushed, not tagged**. Field
+reports (Opus 5.5 via nano-gpt, heavily used): streams failing before the first
+token, and the retry paying full input price. Live probes: nano-gpt withholds the
+response headers until the upstream answers (4-7.5 s at rest), so our 15 s
+time-to-first-byte cap cut healthy requests under load; a pre-header abort on the
+direct route reaches Anthropic before the cache write (retry paid 109k uncached
+tokens, $0.83), while a mid-stream abort keeps the cache ($0.02). Our cache
+breakpoints and the Retry message list were verified identical — not the cause.
+Fix: streaming default cap **120 s** (`stream-completion.ts`), proxy
+`PROXY_IDLE_TIMEOUT_S` default **180 s** (stays above the client cap; deploy
+template updated — **an existing `deployment.env` pinning `120` must be edited by
+hand**). Regression test on the default. Larissa CLEAR; one pre-existing Low
+deferred (proxy never aborts its upstream fetch — see
+[[insights/security-deferrals]]). **Still open:** mid-stream breaks are unexplained
+(suspect Anthropic `overloaded` under load); Chris collects console lines /
+diagnostics reports from testers. **Next:** Chris tests on device, then push + tag
+`0e38315f`.
+
+**Also 2026-09-26 — APP UPDATES NOW REACH LONG-LIVED CLIENTS, AND A
 MISSING MODEL NO LONGER HIDES THE COMPOSER.** Squashed to `master` (`3daf98fb`),
 **not pushed, not tagged**. Field incident: on the server deploy (`v0.2.18`) the
 Opus 5.5 persona's chat showed the topbar but **no composer**. Root cause: the
