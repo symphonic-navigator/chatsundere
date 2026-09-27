@@ -71,7 +71,7 @@ export async function _runOneShotWith(
 
   // No `cacheKey` and no `tools` by design: one-shot calls forgo
   // conversation-affinity caching (spec §6 — chat-only) and never call tools.
-  // `initialResponseTimeoutMs` is the caller's overall budget, NOT the 15 s
+  // `initialResponseTimeoutMs` is the caller's overall budget, NOT the 120 s
   // streaming default: dreaming (180 s, 40-memory batches) and compaction have
   // no time-to-first-byte constraint today, and inheriting one would break them.
   for await (const chunk of streamFn({

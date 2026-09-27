@@ -19,6 +19,7 @@ Canonical source: [[security-deferrals]]
 
 | ID | Item | Trigger | Severity |
 |---|---|---|---|
+| Stream-TTFB L1 (2026-09-27) | Proxy never aborts its upstream fetch on client disconnect → per-user concurrency slot held until upstream answers (pre-existing; forwarding the abort would cost the proxied route its prompt-cache write) | Next proxy-service touch, or any sign of slot exhaustion | Low |
 | App-update L-1 | ≤5 s apply-latch window could reload a session created via another route | A one-tap session-creating route from the login screen | Low |
 | H-1 / M-1 | Recovery wrap accepted without server-side integrity attestation | Phase 1 sync-service brief | Medium (re-classified) |
 | M-3 | `changePassphraseLinkedOnline` atomicity edge case lacks crash regression test | Sync-service staging logic in Phase 1 | Low |

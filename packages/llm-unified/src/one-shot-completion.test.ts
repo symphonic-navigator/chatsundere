@@ -95,7 +95,7 @@ describe('runOneShotCompletion', () => {
     expect(seen.cacheKey).toBeUndefined();
     expect(seen.operation).toBe('one-shot');
     // Critical: the caller's overall budget (default 30 000 ms), NOT
-    // streamCompletion's own 15 s default — inheriting that would impose a
+    // streamCompletion's own 120 s default — inheriting that would impose a
     // new time-to-first-byte cap on dreaming (180 s) and compaction (180 s).
     expect(seen.initialResponseTimeoutMs).toBe(30_000);
     expect(seen.signal).toBeDefined();

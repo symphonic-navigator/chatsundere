@@ -42,7 +42,7 @@ record and block any private/internal range → connect to the pinned IP
 | `RATE_LIMIT_IP_PER_MIN` | `600` | Per-IP rate limit |
 | `MAX_BODY_BYTES` | `52428800` | Max request body (50 MiB), enforced on streamed bytes |
 | `MAX_CONCURRENT_PER_USER` | `6` | Per-user concurrent connections (in-process, single replica) |
-| `PROXY_IDLE_TIMEOUT_S` | `120` | Bun `idleTimeout` (inactivity) |
+| `PROXY_IDLE_TIMEOUT_S` | `180` | Bun `idleTimeout` (inactivity); keep above the client's 120 s time-to-first-byte cap (max 255) |
 | `LOG_LEVEL` | `info` | Operational logs only — never request data |
 
 ## Wire reference (`curl`)

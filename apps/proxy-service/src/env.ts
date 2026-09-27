@@ -33,7 +33,9 @@ const EnvSchema = v.object({
   RATE_LIMIT_IP_PER_MIN: num('600'),
   MAX_BODY_BYTES: num('52428800'),
   MAX_CONCURRENT_PER_USER: num('6'),
-  PROXY_IDLE_TIMEOUT_S: num('120'),
+  // Above the client's 120 s time-to-first-byte cap: the proxy sends no headers
+  // until the upstream does, so an equal limit would cut the same slow starts.
+  PROXY_IDLE_TIMEOUT_S: num('180'),
 });
 
 export type Env = v.InferOutput<typeof EnvSchema>;

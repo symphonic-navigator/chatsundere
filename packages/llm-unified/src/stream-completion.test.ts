@@ -292,6 +292,28 @@ function streamArgs(): StreamCompletionArgs {
   };
 }
 
+describe('streamCompletion default time-to-first-byte cap', () => {
+  it('waits 120 s for the headers when the caller sets no cap', async () => {
+    // nano-gpt withholds headers until the upstream answers; a short cap
+    // aborted healthy Opus requests before the prompt cache was written.
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      mockFetch('data: [DONE]\n\n') as never,
+    );
+    const timeoutSpy = spyOn(globalThis, 'setTimeout');
+    try {
+      const { initialResponseTimeoutMs: _omit, ...args } = streamArgs();
+      for await (const _ of streamCompletion(args)) {
+        // drain
+      }
+      const delays = timeoutSpy.mock.calls.map((c) => c[1]);
+      expect(delays).toContain(120_000);
+    } finally {
+      timeoutSpy.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+});
+
 describe('streamCompletion retry on transient initial-fetch failure', () => {
   it('retries on 503 then succeeds with streamed content', async () => {
     let attempts = 0;

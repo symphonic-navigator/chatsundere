@@ -56,7 +56,7 @@ export interface StreamCompletionArgs {
   /**
    * Cap on how long we wait for the upstream to begin responding (TTFB).
    * Once the headers arrive the timer is cleared and the body stream can
-   * run as long as it needs to. Defaults to 15 000 ms.
+   * run as long as it needs to. Defaults to 120 000 ms.
    */
   initialResponseTimeoutMs?: number;
   /** Optional sink for retry decisions. Caller (apps/) wires the console line. */
@@ -71,7 +71,14 @@ export interface StreamCompletionArgs {
   onDiagnostics?: StreamDiagnosticsSink;
 }
 
-const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 15_000;
+// Generous on purpose. nano-gpt withholds the response headers until the
+// upstream starts answering (~4-7.5 s for Opus 5.5 at rest, probed live
+// 2026-09-27), so under load a short cap aborts healthy requests. Worse, on
+// the direct route an abort before the headers reaches Anthropic before the
+// prompt cache is written: the manual retry then pays the full uncached prefix,
+// is slower for it, and is more likely to hit the cap once more. A dead
+// provider fails fast with a status anyway; the stop button covers the rest.
+const DEFAULT_INITIAL_RESPONSE_TIMEOUT_MS = 120_000;
 
 /**
  * High-level streaming completion. Picks the right wire-body, delegates the

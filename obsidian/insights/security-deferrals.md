@@ -847,3 +847,29 @@ deferred:
   hardening: embed `APP_VERSION` in the worker and refuse `SKIP_WAITING` on a lower
   SemVer (downgrade pinning by a stale edge cache).
 
+
+## 2026-09-27 — Stream time-to-first-byte cap (Larissa pre-squash; one Low deferred)
+
+Larissa audited the change that raises the client's streaming time-to-first-byte
+cap from 15 s to 120 s and the proxy's `PROXY_IDLE_TIMEOUT_S` default from 120 s to
+180 s (field reports: Opus 5.5 via nano-gpt aborting before the first token, and
+the retry paying the full uncached prompt). **CLEAR TO SQUASH**, no
+Critical/High/Medium. The 180 s idle window was accepted as Info (Traefik fronts
+the sockets; a trickled body resets the timer either way; within Bun's 255 s cap).
+Consciously deferred:
+
+- **L1 (Low, pre-existing) — the proxy never aborts its upstream fetch.** The
+  forward in `apps/proxy-service/src/routes/proxy.ts` (`doPinnedFetch`) is built
+  without `c.req.raw.signal` and has no server-side time-to-first-byte cap, so when
+  the client disconnects (or Bun's `idleTimeout` closes the socket) before the
+  upstream sends headers, `release()` never runs and the per-user concurrency slot
+  stays held for as long as the upstream holds the connection. Bounded: needs a
+  valid invitation-only account token, ≤ `MAX_CONCURRENT_PER_USER` (6) slots per
+  account, per-user rate limit. Not widened by this change. **Follow-up
+  commitment:** pass `c.req.raw.signal` into `pinnedFetch`, combined with a
+  server-side time-to-first-byte cap of ~150–200 s, so a disconnected client or a
+  stalled upstream frees the slot. **Mind the cache trade-off when doing so:** the
+  current non-propagation is exactly why a pre-header abort on the *proxied* route
+  still lets the upstream write the Anthropic prompt cache (Larissa I2), so
+  forwarding the abort re-introduces the direct-route behaviour there. Tracked in
+  [[follow-ups-index]].
