@@ -19,6 +19,7 @@ import type {
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { transcodeGeneratedImage } from '../attachments/image-transcode.js';
 import {
   type ChatRow,
   type MessageRow,
@@ -374,7 +375,10 @@ async function resolveImageGeneration(
       });
     },
     persistImage: async (item, meta) => {
-      const { thumbBlob, width, height } = await thumbnailFromBlob(item.bytes);
+      // Sequential by construction: the tool awaits each persist in turn, so
+      // at most one full-size bitmap is decoded at a time.
+      const stored = await transcodeGeneratedImage(item);
+      const { thumbBlob, width, height } = await thumbnailFromBlob(stored.bytes);
       return addGeneratedImageArtefact({
         chatId,
         personaId: persona.id,
@@ -382,8 +386,8 @@ async function resolveImageGeneration(
         modelRef: meta.slot.ref,
         modelLabel: meta.slot.modelLabel,
         configSnapshot: meta.slot.config,
-        bytes: item.bytes,
-        mime: item.mime,
+        bytes: stored.bytes,
+        mime: stored.mime,
         thumbBlob,
         width,
         height,
