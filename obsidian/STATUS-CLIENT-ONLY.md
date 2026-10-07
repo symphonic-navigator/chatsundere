@@ -29,6 +29,24 @@ transcoded to JPEG at full size. **Next (Liz):**
 - Add the per-model NSFW judgement item to `obsidian/insights/follow-ups-index.md`.
 - Squash; **then Chris** runs spec §10 on device.
 
+**Also:** 2026-10-08 — **PERSONA QUICK ACCESS BUILT (overnight), AWAITING
+REVIEW.** Branch `feat/persona-quick-access`, **not squashed, not merged, not
+pushed**. Spec `superpowers/specs/2026-10-07-persona-quick-access-design.md`, plan
+`superpowers/plans/2026-10-07-persona-quick-access.md`. Third piece of the v0.2.30
+omnibus. The persona hub's History button became a **Recent chats** accordion (ten
+newest, title filter across all chats, `History →` / `All in History →`, open state
+per device); the chat's brand logo and the interaction-mode hamburger open one
+**quick menu** (Entrance Hall, persona, New chat with …, Memories, History,
+Knowledge, Image settings) with return paths back into the chat; new personas start
+with **"You are a friendly assistant."**, cleared on focus and restored on an empty
+blur, so a fresh persona needs only a model. The final review's fix wave also keeps
+Enter on a focused button out of the reading-mode cockpit hotkey, gives the History
+links 44 px tap targets, puts the incomplete cue above the accordion, and shows a
+disabled "New chat" while the persona loads. **Open design question:** Circle cards
+of tagline-less new personas now show the default instruction as their subtitle.
+**Next (Liz):** Laura pre-squash pass, squash (watch the STATUS merge with the
+parallel `feat/unified-image-models`); **then Chris** runs spec §6 on device.
+
 **Also:** 2026-10-07 — **MISTRAL LARGE 4 CURATED** on the direct
 Mistral API and on nano-gpt (testers asked for it after seeing it on nano-gpt).
 Squashed to `master` (`fa8e3b74`), **not pushed, not tagged**. Large 4 reasons

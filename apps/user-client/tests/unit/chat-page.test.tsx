@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -706,5 +707,102 @@ describe('desktop single mode (spec 2026-07-18 §5)', () => {
       expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
     });
     expect(useCurrentChatStore.getState().isPinned).toBe(true);
+  });
+});
+
+describe('ChatPage — reading-mode Enter hotkey leaves interactive elements alone', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  afterEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: originalMatchMedia,
+    });
+  });
+
+  async function renderReadingModeChat() {
+    installMatchMedia(false);
+    const { db, personaId } = await seedPersonaWithMindspace();
+    const ms = await db.mindspaces.toArray();
+    const firstMs = ms[0];
+    if (!firstMs) throw new Error('No mindspace seeded');
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: 'Reading chat',
+      resolvedMindspaceId: firstMs.id,
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<ChatPage />, { wrapper: makeWrapperWithHistory(qc, `/app/chat/${chatId}`) });
+    await waitFor(() => {
+      expect(document.querySelector('.chat-page')).toHaveAttribute('data-mode', 'reading');
+    });
+    // The hotkey is armed only once the persona has resolved; the quick menu's
+    // persona entries enabling is the observable signal for that.
+    act(() => useCurrentChatStore.getState().openQuickMenu({ top: 0, left: 0, bottom: 10 }));
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: 'History' })).not.toHaveAttribute(
+        'aria-disabled',
+      ),
+    );
+    act(() => useCurrentChatStore.getState().closeQuickMenu());
+    return { personaId, chatId };
+  }
+
+  it('runs a quick-menu item on Enter and keeps the cockpit closed', async () => {
+    await renderReadingModeChat();
+    const user = userEvent.setup();
+    act(() => useCurrentChatStore.getState().openQuickMenu({ top: 0, left: 0, bottom: 10 }));
+    const history = await screen.findByRole('menuitem', { name: 'History' });
+    await waitFor(() => expect(history).not.toHaveAttribute('aria-disabled'));
+    history.focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByTestId('history-page')).toBeInTheDocument();
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
+  });
+
+  it('does not open the cockpit on Enter while the quick menu is open', async () => {
+    await renderReadingModeChat();
+    const user = userEvent.setup();
+    act(() => useCurrentChatStore.getState().openQuickMenu({ top: 0, left: 0, bottom: 10 }));
+    const menu = await screen.findByRole('menu', { name: 'Quick menu' });
+    menu.focus();
+    await user.keyboard('{Enter}');
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
+  });
+
+  it('lets Enter activate a focused plain button (the logo) without opening the cockpit', async () => {
+    await renderReadingModeChat();
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const logo = document.createElement('button');
+    logo.type = 'button';
+    logo.className = 'brand-logo';
+    logo.addEventListener('click', onClick);
+    document.body.append(logo);
+    try {
+      logo.focus();
+      await user.keyboard('{Enter}');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(useCurrentChatStore.getState().isInteractionMode).toBe(false);
+    } finally {
+      logo.remove();
+    }
+  });
+
+  it('still opens the cockpit on a bare Enter with nothing interactive focused', async () => {
+    await renderReadingModeChat();
+    const user = userEvent.setup();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.keyboard('{Enter}');
+    expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
   });
 });

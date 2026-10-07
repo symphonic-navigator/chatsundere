@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db.js';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../src/lib/persona-defaults.js';
 import {
   fontVoiceMeta,
+  incompleteCue,
   instructionsMeta,
   integrationsMeta,
   isPersonaIncomplete,
@@ -151,5 +153,57 @@ describe('meta lines', () => {
     expect(
       mindspaceMeta({ ...base, mindspaceId: 'x' }, [{ id: 'x', displayName: 'Moonlit' }] as never),
     ).toBe('Moonlit');
+  });
+});
+
+describe('instructionsMeta — default instruction', () => {
+  it('prefixes Default · when the instruction is exactly the default', () => {
+    expect(instructionsMeta({ ...base, instructions: DEFAULT_PERSONA_INSTRUCTIONS })).toBe(
+      'Default · Chatsundere voice',
+    );
+  });
+
+  it('keeps the adult suffix after the prefix', () => {
+    expect(
+      instructionsMeta({ ...base, instructions: DEFAULT_PERSONA_INSTRUCTIONS, adultPersona: true }),
+    ).toBe('Default · Chatsundere voice · Adult');
+  });
+
+  it('does not prefix an edited default', () => {
+    expect(
+      instructionsMeta({ ...base, instructions: `${DEFAULT_PERSONA_INSTRUCTIONS} And funny.` }),
+    ).toBe('Chatsundere voice');
+  });
+});
+
+describe('incompleteCue', () => {
+  const named = { ...base, name: 'Fable' };
+
+  it('returns null for a complete persona', () => {
+    expect(incompleteCue(named)).toBeNull();
+  });
+
+  it('names only the model when only the model is missing', () => {
+    expect(incompleteCue({ ...named, canonicalId: null })).toBe(
+      'Pick a model, then Fable can chat.',
+    );
+  });
+
+  it('names only the instruction when only the instruction is missing', () => {
+    expect(incompleteCue({ ...named, instructions: '  ' })).toBe(
+      'Add an instruction, then Fable can chat.',
+    );
+  });
+
+  it('names both when both are missing', () => {
+    expect(incompleteCue({ ...named, instructions: '', modelId: '' })).toBe(
+      'Add an instruction and pick a model, then Fable can chat.',
+    );
+  });
+
+  it('falls back to "this persona" without a name', () => {
+    expect(incompleteCue({ ...named, name: '', modelId: '' })).toBe(
+      'Pick a model, then this persona can chat.',
+    );
   });
 });

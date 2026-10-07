@@ -8,7 +8,7 @@ const base = {
   persona: { id: 'p', name: 'Fable' } as never,
   chat: { id: 'c' } as never,
   contextWindow: 1000,
-  onExit: () => {},
+  onOpenQuickMenu: () => {},
   onRenameChat: () => {},
 };
 

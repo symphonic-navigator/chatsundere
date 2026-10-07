@@ -3,7 +3,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../../src/lib/persona-defaults.js';
 import { PersonaHub } from '../../../src/routes/app/persona/hub.js';
 
 // ── Shared stable data ───────────────────────────────────────────────────────
@@ -158,6 +159,8 @@ function renderHub(personaId: string) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
+beforeEach(() => localStorage.clear());
+
 describe('PersonaHub — complete persona with a recent chat', () => {
   it('renders all 8 NavTiles', async () => {
     state.persona = COMPLETE_PERSONA;
@@ -246,7 +249,7 @@ describe('PersonaHub — incomplete persona (empty instructions, no model)', () 
 
     await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
 
-    const actionLabels = ['Continue', 'New Chat', 'New Incognito', 'History'];
+    const actionLabels = ['Continue', 'New Chat', 'New Incognito'];
     for (const name of actionLabels) {
       const btn = screen.getByRole('button', { name });
       expect(btn.getAttribute('data-priority')).toBeNull();
@@ -289,5 +292,51 @@ describe('PersonaHub — third-party chat import entry point', () => {
     const btn = screen.getByRole('button', { name: 'Import chats from ChatGPT or Grok…' });
     fireEvent.click(btn);
     expect(await screen.findByRole('dialog', { name: 'Import chats' })).toBeInTheDocument();
+  });
+});
+
+describe('PersonaHub — fresh persona with the default instruction and no model', () => {
+  const FRESH = {
+    ...INCOMPLETE_PERSONA,
+    id: 'p-fresh',
+    name: 'Fable',
+    instructions: DEFAULT_PERSONA_INSTRUCTIONS,
+  };
+
+  it('the cue asks only for a model', async () => {
+    state.persona = FRESH;
+    state.chats = [];
+    renderHub('p-fresh');
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    expect(screen.getByText('Pick a model, then Fable can chat.')).toBeInTheDocument();
+    expect(screen.queryByText(/add an instruction/i)).toBeNull();
+  });
+
+  it('the Instructions tile shows the Default prefix', async () => {
+    state.persona = FRESH;
+    state.chats = [];
+    renderHub('p-fresh');
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    expect(screen.getByText('Default · Chatsundere voice')).toBeInTheDocument();
+  });
+});
+
+describe('PersonaHub — Recent chats accordion', () => {
+  it('the action row no longer has a History button', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [RECENT_CHAT];
+    renderHub('p-complete');
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'History' })).toBeNull();
+    expect(screen.getByRole('button', { name: /recent chats/i })).toBeInTheDocument();
+  });
+
+  it('the History link opens the History page for this persona', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [RECENT_CHAT];
+    renderHub('p-complete');
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('link', { name: 'History →' }));
+    expect(screen.getByTestId('history-sentinel')).toBeInTheDocument();
   });
 });

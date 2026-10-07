@@ -56,6 +56,7 @@ function setup(initialPath: string) {
             element={<div data-testid="editor-sentinel">editor</div>}
           />
           <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel">chat</div>} />
+          <Route path="/app/chat/new" element={<div data-testid="lazy-chat-sentinel" />} />
         </Routes>
       </MemoryRouter>
       <Toast />
@@ -93,6 +94,20 @@ describe('PersonaMemory — shell', () => {
     await screen.findByRole('heading', { level: 1, name: /memory/i });
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
     await waitFor(() => expect(screen.getByTestId('editor-sentinel')).toBeInTheDocument());
+  });
+
+  it('?return= beats ?chat= for the back control', async () => {
+    setup(
+      `/app/persona/p1/memory?chat=c1&return=${encodeURIComponent('/app/chat/new?personaId=p1')}`,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('lazy-chat-sentinel')).toBeInTheDocument());
+  });
+
+  it('an off-origin ?return= falls back to the ?chat= target', async () => {
+    setup(`/app/persona/p1/memory?chat=c1&return=${encodeURIComponent('//evil.example')}`);
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('chat-sentinel')).toBeInTheDocument());
   });
 });
 

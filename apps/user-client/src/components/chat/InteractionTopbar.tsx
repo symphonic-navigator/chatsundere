@@ -4,6 +4,7 @@ import type { ChatRow, PersonaRow } from '../../boot/client-data-db.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { sanitiseTitle } from '../../lib/title-generator.js';
 import { contextUtilisation } from '../../lib/token-estimator.js';
+import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { PersonaAvatar } from '../PersonaAvatar.js';
 
@@ -14,7 +15,8 @@ interface Props {
   /** Resolved context window, or null when no offering resolves (removed model —
    *  the gauge shows an inert unavailable state, spec 2026-07-18 §5.6). */
   contextWindow: number | null;
-  onExit: () => void;
+  /** Opens the chat quick menu anchored to the hamburger (spec §3.1). */
+  onOpenQuickMenu: (trigger: HTMLElement) => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
   /** Name of the project this chat belongs to. Projects are not yet modelled,
@@ -32,6 +34,7 @@ interface Props {
 }
 
 export function InteractionTopbar(p: Props): JSX.Element {
+  const quickMenuOpen = useCurrentChatStore((s) => s.quickMenuAnchor !== null);
   const pct = p.contextWindow === null ? null : contextUtilisation(p.usedTokens, p.contextWindow);
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -70,8 +73,10 @@ export function InteractionTopbar(p: Props): JSX.Element {
         <button
           type="button"
           className="hamburger-btn"
-          aria-label="Exit to Entrance Hall"
-          onClick={p.onExit}
+          aria-label="Quick menu"
+          aria-haspopup="menu"
+          aria-expanded={quickMenuOpen}
+          onClick={(e) => p.onOpenQuickMenu(e.currentTarget)}
         >
           <svg
             viewBox="0 0 24 24"

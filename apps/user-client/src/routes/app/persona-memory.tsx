@@ -19,6 +19,7 @@ import {
   useUnextractedCount,
   useUpdateEntry,
 } from '../../data/memory.js';
+import { safeReturnPath } from '../../lib/safe-return.js';
 import type { MemoryActionState } from '../../lib/use-memory-actions.js';
 import { useMemoryActions } from '../../lib/use-memory-actions.js';
 import type { MemoryActionError } from '../../memory/classify-error.js';
@@ -56,7 +57,12 @@ export function PersonaMemory(): JSX.Element {
   const chatId = search.get('chat') ?? '';
 
   const personaId = id ?? '';
-  const backPath = chatId ? `/app/chat/${chatId}` : `/app/persona/${personaId}`;
+  // `?return=` (the chat quick menu, incl. a lazy unsent chat) wins over the
+  // cockpit's `?chat=` convention; both fall back to the persona hub.
+  const backPath = safeReturnPath(
+    search.get('return'),
+    chatId ? `/app/chat/${chatId}` : `/app/persona/${personaId}`,
+  );
 
   const { onHelp, helpOverlay } = useHelp('persona-memory');
   const { persona, patch } = usePersonaEditing(personaId || null);

@@ -194,3 +194,41 @@ describe('PersonaKnowledge — library selection', () => {
     await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ libraryIds: [] }));
   });
 });
+
+function renderAt(url: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[url]}>
+        <Routes>
+          <Route path="/app/persona/:id/knowledge" element={<PersonaKnowledge />} />
+          <Route path="/app/persona/:id" element={<div data-testid="hub-sentinel" />} />
+          <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel" />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe('PersonaKnowledge — return path', () => {
+  it('?return= drives the back control', async () => {
+    state.persona = BASE_PERSONA;
+    renderAt(`/app/persona/p-1/knowledge?return=${encodeURIComponent('/app/chat/c1')}`);
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('chat-sentinel')).toBeInTheDocument());
+  });
+
+  it('without ?return= back goes to the persona hub', async () => {
+    state.persona = BASE_PERSONA;
+    renderAt('/app/persona/p-1/knowledge');
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('hub-sentinel')).toBeInTheDocument());
+  });
+
+  it('an off-origin ?return= falls back to the persona hub', async () => {
+    state.persona = BASE_PERSONA;
+    renderAt(`/app/persona/p-1/knowledge?return=${encodeURIComponent('https://evil.example')}`);
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('hub-sentinel')).toBeInTheDocument());
+  });
+});

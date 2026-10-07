@@ -75,6 +75,19 @@ describe('Root brand-bar chrome trims inside a chat', () => {
     renderAt('/app');
     expect(screen.getByRole('button', { name: /adult mode/i })).toBeInTheDocument();
   });
+
+  it('in interaction mode the logo is also the Quick menu button', () => {
+    useCurrentChatStore.getState().setInteractionMode(true);
+    renderAt('/app/chat/abc');
+    fireEvent.click(screen.getByRole('button', { name: 'Quick menu' }));
+    expect(useCurrentChatStore.getState().quickMenuAnchor).not.toBeNull();
+  });
+
+  it('outside a chat the logo stays a home link', () => {
+    renderAt('/app');
+    expect(screen.queryByRole('button', { name: 'Quick menu' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Chatsundere home' })).toBeInTheDocument();
+  });
 });
 
 describe('Root read-only chat topbar (chatHeader set)', () => {
@@ -90,7 +103,7 @@ describe('Root read-only chat topbar (chatHeader set)', () => {
     await _resetClientDataDbForTests();
   });
 
-  it('renders exit affordance with correct aria-label in reading-chat mode', () => {
+  it('in reading-chat mode the logo is a Quick menu button that opens the menu', () => {
     useCurrentChatStore.getState().setChatHeader({
       personaId: 'p1',
       name: 'Laura',
@@ -99,7 +112,12 @@ describe('Root read-only chat topbar (chatHeader set)', () => {
     });
     useCurrentChatStore.getState().setInteractionMode(false);
     renderAt('/app/chat/c1');
-    expect(screen.getByLabelText('Leave chat')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Leave chat')).toBeNull();
+    const logo = screen.getByRole('button', { name: 'Quick menu' });
+    expect(logo).toHaveAttribute('aria-haspopup', 'menu');
+    expect(logo).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(logo);
+    expect(useCurrentChatStore.getState().quickMenuAnchor).not.toBeNull();
   });
 
   it('renders persona avatar button with correct aria-label in reading-chat mode', () => {

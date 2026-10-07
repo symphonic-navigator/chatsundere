@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useSettings } from '../../../data/settings.js';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../../lib/persona-defaults.js';
 import { InlineEditTextarea } from '../settings/InlineEditTextarea.js';
 import { usePersonaEditing } from './use-persona-editing.js';
 
@@ -137,6 +138,8 @@ export function PersonaInstructions(): JSX.Element {
             label="Custom Instructions"
             value={persona.instructions}
             helper="Who this persona is."
+            clearOnFocusValue={DEFAULT_PERSONA_INSTRUCTIONS}
+            placeholder={DEFAULT_PERSONA_INSTRUCTIONS}
             minRows={5}
             onSave={(v) => patch({ instructions: v })}
           />

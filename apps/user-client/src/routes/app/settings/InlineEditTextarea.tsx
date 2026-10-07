@@ -10,6 +10,10 @@ export interface InlineEditTextareaProps {
   minRows?: number;
   /** Persist the new value; throw to signal a failed save (value + focus kept). */
   onSave: (next: string) => Promise<void>;
+  /** When the field holds exactly this value, focusing clears it; leaving it
+   *  empty restores the value without a write. For placeholder-like defaults
+   *  that are real stored values (the default persona instruction). */
+  clearOnFocusValue?: string;
 }
 
 /**
@@ -26,6 +30,7 @@ export function InlineEditTextarea({
   helper,
   minRows = 4,
   onSave,
+  clearOnFocusValue,
 }: InlineEditTextareaProps): JSX.Element {
   const id = useId();
   const [draft, setDraft] = useState(value);
@@ -34,6 +39,9 @@ export function InlineEditTextarea({
   const savingRef = useRef(false);
   const focusedRef = useRef(false);
   const valueRef = useRef(value);
+  // True while the field was cleared on focus — an empty blur then restores
+  // the stored value instead of saving an empty one.
+  const clearedOnFocusRef = useRef(false);
 
   useEffect(() => {
     valueRef.current = value;
@@ -74,10 +82,22 @@ export function InlineEditTextarea({
         placeholder={placeholder}
         onFocus={() => {
           focusedRef.current = true;
+          if (clearOnFocusValue !== undefined && draft === clearOnFocusValue) {
+            clearedOnFocusRef.current = true;
+            setDraft('');
+          }
         }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
           focusedRef.current = false;
+          if (clearedOnFocusRef.current) {
+            clearedOnFocusRef.current = false;
+            if (draft.trim() === '') {
+              // Back to the stored value: commit() then sees no change, so no write.
+              setDraft(valueRef.current);
+              return;
+            }
+          }
           void commit();
         }}
       />

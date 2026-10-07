@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../../src/boot/client-data-db.js';
 import type { PersonaRow } from '../../../src/boot/client-data-db.js';
+import { ChatQuickMenu, anchorFrom } from '../../../src/components/chat/ChatQuickMenu.js';
 import { InteractionMode } from '../../../src/components/chat/InteractionMode.js';
 import { useCurrentChatStore } from '../../../src/state/current-chat.store.js';
 import { DESKTOP_MEDIA_QUERY } from '../../../src/state/effective-chat-mode.js';
@@ -117,7 +118,7 @@ it('gauge uses the resolved context window (clamped), not raw recommended', () =
           onCancelEdit={() => {}}
           onStop={() => {}}
           isStreamLive={false}
-          onExit={() => {}}
+          onOpenQuickMenu={() => {}}
           onRenameChat={() => {}}
           onOpenPersonaEditor={() => {}}
           dictation={idleDictationStub}
@@ -193,7 +194,7 @@ function interactionModeTree(
           onCancelEdit={() => {}}
           onStop={() => {}}
           isStreamLive={false}
-          onExit={() => {}}
+          onOpenQuickMenu={() => {}}
           onRenameChat={() => {}}
           onOpenPersonaEditor={() => {}}
           dictation={idleDictationStub}
@@ -231,8 +232,8 @@ it('does not close on an outside tap on desktop (pinned semantics, spec §7.5)',
 it('mounts the topbar without a cockpit when no offering resolves (spec §5.6)', () => {
   installMatchMedia(false);
   renderInteractionMode({ offering: null, resolution: null });
-  // The repair path stays reachable: exit + persona avatar are in the topbar.
-  expect(screen.getByLabelText('Exit to Entrance Hall')).toBeInTheDocument();
+  // The repair path stays reachable: quick menu + persona avatar are in the topbar.
+  expect(screen.getByLabelText('Quick menu')).toBeInTheDocument();
   // No model — no composer.
   expect(document.querySelector('.cockpit-focus-capture')).toBeNull();
   // The gauge degrades to an explicit unavailable state, not a fake 0 %.
@@ -287,4 +288,58 @@ it('remounts the card with a fresh update check when the unresolved model change
   );
   expect(check).toHaveBeenCalledTimes(2);
   _resetAppUpdateForTests();
+});
+
+it('a tap inside the quick menu does not collapse an unpinned cockpit (spec §3.5)', () => {
+  installMatchMedia(false);
+  renderInteractionMode();
+  const root = document.createElement('div');
+  root.className = 'chat-quick-menu-root';
+  const entry = document.createElement('button');
+  root.appendChild(entry);
+  document.body.appendChild(root);
+  const onClick = vi.fn();
+  entry.addEventListener('click', onClick);
+
+  fireEvent.pointerDown(entry);
+  fireEvent.click(entry);
+
+  expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+  expect(onClick).toHaveBeenCalledTimes(1);
+  root.remove();
+});
+
+it('Escape with the quick menu open closes only the menu, not the cockpit', () => {
+  installMatchMedia(false);
+  function StoreWiredMenu(): JSX.Element {
+    const anchor = useCurrentChatStore((s) => s.quickMenuAnchor);
+    const close = useCurrentChatStore((s) => s.closeQuickMenu);
+    return (
+      <ChatQuickMenu
+        anchor={anchor}
+        persona={{ id: persona.id, name: persona.name, colour: persona.colour }}
+        activeChatId="c1"
+        returnTo="/app/chat/c1"
+        onClose={close}
+        onEntranceHall={() => {}}
+        onNavigate={() => {}}
+      />
+    );
+  }
+  renderInteractionMode({
+    onOpenQuickMenu: (trigger) => useCurrentChatStore.getState().openQuickMenu(anchorFrom(trigger)),
+  });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <StoreWiredMenu />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quick menu' }));
+  expect(screen.getByRole('menu')).toBeInTheDocument();
+
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+  expect(useCurrentChatStore.getState().quickMenuAnchor).toBeNull();
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
 });

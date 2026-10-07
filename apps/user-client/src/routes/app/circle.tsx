@@ -19,6 +19,7 @@ import {
 } from '../../data/personas.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../lib/persona-defaults.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
@@ -156,7 +157,11 @@ export function Circle(): JSX.Element {
                     {p.name}
                   </span>
                   <span className="cs-row-subtitle">
-                    {p.tagline || p.instructions.slice(0, 60)}
+                    {/* The default instruction addresses the model, not the user — never a subtitle. */}
+                    {p.tagline ||
+                      (p.instructions === DEFAULT_PERSONA_INSTRUCTIONS
+                        ? ''
+                        : p.instructions.slice(0, 60))}
                   </span>
                 </span>
               </button>

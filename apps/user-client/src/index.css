@@ -5716,3 +5716,23 @@ h1 {
   color: var(--color-paper, #efeaff);
   border-color: rgba(255, 255, 255, 0.3);
 }
+
+/* Chat quick menu — a short drop-in; still under reduced motion. */
+.chat-quick-menu-card {
+  animation: chat-quick-menu-in 140ms ease-out;
+}
+@keyframes chat-quick-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-quick-menu-card {
+    animation: none;
+  }
+}

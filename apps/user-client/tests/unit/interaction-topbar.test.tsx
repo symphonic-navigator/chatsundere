@@ -69,21 +69,24 @@ function wrap(node: React.ReactNode) {
 }
 
 describe('InteractionTopbar', () => {
-  it('hamburger triggers onExit', () => {
-    const onExit = vi.fn();
+  it('hamburger opens the quick menu with itself as the trigger', () => {
+    const onOpenQuickMenu = vi.fn();
     const { container } = wrap(
       <InteractionTopbar
         persona={aurum}
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={onExit}
+        onOpenQuickMenu={onOpenQuickMenu}
         onRenameChat={vi.fn()}
       />,
     );
     const btn = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+    expect(btn).toHaveAttribute('aria-label', 'Quick menu');
+    expect(btn).toHaveAttribute('aria-haspopup', 'menu');
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(btn);
-    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onOpenQuickMenu).toHaveBeenCalledWith(btn);
   });
 
   it('journal stub shows 0', () => {
@@ -93,7 +96,7 @@ describe('InteractionTopbar', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -107,7 +110,7 @@ describe('InteractionTopbar', () => {
         chat={chatRow}
         usedTokens={250}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -123,7 +126,7 @@ describe('InteractionTopbar', () => {
         chat={chatRow}
         usedTokens={5000}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -139,7 +142,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -157,7 +160,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
         onOpenPersonaEditor={onOpen}
       />,
@@ -176,7 +179,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
         onOpenPersonaEditor={vi.fn()}
       />,
@@ -191,7 +194,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -208,7 +211,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
         projectName="Rennwagen"
       />,
@@ -225,7 +228,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -244,7 +247,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={onRename}
       />,
     );
@@ -263,7 +266,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={onRename}
       />,
     );
@@ -283,7 +286,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={chatRow}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={onRename}
       />,
     );
@@ -302,7 +305,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         chat={{ ...chatRow, title: 'existing' }}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={onRename}
       />,
     );
@@ -322,7 +325,7 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
         chat={null}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
       />,
     );
@@ -341,7 +344,7 @@ describe('InteractionTopbar — lazy mode (no chat yet)', () => {
         chat={null}
         usedTokens={0}
         contextWindow={1000}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={vi.fn()}
         onOpenPersonaEditor={onOpen}
       />,
@@ -381,7 +384,7 @@ describe('InteractionMode → InteractionTopbar plumbing', () => {
         onBranchEdit={vi.fn()}
         onCancelEdit={vi.fn()}
         onStop={vi.fn()}
-        onExit={vi.fn()}
+        onOpenQuickMenu={vi.fn()}
         onRenameChat={onRename}
         onOpenPersonaEditor={vi.fn()}
         dictation={idleDictationStub}

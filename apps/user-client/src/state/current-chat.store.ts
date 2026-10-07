@@ -9,6 +9,13 @@ export interface ChatHeader {
   title: string;
 }
 
+/** Where the chat quick menu anchors (the trigger's viewport rect). */
+export interface QuickMenuAnchor {
+  top: number;
+  left: number;
+  bottom: number;
+}
+
 interface CurrentChatStore {
   chatId: string | null;
   pendingPersonaId: string | null;
@@ -75,6 +82,12 @@ interface CurrentChatStore {
   unstageRemoval: (id: string) => void;
   /** Clear all staged removals. Called on enter-edit, cancel, and commit. */
   resetEditSession: () => void;
+  /** Open chat quick menu, anchored to its trigger; null = closed. Opened from
+   *  the brand logo (root.tsx) or the interaction-mode hamburger; rendered by
+   *  chat-page, which owns the persona. */
+  quickMenuAnchor: QuickMenuAnchor | null;
+  openQuickMenu: (anchor: QuickMenuAnchor) => void;
+  closeQuickMenu: () => void;
   /** Reset all ephemeral state to initial defaults. */
   reset: () => void;
 }
@@ -101,6 +114,8 @@ type InitialState = Omit<
   | 'stageRemoval'
   | 'unstageRemoval'
   | 'resetEditSession'
+  | 'openQuickMenu'
+  | 'closeQuickMenu'
   | 'reset'
 >;
 
@@ -121,6 +136,7 @@ const initial: InitialState = {
   artefactExpertError: null,
   openArtefactId: null,
   editStagedRemovals: [],
+  quickMenuAnchor: null,
 };
 
 export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
@@ -162,5 +178,7 @@ export const useCurrentChatStore = create<CurrentChatStore>((set) => ({
   unstageRemoval: (id) =>
     set((s) => ({ editStagedRemovals: s.editStagedRemovals.filter((x) => x !== id) })),
   resetEditSession: () => set({ editStagedRemovals: [] }),
+  openQuickMenu: (anchor) => set({ quickMenuAnchor: anchor }),
+  closeQuickMenu: () => set({ quickMenuAnchor: null }),
   reset: () => set({ ...initial }),
 }));

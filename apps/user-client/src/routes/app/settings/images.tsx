@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useSearchParams } from 'react-router-dom';
 import { ModelSlotPicker } from '../../../components/ModelSlotPicker.js';
 import { ImageGenerationSection } from '../../../components/image-gen/ImageGenerationSection.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 
@@ -18,6 +20,7 @@ function parseModelRef(
 }
 
 export function SettingsImagesPage(): JSX.Element {
+  const [search] = useSearchParams();
   const { onHelp, helpOverlay } = useHelp('settings-images');
   const { data: settings } = useSettings();
   const update = useUpdateSettings();
@@ -30,7 +33,7 @@ export function SettingsImagesPage(): JSX.Element {
   return (
     <PageScaffold
       crumbs={[{ label: 'My Settings', to: '/app/settings' }, { label: 'Images' }]}
-      back="/app/settings"
+      back={safeReturnPath(search.get('return'), '/app/settings')}
       onHelp={onHelp}
     >
       {helpOverlay}

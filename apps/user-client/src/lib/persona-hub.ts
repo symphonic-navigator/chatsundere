@@ -2,6 +2,7 @@
 import { getCanonical, isUnsuitableAsBackgroundWorker } from '@chatsundere/llm-unified';
 import type { MindspaceRow, PersonaRow } from '../boot/client-data-db.js';
 import { hasBackgroundHelper } from '../data/resolve-background-offering.js';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from './persona-defaults.js';
 
 /** A persona that cannot yet chat: missing instructions or a complete model choice. */
 export function isPersonaIncomplete(p: PersonaRow): boolean {
@@ -15,10 +16,27 @@ export function missingRequirement(p: PersonaRow): 'model' | 'instructions' | nu
   return null;
 }
 
+/** The hub's calm cue for an incomplete persona, naming only what is actually
+ *  missing; null when the persona can chat. */
+export function incompleteCue(p: PersonaRow): string | null {
+  const noModel = !p.canonicalId || !p.providerId || !p.modelId;
+  const noInstructions = !p.instructions.trim();
+  const name = p.name || 'this persona';
+  if (noModel && noInstructions)
+    return `Add an instruction and pick a model, then ${name} can chat.`;
+  if (noModel) return `Pick a model, then ${name} can chat.`;
+  if (noInstructions) return `Add an instruction, then ${name} can chat.`;
+  return null;
+}
+
+/** Hub tile meta for the Instructions section. */
 export function instructionsMeta(p: PersonaRow): string {
   if (!p.instructions.trim()) return 'Needs setup';
   const voice = p.chatsundereTonality ? 'Chatsundere voice' : 'Plain voice';
-  return p.adultPersona ? `${voice} · Adult` : voice;
+  const meta = p.adultPersona ? `${voice} · Adult` : voice;
+  // A persona still on the default instruction is flagged quietly — an
+  // invitation to personalise, not a nag.
+  return p.instructions === DEFAULT_PERSONA_INSTRUCTIONS ? `Default · ${meta}` : meta;
 }
 
 export function roleplayMeta(p: PersonaRow): string {

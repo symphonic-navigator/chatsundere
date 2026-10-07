@@ -21,6 +21,7 @@ import {
   ChatsuneImportControl,
 } from '../../../components/persona-editor/ChatsuneImportControl.js';
 import { PostImportNote } from '../../../components/persona-editor/PostImportNote.js';
+import { RecentChatsAccordion } from '../../../components/persona-hub/RecentChatsAccordion.js';
 import { ExportOverlay } from '../../../components/transfer/ExportOverlay.js';
 import { Button } from '../../../components/ui/Button.js';
 import { NavTile } from '../../../components/ui/NavTile.js';
@@ -36,9 +37,11 @@ import { hasBackgroundHelper } from '../../../data/resolve-background-offering.j
 import { useSettings } from '../../../data/settings.js';
 import { normaliseAvatar } from '../../../lib/avatar-normalise.js';
 import { resolveImportedNsfw } from '../../../lib/chatsune-import/nsfw.js';
+import { instructionsOrDefault } from '../../../lib/persona-defaults.js';
 import { FONT_VAR } from '../../../lib/persona-font.js';
 import {
   fontVoiceMeta,
+  incompleteCue,
   instructionsMeta,
   integrationsMeta,
   isPersonaIncomplete,
@@ -286,7 +289,7 @@ export function PersonaHub(): JSX.Element {
           ? {
               name: a.persona.name,
               tagline: a.persona.tagline,
-              instructions: a.persona.instructions,
+              instructions: instructionsOrDefault(a.persona.instructions),
             }
           : {}),
       });
@@ -390,26 +393,26 @@ export function PersonaHub(): JSX.Element {
           >
             New Chat
           </Button>
-          <Button disabled title="Coming soon — a chat that leaves nothing in memory">
-            New Incognito
-          </Button>
           <Button
-            disabled={!recentChat}
-            title={!recentChat ? 'No chats with this persona yet' : undefined}
-            onClick={() => {
-              if (id) navigate(`/app/history?personaId=${id}`);
-            }}
+            className="col-span-2"
+            disabled
+            title="Coming soon — a chat that leaves nothing in memory"
           >
-            History
+            New Incognito
           </Button>
         </div>
 
-        {/* Incomplete persona cue — shown instead of gold on any button */}
+        {/* Incomplete persona cue — names only what is missing (spec §4.3) */}
         {incomplete ? (
-          <p className="text-[11px] text-paper-soft">
-            Add an instruction and pick a model, then {persona.name || 'this persona'} can chat.
-          </p>
+          <p className="text-[11px] text-paper-soft">{incompleteCue(persona)}</p>
         ) : null}
+
+        {/* A2. Recent chats — the persona's history without leaving it (spec §2) */}
+        <RecentChatsAccordion
+          personaId={persona.id}
+          chats={chats.data}
+          returnTo={`${location.pathname}${location.search}`}
+        />
 
         {/* B. Identity hero ───────────────────────────────────────────────── */}
         <section className="rounded-card border border-white/5 bg-white/[0.02] p-3">

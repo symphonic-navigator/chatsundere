@@ -21,6 +21,7 @@ import { QK } from '../../../data/queryKeys.js';
 import { useSettings } from '../../../data/settings.js';
 import { normaliseAvatar } from '../../../lib/avatar-normalise.js';
 import { resolveImportedNsfw } from '../../../lib/chatsune-import/nsfw.js';
+import { instructionsOrDefault } from '../../../lib/persona-defaults.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -85,7 +86,7 @@ export function PersonaCreate(): JSX.Element {
         ? {
             name: a.persona.name,
             tagline: a.persona.tagline,
-            instructions: a.persona.instructions,
+            instructions: instructionsOrDefault(a.persona.instructions),
           }
         : {}),
     }));

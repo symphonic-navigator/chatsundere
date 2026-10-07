@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { KnowledgeSection } from '../../../components/persona-editor/KnowledgeSection.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { usePersonaEditing } from './use-persona-editing.js';
 
 /**
@@ -17,10 +18,11 @@ export function PersonaKnowledge(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { onHelp, helpOverlay } = useHelp('persona-knowledge');
   const { persona, patch } = usePersonaEditing(id ?? null);
+  const [search] = useSearchParams();
+  const back = safeReturnPath(search.get('return'), `/app/persona/${id ?? ''}`);
 
   // ── Guard: unknown persona ────────────────────────────────────────────────
   if (persona === null) {
-    const back = `/app/persona/${id ?? ''}`;
     return (
       <PageScaffold crumbs={[{ label: 'My Circle', to: '/app/circle' }]} back={back}>
         <div
@@ -45,21 +47,19 @@ export function PersonaKnowledge(): JSX.Element {
           { label: 'Persona', to: `/app/persona/${id ?? ''}` },
           { label: 'Knowledge' },
         ]}
-        back={`/app/persona/${id ?? ''}`}
+        back={back}
       >
         <div data-testid="persona-knowledge" className="px-4 pt-4" />
       </PageScaffold>
     );
   }
 
-  const back = `/app/persona/${id}`;
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <PageScaffold
       crumbs={[
         { label: 'My Circle', to: '/app/circle' },
-        { label: persona.name || 'Persona', to: back },
+        { label: persona.name || 'Persona', to: `/app/persona/${id}` },
         { label: 'Knowledge' },
       ]}
       back={back}

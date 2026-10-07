@@ -774,3 +774,27 @@ later Laura sweep does not re-flag them:
   - An activation slower than 5 s makes the applying tab show the overlay instead of
     reloading — fails safe with one Reload tap.
 
+## 2026-10-07 — Hub "My Circle" crumb follows `?return=` (Laura spec-pass on persona quick access)
+
+- **Affected flow / surface:** The persona hub breadcrumb navigation (`hub.tsx`, ~line 341).
+- **Finding (soft, pre-existing):** `hub.tsx` uses `returnPath` for the "My Circle" breadcrumb. Arriving with `?return=<chat>` — now also from the chat quick menu — the crumb labelled "My Circle" leads back to the chat instead of to the circle.
+- **Mode:** spec-pass.
+- **Criterion:** breadcrumb consistency / predictable navigation.
+- **Rationale for deferral:** pre-existing behaviour; the spec keeps breadcrumbs unchanged. The fix belongs to a hub-wide navigation pass: the crumb should always go to `/app/circle`, and only the back control should follow `?return=`.
+- **Follow-up commitment:** Address at the next hub design iteration; otherwise bubble up at the v0.1.0 release cut.
+- **Chris sign-off:** Not required (soft, pre-existing).
+
+
+## 2026-10-08 — Image-model picker softs (Laura pre-squash pass on unified image models)
+
+No hard defects. One soft was fixed before the squash: an unusable family's reason now comes from the offering a tap would pick (recommended first, then the first one), so hint and pick agree (`tti-picker-model.ts`). Deferred:
+
+- **Stale reason is long and names the provider twice** — `reasonFor` (`ImageGenerationSection.tsx`) returns the full "what to do" sentence, which `config-views.tsx` appends to the variant label and the identity line ("1 · xAI — xAI is not set up — add it under Upstream Providers above"). Wraps to two lines at 380 px. Fix: return a short reason ("not set up") for the variant button and keep the full sentence for the identity line and family-tap line.
+- **A retired offering silently turns into unset** — when `upgradeImageSlot` returns null, the user's earlier choice disappears without a word. Approved behaviour in spec §6.1, no ref is retired today. Fix when the first offering is retired: one line above the picker naming the old model.
+- **Direct xAI offering shows no version** — `xai.ts` `displayName: 'Grok Imagine'` while nano-gpt carries "Grok Imagine 2.0"; with only xAI set up the identity line is the only place the version could show. Needs the actual upstream version confirmed before renaming.
+- **Identical latency hints on the xAI Quality row** — every cell is "~12 s", so the hint carries no signal. Fix: omit the hint when all of an offering's latencies are equal.
+- **Mode:** pre-squash. **Criterion:** least astonishment / ND-calm. **Follow-up commitment:** next touch of the image-generation section. **Chris sign-off:** not required (soft).
+
+## 2026-10-08 — Persona quick access softs (Laura pre-squash pass)
+
+No hard defects. Both softs were fixed before the squash: Circle cards no longer show the default instruction as a subtitle (`circle.tsx`, the excerpt fallback stays for custom instructions), and the cleared Custom Instructions field shows the default as its placeholder (`instructions.tsx`), so emptying it visibly keeps the default. Nothing deferred. Laura's verdict on the open design question is recorded here: an empty subtitle beats a "No tagline yet" filler, which would nag.

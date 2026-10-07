@@ -5,6 +5,7 @@ import type {
   ProviderRow,
   SettingsRow,
 } from '../../../boot/client-data-db.js';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../../lib/persona-defaults.js';
 
 export type DraftPersona = Omit<PersonaRow, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -24,7 +25,7 @@ export function defaultDraft(
     tagline: '',
     colour: defaultMindspace?.palette.accent ?? '#c9a84c',
     font: 'sans',
-    instructions: '',
+    instructions: DEFAULT_PERSONA_INSTRUCTIONS,
     canonicalId: null,
     providerId: firstEnabled?.id ?? '',
     modelId: '',

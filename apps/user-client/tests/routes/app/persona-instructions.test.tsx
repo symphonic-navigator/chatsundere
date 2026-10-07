@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../../src/lib/persona-defaults.js';
 import { PersonaInstructions } from '../../../src/routes/app/persona/instructions.js';
 
 // ── Shared stable persona fixtures ───────────────────────────────────────────
@@ -19,7 +20,7 @@ const BASE_PERSONA = {
   providerId: 'pv1',
   modelId: 'glm-4-flash',
   mindspaceId: null,
-  aboutMeOverride: null,
+  aboutMeOverride: null as string | null,
   textureOverride: null,
   temperature: 0.85,
   adultPersona: false,
@@ -174,5 +175,73 @@ describe('PersonaInstructions — Custom Instructions field', () => {
     await waitFor(() => expect(screen.getByTestId('persona-instructions')).toBeInTheDocument());
 
     expect(screen.queryByText(/needs setup/i)).toBeNull();
+  });
+});
+
+describe('PersonaInstructions — default instruction clears on focus', () => {
+  it('focusing the exact default clears the field', async () => {
+    state.persona = { ...BASE_PERSONA, instructions: DEFAULT_PERSONA_INSTRUCTIONS };
+    renderPage('p-1');
+    const textarea = (await screen.findByRole('textbox', {
+      name: /custom instructions/i,
+    })) as HTMLTextAreaElement;
+    expect(textarea.value).toBe(DEFAULT_PERSONA_INSTRUCTIONS);
+    fireEvent.focus(textarea);
+    expect(textarea.value).toBe('');
+  });
+
+  it('blurring while still empty restores the default without a write', async () => {
+    state.persona = { ...BASE_PERSONA, instructions: DEFAULT_PERSONA_INSTRUCTIONS };
+    renderPage('p-1');
+    const textarea = (await screen.findByRole('textbox', {
+      name: /custom instructions/i,
+    })) as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    fireEvent.blur(textarea);
+    expect(textarea.value).toBe(DEFAULT_PERSONA_INSTRUCTIONS);
+    expect(state.patch).not.toHaveBeenCalled();
+  });
+
+  it('typing after the clear saves the new text', async () => {
+    state.persona = { ...BASE_PERSONA, instructions: DEFAULT_PERSONA_INSTRUCTIONS };
+    renderPage('p-1');
+    const textarea = await screen.findByRole('textbox', { name: /custom instructions/i });
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: 'Speak like a pirate.' } });
+    fireEvent.blur(textarea);
+    await waitFor(() =>
+      expect(state.patch).toHaveBeenCalledWith({ instructions: 'Speak like a pirate.' }),
+    );
+  });
+
+  it('an edited default is not cleared on focus', async () => {
+    const edited = `${DEFAULT_PERSONA_INSTRUCTIONS} And funny.`;
+    state.persona = { ...BASE_PERSONA, instructions: edited };
+    renderPage('p-1');
+    const textarea = (await screen.findByRole('textbox', {
+      name: /custom instructions/i,
+    })) as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    expect(textarea.value).toBe(edited);
+  });
+
+  it('a non-default value cleared by hand still saves empty (unchanged behaviour)', async () => {
+    state.persona = { ...BASE_PERSONA, instructions: 'Be wise.' };
+    renderPage('p-1');
+    const textarea = await screen.findByRole('textbox', { name: /custom instructions/i });
+    fireEvent.focus(textarea);
+    fireEvent.change(textarea, { target: { value: '' } });
+    fireEvent.blur(textarea);
+    await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ instructions: '' }));
+  });
+
+  it('the About Me field never clears on focus, even with the default text', async () => {
+    state.persona = { ...BASE_PERSONA, aboutMeOverride: DEFAULT_PERSONA_INSTRUCTIONS };
+    renderPage('p-1');
+    const about = (await screen.findByRole('textbox', {
+      name: /what the model knows about you/i,
+    })) as HTMLTextAreaElement;
+    fireEvent.focus(about);
+    expect(about.value).toBe(DEFAULT_PERSONA_INSTRUCTIONS);
   });
 });

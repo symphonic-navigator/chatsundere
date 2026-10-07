@@ -15,6 +15,7 @@ import { useFilteredPersonas } from '../../data/personas.js';
 import { useSettings } from '../../data/settings.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { historyCountLabel } from '../../lib/history-count.js';
+import { safeReturnPath } from '../../lib/safe-return.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 export function HistoryPage(): JSX.Element {
@@ -30,7 +31,10 @@ export function HistoryPage(): JSX.Element {
   const deleteChat = useDeleteChat();
 
   const initialPersonaId = search.get('personaId');
-  const [searchQuery, setSearchQuery] = useState('');
+  // `?q=` seeds the search once (the hub's Recent chats filter carries its text
+  // here); the field is not mirrored back into the URL.
+  const [searchQuery, setSearchQuery] = useState(() => search.get('q') ?? '');
+  const backPath = safeReturnPath(search.get('return'), '/app');
   const [filterPersonaId, setFilterPersonaId] = useState<string | null>(initialPersonaId);
   const [tab, setTab] = useState<'chats' | 'bookmarks'>('chats');
   const bookmarks = useBookmarks();
@@ -120,7 +124,7 @@ export function HistoryPage(): JSX.Element {
   return (
     <PageScaffold
       crumbs={[{ label: 'My History' }]}
-      back="/app"
+      back={backPath}
       onHelp={onHelp}
       stickyHeader={
         <>

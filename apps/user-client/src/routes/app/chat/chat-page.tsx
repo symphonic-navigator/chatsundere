@@ -12,6 +12,7 @@ import { SyncTombstoneBreadcrumb } from '../../../components/SyncTombstoneBreadc
 import { ArtefactPicker } from '../../../components/artefact/ArtefactPicker.js';
 import { BottomAffordance } from '../../../components/chat/BottomAffordance.js';
 import { BranchSheet } from '../../../components/chat/BranchSheet.js';
+import { ChatQuickMenu, anchorFrom } from '../../../components/chat/ChatQuickMenu.js';
 import { ChatStream } from '../../../components/chat/ChatStream.js';
 import { CompactConfirmCard } from '../../../components/chat/CompactConfirmCard.js';
 import { CompactingOverlay } from '../../../components/chat/CompactingOverlay.js';
@@ -98,6 +99,9 @@ export function ChatPage(): JSX.Element {
   const setLazy = useCurrentChatStore((s) => s.setLazy);
   const setInteractionMode = useCurrentChatStore((s) => s.setInteractionMode);
   const togglePin = useCurrentChatStore((s) => s.togglePin);
+  const quickMenuAnchor = useCurrentChatStore((s) => s.quickMenuAnchor);
+  const openQuickMenu = useCurrentChatStore((s) => s.openQuickMenu);
+  const closeQuickMenu = useCurrentChatStore((s) => s.closeQuickMenu);
   // Effective mode: desktop forces interaction+pinned at read time (spec
   // 2026-07-18 §5.2). Store setters below still write the mobile truth.
   const { isInteractionMode, isPinned } = useEffectiveChatMode();
@@ -463,12 +467,18 @@ export function ChatPage(): JSX.Element {
   // you're composing. Ignored while already in interaction mode, while any
   // other field/editable is focused (chat-title rename, etc.), and when there
   // is no persona to compose to. The cockpit's autoFocus lands the caret.
+  // Also ignored while the quick menu is open and on interactive targets
+  // (buttons, links, menu items — the logo trigger included): preventDefault
+  // there would cancel the element's own Enter activation.
   useEffect(() => {
     if (isInteractionMode || !effectivePersona) return undefined;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Read live: this listener is not re-bound when the menu opens.
+      if (useCurrentChatStore.getState().quickMenuAnchor !== null) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (t?.closest?.('button, a, [role="menuitem"], select')) return;
       e.preventDefault();
       setAutoFollow(true);
       setInteractionMode(true);
@@ -528,6 +538,18 @@ export function ChatPage(): JSX.Element {
     const returnUrl = `${location.pathname}${location.search}`;
     navigate(`/app/persona/${effectivePersona.id}?return=${encodeURIComponent(returnUrl)}`);
   };
+
+  const onOpenQuickMenu = (trigger: HTMLElement): void => {
+    openQuickMenu(anchorFrom(trigger));
+  };
+
+  // The quick menu never outlives its route: close it on any navigation
+  // (incl. chat → chat, where this page may stay mounted) and on unmount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on every location change by design
+  useEffect(() => {
+    closeQuickMenu();
+  }, [location.pathname, location.search, closeQuickMenu]);
+  useEffect(() => () => closeQuickMenu(), [closeQuickMenu]);
 
   const chat = chatQuery.data?.chat ?? null;
   const messages = chatQuery.data?.messages ?? [];
@@ -1159,7 +1181,7 @@ export function ChatPage(): JSX.Element {
             void useStreamManagerStore.getState().abortPreserve(chat?.id ?? activeChatId ?? '')
           }
           isStreamLive={isStreamLive}
-          onExit={onExitToEntranceHall}
+          onOpenQuickMenu={onOpenQuickMenu}
           onRenameChat={onRenameChat}
           onOpenPersonaEditor={onOpenPersonaEditor}
           onAttachFromTreasury={() => setPickerOpen(true)}
@@ -1191,6 +1213,24 @@ export function ChatPage(): JSX.Element {
           </div>
         </PickerOverlay>
       ) : null}
+
+      <ChatQuickMenu
+        anchor={quickMenuAnchor}
+        persona={
+          effectivePersona
+            ? {
+                id: effectivePersona.id,
+                name: effectivePersona.name,
+                colour: effectivePersona.colour,
+              }
+            : null
+        }
+        activeChatId={activeChatId}
+        returnTo={`${location.pathname}${location.search}`}
+        onClose={closeQuickMenu}
+        onEntranceHall={onExitToEntranceHall}
+        onNavigate={(to) => navigate(to)}
+      />
     </div>
   );
 }

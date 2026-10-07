@@ -45,7 +45,8 @@ interface Props {
   onCancelEdit: () => void;
   onStop: () => void;
   isStreamLive: boolean;
-  onExit: () => void;
+  /** Opens the chat quick menu anchored to the hamburger (spec §3.1). */
+  onOpenQuickMenu: (trigger: HTMLElement) => void;
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
   onAttachFromTreasury?: () => void;
@@ -111,9 +112,9 @@ export function InteractionMode(p: Props): JSX.Element {
       if (!target || !containerRef.current) return;
       if (containerRef.current.contains(target)) return;
 
-      // A tap on the brand logo is a deliberate navigation back to the Entrance
-      // Hall, not an idle outside-tap: let its click through to React Router
-      // rather than swallowing it. Without this the logo is dead while unpinned.
+      // A tap on the brand logo deliberately opens the chat quick menu (spec
+      // §3.1), not an idle outside-tap: let its click through rather than
+      // swallowing it. Without this the logo is dead while unpinned.
       if (target instanceof Element && target.closest('.brand-logo')) return;
 
       // The lightbox is portalled to <body>, so it lives outside this container —
@@ -129,9 +130,13 @@ export function InteractionMode(p: Props): JSX.Element {
       // inside the sheet is swallowed (and the cockpit collapses) instead of reaching
       // the control, so e.g. opening an artefact from the sidebar — or selecting one
       // in the attach picker — over an unpinned cockpit takes two taps.
+      // The chat quick menu is portalled to <body> too; a tap there must
+      // navigate, not collapse the cockpit (spec §3.5).
       if (
         target instanceof Element &&
-        target.closest('.branch-sheet-root, .artefact-picker-root, .document-picker-root')
+        target.closest(
+          '.branch-sheet-root, .artefact-picker-root, .document-picker-root, .chat-quick-menu-root',
+        )
       )
         return;
 
@@ -183,7 +188,7 @@ export function InteractionMode(p: Props): JSX.Element {
         chat={p.chat}
         usedTokens={p.usedTokens}
         contextWindow={p.offering ? resolveContextWindow(p.persona, p.offering) : null}
-        onExit={p.onExit}
+        onOpenQuickMenu={p.onOpenQuickMenu}
         onRenameChat={p.onRenameChat}
         onOpenPersonaEditor={p.onOpenPersonaEditor}
         compactable={p.compactable}

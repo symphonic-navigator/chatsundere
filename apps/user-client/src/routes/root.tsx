@@ -1,5 +1,5 @@
 import { useSessionStore } from '@chatsundere/ui-shared';
-import { ArrowLeft } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ import { SplashContext } from '../components/SplashContext.js';
 import { SplashOverlay } from '../components/SplashOverlay.js';
 import { SyncSurfaceHost } from '../components/SyncSurfaceHost.js';
 import { Toast } from '../components/Toast.js';
+import { anchorFrom } from '../components/chat/ChatQuickMenu.js';
 import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay.js';
 import { copy } from '../lib/copy.js';
 import { useBootStore } from '../state/boot.store.js';
@@ -50,6 +51,8 @@ export function Root() {
   // (spec 2026-07-18 §5.3).
   const { isInteractionMode } = useEffectiveChatMode();
   const chatHeader = useCurrentChatStore((s) => s.chatHeader);
+  const quickMenuOpen = useCurrentChatStore((s) => s.quickMenuAnchor !== null);
+  const openQuickMenu = useCurrentChatStore((s) => s.openQuickMenu);
 
   // Chrome trims down inside a chat: the username + connectivity badge drop
   // away in both chat sub-modes (reading and cockpit-open); in read-only mode
@@ -132,33 +135,55 @@ export function Root() {
               : 'px-4 py-3 lg:px-6 lg:py-4'
           }`}
         >
-          {/* Left cluster — exit/logo + persona avatar (reading-chat mode) +
-              transient background-stream badge. In reading-chat mode the logo
-              shrinks to the small variant and gains an arrow prefix, making the
-              whole affordance an explicit "leave chat" tap to the Entrance Hall.
-              The avatar button navigates to the persona hub. */}
+          {/* Left cluster — logo + persona avatar (reading-chat mode) +
+              transient background-stream badge. Inside a chat the logo is no
+              longer a "leave chat" tap: it opens the chat quick menu (whose
+              first entry leaves to the Entrance Hall); in reading-chat mode it
+              shrinks to the small variant. Off the chat route it stays the
+              home link. The avatar button navigates to the persona hub. */}
           <div className="flex min-w-0 items-center gap-2">
-            <Link
-              to={isReadingChat ? '/app' : '/'}
-              className={`brand-logo${isReadingChat ? ' brand-logo-small' : ''} flex items-center gap-1`}
-              style={{ opacity: topbarLogoVisible ? 1 : 0 }}
-              aria-label={isReadingChat ? 'Leave chat' : 'Chatsundere home'}
-            >
-              {isReadingChat && <ArrowLeft size={18} aria-hidden="true" />}
-              <span
-                ref={(el) => {
-                  topbarLogoRef.current = el;
-                }}
-                className="brand-logo-text"
+            {isChatRoute ? (
+              // Inside a chat the logo opens the quick menu (spec §3.1) in both
+              // reading and interaction mode; leaving is its first entry.
+              <button
+                type="button"
+                className={`brand-logo${isReadingChat ? ' brand-logo-small' : ''} flex items-center gap-1`}
+                style={{ opacity: topbarLogoVisible ? 1 : 0 }}
+                aria-label="Quick menu"
+                aria-haspopup="menu"
+                aria-expanded={quickMenuOpen}
+                onClick={(e) => openQuickMenu(anchorFrom(e.currentTarget))}
               >
-                Chatsundere
-              </span>
-              {!isReadingChat && (
+                <span
+                  ref={(el) => {
+                    topbarLogoRef.current = el;
+                  }}
+                  className="brand-logo-text"
+                >
+                  Chatsundere
+                </span>
+                <ChevronDown size={14} aria-hidden="true" className="text-paper-soft" />
+              </button>
+            ) : (
+              <Link
+                to="/"
+                className="brand-logo flex items-center gap-1"
+                style={{ opacity: topbarLogoVisible ? 1 : 0 }}
+                aria-label="Chatsundere home"
+              >
+                <span
+                  ref={(el) => {
+                    topbarLogoRef.current = el;
+                  }}
+                  className="brand-logo-text"
+                >
+                  Chatsundere
+                </span>
                 <span className="brand-logo-twinkle" aria-hidden="true">
                   ✦
                 </span>
-              )}
-            </Link>
+              </Link>
+            )}
             {isReadingChat && chatHeader ? (
               <button
                 type="button"

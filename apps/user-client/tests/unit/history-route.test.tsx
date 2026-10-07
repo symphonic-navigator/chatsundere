@@ -4,7 +4,7 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
@@ -117,6 +117,11 @@ async function seed(args: { adultMode?: 'nsfw' | 'sfw' } = {}): Promise<{
   return { sfwId, nsfwId, chatA, chatB };
 }
 
+function LocationProbe(): JSX.Element {
+  const loc = useLocation();
+  return <div data-testid="location">{`${loc.pathname}${loc.search}`}</div>;
+}
+
 function renderHistory(
   initialUrl = '/app/history',
 ): { qc: QueryClient } & ReturnType<typeof render> {
@@ -124,8 +129,10 @@ function renderHistory(
   const result = render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[initialUrl]}>
+        <LocationProbe />
         <Routes>
           <Route path="/app/history" element={<HistoryPage />} />
+          <Route path="/app/persona/:id" element={<div data-testid="hub" />} />
           <Route path="/app/circle" element={<div data-testid="circle" />} />
           <Route path="/app/chat/:id" element={<div data-testid="chat" />} />
           <Route path="/app/chat/new" element={<div data-testid="chat-new" />} />
@@ -404,5 +411,53 @@ describe('HistoryPage', () => {
     await waitFor(() =>
       expect(document.querySelectorAll('[data-history-row]').length).toBeGreaterThan(0),
     );
+  });
+});
+
+describe('HistoryPage — q and return parameters', () => {
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+
+  it('?q= pre-fills the search field and filters', async () => {
+    await seed();
+    renderHistory('/app/history?q=book');
+    await screen.findByText('about books');
+    const input = document.querySelector('input[type="search"]') as HTMLInputElement;
+    expect(input.value).toBe('book');
+    expect(screen.queryByText('private chat')).toBeNull();
+  });
+
+  it('?return= drives the back control', async () => {
+    const { sfwId } = await seed();
+    renderHistory(
+      `/app/history?personaId=${sfwId}&return=${encodeURIComponent(`/app/persona/${sfwId}`)}`,
+    );
+    await screen.findByText('about books');
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('hub')).toBeInTheDocument());
+  });
+
+  it('an off-origin ?return= falls back to /app', async () => {
+    await seed();
+    renderHistory(`/app/history?return=${encodeURIComponent('//evil.example')}`);
+    await screen.findByText('about books');
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('entrance')).toBeInTheDocument());
+  });
+
+  it('clearing the persona filter keeps return and q in the URL', async () => {
+    const { sfwId } = await seed();
+    const ret = encodeURIComponent('/app/persona/x');
+    renderHistory(`/app/history?personaId=${sfwId}&q=book&return=${ret}`);
+    await screen.findByText('about books');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by persona' }));
+    fireEvent.click(screen.getByRole('button', { name: 'All personas' }));
+    await waitFor(() => {
+      const loc = screen.getByTestId('location').textContent ?? '';
+      expect(loc).not.toContain('personaId=');
+      expect(loc).toContain('q=book');
+      expect(loc).toContain(`return=${ret}`);
+    });
   });
 });

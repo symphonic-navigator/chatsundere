@@ -14,8 +14,8 @@ Use the **Import** section to bring across a persona export. In create mode the 
 
 You land on the persona hub, where you can:
 
-- **Chat** — start a new conversation or continue the most recent one.
+- **Chat** — start a new conversation, continue the most recent one, or open **Recent chats** to see and filter this persona's last ten chats without leaving the page.
 - **Edit** any field — each sub-page saves automatically as you type; there is no Save button.
 - **Avatar, voice, model, mindspace** — all configurable from the hub.
 
-The persona is ready to chat as soon as it has a name and a model selected.
+The persona is ready to chat as soon as it has a name and a model selected — it starts with a default instruction you can rewrite any time.

@@ -12,7 +12,7 @@ Marks this persona as adult-oriented, unlocking explicit content in its system p
 
 ## Custom Instructions
 
-The core of the persona — write who they are, how they think, and how they speak. This field is required before the persona can start a chat.
+The core of the persona — write who they are, how they think, and how they speak. A new persona starts with a simple default — *You are a friendly assistant.* — so it can chat straight away. Tap the field and the default clears so you can write your own; leave it empty and the default comes back.
 
 ## What the Model Knows About You
 
