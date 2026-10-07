@@ -1,6 +1,6 @@
 # Persona Quick Access — Design Specification
 
-**Date:** 2026-10-07 · **Author:** Liz, brainstormed with Chris · **Status:** approved in conversation by Chris (2026-10-07), pending written-spec review and Laura spec-pass
+**Date:** 2026-10-07 · **Author:** Liz, brainstormed with Chris · **Status:** approved in conversation by Chris (2026-10-07); Laura spec-pass folded in (3 hard, 9 soft — see §8); pending Chris's written-spec review
 
 ## 1. Purpose and Scope
 
@@ -31,14 +31,17 @@ This is the third piece of the v0.2.30 omnibus release.
 
 - **A.** A "Recent chats" accordion on the persona hub replacing the `History`
   button (§2).
-- **B.** A chat quick menu opened from the brand logo on the chat route (§3).
+- **B.** A chat quick menu opened from the brand logo (and, in interaction
+  mode, the hamburger) on the chat route (§3).
 - **C.** A default persona instruction that clears on focus (§4).
-- `?return=` support on the three quick-menu destinations that lack a return path (§3.5).
+- `?return=` support on the four quick-menu destinations that lack it (§3.6).
+- Hub incomplete-cue copy derived from what is actually missing (§4.3).
+- The Instructions tile meta flags the default instruction (§4.4).
 
 ### 1.3 Out of scope
 
 - Any change to the global `/app/history` page beyond reading `?q=` and
-  `?return=` (§2.5, §3.5).
+  `?return=` (§2.5, §3.6).
 - Rename, delete, or overflow actions in the accordion rows — those stay on the
   History page.
 - Migrating existing personas' instructions. Existing personas are untouched.
@@ -55,6 +58,16 @@ touches `packages/llm-unified/src/tti/**`, `apps/user-client/src/components/imag
 `/app/settings/images`, whose page file (`routes/app/settings/images.tsx`) the
 image plan does not modify. No Dexie version bump: all new device state lives in
 `localStorage`. The only expected merge point is `obsidian/STATUS-CLIENT-ONLY.md`.
+
+Files this work touches (all under `apps/user-client/src/`, none in the image
+plan): `routes/root.tsx`, `routes/app/chat/chat-page.tsx`,
+`components/chat/InteractionTopbar.tsx`, `components/chat/InteractionMode.tsx`,
+`components/chat/ChatQuickMenu.tsx` (new), `state/current-chat.store.ts`,
+`routes/app/persona/hub.tsx`, `routes/app/history.tsx`,
+`routes/app/persona-memory.tsx`, `routes/app/persona/knowledge.tsx`,
+`routes/app/settings/images.tsx`, `routes/app/persona/persona-draft.ts`,
+`routes/app/persona/create.tsx`, `routes/app/persona/instructions.tsx`,
+`lib/persona-hub.ts`, `content/help/*`, plus their tests.
 
 ## 2. A — Recent Chats Accordion (`routes/app/persona/hub.tsx`)
 
@@ -80,7 +93,7 @@ EXPANDED
 │  Evening talk about Bach    2h  │
 │  Tax return           yesterday │
 │  …  (at most 10)                │
-│                       More…  →  │
+│               All in History →  │
 └─────────────────────────────────┘
 ```
 
@@ -88,9 +101,10 @@ EXPANDED
   `aria-controls` covering the chevron and the "Recent chats" label.
 - **Collapsed:** the right end of the header row carries a `History →` link.
   It is a separate focusable element, not part of the toggle.
-- **Expanded:** the `History →` link is not rendered in the header; instead a
-  `More… →` link closes the list. It is one destination with two positions —
-  the label reflects the state.
+- **Expanded:** the `History →` link is not rendered in the header; instead an
+  `All in History →` link closes the list. It is one destination with two
+  positions; the expanded label says where it leads, so it never reads as
+  "more rows here".
 - Styling follows the hub's existing section cards
   (`rounded-card border border-white/5 bg-white/[0.02] p-3`); the filter input
   matches the create form's inputs.
@@ -114,14 +128,14 @@ EXPANDED
 
 | State | Behaviour |
 |---|---|
-| Persona has no chats | The header toggle and `History →` are rendered **disabled** with the tooltip `No chats with this persona yet` (the existing History button's copy). Disabled over hidden. |
-| Filter matches nothing | One muted line `No chats match "<text>"` in place of the rows; `More… →` stays visible (it carries the filter text — §2.5). |
-| Chats still loading | The list area renders empty (no spinner); the toggle stays usable. |
+| Persona has no chats (chats **loaded** and empty) | The header toggle is **disabled**, and in place of `History →` the header shows a muted inline `No chats yet` — a visible reason, not a tooltip (tooltips do not show on touch). Disabled over hidden. |
+| Filter matches nothing | One muted line `No chats match "<text>"` in place of the rows; `All in History →` stays visible (it carries the filter text — §2.5). |
+| Chats still loading (`chats.data === undefined`) | Rendered as if chats exist: toggle and `History →` enabled, the list area empty (no spinner). Never flash the disabled state while loading — note `hub.tsx` ~line 171 currently folds "loading" and "empty" together into `recentChat === null`; the accordion must distinguish them. |
 | Persona incomplete | The accordion is unaffected — history remains reachable for an incomplete persona with chats. |
 
 ### 2.5 Link target
 
-Both `History →` and `More… →` navigate to:
+Both `History →` and `All in History →` navigate to:
 
 ```
 /app/history?personaId=<id>[&q=<filter>]&return=<hub path incl. its own search>
@@ -131,7 +145,7 @@ Both `History →` and `More… →` navigate to:
 - `routes/app/history.tsx` reads `q` once as the initial value of its search
   field (`useState(() => search.get('q') ?? '')`). It does **not** mirror the
   search field back into the URL.
-- `return` is honoured as described in §3.5, so the History page's back control
+- `return` is honoured as described in §3.6, so the History page's back control
   returns to the hub (and the hub's own `?return=` survives the round trip).
 
 ### 2.6 Persisted open/closed state
@@ -144,91 +158,129 @@ Both `History →` and `More… →` navigate to:
 
 ## 3. B — Chat Quick Menu
 
-### 3.1 Trigger
+### 3.1 Triggers
 
-- Only on the chat route (`isExactChatRoute(location.pathname)`), in **both**
-  reading and interaction mode.
-- The brand logo becomes a `<button>` with `aria-haspopup="menu"` and
-  `aria-expanded`, accessible name `Quick menu`.
-- The `ArrowLeft` prefix is removed in reading mode. A small `▾` glyph
-  (`ChevronDown`, ~14 px, `text-paper-soft`) follows the logo text in both
-  modes on the chat route — a visible affordance for the menu.
-- Off the chat route, the logo is unchanged: a link to `/` with label
-  `Chatsundere home`.
-- The existing `InteractionMode.tsx` outside-pointer exemption for
-  `.brand-logo` stays; it now lets the tap open the menu instead of navigating.
-  Opening the menu does not change the cockpit's open/pinned state.
+The quick menu has **two triggers and one surface**:
 
-### 3.2 Presentation
+1. **The brand logo** (`routes/root.tsx`), on the chat route
+   (`isExactChatRoute(location.pathname)`), in **both** reading and interaction
+   mode.
+   - It becomes a `<button>` with `aria-haspopup="menu"` and `aria-expanded`,
+     accessible name `Quick menu`.
+   - The `ArrowLeft` prefix is removed in reading mode. A small `▾` glyph
+     (`ChevronDown`, ~14 px, `text-paper-soft`) follows the logo text in both
+     modes on the chat route — a visible affordance for the menu.
+   - Off the chat route, the logo is unchanged: a link to `/` with label
+     `Chatsundere home`.
+2. **The interaction-mode hamburger** (`components/chat/InteractionTopbar.tsx`
+   ~line 70). Today it is `Exit to Entrance Hall` and navigates at once; with a
+   real menu one row above it, the two controls would swap their expected
+   meanings (Laura, spec-pass). It now opens the **same** quick menu, anchored
+   to the hamburger, with accessible name `Quick menu` and the same ARIA
+   attributes. Its `onExit` prop is replaced by an `onOpenQuickMenu(anchor)` prop.
+
+Leaving the chat therefore costs two taps in both modes (trigger →
+`Entrance Hall`), and the exit is always the menu's first entry.
+
+### 3.2 Ownership and state
+
+- `ChatQuickMenu` (new, `components/chat/ChatQuickMenu.tsx`) is rendered **once,
+  by `routes/app/chat/chat-page.tsx`**. Chat-page owns everything the menu needs:
+  `effectivePersona` (known for saved *and* lazy `/app/chat/new?personaId=…`
+  chats), `activeChatId`, `onExitToEntranceHall`, and `navigate`.
+- Open state lives in `state/current-chat.store.ts` as a new field
+  `quickMenuAnchor: { top: number; left: number; bottom: number } | null`
+  (`null` = closed) with setters `openQuickMenu(rect)` / `closeQuickMenu()`. The
+  logo (in `root.tsx`, outside chat-page) and the hamburger both call
+  `openQuickMenu(el.getBoundingClientRect())`. Chat-page resets it to `null` on
+  unmount and on route change.
+- Because the persona comes from `effectivePersona`, not from `chatHeader`, all
+  entries are enabled in a lazy, not-yet-sent chat. While `effectivePersona` is
+  still resolving (a momentary state on first paint), the persona group renders
+  disabled with the visible secondary line `Loading persona…` — never a
+  tooltip-only reason.
+
+### 3.3 Presentation
 
 ```
 Chatsundere ▾
-┌──────────────────┐ ░░░░░░░░
-│ Main menu        │ ░░ blur ░
-│──────────────────│ ░░░░░░░░
-│ ◯ Fable          │ ░░░░░░░░
-│ Memories         │ ░░░░░░░░
-│ History          │ ░░░░░░░░
-│ Knowledge        │ ░░░░░░░░
-│──────────────────│ ░░░░░░░░
-│ Image settings   │ ░░░░░░░░
-└──────────────────┘ ░░░░░░░░
+┌────────────────────────┐ ░░░░░░░░
+│ Entrance Hall          │ ░░ blur ░
+│────────────────────────│ ░░░░░░░░
+│ ◯ Fable                │ ░░░░░░░░
+│ New chat with Fable    │ ░░░░░░░░
+│ Memories               │ ░░░░░░░░
+│ History                │ ░░░░░░░░
+│ Knowledge              │ ░░░░░░░░
+│────────────────────────│ ░░░░░░░░
+│ Image settings         │ ░░░░░░░░
+└────────────────────────┘ ░░░░░░░░
 ```
 
-- A new component `components/chat/ChatQuickMenu.tsx`, rendered via a portal to
-  `<body>` so it overlays the topbar and the chat.
+- Rendered via a portal to `<body>` so it overlays the topbar and the chat.
+  The portal root carries the class `chat-quick-menu-root` (backdrop and card
+  both inside it).
 - A full-viewport backdrop: dimmed (`bg-black/50`) with `backdrop-blur-sm`.
   Where `backdrop-filter` is unsupported, the dimming alone suffices.
-- The card is anchored to the logo: its top-left aligns under the logo's
-  bounding rect (computed on open), clamped to the 16 px viewport gutter.
-  Minimum width 14 rem; item rows have at least 44 px tap height.
+- The card is anchored to its trigger: its top-left aligns under the anchor
+  rect, clamped to the 16 px viewport gutter. Minimum width 14 rem; item rows
+  have at least 44 px tap height.
 - The persona entry shows the persona's avatar (`PersonaAvatar`, 24 px) before
   the name, in the menu's default font.
-- Two thin separators group the entries: navigation-out / persona / settings.
+- Two thin separators group the entries: leave / persona / settings.
 - Motion: a short fade + 4 px drop-in (≤150 ms); none under
   `prefers-reduced-motion`.
 
-### 3.3 Entries
+### 3.4 Entries
 
-| Entry | Target |
+| Entry | Action |
 |---|---|
-| `Main menu` | `/app` (the Entrance Hall — the logo's previous destination) |
+| `Entrance Hall` | `onExitToEntranceHall()` — resets interaction mode, then navigates to `/app` (the same semantics as today's hamburger). The label matches the name the place carries everywhere else. |
 | `<Persona name>` | `/app/persona/<personaId>?return=<chat>` |
-| `Memories` | `/app/persona/<personaId>/memory?chat=<chatId>` (the memory page's existing cockpit convention — its back control already returns to the chat) |
+| `New chat with <Persona name>` | `/app/chat/new?personaId=<personaId>`. **Disabled** with the visible secondary line `You're in a new chat` when the current chat is itself a lazy, unsent chat (no `activeChatId`) — navigating there would be a no-op. |
+| `Memories` | `/app/persona/<personaId>/memory?return=<chat>` |
 | `History` | `/app/history?personaId=<personaId>&return=<chat>` |
 | `Knowledge` | `/app/persona/<personaId>/knowledge?return=<chat>` |
 | `Image settings` | `/app/settings/images?return=<chat>` |
 
 `<chat>` is `encodeURIComponent(location.pathname + location.search)`, exactly
-as the topbar's persona-avatar button builds it today.
+as `onOpenPersonaEditor` builds it today (`chat-page.tsx` ~line 527). For a
+lazy chat this keeps `?personaId=`, so back returns to the same unsent chat.
 
-The persona identity comes from `useCurrentChatStore((s) => s.chatHeader)`. When
-`chatHeader` is `null` (e.g. a fresh `/app/chat/new` before the header is set),
-the four persona entries render **disabled** with the label `Persona` and the
-tooltip `Available once the chat has loaded`; `Main menu` and `Image settings`
-stay enabled.
+Except for `Entrance Hall`, entries do not touch interaction mode: returning to
+the chat finds the cockpit as the user left it (today's avatar-button
+behaviour).
 
-### 3.4 Interaction
+### 3.5 Interaction
 
-- Opens on logo click/tap, or Enter/Space when the logo is focused.
+- Opens on trigger click/tap, or Enter/Space when the trigger is focused.
 - Closes on: tap on the backdrop, Escape, selecting an entry, or a route change.
+  Escape inside the menu closes **only** the menu (it must not also collapse the
+  cockpit).
 - Implemented as `role="menu"` with `role="menuitem"` children; arrow keys move
-  focus, focus moves to the first enabled item on open, and returns to the logo
-  on close (except after navigation).
+  focus, focus moves to the first enabled item on open, and returns to the
+  trigger on close (except after navigation).
 - While open, the rest of the app is `inert` behind the backdrop; the backdrop
   tap is consumed (it does not reach the chat underneath — no accidental message
   expansion).
+- **Cockpit interplay (Laura hard defect 1).** `InteractionMode.tsx` closes an
+  unpinned cockpit on any pointerdown outside its container and swallows the
+  following click. The portal is outside that container, so
+  `.chat-quick-menu-root` is **added to the exemption selector** at
+  `InteractionMode.tsx` ~line 132 (beside `.branch-sheet-root`, …). Result: with
+  an unpinned cockpit open, one tap on an entry navigates, and a backdrop tap
+  closes only the menu; the cockpit stays as it was. The existing `.brand-logo`
+  exemption stays.
 
-### 3.5 `?return=` on the destinations
+### 3.6 Return paths on the destinations
 
 The persona hub already honours `?return=` via `safeReturnPath`
-(`lib/safe-return.ts`), and the memory page already returns to the chat via its
-existing `?chat=<chatId>` parameter (`persona-memory.tsx` ~line 59) — neither
-changes. The other three destinations gain `?return=`, each with its current
-back target as the fallback:
+(`lib/safe-return.ts`) and does not change. The other four destinations gain
+`?return=`, each keeping its current back target as the fallback:
 
 | Page | File | Fallback (today's `back`) |
 |---|---|---|
+| Persona memory | `routes/app/persona-memory.tsx` | today's `backPath` (`?chat=<id>` → that chat, else the persona hub). `?return=` takes precedence over `?chat=`; the cockpit's existing `?chat=` links keep working unchanged. |
 | Persona knowledge | `routes/app/persona/knowledge.tsx` | `/app/persona/<id>` |
 | History | `routes/app/history.tsx` | `/app` |
 | Image settings | `routes/app/settings/images.tsx` | `/app/settings` |
@@ -262,7 +314,10 @@ Instructions field on `routes/app/persona/instructions.tsx`, an
   the field is cleared. Any other value — including the default with an edit —
   is left alone.
 - **On blur:** if the value is empty after trimming **and** the value at focus
-  time was the default, the default is restored and saved (no empty save).
+  time was the default, the draft is reset to the default. That is no change
+  against the stored value, so no write happens (`InlineEditTextarea`'s
+  unchanged-value de-dupe, ~line 49, already skips it) — tabbing through the
+  field never causes a sync write.
   If the value at focus time was something else, today's behaviour stands
   (empty saves as empty).
 - The behaviour lives in the instructions page (or a small wrapper there), not
@@ -272,6 +327,29 @@ Instructions field on `routes/app/persona/instructions.tsx`, an
 
 No change to the incomplete rule itself (empty instructions or no model). The
 default simply means a fresh persona is no longer incomplete on instructions.
+
+**Cue copy (Laura hard defect 2).** The hub's incomplete cue (`hub.tsx` ~line
+408) today always reads `Add an instruction and pick a model, then <name> can
+chat.` With the default, "only the model is missing" becomes the usual case, so
+the cue would tell the user to add something that already exists. The cue is
+derived from what is missing, reusing `missingRequirement(persona)` (already
+used at `hub.tsx` ~line 459):
+
+| Missing | Cue |
+|---|---|
+| model only | `Pick a model, then <name> can chat.` |
+| instruction only | `Add an instruction, then <name> can chat.` |
+| both | `Add an instruction and pick a model, then <name> can chat.` (unchanged) |
+
+`<name>` falls back to `this persona` as today.
+
+### 4.4 Default visible on the hub
+
+The create form has no instructions field, so a user never sees that a new
+persona runs on the default. `instructionsMeta` (`lib/persona-hub.ts` ~line 18)
+prefixes `Default · ` when `instructions === DEFAULT_PERSONA_INSTRUCTIONS`
+(e.g. `Default · Chatsundere voice`) — a quiet invitation to personalise, not a
+nag. `DEFAULT_PERSONA_INSTRUCTIONS` is imported from `persona-draft.ts`.
 
 ## 5. Testing
 
@@ -286,10 +364,11 @@ default simply means a fresh persona is no longer incomplete on instructions.
 - With 15 chats: exactly the 10 newest render, newest first.
 - Filter: matches across all 15 (a match only in chat #14 appears); case
   insensitive; at most 10 matches shown.
-- No matches: the empty line renders and `More… →` stays.
-- Zero chats: toggle and `History →` disabled with the tooltip.
-- `More… →` / `History →` hrefs carry `personaId`, `q` (only when non-empty),
-  and `return`.
+- No matches: the empty line renders and `All in History →` stays.
+- Zero chats (loaded): toggle disabled, `No chats yet` visible, no `History →`.
+- Chats loading (`undefined`): toggle and `History →` enabled, not disabled.
+- `All in History →` / `History →` hrefs carry `personaId`, `q` (only when
+  non-empty), and `return`.
 - Row tap navigates to `/app/chat/<id>`.
 - The action row no longer contains a `History` button.
 
@@ -302,22 +381,34 @@ default simply means a fresh persona is no longer incomplete on instructions.
 **Quick menu (`tests/components/chat-quick-menu.test.tsx`):**
 
 - On the chat route the logo is a button named `Quick menu`; off the chat
-  route it is the `/` link.
-- Opens on click; six entries in order; Escape and backdrop close it.
-- Each entry navigates to its target with the encoded chat return path.
-- `chatHeader === null`: persona entries disabled, `Main menu` and
-  `Image settings` enabled.
-- Works in interaction mode (the cockpit's outside-pointer handler does not
-  swallow the logo tap).
+  route it is the `/` link with label `Chatsundere home`.
+- The interaction-mode hamburger is a button named `Quick menu` and opens the
+  same menu (no immediate navigation).
+- Opens on click; seven entries in order; Escape and backdrop close it.
+- Each entry navigates to its target with the encoded chat return path;
+  `Entrance Hall` also resets interaction mode.
+- Lazy chat (`/app/chat/new?personaId=p1`, no `activeChatId`): all persona
+  entries enabled; `New chat with …` disabled with `You're in a new chat`
+  visible; the return path keeps `?personaId=p1`.
+- **Cockpit interplay:** with an unpinned cockpit open, open the menu, tap one
+  entry once — it navigates (the click is not swallowed). Backdrop tap and
+  Escape close only the menu; the cockpit stays open.
 
-**Return paths:** one test per destination (knowledge, images) that
-`?return=` drives the back control and an off-origin value falls back.
+**Hub cue:** a persona with the default instruction and no model shows
+`Pick a model, then <name> can chat.`; one with neither shows the combined copy.
+
+**Instructions tile meta:** default instruction → `Default · …`; any other
+non-empty instruction → unchanged meta.
+
+**Return paths:** one test per destination (memory, knowledge, images) that
+`?return=` drives the back control and an off-origin value falls back; for
+memory, `?return=` beats `?chat=` and `?chat=` alone still works.
 
 **Default instructions (`tests/routes/persona-instructions-default.test.tsx`):**
 
 - `defaultDraft()` yields the default.
-- Focus on the exact default clears the field; blur while empty restores and
-  saves the default.
+- Focus on the exact default clears the field; blur while empty restores the
+  default and performs **no** write.
 - Focus on an edited default (`You are a friendly assistant. And funny.`) does
   not clear.
 - Focus on a non-default value, clear, blur: saves empty (unchanged behaviour).
@@ -334,18 +425,29 @@ default simply means a fresh persona is no longer incomplete on instructions.
 1. Open a persona with many chats. The accordion sits under the action row,
    collapsed, with `History →` on the right. `History` is gone from the button row.
 2. Expand. Ten newest chats show. Type part of an old chat's title — it appears.
-3. Tap `More… →`. The History page opens filtered to this persona with the
-   search pre-filled. Back returns to the persona hub.
+3. Tap `All in History →`. The History page opens filtered to this persona with
+   the search pre-filled. Back returns to the persona hub.
 4. Reload the app, open a different persona: the accordion is still expanded.
-   Collapse it, open a third persona: collapsed.
-5. A persona without chats: accordion disabled, tooltip explains why.
+   At 380 px with 10+ chats, judge how far the identity hero is pushed down —
+   acceptable or not? Collapse it, open a third persona: collapsed.
+5. A persona without chats: accordion disabled, `No chats yet` visible in the
+   header.
 6. In a chat (reading mode): the logo shows `Chatsundere ▾`, no arrow. Tap it:
    the menu drops from the logo, background dimmed and blurred.
 7. Try every entry; on each destination, the back control returns to the chat.
-8. Open the cockpit (interaction mode, unpinned) and tap the logo: the menu
-   opens; nothing in the chat underneath reacts.
-9. Create a new persona, pick a model: `New Chat` is enabled immediately.
-10. Open its Instructions: tap the custom-instructions field — the default
+   `Entrance Hall` lands in the Entrance Hall; opening another chat afterwards
+   starts in reading mode.
+8. Open the cockpit (interaction mode, unpinned). Tap the logo: the menu opens.
+   Tap the backdrop: only the menu closes, the cockpit stays. Open it again and
+   tap `Memories` once: it navigates on the first tap.
+9. In interaction mode, tap the hamburger: the same menu opens, anchored to it.
+10. Start a new chat but do not send: the menu's persona entries all work;
+    `New chat with …` is greyed out with `You're in a new chat`. From
+    `Knowledge`, back returns to the unsent chat.
+11. Create a new persona: the hub cue reads `Pick a model, then … can chat.`
+    and the Instructions tile reads `Default · …`. Pick a model: `New Chat` is
+    enabled immediately.
+12. Open its Instructions: tap the custom-instructions field — the default
     disappears. Tap away without typing — it comes back. Type something — it saves.
 
 ## 7. Documentation
@@ -356,8 +458,16 @@ default simply means a fresh persona is no longer incomplete on instructions.
 
 ## 8. Audits
 
-- **Laura spec-pass** on this document before the plan is written (flows change:
-  history reachability, logo affordance, default copy).
+- **Laura spec-pass** — done 2026-10-07: 3 hard defects (quick-menu taps
+  swallowed by the unpinned cockpit; misleading incomplete cue; disabled
+  persona entries in a lazy chat), all folded in (§3.2, §3.5, §4.3). Soft
+  findings adopted with Chris: hamburger opens the same menu, `Entrance Hall`
+  label with exit semantics, `All in History →`, `New chat with …` entry,
+  visible zero-chat reason, no-write restore, `Default ·` tile meta. Kept
+  against her alternative: clear-on-focus (Chris's choice over select-all).
+  Logged as follow-up: the hub's `My Circle` crumb follows `?return=` and can
+  lead to a chat (pre-existing, `hub.tsx` ~line 341) — record in
+  `obsidian/insights/ux-deferrals.md` during implementation.
 - **Laura pre-squash pass** on the built diff.
 - **Larissa:** not required — frontend-only, no auth/sync/proxy/crypto surface.
   The `?return=` additions reuse the existing `safeReturnPath` validator; that
