@@ -240,6 +240,19 @@ export const CANONICALS: CanonicalModel[] = [
     modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
   },
   {
+    id: 'mistral-large-4',
+    displayName: 'Mistral Large 4',
+    family: 'mistral',
+    // Unlike Large 3, Large 4 reasons: a binary toggle (high/none) on both the
+    // direct API and nano-gpt, and it reasons when no effort is sent. Vision +
+    // tools, 512k window (probed live 2026-10-07).
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: null,
+    freedomNote:
+      'Not yet assessed (2026-10-07): Chris is testing Large 4 before judging it; the earlier Mistral models were judged freedom-oriented.',
+    modelInstructions: MISTRAL_FORMATTING_INSTRUCTIONS,
+  },
+  {
     id: 'hy3',
     displayName: 'Hy3',
     family: 'hunyuan',

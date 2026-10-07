@@ -28,11 +28,12 @@ afterAll(() => {
 });
 
 describe('canonical-registry', () => {
-  test('lists forty-eight canonicals with unique ids', () => {
+  test('lists forty-nine canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(48);
-    expect(new Set(ids).size).toBe(48);
+    expect(ids).toHaveLength(49);
+    expect(new Set(ids).size).toBe(49);
     expect(ids).toContain('claude-sonnet-5');
+    expect(ids).toContain('mistral-large-4');
     expect(ids).toContain('claude-opus-5');
     expect(ids).toContain('hy3');
     expect(ids).toContain('minimax-m3');

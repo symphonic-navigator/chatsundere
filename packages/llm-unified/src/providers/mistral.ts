@@ -30,6 +30,8 @@ const RECOMMENDED_CONTEXT = 131_072;
 interface MistralOfferingArgs {
   vision: boolean;
   reasoning: ReasoningControl;
+  /** Overrides the family-wide 256k window (Large 4 has 512k). */
+  context?: { recommended: number; max: number };
 }
 
 function mistralOffering(canonicalRef: string, slug: string, args: MistralOfferingArgs): Offering {
@@ -44,7 +46,7 @@ function mistralOffering(canonicalRef: string, slug: string, args: MistralOfferi
       vision: args.vision,
       replayReasoning: false,
     },
-    context: { recommended: RECOMMENDED_CONTEXT, max: MAX_CONTEXT },
+    context: args.context ?? { recommended: RECOMMENDED_CONTEXT, max: MAX_CONTEXT },
     // Mistral AI is EU-jurisdiction (French company, GDPR-compliant) but offers
     // NEITHER zero data retention NOR a trusted execution environment — the
     // trust basis is EU justiciability plus its published privacy terms, not
@@ -94,6 +96,14 @@ const offerings: Offering[] = [
   mistralOffering('mistral-large-3', 'mistral-large-latest', {
     vision: true,
     reasoning: NONE,
+  }),
+  // Mistral Large 4 — reasoning toggle (high/none), vision, tools. The literal
+  // slug, not `mistral-large-latest`, which still resolves to Large 3. 512k
+  // window; recommended at half the ceiling, as for the rest of the family.
+  mistralOffering('mistral-large-4', 'mistral-large-4', {
+    vision: true,
+    reasoning: TOGGLE,
+    context: { recommended: 262_144, max: 524_288 },
   }),
   // Voxtral Mini TTS — text-to-speech; bypasses the chat adapter entirely.
   {

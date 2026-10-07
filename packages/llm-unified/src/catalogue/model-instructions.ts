@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 /**
- * Formatting restraint for the Mistral family (Small 4, Medium 3.5, Large 3).
+ * Formatting restraint for the Mistral family (Small 4, Medium 3.5, Large 3,
+ * Large 4).
  * The models are warm and creative but chronically over-format: synopsis-style
  * bullet lists where the user asked for a story, spaced-out or all-capital
  * words for emphasis, heading cascades in casual chat. This restrains

@@ -11,18 +11,21 @@
 //   - the direct Mistral Cloud provider (the polymorphic thinking-in-content
 //     parser is the novel risk being verified here), and
 //   - the Mistral offerings on the nano-gpt anonymous-router (slug-swap
-//     reasoning, standard `reasoning` channel).
+//     reasoning for Small 4 / Medium 3.5, a `reasoning_effort` body flag for
+//     Large 4; standard `reasoning` channel). Their adapters are resolved from
+//     the registry after `registerNanoGpt()`, so the run exercises the
+//     production wiring rather than a hand-picked adapter.
 //
 //   bun run curation/run-mistral-suite.ts                (from packages/llm-unified)
 //   bun run curation/run-mistral-suite.ts mistral        (provider-id filter)
 //   bun run curation/run-mistral-suite.ts nano-gpt small (provider-id + slug substring)
 import { readFileSync } from 'node:fs';
 import type { ModelAdapter, ToolDef } from '../src/adapter-contract.js';
+import { getAdapter } from '../src/adapter-registry.js';
 import { mistralAdapter } from '../src/adapters/mistral-openai.js';
-import { nanoGptSlugSwapAdapter } from '../src/adapters/nano-gpt-slug-swap.js';
 import type { Offering } from '../src/catalogue/types.js';
 import { mistral } from '../src/providers/mistral.js';
-import { nanoGpt } from '../src/providers/nano-gpt.js';
+import { nanoGpt, registerNanoGpt } from '../src/providers/nano-gpt.js';
 import type { ProviderConfig } from '../src/types.js';
 import {
   type ReasoningPermutation,
@@ -64,6 +67,8 @@ interface ProviderTarget {
   adapterFor(o: Offering): ModelAdapter;
 }
 
+registerNanoGpt();
+
 const targets: ProviderTarget[] = [
   {
     providerId: 'mistral',
@@ -79,8 +84,12 @@ const targets: ProviderTarget[] = [
     providerConfig: { baseUrl: nanoGpt.baseUrl, routing: { kind: 'direct' } },
     // Only the Mistral-family offerings on nano-gpt.
     offerings: nanoGpt.offerings.filter((o) => o.canonicalRef?.startsWith('mistral-')),
-    adapterFor: (o) =>
-      nanoGptSlugSwapAdapter(o.upstreamSlug, o.profile.vision, o.profile.reasoning),
+    adapterFor: (o) => {
+      const adapter = o.adapter.kind === 'catalogue' ? getAdapter(o.adapter.adapterId) : undefined;
+      if (!adapter)
+        throw new Error(`No catalogue adapter registered for nano-gpt:${o.upstreamSlug}`);
+      return adapter;
+    },
   },
 ];
 

@@ -5,10 +5,11 @@
 > `.claude/skills/curate/references/conventions.md`.
 
 **Onboarded:** 2026-05-31 (via `/curate` Mode 1, subagent) · **Status:**
-live-curated, three first-party offerings (Small 4, Medium 3.5, Large 3). The
-same three canonicals are *also* offered via the nano-gpt anonymous router —
-see [[../models/mistral-small-4]], [[../models/mistral-medium-3-5]],
-[[../models/mistral-large-3]].
+live-curated, four first-party offerings (Small 4, Medium 3.5, Large 3, and
+Large 4 since 2026-10-07). The same four canonicals are *also* offered via the
+nano-gpt anonymous router — see [[../models/mistral-small-4]],
+[[../models/mistral-medium-3-5]], [[../models/mistral-large-3]],
+[[../models/mistral-large-4]].
 
 - **id:** `mistral` · **displayName:** Mistral AI
 - **Base URL:** `https://api.mistral.ai/v1` (OpenAI-compatible Chat Completions)
@@ -58,6 +59,7 @@ The three curated upstream slugs:
 | `mistral-small-4` | `mistral-small-latest` | `-latest` alias |
 | `mistral-medium-3-5` | `mistral-medium-3-5` | **literal slug, NOT `-latest`** |
 | `mistral-large-3` | `mistral-large-latest` | `-latest` alias |
+| `mistral-large-4` | `mistral-large-4` | **literal slug** — `-latest` still resolves to Large 3 (2026-10-07) |
 
 The **medium slug caveat** is load-bearing: there is no `mistral-medium-latest`
 that resolves to 3.5, so the literal dated-family slug `mistral-medium-3-5` is
@@ -67,7 +69,8 @@ nano-gpt form; the first-party API takes the hyphen form `mistral-medium-3-5`.)
 ## Reasoning mechanism (empirical, probed live 2026-05-31)
 
 - **Binary toggle via `reasoning_effort`.** Only `"high"` (on) and `"none"`
-  (off) are honoured, and **only by Small 4 and Medium 3.5**. Effort buckets
+  (off) are honoured, and **only by Small 4, Medium 3.5 and Large 4** (Large 4
+  rejects `low`/`medium` with HTTP 400, probed 2026-10-07). Effort buckets
   (low/medium) are not meaningful — the adapter collapses any reasoning-on intent
   to `"high"`. The control is `{ mode: 'toggle', defaultOn: false }`.
 - **`"none"` is a GENUINE off.** With `reasoning_effort: "none"`, content reverts
@@ -168,10 +171,12 @@ First-party (`mistral`), each with the hand-written `mistral-openai` adapter
 (`confidence: 'verified'`):
 [[../models/mistral-small-4]] (toggle, vision),
 [[../models/mistral-medium-3-5]] (toggle, vision),
-[[../models/mistral-large-3]] (no reasoning, vision).
+[[../models/mistral-large-3]] (no reasoning, vision),
+[[../models/mistral-large-4]] (toggle, vision, 512k window).
 
 Also on nano-gpt (slug-swap reasoning via the existing `nano-gpt-slug-swap`
-adapter) — see each model record.
+adapter; Large 4 has no thinking sibling and is steered by `reasoning_effort` on
+the bare slug instead) — see each model record.
 
 ## Documentation
 

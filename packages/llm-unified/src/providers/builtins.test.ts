@@ -36,23 +36,24 @@ describe('built-in providers', () => {
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('inofficial');
-      // 7 original (incl. glm-5.2) + 3 Mistral (small-4, medium-3.5, large-3)
+      // 7 original (incl. glm-5.2) + 4 Mistral (small-4, medium-3.5, large-3,
+      // large-4)
       // + 9 Claude (incl. Opus 5) + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI,
       // censored) + 4 web + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling
       // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream)
-      // + 11 September 2026 additions = 51.
+      // + 11 September 2026 additions = 52.
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(51);
+      expect(p.offerings).toHaveLength(52);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
 
-  it('mistral has direct CORS hint, five offerings (3 LLM + 1 TTS + 1 STT), and sortPriority 14', () => {
+  it('mistral has direct CORS hint, six offerings (4 LLM + 1 TTS + 1 STT), and sortPriority 14', () => {
     const p = getProvider('mistral');
     expect(p).toBeDefined();
     if (p) {
       expect(p.corsHint).toBe('direct');
-      expect(p.offerings).toHaveLength(5);
+      expect(p.offerings).toHaveLength(6);
       expect(p.sortPriority).toBe(14);
     }
   });

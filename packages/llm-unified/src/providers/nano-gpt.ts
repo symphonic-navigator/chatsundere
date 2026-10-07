@@ -74,7 +74,12 @@ const HY3_NANO_FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
 // sibling streams thinking on the standard `reasoning` channel — NOT the
 // polymorphic content-array Mistral's own API uses (probed live 2026-05-31), so
 // the existing nanoGptSlugSwapAdapter handles it unchanged. Large 3 has no
-// `:thinking` sibling on nano-gpt → reasoning `none`.
+// `:thinking` sibling on nano-gpt → reasoning `none`. Large 4 breaks the
+// pattern (probed live 2026-10-07): neither `:thinking` nor `-thinking` exists,
+// the bare slug reasons by default and `reasoning_effort:'none'` is a genuine
+// off (0 reasoning tokens) — the body-flag shape, so it takes the
+// reasoning-effort adapter. nano-gpt lists `high` as an effort but rejects it
+// with HTTP 400; the toggle never sends an effort, so on is simply the default.
 const MISTRAL_TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: false };
 const MISTRAL_NONE: ReasoningControl = { mode: 'none' };
 
@@ -600,6 +605,14 @@ const offerings: Offering[] = [
     true,
     262_144,
   ),
+  slugSwapOffering(
+    'mistral-large-4',
+    'mistralai/mistral-large-4',
+    MISTRAL_TOGGLE,
+    true,
+    262_144,
+    524_288,
+  ),
   ...CLAUDE_SPECS.map(claudeOffering),
   // Claude Opus 5 via nano-gpt. Body-flag reasoning like Fable (no thinking
   // sibling) but with no genuine off — see OPUS5_STEPS above. Vision + tools
@@ -920,7 +933,8 @@ export function registerNanoGpt(): void {
       o.canonicalRef === 'glm-5.3-flash-uncensored' ||
       o.canonicalRef === 'mimo-v2.6-pro' ||
       o.canonicalRef === 'mimo-v2.6-flash' ||
-      o.canonicalRef === 'mimo-v2.6-flash-uncensored'
+      o.canonicalRef === 'mimo-v2.6-flash-uncensored' ||
+      o.canonicalRef === 'mistral-large-4'
     ) {
       // These routes have no published `:thinking` sibling. Keep them on the
       // base slug and preserve their declared off semantics: GLM 5.3 Flash
