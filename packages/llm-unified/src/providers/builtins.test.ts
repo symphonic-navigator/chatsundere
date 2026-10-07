@@ -41,9 +41,9 @@ describe('built-in providers', () => {
       // + 9 Claude (incl. Opus 5) + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI,
       // censored) + 4 web + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling
       // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream)
-      // + 11 September 2026 additions = 52.
+      // + 11 September 2026 additions + Z-Image Base = 53.
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(52);
+      expect(p.offerings).toHaveLength(53);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -508,7 +508,7 @@ describe('built-in providers', () => {
     expect(grok420?.profile.reasoning).toEqual({ mode: 'toggle', defaultOn: true });
     const tti = p?.offerings.find((o) => o.serviceKind === 'tti');
     expect(tti?.upstreamSlug).toBe('grok-imagine-image');
-    expect(tti?.tti?.groupId).toBe('xai-imagine');
+    expect([tti?.tti?.family, tti?.tti?.variant]).toEqual(['Grok Imagine', '1']);
     expect(tti?.tti?.canDoNsfw).toBe(false);
     expect(tti?.tti?.displayName).toBe('Grok Imagine');
   });

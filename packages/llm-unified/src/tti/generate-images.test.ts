@@ -1,8 +1,27 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { _resetAdapterRegistryForTests } from '../adapter-registry.js';
+import { registerBuiltinProviders } from '../providers/_register-builtins.js';
 import { setProxyAuthSource } from '../proxy-auth.js';
+import { _resetRegistryForTests, getOffering } from '../registry.js';
 import type { ProviderConfig } from '../types.js';
 import { ImageGenerationError, generateImages } from './generate-images.js';
+
+beforeAll(() => {
+  _resetRegistryForTests();
+  _resetAdapterRegistryForTests();
+  registerBuiltinProviders();
+});
+afterAll(() => {
+  _resetRegistryForTests();
+  _resetAdapterRegistryForTests();
+});
+
+function offeringArgs(providerId: string, slug: string) {
+  const meta = getOffering(providerId, slug)?.tti;
+  if (!meta) throw new Error(`missing TTI offering ${providerId}:${slug}`);
+  return { slug, meta };
+}
 
 function asMockFetch(
   impl: (input: string | Request | URL, init?: RequestInit) => Promise<Response>,
@@ -42,7 +61,8 @@ describe('generateImages — nano-gpt url flow', () => {
     });
     const result = await generateImages({
       ...base,
-      config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+      ...offeringArgs('nano-gpt', 'z-image-turbo'),
+      config: { aspect: '1:1', resolution: null, quality: null },
       prompt: 'a fox',
       count: 1,
       fetchFn,
@@ -75,7 +95,8 @@ describe('generateImages — nano-gpt url flow', () => {
     });
     const result = await generateImages({
       ...base,
-      config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+      ...offeringArgs('nano-gpt', 'z-image-turbo'),
+      config: { aspect: '1:1', resolution: null, quality: null },
       prompt: 'a fox',
       count: 2,
       fetchFn,
@@ -113,7 +134,8 @@ describe('generateImages — nano-gpt url flow', () => {
     try {
       const result = await generateImages({
         ...base, // providerConfig routing: 'direct'
-        config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+        ...offeringArgs('nano-gpt', 'z-image-turbo'),
+        config: { aspect: '1:1', resolution: null, quality: null },
         prompt: 'a fox',
         count: 1,
         fetchFn,
@@ -146,7 +168,8 @@ describe('generateImages — nano-gpt url flow', () => {
     setProxyAuthSource(null);
     const result = await generateImages({
       ...base,
-      config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+      ...offeringArgs('nano-gpt', 'z-image-turbo'),
+      config: { aspect: '1:1', resolution: null, quality: null },
       prompt: 'a fox',
       count: 1,
       fetchFn,
@@ -179,7 +202,8 @@ describe('generateImages — nano-gpt url flow', () => {
           baseUrl: 'https://api.nano-gpt.com',
           routing: { kind: 'cors-proxy' },
         } as ProviderConfig,
-        config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+        ...offeringArgs('nano-gpt', 'z-image-turbo'),
+        config: { aspect: '1:1', resolution: null, quality: null },
         prompt: 'a fox',
         count: 1,
         fetchFn,
@@ -211,7 +235,8 @@ describe('generateImages — xai b64 flow', () => {
     );
     const result = await generateImages({
       ...xaiBase,
-      config: { groupId: 'xai-imagine', tier: 'quality', resolution: '1k', aspect: '1:1' },
+      ...offeringArgs('xai', 'grok-imagine-image'),
+      config: { aspect: '1:1', resolution: '1k', quality: 'quality' },
       prompt: 'a fox',
       count: 1,
       fetchFn,
@@ -233,7 +258,8 @@ describe('generateImages — xai b64 flow', () => {
     );
     const result = await generateImages({
       ...xaiBase,
-      config: { groupId: 'xai-imagine', tier: 'normal', resolution: '1k', aspect: '1:1' },
+      ...offeringArgs('xai', 'grok-imagine-image'),
+      config: { aspect: '1:1', resolution: '1k', quality: 'normal' },
       prompt: 'a fox',
       count: 2,
       fetchFn,
@@ -250,7 +276,8 @@ describe('generateImages — errors', () => {
     await expect(
       generateImages({
         ...base,
-        config: { groupId: 'seedream', aspect: '1:1', quality: 'standard' },
+        ...offeringArgs('nano-gpt', 'seedream-v4.5'),
+        config: { aspect: '1:1', resolution: '2k', quality: null },
         prompt: 'a fox',
         count: 1,
         fetchFn,
@@ -259,7 +286,8 @@ describe('generateImages — errors', () => {
     try {
       await generateImages({
         ...base,
-        config: { groupId: 'seedream', aspect: '1:1', quality: 'standard' },
+        ...offeringArgs('nano-gpt', 'seedream-v4.5'),
+        config: { aspect: '1:1', resolution: '2k', quality: null },
         prompt: 'a fox',
         count: 1,
         fetchFn,

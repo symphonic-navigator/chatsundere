@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { TtiGroupId } from './config.js';
 
 /** One pre-fetch item from a generations response. */
 export type RawImageItem =
@@ -16,17 +15,17 @@ interface ResponseEntry {
 }
 
 /**
- * Parse a `/images/generations` JSON payload into raw items. xAI marks
- * moderated entries per-item (`respect_moderation: false` + `reason`);
- * nano-gpt has no per-item moderation (a refused prompt fails the whole POST
- * with 4xx upstream of this function). Unknown entry shapes are dropped.
+ * Parse a `/images/generations` JSON payload into raw items. Providers with
+ * per-item moderation (xAI) mark refused entries with
+ * `respect_moderation: false` + `reason`; nano-gpt fails the whole POST
+ * instead, upstream of this function. Unknown entry shapes are dropped.
  */
-export function parseImagesResponse(groupId: TtiGroupId, payload: unknown): RawImageItem[] {
+export function parseImagesResponse(perItemModeration: boolean, payload: unknown): RawImageItem[] {
   const data = (payload as { data?: unknown })?.data;
   if (!Array.isArray(data)) return [];
   const items: RawImageItem[] = [];
   for (const raw of data as ResponseEntry[]) {
-    if (groupId === 'xai-imagine' && raw.respect_moderation === false) {
+    if (perItemModeration && raw.respect_moderation === false) {
       items.push({ kind: 'moderated', reason: typeof raw.reason === 'string' ? raw.reason : null });
       continue;
     }

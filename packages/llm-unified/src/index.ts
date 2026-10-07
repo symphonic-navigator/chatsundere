@@ -122,17 +122,17 @@ export * from './catalogue/index.js';
 // screen-effects spec (2026-06-29).
 export * from './integrations/index.js';
 
+export type { ImageModelConfig, TtiDescriptor, TtiOption, TtiWire } from './tti/descriptor.js';
 export {
-  defaultConfigFor,
+  carryOverConfig,
+  formatPriceCents,
   isImageModelConfig,
-  maxCountFor,
-  type GptImage2Config,
-  type ImageModelConfig,
-  type SeedreamConfig,
-  type TtiGroupId,
-  type XaiImagineConfig,
-  type ZImageConfig,
-} from './tti/config.js';
+  isValidConfigFor,
+  latencyFor,
+  priceCentsFor,
+  priceKey,
+} from './tti/image-config.js';
+export { buildImagePayload } from './tti/build-payload.js';
 export {
   generateImages,
   ImageGenerationError,

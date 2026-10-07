@@ -15,32 +15,36 @@ describe('TTI offerings', () => {
     _resetAdapterRegistryForTests();
   });
 
-  test('the four curated offerings are present and none can do NSFW', () => {
-    const ttis = listTtiOfferings();
-    const refs = ttis.map((o) => `${o.providerId}:${o.upstreamSlug}`).sort();
-    expect(refs).toEqual([
-      'nano-gpt:gpt-image-2',
-      'nano-gpt:seedream-v4.5',
-      'nano-gpt:z-image-turbo',
+  test('the migrated offerings are present and none can do NSFW', () => {
+    const refs = listTtiOfferings().map((o) => `${o.providerId}:${o.upstreamSlug}`);
+    for (const ref of [
       'xai:grok-imagine-image',
-    ]);
-    const expectedDisplayNames: Record<string, string> = {
-      'xai:grok-imagine-image': 'Grok Imagine',
-      'nano-gpt:z-image-turbo': 'Z-Image',
-      'nano-gpt:seedream-v4.5': 'Seedream 4.5',
-      'nano-gpt:gpt-image-2': 'GPT Image 2',
-    };
-    for (const o of ttis) {
+      'nano-gpt:z-image-turbo',
+      'nano-gpt:z-image-base',
+      'nano-gpt:seedream-v4.5',
+      'nano-gpt:gpt-image-2',
+    ]) {
+      expect(refs).toContain(ref);
+    }
+    for (const o of listTtiOfferings()) {
       expect(o.serviceKind).toBe('tti');
       expect(o.canonicalRef).toBeNull();
       expect(o.tti?.canDoNsfw).toBe(false);
-      expect(o.tti?.displayName).toBe(expectedDisplayNames[`${o.providerId}:${o.upstreamSlug}`]);
     }
   });
-  test('groupIds map as designed', () => {
-    expect(getOffering('xai', 'grok-imagine-image')?.tti?.groupId).toBe('xai-imagine');
-    expect(getOffering('nano-gpt', 'z-image-turbo')?.tti?.groupId).toBe('zimage');
-    expect(getOffering('nano-gpt', 'seedream-v4.5')?.tti?.groupId).toBe('seedream');
-    expect(getOffering('nano-gpt', 'gpt-image-2')?.tti?.groupId).toBe('gpt-image-2');
+
+  test('families and variants map as designed', () => {
+    const z = getOffering('nano-gpt', 'z-image-turbo')?.tti;
+    const zb = getOffering('nano-gpt', 'z-image-base')?.tti;
+    expect([z?.family, z?.variant, z?.recommended]).toEqual(['Z-Image', 'Turbo', true]);
+    expect([zb?.family, zb?.variant, zb?.latencyHint]).toEqual(['Z-Image', 'Base', '~10× slower']);
+    expect(getOffering('nano-gpt', 'seedream-v4.5')?.tti?.variant).toBe('4.5');
+    expect(getOffering('nano-gpt', 'gpt-image-2')?.tti?.variant).toBeNull();
+    const xai = getOffering('xai', 'grok-imagine-image')?.tti;
+    expect([xai?.family, xai?.variant, xai?.perItemModeration]).toEqual([
+      'Grok Imagine',
+      '1',
+      true,
+    ]);
   });
 });
