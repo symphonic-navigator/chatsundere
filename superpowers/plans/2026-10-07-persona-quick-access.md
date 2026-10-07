@@ -1,6 +1,6 @@
 # Persona Quick Access Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Read the Operating rules below first. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give new personas a default instruction that clears on focus, replace the persona hub's History button with a "Recent chats" accordion, and add a quick menu to the chat opened from the brand logo and the interaction-mode hamburger.
 
@@ -9,6 +9,36 @@
 **Tech Stack:** TypeScript (strict, `noUncheckedIndexedAccess`), React 18, React Router, Zustand, TanStack Query, Tailwind v4, lucide-react, Vitest + Testing Library, Biome, pnpm + Turborepo.
 
 **Spec:** `superpowers/specs/2026-10-07-persona-quick-access-design.md` — read it before Task 1. Where this plan and the spec differ, **this plan wins**; the deliberate refinements are listed under "Spec refinements".
+
+## Operating rules for the overnight worker (READ FIRST)
+
+These rules are binding and override your defaults. You cannot ask questions; if something is genuinely ambiguous, choose the option that keeps existing behaviour and note it in your final report.
+
+1. **Language.** Every text artefact you write into the repo is **British English**: code, identifiers, comments, test names, commit messages, log strings, user-facing copy, Markdown (`colour`, `behaviour`, `initialise`, `licence` as a noun, `normalise`). No German anywhere in the repo.
+2. **TDD per task.** For each task: write the failing test → run it and confirm it fails for the expected reason → write the minimal implementation → run it and confirm it passes → commit. Never write implementation before its test.
+3. **Execution discipline.** Use superpowers:subagent-driven-development: one fresh implementer subagent per task, then a spec-compliance review and a code-quality review before the next task. Dispatch **one implementer at a time** — never two subagents writing to the tree in parallel. **Subagents never merge, push, or switch branches.** Tell every subagent this explicitly in its prompt. After each subagent commit, verify the commit landed on `feat/persona-quick-access` with `git branch --contains <sha>`.
+4. **Branch.** Before Task 1: `git checkout -b feat/persona-quick-access` from the current `master` (if that branch already exists, `git checkout feat/persona-quick-access` instead and confirm it contains this plan). All commits go on that branch. **Do NOT merge to `master`. Do NOT push. Do NOT create any tag or release** (no `git tag`, no GitHub release, no version bump in any `package.json` or `version.txt`). A second overnight worker is building the unified image models on its own branch `feat/unified-image-models` at the same time; both join one release that Chris cuts later. Never touch that branch.
+5. **Parallel-work boundary.** The files listed under "Do not touch" in Global Constraints belong to the other worker. If a task seems to need one of them, stop that task and report instead.
+6. **Commit messages.** Free-form imperative, capitalised subject, no Conventional-Commits prefix (`Add the chat quick menu component`, not `feat: add …`). Every commit ends with a blank line and:
+   ```
+   Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>
+   ```
+   (the plan's `git commit -m "…"` lines omit it for brevity — always add it, e.g. `git commit -m "Subject" -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"`). Doc-only commits (Markdown only, no code) append ` [skip ci]` to the subject.
+7. **No non-null assertions.** Biome bans the `!` postfix operator; the pre-commit hook (lefthook) runs Biome and rejects it. Narrow with `if`, `??` or optional chaining instead. No `any` without an inline comment explaining why. Do not bypass the hook (`--no-verify` is forbidden).
+8. **Exact commands** (run from the repo root unless stated):
+   - First, once: `pnpm install` (if `node_modules` is missing) and `pnpm turbo run build --filter=./packages/*` so the workspace packages' `dist/` exist — stale or missing package builds cause phantom type errors.
+   - user-client tests, one file: `cd apps/user-client && pnpm exec vitest run <path>`
+   - user-client tests, all: `cd apps/user-client && pnpm exec vitest run`
+   - Typecheck gate (the CI gate; covers tests): `pnpm turbo run typecheck --force` (`--force` matters — Turbo caches typecheck and can report a stale pass).
+   - Build: `pnpm run build` (the full TS pipeline; it is not the same as typecheck — run both).
+   - Lint: `pnpm biome check .` (fix formatting with `pnpm biome check --write <files>`).
+9. **Known-green baseline** (confirm on `master` before Task 1 and write the numbers down):
+   - `cd apps/user-client && pnpm exec vitest run` → **0 failures** on Node 26 (about 3340 tests on 2026-10-07; `tests/setup.ts` shims `localStorage`). On Node 22–25 you may instead see **exactly 8 failures** (in `cockpit-draft`, `chat-page`, `chat-route`) caused by Node's experimental `localStorage` global; if so, confirm the same 8 fail on `master` and treat them as baseline. A 9th failure is real — or the known transient parallel-load flake, which passes when the file is re-run alone; re-run it alone once before deciding.
+   - `pnpm turbo run typecheck --force` and `pnpm run build` → green.
+10. **Full verification at the end** (Task 8), never only the touched directories.
+11. **Security gate.** Larissa (the security auditor) is **not triggered**: nothing under `apps/auth-service`, `apps/sync-service`, `apps/proxy-service` or `packages/crypto` changes. If you find yourself editing any of those paths, stop and report instead. The only security-relevant point is the reuse of `safeReturnPath` for every new `?return=` sink — never read `search.get('return')` into a navigation target without it. The UX auditor (Laura) pre-squash pass is run by Liz after hand-off — not by you.
+12. **Do not squash.** Leave the per-task commits on the branch; Liz squashes after review.
+13. **STATUS update** at the end (Task 8): `obsidian/STATUS-CLIENT-ONLY.md`, as described there.
 
 ## Global Constraints
 
@@ -64,11 +94,7 @@
 
 All paths below are relative to `apps/user-client/` unless they start with `obsidian/` or `superpowers/`.
 
-**Commands** (from the repo root):
-- One test file: `cd apps/user-client && pnpm exec vitest run <path>`
-- Full user-client suite: `cd apps/user-client && pnpm exec vitest run`
-- Typecheck (covers tests): `pnpm --filter @chatsundere/user-client typecheck`
-- Lint: `pnpm exec biome check apps/user-client`
+**Commands:** see Operating rule 8. Per-task typecheck shortcut (covers tests): `pnpm --filter @chatsundere/user-client typecheck`.
 
 ---
 
@@ -1933,7 +1959,7 @@ git commit -m "Open the chat quick menu from the logo and the hamburger"
 
 ---
 
-### Task 7: Help copy, follow-up log, full gates
+### Task 7: Help copy and follow-up log
 
 **Files:**
 - Modify: `src/content/help/persona.md`, `src/content/help/persona-instructions.md`, `src/content/help/history.md` (only where the copy is now wrong)
@@ -1970,16 +1996,7 @@ Append to `obsidian/insights/ux-deferrals.md`, following the existing entry form
 
 - [ ] **Step 3: Full gates**
 
-Run, in order, from the repo root:
-
-```bash
-pnpm --filter @chatsundere/user-client exec vitest run
-pnpm turbo run typecheck --force --filter=@chatsundere/user-client
-pnpm --filter @chatsundere/user-client build
-pnpm exec biome check apps/user-client
-```
-
-Expected: vitest all green; if any failure appears, run the same file on `master` in a throwaway worktree before calling it pre-existing. Typecheck, build and Biome exit 0.
+Run the help-content tests if any exist (`rg -l "content/help" apps/user-client/tests`) and `pnpm biome check apps/user-client`. The full gates run in Task 8.
 
 - [ ] **Step 4: Commit**
 
@@ -1987,6 +2004,71 @@ Expected: vitest all green; if any failure appears, run the same file on `master
 git add apps/user-client/src/content/help obsidian/insights/ux-deferrals.md
 git commit -m "Document Recent chats, the quick menu and the default instruction"
 ```
+
+
+---
+
+### Task 8: Full verification, STATUS and hand-off
+
+**Files:**
+- Modify: `obsidian/STATUS-CLIENT-ONLY.md`
+
+- [ ] **Step 1: Full verification (never only the touched directories)**
+
+Run each from the repo root and record the numbers:
+
+```bash
+(cd apps/user-client && pnpm exec vitest run)   # expect 0 failures (or exactly the 8 Node-localStorage baseline, see rule 9)
+pnpm turbo run typecheck --force                # expect green
+pnpm run build                                  # expect green
+pnpm biome check .                              # expect clean
+```
+
+Leftover scan — each must print nothing:
+
+```bash
+rg -n "Leave chat|Exit to Entrance Hall|ArrowLeft" apps/user-client/src/routes/root.tsx apps/user-client/src/components/chat/InteractionTopbar.tsx
+rg -n "onExit=\{onExitToEntranceHall\}" apps/user-client/src
+rg -n "search\.get\('return'\)" apps/user-client/src | rg -v safeReturnPath
+git diff --name-only master...HEAD | rg "packages/llm-unified|components/image-gen|send-message\.ts|generate-image\.ts|client-data-db\.ts|data/artefacts\.ts|src/attachments/|image-gen-section\.test|settings-images\.test"
+```
+
+The third command may list lines where `search.get('return')` is passed *into* `safeReturnPath(` on the same line — those are fine; any other hit is a bug. If anything fails, fix it in a new commit on the branch before continuing.
+
+- [ ] **Step 2: STATUS update**
+
+In `obsidian/STATUS-CLIENT-ONLY.md`, insert directly under the `## Current` heading (above the existing `**Last updated:** …` paragraph, which becomes `**Also …**` by replacing its leading `**Last updated:**` with `**Also`):
+
+```markdown
+**Last updated:** 2026-10-08 — **PERSONA QUICK ACCESS BUILT (overnight), AWAITING
+REVIEW.** Branch `feat/persona-quick-access`, **not squashed, not merged, not
+pushed**. Spec `superpowers/specs/2026-10-07-persona-quick-access-design.md`, plan
+`superpowers/plans/2026-10-07-persona-quick-access.md`. Third piece of the v0.2.30
+omnibus. The persona hub's History button became a **Recent chats** accordion (ten
+newest, title filter across all chats, `History →` / `All in History →`, open state
+per device); the chat's brand logo and the interaction-mode hamburger open one
+**quick menu** (Entrance Hall, persona, New chat with …, Memories, History,
+Knowledge, Image settings) with return paths back into the chat; new personas start
+with **"You are a friendly assistant."**, cleared on focus and restored on an empty
+blur, so a fresh persona needs only a model. **Next (Liz):** Laura pre-squash pass,
+squash (watch the STATUS merge with the parallel `feat/unified-image-models`);
+**then Chris** runs spec §6 on device.
+```
+
+Commit:
+
+```bash
+git add obsidian/STATUS-CLIENT-ONLY.md
+git commit -m "Update client STATUS for the persona quick access build [skip ci]" -m "Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>"
+```
+
+- [ ] **Step 3: Hand-off — stop here**
+
+**Do NOT merge. Do NOT push. Do NOT squash. Do NOT tag or release.** Report back, in this order:
+
+1. The verification numbers from Step 1 (tests passed/failed, typecheck, build, Biome), noting whether the 8-failure Node-localStorage baseline applied.
+2. `git log --oneline master..feat/persona-quick-access` (the commit list).
+3. Anything you decided on your own because the plan was ambiguous, and anything you could not finish.
 
 ---
 
