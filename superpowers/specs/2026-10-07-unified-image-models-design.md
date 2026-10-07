@@ -1,6 +1,6 @@
 # Unified Image Models — Design Specification
 
-**Date:** 2026-10-07 · **Author:** Liz, brainstormed with Chris · **Status:** draft for Chris's review
+**Date:** 2026-10-07 · **Author:** Liz, brainstormed with Chris · **Status:** approved by Chris (2026-10-07)
 
 ## 1. Purpose and Scope
 
@@ -41,8 +41,9 @@ data-driven model description** and adds the nine models as data.
   butterfly wings), which no single probe reveals. Unlocking later is a one-line
   data change.
 - `grok-imagine-image-2.0` on the **direct** xAI API (listed by
-  `GET /v1/image-generation-models`, $0.06) — not requested; logged as a
-  follow-up.
+  `GET /v1/image-generation-models`, $0.06) — deliberately not pursued: new image
+  models are onboarded via nano-gpt only for now, to keep things simple (Chris,
+  2026-10-07). The existing direct `xai:grok-imagine-image` offering stays.
 
 ## 2. Data Model
 
@@ -70,6 +71,12 @@ export interface TtiOfferingMeta {
   priceCents: Readonly<Record<string, number>>;
   /** Optional latency hint per quality id, e.g. { low: '~20 s' }. */
   qualityLatency?: Readonly<Record<string, string>>;
+  /** Optional latency hint on the Variant button, e.g. '~10× slower' (Z-Image Base). */
+  latencyHint?: string;
+  /** 'usage' = billed by actual usage (Nano Banana): prices render with a '~'. */
+  billing: 'fixed' | 'usage';
+  /** The family's default pick (§2.3). At most one per family. */
+  recommended?: boolean;
   defaults: ImageModelConfig;
   wire: TtiWire;               // §5
   /** xAI marks refused items per entry (`respect_moderation: false`). */
@@ -89,7 +96,10 @@ export interface ImageModelConfig {
 }
 ```
 
-A slot stays `{ ref: 'providerId:upstreamSlug', config }`. Validity is judged
+A slot becomes `{ ref: 'providerId:upstreamSlug', config, lastConfigByRef? }`.
+`lastConfigByRef` (optional, unindexed — no Dexie bump) remembers the last config
+per offering picked in this slot, so looking at another family and coming back
+restores the tuned settings instead of losing them to carry-over (§3.3). Validity is judged
 **against the offering's descriptor**: `isValidConfigFor(meta, config)` — the
 aspect is in `aspects`, the resolution is in `resolutions` (or both null), the
 quality likewise. The four per-group schemas, `defaultConfigFor(groupId)` and
@@ -108,16 +118,34 @@ quality likewise. The four per-group schemas, `defaultConfigFor(groupId)` and
 | Seedream | `4.5`, `5.0 Flash`, `5.0 Lite`, `5.0 Pro` | nano-gpt |
 | Z-Image | `Turbo`, `Base` | nano-gpt |
 
+Variant order is version order (what the Variant row shows). The **default pick**
+when a family is tapped is the usable offering marked `recommended`, else the
+first usable one. Recommended: Seedream **5.0 Flash** (cheapest, fast), Qwen
+Image **2.1**, Grok Imagine **2.0**, Z-Image **Turbo**. Chris may change these;
+each is a one-line data flag.
+
 ## 3. Picker and Configuration UI (`apps/user-client/src/components/image-gen/`)
 
 ### 3.1 Picker (`TtiModelSelect`)
 
-- One button per **family**, alphabetical. A family appears when at least one of
-  its offerings is on a usable provider (existing `usableTemplateIds` rule, and
-  the existing empty-state copy when none is).
-- `onSelect` returns the chosen offering's `ref`. Picking a family selects its
-  **first usable variant** (data order) — unless the current slot already sits in
-  that family, in which case nothing changes.
+- One button per **family**, alphabetical, for **every** family — *disabled over
+  hidden* (Laura, spec-pass). A family with no offering on a usable provider
+  (`usableTemplateIds`) renders greyed (`aria-disabled`); tapping it shows one
+  inline line under the picker: "<family> needs <provider displayName> — add it
+  under Upstream Providers above." When no image provider is usable at all, the
+  existing empty-state copy stays above the greyed families.
+- `onSelect` returns the chosen offering's `ref`. Tapping a family:
+  - if the slot's saved offering is in that family **and usable** → nothing
+    changes;
+  - otherwise → the family's default pick (§2.3); its config is
+    `lastConfigByRef[ref]` when present and still valid, else
+    `carryOverConfig(prev, meta)`.
+- **Stale slot** (the saved offering's provider is no longer usable — e.g. xAI
+  disabled after picking "1 · xAI"): the saved family button stays visibly
+  pressed but greyed; the Variant row (§3.2) always includes the saved offering,
+  greyed, still marked selected, with its reason ("1 · xAI — xAI is not set up");
+  a tap on the family or on a usable variant moves the slot as above. The
+  identity line (§3.2) carries the same reason. No closed loops.
 - The NSFW slot reuses the picker with `nsfwOnly`: offerings without
   `canDoNsfw` are filtered out *before* families are formed, so a family shows
   only its NSFW-capable variants and vanishes if it has none. With every offering
@@ -125,26 +153,38 @@ quality likewise. The four per-group schemas, `defaultConfigFor(groupId)` and
 
 ### 3.2 Config view — one generic component
 
+**Identity line** — always shown while a slot is set, directly under the picker:
+`<displayName> · <provider displayName> · <price> per image`, with the price of
+the current config. For a stale slot the price is replaced by the reason
+("— xAI is not set up"). This keeps model and provider visible even when the
+Variant row is hidden (Laura, spec-pass), and it is the home of a flat price.
+Usage-billed offerings show `~` before the price. One caption under the rows:
+"Estimated price per image, billed by the provider."
+
 Rows, top to bottom, each rendered only when it offers more than one choice:
 
-1. **Variant** — the family's usable offerings. Label = `variant` (or
+1. **Variant** — the family's usable offerings, plus the saved offering when it
+   is stale (greyed, with its reason). The button shows `latencyHint` when present
+   ("Base · ~10× slower"). Label = `variant` (or
    `displayName` when `variant` is null). When the row's offerings span more than
    one provider, each label gains ` · <provider displayName>` (today only Grok
    Imagine: "1 · xAI", "2.0 · nano-gpt").
 2. **Aspect** — `meta.aspects`.
 3. **Resolution** — `meta.resolutions`, each button labelled
    `<label> · <price>` using `priceCents[`${id}|${config.quality ?? '-'}`]`.
-   When `resolutions` is null, the flat price is shown as a small inline-marker
-   pill beside the Aspect label instead, so a price is always visible.
+   Whenever this row is not shown (no tiers, or a single tier), the price lives
+   only in the identity line, so a price is always visible.
 4. **Quality** — `meta.qualities`; each button shows `<label>` plus
    `qualityLatency[id]` when present ("Low · ~20 s").
 
-Price formatting: whole cents as `5¢`, fractional as `2.7¢`, ≥ 100 as `$1.20`.
+Price formatting: whole cents as `5¢`, fractional as `2.7¢`, ≥ 100 as `$1.20`;
+prefixed `~` for `billing: 'usage'`.
 
 The four bespoke views in `config-views.tsx` are deleted.
 
 ### 3.3 Carry-over on a variant or family switch
 
+Used only when `lastConfigByRef` has no valid entry for the target offering.
 `carryOverConfig(prev, nextMeta)` (pure, in `tti/config.ts`):
 
 - `aspect`: kept if in `nextMeta.aspects`, else `nextMeta.defaults.aspect`.
@@ -180,7 +220,7 @@ the 2026-10-07 probes unless marked *catalogue*.
 | `seedream-v5.0-lite` | size-table | 1:1, 16:9, 9:16, 3:2, 2:3 | — (flat 3.5¢) | — | 4 | 300 s |
 | `bytedance/seedream-v5.0-pro` | aspect-resolution, no resolution param | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 | — (flat 9¢) | — | 4 | 300 s |
 | `xai/grok-imagine-image/v2.0/text-to-image` | aspect-resolution, `qualityParam: 'quality'` | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 | 1k / 2k | Low (~20 s) · Medium (~70 s) | 4 | 300 s |
-| `nano-banana-2.1` | aspect-resolution, `qualityParam: 'thinking_level'`, `extra: { output_format: 'jpeg' }` | palette | 1k / 2k | Quick = `minimal` · Considered = `high` | 4 | 300 s |
+| `nano-banana-2.1` (`billing: 'usage'`) | aspect-resolution, `qualityParam: 'thinking_level'`, `extra: { output_format: 'jpeg' }` | palette | 1k / 2k | Quick = `minimal` · Considered = `high` | 4 | 300 s |
 
 Notes the descriptors and records must carry:
 
@@ -205,9 +245,9 @@ Notes the descriptors and records must carry:
 
 | Offering | Wire | Aspects | Resolutions | Quality | Notes |
 |---|---|---|---|---|---|
-| `xai:grok-imagine-image` (variant `1`) | aspect-resolution, `modelByQuality: { normal: 'grok-imagine-image', quality: 'grok-imagine-image-quality' }`, `responseFormat: 'b64_json'`, `perItemModeration: true` | 1:1, 16:9, 9:16, 4:3, 3:4 | 1k / 2k | Normal 2¢ · Quality 5¢ (xAI `image_price`) | timeout 60 s, maxCount 10 |
+| `xai:grok-imagine-image` (variant `1`) | aspect-resolution, `modelByQuality: { normal: 'grok-imagine-image', quality: 'grok-imagine-image-quality' }`, `responseFormat: 'b64_json'`, `perItemModeration: true` | 1:1, 16:9, 9:16, 4:3, 3:4 | 1k / 2k | ids `normal` / `quality`, labelled **Normal · High** (not "Quality: Quality"); 2¢ / 5¢ per xAI `image_price`, 2k cells measured by the harness | timeout 60 s, maxCount 10 |
 | `nano-gpt:z-image-turbo` (variant `Turbo`) | size-table | 1:1 1024², 16:9 1280×720, 9:16 720×1280, 3:2 1536×1024, 2:3 1024×1536 | — (flat 1.2¢) | — | maxCount 10 |
-| `nano-gpt:z-image-base` (variant `Base`, **new offering**) | size-table | 1:1 1024², 16:9 1024×576, 9:16 576×1024, 4:3 1024×768, 3:4 768×1024 | — (flat 1.7¢) | — | maxCount 4 |
+| `nano-gpt:z-image-base` (variant `Base`, **new offering**, `latencyHint: '~10× slower'`) | size-table | 1:1 1024², 16:9 1024×576, 9:16 576×1024, 4:3 1024×768, 3:4 768×1024 | — (flat 1.7¢) | — | maxCount 4 |
 | `nano-gpt:seedream-v4.5` (variant `4.5`) | size-table (existing table) | existing seven | 2k · 2.2k · 2.7k (from standard/high/ultra), flat 4¢ | — | |
 | `nano-gpt:gpt-image-2` | size-table (existing table) + `qualityParam: 'quality'` | existing eight | 1k / 2k | Low · Medium · High (~24 s / ~70 s / ~3.5 min) | timeout 600 s; prices per cell from the record and harness |
 
@@ -303,6 +343,9 @@ until it updates (the app-update mechanism of 2026-09-26 makes that short); the
 tool then tells the model no image model is configured. An old client that
 **saves** writes a legacy shape, which the new client upgrades. Nothing is
 corrupted; at worst image generation is briefly unavailable on a stale device.
+Accepted consciously: if the user re-picks a model **on the stale device**, that
+save overwrites the newer choice made elsewhere. Old code cannot be fixed, and
+the update mechanism keeps the window short.
 
 ## 7. Testing
 
@@ -313,7 +356,7 @@ corrupted; at worst image generation is briefly unavailable on a stale device.
   aspect × resolution cell exists in a `size-table`; every resolution × quality
   combination has a `priceCents` entry; `variant` is non-null whenever the family
   has more than one member; `maxCount ≥ 1`; all thirteen have
-  `canDoNsfw: false`.
+  `canDoNsfw: false`; at most one `recommended` per family.
 - **Payload tests**: the exact body for each of the thirteen offerings at its
   default config plus one non-default config, matching the probed bodies.
 - `upgradeImageSlot`: one case per row of the §6.1 table.
@@ -326,9 +369,15 @@ corrupted; at worst image generation is briefly unavailable on a stale device.
 - Picker: families, alphabetical order; family hidden when no provider is
   usable; NSFW slot shows no family while every offering is `false`, and only the
   capable variant when a test descriptor sets one `true`.
-- Config view: rows hidden when they would offer a single choice; the price pill
-  replaces the Resolution row for flat-price models; provider suffix only on a
-  cross-provider Variant row; variant switch applies `carryOverConfig`.
+- Picker: families without a usable provider render greyed and a tap shows the
+  "needs <provider>" line; a family tap picks the `recommended` variant.
+- Stale slot: pick `xai:grok-imagine-image`, make xAI unusable → Grok Imagine
+  stays pressed and greyed, the Variant row shows "1 · xAI" greyed with its
+  reason, a family tap moves the slot to "2.0 · nano-gpt".
+- Config view: rows hidden when they would offer a single choice; the identity
+  line shows model, provider and price (with `~` for usage billing); provider
+  suffix only on a cross-provider Variant row; a variant switch restores
+  `lastConfigByRef` when present, else applies `carryOverConfig`.
 - `image-transcode`: PNG goes to the encoder, JPEG/WebP pass through, encoder
   failure keeps the original.
 - `resolveImageSlot` upgrades a legacy slot.
@@ -340,8 +389,10 @@ offering through the real `generateImages()` (keys from `keys/`), at the default
 config plus each priced cell not yet measured, **including FLUX.3 4k** (Chris,
 2026-10-07). It asserts the returned pixel dimensions against the descriptor
 (size tables exactly; tiers within the model's observed band) and prints the
-billed `cost`, which fills the remaining `priceCents` cells. Expected spend:
-about $1.50.
+billed `cost`, which fills the remaining `priceCents` cells — including the
+xAI 2k cells (not assumed equal to 1k) — and the wall-clock time, which fills
+`qualityLatency` (Nano Banana "Considered" included) and confirms Z-Image Base's
+`latencyHint`. Expected spend: about $1.50.
 
 ## 8. Documentation
 
@@ -352,13 +403,18 @@ about $1.50.
   fetch → serial probes (`aspect_ratio`/`resolution`/quality, billed `cost`,
   returned dimensions, PNG vs JPEG) → descriptor → harness → record. The skill's
   router gains a row.
-- `obsidian/insights/follow-ups-index.md`: `grok-imagine-image-2.0` on direct
-  xAI; NSFW judgement per model once community feedback is in.
+- `obsidian/insights/follow-ups-index.md`: NSFW judgement per model once
+  community feedback is in.
 
 ## 9. Audits
 
-- **Laura — spec-pass** before the plan: the variant moves one level down
-  (family → Variant row), which changes the reachability of thirteen models.
+- **Laura — spec-pass** (done 2026-10-07): two hard defects — the stale-slot
+  closed loop and the invisible model/provider identity — folded in (§3.1, §3.2).
+  Soft findings folded in: recommended default variant, `lastConfigByRef`,
+  disabled-over-hidden families, flat price in the identity line, `~` for usage
+  billing plus a price caption, Variant latency hints, Grok 1 "Normal · High".
+  Not taken: per-quality price deltas and an "up to ×4 per request" note (the
+  "per image" caption covers it); silent migration changes accepted as specified.
 - **Laura — pre-squash pass** on the built picker.
 - **Larissa — not required**: nothing under `apps/auth-service`,
   `apps/sync-service`, `apps/proxy-service` or `packages/crypto` changes.
@@ -366,16 +422,26 @@ about $1.50.
 ## 10. Manual Verification (Chris, on device)
 
 1. **Families:** My Settings → Image generation shows eight family buttons
-   alphabetically. Picking *Seedream* shows a Variant row
-   (4.5 · 5.0 Flash · 5.0 Lite · 5.0 Pro); *FLUX.3* shows none.
-2. **Prices:** FLUX.3 shows `1k · 5¢`, `2k · 12¢`, `4k · 65¢`. Seedream 5.0 Pro
-   shows no Resolution row and a `9¢` pill beside Aspect.
+   alphabetically. Picking *Seedream* selects **5.0 Flash** and shows a Variant
+   row (4.5 · 5.0 Flash · 5.0 Lite · 5.0 Pro); *FLUX.3* shows none.
+2. **Prices and identity:** FLUX.3 shows `1k · 5¢`, `2k · 12¢`, `4k · 65¢` and the
+   line "FLUX.3 · nano-gpt · 5¢ per image". Seedream 5.0 Pro shows no Resolution
+   row; its identity line reads "… · 9¢ per image". Nano Banana prices start
+   with `~`.
 3. **Carry-over:** On Seedream 5.0 Flash pick 16:9 and 2k, switch to 5.0 Lite →
    16:9 stays, no Resolution row; back to Flash → 16:9 stays, resolution `2k`.
 4. **Quality:** Grok Imagine 2.0 shows `Low · ~20 s` / `Medium · ~70 s`; the
    Resolution prices change with the quality.
 5. **Grok across providers:** with both xAI and nano-gpt set up, *Grok Imagine*
-   shows `1 · xAI` and `2.0 · nano-gpt`; with only nano-gpt, no Variant row.
+   shows `1 · xAI` and `2.0 · nano-gpt`; with only nano-gpt, no Variant row, and
+   the identity line names Grok Imagine 2.0 · nano-gpt.
+5a. **Stale slot:** pick `1 · xAI`, then disable xAI. Grok Imagine stays pressed
+   but greyed; `1 · xAI — xAI is not set up` appears greyed; tapping Grok Imagine
+   moves to 2.0 · nano-gpt.
+5b. **Come back:** tune GPT Image 2 to 16:9 · 2k · High, tap Qwen Image, tap GPT
+   Image 2 again → 16:9 · 2k · High is restored.
+5c. **Disabled over hidden:** with only xAI set up, the other seven families are
+   greyed; tapping FLUX.3 explains it needs nano-gpt.
 6. **Migration:** a device that had Seedream 4.5 "high" configured before the
    update now shows Seedream · 4.5 · 2.2k; a Z-Image *base* user lands on
    Z-Image · Base.
