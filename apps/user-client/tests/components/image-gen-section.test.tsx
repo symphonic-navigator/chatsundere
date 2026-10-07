@@ -293,7 +293,10 @@ describe('ImageGenerationSection — stale and legacy slots', () => {
     const s = primarySection();
     const family = within(s).getByRole('button', { name: 'Grok Imagine' });
     expect(family).toHaveAttribute('aria-pressed', 'true');
-    expect(family.className).toContain('opacity-50');
+    expect(family.classList.contains('opacity-50')).toBe(true);
+    expect(
+      within(s).getByRole('button', { name: 'Seedream' }).classList.contains('opacity-50'),
+    ).toBe(false);
     const stale = within(s).getByRole('button', {
       name: '1 · xAI — xAI is not set up — add it under Upstream Providers above',
     });
