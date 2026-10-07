@@ -133,6 +133,8 @@ export {
   priceKey,
 } from './tti/image-config.js';
 export { buildImagePayload } from './tti/build-payload.js';
+export { getTtiDescriptor } from './tti/lookup.js';
+export { upgradeImageSlot, type ImageSlot, type LegacyImageModelConfig } from './tti/upgrade.js';
 export {
   generateImages,
   ImageGenerationError,
