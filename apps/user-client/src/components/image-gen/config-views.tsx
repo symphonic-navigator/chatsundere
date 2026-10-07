@@ -1,27 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type {
-  GptImage2Config,
-  ImageModelConfig,
-  SeedreamConfig,
-  XaiImagineConfig,
-  ZImageConfig,
+import {
+  type ImageModelConfig,
+  type TtiDescriptor,
+  formatPriceCents,
+  latencyFor,
+  priceCentsFor,
 } from '@chatsundere/llm-unified';
+import type { VariantEntry } from './tti-picker-model.js';
 
-interface OptionRowProps<T extends string> {
+interface RowOption {
+  value: string;
   label: string;
-  options: ReadonlyArray<{ value: T; label: string }>;
-  value: T;
-  onChange: (v: T) => void;
+  disabled?: boolean;
 }
 
 /** One labelled row of mutually exclusive option buttons (aria-pressed marks the pick). */
-function OptionRow<T extends string>({
+function OptionRow({
   label,
   options,
   value,
   onChange,
-}: OptionRowProps<T>): JSX.Element {
+}: {
+  label: string;
+  options: ReadonlyArray<RowOption>;
+  value: string | null;
+  onChange: (v: string) => void;
+}): JSX.Element {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="w-24 shrink-0 text-[11px] uppercase tracking-widest text-paper-soft">
@@ -32,12 +37,15 @@ function OptionRow<T extends string>({
           key={o.value}
           type="button"
           aria-pressed={o.value === value}
-          onClick={() => onChange(o.value)}
+          aria-disabled={o.disabled ? true : undefined}
+          onClick={() => {
+            if (!o.disabled) onChange(o.value);
+          }}
           className={`rounded-md border px-2.5 py-1 text-xs ${
             o.value === value
               ? 'border-paper/40 bg-white/[0.08] text-paper'
               : 'border-white/5 bg-white/[0.02] text-paper-soft hover:bg-white/[0.04]'
-          }`}
+          } ${o.disabled ? 'opacity-50' : ''}`}
         >
           {o.label}
         </button>
@@ -46,197 +54,96 @@ function OptionRow<T extends string>({
   );
 }
 
-const XAI_TIERS = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'quality', label: 'Quality' },
-] as const satisfies ReadonlyArray<{ value: XaiImagineConfig['tier']; label: string }>;
-
-const XAI_RESOLUTIONS = [
-  { value: '1k', label: '1k' },
-  { value: '2k', label: '2k' },
-] as const satisfies ReadonlyArray<{ value: XaiImagineConfig['resolution']; label: string }>;
-
-const XAI_ASPECTS = (['1:1', '16:9', '9:16', '4:3', '3:4'] as const).map((a) => ({
-  value: a,
-  label: a,
-}));
-
-/** Grok Imagine: tier, resolution and aspect rows. */
-export function XaiImagineConfigView({
-  config,
-  onChange,
-}: {
-  config: XaiImagineConfig;
-  onChange: (c: XaiImagineConfig) => void;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <OptionRow
-        label="Tier"
-        options={XAI_TIERS}
-        value={config.tier}
-        onChange={(tier) => onChange({ ...config, tier })}
-      />
-      <OptionRow
-        label="Resolution"
-        options={XAI_RESOLUTIONS}
-        value={config.resolution}
-        onChange={(resolution) => onChange({ ...config, resolution })}
-      />
-      <OptionRow
-        label="Aspect"
-        options={XAI_ASPECTS}
-        value={config.aspect}
-        onChange={(aspect) => onChange({ ...config, aspect })}
-      />
-    </div>
-  );
-}
-
-const ZIMAGE_VARIANTS = [
-  { value: 'turbo', label: 'Turbo' },
-  { value: 'base', label: 'Base (~10× slower)' },
-] as const satisfies ReadonlyArray<{ value: ZImageConfig['variant']; label: string }>;
-
-const ZIMAGE_SIZES = (
-  [
-    '256x256',
-    '512x512',
-    '768x768',
-    '1024x1024',
-    '1280x720',
-    '720x1280',
-    '1536x1024',
-    '1024x1536',
-    '1536x1536',
-  ] as const
-).map((s) => ({ value: s, label: s.replace('x', ' × ') }));
-
-/** Z-Image: variant and size rows. */
-export function ZImageConfigView({
-  config,
-  onChange,
-}: {
-  config: ZImageConfig;
-  onChange: (c: ZImageConfig) => void;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <OptionRow
-        label="Variant"
-        options={ZIMAGE_VARIANTS}
-        value={config.variant}
-        onChange={(variant) => onChange({ ...config, variant })}
-      />
-      <OptionRow
-        label="Size"
-        options={ZIMAGE_SIZES}
-        value={config.size}
-        onChange={(size) => onChange({ ...config, size })}
-      />
-    </div>
-  );
-}
-
-const SEEDREAM_ASPECTS = (['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] as const).map(
-  (a) => ({ value: a, label: a }),
-);
-
-const SEEDREAM_QUALITIES = [
-  { value: 'standard', label: 'Standard' },
-  { value: 'high', label: 'High' },
-  { value: 'ultra', label: 'Ultra' },
-] as const satisfies ReadonlyArray<{ value: SeedreamConfig['quality']; label: string }>;
-
-/** Seedream 4.5: aspect and quality rows. */
-export function SeedreamConfigView({
-  config,
-  onChange,
-}: {
-  config: SeedreamConfig;
-  onChange: (c: SeedreamConfig) => void;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <OptionRow
-        label="Aspect"
-        options={SEEDREAM_ASPECTS}
-        value={config.aspect}
-        onChange={(aspect) => onChange({ ...config, aspect })}
-      />
-      <OptionRow
-        label="Quality"
-        options={SEEDREAM_QUALITIES}
-        value={config.quality}
-        onChange={(quality) => onChange({ ...config, quality })}
-      />
-    </div>
-  );
-}
-
-const GPT_IMAGE_2_ASPECTS = (
-  ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'] as const
-).map((a) => ({ value: a, label: a }));
-
-const GPT_IMAGE_2_RESOLUTIONS = [
-  { value: '1k', label: '1k' },
-  { value: '2k', label: '2k' },
-] as const satisfies ReadonlyArray<{ value: GptImage2Config['resolution']; label: string }>;
-
-const GPT_IMAGE_2_QUALITIES = [
-  { value: 'low', label: 'Low (fast)' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High (~3 min)' },
-] as const satisfies ReadonlyArray<{ value: GptImage2Config['quality']; label: string }>;
-
-/** GPT Image 2: aspect, resolution and quality rows. */
-export function GptImage2ConfigView({
-  config,
-  onChange,
-}: {
-  config: GptImage2Config;
-  onChange: (c: GptImage2Config) => void;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <OptionRow
-        label="Aspect"
-        options={GPT_IMAGE_2_ASPECTS}
-        value={config.aspect}
-        onChange={(aspect) => onChange({ ...config, aspect })}
-      />
-      <OptionRow
-        label="Resolution"
-        options={GPT_IMAGE_2_RESOLUTIONS}
-        value={config.resolution}
-        onChange={(resolution) => onChange({ ...config, resolution })}
-      />
-      <OptionRow
-        label="Quality"
-        options={GPT_IMAGE_2_QUALITIES}
-        value={config.quality}
-        onChange={(quality) => onChange({ ...config, quality })}
-      />
-    </div>
-  );
-}
-
-/** Dispatch on the stored config's group — one view per image-model family. */
-export function ImageModelConfigView({
-  config,
-  onChange,
-}: {
+interface Props {
+  meta: TtiDescriptor;
+  providerName: string;
   config: ImageModelConfig;
-  onChange: (c: ImageModelConfig) => void;
-}): JSX.Element {
-  switch (config.groupId) {
-    case 'xai-imagine':
-      return <XaiImagineConfigView config={config} onChange={onChange} />;
-    case 'zimage':
-      return <ZImageConfigView config={config} onChange={onChange} />;
-    case 'seedream':
-      return <SeedreamConfigView config={config} onChange={onChange} />;
-    case 'gpt-image-2':
-      return <GptImage2ConfigView config={config} onChange={onChange} />;
-  }
+  /** Set when the saved offering's provider is unusable. */
+  staleReason: string | null;
+  variants: VariantEntry[];
+  onSelectVariant: (ref: string) => void;
+  onChange: (config: ImageModelConfig) => void;
+}
+
+/**
+ * The one config view for every image model (spec §3.2): identity line, then
+ * Variant / Aspect / Resolution / Quality rows — each only when it offers more
+ * than one choice.
+ */
+export function ImageModelConfigView({
+  meta,
+  providerName,
+  config,
+  staleReason,
+  variants,
+  onSelectVariant,
+  onChange,
+}: Props): JSX.Element {
+  const price = priceCentsFor(meta, config);
+  const identity = staleReason
+    ? `${meta.displayName} · ${providerName} — ${staleReason}`
+    : `${meta.displayName} · ${providerName}${
+        price === undefined ? '' : ` · ${formatPriceCents(price, meta.billing)} per image`
+      }`;
+
+  const selectedVariant = variants.find((v) => v.selected)?.ref ?? null;
+  const resolutions = meta.resolutions ?? [];
+  const qualities = meta.qualities ?? [];
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] text-paper-soft">{identity}</p>
+      {variants.length > 1 ? (
+        <OptionRow
+          label="Variant"
+          options={variants.map((v) => ({
+            value: v.ref,
+            label: v.reason ? `${v.label} — ${v.reason}` : v.label,
+            disabled: v.disabled,
+          }))}
+          value={selectedVariant}
+          onChange={onSelectVariant}
+        />
+      ) : null}
+      {meta.aspects.length > 1 ? (
+        <OptionRow
+          label="Aspect"
+          options={meta.aspects.map((a) => ({ value: a, label: a }))}
+          value={config.aspect}
+          onChange={(aspect) => onChange({ ...config, aspect })}
+        />
+      ) : null}
+      {resolutions.length > 1 ? (
+        <OptionRow
+          label="Resolution"
+          options={resolutions.map((r) => {
+            const cents = priceCentsFor(meta, { ...config, resolution: r.id });
+            return {
+              value: r.id,
+              label:
+                cents === undefined
+                  ? r.label
+                  : `${r.label} · ${formatPriceCents(cents, meta.billing)}`,
+            };
+          })}
+          value={config.resolution}
+          onChange={(resolution) => onChange({ ...config, resolution })}
+        />
+      ) : null}
+      {qualities.length > 1 ? (
+        <OptionRow
+          label="Quality"
+          options={qualities.map((q) => {
+            const wait = latencyFor(meta, { ...config, quality: q.id });
+            return { value: q.id, label: wait ? `${q.label} · ${wait}` : q.label };
+          })}
+          value={config.quality}
+          onChange={(quality) => onChange({ ...config, quality })}
+        />
+      ) : null}
+      <p className="text-[11px] text-paper-soft">
+        Estimated price per image, billed by the provider.
+      </p>
+    </div>
+  );
 }

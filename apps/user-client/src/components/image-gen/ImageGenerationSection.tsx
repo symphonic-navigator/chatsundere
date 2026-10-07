@@ -2,43 +2,61 @@
 
 import {
   type ImageModelConfig,
-  defaultConfigFor,
-  isImageModelConfig,
+  type ImageSlot,
+  carryOverConfig,
+  getProvider,
+  getTtiDescriptor,
+  isValidConfigFor,
   listTtiOfferings,
+  upgradeImageSlot,
 } from '@chatsundere/llm-unified';
+import type { StoredImageSlot } from '../../boot/client-data-db.js';
 import { useProviders } from '../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { useServerGate } from '../../lib/server-gate.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
 import { TtiModelSelect } from './TtiModelSelect.js';
 import { ImageModelConfigView } from './config-views.js';
+import {
+  type PickerFamily,
+  buildPickerFamilies,
+  familyTapTarget,
+  variantEntries,
+} from './tti-picker-model.js';
 
-type ImageGenSlot = { ref: string; config: ImageModelConfig } | null;
-
-/** Validate a stored slot; an invalid or stale config renders as unset. */
-function validSlot(slot: ImageGenSlot | undefined): ImageGenSlot {
-  if (!slot || !isImageModelConfig(slot.config)) return null;
-  return slot;
-}
-
-function offeringFor(ref: string) {
-  const idx = ref.indexOf(':');
-  if (idx < 0) return undefined;
-  const providerId = ref.slice(0, idx);
-  const upstreamSlug = ref.slice(idx + 1);
-  return listTtiOfferings().find(
-    (o) => o.providerId === providerId && o.upstreamSlug === upstreamSlug,
-  );
-}
+type Slot = ImageSlot | null;
 
 const disabledRowClass =
   'rounded-md border border-white/5 bg-white/[0.02] p-3 text-sm text-paper-soft';
 
+function providerName(id: string): string {
+  return getProvider(id)?.displayName ?? id;
+}
+
+/** Select `ref` in a slot: remembered config if it still fits, else carry-over. */
+function selectRef(prev: Slot, ref: string): Slot {
+  const meta = getTtiDescriptor(ref);
+  if (!meta) return prev;
+  const remembered = prev?.lastConfigByRef?.[ref];
+  const config: ImageModelConfig =
+    remembered && isValidConfigFor(meta, remembered)
+      ? remembered
+      : prev
+        ? carryOverConfig(prev.config, meta)
+        : meta.defaults;
+  return withConfig(prev, ref, config);
+}
+
+/** Store `config` as the slot's current config and remember it for `ref`. */
+function withConfig(prev: Slot, ref: string, config: ImageModelConfig): ImageSlot {
+  return { ref, config, lastConfigByRef: { ...(prev?.lastConfigByRef ?? {}), [ref]: config } };
+}
+
 /**
  * My Settings — image generation. Picks the global primary image model (and,
- * once one is curated, an NSFW-capable second slot) plus its per-model config.
- * Every change persists immediately — this section is not governed by the
- * SaveBar (spec 2026-06-09 §6).
+ * once one is curated, an NSFW-capable second slot) plus its config. Every
+ * change persists immediately — not governed by the SaveBar (spec 2026-06-09
+ * §6). Family-first picker per spec 2026-10-07 §3.
  */
 export function ImageGenerationSection(): JSX.Element {
   const { data: settings } = useSettings();
@@ -48,16 +66,73 @@ export function ImageGenerationSection(): JSX.Element {
   const hasProxy = useServerGate('proxy').enabled;
   const usable = usableTemplateIds(rows, hasProxy);
 
+  const reasonFor = (id: string): string => {
+    const name = providerName(id);
+    const configured = rows.some((r) => r.templateId === id && r.enabled && r.apiKey !== null);
+    return configured && getProvider(id)?.corsHint === 'requires-proxy' && !hasProxy
+      ? `${name} needs the relay server`
+      : `${name} is not set up — add it under Upstream Providers above`;
+  };
+
   // Defensive: an older row may predate the v19 migration.
   const stored = settings?.imageGeneration ?? { primary: null, nsfw: null };
-  const primary = validSlot(stored.primary);
-  const nsfw = validSlot(stored.nsfw);
+  const primary = upgradeImageSlot(stored.primary, getTtiDescriptor);
+  const nsfw = upgradeImageSlot(stored.nsfw, getTtiDescriptor);
 
-  const persist = (next: { primary: ImageGenSlot; nsfw: ImageGenSlot }) =>
+  const persist = (next: { primary: Slot | StoredImageSlot; nsfw: Slot | StoredImageSlot }) =>
     update.mutate({ imageGeneration: next });
 
-  const nsfwOfferingExists = listTtiOfferings().some((o) => o.tti?.canDoNsfw === true);
-  const primaryCanDoNsfw = primary ? offeringFor(primary.ref)?.tti?.canDoNsfw === true : false;
+  const offerings = listTtiOfferings();
+  const nsfwOfferingExists = offerings.some((o) => o.tti?.canDoNsfw === true);
+  const primaryCanDoNsfw = primary ? getTtiDescriptor(primary.ref)?.canDoNsfw === true : false;
+
+  const renderSlot = (
+    which: 'primary' | 'nsfw',
+    slot: Slot,
+    save: (next: Slot) => void,
+    opts: { nsfwOnly: boolean; disabled: boolean },
+  ): JSX.Element => {
+    const families = buildPickerFamilies({
+      offerings,
+      usableTemplateIds: usable,
+      providerName,
+      reasonFor,
+      nsfwOnly: opts.nsfwOnly,
+      savedRef: slot?.ref ?? null,
+    });
+    const meta = slot ? getTtiDescriptor(slot.ref) : undefined;
+    const family: PickerFamily | undefined = families.find((f) => f.selected);
+    const saved = family?.offerings.find((o) => o.ref === slot?.ref);
+
+    return (
+      <div data-testid={`image-slot-${which}`}>
+        <TtiModelSelect
+          families={families}
+          noUsableProvider={!families.some((f) => f.usable)}
+          hasSelection={slot !== null}
+          disabled={opts.disabled}
+          onTapFamily={(f) => {
+            const target = familyTapTarget(f, slot?.ref ?? null);
+            if (target) save(selectRef(slot, target));
+          }}
+          onClear={() => save(null)}
+        />
+        {slot && meta && family ? (
+          <div className="mt-3">
+            <ImageModelConfigView
+              meta={meta}
+              providerName={providerName(slot.ref.slice(0, slot.ref.indexOf(':')))}
+              config={slot.config}
+              staleReason={saved && !saved.usable ? saved.reason : null}
+              variants={variantEntries(family, slot.ref)}
+              onSelectVariant={(ref) => save(selectRef(slot, ref))}
+              onChange={(config) => save(withConfig(slot, slot.ref, config))}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -69,27 +144,10 @@ export function ImageGenerationSection(): JSX.Element {
       <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">
         Primary model
       </div>
-      <TtiModelSelect
-        usableTemplateIds={usable}
-        selectedRef={primary?.ref ?? null}
-        onSelect={(sel) =>
-          persist({
-            primary: { ref: sel.ref, config: defaultConfigFor(sel.groupId) },
-            nsfw: stored.nsfw,
-          })
-        }
-        onClear={() => persist({ primary: null, nsfw: stored.nsfw })}
-      />
-      {primary ? (
-        <div className="mt-3">
-          <ImageModelConfigView
-            config={primary.config}
-            onChange={(config) =>
-              persist({ primary: { ref: primary.ref, config }, nsfw: stored.nsfw })
-            }
-          />
-        </div>
-      ) : null}
+      {renderSlot('primary', primary, (next) => persist({ primary: next, nsfw: stored.nsfw }), {
+        nsfwOnly: false,
+        disabled: false,
+      })}
 
       <div className="mt-4">
         <div className="mb-1.5 text-[11px] uppercase tracking-widest text-paper-soft">
@@ -107,29 +165,10 @@ export function ImageGenerationSection(): JSX.Element {
             {primary === null ? (
               <p className="mb-2 text-[11px] text-paper-soft">Pick a primary model first.</p>
             ) : null}
-            <TtiModelSelect
-              nsfwOnly
-              disabled={primary === null}
-              usableTemplateIds={usable}
-              selectedRef={nsfw?.ref ?? null}
-              onSelect={(sel) =>
-                persist({
-                  primary: stored.primary,
-                  nsfw: { ref: sel.ref, config: defaultConfigFor(sel.groupId) },
-                })
-              }
-              onClear={() => persist({ primary: stored.primary, nsfw: null })}
-            />
-            {nsfw && primary !== null ? (
-              <div className="mt-3">
-                <ImageModelConfigView
-                  config={nsfw.config}
-                  onChange={(config) =>
-                    persist({ primary: stored.primary, nsfw: { ref: nsfw.ref, config } })
-                  }
-                />
-              </div>
-            ) : null}
+            {renderSlot('nsfw', nsfw, (next) => persist({ primary: stored.primary, nsfw: next }), {
+              nsfwOnly: true,
+              disabled: primary === null,
+            })}
           </>
         )}
       </div>
