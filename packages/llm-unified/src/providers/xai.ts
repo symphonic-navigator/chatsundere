@@ -11,10 +11,42 @@ import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
 import { apiKeyField } from './_helpers.js';
 
+// Grok Imagine (xAI direct), probed 2026-10-07. Quality picks the upstream model
+// (`grok-imagine-image` / `-quality`) rather than a body field. Billed: Normal
+// 2¢ at 1k and 2k; Quality 5¢ at 1k but 7¢ at 2k. Both answer in ~12 s.
+// Normal is flat across tiers, so the default resolution is the higher one.
 const TTI_META: TtiOfferingMeta = {
-  groupId: 'xai-imagine',
-  canDoNsfw: false,
+  family: 'Grok Imagine',
+  variant: '1',
   displayName: 'Grok Imagine',
+  canDoNsfw: false,
+  maxCount: 10,
+  timeoutMs: 60_000,
+  aspects: ['1:1', '16:9', '9:16', '4:3', '3:4'],
+  resolutions: [
+    { id: '1k', label: '1k' },
+    { id: '2k', label: '2k' },
+  ],
+  qualities: [
+    { id: 'normal', label: 'Normal' },
+    { id: 'quality', label: 'High' },
+  ],
+  priceCents: { '1k|normal': 2, '2k|normal': 2, '1k|quality': 5, '2k|quality': 7 },
+  latency: {
+    '1k|normal': '~12 s',
+    '2k|normal': '~12 s',
+    '1k|quality': '~12 s',
+    '2k|quality': '~12 s',
+  },
+  billing: 'fixed',
+  defaults: { aspect: '1:1', resolution: '2k', quality: 'normal' },
+  wire: {
+    kind: 'aspect-resolution',
+    sendResolution: true,
+    modelByQuality: { normal: 'grok-imagine-image', quality: 'grok-imagine-image-quality' },
+    responseFormat: 'b64_json',
+  },
+  perItemModeration: true,
 };
 
 const TTS_META: TtsOfferingMeta = {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { WebOfferingMeta } from '../integrations/web-interfacing.js';
+import type { TtiDescriptor } from '../tti/descriptor.js';
 
 /** How the user steers reasoning — drives the cockpit UI directly. */
 export type ReasoningControl =
@@ -144,14 +145,11 @@ export interface SttOfferingMeta {
   spoofWebmAsMatroska?: boolean;
 }
 
-/** Image-generation metadata when `serviceKind === 'tti'`; undefined otherwise. */
-export interface TtiOfferingMeta {
-  groupId: 'xai-imagine' | 'zimage' | 'seedream' | 'gpt-image-2';
-  /** Whether the upstream accepts adult prompts. All launch models: false. */
-  canDoNsfw: boolean;
-  /** Human-readable model name (TTI offerings have no CanonicalModel). */
-  displayName: string;
-}
+/**
+ * Metadata carried by a `serviceKind: 'tti'` offering — the full data-driven
+ * descriptor (family, choices, prices, wire shape). See `tti/descriptor.ts`.
+ */
+export type TtiOfferingMeta = TtiDescriptor;
 
 const MODES = new Set(['none', 'fixed-on', 'toggle', 'steps']);
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ImageModelConfig } from '@chatsundere/llm-unified';
+import type { ImageModelConfig, LegacyImageModelConfig } from '@chatsundere/llm-unified';
 import type { BlobRef, SyncCollection } from '@chatsundere/shared-types';
 import Dexie, { type Table } from 'dexie';
 import { pickProviderSurvivor } from '../data/provider-dedup.js';
@@ -13,6 +13,17 @@ import type { McpToolDefinition } from '../mcp/types.js';
 export const DB_NAME = 'chatsundere_client_data';
 
 // ===== Row types =====
+
+/**
+ * One stored image-generation slot. `config` may still be a pre-2026-10-07
+ * legacy shape (synced from an older device); readers pass the slot through
+ * `upgradeImageSlot` before use.
+ */
+export interface StoredImageSlot {
+  ref: string;
+  config: ImageModelConfig | LegacyImageModelConfig;
+  lastConfigByRef?: Record<string, ImageModelConfig>;
+}
 
 export interface SettingsRow {
   id: 1;
@@ -51,8 +62,8 @@ export interface SettingsRow {
    *  `primary` drives generate_image; `nsfw` is the NSFW-capable second slot
    *  (spec 2026-06-09 §6). Both null until the user picks. */
   imageGeneration: {
-    primary: { ref: string; config: ImageModelConfig } | null;
-    nsfw: { ref: string; config: ImageModelConfig } | null;
+    primary: StoredImageSlot | null;
+    nsfw: StoredImageSlot | null;
   };
   /** Voice playback granularity: paragraph = one segment per paragraph,
    *  sentence = one segment per sentence. */
@@ -415,7 +426,7 @@ export interface ArtefactRow {
     prompt: string;
     modelRef: string;
     modelLabel: string;
-    configSnapshot: ImageModelConfig;
+    configSnapshot: ImageModelConfig | LegacyImageModelConfig;
   };
 }
 

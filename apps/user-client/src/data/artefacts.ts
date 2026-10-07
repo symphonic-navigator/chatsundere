@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ImageModelConfig } from '@chatsundere/llm-unified';
+import type { ImageModelConfig, LegacyImageModelConfig } from '@chatsundere/llm-unified';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { type ArtefactRow, getClientDataDb } from '../boot/client-data-db.js';
@@ -101,7 +101,7 @@ export interface AddGeneratedImageArtefactInput {
   prompt: string;
   modelRef: string;
   modelLabel: string;
-  configSnapshot: ImageModelConfig;
+  configSnapshot: ImageModelConfig | LegacyImageModelConfig;
   bytes: Blob;
   mime: string;
   thumbBlob: Blob;

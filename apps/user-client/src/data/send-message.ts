@@ -5,21 +5,21 @@ import {
   getCanonical,
   getOffering,
   getProvider,
-  isImageModelConfig,
   offeringToTarget,
 } from '@chatsundere/llm-unified';
 import type {
-  ImageModelConfig,
   ImageRequestBase,
   Offering,
   OneShotArgs,
   ProviderConfig,
   ProviderDefinition,
   ReasoningIntent,
+  TtiDescriptor,
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { transcodeGeneratedImage } from '../attachments/image-transcode.js';
 import {
   type ChatRow,
   type MessageRow,
@@ -57,6 +57,7 @@ import {
 import { addGeneratedImageArtefact } from './artefacts.js';
 import { providerApiKeySlot } from './providers.js';
 import { type ChoreCallBundle, resolveBackgroundBundle } from './resolve-background-offering.js';
+import { buildImageSlot } from './resolve-image-slot.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // lastCompanionText — lorebook companion-scan helper
@@ -291,24 +292,20 @@ async function resolveSubstituteVision(
 interface ResolvedImageSlot {
   slot: ImageGenerationSlot;
   base: ImageRequestBase;
+  slug: string;
+  meta: TtiDescriptor;
 }
 
 /** Resolve one stored settings slot into a tool slot + request base. Mirrors
  *  resolveSubstituteVision: ref → provider def + offering → enabled row → key. */
-async function resolveImageSlot(
-  stored: { ref: string; config: ImageModelConfig } | null,
-  mk: MasterKey,
-): Promise<ResolvedImageSlot | null> {
-  if (!stored) return null;
-  const idx = stored.ref.indexOf(':');
-  if (idx < 0) return null;
-  const templateId = stored.ref.slice(0, idx);
-  const slug = stored.ref.slice(idx + 1);
+async function resolveImageSlot(stored: unknown, mk: MasterKey): Promise<ResolvedImageSlot | null> {
+  // Upgrades legacy shapes synced from older devices; null = junk or retired model.
+  const built = buildImageSlot(stored);
+  if (!built) return null;
+  const { slot, templateId, slug, meta } = built;
 
   const providerDef = getProvider(templateId);
-  const offering = getOffering(templateId, slug);
-  if (!providerDef || !offering || offering.serviceKind !== 'tti' || !offering.tti) return null;
-  if (!isImageModelConfig(stored.config)) return null;
+  if (!providerDef) return null;
 
   const db = getClientDataDb();
   const providerRow = (await db.providers.where('templateId').equals(templateId).toArray()).find(
@@ -325,12 +322,9 @@ async function resolveImageSlot(
   }
 
   return {
-    slot: {
-      ref: stored.ref,
-      modelLabel: offering.tti.displayName,
-      canDoNsfw: offering.tti.canDoNsfw,
-      config: stored.config,
-    },
+    slot,
+    slug,
+    meta,
     base: {
       providerConfig: {
         baseUrl: providerDef.baseUrl,
@@ -353,9 +347,9 @@ async function resolveImageGeneration(
   const primary = await resolveImageSlot(settings?.imageGeneration?.primary ?? null, mk);
   const nsfw = await resolveImageSlot(settings?.imageGeneration?.nsfw ?? null, mk);
 
-  const baseByRef = new Map<string, ImageRequestBase>();
-  if (primary) baseByRef.set(primary.slot.ref, primary.base);
-  if (nsfw) baseByRef.set(nsfw.slot.ref, nsfw.base);
+  const resolvedByRef = new Map<string, ResolvedImageSlot>();
+  if (primary) resolvedByRef.set(primary.slot.ref, primary);
+  if (nsfw) resolvedByRef.set(nsfw.slot.ref, nsfw);
 
   return {
     chatId,
@@ -368,12 +362,23 @@ async function resolveImageGeneration(
       Boolean(nsfw) || Boolean(primary?.slot.canDoNsfw),
     ),
     generate: (slot, prompt, count, signal) => {
-      const base = baseByRef.get(slot.ref);
-      if (!base) return Promise.reject(new Error('image slot base missing'));
-      return generateImages({ ...base, config: slot.config, prompt, count, signal });
+      const resolved = resolvedByRef.get(slot.ref);
+      if (!resolved) return Promise.reject(new Error('image slot base missing'));
+      return generateImages({
+        ...resolved.base,
+        slug: resolved.slug,
+        meta: resolved.meta,
+        config: slot.config,
+        prompt,
+        count,
+        signal,
+      });
     },
     persistImage: async (item, meta) => {
-      const { thumbBlob, width, height } = await thumbnailFromBlob(item.bytes);
+      // Sequential by construction: the tool awaits each persist in turn, so
+      // at most one full-size bitmap is decoded at a time.
+      const stored = await transcodeGeneratedImage(item);
+      const { thumbBlob, width, height } = await thumbnailFromBlob(stored.bytes);
       return addGeneratedImageArtefact({
         chatId,
         personaId: persona.id,
@@ -381,8 +386,8 @@ async function resolveImageGeneration(
         modelRef: meta.slot.ref,
         modelLabel: meta.slot.modelLabel,
         configSnapshot: meta.slot.config,
-        bytes: item.bytes,
-        mime: item.mime,
+        bytes: stored.bytes,
+        mime: stored.mime,
         thumbBlob,
         width,
         height,

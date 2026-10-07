@@ -3,18 +3,10 @@ import { b64ToBlob } from '../b64.js';
 import { fetchWithProxyAuth } from '../proxy-fetch.js';
 import { buildRequest, buildSignedUrlGet, canRouteThroughProxy } from '../transport.js';
 import type { ProviderConfig } from '../types.js';
-import type { ImageModelConfig } from './config.js';
+import { buildImagePayload } from './build-payload.js';
+import type { ImageModelConfig, TtiDescriptor } from './descriptor.js';
 import { parseImagesResponse } from './parse.js';
-import { buildImagePayload } from './payloads.js';
 
-/** xAI returns within ~tens of seconds; Z-Image base at count 4 takes ~3 min.
- *  GPT Image 2 at quality high took ~3.5 min for a single 1K image. */
-const POST_TIMEOUT_MS: Record<ImageModelConfig['groupId'], number> = {
-  'xai-imagine': 60_000,
-  zimage: 300_000,
-  seedream: 300_000,
-  'gpt-image-2': 600_000,
-};
 const URL_FETCH_TIMEOUT_MS = 60_000;
 
 /** Connection-independent inputs the caller (apps/) resolves per provider row. */
@@ -24,9 +16,13 @@ export interface ImageRequestBase {
 }
 
 export interface GenerateImagesArgs extends ImageRequestBase {
+  /** Upstream slug of the offering (the part of the ref after the provider). */
+  slug: string;
+  /** Descriptor of the offering being called; drives payload, timeout and moderation parsing. */
+  meta: TtiDescriptor;
   config: ImageModelConfig;
   prompt: string;
-  /** Already clamped by the caller via `maxCountFor`. */
+  /** Already clamped by the caller to `meta.maxCount`. */
   count: number;
   signal?: AbortSignal;
   /** Test injection; defaults to global fetch. */
@@ -74,10 +70,10 @@ function extractProviderMessage(json: unknown): string | undefined {
  */
 export async function generateImages(args: GenerateImagesArgs): Promise<GenerateImagesResult> {
   const fetchFn = args.fetchFn ?? fetch;
-  const body = buildImagePayload(args.config, args.prompt, args.count);
+  const body = buildImagePayload(args.slug, args.meta, args.config, args.prompt, args.count);
   const modelId = String(body.model);
 
-  const timeoutSignal = AbortSignal.timeout(POST_TIMEOUT_MS[args.config.groupId]);
+  const timeoutSignal = AbortSignal.timeout(args.meta.timeoutMs);
   const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
 
   const proxied = args.providerConfig.routing.kind === 'cors-proxy';
@@ -105,7 +101,7 @@ export async function generateImages(args: GenerateImagesArgs): Promise<Generate
     });
   }
 
-  const raw = parseImagesResponse(args.config.groupId, json);
+  const raw = parseImagesResponse(args.meta.perItemModeration, json);
   if (raw.length === 0) {
     throw new ImageGenerationError('image generation returned no items', {
       status: response.status,

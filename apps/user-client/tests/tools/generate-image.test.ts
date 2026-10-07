@@ -13,7 +13,8 @@ function slot(over: Partial<ImageGenerationSlot> = {}): ImageGenerationSlot {
     ref: 'nano-gpt:z-image-turbo',
     modelLabel: 'Z-Image',
     canDoNsfw: false,
-    config: { groupId: 'zimage', variant: 'turbo', size: '1024x1024' },
+    config: { aspect: '1:1', resolution: null, quality: null },
+    maxCount: 10,
     ...over,
   };
 }
@@ -93,11 +94,12 @@ describe('contributeImageTool — execute', () => {
     expect(r.ok).toBe(false);
     expect(c.generate).not.toHaveBeenCalled();
   });
-  it('clamps count to the group maximum and persists one artefact per image', async () => {
+  it('clamps count to the slot maximum and persists one artefact per image', async () => {
     const seedreamSlot = slot({
       ref: 'nano-gpt:seedream-v4.5',
       modelLabel: 'Seedream 4.5',
-      config: { groupId: 'seedream', aspect: '1:1', quality: 'standard' },
+      config: { aspect: '1:1', resolution: '2.7k', quality: null },
+      maxCount: 4,
     });
     const c = ctx({
       primary: seedreamSlot,
@@ -185,5 +187,20 @@ describe('contributeImageTool — execute', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toContain('prompt rejected');
     expect(r.error).toContain('rephras');
+  });
+
+  it('clamps an oversized count to the slot maxCount (FLUX.3 → 4)', async () => {
+    const fluxSlot = slot({
+      ref: 'nano-gpt:black-forest-labs/flux-3/text-to-image',
+      modelLabel: 'FLUX.3',
+      config: { aspect: '1:1', resolution: '4k', quality: null },
+      maxCount: 4,
+    });
+    const generate = vi.fn(
+      async (): Promise<GenerateImagesResult> => ({ items: [], modelId: 'flux' }),
+    );
+    const c = ctx({ primary: fluxSlot, generate });
+    await getTool(c).execute({ prompt: 'a fox', count: 10 });
+    expect(generate).toHaveBeenCalledWith(fluxSlot, 'a fox', 4, undefined);
   });
 });

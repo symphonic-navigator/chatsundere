@@ -8,7 +8,28 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-10-07 — **MISTRAL LARGE 4 CURATED** on the direct
+**Last updated:** 2026-10-08 — **UNIFIED IMAGE MODELS BUILT (overnight), AWAITING
+REVIEW.** Branch `claude/zealous-cerf-01fn2t`, **not squashed, not merged, not
+pushed**. Spec `superpowers/specs/2026-10-07-unified-image-models-design.md`, plan
+`superpowers/plans/2026-10-07-unified-image-models.md`. Every TTI offering is now a
+data descriptor (family, variant, aspects, resolutions, qualities, prices, wire);
+the four bespoke groups are gone; nine nano-gpt models added (MiniMax H3, Qwen Image
+2.1 + Pro, FLUX.3, Seedream 5.0 Flash/Lite/Pro, Grok Imagine 2.0, Nano Banana 2.1)
+plus Z-Image Base as its own offering — 14 offerings, 8 families, all
+`canDoNsfw: false` (Chris + community judge NSFW first). Family-first picker with
+identity line, priced resolutions, latency-hinted qualities, stale-slot handling,
+`lastConfigByRef`; lazy legacy-slot upgrade (no Dexie bump); generated PNGs
+transcoded to JPEG at full size. **Next (Liz):**
+- Laura pre-squash pass: long "label — reason" variant text at 380 px; the family
+  reason names only the first provider; a retired offering shows as plain unset.
+- Run `curation/run-tti-suite.ts` live. It has not been run. It prints no billed
+  cost and runs every cell (a known deviation from spec §7, for Chris to decide).
+  The first run should confirm which content-type nano-gpt's R2 returns for PNGs.
+- Write the per-family Curation Records and the curate skill's Mode 5.
+- Add the per-model NSFW judgement item to `obsidian/insights/follow-ups-index.md`.
+- Squash; **then Chris** runs spec §10 on device.
+
+**Also:** 2026-10-07 — **MISTRAL LARGE 4 CURATED** on the direct
 Mistral API and on nano-gpt (testers asked for it after seeing it on nano-gpt).
 Squashed to `master` (`fa8e3b74`), **not pushed, not tagged**. Large 4 reasons
 (unlike Large 3): binary toggle with a genuine off, vision, tools, 512k window

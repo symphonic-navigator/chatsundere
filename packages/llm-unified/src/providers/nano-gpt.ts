@@ -17,6 +17,14 @@ import type {
 import { registerWebAdapter } from '../integrations/web-adapter-registry.js';
 import type { SearchTier, WebOfferingMeta } from '../integrations/web-interfacing.js';
 import { registerProvider } from '../registry.js';
+import {
+  GPT_IMAGE_2_SIZES,
+  QWEN_IMAGE_2_1_PRO_SIZES,
+  SEEDREAM_4_5_SIZES,
+  SEEDREAM_5_LITE_SIZES,
+  Z_IMAGE_BASE_SIZES,
+  Z_IMAGE_TURBO_SIZES,
+} from '../tti/size-tables.js';
 import type { ProviderDefinition } from '../types.js';
 import { nanoGptWebScrapeAdapter, nanoGptWebSearchAdapter } from '../web-adapters/nano-gpt-web.js';
 import { apiKeyField } from './_helpers.js';
@@ -414,23 +422,287 @@ function ttiOffering(slug: string, tti: TtiOfferingMeta): Offering {
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: true,
     source: 'curated',
-    confidence: 'verified', // live CORS + generation probes with Chris, 2026-06-09 (spec §10)
+    confidence: 'verified', // live probes 2026-06-09/10 and 2026-10-07 (unified image models spec §4)
     serviceKind: 'tti',
     tti,
   };
 }
 
+// The aspect palette shared by the image models (calm rows; exotic ratios such
+// as 1:8 are left out on purpose). Each descriptor takes the subset its model
+// supports.
+const TTI_PALETTE = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'] as const;
+const TTI_SEVEN = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] as const;
+
 const ttiOfferings: Offering[] = [
-  ttiOffering('z-image-turbo', { groupId: 'zimage', canDoNsfw: false, displayName: 'Z-Image' }),
-  ttiOffering('seedream-v4.5', {
-    groupId: 'seedream',
+  ttiOffering('z-image-turbo', {
+    family: 'Z-Image',
+    variant: 'Turbo',
+    displayName: 'Z-Image Turbo',
     canDoNsfw: false,
-    displayName: 'Seedream 4.5',
+    maxCount: 10,
+    timeoutMs: 300_000,
+    aspects: ['1:1', '16:9', '9:16', '3:2', '2:3'],
+    resolutions: null,
+    qualities: null,
+    priceCents: { '-|-': 1.19 },
+    billing: 'fixed',
+    recommended: true,
+    defaults: { aspect: '1:1', resolution: null, quality: null },
+    wire: { kind: 'size-table', sizes: Z_IMAGE_TURBO_SIZES, responseFormat: 'url' },
+    perItemModeration: false,
   }),
-  ttiOffering('gpt-image-2', {
-    groupId: 'gpt-image-2',
+  // Z-Image Base: ~37 s against Turbo's ~4 s at 1024² (probed 2026-10-07).
+  ttiOffering('z-image-base', {
+    family: 'Z-Image',
+    variant: 'Base',
+    displayName: 'Z-Image Base',
     canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: ['1:1', '16:9', '9:16', '4:3', '3:4'],
+    resolutions: null,
+    qualities: null,
+    priceCents: { '-|-': 1.7 },
+    latencyHint: '~10× slower',
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: null, quality: null },
+    wire: { kind: 'size-table', sizes: Z_IMAGE_BASE_SIZES, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  ttiOffering('seedream-v4.5', {
+    family: 'Seedream',
+    variant: '4.5',
+    displayName: 'Seedream 4.5',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_SEVEN],
+    resolutions: [
+      { id: '2k', label: '2k' },
+      { id: '2.2k', label: '2.2k' },
+      { id: '2.7k', label: '2.7k' },
+    ],
+    qualities: null,
+    priceCents: { '2k|-': 4, '2.2k|-': 4, '2.7k|-': 4 },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: '2.7k', quality: null },
+    wire: { kind: 'size-table', sizes: SEEDREAM_4_5_SIZES, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  // GPT Image 2: `quality` passes through nano-gpt and steers cost and wait.
+  // Billed 1k: low 1.8¢ / medium 6.6¢ / high 15.6¢ (2026-06-10); 2k: low 2.5¢
+  // (~2 min), medium 12.2¢ (~2 min), high 31.3¢ (~2.5 min) (2026-10-07).
+  ttiOffering('gpt-image-2', {
+    family: 'GPT Image 2',
+    variant: null,
     displayName: 'GPT Image 2',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 600_000,
+    aspects: [...TTI_PALETTE],
+    resolutions: [
+      { id: '1k', label: '1k' },
+      { id: '2k', label: '2k' },
+    ],
+    qualities: [
+      { id: 'low', label: 'Low' },
+      { id: 'medium', label: 'Medium' },
+      { id: 'high', label: 'High' },
+    ],
+    priceCents: {
+      '1k|low': 1.8,
+      '1k|medium': 6.6,
+      '1k|high': 15.6,
+      '2k|low': 2.5,
+      '2k|medium': 12.2,
+      '2k|high': 31.3,
+    },
+    latency: {
+      '1k|low': '~25 s',
+      '1k|medium': '~70 s',
+      '1k|high': '~3.5 min',
+      '2k|low': '~2 min',
+      '2k|medium': '~2 min',
+      '2k|high': '~2.5 min',
+    },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: '1k', quality: 'medium' },
+    wire: {
+      kind: 'size-table',
+      sizes: GPT_IMAGE_2_SIZES,
+      qualityParam: 'quality',
+      responseFormat: 'url',
+    },
+    perItemModeration: false,
+  }),
+  // ── October 2026 additions (probed live 2026-10-07; billed costs, wall-clock
+  // waits). nano-gpt's catalogue listings are suggestions; these are measured.
+  ttiOffering('minimax-h3/text-to-image', {
+    family: 'MiniMax H3',
+    variant: null,
+    displayName: 'MiniMax H3',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_PALETTE],
+    resolutions: [
+      { id: '1k', label: '1k' },
+      { id: '2k', label: '2k' },
+    ],
+    qualities: null,
+    priceCents: { '1k|-': 2, '2k|-': 6 },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: '1k', quality: null },
+    wire: { kind: 'aspect-resolution', sendResolution: true, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  ttiOffering('qwen-image-2.1/text-to-image', {
+    family: 'Qwen Image',
+    variant: '2.1',
+    displayName: 'Qwen Image 2.1',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_PALETTE],
+    resolutions: [
+      { id: '1k', label: '1k' },
+      { id: '1.5k', label: '1.5k' },
+      { id: '2k', label: '2k' },
+    ],
+    qualities: null,
+    priceCents: { '1k|-': 2, '1.5k|-': 4, '2k|-': 6 },
+    billing: 'fixed',
+    recommended: true,
+    defaults: { aspect: '1:1', resolution: '1k', quality: null },
+    wire: { kind: 'aspect-resolution', sendResolution: true, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  // Qwen Image 2.1 Pro returns PNGs of ~9 MB; the client transcodes them.
+  ttiOffering('qwen-image-2.1-pro', {
+    family: 'Qwen Image',
+    variant: '2.1 Pro',
+    displayName: 'Qwen Image 2.1 Pro',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_SEVEN],
+    resolutions: null,
+    qualities: null,
+    priceCents: { '-|-': 7.5 },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: null, quality: null },
+    wire: { kind: 'size-table', sizes: QWEN_IMAGE_2_1_PRO_SIZES, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  // FLUX.3: 4k is 5456×3072 at 65¢ and ~90 s. maxCount is 4, not the
+  // catalogue's 10, so one tool call can never bill $6.50.
+  ttiOffering('black-forest-labs/flux-3/text-to-image', {
+    family: 'FLUX.3',
+    variant: null,
+    displayName: 'FLUX.3',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_PALETTE],
+    resolutions: [
+      { id: '1k', label: '1k' },
+      { id: '2k', label: '2k' },
+      { id: '4k', label: '4k' },
+    ],
+    qualities: null,
+    priceCents: { '1k|-': 5, '2k|-': 12, '4k|-': 65 },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: '1k', quality: null },
+    wire: { kind: 'aspect-resolution', sendResolution: true, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  ttiOffering('bytedance/seedream-v5.0-flash', {
+    family: 'Seedream',
+    variant: '5.0 Flash',
+    displayName: 'Seedream 5.0 Flash',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_SEVEN],
+    resolutions: [
+      { id: '1k', label: '1k' },
+      { id: '1.5k', label: '1.5k' },
+      { id: '2k', label: '2k' },
+    ],
+    qualities: null,
+    priceCents: { '1k|-': 2.7, '1.5k|-': 2.7, '2k|-': 2.7 },
+    billing: 'fixed',
+    recommended: true,
+    defaults: { aspect: '1:1', resolution: '2k', quality: null },
+    wire: { kind: 'aspect-resolution', sendResolution: true, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  ttiOffering('seedream-v5.0-lite', {
+    family: 'Seedream',
+    variant: '5.0 Lite',
+    displayName: 'Seedream 5.0 Lite',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: ['1:1', '16:9', '9:16', '3:2', '2:3'],
+    resolutions: null,
+    qualities: null,
+    priceCents: { '-|-': 3.5 },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: null, quality: null },
+    wire: { kind: 'size-table', sizes: SEEDREAM_5_LITE_SIZES, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  // Seedream 5.0 Pro always renders and bills 2k (~2730×1536 at 16:9, 9¢):
+  // `resolution: '1k'`, `'1K'` and `size: '1k'` were all ignored, so no
+  // Resolution row and no resolution param. The catalogue's 1k price is wrong.
+  ttiOffering('bytedance/seedream-v5.0-pro', {
+    family: 'Seedream',
+    variant: '5.0 Pro',
+    displayName: 'Seedream 5.0 Pro',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_SEVEN],
+    resolutions: null,
+    qualities: null,
+    priceCents: { '-|-': 9 },
+    billing: 'fixed',
+    defaults: { aspect: '1:1', resolution: null, quality: null },
+    wire: { kind: 'aspect-resolution', sendResolution: false, responseFormat: 'url' },
+    perItemModeration: false,
+  }),
+  // Grok Imagine 2.0 via nano-gpt: `quality` steers cost and wait. nano-gpt's
+  // catalogue warns that prompts refused under xAI's terms may still be billed.
+  ttiOffering('xai/grok-imagine-image/v2.0/text-to-image', {
+    family: 'Grok Imagine',
+    variant: '2.0',
+    displayName: 'Grok Imagine 2.0',
+    canDoNsfw: false,
+    maxCount: 4,
+    timeoutMs: 300_000,
+    aspects: [...TTI_SEVEN],
+    resolutions: [
+      { id: '1k', label: '1k' },
+      { id: '2k', label: '2k' },
+    ],
+    qualities: [
+      { id: 'low', label: 'Low' },
+      { id: 'medium', label: 'Medium' },
+    ],
+    priceCents: { '1k|low': 4, '1k|medium': 6, '2k|low': 6, '2k|medium': 8 },
+    latency: { '1k|low': '~20 s', '1k|medium': '~70 s', '2k|low': '~30 s', '2k|medium': '~80 s' },
+    billing: 'fixed',
+    recommended: true,
+    defaults: { aspect: '1:1', resolution: '1k', quality: 'low' },
+    wire: {
+      kind: 'aspect-resolution',
+      sendResolution: true,
+      qualityParam: 'quality',
+      responseFormat: 'url',
+    },
+    perItemModeration: false,
   }),
 ];
 

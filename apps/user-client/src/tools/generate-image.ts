@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import {
-  type GenerateImagesResult,
-  type ImageModelConfig,
-  maxCountFor,
-} from '@chatsundere/llm-unified';
+import type { GenerateImagesResult, ImageModelConfig } from '@chatsundere/llm-unified';
 import type { Tool, ToolResult } from './types.js';
 
 /** One configured image-model slot, fully resolved by the send path. */
@@ -13,6 +9,8 @@ export interface ImageGenerationSlot {
   modelLabel: string;
   canDoNsfw: boolean;
   config: ImageModelConfig;
+  /** Per-call image cap from the offering's descriptor. */
+  maxCount: number;
 }
 
 /** Per-send image-generation context. Closures keep the tool free of db/network imports. */
@@ -50,9 +48,9 @@ const NOT_CONFIGURED =
 const NSFW_UNAVAILABLE =
   'NSFW image generation is not available — no NSFW-capable model is configured. Offer the user a non-explicit variant of their idea instead.';
 
-function clampCount(raw: unknown, config: ImageModelConfig): number {
+function clampCount(raw: unknown, max: number): number {
   const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.trunc(raw) : 1;
-  return Math.min(Math.max(1, n), maxCountFor(config));
+  return Math.min(Math.max(1, n), max);
 }
 
 /** The generate_image context tool — always exactly one tool (always-offered design). */
@@ -99,7 +97,7 @@ export function contributeImageTool(ctx: ImageToolContext): Tool[] {
           : ctx.primary;
         if (slot === null) return { ok: false, output: '', error: NSFW_UNAVAILABLE };
 
-        const count = clampCount(args.count, slot.config);
+        const count = clampCount(args.count, slot.maxCount);
         let result: GenerateImagesResult;
         try {
           result = await ctx.generate(slot, prompt, count, signal);
