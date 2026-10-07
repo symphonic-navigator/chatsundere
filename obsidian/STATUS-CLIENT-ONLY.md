@@ -2324,6 +2324,8 @@ something that delights and doesn't annoy).
 
 ## Next session
 
+**⏰ REMIND CHRIS FIRST THING: tool-call history poisoning.** Found 2026-10-08 evening: prior turns are replayed without their tool calls/results, so models learn to fake tool use (Mistral Large 4 described imaginary images instead of calling `generate_image`). Chris wants to brainstorm the fix next session — start there (brainstorming → spec). Full context and the A/B/C options are in [[insights/follow-ups-index]] (Implementation, top row).
+
 **▶ Resuming after 2026-10-08.** `v0.3.0` is tagged and pushed (see Current).
 Waiting on Chris's device checks for the image picker and persona quick access.
 Liz owes the TTI Curation Records + curate Mode 5. Everything below this paragraph
