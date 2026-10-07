@@ -8,7 +8,20 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-09-27 — **SLOW STREAM STARTS NO LONGER ABORT OR COST THE
+**Last updated:** 2026-10-07 — **MISTRAL LARGE 4 CURATED** on the direct
+Mistral API and on nano-gpt (testers asked for it after seeing it on nano-gpt).
+Squashed to `master` (`fa8e3b74`), **not pushed, not tagged**. Large 4 reasons
+(unlike Large 3): binary toggle with a genuine off, vision, tools, 512k window
+(256k recommended). Direct route reuses the Mistral adapter unchanged; nano-gpt
+has **no `:thinking` sibling** (both suffixes 404), so the bare slug is steered by
+`reasoning_effort` via the reasoning-effort adapter (nano-gpt 400s an explicit
+`high`; a toggle never sends one). Suite 32/32 core + 4/4 vision on both routes.
+`freedomOriented: null` until Chris has tested it — then set the judgement in
+`canonical-registry.ts` and [[models/mistral-large-4]]. **Next:** Chris field-tests
+(freedom + whether the formatting instructions are still needed), then push + tag
+together with `0e38315f`.
+
+**Also 2026-09-27 — SLOW STREAM STARTS NO LONGER ABORT OR COST THE
 PROMPT CACHE.** Squashed to `master` (`0e38315f`), **not pushed, not tagged**. Field
 reports (Opus 5.5 via nano-gpt, heavily used): streams failing before the first
 token, and the retry paying full input price. Live probes: nano-gpt withholds the
