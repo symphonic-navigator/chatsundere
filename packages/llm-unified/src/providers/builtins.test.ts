@@ -39,9 +39,10 @@ describe('built-in providers', () => {
       // 7 original (incl. glm-5.2) + 4 Mistral (small-4, medium-3.5, large-3,
       // large-4)
       // + 9 Claude (incl. Opus 5) + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI,
-      // censored) + 4 web + 3 tti + 2 Grok voice (tts + stt) + 1 Inkling
+      // censored) + 4 web + 3 tti (original) + 2 Grok voice (tts + stt) + 1 Inkling
       // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream)
-      // + 11 September 2026 additions + Z-Image Base + 9 October 2026 image models = 62.
+      // + 11 September 2026 additions + Z-Image Base + 9 October 2026 image models = 62
+      // (13 of the 62 are image offerings after the unified image models work).
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
       expect(p.offerings).toHaveLength(62);
       expect(p.shape).toBe('openai-chat-completions');

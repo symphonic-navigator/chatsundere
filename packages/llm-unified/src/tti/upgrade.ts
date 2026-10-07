@@ -108,7 +108,7 @@ export function upgradeImageSlot(
 
   const meta = lookup(ref);
   if (!meta) return null;
-  let config = meta.defaults;
+  let config = { ...meta.defaults };
   if (candidate)
     config = isValidConfigFor(meta, candidate) ? candidate : carryOverConfig(candidate, meta);
 

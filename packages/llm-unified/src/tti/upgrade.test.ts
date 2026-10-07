@@ -117,6 +117,12 @@ describe('upgradeImageSlot — new shapes and failure cases', () => {
       config: { aspect: '1:1', resolution: null, quality: null },
     });
   });
+  test('a defaulted config is a copy, never the descriptor defaults object', () => {
+    const slot = up({ ref: 'nano-gpt:seedream-v5.0-lite', config: 'garbage' });
+    const meta = getTtiDescriptor('nano-gpt:seedream-v5.0-lite');
+    expect(slot?.config).toEqual(meta?.defaults);
+    expect(slot?.config).not.toBe(meta?.defaults);
+  });
   test('an unknown ref, a null slot or junk yields null', () => {
     expect(
       up({

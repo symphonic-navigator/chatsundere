@@ -18,6 +18,7 @@ export interface ImageRequestBase {
 export interface GenerateImagesArgs extends ImageRequestBase {
   /** Upstream slug of the offering (the part of the ref after the provider). */
   slug: string;
+  /** Descriptor of the offering being called; drives payload, timeout and moderation parsing. */
   meta: TtiDescriptor;
   config: ImageModelConfig;
   prompt: string;

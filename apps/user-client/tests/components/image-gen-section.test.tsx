@@ -374,4 +374,42 @@ describe('ImageGenerationSection — stale and legacy slots', () => {
     fireEvent.click(within(primarySection()).getByRole('button', { name: 'Clear selection' }));
     expect(mutateMock).toHaveBeenCalledWith({ imageGeneration: { primary: null, nsfw: null } });
   });
+
+  it('offers no count control anywhere in the section', () => {
+    render(<ImageGenerationSection />);
+    expect(screen.queryByText(/count/i)).toBeNull();
+    expect(screen.queryByLabelText(/count/i)).toBeNull();
+  });
+
+  it('with zero TTI providers shows the empty-state copy and every family greyed', () => {
+    providerRows = [];
+    render(<ImageGenerationSection />);
+    const s = primarySection();
+    expect(screen.getAllByText(/Upstream Providers/).length).toBeGreaterThan(0);
+    const families = within(s).getAllByRole('button', {
+      name: /^(FLUX\.3|GPT Image 2|Grok Imagine|MiniMax H3|Nano Banana 2\.1|Qwen Image|Seedream|Z-Image)$/,
+    });
+    expect(families).toHaveLength(8);
+    for (const f of families) expect(f).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(families[0] as HTMLElement);
+    expect(mutateMock).not.toHaveBeenCalled();
+  });
+
+  it('renders without crashing when imageGeneration is undefined or stale', () => {
+    settingsRow = { corsProxy: PROXY };
+    const { unmount } = render(<ImageGenerationSection />);
+    unmount();
+    settingsRow = {
+      corsProxy: PROXY,
+      imageGeneration: {
+        primary: {
+          ref: 'nano-gpt:seedream-v4.5',
+          config: { groupId: 'seedream', aspect: 'bogus' },
+        },
+        nsfw: null,
+      },
+    };
+    render(<ImageGenerationSection />);
+    expect(screen.queryByRole('button', { name: 'Ultra' })).toBeNull();
+  });
 });

@@ -10,7 +10,7 @@
 //
 //   bun run curation/run-tti-suite.ts              (from packages/llm-unified)
 //   bun run curation/run-tti-suite.ts flux         (slug substring filter)
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerBuiltinProviders } from '../src/providers/_register-builtins.js';
 import { getProvider, listTtiOfferings } from '../src/registry.js';
 import type { ImageModelConfig, TtiDescriptor } from '../src/tti/descriptor.js';
@@ -19,10 +19,14 @@ import { latencyFor, priceCentsFor } from '../src/tti/image-config.js';
 
 const KEY_FILES: Record<string, string> = { 'nano-gpt': '.nano-test-key', xai: '.xai-test-key' };
 
-function readKey(providerId: string): string {
+function keyUrl(providerId: string): URL {
   const file = KEY_FILES[providerId];
   if (!file) throw new Error(`no key file mapped for ${providerId}`);
-  return readFileSync(new URL(`../../../keys/${file}`, import.meta.url), 'utf8').trim();
+  return new URL(`../../../keys/${file}`, import.meta.url);
+}
+
+function readKey(providerId: string): string {
+  return readFileSync(keyUrl(providerId), 'utf8').trim();
 }
 
 /** Width × height from PNG / JPEG / WebP bytes; [0, 0] when unknown. */
@@ -39,6 +43,18 @@ function dimensions(bytes: Uint8Array): [number, number] {
       const marker = bytes[i + 1] ?? 0;
       if (marker >= 0xc0 && marker <= 0xc2) return [view.getUint16(i + 7), view.getUint16(i + 5)];
       i += 2 + view.getUint16(i + 2);
+    }
+  }
+  const isWebp = bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+  if (isWebp && bytes[12] === 0x56 && bytes[13] === 0x50 && bytes[14] === 0x38) {
+    const b = (i: number): number => bytes[i] ?? 0;
+    if (bytes[15] === 0x20)
+      return [(b(26) | (b(27) << 8)) & 0x3fff, (b(28) | (b(29) << 8)) & 0x3fff];
+    if (bytes[15] === 0x4c) {
+      return [
+        1 + (b(21) | ((b(22) & 0x3f) << 8)),
+        1 + ((b(22) >> 6) | (b(23) << 2) | ((b(24) & 0x0f) << 10)),
+      ];
     }
   }
   if (bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[12] === 0x56 && bytes[15] === 0x58) {
@@ -63,7 +79,8 @@ function dimensionVerdict(
 ): string {
   if (meta.wire.kind === 'size-table') {
     const want = meta.wire.sizes[`${config.aspect}|${config.resolution ?? '-'}`];
-    return want && want[0] === w && want[1] === h ? 'PASS exact' : `FAIL want ${want?.join('x')}`;
+    if (!want) return `FAIL no size-table entry for ${config.aspect}|${config.resolution ?? '-'}`;
+    return want[0] === w && want[1] === h ? 'PASS exact' : `FAIL want ${want.join('x')}`;
   }
   if (w === 0 || h === 0) return 'FAIL unknown image format';
   const drift = Math.abs(w / h - ratioOf(config.aspect)) / ratioOf(config.aspect);
@@ -83,6 +100,20 @@ function cells(meta: TtiDescriptor): ImageModelConfig[] {
 registerBuiltinProviders();
 const filter = process.argv[2];
 let failures = 0;
+
+// Fail before any request is sent (and any money spent) if a key is missing.
+const neededProviders = new Set(
+  listTtiOfferings()
+    .filter((o) => o.tti && (!filter || o.upstreamSlug.includes(filter)))
+    .map((o) => o.providerId),
+);
+const missingKeys = [...neededProviders].filter((id) => !existsSync(keyUrl(id)));
+if (missingKeys.length > 0) {
+  console.error(
+    `Missing key file(s): ${missingKeys.map((id) => `keys/${KEY_FILES[id]} (${id})`).join(', ')}. Nothing was sent.`,
+  );
+  process.exit(1);
+}
 
 for (const o of listTtiOfferings()) {
   const meta = o.tti;
@@ -114,10 +145,11 @@ for (const o of listTtiOfferings()) {
       const bytes = new Uint8Array(await item.bytes.arrayBuffer());
       const [w, h] = dimensions(bytes);
       const verdict = dimensionVerdict(meta, config, w, h);
+      const price = priceCentsFor(meta, config);
       if (verdict.startsWith('FAIL')) failures++;
       console.log(
         `${verdict} ${label}: ${w}x${h} ${item.mime} ${Math.round(bytes.length / 1024)} KiB in ${seconds} s` +
-          ` (descriptor: ${priceCentsFor(meta, config)}¢, ${latencyFor(meta, config) ?? 'no latency hint'})`,
+          ` (descriptor: ${price === undefined ? '?' : `${price}¢`}, ${latencyFor(meta, config) ?? 'no latency hint'})`,
       );
     } catch (e) {
       failures++;

@@ -32,20 +32,52 @@ export const canvasJpegEncoder: JpegEncoder = async (blob) => {
   }
 };
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** `Blob.arrayBuffer` with a FileReader fallback for environments lacking it (jsdom). */
+function readBuffer(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+/**
+ * Whether the blob starts with the PNG signature. Declared content types are
+ * unreliable (object stores often serve PNGs as `binary/octet-stream`), so the
+ * bytes decide.
+ */
+async function hasPngSignature(blob: Blob): Promise<boolean> {
+  try {
+    const head = new Uint8Array(await readBuffer(blob.slice(0, PNG_SIGNATURE.length)));
+    return head.length === PNG_SIGNATURE.length && PNG_SIGNATURE.every((b, i) => head[i] === b);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Some image models answer with 7–10 MB PNGs; as JPEG they shrink roughly
- * tenfold, which matters for storage and the encrypted sync quota. Any failure
- * (decode, memory, missing OffscreenCanvas) keeps the original — the image is
- * never lost, only larger.
+ * tenfold, which matters for storage and the encrypted sync quota. PNGs are
+ * recognised by their bytes, not the declared type. Any failure (decode,
+ * memory, missing OffscreenCanvas) keeps the original — the image is never
+ * lost, only larger — labelled with its true type.
  */
 export async function transcodeGeneratedImage(
   item: { bytes: Blob; mime: string },
   encode: JpegEncoder = canvasJpegEncoder,
 ): Promise<{ bytes: Blob; mime: string }> {
-  if (!shouldTranscode(item.mime)) return item;
+  const isPng = shouldTranscode(item.mime) || (await hasPngSignature(item.bytes));
+  if (!isPng) return item;
+  const original = shouldTranscode(item.mime) ? item : { bytes: item.bytes, mime: 'image/png' };
   try {
-    return { bytes: await encode(item.bytes), mime: 'image/jpeg' };
+    const out = await encode(item.bytes);
+    if (out.type !== 'image/jpeg') return original;
+    return { bytes: out, mime: 'image/jpeg' };
   } catch {
-    return item;
+    return original;
   }
 }
