@@ -8,48 +8,44 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-10-08 — **UNIFIED IMAGE MODELS BUILT (overnight), AWAITING
-REVIEW.** Branch `claude/zealous-cerf-01fn2t`, **not squashed, not merged, not
-pushed**. Spec `superpowers/specs/2026-10-07-unified-image-models-design.md`, plan
-`superpowers/plans/2026-10-07-unified-image-models.md`. Every TTI offering is now a
-data descriptor (family, variant, aspects, resolutions, qualities, prices, wire);
-the four bespoke groups are gone; nine nano-gpt models added (MiniMax H3, Qwen Image
-2.1 + Pro, FLUX.3, Seedream 5.0 Flash/Lite/Pro, Grok Imagine 2.0, Nano Banana 2.1)
-plus Z-Image Base as its own offering — 14 offerings, 8 families, all
-`canDoNsfw: false` (Chris + community judge NSFW first). Family-first picker with
-identity line, priced resolutions, latency-hinted qualities, stale-slot handling,
-`lastConfigByRef`; lazy legacy-slot upgrade (no Dexie bump); generated PNGs
-transcoded to JPEG at full size. **Next (Liz):**
-- Laura pre-squash pass: long "label — reason" variant text at 380 px; the family
-  reason names only the first provider; a retired offering shows as plain unset.
-- Run `curation/run-tti-suite.ts` live. It has not been run. It prints no billed
-  cost and runs every cell (a known deviation from spec §7, for Chris to decide).
-  The first run should confirm which content-type nano-gpt's R2 returns for PNGs.
-- Write the per-family Curation Records and the curate skill's Mode 5.
-- Add the per-model NSFW judgement item to `obsidian/insights/follow-ups-index.md`.
-- Squash; **then Chris** runs spec §10 on device.
+**Last updated:** 2026-10-08 — **v0.3.0 RELEASED: UNIFIED IMAGE MODELS + PERSONA
+QUICK ACCESS (+ Mistral Large 4).** Both overnight branches squashed to `master`
+and pushed: `0f5236c7` (image models) and `944dd086` (persona quick access), tagged
+**`v0.3.0`** on `944dd086`. Chris chose the minor jump over the planned v0.2.30
+omnibus because the release brings so much that users can see. PR #31 closed, both
+remote branches deleted.
 
-**Also:** 2026-10-08 — **PERSONA QUICK ACCESS BUILT (overnight), AWAITING
-REVIEW.** Branch `feat/persona-quick-access`, **not squashed, not merged, not
-pushed**. Spec `superpowers/specs/2026-10-07-persona-quick-access-design.md`, plan
-`superpowers/plans/2026-10-07-persona-quick-access.md`. Third piece of the v0.2.30
-omnibus. The persona hub's History button became a **Recent chats** accordion (ten
-newest, title filter across all chats, `History →` / `All in History →`, open state
-per device); the chat's brand logo and the interaction-mode hamburger open one
-**quick menu** (Entrance Hall, persona, New chat with …, Memories, History,
-Knowledge, Image settings) with return paths back into the chat; new personas start
-with **"You are a friendly assistant."**, cleared on focus and restored on an empty
-blur, so a fresh persona needs only a model. The final review's fix wave also keeps
-Enter on a focused button out of the reading-mode cockpit hotkey, gives the History
-links 44 px tap targets, puts the incomplete cue above the accordion, and shows a
-disabled "New chat" while the persona loads. **Open design question:** Circle cards
-of tagline-less new personas now show the default instruction as their subtitle.
-**Next (Liz):** Laura pre-squash pass, squash (watch the STATUS merge with the
-parallel `feat/unified-image-models`); **then Chris** runs spec §6 on device.
+- **Unified image models.** Every TTI offering is a data descriptor (family,
+  variant, aspects, resolutions, qualities, prices, wire); the four bespoke groups
+  are gone. **13 offerings, 7 families**: eight new nano-gpt models (MiniMax H3,
+  Qwen Image 2.1 + Pro, FLUX.3, Seedream 5.0 Flash/Lite/Pro, Grok Imagine 2.0) plus
+  Z-Image Base, all `canDoNsfw: false` until Chris and the community judge them.
+  Family-first picker with an identity line, lazy legacy-slot upgrade (no Dexie
+  bump), generated PNGs transcoded to JPEG at full size. **Live TTI suite run
+  2026-10-08: 34/34 cells PASS** with exact pixel dimensions across all 13 offerings.
+  nano-gpt returns real PNGs (6–9 MB) for GPT Image 2 and Qwen 2.1 Pro, so the
+  transcode earns its keep. **Nano Banana 2.1 was withdrawn**: nano-gpt 502s it on
+  every request, even a bare minimal body, while `nano-banana-2` answers 200. That
+  is upstream, not us. The re-add recipe is in [[insights/follow-ups-index]].
+- **Persona quick access.** A Recent chats accordion replaces the hub's History
+  button. The brand logo and the interaction-mode hamburger open one quick menu
+  with return paths into the chat. New personas start with "You are a friendly
+  assistant.".
+- **Laura pre-squash, both units: no hard defects.** Fixed before the squash: a
+  family's disabled reason now follows the offering a tap would pick; Circle cards
+  no longer show the default instruction as a subtitle; the cleared instruction
+  field shows the default as its placeholder. The remaining image-picker softs are
+  in [[insights/ux-deferrals]].
+- Gate on the integrated tree: forced typecheck 14/14, build, and every suite green
+  (user-client 3452/3452).
+
+**Next:** Chris runs the device checks: image-models spec §10 and persona quick
+access spec §6. **Liz still owes** the per-family TTI Curation Records and the
+curate skill's Mode 5. Re-probe Nano Banana 2.1 now and then.
 
 **Also:** 2026-10-07 — **MISTRAL LARGE 4 CURATED** on the direct
 Mistral API and on nano-gpt (testers asked for it after seeing it on nano-gpt).
-Squashed to `master` (`fa8e3b74`), **not pushed, not tagged**. Large 4 reasons
+Squashed to `master` (`fa8e3b74`), **released in `v0.3.0`**. Large 4 reasons
 (unlike Large 3): binary toggle with a genuine off, vision, tools, 512k window
 (256k recommended). Direct route reuses the Mistral adapter unchanged; nano-gpt
 has **no `:thinking` sibling** (both suffixes 404), so the bare slug is steered by
@@ -2327,6 +2323,11 @@ something that delights and doesn't annoy).
 ---
 
 ## Next session
+
+**▶ Resuming after 2026-10-08.** `v0.3.0` is tagged and pushed (see Current).
+Waiting on Chris's device checks for the image picker and persona quick access.
+Liz owes the TTI Curation Records + curate Mode 5. Everything below this paragraph
+is older history.
 
 **▶ Resuming 2026-07-26.** `master` sits **5 commits ahead of `origin/master`,
 unpushed** — the Opus 5 / MiMo curation (`819e4728`, `5c38972a`), its STATUS
