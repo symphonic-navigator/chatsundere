@@ -8,6 +8,38 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-10-08 (later) — **TOOL HISTORY REPLAY: HISTORY POISONING
+FIXED.** Squashed to `master` (`e43eecad`), **not pushed, not tagged**. Prior turns
+used to replay as text only, so every tool call vanished from history and models
+learnt to *describe* images instead of calling `generate_image` (Le Chat 4,
+2026-10-07). Earlier tool rounds now replay as `assistant(tool_calls)` + `tool`,
+rebuilt from the pills already in Dexie (old chats benefit too, no Dexie bump):
+deterministic 9-char provider-neutral ids, results capped at 2000 chars, failed and
+interrupted calls answered, and a graded policy — text-only on tool-less models,
+structured for active tools, and for orphaned **built-in** tools only where the
+measured `toolCalls.orphanReplay` allows it. One shared estimator now feeds the
+gauge, the overflow trigger and compaction (tool-heavy chats read **higher** — that
+is the gauge becoming honest); truncation never leaves an orphaned `tool` message.
+- **Larissa: one High, fixed.** Compaction could launder a fetched page's text into
+  a forged `User:` line that persisted in `<conversation_compact>`; tool refs are now
+  single-line untrusted facts and summaries cannot break out of their block. L-2
+  (removed MCP servers kept replaying) and L-5 (unvalidated imported pills) fixed
+  too; L-3/L-4/L-7 plus an MCP name-collision residual deferred
+  ([[insights/security-deferrals]]). Laura not summoned (no flow change).
+- **Live:** nine offerings across all curated providers (xAI skipped, no test key)
+  pass `tool-replay`, `tool-then-user` and `orphan-tool-replay` on every reasoning
+  permutation and carry `orphanReplay: true`; the `/curate` skill now requires the
+  probe. One observation: wafer GLM-5.2 skips reasoning on a direct tool
+  instruction (tool still fires) — follow-up.
+- Gate: forced typecheck 14/14 (0 cached, also on `master`), build, llm-unified
+  503 + curation 56, user-client 3491/3491, Biome clean.
+
+**Next:** Chris runs the spec §10 device checks (the poisoned Le Chat 4 chat calls
+`generate_image` again; nano-gpt → Mistral switch mid-chat; removed MCP server;
+tool-less model; gauge + next compaction), then push.
+
+---
+
 **Last updated:** 2026-10-08 — **v0.3.0 RELEASED: UNIFIED IMAGE MODELS + PERSONA
 QUICK ACCESS (+ Mistral Large 4).** Both overnight branches squashed to `master`
 and pushed: `0f5236c7` (image models) and `944dd086` (persona quick access), tagged
@@ -2324,7 +2356,7 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**⏰ REMIND CHRIS FIRST THING: tool-call history poisoning.** Found 2026-10-08 evening: prior turns are replayed without their tool calls/results, so models learn to fake tool use (Mistral Large 4 described imaginary images instead of calling `generate_image`). Chris wants to brainstorm the fix next session — start there (brainstorming → spec). Full context and the A/B/C options are in [[insights/follow-ups-index]] (Implementation, top row).
+**▶ 2026-10-08 (later):** tool history replay squashed to `master` (`e43eecad`, unpushed) — waiting on Chris's spec §10 device checks, then push. See Current.
 
 **▶ Resuming after 2026-10-08.** `v0.3.0` is tagged and pushed (see Current).
 Waiting on Chris's device checks for the image picker and persona quick access.
