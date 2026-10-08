@@ -30,9 +30,9 @@ unhappy path.
 - A new optional payload field `replaySummary` on tool-call pills.
 - A grow-only sync conflict rule for pills so the summary reaches other devices.
 - Replay uses the summary, marked as such, when present.
-- The summary is visible in the expanded tool pill (`Pill`, `ExpertPill`,
-  `VisionPill`); a pending job and a long result without a summary each say
-  what later turns will see.
+- The summary is visible in the expanded tool pill (`Pill`, `ExpertPill`);
+  a pending job and a long result without a summary each say what later turns
+  will see.
 
 ### 1.3 Out of scope
 
@@ -83,6 +83,11 @@ At the end of a completed turn, next to `fireMemoryPipeline` and
 - `status === 'completed'`,
 - carrying a string `result` longer than `REPLAY_RESULT_MAX_CHARS`,
 - without a `replaySummary`,
+- with a replayable payload (`validPayload` in `lib/tool-replay.ts`: tool-name
+  pattern and a string `argumentsJson`) — this excludes `describe_image` vision
+  pills, which carry no `argumentsJson`, are never replayed as tool results
+  (the description rides in the user content instead) and so have nothing to
+  condense,
 - not one of the artefact tools (`create_artefact`, `modify_artefact`,
   `inspect_artefact`) — see §1.3.
 
@@ -191,11 +196,21 @@ tool refs are unaffected.
 
 ## 6. Pill UI
 
-Three tool-pill renderers show a tool result in their expanded detail and all
-behave identically: `Pill` (`components/chat/Pill.tsx:155`, also used for MCP
-tools), `ExpertPill` (`ask_expert`) and `VisionPill` (`describe_image`). One
-small shared component, the **condensation slot**, renders the states below so
-the three cannot drift.
+Two tool-pill renderers show a replayable tool result in their expanded detail
+and behave identically: `Pill` (`components/chat/Pill.tsx:155`, also used for
+MCP tools) and `ExpertPill` (`ask_expert`). One small shared component, the
+**condensation slot**, renders the states below so the two cannot drift.
+
+`VisionPill` (`describe_image`) gets no slot. Laura's spec-pass suggested it,
+but implementation planning showed vision pills are never replayed as tool
+results (no `argumentsJson`; the description is injected into the user
+content), so a "later turns see…" line there would be false. The slot renders
+only for pills that satisfy the job's selection (§3.1).
+
+The slot describes how a result is condensed *when it is replayed*. Whether a
+round is replayed at all (orphaned MCP tool, model without tool support, §5.2
+of the tool-replay spec) is policy decided per request and not reflected in
+the pill.
 
 ### 6.1 Placement
 
@@ -261,7 +276,7 @@ judgement call per CLAUDE.md §9.1. Deferred findings go to
 `obsidian/insights/security-deferrals.md`.
 
 **Laura** did the spec-pass on 2026-10-08: no hard defects, seven soft
-findings, all incorporated (§1.3, §3.1, §6). She does a light pre-squash pass
+findings, incorporated (§1.3, §3.1, §6) — except `VisionPill`, see §6. She does a light pre-squash pass
 on the built pills.
 
 ## 8. Testing
@@ -282,8 +297,9 @@ on the built pills.
 - Job selection also skips the three artefact tools.
 - Pending store: a pill id is present while queued/running and removed on
   success, empty output and error alike.
-- Condensation slot: every row of §6.2, rendered in `Pill`, `ExpertPill` and
-  `VisionPill`, positioned above the full result; *"Full result"* label only
+- Job selection skips `describe_image` pills (no `argumentsJson`).
+- Condensation slot: every row of §6.2, rendered in `Pill` and `ExpertPill`,
+  positioned above the full result; *"Full result"* label only
   with a summary; copy numbers derived from the constants.
 
 **llm-unified (Bun test)** — `'tool-summary'` job: NSFW segment present iff
