@@ -104,3 +104,37 @@ describe('ExpertPill', () => {
     expect(screen.getByText(/example\.com/)).toBeInTheDocument();
   });
 });
+
+describe('ExpertPill — condensation slot', () => {
+  const long = 'Fact. '.repeat(1_000);
+  const expert = (extra: Record<string, unknown> = {}) =>
+    row(
+      { status: 'completed' },
+      {
+        name: 'ask_expert',
+        argumentsJson: '{"question":"Q?"}',
+        model: 'Big Model',
+        question: 'Q?',
+        result: long,
+        ...extra,
+      },
+    );
+
+  it('shows the summary before the labelled full answer', () => {
+    const { container } = render(<ExpertPill row={expert({ replaySummary: 'The gist.' })} />);
+    fireEvent.click(screen.getByRole('button'));
+    const slot = screen.getByText('Later turns see this summary');
+    expect(screen.getByText('Full result')).toBeInTheDocument();
+    const result = container.querySelector('.pill-detail-result');
+    expect(result).not.toBeNull();
+    expect(
+      slot.compareDocumentPosition(result as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('has no Full result label without a summary', () => {
+    render(<ExpertPill row={expert()} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.queryByText('Full result')).toBeNull();
+  });
+});

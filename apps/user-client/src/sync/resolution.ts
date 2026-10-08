@@ -39,9 +39,12 @@ const LWW_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
   'attachments',
 ]);
 
-/** Creation-only / immutable collections: any conflict is an idempotent no-op. */
+/**
+ * Creation-only / immutable collections: any conflict is an idempotent no-op.
+ * `pills` left this set for the grow-only branch in {@link resolveConflict}
+ * (its `payload.replaySummary` is written after creation).
+ */
 const IMMUTABLE_COLLECTIONS: ReadonlySet<SyncCollection> = new Set<SyncCollection>([
-  'pills',
   'compactionCheckpoints',
   'seedTemplates',
 ]);
@@ -117,6 +120,12 @@ function lww(local: LwwRow, pulled: LwwRow, collection: SyncCollection): Resolut
   return { winner: 'local', repush: true };
 }
 
+/** True when a pill row carries a non-blank background `replaySummary` string. */
+function hasReplaySummary(row: unknown): boolean {
+  const s = (row as { payload?: { replaySummary?: unknown } } | null)?.payload?.replaySummary;
+  return typeof s === 'string' && s.trim() !== '';
+}
+
 /**
  * Resolve a pulled/local collision for one record (spec §7.5). The blob-bearing
  * collections join the handled set in WS-D (§3): `artefacts`/`attachments` via
@@ -130,6 +139,16 @@ export function resolveConflict(
 ): Resolution {
   if (LWW_COLLECTIONS.has(collection)) {
     return lww(local as LwwRow, pulled as LwwRow, collection);
+  }
+
+  if (collection === 'pills') {
+    // Grow-only on the background summary (summaries spec §4): it can only go
+    // from absent to present. Everything else on a pill is creation-only.
+    const l = hasReplaySummary(local);
+    const p = hasReplaySummary(pulled);
+    if (p && !l) return { winner: 'pulled', repush: false };
+    if (l && !p) return { winner: 'local', repush: true };
+    return { winner: 'local', repush: false };
   }
 
   if (collection === 'personaAvatars') {

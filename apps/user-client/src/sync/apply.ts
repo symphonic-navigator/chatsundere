@@ -432,6 +432,10 @@ function collectFor(collection: SyncCollection, key: string, chatId: string | un
     case 'compactionCheckpoints':
       if (chatId) collect(QK.compaction(chatId));
       break;
+    case 'pills':
+      // A pulled replaySummary must re-render the chat; the prefix covers every chat.
+      collect(QK.chats);
+      break;
     default:
       break;
   }

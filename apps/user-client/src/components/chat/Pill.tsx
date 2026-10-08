@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
 import { ArtefactPill } from './ArtefactPill.js';
+import { CondensationSlot, hasVisibleSummary } from './CondensationSlot.js';
 import { ExpertPill } from './ExpertPill.js';
 import { ImagePill } from './ImagePill.js';
 import { VisionPill } from './VisionPill.js';
@@ -152,8 +153,12 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
           ) : (
             <>
               {code !== null && <code className="pill-detail-code">{code}</code>}
+              <CondensationSlot row={row} />
               {payload?.result !== undefined && (
-                <code className="pill-detail-result">{payload.result}</code>
+                <>
+                  {hasVisibleSummary(row) && <span className="pill-detail-label">Full result</span>}
+                  <code className="pill-detail-result">{payload.result}</code>
+                </>
               )}
               {payload?.error && <code className="pill-detail-error">{payload.error}</code>}
             </>

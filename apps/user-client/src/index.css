@@ -2708,6 +2708,23 @@ h1 {
   white-space: pre-wrap;
   font-size: 0.85em;
 }
+.pill-detail-condensed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.pill-detail-label,
+.pill-detail-condensed-note {
+  font-size: 0.75em;
+  color: var(--color-paper-muted, #8a8a8a);
+}
+.pill-detail-summary {
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap;
+  font-size: 0.85em;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--color-paper-muted, #8a8a8a);
+}
 
 /* ===== Web interfacing settings (inside its AccordionCard) ===== */
 .web-interfacing {

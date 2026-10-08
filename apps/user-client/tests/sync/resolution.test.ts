@@ -201,7 +201,7 @@ describe('resolveConflict — memoryBody (never merged)', () => {
 });
 
 describe('resolveConflict — immutable / creation-only collections', () => {
-  for (const c of ['pills', 'compactionCheckpoints', 'seedTemplates'] as const) {
+  for (const c of ['compactionCheckpoints', 'seedTemplates'] as const) {
     it(`${c}: idempotent no-op on conflict`, () => {
       expect(resolveConflict(c, { id: 'x' }, { id: 'x' })).toEqual({
         winner: 'local',
@@ -209,6 +209,49 @@ describe('resolveConflict — immutable / creation-only collections', () => {
       });
     });
   }
+});
+
+describe('resolveConflict — pills are grow-only on replaySummary (summaries spec §4)', () => {
+  const pill = (summary?: unknown) => ({
+    id: 'p',
+    messageId: 'm',
+    kind: 'tool-call',
+    positionHint: 'inline',
+    status: 'completed',
+    payload: {
+      name: 'ask_expert',
+      argumentsJson: '{"question":"q"}',
+      result: 'r'.repeat(3000),
+      ...(summary === undefined ? {} : { replaySummary: summary }),
+    },
+    createdAt: 1,
+  });
+
+  it('pulled with summary beats local without', () => {
+    expect(resolveConflict('pills', pill(), pill('S'))).toEqual({
+      winner: 'pulled',
+      repush: false,
+    });
+  });
+  it('local with summary wins and repushes', () => {
+    expect(resolveConflict('pills', pill('S'), pill())).toEqual({ winner: 'local', repush: true });
+  });
+  it('neither: idempotent no-op', () => {
+    expect(resolveConflict('pills', pill(), pill())).toEqual({ winner: 'local', repush: false });
+  });
+  it('both: local, no repush', () => {
+    expect(resolveConflict('pills', pill('A'), pill('B'))).toEqual({
+      winner: 'local',
+      repush: false,
+    });
+  });
+  it('a blank or non-string pulled summary does not count', () => {
+    expect(resolveConflict('pills', pill(), pill('  '))).toEqual({
+      winner: 'local',
+      repush: false,
+    });
+    expect(resolveConflict('pills', pill(), pill(7))).toEqual({ winner: 'local', repush: false });
+  });
 });
 
 describe('resolveConflict — blob collections resolve LWW (WS-D §3)', () => {

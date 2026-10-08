@@ -607,6 +607,27 @@ describe('runPullLoop — invalidation coalescing (§7.6, Laura soft)', () => {
   });
 });
 
+describe('runPullLoop — pulled pills invalidate the chat queries', () => {
+  it('invalidates the chats key prefix when a pill is applied', async () => {
+    _setApplyOpenRecord(async () => ({ id: 'pill1', updatedAt: 1 }));
+    _setPullTransport(
+      async (): Promise<SyncPullResponse> => ({
+        head: 1,
+        epoch: 'E1',
+        more: false,
+        records: [pulledUpsert('pills', 'pill1', new Uint8Array([1]), 1)],
+      }),
+    );
+    const invalidate = vi.fn();
+    setInvalidator(invalidate);
+
+    await runPullLoop();
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate.mock.calls[0]?.[0]).toContainEqual(['chats']);
+  });
+});
+
 describe('runPullLoop — §2.2 tombstone throttle (lossless)', () => {
   it('applies at most the cap per cycle and drains the rest next cycle', async () => {
     // 250 tombstones on one page, revs 1..250. Cap is 200.

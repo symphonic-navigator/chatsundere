@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
+import { CondensationSlot, hasVisibleSummary } from './CondensationSlot.js';
 
 interface ExpertPayload {
   model?: string;
@@ -114,7 +115,13 @@ export function ExpertPill({ row }: { row: PillRow }): JSX.Element {
               ))}
             </span>
           ) : null}
-          {p.result !== undefined && <code className="pill-detail-result">{p.result}</code>}
+          <CondensationSlot row={row} />
+          {p.result !== undefined && (
+            <>
+              {hasVisibleSummary(row) && <span className="pill-detail-label">Full result</span>}
+              <code className="pill-detail-result">{p.result}</code>
+            </>
+          )}
         </span>
       ) : null}
     </span>

@@ -99,3 +99,32 @@ describe('Pill — kb-injection', () => {
     expect(btn).not.toHaveAttribute('aria-expanded');
   });
 });
+
+describe('Pill — condensation slot', () => {
+  const long = 'Fact. '.repeat(1_000);
+  function longPill(extra: Record<string, unknown> = {}): PillRow {
+    return {
+      ...toolCallPill('mcp_search', '{"q":"x"}'),
+      payload: { name: 'mcp_search', argumentsJson: '{"q":"x"}', result: long, ...extra },
+    };
+  }
+
+  it('shows the summary before the full result, which gets a label', () => {
+    const { container } = render(<Pill row={longPill({ replaySummary: 'The gist.' })} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('Later turns see this summary')).toBeInTheDocument();
+    expect(screen.getByText('Full result')).toBeInTheDocument();
+    const slot = screen.getByText('Later turns see this summary');
+    const result = container.querySelector('.pill-detail-result');
+    expect(result).not.toBeNull();
+    expect(
+      slot.compareDocumentPosition(result as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('has no Full result label without a summary', () => {
+    render(<Pill row={longPill()} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.queryByText('Full result')).toBeNull();
+  });
+});

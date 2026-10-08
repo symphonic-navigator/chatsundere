@@ -61,6 +61,7 @@ import { generateTitleAsync } from '../lib/title-generator.js';
 import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
 import { type ReplayContext, estimateReplayTokens } from '../lib/tool-replay.js';
+import { enqueueToolSummaries } from '../lib/tool-summary.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
 import { loadMemoryContext } from '../memory/repo.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
@@ -222,6 +223,16 @@ function compactionArgsFrom(args: StartArgs): Omit<CompactionArgs, 'trigger'> {
     ...choreBundle(args),
     windowOffering: args.offering,
   };
+}
+
+/** Condenses long tool results for later-turn replay (best-effort, sequential per chat). */
+function fireToolSummaries(args: StartArgs, pills: PillRow[]): void {
+  void enqueueToolSummaries({
+    chatId: args.chatId,
+    pills,
+    adultPersona: args.persona.adultPersona,
+    bundle: choreBundle(args),
+  });
 }
 
 function fireCompactionValve(args: StartArgs, usedTokens: number): void {
@@ -1044,6 +1055,10 @@ async function runIntoDraft(
         await db.chats.update(args.chatId, { lastMessageAt: Date.now() });
       });
       if (linked) scheduleClass1Sync();
+
+      // Tool-result summaries (best-effort, no await); failures keep the head-cut.
+      // Before the invalidations, so the pending line is set when the chat re-renders.
+      fireToolSummaries(args, pillsWithMessageId);
 
       // TanStack-Query has no idea the underlying Dexie rows just changed.
       // Invalidate both the single-chat key (for the active ChatPage) and

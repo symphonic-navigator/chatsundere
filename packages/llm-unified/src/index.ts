@@ -32,7 +32,12 @@ export {
 } from './registry.js';
 export { registerAdapter, getAdapter } from './adapter-registry.js';
 
-export { buildPrompt, type BuildPromptInputs, type PromptJob } from './composition.js';
+export {
+  buildPrompt,
+  TOOL_SUMMARY_INSTRUCTION,
+  type BuildPromptInputs,
+  type PromptJob,
+} from './composition.js';
 export { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js';
 export { buildContentAxisPrompt } from './content-axis.js';
 

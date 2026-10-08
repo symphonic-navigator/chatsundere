@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { describe, expect, it } from 'bun:test';
-import { type BuildPromptInputs, buildPrompt } from './composition.js';
+import { type BuildPromptInputs, TOOL_SUMMARY_INSTRUCTION, buildPrompt } from './composition.js';
 import {
   NSFW_PROMPT,
   ROLEPLAY_BEHAVIOUR_PROMPT,
@@ -407,5 +407,41 @@ describe('screen-effects prompt segment', () => {
     expect(buildPrompt(inputs({ screenEffectsEnabled: true }), 'memory')).not.toContain(
       'emoji-shower',
     );
+  });
+});
+
+describe('tool-summary job', () => {
+  it('contains only the instruction when nsfw is off', () => {
+    const out = buildPrompt(
+      inputs({
+        nsfwEnabled: false,
+        tonalityEnabled: true,
+        roleplayEnabled: true,
+        personaInstructions: 'PERSONA',
+        globalInstructions: 'GLOBAL',
+        aboutMe: 'ABOUT',
+        modelInstructions: 'MODEL',
+      }),
+      'tool-summary',
+    );
+    expect(out).toBe(TOOL_SUMMARY_INSTRUCTION);
+  });
+
+  it('prepends the NSFW segment for adult personas', () => {
+    const out = buildPrompt(inputs({ nsfwEnabled: true }), 'tool-summary');
+    expect(out).toBe(`${NSFW_PROMPT}\n\n${TOOL_SUMMARY_INSTRUCTION}`);
+  });
+
+  it('accepts empty persona instructions for this job only', () => {
+    expect(() => buildPrompt(inputs({ personaInstructions: '' }), 'tool-summary')).not.toThrow();
+    expect(() => buildPrompt(inputs({ personaInstructions: '' }), 'title')).toThrow();
+  });
+
+  it('never leaks the instruction into other jobs', () => {
+    for (const job of ['chat', 'title', 'memory', 'greeting'] as const) {
+      expect(buildPrompt(inputs({ personaInstructions: 'P' }), job)).not.toContain(
+        TOOL_SUMMARY_INSTRUCTION,
+      );
+    }
   });
 });
