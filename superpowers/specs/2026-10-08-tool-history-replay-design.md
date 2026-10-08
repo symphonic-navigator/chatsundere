@@ -170,7 +170,7 @@ round's tool passes, because the live exchange already carries tool calls.
 
 ### 5.3 Conversation-suite scenarios
 
-Two new scenarios in `packages/llm-unified/curation/conversation-suite/scenarios/core.ts`:
+Two new scenarios in their own file, `packages/llm-unified/curation/conversation-suite/scenarios/tool-replay.ts` — not in `core.ts`, because `orphan-tool-replay` needs a binding without tools and is informational, so it must not count against `core`'s pass/fail:
 
 1. **`replayed-tool-history`** — the history contains a structured, replayed
    `generate_image` round with its result; the next user turn is a **direct**
@@ -196,10 +196,15 @@ Record). Every newly curated offering gets it.
 ### 5.5 Live verification in this feature
 
 One representative offering per adapter, run **serially**, each response read
-in full: Mistral (direct), nano-gpt, ollama, OpenRouter, xAI, Anthropic,
-Chutes. `replayed-tool-history` must pass on each; `orphan-tool-replay` sets
-the field for every offering served by that adapter/provider. No pass rate is
-stated before it is measured.
+in full: Mistral Large 4 (direct), Mistral Large 4 and Claude Haiku 4.5 on nano-gpt
+(the latter an Anthropic backend), Chutes, Novita, ollama, OpenRouter (Claude
+Sonnet 5), Tensorix, Wafer. xAI is skipped for want of a test key.
+`replayed-tool-history` must pass on each. `orphan-tool-replay` sets the field
+**only on the probed offering**: adapters are per offering, and one provider
+(nano-gpt, OpenRouter) fronts several upstream backends with different
+strictness, so generalising one probe to a whole provider would be a guess.
+Every other offering keeps `false` (safe: text-only for orphaned rounds) until
+its next curation pass. No pass rate is stated before it is measured.
 
 ## 6. Compaction and Token Counting
 
@@ -212,6 +217,11 @@ History token estimation exists today at five sites, all text-only:
 - `apps/user-client/src/routes/app/chat/chat-page.tsx:433` (context meter)
 - `apps/user-client/src/components/chat/ChatStream.tsx:140`
 - `apps/user-client/src/lib/context-window.ts:30` (wire messages; ignores `tool_calls` arguments)
+
+`truncateToWindow` (`lib/context-window.ts`) drops the oldest history first;
+it must never leave a `tool` message at the head whose `assistant(tool_calls)`
+was dropped (an orphan every provider rejects), so leading `tool` messages go
+with the call they answered.
 
 They converge on one function `estimateReplayTokens(row, pillsById)` built on
 the **same decomposition** as `replayMessage`: text + `argumentsJson` +
