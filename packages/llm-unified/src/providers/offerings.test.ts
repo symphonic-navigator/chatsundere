@@ -67,4 +67,25 @@ describe('provider offerings', () => {
       }
     }
   });
+
+  test('only the live-probed offerings are marked as accepting orphaned tool replay', () => {
+    const expected = [
+      'mistral:mistral-large-4',
+      'nano-gpt:mistralai/mistral-large-4',
+      'nano-gpt:claude-haiku-4-5-20251001',
+      'chutes:zai-org/GLM-5.2-TEE',
+      'novita:moonshotai/kimi-k2.6',
+      'ollama-cloud:glm-5.2:cloud',
+      'openrouter:openai/gpt-4.1',
+      'tensorix:z-ai/glm-5.2',
+      'wafer:GLM-5.2',
+    ];
+    const marked: string[] = [];
+    for (const p of PROVIDERS) {
+      for (const o of p.offerings) {
+        if (o.profile.toolCalls?.orphanReplay === true) marked.push(`${p.id}:${o.upstreamSlug}`);
+      }
+    }
+    expect(marked.sort()).toEqual([...expected].sort());
+  });
 });

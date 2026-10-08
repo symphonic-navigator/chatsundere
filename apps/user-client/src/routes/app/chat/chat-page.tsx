@@ -57,6 +57,7 @@ import { resolveOffering } from '../../../lib/resolve-offering.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
+import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
@@ -424,14 +425,21 @@ export function ChatPage(): JSX.Element {
       'chat',
     );
     // Openers never reach the wire (isContextMessage), so they don't count here.
-    const msgTexts = (chatQuery.data?.messages ?? []).filter(isContextMessage).map((m) =>
-      m.contentBlocks
-        .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-        .map((b) => b.text)
-        .join(''),
-    );
-    return { usedTokens: estimateTokens([sys, ...msgTexts]), systemTokens: estimateTokens(sys) };
-  }, [offering, effectivePersona, settingsQuery.data, chatQuery.data?.messages]);
+    // Tool rounds count as they are replayed (estimateReplayTokens), so the
+    // gauge reads what the wire sends.
+    const pillsById = new Map((chatQuery.data?.pills ?? []).map((p) => [p.id, p]));
+    const historyTokens = (chatQuery.data?.messages ?? [])
+      .filter(isContextMessage)
+      .reduce((s, m) => s + estimateReplayTokens(m, pillsById), 0);
+    const systemTokens = estimateTokens(sys);
+    return { usedTokens: systemTokens + historyTokens, systemTokens };
+  }, [
+    offering,
+    effectivePersona,
+    settingsQuery.data,
+    chatQuery.data?.messages,
+    chatQuery.data?.pills,
+  ]);
 
   const contextBudget = useMemo(
     () =>

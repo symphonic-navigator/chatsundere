@@ -25,6 +25,7 @@ import type {
 import { flattenAnswerText, isContextMessage } from './content-blocks.js';
 import { resolveContextWindow, truncateToWindow, wireTokens } from './context-window.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
+import { type ReplayContext, replayHistory } from './tool-replay.js';
 
 export interface StartStreamArgs {
   chat: ChatRow;
@@ -55,6 +56,9 @@ export interface StartStreamArgs {
   /** Accumulated assistant(tool_calls) / tool messages from prior loop rounds,
    *  appended after the active user turn. */
   toolExchange?: WireMessage[];
+  /** Pills + policy for replaying prior tool rounds structurally (spec §3/§5).
+   *  Absent ⇒ history replays as text only (opener, background jobs). */
+  replay?: ReplayContext;
   /** Prompt job — 'greeting' builds the opener prompt (Band 1 + About Me, no
    *  lore/knowledge/tools). Default 'chat'. */
   job?: 'chat' | 'greeting';
@@ -122,6 +126,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     args.priorMessages,
     args.userMessageText,
     args.toolExchange ?? [],
+    args.replay,
   );
 
   const budget = resolveContextWindow(args.persona, args.offering);
@@ -237,34 +242,24 @@ function appendReasoning(buf: ContentBlock[], text: string): void {
 /**
  * Assemble the wire message list for one engine pass: system prompt, replayed
  * history, the active user turn, then any accumulated tool exchange from prior
- * loop rounds. Extracted so the tool-exchange placement is unit-testable.
+ * loop rounds. Prior persona turns replay their recorded tool rounds as
+ * assistant(tool_calls) + tool messages when a replay context is given (see
+ * `tool-replay.ts`); prior-turn attachments are still not replayed.
  *
  * `userContent` accepts a plain string for text-only turns or a
- * `WireContentPart[]` for multimodal turns (text + images). Prior-turn replay
- * of attachments is the caller's responsibility (Task 14) — `toWireMessage`
- * stays text-only for v1.
+ * `WireContentPart[]` for multimodal turns (text + images).
  */
 export function buildEngineWireMessages(
   systemPrompt: string,
   priorMessages: MessageRow[],
   userContent: string | WireContentPart[],
   toolExchange: WireMessage[],
+  replay?: ReplayContext,
 ): WireMessage[] {
   return [
     { role: 'system', content: systemPrompt },
-    ...priorMessages.filter(isContextMessage).map(toWireMessage),
+    ...replayHistory(priorMessages.filter(isContextMessage), replay),
     { role: 'user', content: userContent },
     ...toolExchange,
   ];
-}
-
-/**
- * Collapse a persisted MessageRow to a single WireMessage for context replay.
- * Pill-blocks are dropped — Phase 3 doesn't execute tools from history.
- */
-function toWireMessage(m: MessageRow): WireMessage {
-  const text = flattenAnswerText(m.contentBlocks);
-  if (m.role === 'persona') return { role: 'assistant', content: text };
-  if (m.role === 'system') return { role: 'system', content: text };
-  return { role: 'user', content: text };
 }

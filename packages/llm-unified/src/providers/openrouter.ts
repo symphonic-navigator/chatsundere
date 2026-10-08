@@ -5,7 +5,7 @@ import { openRouterAdapter } from '../adapters/openrouter-openai.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 // Reasoning on OpenRouter is the provider's UNIFIED `reasoning` object:
 // `{ enabled: true, effort? }` enables, `{ enabled: false }` disables. Probed
@@ -335,12 +335,14 @@ const offerings: Offering[] = [
     reasoning: OPENAI_NONE,
     recommended: 128_000,
   }),
-  openRouterOffering('chatgpt-4.1', 'openai/gpt-4.1', {
-    vision: true,
-    reasoning: OPENAI_NONE,
-    recommended: 200_000,
-    max: 1_047_576,
-  }),
+  withOrphanReplay(
+    openRouterOffering('chatgpt-4.1', 'openai/gpt-4.1', {
+      vision: true,
+      reasoning: OPENAI_NONE,
+      recommended: 200_000,
+      max: 1_047_576,
+    }),
+  ),
   // GPT-5 family: 'partial' — reasoning works but the visible summary is
   // stochastic on OpenRouter (reliable on nano-gpt). See the Curation Records.
   openRouterOffering('chatgpt-5', 'openai/gpt-5.1', {

@@ -8,7 +8,7 @@ import type { SearchTier, WebOfferingMeta } from '../integrations/web-interfacin
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
 import { ollamaWebFetchAdapter, ollamaWebSearchAdapter } from '../web-adapters/ollama-web.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 // Reasoning steerability on ollama.com is PER MODEL — the 2026-06-03 blanket
 // "these models cannot disable thinking → fixed-on" was measured on one model and
@@ -303,7 +303,12 @@ const webOfferings: Offering[] = [
   }),
 ];
 
-const offerings: Offering[] = [...SPECS.map(ollamaOffering), ...webOfferings];
+const offerings: Offering[] = [
+  ...SPECS.map((s) =>
+    s.slug === 'glm-5.2:cloud' ? withOrphanReplay(ollamaOffering(s)) : ollamaOffering(s),
+  ),
+  ...webOfferings,
+];
 
 export const ollamaCloud: ProviderDefinition = {
   id: 'ollama-cloud',

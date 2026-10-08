@@ -873,3 +873,69 @@ Consciously deferred:
   still lets the upstream write the Anthropic prompt cache (Larissa I2), so
   forwarding the abort re-introduces the direct-route behaviour there. Tracked in
   [[follow-ups-index]].
+
+## 2026-10-08 — Tool history replay (Larissa pre-squash; High + Medium + Low fixed, two Lows and one Info deferred)
+
+Larissa audited the tool history replay feature (prior turns replay their tool
+rounds as `assistant(tool_calls)` + `tool`, results capped at 2000 characters,
+and tool calls reach the compaction summariser as fact lines). **Fix before
+squash.** Fixed in the final fix wave, before the squash:
+
+- **L-1 (High) — compaction escalated untrusted tool text into the system
+  prompt.** Raw multi-line results in `[tool …]` refs could forge a `User:` turn
+  that the summariser then preserved verbatim inside `<conversation_compact>`,
+  persisting across checkpoints. Now: refs are single-line (`JSON.stringify` plus
+  bracket neutralisation), the prompt rule marks tool lines as untrusted data
+  never attributable to the user, and `applyActiveCompaction` neutralises any
+  `conversation_compact` tag inside a summary.
+- **L-2 (Medium) — results of a removed MCP server kept replaying.** On
+  `orphanReplay` offerings the orphan rule replayed every recorded round. Now it
+  covers built-in tools only; an orphaned MCP/unknown tool falls back to text.
+  The residual risk (an injected result from a *configured* server stays on the
+  wire for the rest of the chat) is accepted as inherent to replaying history
+  at all, which is the feature's purpose.
+- **L-5 (Low) — imported pill payloads were replayed unvalidated.** Now a round
+  replays structurally only when every pill has a valid tool name
+  (`^[A-Za-z0-9_-]{1,64}$`) and string arguments.
+
+Consciously deferred:
+
+- **L-3 (Low) — tool output now reaches providers that never saw it.** The
+  compaction background helper (possibly another provider) now receives capped
+  tool results, and after a mid-chat model switch the new provider receives
+  earlier raw results instead of the persona's paraphrase. Zero-knowledge is
+  untouched (client → user-configured provider; our server sees nothing), and
+  it matches how the whole history already moves on a switch. **Follow-up
+  commitment:** document both flows in the privacy notes and the helper
+  settings copy before v0.4.0. Tracked in [[follow-ups-index]].
+- **L-4 (Low) — `argumentsJson` is replayed uncapped.** Model-authored, bounded
+  by its output limit, capped in effect by `truncateToWindow`; a cost and
+  context-crowding issue, not a confidentiality one. **Follow-up commitment:**
+  above ~4000 characters replace the arguments with a valid-JSON placeholder
+  (`{"_omitted":"N chars"}`, never a slice) when a field report shows large
+  artefact briefs crowding context, or at the next tool-replay touch, v0.4.0 at
+  the latest. Same pass: reject non-JSON `argumentsJson` in `validPayload`
+  (Larissa re-check residual — a crafted import with `"{"` would 400 on
+  providers that parse arguments). Tracked
+  in [[follow-ups-index]].
+- **L-7 (Info, pre-existing) — `tool-loop.ts` logs the first 100 characters of
+  tool arguments to `console.info`.** Stays on device. **Follow-up commitment:**
+  strip it from production builds with the next logging pass. Tracked in
+  [[follow-ups-index]].
+
+Residuals found by the fix-wave re-review, also deferred:
+
+- **(Low) An MCP wire name can collide with a built-in tool name.** MCP tools
+  are named `prefix_tool` with a user-chosen prefix, so a server tool `fetch`
+  under the prefix `web` becomes `web_fetch` — a built-in name. A pill from such
+  a removed server would still count as built-in for the orphan rule (pills
+  record no origin), and live dispatch is affected too: MCP tools are registered before `generate_image` and `write_memory_entry` and `dispatch` takes the first match, so a colliding MCP tool **shadows** the built-in and receives its arguments (memory content, image prompts). Needs a user prefix
+  that mimics a built-in. **Follow-up commitment:** reserve `BUILTIN_TOOL_NAMES`
+  in `buildMcpToolNames` (`apps/user-client/src/mcp/tool-naming.ts`) with the
+  next MCP touch, before v0.4.0. Tracked in [[follow-ups-index]].
+- **(Info) Persona prose and the previous summary reach the compaction
+  transcript unescaped.** A persona that quotes a fetched page verbatim, with
+  its newlines, can still produce a separate `User:` line. This is
+  model-authored text, not raw tool output; the tool-fact prompt rule is the
+  mitigation. **Follow-up commitment:** revisit if compaction ever gains a
+  structured (non-line-based) transcript format.

@@ -45,7 +45,6 @@ import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildWebTools } from '../integrations/web/build-web-tools.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
-import { flattenAnswerText } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
 import {
   type DiagnosticReport,
@@ -55,11 +54,13 @@ import {
 import { buildOpenerInstruction } from '../lib/opener.js';
 import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { queryClient } from '../lib/queryClient.js';
+import { loadReplayPills } from '../lib/replay-pills.js';
 import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
+import { type ReplayContext, estimateReplayTokens } from '../lib/tool-replay.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
 import { loadMemoryContext } from '../memory/repo.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
@@ -385,11 +386,9 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     // Estimate the realistic sent size: if a checkpoint is active, only the tail
     // (+ the injected summary) is sent, not the full history.
     const projected = await applyActiveCompaction(args.chat, args.priorMessages, '');
+    const projectedPills = await loadReplayPills(projected.priorMessages.map((m) => m.id));
     const projectedUsed =
-      projected.priorMessages.reduce(
-        (sum, m) => sum + estimateTokens(flattenAnswerText(m.contentBlocks)),
-        0,
-      ) +
+      projected.priorMessages.reduce((sum, m) => sum + estimateReplayTokens(m, projectedPills), 0) +
       estimateTokens(projected.memoryContext) +
       estimateTokens(args.userText);
     if (wouldOverflow(projectedUsed, contextWindow)) {
@@ -643,7 +642,7 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
  * NOTE (prior-turn replay, spec §9): only the CURRENT user turn's attachments are
  * resolved here. Re-injecting attachments from PRIOR user messages on replay would
  * require resolving per-prior-message parts and a new attachment-parts mapping in
- * `buildEngineWireMessages` (which currently flattens history to text-only). That
+ * `buildEngineWireMessages` (which replays prior tool rounds but not prior attachments). That
  * is deferred — the current-turn path is the must-have. See the task report.
  */
 async function resolveUserContent(
@@ -914,6 +913,16 @@ async function runIntoDraft(
   const memoryContext =
     (args.persona.useMemory ?? true) ? await loadMemoryContext(args.persona.id) : '';
   const compacted = await applyActiveCompaction(args.chat, args.priorMessages, memoryContext);
+  // The forced-answer pass sends no tools, but the policy uses the turn's
+  // active set: the live exchange already carries those calls (spec §5.2).
+  const replay: ReplayContext = {
+    pillsById: await loadReplayPills(compacted.priorMessages.map((m) => m.id)),
+    policy: {
+      toolsSupported: toolsActive,
+      orphanReplay: args.offering.profile.toolCalls.orphanReplay ?? false,
+      activeToolNames: new Set(activeToolDefs.map((d) => d.name)),
+    },
+  };
 
   const onChunk = (chunk: StreamChunk): void => {
     diag.markChunk(chunk);
@@ -966,6 +975,7 @@ async function runIntoDraft(
         loreContext: args.loreContext ?? '',
         tools,
         toolExchange,
+        replay,
         signal: controller.signal,
         onChunk,
         onDiagnostics: diag.sink,

@@ -130,3 +130,13 @@ is input-side.
 - **wafer (2026-05-31):** vision green; core tools / memory / reasoning-on /
   usage all green. Reasoning-off is **not** offered (`fixed-on`) because the
   adapter path cannot suppress it — see the wafer offering above.
+
+## Tool history replay (2026-10-08, live)
+
+Probed with `curation/run-tool-replay-suite.ts` (tool history replay spec, 2026-10-08). `tool-replay` is the gate: after a replayed `generate_image` round (9-character provider-neutral id, result, prose answer), a direct instruction must produce a real call on the tool channel. `orphan-tool-replay` is informational: the same history with **no** `tools` in the request; PASS sets `toolCalls.orphanReplay: true`.
+
+| Offering | `tool-replay` | `orphan-tool-replay` | `orphanReplay` |
+|---|---|---|---|
+| `novita:moonshotai/kimi-k2.6` | PASS 6/6 | PASS (HTTP 200) | `true` (other Kimi K2.6 routes not probed, stay `false`) |
+
+**Re-probe 2026-10-08 (after the final review):** every reasoning permutation, plus the new `tool-then-user` gate (a replayed message that ends on a tool round, directly followed by a user turn — the shape an interrupted call leaves). `novita:moonshotai/kimi-k2.6`: all three scenarios PASS on every permutation.

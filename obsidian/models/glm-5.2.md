@@ -246,3 +246,16 @@ axis (GLM 5 / 5.1 / 5.2 as one logical model) per the data-model design (D6);
 GLM 5.2 behaves identically to GLM 5.1 per provider **except** the 1M context
 window and the ollama `:cloud` slug — which is why no new adapter was needed; the
 five GLM-family adapters were reused unchanged.
+
+## Tool history replay (2026-10-08, live)
+
+Probed with `curation/run-tool-replay-suite.ts` (tool history replay spec, 2026-10-08). `tool-replay` is the gate: after a replayed `generate_image` round (9-character provider-neutral id, result, prose answer), a direct instruction must produce a real call on the tool channel. `orphan-tool-replay` is informational: the same history with **no** `tools` in the request; PASS sets `toolCalls.orphanReplay: true`.
+
+| Offering | `tool-replay` | `orphan-tool-replay` | `orphanReplay` |
+|---|---|---|---|
+| `chutes:zai-org/GLM-5.2-TEE` | PASS 6/6 | PASS (HTTP 200) | `true` |
+| `ollama-cloud:glm-5.2:cloud` | PASS 6/6 | PASS (HTTP 200) | `true` |
+| `tensorix:z-ai/glm-5.2` | PASS 6/6 (reasoning-on) | PASS (HTTP 200) | `true` |
+| `wafer:GLM-5.2` | PASS 6/6 | PASS (HTTP 200) | `true` |
+
+**Re-probe 2026-10-08 (after the final review):** every reasoning permutation, plus the new `tool-then-user` gate (a replayed message that ends on a tool round, directly followed by a user turn — the shape an interrupted call leaves). Chutes, ollama (three permutations), Tensorix (fixed-on): all PASS. **Wafer:** `tool-then-user` and `orphan-tool-replay` PASS on both permutations; `tool-replay` reasoning-on fails only `reasoning-present` (reproduced twice): on a direct "call the tool now" instruction the model calls `generate_image` correctly but emits no reasoning. The tool pipe is fine; the reasoning observation is tracked as a follow-up.

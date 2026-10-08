@@ -118,9 +118,11 @@ function foldDeltaContent(content: string | MistralContentItem[] | null | undefi
           thinkingParts.push(inner.text);
         }
       }
+    } else {
+      // Tool calls arrive on delta.tool_calls, never inline in content, so an
+      // unknown item type is something new from upstream — surface it.
+      console.warn(`[mistral] ignored unknown delta.content item type: ${String(item.type)}`);
     }
-    // Other item types are ignored intentionally: tool calls arrive on
-    // delta.tool_calls, never inline in content.
   }
   return { visible: visibleParts.join(''), thinking: thinkingParts.join('') };
 }
@@ -227,6 +229,10 @@ export function mistralAdapter(slug: string, opts: MistralAdapterOptions): Model
               name: acc.name,
               argumentsJson: acc.args,
             });
+          } else {
+            console.warn(
+              `[mistral] dropped a tool call lacking ${acc.id ? 'a name' : 'an id'} (args ${acc.args.length} chars)`,
+            );
           }
         }
         state.toolCalls = {};

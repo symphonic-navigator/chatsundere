@@ -8,7 +8,7 @@ import { QK } from '../../data/queryKeys.js';
 import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { outOfWindowCount } from '../../lib/context-window.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
-import { estimateTokens } from '../../lib/token-estimator.js';
+import { estimateReplayTokens } from '../../lib/tool-replay.js';
 import { segmentMessage } from '../../lib/voice/segmentation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { useEffectiveChatMode } from '../../state/effective-chat-mode.js';
@@ -137,7 +137,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   const outCount =
     p.contextBudget != null
       ? outOfWindowCount(
-          sorted.map((m) => estimateTokens(flattenAnswerText(m.contentBlocks))),
+          sorted.map((m) => estimateReplayTokens(m, pillMap)),
           p.systemTokens ?? 0,
           p.contextBudget,
         )

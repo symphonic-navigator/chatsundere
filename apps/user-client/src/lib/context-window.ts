@@ -26,14 +26,25 @@ export function resolveContextWindow(persona: PersonaRow, offering: Offering): n
   return Math.min(offering.context.max, Math.max(effectiveFloor(offering), target));
 }
 
+/** Approximate wire framing of one tool call plus its answering `tool` message. */
+export const TOOL_CALL_OVERHEAD_TOKENS = 10;
+
+/** Estimated tokens of one wire message, including any tool calls it carries. */
 export function wireTokens(m: WireMessage): number {
-  return estimateTokens(typeof m.content === 'string' ? m.content : '');
+  const content = estimateTokens(typeof m.content === 'string' ? m.content : '');
+  const calls = (m.tool_calls ?? []).reduce(
+    (s, c) =>
+      s + estimateTokens(c.function.name + c.function.arguments) + TOOL_CALL_OVERHEAD_TOKENS,
+    0,
+  );
+  return content + calls;
 }
 
 /**
  * Drop the oldest history messages until the estimated token total fits the
  * budget. The system prompt (first) and the current user turn (last) are never
- * dropped. `trimmed` counts the history messages actually removed.
+ * dropped. `trimmed` counts the history messages actually removed. Leading
+ * `tool` messages left without their assistant call are dropped too.
  */
 export function truncateToWindow(
   messages: WireMessage[],
@@ -53,6 +64,14 @@ export function truncateToWindow(
     const candidate = history[start];
     if (candidate === undefined) break;
     total -= wireTokens(candidate);
+    start += 1;
+  }
+  // A `tool` message whose assistant(tool_calls) was dropped is an orphan that
+  // providers reject, so it goes with the call it answered.
+  while (start < history.length) {
+    const head = history[start];
+    if (head === undefined || head.role !== 'tool') break;
+    total -= wireTokens(head);
     start += 1;
   }
   return { messages: [system, ...history.slice(start), current], trimmed: start };

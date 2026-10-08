@@ -101,3 +101,50 @@ describe('claudeOpenRouterAdapter.buildRequest', () => {
     expect(last?.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
   });
 });
+
+const REPLAYED_HISTORY: WireMessage[] = [
+  { role: 'system', content: 'You are helpful.' },
+  { role: 'user', content: 'Draw a fox.' },
+  {
+    role: 'assistant',
+    content: '',
+    tool_calls: [
+      {
+        id: 'k3F9aZ1qP',
+        type: 'function',
+        function: { name: 'generate_image', arguments: '{"prompt":"a fox"}' },
+      },
+    ],
+  },
+  { role: 'tool', tool_call_id: 'k3F9aZ1qP', content: 'Generated 1 image(s).' },
+  { role: 'assistant', content: 'Here is your fox.' },
+  { role: 'user', content: 'Thanks! Another one?' },
+];
+
+describe('claudeOpenRouterAdapter — replayed tool history', () => {
+  it('serialises a replayed tool exchange in the middle of the history', () => {
+    const wire = claudeOpenRouterAdapter('anthropic/claude-sonnet-5', OPTS).buildRequest(
+      req(REPLAYED_HISTORY),
+    );
+    const body = wire.body as { messages: Array<Record<string, unknown>> };
+    expect(body.messages.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+      'user',
+    ]);
+    const call = JSON.stringify(body.messages[2]);
+    expect(call).toContain('generate_image');
+    // Cache markers must not turn the empty assistant content into an empty text part.
+    const content = body.messages[2]?.content;
+    if (Array.isArray(content)) {
+      expect(content.some((p) => p.type === 'text' && p.text === '')).toBe(false);
+    } else {
+      expect(content).toBe('');
+    }
+    expect(call).toContain('k3F9aZ1qP');
+    expect(body.messages[3]?.tool_call_id).toBe('k3F9aZ1qP');
+  });
+});

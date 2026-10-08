@@ -96,6 +96,25 @@ reply, and a broken round trip (Gemma 4 via vLLM answering tool results with
 ReAct JSON, caused by its chat template) passed every assertion. See
 [`obsidian/insights/2026-09-26-suite-missed-broken-tool-continuation.md`](../../../../obsidian/insights/2026-09-26-suite-missed-broken-tool-continuation.md).
 
+## Replayed tool history is checked too
+
+The client replays earlier tool rounds structurally (`assistant(tool_calls)` +
+`tool`, 9-character provider-neutral ids, results capped at 2000 characters;
+spec `superpowers/specs/2026-10-08-tool-history-replay-design.md`). Before
+that, history dropped every tool exchange and models learnt to describe images
+instead of calling `generate_image` (Mistral Large 4, 2026-10-07).
+`scenarios/tool-replay.ts` holds two scenarios, run by
+`curation/run-tool-replay-suite.ts`:
+
+- **`tool-replay` (gate):** a replayed `generate_image` round, then a direct
+  instruction to call it again; the call must arrive on the tool channel.
+- **`orphan-tool-replay` (informational):** the same history with no `tools`
+  in the request. PASS ⇒ `toolCalls.orphanReplay: true` for that offering;
+  HTTP 400 ⇒ keep `false`. Both outcomes are valid.
+
+They live outside `core` because the orphan probe needs a binding without
+tools and must not count against `core`'s pass/fail.
+
 ## The rule: validate the pipe, never the intelligence
 
 Validation is **purely technical/protocol** (design D8). The suite judges whether

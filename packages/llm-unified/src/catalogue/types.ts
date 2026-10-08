@@ -12,7 +12,15 @@ export type ReasoningControl =
 /** Per-offering measured behaviour. (Context + confidence live on the Offering.) */
 export interface ModelProfile {
   reasoning: ReasoningControl;
-  toolCalls: { supported: boolean; streaming: boolean; concurrentWithReasoning: boolean };
+  toolCalls: {
+    supported: boolean;
+    streaming: boolean;
+    concurrentWithReasoning: boolean;
+    /** The provider accepts replayed tool calls whose tool is absent from the
+     *  current request's `tools` array. Measured by the `orphan-tool-replay`
+     *  suite scenario; absent ⇒ false (such rounds replay as text only). */
+    orphanReplay?: boolean;
+  };
   vision: boolean;
   /** Hard-CoT models replay thinking into history; soft-CoT do not. */
   replayReasoning: boolean;

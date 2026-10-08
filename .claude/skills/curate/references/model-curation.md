@@ -26,9 +26,18 @@ First read [`catalogue-model.md`](catalogue-model.md) and
    reasoning permutation the offering supports (on / off, and each effort level
    where steerable). This is **mandatory**, not optional. See
    [`conversation-suite.md`](conversation-suite.md) for how to wire and run it.
-5. **Write the catalogue YAML entry + the Model Curation Record**
+5. **Determine `orphanReplay` (mandatory for every tool-capable offering).**
+   Add the offering to `TARGETS` in
+   `packages/llm-unified/curation/run-tool-replay-suite.ts` and run it for that
+   target alone. `tool-replay` must PASS (it is a gate: after a replayed tool
+   round the model still calls the tool). Set `toolCalls.orphanReplay: true`
+   (via `withOrphanReplay` in `src/providers/_helpers.ts`) **only** when
+   `orphan-tool-replay` passes; on an HTTP 400 leave it `false` and quote the
+   error in the Record. Never generalise one probe to a whole provider —
+   nano-gpt and OpenRouter front several backends with different strictness.
+6. **Write the catalogue YAML entry + the Model Curation Record**
    (`obsidian/models/<id>.md`).
-6. **Validate** the assembled entry against `parseCatalogueEntry` (Valibot,
+7. **Validate** the assembled entry against `parseCatalogueEntry` (Valibot,
    `src/catalogue/schema.ts`). Nothing lands that the gate rejects.
 
 ## Harvested probe checklist (hard-won empirical knowledge)

@@ -2,9 +2,10 @@
 import { describe, expect, it } from 'bun:test';
 import type { WireMessage } from '../../src/types.js';
 import { assertTextPresent } from './assertions.js';
-import { type RunnerBinding, runSuite } from './runner.js';
+import { type RunnerBinding, assembleOutcome, runSuite } from './runner.js';
 import type { ConversationScenario } from './scenario.js';
 import { coreScenario } from './scenarios/core.js';
+import { toolReplayScenario, toolThenUserScenario } from './scenarios/tool-replay.js';
 import type { TurnOutcome } from './types.js';
 
 function outcome(partial: Partial<TurnOutcome>): TurnOutcome {
@@ -91,5 +92,69 @@ describe('coreScenario', () => {
     const otherText = JSON.stringify(others.map((t) => t.send)).toLowerCase();
     expect(JSON.stringify(memory?.send).toLowerCase()).toContain('bassoon');
     expect(otherText).not.toContain('bassoon');
+  });
+});
+
+describe('tool replay scenarios', () => {
+  it('replayed-tool-history passes when the model calls the tool from a replayed history', async () => {
+    const seen: WireMessage[][] = [];
+    const binding: RunnerBinding = {
+      offeringRef: 'fake:model',
+      async runTurn(messages) {
+        seen.push(structuredClone(messages));
+        return assembleOutcome(200, [
+          {
+            type: 'tool-call',
+            toolCallId: 'call1',
+            name: 'generate_image',
+            argumentsJson: '{"prompt":"a lighthouse at dusk"}',
+          },
+          { type: 'usage', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+          { type: 'finish', reason: 'tool_calls' },
+        ]);
+      },
+      toolResultFor: (c) => ({ role: 'tool', tool_call_id: c.id, content: '{"ok":true}' }),
+    };
+    const run = await runSuite(toolReplayScenario, perm, binding);
+    const results = run.permutations[0]?.turns[0]?.results ?? [];
+    expect(results.every((r) => r.status === 'pass')).toBe(true);
+    // The replayed exchange is on the wire before the new user turn.
+    expect(seen[0]?.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant', 'user']);
+  });
+
+  it('replayed-tool-history fails when the model answers in prose', async () => {
+    const binding: RunnerBinding = {
+      offeringRef: 'fake:model',
+      async runTurn() {
+        return assembleOutcome(200, [
+          { type: 'token', text: 'Here is a lighthouse glowing at dusk…' },
+        ]);
+      },
+      toolResultFor: (c) => ({ role: 'tool', tool_call_id: c.id, content: '{"ok":true}' }),
+    };
+    const run = await runSuite(toolReplayScenario, perm, binding);
+    const results = run.permutations[0]?.turns[0]?.results ?? [];
+    expect(results.find((r) => r.assertion === 'tool-call-fired:generate_image')?.status).toBe(
+      'fail',
+    );
+  });
+
+  it('tool-then-user sends a history that ends on a tool round, then a user turn', async () => {
+    const seen: WireMessage[][] = [];
+    const binding: RunnerBinding = {
+      offeringRef: 'fake:model',
+      async runTurn(messages) {
+        seen.push(structuredClone(messages));
+        return assembleOutcome(200, [
+          { type: 'token', text: 'I made you a picture of a red fox in the snow.' },
+          { type: 'finish', reason: 'stop' },
+        ]);
+      },
+      toolResultFor: (c) => ({ role: 'tool', tool_call_id: c.id, content: '{"ok":true}' }),
+    };
+    const run = await runSuite(toolThenUserScenario, perm, binding);
+    const results = run.permutations[0]?.turns[0]?.results ?? [];
+    expect(results.every((r) => r.status === 'pass')).toBe(true);
+    expect(seen[0]?.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'user']);
   });
 });

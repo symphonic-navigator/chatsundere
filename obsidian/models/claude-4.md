@@ -63,3 +63,13 @@ did not cache on OpenRouter (Bedrock routing) — is fully green here.
 OpenRouter Claude offerings were built first, then moved here when the
 limited-keys/Bedrock reality surfaced (ADR 0032). The cache-breakpoint module,
 canonicals, and CENSORED derivation are route-agnostic and were reused unchanged.
+
+## Tool history replay (2026-10-08, live)
+
+Probed with `curation/run-tool-replay-suite.ts` (tool history replay spec, 2026-10-08). `tool-replay` is the gate: after a replayed `generate_image` round (9-character provider-neutral id, result, prose answer), a direct instruction must produce a real call on the tool channel. `orphan-tool-replay` is informational: the same history with **no** `tools` in the request; PASS sets `toolCalls.orphanReplay: true`.
+
+| Offering | `tool-replay` | `orphan-tool-replay` | `orphanReplay` |
+|---|---|---|---|
+| `nano-gpt:claude-haiku-4-5-20251001` | PASS 6/6 | PASS (HTTP 200) | `true` (other Claude offerings not probed, stay `false`) |
+
+**Re-probe 2026-10-08 (after the final review):** every reasoning permutation, plus the new `tool-then-user` gate (a replayed message that ends on a tool round, directly followed by a user turn — the shape an interrupted call leaves). `nano-gpt:claude-haiku-4-5-20251001`: all three scenarios PASS on reasoning-off **and reasoning-on** — the latter swaps to the `-thinking` upstream slug, so the `orphanReplay: true` flag is measured on both backends of this one offering. (Correction: the earlier line saying the `-thinking` path stays `false` was wrong — it is the same offering, now probed.)

@@ -144,6 +144,11 @@ describe('useEditAndReplace — real regenerate target selection (I1)', () => {
     await _resetClientDataDbForTests({ keepData: false });
   });
   afterEach(async () => {
+    // regenerate fires runIntoDraft without awaiting it; settle live streams
+    // before the reset so the chain cannot write into a closed database.
+    for (const id of [...useStreamManagerStore.getState().streams.keys()]) {
+      await useStreamManagerStore.getState().abortDiscard(id);
+    }
     await _resetClientDataDbForTests({ keepData: false });
     vi.restoreAllMocks();
     useStreamManagerStore.setState({ streams: new Map() });

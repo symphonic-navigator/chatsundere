@@ -9,7 +9,7 @@ import type {
 } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 // Reasoning on Mistral Cloud is a BINARY toggle via `reasoning_effort`: only
 // 'high' (on) and 'none' (off) are honoured, and only by the reasoning-capable
@@ -100,11 +100,13 @@ const offerings: Offering[] = [
   // Mistral Large 4 — reasoning toggle (high/none), vision, tools. The literal
   // slug, not `mistral-large-latest`, which still resolves to Large 3. 512k
   // window; recommended at half the ceiling, as for the rest of the family.
-  mistralOffering('mistral-large-4', 'mistral-large-4', {
-    vision: true,
-    reasoning: TOGGLE,
-    context: { recommended: 262_144, max: 524_288 },
-  }),
+  withOrphanReplay(
+    mistralOffering('mistral-large-4', 'mistral-large-4', {
+      vision: true,
+      reasoning: TOGGLE,
+      context: { recommended: 262_144, max: 524_288 },
+    }),
+  ),
   // Voxtral Mini TTS — text-to-speech; bypasses the chat adapter entirely.
   {
     canonicalRef: null,

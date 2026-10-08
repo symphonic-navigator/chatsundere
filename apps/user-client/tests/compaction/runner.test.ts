@@ -18,9 +18,14 @@ vi.mock('@chatsundere/llm-unified', async (orig) => {
 });
 
 import { runOneShotCompletion } from '@chatsundere/llm-unified';
-import { getClientDataDb, openClientDataDb } from '../../src/boot/client-data-db.js';
+import {
+  type MessageRow,
+  type PillRow,
+  getClientDataDb,
+  openClientDataDb,
+} from '../../src/boot/client-data-db.js';
 import { listCheckpoints } from '../../src/compaction/repo.js';
-import { runCompaction } from '../../src/compaction/runner.js';
+import { messageToSource, runCompaction } from '../../src/compaction/runner.js';
 
 afterEach(() => {
   calls.length = 0;
@@ -130,6 +135,43 @@ describe('runCompaction', () => {
     });
     expect(vi.mocked(runOneShotCompletion).mock.calls[0]?.[0]).toMatchObject({
       timeoutMs: 180_000,
+    });
+  });
+});
+
+describe('messageToSource with tool calls', () => {
+  it('turns tool-call pills into readable fact refs', () => {
+    const pill: PillRow = {
+      id: 'pA',
+      messageId: 'm',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {
+        name: 'generate_image',
+        argumentsJson: '{"prompt":"a fox in snow"}',
+        toolCallId: 'o',
+        result: 'Generated 1 image(s).',
+      },
+      createdAt: 1,
+    };
+    const row: MessageRow = {
+      id: 'm',
+      chatId: 'c',
+      role: 'persona',
+      contentBlocks: [
+        { type: 'pill', pillId: 'pA' },
+        { type: 'text', text: 'Here you go.' },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+      bookmarked: false,
+      streamingState: 'complete',
+    };
+    expect(messageToSource(row, new Map([['pA', pill]]))).toEqual({
+      role: 'persona',
+      text: 'Here you go.',
+      refs: ['tool generate_image "{\\"prompt\\":\\"a fox in snow\\"}" → "Generated 1 image(s)."'],
     });
   });
 });

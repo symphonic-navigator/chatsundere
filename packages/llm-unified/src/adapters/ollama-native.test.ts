@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, it } from 'bun:test';
 import type { ReasoningControl } from '../catalogue/types.js';
+import type { WireMessage } from '../types.js';
 import { ollamaNativeAdapter } from './ollama-native.js';
 
 const FIXED_ON: ReasoningControl = { mode: 'fixed-on' };
@@ -206,5 +207,47 @@ describe('ollamaNativeAdapter mapSampling', () => {
 
   it('returns an empty fragment for empty sampling', () => {
     expect(adapter.mapSampling?.({})).toEqual({});
+  });
+});
+
+const REPLAYED_HISTORY: WireMessage[] = [
+  { role: 'system', content: 'You are helpful.' },
+  { role: 'user', content: 'Draw a fox.' },
+  {
+    role: 'assistant',
+    content: '',
+    tool_calls: [
+      {
+        id: 'k3F9aZ1qP',
+        type: 'function',
+        function: { name: 'generate_image', arguments: '{"prompt":"a fox"}' },
+      },
+    ],
+  },
+  { role: 'tool', tool_call_id: 'k3F9aZ1qP', content: 'Generated 1 image(s).' },
+  { role: 'assistant', content: 'Here is your fox.' },
+  { role: 'user', content: 'Thanks! Another one?' },
+];
+
+describe('ollamaNativeAdapter — replayed tool history', () => {
+  it('serialises a replayed tool exchange in the middle of the history', () => {
+    const wire = adapter.buildRequest({ messages: REPLAYED_HISTORY, reasoning: { enabled: true } });
+    const body = wire.body as { messages: Array<Record<string, unknown>> };
+    expect(body.messages.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+      'user',
+    ]);
+    const call = JSON.stringify(body.messages[2]);
+    expect(call).toContain('generate_image');
+    // Native Ollama wants arguments as an object, not a JSON string, and carries no call id.
+    const assistant = body.messages[2] as {
+      tool_calls: Array<{ function: { arguments: unknown } }>;
+    };
+    expect(assistant.tool_calls[0]?.function.arguments).toEqual({ prompt: 'a fox' });
+    expect(body.messages[3]?.tool_call_id).toBe('k3F9aZ1qP');
   });
 });

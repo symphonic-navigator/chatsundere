@@ -14,11 +14,14 @@ import type {
   CompactionCheckpointRow,
   MessageRow,
   PersonaRow,
+  PillRow,
 } from '../boot/client-data-db.js';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { flattenAnswerText, isContextMessage } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
+import { loadReplayPills } from '../lib/replay-pills.js';
 import { estimateTokens } from '../lib/token-estimator.js';
+import { estimateReplayTokens, toolTranscriptRefs } from '../lib/tool-replay.js';
 import {
   COMPACTION_RETRY_REMINDER,
   COMPACTION_SYSTEM_PROMPT,
@@ -52,17 +55,16 @@ export interface CompactionArgs {
 }
 
 /** Map a stored message to a transcript source line: text via the shared
- *  flattener (drops pills/tool blocks); non-text blocks become ref hints. */
-export function messageToSource(row: MessageRow): SourceMessage {
-  const refs: string[] = [];
-  for (const block of row.contentBlocks) {
-    const t = (block as { type?: string }).type;
-    if (t && t !== 'text') refs.push(t);
-  }
+ *  flattener; tool calls become readable fact refs, other non-text blocks
+ *  plain type hints (`toolTranscriptRefs`). */
+export function messageToSource(
+  row: MessageRow,
+  pillsById: ReadonlyMap<string, PillRow>,
+): SourceMessage {
   return {
     role: row.role === 'user' ? 'user' : 'persona',
     text: flattenAnswerText(row.contentBlocks),
-    refs,
+    refs: toolTranscriptRefs(row, pillsById),
   };
 }
 
@@ -123,8 +125,11 @@ export async function runCompaction(args: CompactionArgs): Promise<CompactionChe
   );
   if (all.length === 0) return null;
 
+  const pillsById = await loadReplayPills(all.map((m) => m.id));
+  const tokenOf = (m: MessageRow): number => estimateReplayTokens(m, pillsById);
+
   const window = resolveContextWindow(args.persona, args.windowOffering ?? args.offering);
-  const tokens = all.map((m) => estimateTokens(flattenAnswerText(m.contentBlocks)));
+  const tokens = all.map(tokenOf);
   const tailStartIdx = selectTailStartIndex(tokens, window);
   if (tailStartIdx <= 0) return null; // nothing to compress yet
 
@@ -139,11 +144,7 @@ export async function runCompaction(args: CompactionArgs): Promise<CompactionChe
 
   // Source-truncation guard (spec §4.5): drop oldest source until it fits.
   const sourceBudget = window * COMPACTION_SOURCE_FRACTION;
-  while (
-    sourceSlice.length > 1 &&
-    sourceSlice.reduce((s, m) => s + estimateTokens(flattenAnswerText(m.contentBlocks)), 0) >
-      sourceBudget
-  ) {
+  while (sourceSlice.length > 1 && sourceSlice.reduce((s, m) => s + tokenOf(m), 0) > sourceBudget) {
     sourceSlice = sourceSlice.slice(1);
   }
 
@@ -151,14 +152,11 @@ export async function runCompaction(args: CompactionArgs): Promise<CompactionChe
   const lastBeforeMsg = all[tailStartIdx - 1];
   if (!tailStartMsg || !lastBeforeMsg) return null;
 
-  const source: SourceMessage[] = sourceSlice.map(messageToSource);
+  const source: SourceMessage[] = sourceSlice.map((m) => messageToSource(m, pillsById));
   const transcript = buildCompactionTranscript(source, previous?.summaryMarkdown ?? null);
   const markdown = await summarise(args, transcript);
 
-  const tokensBefore = sourceSlice.reduce(
-    (s, m) => s + estimateTokens(flattenAnswerText(m.contentBlocks)),
-    0,
-  );
+  const tokensBefore = sourceSlice.reduce((s, m) => s + tokenOf(m), 0);
   const tailTokenCount = tokens.slice(tailStartIdx).reduce((s, t) => s + t, 0);
 
   // Offering has no `id` field — use canonicalRef if available, else upstreamSlug.

@@ -6,7 +6,7 @@ import { novitaThinkingAdapter } from '../adapters/novita-thinking.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 const TOGGLE_ON: ReasoningControl = { mode: 'toggle', defaultOn: true };
 
@@ -97,7 +97,7 @@ const thinkingOfferings: Offering[] = [
   // at the 200k smart window. Off via enable_thinking is clean (live-probed
   // 2026-06-17).
   thinkingOffering('glm-5.2', 'zai-org/glm-5.2', false, 200_000, 1_048_576),
-  thinkingOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', true, 256_000),
+  withOrphanReplay(thinkingOffering('kimi-k2.6', 'moonshotai/kimi-k2.6', true, 256_000)),
   thinkingOffering('gemma-4-31b', 'google/gemma-4-31b-it', true, 262_144),
   // MiMo: 1M ceiling, recommended capped at 200k (the smart, non-agentic window
   // — ~1000 A4 pages). Omni is vision-capable; Pro is text-only.

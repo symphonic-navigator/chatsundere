@@ -3,7 +3,7 @@ import * as llm from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it, vi } from 'vitest';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt.js';
-import type { MessageRow } from '../../src/boot/client-data-db.js';
+import type { MessageRow, PillRow } from '../../src/boot/client-data-db.js';
 import {
   type StartStreamArgs,
   type StreamEngineResult,
@@ -341,5 +341,89 @@ describe('opener wire exclusion', () => {
       wire.some((m) => typeof m.content === 'string' && m.content.includes('hello there')),
     ).toBe(false);
     expect(wire[1]).toMatchObject({ role: 'user' });
+  });
+});
+
+describe('buildEngineWireMessages — tool history replay', () => {
+  it('replays a prior tool round structurally when a replay context is given', () => {
+    const pill: PillRow = {
+      id: 'pA',
+      messageId: 'm2',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {
+        name: 'generate_image',
+        argumentsJson: '{"prompt":"fox"}',
+        toolCallId: 'orig',
+        result: 'Generated 1 image(s).',
+      },
+      createdAt: 1,
+    };
+    const prior: MessageRow[] = [
+      {
+        id: 'm1',
+        chatId: 'c',
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'Draw a fox' }],
+        createdAt: 1,
+        updatedAt: 1,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+      {
+        id: 'm2',
+        chatId: 'c',
+        role: 'persona',
+        contentBlocks: [
+          { type: 'pill', pillId: 'pA' },
+          { type: 'text', text: 'Here!' },
+        ],
+        createdAt: 2,
+        updatedAt: 2,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ];
+    const out = buildEngineWireMessages('sys', prior, 'Another?', [], {
+      pillsById: new Map([['pA', pill]]),
+      policy: {
+        toolsSupported: true,
+        orphanReplay: false,
+        activeToolNames: new Set(['generate_image']),
+      },
+    });
+    expect(out.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+      'user',
+    ]);
+  });
+
+  it('stays text-only without a replay context', () => {
+    const prior: MessageRow[] = [
+      {
+        id: 'm2',
+        chatId: 'c',
+        role: 'persona',
+        contentBlocks: [
+          { type: 'pill', pillId: 'pA' },
+          { type: 'text', text: 'Here!' },
+        ],
+        createdAt: 2,
+        updatedAt: 2,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ];
+    const out = buildEngineWireMessages('sys', prior, 'Another?', []);
+    expect(out).toEqual([
+      { role: 'system', content: 'sys' },
+      { role: 'assistant', content: 'Here!' },
+      { role: 'user', content: 'Another?' },
+    ]);
   });
 });

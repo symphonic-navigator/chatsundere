@@ -1108,6 +1108,91 @@ describe('stream-manager.store', () => {
     await store.abortDiscard(myChatId);
   });
 
+  it('hands the engine a replay context built from the offering profile and stored pills', async () => {
+    const { db, chatId, personaId } = await seedChat();
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0];
+
+    await db.pills.add({
+      id: 'replay-pill',
+      messageId: 'prior-persona',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {
+        name: 'generate_image',
+        argumentsJson: '{"prompt":"fox"}',
+        toolCallId: 'orig',
+        result: 'Generated 1 image(s).',
+      },
+      createdAt: 1,
+    });
+    const priorMessages = [
+      {
+        id: 'prior-persona',
+        chatId,
+        role: 'persona',
+        contentBlocks: [
+          { type: 'pill', pillId: 'replay-pill' },
+          { type: 'text', text: 'Here!' },
+        ],
+        createdAt: 1,
+        updatedAt: 1,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ];
+
+    type Captured = {
+      replay?: {
+        pillsById: Map<string, unknown>;
+        policy: { toolsSupported: boolean; orphanReplay: boolean };
+      };
+    };
+    const captured: Captured[] = [];
+    vi.spyOn(toolLoop, 'runToolLoop').mockImplementation(((args: {
+      streamOnce: (toolExchange: unknown, tools: unknown) => Promise<unknown>;
+    }) => {
+      void args.streamOnce([], []);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation(((args: Captured) => {
+      captured.push(args);
+      return new Promise(() => {
+        /* never */
+      });
+    }) as never);
+
+    const store = useStreamManagerStore.getState();
+    const run = async (orphanReplay: boolean | undefined) => {
+      captured.length = 0;
+      await store.start({
+        ...baseStartArgs(chatId, persona, model),
+        priorMessages,
+        offering: {
+          ...(model as object),
+          profile: {
+            toolCalls: { supported: true, ...(orphanReplay === undefined ? {} : { orphanReplay }) },
+          },
+        },
+      } as never);
+      await new Promise((r) => setTimeout(r, 50));
+      const replay = captured[0]?.replay;
+      await store.abortDiscard(chatId);
+      return replay;
+    };
+
+    const withOrphan = await run(true);
+    expect(withOrphan?.policy.orphanReplay).toBe(true);
+    expect(withOrphan?.policy.toolsSupported).toBe(true);
+    expect(withOrphan?.pillsById.has('replay-pill')).toBe(true);
+
+    const without = await run(undefined);
+    expect(without?.policy.orphanReplay).toBe(false);
+  });
+
   it('persists a kb-injection pill above the answer when lore fired', async () => {
     const { db, chatId, personaId } = await seedChat();
     const persona = await db.personas.get(personaId);

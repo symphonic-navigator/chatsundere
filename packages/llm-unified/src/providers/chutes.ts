@@ -4,7 +4,7 @@ import { chutesAdapter } from '../adapters/chutes-openai.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 // Reasoning on chutes is a symmetric chat_template_kwargs toggle, not steps:
 // the effort buckets do not measurably modulate the trace (probed live
@@ -50,7 +50,7 @@ const offerings: Offering[] = [
   // GLM 5.2: 1M ceiling (chutes /models reports 1,048,576), recommended capped
   // at 200k (the smart window, carried from the GLM family). Off via the
   // chat_template_kwargs toggle is genuinely off (live-probed 2026-06-17).
-  chutesOffering('glm-5.2', 'zai-org/GLM-5.2-TEE', false, 200_000, 1_048_576),
+  withOrphanReplay(chutesOffering('glm-5.2', 'zai-org/GLM-5.2-TEE', false, 200_000, 1_048_576)),
   chutesOffering('gemma-4-31b', 'google/gemma-4-31B-turbo-TEE', true, 131_072),
 ];
 

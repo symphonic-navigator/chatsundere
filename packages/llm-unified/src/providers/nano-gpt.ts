@@ -27,7 +27,7 @@ import {
 } from '../tti/size-tables.js';
 import type { ProviderDefinition } from '../types.js';
 import { nanoGptWebScrapeAdapter, nanoGptWebSearchAdapter } from '../web-adapters/nano-gpt-web.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 const STEPS: ReasoningControl = {
   mode: 'steps',
@@ -877,15 +877,21 @@ const offerings: Offering[] = [
     true,
     262_144,
   ),
-  slugSwapOffering(
-    'mistral-large-4',
-    'mistralai/mistral-large-4',
-    MISTRAL_TOGGLE,
-    true,
-    262_144,
-    524_288,
+  withOrphanReplay(
+    slugSwapOffering(
+      'mistral-large-4',
+      'mistralai/mistral-large-4',
+      MISTRAL_TOGGLE,
+      true,
+      262_144,
+      524_288,
+    ),
   ),
-  ...CLAUDE_SPECS.map(claudeOffering),
+  ...CLAUDE_SPECS.map((s) =>
+    s.base === 'claude-haiku-4-5-20251001'
+      ? withOrphanReplay(claudeOffering(s))
+      : claudeOffering(s),
+  ),
   // Claude Opus 5 via nano-gpt. Body-flag reasoning like Fable (no thinking
   // sibling) but with no genuine off — see OPUS5_STEPS above. Vision + tools
   // confirmed live; 200k recommended like the family, 1M ceiling per Anthropic.

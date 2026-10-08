@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import type { CanonicalRequest, ParseState } from '../adapter-contract.js';
 import type { ReasoningControl } from '../catalogue/types.js';
+import type { WireMessage } from '../types.js';
 import { mistralAdapter } from './mistral-openai.js';
 
 const TOGGLE: ReasoningControl = { mode: 'toggle', defaultOn: false };
@@ -198,5 +199,76 @@ describe('mistralAdapter.parseChunk — tool calls and usage', () => {
       { type: 'token', text: '91' },
       { type: 'finish', reason: 'stop' },
     ]);
+  });
+});
+
+describe('mistralAdapter — silent drops are visible', () => {
+  const a = mistralAdapter('mistral-small-latest', { vision: true, reasoning: TOGGLE });
+
+  test('warns when delta.content carries an unknown item type', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    a.parseChunk(
+      { choices: [{ index: 0, delta: { content: [{ type: 'image_ref', ref: 'x' }] } }] },
+      {},
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('image_ref'));
+    warn.mockRestore();
+  });
+
+  test('warns when a tool call without id or name is dropped at finish', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    a.parseChunk(
+      {
+        choices: [
+          {
+            index: 0,
+            delta: { tool_calls: [{ index: 0, function: { arguments: '{}' } }] },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      },
+      {},
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dropped a tool call'));
+    warn.mockRestore();
+  });
+});
+
+const REPLAYED_HISTORY: WireMessage[] = [
+  { role: 'system', content: 'You are helpful.' },
+  { role: 'user', content: 'Draw a fox.' },
+  {
+    role: 'assistant',
+    content: '',
+    tool_calls: [
+      {
+        id: 'k3F9aZ1qP',
+        type: 'function',
+        function: { name: 'generate_image', arguments: '{"prompt":"a fox"}' },
+      },
+    ],
+  },
+  { role: 'tool', tool_call_id: 'k3F9aZ1qP', content: 'Generated 1 image(s).' },
+  { role: 'assistant', content: 'Here is your fox.' },
+  { role: 'user', content: 'Thanks! Another one?' },
+];
+
+describe('mistralAdapter — replayed tool history', () => {
+  test('serialises a replayed tool exchange in the middle of the history', () => {
+    const a = mistralAdapter('mistral-small-latest', { vision: true, reasoning: TOGGLE });
+    const wire = a.buildRequest(req({ messages: REPLAYED_HISTORY }));
+    const body = wire.body as { messages: Array<Record<string, unknown>> };
+    expect(body.messages.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+      'user',
+    ]);
+    const call = JSON.stringify(body.messages[2]);
+    expect(call).toContain('generate_image');
+    expect(call).toContain('k3F9aZ1qP');
+    expect(body.messages[3]?.tool_call_id).toBe('k3F9aZ1qP');
   });
 });

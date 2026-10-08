@@ -129,3 +129,15 @@ the `vision` scenario.
 nano-gpt gpt-5.1 and gpt-5.4 were each run to a full green across all effort
 steps; gpt-5.5 shares the identical endpoint behaviour. The OpenRouter GPT-5
 `reasoning-present` flakiness reproduced independently on gpt-5.1 and gpt-5.4.
+
+## Tool history replay (2026-10-08, live)
+
+Probed with `curation/run-tool-replay-suite.ts` (tool history replay spec, 2026-10-08). `tool-replay` is the gate: after a replayed `generate_image` round (9-character provider-neutral id, result, prose answer), a direct instruction must produce a real call on the tool channel. `orphan-tool-replay` is informational: the same history with **no** `tools` in the request; PASS sets `toolCalls.orphanReplay: true`.
+
+| Offering | `tool-replay` | `orphan-tool-replay` | `orphanReplay` |
+|---|---|---|---|
+| `openrouter:openai/gpt-4.1` | PASS 6/6 | PASS (HTTP 200) | `true` (other routes not probed, stay `false`) |
+
+Note: the OpenRouter test key only permits OpenAI-served routes (account allowed-providers setting); `anthropic/claude-sonnet-5` answered HTTP 404 for that reason alone, so an OpenAI backend was probed instead.
+
+**Re-probe 2026-10-08 (after the final review):** every reasoning permutation, plus the new `tool-then-user` gate (a replayed message that ends on a tool round, directly followed by a user turn — the shape an interrupted call leaves). `openrouter:openai/gpt-4.1` (no reasoning control): all three scenarios PASS.

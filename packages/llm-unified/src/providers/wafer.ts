@@ -4,7 +4,7 @@ import { waferAdapter } from '../adapters/wafer-openai.js';
 import type { Offering, ReasoningControl } from '../catalogue/types.js';
 import { registerProvider } from '../registry.js';
 import type { ProviderDefinition } from '../types.js';
-import { apiKeyField } from './_helpers.js';
+import { apiKeyField, withOrphanReplay } from './_helpers.js';
 
 // Reasoning on wafer is the OpenAI-standard `reasoning_effort` param: 'none'
 // disables, 'low'|'medium'|'high' enable (probed live 2026-05-31). The effort
@@ -87,13 +87,15 @@ const offerings: Offering[] = [
   // unique prompts; `medium` → 3/3 present), which is a per-deployment
   // divergence worth naming: the same model is `fixed-on` on Tensorix, where
   // off only hides.
-  waferOffering('glm-5.2', 'GLM-5.2', {
-    vision: false,
-    zdr: true,
-    reasoning: TOGGLE,
-    recommended: 200_000,
-    max: 1_048_576,
-  }),
+  withOrphanReplay(
+    waferOffering('glm-5.2', 'GLM-5.2', {
+      vision: false,
+      zdr: true,
+      reasoning: TOGGLE,
+      recommended: 200_000,
+      max: 1_048_576,
+    }),
+  ),
   // --- Lost ZDR upstream (wafer /models `zdr_supported:false`) ---
   // Kimi K2.6 was ZDR-capable at onboarding; wafer has since decommissioned the
   // backend that carried it (`disabled_reason: self_hosted_backend_decommissioned`,

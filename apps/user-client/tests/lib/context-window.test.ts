@@ -4,11 +4,13 @@ import { describe, expect, it } from 'vitest';
 import type { PersonaRow } from '../../src/boot/client-data-db.js';
 import {
   CONTEXT_FLOOR,
+  TOOL_CALL_OVERHEAD_TOKENS,
   contextAdjustable,
   effectiveFloor,
   outOfWindowCount,
   resolveContextWindow,
   truncateToWindow,
+  wireTokens,
 } from '../../src/lib/context-window.js';
 
 function offering(recommended: number, max: number): Offering {
@@ -77,5 +79,71 @@ describe('outOfWindowCount', () => {
   });
   it('returns 0 when everything fits', () => {
     expect(outOfWindowCount([10, 10, 10], 10, 1000)).toBe(0);
+  });
+});
+
+describe('wireTokens with tool calls', () => {
+  it('counts tool-call names, arguments and a per-call overhead', () => {
+    const m: WireMessage = {
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        {
+          id: 'a',
+          type: 'function',
+          function: { name: 'generate_image', arguments: '{"prompt":"a fox"}' },
+        },
+      ],
+    };
+    // 'generate_image' + '{"prompt":"a fox"}' = 14 + 18 = 32 chars → 8 tokens.
+    expect(wireTokens(m)).toBe(8 + TOOL_CALL_OVERHEAD_TOKENS);
+  });
+
+  it('is unchanged for a plain text message', () => {
+    expect(wireTokens({ role: 'user', content: 'abcdefgh' })).toBe(2);
+  });
+});
+
+describe('truncateToWindow keeps tool groups intact', () => {
+  it('drops the tool messages of a dropped assistant tool call', () => {
+    const big = 'x'.repeat(400); // 100 tokens
+    const messages: WireMessage[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'assistant',
+        content: big,
+        tool_calls: [{ id: 'a', type: 'function', function: { name: 't', arguments: '{}' } }],
+      },
+      { role: 'tool', tool_call_id: 'a', content: 'ok' },
+      { role: 'assistant', content: 'after' },
+      { role: 'user', content: 'now' },
+    ];
+    const { messages: out, trimmed } = truncateToWindow(messages, 20);
+    expect(out.map((m) => m.role)).toEqual(['system', 'assistant', 'user']);
+    expect(out[1]?.content).toBe('after');
+    expect(trimmed).toBe(2);
+  });
+
+  it('drops both tool messages of a dropped parallel round', () => {
+    const big = 'x'.repeat(400); // 100 tokens
+    const messages: WireMessage[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'assistant',
+        content: big,
+        tool_calls: [
+          { id: 'a', type: 'function', function: { name: 't', arguments: '{}' } },
+          { id: 'b', type: 'function', function: { name: 'u', arguments: '{}' } },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'a', content: 'ok' },
+      { role: 'tool', tool_call_id: 'b', content: 'ok' },
+      { role: 'assistant', content: 'after' },
+      { role: 'user', content: 'now' },
+    ];
+    const { messages: out, trimmed } = truncateToWindow(messages, 20);
+    expect(out.map((m) => m.role)).toEqual(['system', 'assistant', 'user']);
+    expect(out[1]?.content).toBe('after');
+    expect(trimmed).toBe(3);
   });
 });

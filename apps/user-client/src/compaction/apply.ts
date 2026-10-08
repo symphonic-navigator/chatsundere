@@ -20,7 +20,13 @@ export async function applyActiveCompaction(
     ? priorMessages.filter((m) => m.createdAt >= boundary.createdAt)
     : priorMessages;
 
-  const block = `<conversation_compact>\n${checkpoint.summaryMarkdown}\n</conversation_compact>`;
+  // The summary is model output over untrusted tool text; it must not be able
+  // to close its block and speak from outside it.
+  const summary = checkpoint.summaryMarkdown.replace(
+    /<(\s*\/?\s*conversation_compact)/gi,
+    '&lt;$1',
+  );
+  const block = `<conversation_compact>\n${summary}\n</conversation_compact>`;
   const combined = memoryContext ? `${block}\n${memoryContext}` : block;
   return { priorMessages: sliced, memoryContext: combined };
 }
