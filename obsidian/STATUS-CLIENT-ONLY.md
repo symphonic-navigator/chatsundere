@@ -36,7 +36,7 @@ is the gauge becoming honest); truncation never leaves an orphaned `tool` messag
 
 **Next:** Chris runs the spec §10 device checks (the poisoned Le Chat 4 chat calls
 `generate_image` again; nano-gpt → Mistral switch mid-chat; removed MCP server;
-tool-less model; gauge + next compaction), then push.
+tool-less model; gauge + next compaction). Chris bundles it with the follow-up he brings in a fresh session into the next version — push and tag together then.
 
 ---
 
@@ -2356,7 +2356,7 @@ something that delights and doesn't annoy).
 
 ## Next session
 
-**▶ 2026-10-08 (later):** tool history replay squashed to `master` (`e43eecad`, unpushed) — waiting on Chris's spec §10 device checks, then push. See Current.
+**▶ 2026-10-08 (later):** tool history replay squashed to `master` (`e43eecad`, unpushed) — waiting on Chris's spec §10 device checks; ships together with Chris's follow-up in the next version. See Current.
 
 **▶ Resuming after 2026-10-08.** `v0.3.0` is tagged and pushed (see Current).
 Waiting on Chris's device checks for the image picker and persona quick access.
