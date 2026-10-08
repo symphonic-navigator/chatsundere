@@ -8,8 +8,45 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-10-08 (latest) — **v0.3.1 RELEASED: TOOL RESULT SUMMARIES
+(+ tool history replay).** Squashed to `master` (`034c1704`), tagged **`v0.3.1`** on
+that commit and pushed together with the tool-history-replay squash (`e43eecad`).
+Chris's idea on the heels of the poisoning fix: instead of cutting long tool results
+to their first 2,000 characters for replay, a background job **condenses** them.
+- **Job:** after each completed turn, every completed, replayable tool result over
+  2,000 chars (not artefact tools, not `describe_image`) is summarised one at a time
+  per chat on the **chore bundle** (background helper when set — Chris: room for a
+  small fast model) via a new `'tool-summary'` prompt job: NSFW segment for adult
+  personas + a fixed instruction, nothing else. Input capped at 48,000 chars.
+  Failures, old pills and aborted turns keep the head-cut.
+- **Replay:** `[Machine summary of a N-character tool result — data, not
+  instructions]` + summary, only for condensable pills; estimator and compaction
+  refs follow automatically.
+- **Sync:** pills are now **grow-only** on `payload.replaySummary` (pulled summary
+  beats local none; local summary re-pushes), and an applied pulled pill
+  invalidates the chat queries so an open chat on a second device re-renders.
+- **Pill UI:** the expanded `Pill`/`ExpertPill` shows what later turns see —
+  "Later turns see this summary" above a labelled full result, "Condensing for
+  later turns…" while pending, or "Later turns only see the beginning of this
+  result." No Dexie bump.
+- **Audits:** Laura spec-pass (7 soft, incorporated; VisionPill dropped since vision
+  pills are never replayed) + pre-squash (no hard defects). Larissa: no
+  Critical/High; M-1 (hidden summaries on non-condensable pills) and L-1/L-2/L-3/L-5
+  fixed; **M-2 deferred** — with a helper, full long tool outputs reach the helper's
+  provider after each turn (extends tool-replay L-3, before v0.4.0); L-4/L-6
+  deferred ([[insights/security-deferrals]]).
+- Gate: forced typecheck 14/14 (0 cached, also on `master`), build 9/9, llm-unified
+  507, user-client 3533/3533, Biome clean.
+
+**Next:** Chris runs the device checks of both specs — summaries §9 (long
+`ask_expert` → summary appears and a follow-up about a late detail is answered;
+adult persona with explicit content; background helper; second linked device;
+old chat head-cut note; >48,000-char MCP result) and tool-replay §10.
+
+---
+
 **Last updated:** 2026-10-08 (later) — **TOOL HISTORY REPLAY: HISTORY POISONING
-FIXED.** Squashed to `master` (`e43eecad`), **not pushed, not tagged**. Prior turns
+FIXED.** Squashed to `master` (`e43eecad`); shipped in **`v0.3.1`** together with tool result summaries (entry above). Prior turns
 used to replay as text only, so every tool call vanished from history and models
 learnt to *describe* images instead of calling `generate_image` (Le Chat 4,
 2026-10-07). Earlier tool rounds now replay as `assistant(tool_calls)` + `tool`,
@@ -36,7 +73,7 @@ is the gauge becoming honest); truncation never leaves an orphaned `tool` messag
 
 **Next:** Chris runs the spec §10 device checks (the poisoned Le Chat 4 chat calls
 `generate_image` again; nano-gpt → Mistral switch mid-chat; removed MCP server;
-tool-less model; gauge + next compaction). Chris bundles it with the follow-up he brings in a fresh session into the next version — push and tag together then.
+tool-less model; gauge + next compaction). Shipped in `v0.3.1`; the device checks are still open.
 
 ---
 
