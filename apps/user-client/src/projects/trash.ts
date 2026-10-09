@@ -12,7 +12,7 @@ import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import type { ProjectCollection } from '../trash/trash-model.js';
 import { fsError, projectNotFound } from './errors.js';
 import { type FileMeta, fileByPath, filesUnder, mapQuota } from './fs.js';
-import { basename, dirname, normalisePath } from './path.js';
+import { MAX_PATH_LENGTH, MAX_SEGMENT_LENGTH, basename, dirname, normalisePath } from './path.js';
 import { rekeyRevisions } from './revisions.js';
 
 /** What a project delete hands the UI: the trash card, an in-place Undo and the toast text. */
@@ -187,15 +187,27 @@ function localDate(now: number): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
 }
 
-/** `/dir/stem.md` → `/dir/stem (restored YYYY-MM-DD)[ n].md` for the n-th attempt. */
+/**
+ * `/dir/stem.md` → `/dir/stem (restored YYYY-MM-DD)[ n].md` for the n-th attempt,
+ * shortening the stem so the name and the path stay within the limits.
+ */
 function restoredPath(path: string, date: string, n: number): string {
   const dir = dirname(path);
+  const prefix = dir === '/' ? '/' : `${dir}/`;
   const name = basename(path);
   const dot = name.lastIndexOf('.');
-  const stem = dot > 0 ? name.slice(0, dot) : name;
   const ext = dot > 0 ? name.slice(dot) : '';
-  const suffix = n === 1 ? '' : ` ${n}`;
-  return `${dir === '/' ? '' : dir}/${stem} (restored ${date})${suffix}${ext}`;
+  const tail = ` (restored ${date})${n === 1 ? '' : ` ${n}`}${ext}`;
+  const room = Math.min(
+    MAX_SEGMENT_LENGTH - tail.length,
+    MAX_PATH_LENGTH - prefix.length - tail.length,
+  );
+  // Only a folder path within a few characters of the limit leaves no room at all.
+  if (room < 1) throw fsError('InvalidPath', { path, reason: 'too-long' });
+  let stem = (dot > 0 ? name.slice(0, dot) : name).slice(0, room);
+  // Never leave half of a surrogate pair at the cut.
+  if (/[\uD800-\uDBFF]$/.test(stem)) stem = stem.slice(0, -1);
+  return `${prefix}${stem}${tail}`;
 }
 
 /** Newest delete first; equal times fall back to the newer (uuidv7) file id. */

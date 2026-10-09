@@ -42,8 +42,10 @@ export function showCardDeleteToast(
               else throw e;
             }
           } catch (e) {
+            const reason = describeRestoreError(e);
+            if (reason === null) console.warn('Undo of a delete failed', e);
             toastStore.show({
-              message: describeRestoreError(e) ?? 'Could not restore. Please try again.',
+              message: reason ?? 'Could not restore. Please try again.',
               tone: 'warn',
               durationMs: 8000,
             });

@@ -163,6 +163,56 @@ describe('restoreCard on a project card', () => {
   });
 });
 
+describe('restored names near the limits', () => {
+  /** Deletes `path`, recreates it, deletes the project, restores the card. */
+  async function restoreDuplicate(path: string): Promise<string[]> {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 9, 8));
+    const pid = await seed([path]);
+    await deletePath(pid, path);
+    vi.setSystemTime(new Date(2026, 9, 9, 9));
+    await writeText(pid, path, 'live');
+    await deleteProject(pid);
+    await restoreCard(`projects:${pid}`);
+    const [project] = await db.projects.toArray();
+    const paths = (await db.projectFiles.toArray()).map((f) => f.path);
+    // Every restored path must still be readable, i.e. pass path validation.
+    for (const p of paths) await readText(project?.id ?? '', p);
+    return paths.filter((p) => p !== path);
+  }
+
+  it('shortens the stem so the name fits 255 characters', async () => {
+    const [renamed] = await restoreDuplicate(`/notes/${'a'.repeat(252)}.md`);
+    const name = renamed?.slice('/notes/'.length) ?? '';
+    expect(name).toHaveLength(255);
+    expect(name.endsWith(' (restored 2026-10-09).md')).toBe(true);
+    expect(name.startsWith('aaaa')).toBe(true);
+  });
+
+  it('shortens the stem so the path fits 1024 characters', async () => {
+    const dir = `/${'d'.repeat(244)}`.repeat(4);
+    const path = `${dir}/${'x'.repeat(40)}.md`;
+    expect(path).toHaveLength(1024);
+    const [renamed] = await restoreDuplicate(path);
+    expect(renamed).toHaveLength(1024);
+    expect(renamed?.startsWith(`${dir}/x`)).toBe(true);
+    expect(renamed?.endsWith(' (restored 2026-10-09).md')).toBe(true);
+  });
+
+  it('refuses, keeping the card, when not even a one-character stem fits', async () => {
+    const path = `${`/${'d'.repeat(250)}`.repeat(4)}/${'x'.repeat(16)}.md`;
+    const pid = await seed([path]);
+    await deletePath(pid, path);
+    await writeText(pid, path, 'live');
+    await deleteProject(pid);
+
+    const e = await expectFsError(restoreCard(`projects:${pid}`), 'InvalidPath');
+    expect((e as { detail: { reason: string } }).detail.reason).toBe('too-long');
+    expect(await db.projects.count()).toBe(0);
+    expect(await db.trash.count()).toBe(5);
+  });
+});
+
 describe('restoreCard onto a live collision', () => {
   it('rejects with AlreadyExists, changes nothing and keeps the card', async () => {
     const pid = await seed(['/notes/a.md', '/notes/b.md', '/notes/c.md']);

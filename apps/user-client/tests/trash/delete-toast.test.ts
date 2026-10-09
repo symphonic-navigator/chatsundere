@@ -55,9 +55,11 @@ describe('showCardDeleteToast', () => {
   });
 
   it('turns any other Undo failure into a warning toast', async () => {
+    const failure = new Error('disk on fire');
     const restore = vi.fn(async () => {
-      throw new Error('disk on fire');
+      throw failure;
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const invalidate = vi.fn();
     showCardDeleteToast('batch:k1', { kind: 'in-place', restore }, invalidate);
 
@@ -70,5 +72,7 @@ describe('showCardDeleteToast', () => {
       ]);
     });
     expect(invalidate).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.any(String), failure);
+    warn.mockRestore();
   });
 });

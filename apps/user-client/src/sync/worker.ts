@@ -1144,7 +1144,10 @@ async function withSingleFlight(fn: () => Promise<void>): Promise<void> {
 async function purgeTrash(): Promise<void> {
   const db = getClientDataDb();
   await db.trash.where('purgeAt').belowOrEqual(Date.now()).delete();
-  await sweepOrphanRevisions();
+  // Local housekeeping: a failed sweep must not abort or fail the sync cycle.
+  await sweepOrphanRevisions().catch((e: unknown) => {
+    console.warn('Could not sweep orphaned project revisions after the trash purge', e);
+  });
 }
 
 // ===== The pull loop (spec §6 pull, §7 apply) =====

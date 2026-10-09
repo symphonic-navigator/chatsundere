@@ -170,7 +170,10 @@ export async function purgeCard(cardKey: string): Promise<void> {
   const all = await db.trash.toArray();
   const memberIds = rowsOfCard(cardKey, all).map((r) => r.id);
   if (memberIds.length > 0) await db.trash.bulkDelete(memberIds);
-  await sweepOrphanRevisions();
+  // The purge has committed; a failed sweep is retried by the next one.
+  await sweepOrphanRevisions().catch((e: unknown) => {
+    console.warn('Could not sweep orphaned project revisions after a purge', e);
+  });
 }
 
 /** §3.7 — retire this device's stale trash card for an entity restored elsewhere.
