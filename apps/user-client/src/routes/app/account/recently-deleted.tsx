@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { toastStore } from '../../../state/toast.store.js';
+import { describeRestoreError } from '../../../trash/restore-error.js';
 import type { TrashEntityKind } from '../../../trash/trash-model.js';
 import {
   type TrashCard,
@@ -59,13 +60,26 @@ function joinWithAnd(parts: string[]): string {
 }
 
 /**
- * The count summary shown under a card: the named sub-counts, or a bare "N items"
- * fallback when there are no typed descendants.
+ * The count summary shown under a card: the file count for project cards, else
+ * the named sub-counts, or a bare "N items" fallback when there are no typed
+ * descendants.
  */
 function countSummary(counts: TrashCard['counts']): string {
+  if (counts.files !== undefined) {
+    const earlier = counts.earlierFiles
+      ? ` · includes ${plural(counts.earlierFiles, 'file')} deleted earlier`
+      : '';
+    return `${plural(counts.files, 'file')}${earlier}`;
+  }
   const parts = cascadeParts(counts);
   if (parts.length > 0) return parts.join(' · ');
   return plural(counts.items, 'item');
+}
+
+/** The line under a card's title: a file card names its project, others summarise counts. */
+function cardSummary(card: TrashCard): string {
+  if (card.entityKind === 'projectFile' && card.projectName !== undefined) return card.projectName;
+  return countSummary(card.counts);
 }
 
 /** A calm, day-granular "deleted X ago" label suited to the 30-day window. */
@@ -80,6 +94,10 @@ function deletedAgoLabel(deletedAt: number, now: number = Date.now()): string {
 /** The purge-confirm body, naming the entity and its concrete cascade. */
 function purgeBody(card: TrashCard): string {
   const noun = ENTITY_NOUN[card.entityKind];
+  const files = card.counts.files;
+  if ((card.entityKind === 'projectFolder' || card.entityKind === 'project') && files) {
+    return `Permanently delete this ${noun} and its ${files} files? This cannot be undone.`;
+  }
   const parts = cascadeParts(card.counts);
   const tail = parts.length > 0 ? ` and its ${joinWithAnd(parts)}` : '';
   return `Permanently delete this ${noun}${tail}? This cannot be undone.`;
@@ -107,6 +125,13 @@ export function RecentlyDeletedPage(): JSX.Element {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: TRASH_CARDS_KEY });
       toastStore.show({ message: 'Restored.', tone: 'success', durationMs: 2500 });
+    },
+    onError: (e) => {
+      toastStore.show({
+        message: describeRestoreError(e) ?? 'Could not restore. Please try again.',
+        tone: 'warn',
+        durationMs: 8000,
+      });
     },
   });
 
@@ -142,7 +167,7 @@ export function RecentlyDeletedPage(): JSX.Element {
               <div className="space-y-1">
                 <p className="font-display text-base text-paper">{card.title}</p>
                 <p className="text-xs text-paper-soft">
-                  {countSummary(card.counts)} · {deletedAgoLabel(card.deletedAt)}
+                  {cardSummary(card)} · {deletedAgoLabel(card.deletedAt)}
                 </p>
               </div>
               <div className="flex gap-2">

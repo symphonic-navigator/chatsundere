@@ -2,7 +2,10 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 import { toastStore } from '../state/toast.store.js';
 import { type TrashUndoHandle, UndoDrainedError } from './delete-flow.js';
+import { describeRestoreError } from './restore-error.js';
 import { purgeCard, restoreCard } from './trash-repo.js';
+
+const DEFAULT_MESSAGE = 'Moved to Recently deleted · recoverable for 30 days';
 
 /** After a soft-delete, surface the delete-time signal: a toast with Undo (fast,
  *  identity-preserving before drain; falls back to the new-identity restore once the
@@ -13,9 +16,18 @@ export function showDeleteToast(
   handle: TrashUndoHandle,
   invalidate: () => void,
 ): void {
-  const cardKey = `${collection}:${key}`;
+  showCardDeleteToast(`${collection}:${key}`, handle, invalidate);
+}
+
+/** {@link showDeleteToast} for any trash card; a refused Undo (path collision) becomes a warning toast. */
+export function showCardDeleteToast(
+  cardKey: string,
+  handle: TrashUndoHandle,
+  invalidate: () => void,
+  message: string = DEFAULT_MESSAGE,
+): void {
   toastStore.show({
-    message: 'Moved to Recently deleted · recoverable for 30 days',
+    message,
     tone: 'info',
     durationMs: 8000,
     action: {
@@ -23,10 +35,17 @@ export function showDeleteToast(
       onClick: () => {
         void (async () => {
           try {
-            await handle.restore();
+            try {
+              await handle.restore();
+            } catch (e) {
+              if (e instanceof UndoDrainedError) await restoreCard(cardKey);
+              else throw e;
+            }
           } catch (e) {
-            if (e instanceof UndoDrainedError) await restoreCard(cardKey);
-            else throw e;
+            const reason = describeRestoreError(e);
+            if (reason === null) throw e;
+            toastStore.show({ message: reason, tone: 'warn', durationMs: 8000 });
+            return;
           }
           invalidate();
           toastStore.show({ message: 'Restored.', tone: 'success', durationMs: 2500 });

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { SyncCollection } from '@chatsundere/shared-types';
 import type { Transaction } from 'dexie';
 import type { TrashRow } from '../boot/client-data-db.js';
-import { deriveTrashMeta } from './trash-model.js';
+import { type LocalCollection, deriveTrashMeta } from './trash-model.js';
 
 /** The 30-day trash grace window before auto-purge (§3.3), in milliseconds. */
 export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -13,15 +12,17 @@ export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
  * {@link deriveTrashMeta}; pass `resolvePersonaForChat` so a chat-child's
  * `rootGroup` lifts to its persona card. The `trash` table must be in the
  * transaction's scope, and this must run before `write` deletes the live rows so
- * the snapshot captures the row's final state.
+ * the snapshot captures the row's final state. `batch` groups rows from one
+ * folder delete into a single card.
  */
 export async function snapshotRowIntoTrash(
   tx: Transaction,
   now: number,
-  collection: SyncCollection,
+  collection: LocalCollection,
   key: string,
   row: unknown,
   resolvePersonaForChat?: (chatId: string) => string | null,
+  batch?: TrashRow['batch'],
 ): Promise<void> {
   const meta = deriveTrashMeta(collection, key, row, resolvePersonaForChat);
   const trashRow: TrashRow = {
@@ -35,5 +36,6 @@ export async function snapshotRowIntoTrash(
     rootGroup: meta.rootGroup,
     parentRef: meta.parentRef,
   };
+  if (batch) trashRow.batch = batch;
   await tx.table('trash').put(trashRow);
 }

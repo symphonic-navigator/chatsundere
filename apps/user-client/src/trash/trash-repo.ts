@@ -14,8 +14,21 @@ export interface TrashCard {
   /** The card ROOT's kind — drives icon + title. */
   entityKind: TrashEntityKind;
   title: string;
-  /** Descendant tallies; `items` is always present, the rest only when > 0. */
-  counts: { chats?: number; memories?: number; documents?: number; items: number };
+  /**
+   * Descendant tallies; `items` is always present, the rest only when > 0.
+   * `files` counts project files including the root; `earlierFiles` those deleted
+   * before the root. Project content rows are never counted.
+   */
+  counts: {
+    chats?: number;
+    memories?: number;
+    documents?: number;
+    files?: number;
+    earlierFiles?: number;
+    items: number;
+  };
+  /** For a project file card: the name of the project it belongs to. */
+  projectName?: string;
   deletedAt: number;
 }
 
@@ -36,6 +49,10 @@ function titleOf(root: TrashRow): string {
       return readStr(root.row, 'title') ?? 'Untitled chat';
     case 'documents':
       return readStr(root.row, 'title') ?? root.key;
+    case 'projects':
+      return readStr(root.row, 'name') ?? root.key;
+    case 'projectFiles':
+      return readStr(root.row, 'path')?.slice(1) ?? root.key;
     case 'memoryJournal':
     case 'memoryBody': {
       const content = readStr(root.row, 'content');
@@ -68,25 +85,52 @@ export async function listTrashCards(): Promise<TrashCard[]> {
   const cards: TrashCard[] = [];
   for (const [cardKey, members] of groups) {
     const root = byId.get(cardKey);
-    if (root === undefined) continue; // defensive — cardKey is always a member id
-    const descendants = members.filter((m) => m.id !== cardKey);
+    // A batch card (one folder delete) has no root row; its members carry the batch.
+    const batch = root === undefined ? members.find((m) => m.batch)?.batch : undefined;
+    const head = root ? { kind: root.entityKind, title: titleOf(root) } : batch;
+    if (head === undefined) continue; // defensive — cardKey is a member id or a batch key
+    const deletedAt = root?.deletedAt ?? Math.max(...members.map((m) => m.deletedAt));
+    const descendants = members.filter(
+      (m) => m.id !== cardKey && m.collection !== 'projectContents',
+    );
     const counts: TrashCard['counts'] = { items: descendants.length };
     const chats = descendants.filter((d) => d.entityKind === 'chat').length;
     const memories = descendants.filter((d) => d.entityKind === 'memory').length;
     const documents = descendants.filter((d) => d.entityKind === 'document').length;
+    const files = members.filter((m) => m.collection === 'projectFiles');
+    // Only a root (project) card folds in earlier deletes; a batch is one delete.
+    const earlierFiles = root ? files.filter((f) => f.deletedAt < root.deletedAt).length : 0;
     if (chats > 0) counts.chats = chats;
     if (memories > 0) counts.memories = memories;
     if (documents > 0) counts.documents = documents;
-    cards.push({
+    if (files.length > 0) counts.files = files.length;
+    if (earlierFiles > 0) counts.earlierFiles = earlierFiles;
+    const card: TrashCard = {
       cardKey,
-      entityKind: root.entityKind,
-      title: titleOf(root),
+      entityKind: head.kind,
+      title: head.title,
       counts,
-      deletedAt: root.deletedAt,
-    });
+      deletedAt,
+    };
+    if (root?.collection === 'projectFiles') {
+      const name = await projectNameOf(readStr(root.row, 'projectId'), byId);
+      if (name !== null) card.projectName = name;
+    }
+    cards.push(card);
   }
 
   return cards.sort((a, b) => b.deletedAt - a.deletedAt);
+}
+
+/** The live project's name, else its trashed snapshot's name, else null. */
+async function projectNameOf(
+  projectId: string | null,
+  byId: ReadonlyMap<string, TrashRow>,
+): Promise<string | null> {
+  if (projectId === null) return null;
+  const live = await getClientDataDb().projects.get(projectId);
+  if (live) return live.name;
+  return readStr(byId.get(`projects:${projectId}`)?.row, 'name');
 }
 
 /**
@@ -94,6 +138,7 @@ export async function listTrashCards(): Promise<TrashCard[]> {
  * (`${collection}:${key}`). Computed by walking `parentRef` while the parent is
  * itself in trash — NOT the denormalised `rootGroup` hint (§3.2/§3.3). This is
  * what folds a chat into its persona card once the persona is also deleted.
+ * When that ancestor carries a `batch`, the card is `batch:<key>` instead.
  */
 export function cardKeyOf(row: TrashRow, byId: ReadonlyMap<string, TrashRow>): string {
   let cur = row;
@@ -106,7 +151,8 @@ export function cardKeyOf(row: TrashRow, byId: ReadonlyMap<string, TrashRow>): s
     if (parent === undefined) break; // parent not trashed → cur is the highest trashed ancestor
     cur = parent;
   }
-  return cur.id;
+  // A folder delete stamps its file rows with one batch so they form one card.
+  return cur.batch ? `batch:${cur.batch.key}` : cur.id;
 }
 
 /** Purge a whole trash card: delete its snapshot rows from db.trash only (§3.6).

@@ -101,11 +101,13 @@ async function requireProject(projectId: string): Promise<void> {
   if (!(await getClientDataDb().projects.get(projectId))) throw projectNotFound(projectId);
 }
 
-function fileByPath(projectId: string, path: string): Promise<FileMeta | undefined> {
+/** The file at the normalised `path`, or undefined; usable inside a transaction. */
+export function fileByPath(projectId: string, path: string): Promise<FileMeta | undefined> {
   return getClientDataDb().projectFiles.where('[projectId+path]').equals([projectId, path]).first();
 }
 
-function filesUnder(projectId: string, dir: string) {
+/** Every file strictly below the normalised directory `dir`, as a Dexie collection. */
+export function filesUnder(projectId: string, dir: string) {
   const [lo, hi] = prefixRange(dir);
   return getClientDataDb()
     .projectFiles.where('[projectId+path]')
