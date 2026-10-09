@@ -42,6 +42,16 @@ export function fault(step: string, n: number): void {
   faultHook?.(step, n);
 }
 
+let asyncFaultHook: (() => Promise<void>) | null = null;
+
+/**
+ * Test-only: installs an async hook awaited inside the `writeText` and `move`
+ * transactions, so a test can prove a non-Dexie await there aborts the write.
+ */
+export function _setAsyncFaultHookForTests(hook: (() => Promise<void>) | null): void {
+  asyncFaultHook = hook;
+}
+
 /** Base64url (unpadded) SHA-256 of `bytes`. Call outside Dexie transactions. */
 export async function sha256B64Url(bytes: Uint8Array): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
@@ -247,6 +257,7 @@ export async function writeText(
       [db.projects, db.projectFiles, db.projectContents, db.projectRevisions],
       async (tx) => {
         await requireProject(projectId);
+        if (asyncFaultHook) await asyncFaultHook();
         if ((await filesUnder(projectId, p).count()) > 0) throw fsError('IsDirectory', { path: p });
         const above = ancestors(p);
         if (above.length > 0) {
@@ -379,6 +390,7 @@ export async function move(
   await mapQuota(
     db.transaction('rw', db.projects, db.projectFiles, async () => {
       await requireProject(projectId);
+      if (asyncFaultHook) await asyncFaultHook();
       const file = src === '/' ? undefined : await fileByPath(projectId, src);
       let plan: MoveStep[];
       if (file) {
