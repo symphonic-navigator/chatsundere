@@ -17,6 +17,25 @@ import { useProviders } from '../../data/providers.js';
 import { usePreviewFlag } from '../../data/settings.js';
 import { useServerGate } from '../../lib/server-gate.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
+import { useProjects } from '../../projects/hooks.js';
+
+/** The Projects preview tile; mounted only while the preview is on, so the flag-off page never reads projects. */
+function ProjectsTile(): JSX.Element {
+  const count = useProjects()?.length;
+  return (
+    <NavTile
+      colour="green"
+      icon={FolderOpen}
+      label="Projects (preview)"
+      to="/app/projects"
+      meta={
+        count === undefined
+          ? undefined
+          : `${count} ${count === 1 ? 'project' : 'projects'} · this device`
+      }
+    />
+  );
+}
 
 /** My Settings — the root navigation matrix (spec §2). */
 export function Settings(): JSX.Element {
@@ -89,9 +108,7 @@ export function Settings(): JSX.Element {
           to="/app/settings/previews"
           meta="try early features"
         />
-        {projectsOn ? (
-          <NavTile colour="green" icon={FolderOpen} label="Projects (preview)" to="/app/projects" />
-        ) : null}
+        {projectsOn ? <ProjectsTile /> : null}
       </div>
     </PageScaffold>
   );

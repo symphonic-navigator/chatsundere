@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { useProjects } from '../../../projects/hooks.js';
@@ -43,7 +43,16 @@ export function SettingsPreviewsPage(): JSX.Element {
       <div className="flex flex-col gap-4 px-4 pb-8 pt-2">
         {notice ? (
           <p className="rounded-md border border-paper-soft/20 bg-white/[0.02] p-3 text-[11px] text-paper-soft">
-            {notice}
+            {on ? (
+              <>
+                Projects is on.{' '}
+                <Link to="/app/projects" className="text-paper underline">
+                  Open Projects
+                </Link>
+              </>
+            ) : (
+              notice
+            )}
           </p>
         ) : null}
         <div className="flex items-start justify-between gap-3">

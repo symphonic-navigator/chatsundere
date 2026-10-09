@@ -81,6 +81,27 @@ describe('Previews preview flag', () => {
     expect(await screen.findByRole('button', { name: /Projects \(preview\)/ })).toBeInTheDocument();
   });
 
+  it('counts projects on the Projects tile, singular and plural', async () => {
+    await setFlag(true);
+    await createProject('Only');
+    const first = renderAt('/app/settings');
+    expect(await screen.findByText('1 project · this device')).toBeInTheDocument();
+    first.unmount();
+    await createProject('Second');
+    renderAt('/app/settings');
+    expect(await screen.findByText('2 projects · this device')).toBeInTheDocument();
+  });
+
+  it('swaps the redirect notice for a way in once Projects is on', async () => {
+    renderAt('/app/projects');
+    expect(await screen.findByText('Projects is a preview — turn it on here.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Projects (preview)' }));
+    expect(await screen.findByText('Projects is on.')).toBeInTheDocument();
+    expect(screen.queryByText('Projects is a preview — turn it on here.')).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'Open Projects' }));
+    expect(await screen.findByText('Project list')).toBeInTheDocument();
+  });
+
   it('toggling writes settings.previews.projects', async () => {
     renderAt('/app/settings/previews');
     expect(

@@ -6,7 +6,7 @@ import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { move, renameProject, writeText } from '../../../projects/fs.js';
 import { useProject, useProjectTree } from '../../../projects/hooks.js';
-import { normalisePath } from '../../../projects/path.js';
+import { dirname, normalisePath, withMarkdownExtension } from '../../../projects/path.js';
 import { deletePath } from '../../../projects/trash.js';
 import { type TreeNode, buildTree } from '../../../projects/tree-model.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -40,6 +40,20 @@ function saveCollapsed(projectId: string, collapsed: Set<string>): void {
 }
 
 const asName = (input: string): string => input.trim();
+
+/** Folders keep their name as typed; files get the `.md` rule. */
+function moveNormaliser(node: TreeNode): (input: string) => string {
+  return node.type === 'dir' ? normalisePath : withMarkdownExtension;
+}
+
+/** "Rename" while the input only changes the last segment, "Move" otherwise. */
+function moveLabel(node: TreeNode, input: string): string {
+  try {
+    return dirname(moveNormaliser(node)(input)) === dirname(node.path) ? 'Rename' : 'Move';
+  } catch {
+    return 'Move';
+  }
+}
 
 /** `/app/projects/:projectId` — collapsible file tree with create, move and delete (spec §6.3). */
 export function ProjectTreePage(): JSX.Element {
@@ -148,8 +162,8 @@ export function ProjectTreePage(): JSX.Element {
         <PathDialog
           title="Rename / Move"
           initial={dialog.node.path}
-          confirmLabel="Move"
-          {...(dialog.node.type === 'dir' ? { normalise: normalisePath } : {})}
+          confirmLabel={(input) => moveLabel(dialog.node, input)}
+          normalise={moveNormaliser(dialog.node)}
           onClose={() => setDialog(null)}
           onSubmit={async (to) => {
             await move(projectId, dialog.node.path, to);

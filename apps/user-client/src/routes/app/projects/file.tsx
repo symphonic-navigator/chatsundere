@@ -17,6 +17,8 @@ import { PathDialog, QUOTA_COPY, describeProjectError } from './PathDialog.js';
 const CONFLICT_COPY =
   'This file changed elsewhere. If you keep yours, the other version stays in History.';
 const SAVE_FAILED_COPY = 'Could not save — your changes are kept. Try again.';
+const READ_FAILED_COPY = 'Could not load this file. Please try again.';
+const EDIT_FIRST_COPY = 'Save or cancel your edit first.';
 
 /** The text shown in view mode, pinned to the version it was read at. */
 interface Loaded {
@@ -68,9 +70,10 @@ export function ProjectFilePage(): JSX.Element {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [viewing, setViewing] = useState<{ version: string; text: string } | null>(null);
+  const [viewing, setViewing] = useState<{ rev: RevisionMeta; text: string } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<RevisionMeta | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [readError, setReadError] = useState(false);
 
   const projectUrl = `/app/projects/${projectId}`;
   const fileUrl = useCallback(
@@ -90,6 +93,7 @@ export function ProjectFilePage(): JSX.Element {
     setConflict(null);
     setSaveError(null);
     setMovedNote(null);
+    setReadError(false);
     void stat(projectId, urlPath)
       .catch(() => null)
       .then((m) => {
@@ -124,11 +128,14 @@ export function ProjectFilePage(): JSX.Element {
     if (!meta) return;
     try {
       const res = await readText(projectId, meta.path);
+      setReadError(false);
       if (res.meta.id === meta.id)
         setLoaded({ version: res.meta.version, contentHash: res.meta.contentHash, text: res.text });
     } catch (e) {
       // NotFound means a move or delete raced the read; the live meta catches up.
-      if (!isProjectFsError(e, 'NotFound')) console.warn('Project file read failed', e);
+      if (isProjectFsError(e, 'NotFound')) return;
+      console.warn('Project file read failed', e);
+      setReadError(true);
     }
   }, [meta, projectId]);
 
@@ -144,6 +151,20 @@ export function ProjectFilePage(): JSX.Element {
     setWantEdit(false);
     startEdit(loaded);
   });
+
+  const dirty = draft !== null && draft.text !== draft.original;
+
+  // In-app navigation is guarded by the page scaffold; reload and tab close warn here.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent): void => {
+      e.preventDefault();
+      // Older browsers only warn when returnValue is set.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
 
   /** Opens the editor on the text shown, guarded by the version and hash it was read at. */
   function startEdit(from: Loaded): void {
@@ -194,10 +215,7 @@ export function ProjectFilePage(): JSX.Element {
     if (!meta) return;
     setHistoryError(null);
     try {
-      setViewing({
-        version: rev.version,
-        text: await readRevision(projectId, meta.path, rev.version),
-      });
+      setViewing({ rev, text: await readRevision(projectId, meta.path, rev.version) });
     } catch (e) {
       setHistoryError(describeProjectError(e) ?? 'Could not open that version. Please try again.');
     }
@@ -215,9 +233,10 @@ export function ProjectFilePage(): JSX.Element {
     }
   }
 
-  const deleted = fileId === null || meta === null;
+  // Nothing at ?path= on entry, as opposed to the file going away while open.
+  const absent = fileId === null;
+  const deleted = absent || meta === null;
   const editing = draft !== null;
-  const dirty = draft !== null && draft.text !== draft.original;
   const shownPath = meta?.path ?? trackedPath.current ?? urlPath;
   const projectName = project?.name ?? 'Project';
 
@@ -264,7 +283,11 @@ export function ProjectFilePage(): JSX.Element {
 
         {deleted ? (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-paper-soft">This file was deleted.</p>
+            <p className="text-sm text-paper-soft">
+              {absent
+                ? `There is no file at ${urlPath}. It may have been moved or deleted.`
+                : 'This file was deleted.'}
+            </p>
             {/* While an edit is open, Discard is the way out; a plain link would drop the buffer unasked. */}
             {editing ? null : (
               <Link to={projectUrl} className="text-sm text-paper underline">
@@ -321,7 +344,9 @@ export function ProjectFilePage(): JSX.Element {
                   <Button tone="primary" priority onClick={() => setSaveAsOpen(true)}>
                     Save as new file
                   </Button>
-                  <Button onClick={leaveEdit}>Discard</Button>
+                  <Button onClick={() => (dirty ? setConfirmCancel(true) : leaveEdit())}>
+                    Discard
+                  </Button>
                 </>
               ) : (
                 <>
@@ -346,16 +371,17 @@ export function ProjectFilePage(): JSX.Element {
           <>
             {viewing ? (
               <div className="flex flex-col gap-2">
-                <p className="text-[11px] text-paper-soft">
-                  An earlier version.{' '}
-                  <button
-                    type="button"
-                    className="text-paper underline"
-                    onClick={() => setViewing(null)}
-                  >
-                    Back to the current version
-                  </button>
-                </p>
+                <div className="flex flex-col gap-2 rounded-md border border-paper-soft/20 bg-white/[0.02] p-3">
+                  <p className="text-[12px] text-paper">
+                    Version from {formatTime(viewing.rev.createdAt)}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button tone="primary" onClick={() => setRestoreTarget(viewing.rev)}>
+                      Restore this version
+                    </Button>
+                    <Button onClick={() => setViewing(null)}>Back to the current version</Button>
+                  </div>
+                </div>
                 <MarkdownDoc content={viewing.text} />
               </div>
             ) : (
@@ -375,6 +401,22 @@ export function ProjectFilePage(): JSX.Element {
           </>
         ) : null}
 
+        {readError && !editing && !deleted ? (
+          <div className="flex flex-col items-start gap-2">
+            <p role="alert" className="text-[11px] text-amber-300/80">
+              {READ_FAILED_COPY}
+            </p>
+            <Button
+              onClick={() => {
+                setReadError(false);
+                void reload();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
+
         {!deleted && meta ? (
           <section className="flex flex-col gap-2">
             <button
@@ -385,13 +427,23 @@ export function ProjectFilePage(): JSX.Element {
             >
               {historyOpen ? '▾ ' : '▸ '}History
             </button>
+            {editing ? <p className="text-[11px] text-paper-soft">{EDIT_FIRST_COPY}</p> : null}
             {historyOpen ? (
               revisions === undefined ? null : revisions.length === 0 ? (
                 <p className="text-sm text-paper-soft">No earlier versions yet.</p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {revisions.map((rev) => (
-                    <li key={rev.version} data-testid="revision" className="cs-row">
+                    <li
+                      key={rev.version}
+                      data-testid="revision"
+                      aria-current={viewing?.rev.version === rev.version ? 'true' : undefined}
+                      className={`cs-row ${
+                        viewing?.rev.version === rev.version
+                          ? 'rounded-md bg-white/5 ring-1 ring-inset ring-paper-soft/30'
+                          : ''
+                      }`}
+                    >
                       <span className="cs-row-body">
                         <span className="cs-row-title">{formatTime(rev.createdAt)}</span>
                         <span className="text-[11px] text-paper-soft">{formatBytes(rev.size)}</span>
@@ -399,14 +451,14 @@ export function ProjectFilePage(): JSX.Element {
                       <span className="cs-row-trailing flex gap-2">
                         <Button
                           disabled={editing}
-                          title={editing ? 'Save or cancel your edit first.' : undefined}
+                          title={editing ? EDIT_FIRST_COPY : undefined}
                           onClick={() => void view(rev)}
                         >
                           View
                         </Button>
                         <Button
                           disabled={editing}
-                          title={editing ? 'Save or cancel your edit first.' : undefined}
+                          title={editing ? EDIT_FIRST_COPY : undefined}
                           onClick={() => setRestoreTarget(rev)}
                         >
                           Restore

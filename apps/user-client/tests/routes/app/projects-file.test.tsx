@@ -13,6 +13,7 @@ vi.mock('../../../src/components/chat/markdown/MarkdownContent.js', () => ({
 // Pass-through fs with switches: fail the next writeText, or hold readText until released.
 const fsControl = vi.hoisted(() => ({
   failNextWrite: null as unknown,
+  failNextRead: null as unknown,
   readGate: null as Promise<void> | null,
 }));
 vi.mock('../../../src/projects/fs.js', async () => {
@@ -31,6 +32,11 @@ vi.mock('../../../src/projects/fs.js', async () => {
     },
     readText: async (...args: Parameters<typeof actual.readText>) => {
       if (fsControl.readGate) await fsControl.readGate;
+      const failure = fsControl.failNextRead;
+      if (failure !== null) {
+        fsControl.failNextRead = null;
+        throw failure;
+      }
       return actual.readText(...args);
     },
   };
@@ -39,7 +45,11 @@ vi.mock('../../../src/projects/fs.js', async () => {
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { _resetClientDataDbForTests, openClientDataDb } from '../../../src/boot/client-data-db.js';
+import {
+  _resetClientDataDbForTests,
+  getClientDataDb,
+  openClientDataDb,
+} from '../../../src/boot/client-data-db.js';
 import { fsError } from '../../../src/projects/errors.js';
 import { createProject, move, readText, stat, writeText } from '../../../src/projects/fs.js';
 import { deletePath } from '../../../src/projects/trash.js';
@@ -76,6 +86,7 @@ function settled<T>(read: () => Promise<T>): Promise<T> {
 
 beforeEach(async () => {
   fsControl.failNextWrite = null;
+  fsControl.failNextRead = null;
   fsControl.readGate = null;
   await _resetClientDataDbForTests();
   await openClientDataDb();
@@ -105,10 +116,15 @@ describe('ProjectFilePage', () => {
     await waitFor(() => expect(screen.getByTestId('md')).toHaveTextContent('two'));
   });
 
-  it('shows the deleted state with a link to the project when nothing is at the path', async () => {
+  it('says there is no file at the path, with a link to the project, when nothing is there on entry', async () => {
     const p = await createProject('P');
     renderFile(p.id, '/missing.md');
-    expect(await screen.findByText('This file was deleted.')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'There is no file at /missing.md. It may have been moved or deleted.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('This file was deleted.')).toBeNull();
     fireEvent.click(screen.getByRole('link', { name: 'Back to the project' }));
     expect(await screen.findByText('Tree page')).toBeInTheDocument();
   });
@@ -251,7 +267,29 @@ describe('ProjectFilePage', () => {
       await deletePath(p.id, '/a.md');
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    const confirm = await screen.findByRole('dialog');
+    expect(confirm).toHaveTextContent('Discard your changes?');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Keep editing' }));
+    expect((await editor()).value).toBe('mine');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard' }),
+    );
     await waitFor(() => expect(screen.queryByRole('textbox', { name: 'File content' })).toBeNull());
+    expect(screen.getByText('This file was deleted.')).toBeInTheDocument();
+  });
+
+  it('Discard after a delete drops an unchanged buffer without asking', async () => {
+    const p = await createProject('P');
+    await writeText(p.id, '/a.md', 'base');
+    renderFile(p.id, '/a.md', true);
+    await editor();
+    await act(async () => {
+      await deletePath(p.id, '/a.md');
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'File content' })).toBeNull());
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
     expect(screen.getByText('This file was deleted.')).toBeInTheDocument();
   });
 
@@ -372,6 +410,96 @@ describe('ProjectFilePage', () => {
     expect(await screen.findByText('This file was deleted.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Back to the project' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard' }),
+    );
     expect(await screen.findByRole('link', { name: 'Back to the project' })).toBeInTheDocument();
+  });
+
+  it('warns on reload or tab close only while the edit has unsaved changes', async () => {
+    const p = await createProject('P');
+    await writeText(p.id, '/a.md', 'base');
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const unloadWarns = (): boolean => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    renderFile(p.id, '/a.md', true);
+    const box = await editor();
+    expect(unloadWarns()).toBe(false);
+
+    fireEvent.change(box, { target: { value: 'mine' } });
+    await waitFor(() =>
+      expect(add.mock.calls.some(([type]) => type === 'beforeunload')).toBe(true),
+    );
+    expect(unloadWarns()).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'File content' })).toBeNull());
+    expect(remove.mock.calls.some(([type]) => type === 'beforeunload')).toBe(true);
+    expect(unloadWarns()).toBe(false);
+  });
+
+  it('shows an earlier version under a banner with Restore and Back, marking its History row', async () => {
+    const p = await createProject('P');
+    await writeText(p.id, '/a.md', 'first');
+    await writeText(p.id, '/a.md', 'second');
+    const [rev] = await settled(() => getClientDataDb().projectRevisions.toArray());
+    const when = new Date(rev?.createdAt ?? 0).toLocaleString('en-GB', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    renderFile(p.id, '/a.md');
+    expect(await screen.findByTestId('md')).toHaveTextContent('second');
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    const [row] = await screen.findAllByTestId('revision');
+    expect(row).not.toHaveAttribute('aria-current');
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+
+    expect(await screen.findByText(`Version from ${when}`)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('md')).toHaveTextContent('first'));
+    expect(screen.getByTestId('revision')).toHaveAttribute('aria-current', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the current version' }));
+    await waitFor(() => expect(screen.getByTestId('md')).toHaveTextContent('second'));
+    expect(screen.queryByText(`Version from ${when}`)).toBeNull();
+    expect(screen.getByTestId('revision')).not.toHaveAttribute('aria-current');
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore this version' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Restore this version?');
+    expect(dialog).toHaveTextContent(`The version from ${when} becomes the current text.`);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
+    await waitFor(async () => expect((await readText(p.id, '/a.md')).text).toBe('first'));
+    await waitFor(() => expect(screen.queryByText(`Version from ${when}`)).toBeNull());
+    await waitFor(() => expect(screen.getByTestId('md')).toHaveTextContent('first'));
+  });
+
+  it('says why History is unavailable while editing', async () => {
+    const p = await createProject('P');
+    await writeText(p.id, '/a.md', 'base');
+    renderFile(p.id, '/a.md');
+    await screen.findByTestId('md');
+    expect(screen.queryByText('Save or cancel your edit first.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await editor();
+    expect(screen.getByText('Save or cancel your edit first.')).toBeInTheDocument();
+  });
+
+  it('offers Retry when the file cannot be read', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const p = await createProject('P');
+    await writeText(p.id, '/a.md', 'hello');
+    fsControl.failNextRead = new Error('disk on fire');
+    renderFile(p.id, '/a.md');
+    expect(
+      await screen.findByText('Could not load this file. Please try again.'),
+    ).toBeInTheDocument();
+    expect(warn).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByTestId('md')).toHaveTextContent('hello');
+    expect(screen.queryByText('Could not load this file. Please try again.')).toBeNull();
   });
 });

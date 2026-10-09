@@ -121,7 +121,7 @@ describe('ProjectTreePage', () => {
     renderTree(p.id);
     await choose('Actions for /notes', 'Rename / Move');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '/ideas' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
     await waitFor(async () => {
       expect(await stat(p.id, '/ideas/a.md')).not.toBeNull();
       expect(await stat(p.id, '/ideas/b.md')).not.toBeNull();
@@ -135,8 +135,24 @@ describe('ProjectTreePage', () => {
     renderTree(p.id);
     await choose('Actions for /a.md', 'Rename / Move');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '/b' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
     await waitFor(async () => expect(await stat(p.id, '/b.md')).not.toBeNull());
+  });
+
+  it('labels the confirm "Rename" for a new name and "Move" for a new folder', async () => {
+    const p = await createProject('P');
+    await writeText(p.id, '/notes/a.md', 'a');
+    renderTree(p.id);
+    await choose('Actions for /notes/a.md', 'Rename / Move');
+    const input = screen.getByRole('textbox');
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '/notes/b' } });
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '/archive/a.md' } });
+    expect(screen.getByRole('button', { name: 'Move' })).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '/a' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    await waitFor(async () => expect(await stat(p.id, '/a.md')).not.toBeNull());
   });
 
   it('deleting a folder shows the folder toast', async () => {

@@ -44,7 +44,8 @@ export interface PathDialogProps {
   title: string;
   initial: string;
   placeholder?: string;
-  confirmLabel: string;
+  /** The confirm button's text, or a function of the current input. */
+  confirmLabel: string | ((input: string) => string);
   /** Receives the normalised path; a thrown error is shown inline and the dialog stays open. */
   onSubmit: (path: string) => Promise<void>;
   onClose: () => void;
@@ -129,7 +130,7 @@ export function PathDialog({
             Cancel
           </Button>
           <Button tone="primary" priority type="submit" disabled={busy || value.trim() === ''}>
-            {confirmLabel}
+            {typeof confirmLabel === 'string' ? confirmLabel : confirmLabel(value)}
           </Button>
         </div>
       </form>
