@@ -21,6 +21,7 @@ const SAVE_FAILED_COPY = 'Could not save — your changes are kept. Try again.';
 /** The text shown in view mode, pinned to the version it was read at. */
 interface Loaded {
   version: string;
+  contentHash: string;
   text: string;
 }
 
@@ -113,14 +114,18 @@ export function ProjectFilePage(): JSX.Element {
   // in-progress edit into a conflict; a content change still does.
   useEffect(() => {
     if (!meta || !draft || meta.version === draft.base) return;
-    if (meta.contentHash === draft.baseHash) setDraft({ ...draft, base: meta.version });
+    // An A→B→A round trip by another writer is absorbed too; B stays in History.
+    if (meta.contentHash !== draft.baseHash) return;
+    const version = meta.version;
+    setDraft((d) => d && { ...d, base: version });
   }, [meta, draft]);
 
   const reload = useCallback(async (): Promise<void> => {
     if (!meta) return;
     try {
       const res = await readText(projectId, meta.path);
-      if (res.meta.id === meta.id) setLoaded({ version: res.meta.version, text: res.text });
+      if (res.meta.id === meta.id)
+        setLoaded({ version: res.meta.version, contentHash: res.meta.contentHash, text: res.text });
     } catch (e) {
       // NotFound means a move or delete raced the read; the live meta catches up.
       if (!isProjectFsError(e, 'NotFound')) console.warn('Project file read failed', e);
@@ -137,14 +142,20 @@ export function ProjectFilePage(): JSX.Element {
   useEffect(() => {
     if (!wantEdit || !loaded || !meta || loaded.version !== meta.version) return;
     setWantEdit(false);
-    startEdit(loaded, meta.contentHash);
+    startEdit(loaded);
   });
 
-  function startEdit(from: Loaded, hash: string): void {
+  /** Opens the editor on the text shown, guarded by the version and hash it was read at. */
+  function startEdit(from: Loaded): void {
     setViewing(null);
     setSaveError(null);
     setConflict(null);
-    setDraft({ base: from.version, baseHash: hash, original: from.text, text: from.text });
+    setDraft({
+      base: from.version,
+      baseHash: from.contentHash,
+      original: from.text,
+      text: from.text,
+    });
   }
 
   function leaveEdit(): void {
@@ -163,7 +174,7 @@ export function ProjectFilePage(): JSX.Element {
     const text = draft.text;
     try {
       const written = await writeText(projectId, path, text, { ifVersion });
-      setLoaded({ version: written.version, text });
+      setLoaded({ version: written.version, contentHash: written.contentHash, text });
       setDraft(null);
     } catch (e) {
       if (isProjectFsError(e, 'VersionConflict') && e.detail.current !== undefined) {
@@ -229,7 +240,11 @@ export function ProjectFilePage(): JSX.Element {
           onSubmit={async (path) => {
             const written = await writeText(projectId, path, draft.text, { createOnly: true });
             trackedPath.current = written.path;
-            setLoaded({ version: written.version, text: draft.text });
+            setLoaded({
+              version: written.version,
+              contentHash: written.contentHash,
+              text: draft.text,
+            });
             setFileId(written.id);
             setSaveAsOpen(false);
             leaveEdit();
@@ -250,9 +265,12 @@ export function ProjectFilePage(): JSX.Element {
         {deleted ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-paper-soft">This file was deleted.</p>
-            <Link to={projectUrl} className="text-sm text-paper underline">
-              Back to the project
-            </Link>
+            {/* While an edit is open, Discard is the way out; a plain link would drop the buffer unasked. */}
+            {editing ? null : (
+              <Link to={projectUrl} className="text-sm text-paper underline">
+                Back to the project
+              </Link>
+            )}
           </div>
         ) : null}
 
@@ -262,7 +280,10 @@ export function ProjectFilePage(): JSX.Element {
               aria-label="File content"
               value={draft.text}
               spellCheck={false}
-              onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+              onChange={(e) => {
+                const text = e.target.value;
+                setDraft((d) => d && { ...d, text });
+              }}
               className="min-h-[60dvh] w-full flex-1 resize-none rounded-md border border-paper-soft/30 bg-white/5 px-3 py-2 font-mono text-sm text-paper"
             />
             {conflict ? (
@@ -340,7 +361,11 @@ export function ProjectFilePage(): JSX.Element {
             ) : (
               <>
                 <div>
-                  <Button tone="primary" onClick={() => startEdit(loaded, meta.contentHash)}>
+                  <Button
+                    tone="primary"
+                    disabled={loaded.version !== meta.version}
+                    onClick={() => startEdit(loaded)}
+                  >
                     Edit
                   </Button>
                 </div>
