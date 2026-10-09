@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 
 /** Storage persistence and usage; `null` where the browser lacks the API. */
 export interface StorageStatus {
+  /** False until the first read has completed; the other fields are not yet meaningful. */
+  loaded: boolean;
   persisted: boolean | null;
   usage: number | null;
   quota: number | null;
@@ -32,7 +34,7 @@ export async function requestPersistence(): Promise<void> {
 
 async function readStatus(): Promise<StorageStatus> {
   const storage = storageManager();
-  const status: StorageStatus = { persisted: null, usage: null, quota: null };
+  const status: StorageStatus = { loaded: true, persisted: null, usage: null, quota: null };
   if (!storage) return status;
   try {
     if (storage.persisted) status.persisted = await storage.persisted();
@@ -54,6 +56,7 @@ async function readStatus(): Promise<StorageStatus> {
 /** Live storage status; refreshes after each {@link requestPersistence}. */
 export function useStorageStatus(): StorageStatus {
   const [status, setStatus] = useState<StorageStatus>({
+    loaded: false,
     persisted: null,
     usage: null,
     quota: null,

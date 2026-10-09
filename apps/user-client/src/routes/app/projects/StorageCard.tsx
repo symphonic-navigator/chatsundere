@@ -17,13 +17,13 @@ export function formatStorage(bytes: number): string {
 
 /** Storage state at the top of `/app/projects` (spec §6.2): persistence, usage, locality. */
 export function StorageCard(): JSX.Element {
-  const { persisted, usage, quota } = useStorageStatus();
+  const { loaded, persisted, usage, quota } = useStorageStatus();
   return (
     <section
       aria-label="Storage"
       className="flex flex-col gap-1 rounded-md border border-white/5 bg-white/[0.02] p-3 text-[11px] text-paper-soft"
     >
-      {persisted === true ? (
+      {!loaded ? null : persisted === true ? (
         <p>Storage is persistent</p>
       ) : (
         <p>

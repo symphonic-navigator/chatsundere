@@ -112,6 +112,26 @@ describe('ProjectsListPage', () => {
     expect(screen.getByText('Projects live on this device only for now.')).toBeInTheDocument();
   });
 
+  it('shows no persistence line until the first read completes', async () => {
+    const storage = mockStorage({ persisted: true });
+    let resolve: (v: boolean) => void = () => undefined;
+    storage?.persisted.mockImplementation(
+      () =>
+        new Promise<boolean>((r) => {
+          resolve = r;
+        }),
+    );
+    renderList();
+    expect(
+      await screen.findByText('Projects live on this device only for now.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/The browser may clear this data/)).toBeNull();
+    expect(screen.queryByText('Storage is persistent')).toBeNull();
+    resolve(true);
+    expect(await screen.findByText('Storage is persistent')).toBeInTheDocument();
+    expect(screen.queryByText(/The browser may clear this data/)).toBeNull();
+  });
+
   it('shows the may-clear line when storage is not persistent', async () => {
     mockStorage({ persisted: false });
     renderList();

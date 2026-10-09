@@ -32,15 +32,18 @@ export function useProjects(): ProjectRow[] | undefined {
   return useLive(() => getClientDataDb().projects.orderBy('updatedAt').reverse().toArray(), []);
 }
 
+/** Shared empty result while counts load, so consumers see a stable reference. */
+const NO_COUNTS: ReadonlyMap<string, number> = Object.freeze(new Map<string, number>());
+
 /** File count per project id (projects without files are absent; read as 0). */
-export function useProjectFileCounts(): Map<string, number> {
+export function useProjectFileCounts(): ReadonlyMap<string, number> {
   const counts = useLive(async () => {
     const ids = (await getClientDataDb().projectFiles.orderBy('projectId').keys()) as string[];
     const map = new Map<string, number>();
     for (const id of ids) map.set(id, (map.get(id) ?? 0) + 1);
     return map;
   }, []);
-  return counts ?? new Map();
+  return counts ?? NO_COUNTS;
 }
 
 /** One project; `null` when it does not exist, `undefined` while loading. */

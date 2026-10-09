@@ -19,7 +19,7 @@ vi.mock('@chatsundere/ui-shared', () => ({
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
@@ -29,10 +29,16 @@ import { createProject } from '../../../src/projects/fs.js';
 import { ProjectsGate } from '../../../src/routes/app/projects/ProjectsGate.js';
 import { Settings } from '../../../src/routes/app/settings.js';
 import { SettingsPreviewsPage } from '../../../src/routes/app/settings/previews.js';
+import { toastStore, useToastStore } from '../../../src/state/toast.store.js';
 
 beforeEach(async () => {
   await _resetClientDataDbForTests();
   await openClientDataDb();
+  toastStore.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 function renderAt(path: string) {
@@ -105,6 +111,32 @@ describe('Previews preview flag', () => {
         'Turning this off hides Projects; your 2 projects stay on this device and return when you turn it back on.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('uses the singular turn-off line for one project', async () => {
+    await setFlag(true);
+    await createProject('Only');
+    renderAt('/app/settings/previews');
+    expect(
+      await screen.findByText(
+        'Turning this off hides Projects; your 1 project stays on this device and returns when you turn it back on.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a warning toast when the toggle cannot be saved', async () => {
+    renderAt('/app/settings/previews');
+    const toggle = await screen.findByRole('switch', { name: 'Projects (preview)' });
+    vi.spyOn(getClientDataDb().settings, 'update').mockRejectedValueOnce(new Error('disk full'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.at(-1)?.message).toBe(
+        'Could not save the setting. Please try again.',
+      ),
+    );
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('shows no turn-off line without projects', async () => {

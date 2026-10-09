@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { useProjects } from '../../../projects/hooks.js';
+import { toastStore } from '../../../state/toast.store.js';
 
 function noticeFrom(state: unknown): string | null {
   if (state === null || typeof state !== 'object') return null;
@@ -24,7 +25,14 @@ export function SettingsPreviewsPage(): JSX.Element {
 
   function toggle(): void {
     if (settings.data === undefined) return;
-    void update.mutateAsync({ previews: { ...previews, projects: !on } });
+    update.mutateAsync({ previews: { ...previews, projects: !on } }).catch((e: unknown) => {
+      console.warn('Saving the preview setting failed', e);
+      toastStore.show({
+        message: 'Could not save the setting. Please try again.',
+        tone: 'warn',
+        durationMs: 8000,
+      });
+    });
   }
 
   return (
@@ -48,7 +56,9 @@ export function SettingsPreviewsPage(): JSX.Element {
             </p>
             {on && count > 0 ? (
               <p className="mt-1 text-[11px] text-paper-soft">
-                {`Turning this off hides Projects; your ${count} ${count === 1 ? 'project' : 'projects'} stay on this device and return when you turn it back on.`}
+                {count === 1
+                  ? 'Turning this off hides Projects; your 1 project stays on this device and returns when you turn it back on.'
+                  : `Turning this off hides Projects; your ${count} projects stay on this device and return when you turn it back on.`}
               </p>
             ) : null}
           </div>
