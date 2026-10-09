@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { uuidv7 } from 'uuidv7';
 import { type ProjectFileRow, type ProjectRow, getClientDataDb } from '../boot/client-data-db.js';
-import { type ProjectFsError, fsError, isProjectFsError } from './errors.js';
-import { dirname, isHiddenPath, normaliseFilePath, normalisePath, prefixRange } from './path.js';
+import { type ProjectFsError, fsError, isProjectFsError, projectNotFound } from './errors.js';
+import {
+  dirname,
+  isHiddenPath,
+  isUnder,
+  normaliseFilePath,
+  normalisePath,
+  prefixRange,
+} from './path.js';
 import { recordRevision } from './revisions.js';
 
 /** File metadata only; content is never part of it. */
@@ -87,10 +94,6 @@ export async function renameProject(projectId: string, name: string): Promise<vo
     getClientDataDb().projects.update(projectId, { name: cleanName(name) }),
   );
   if (changed === 0) throw projectNotFound(projectId);
-}
-
-function projectNotFound(projectId: string): ProjectFsError {
-  return fsError('NotFound', { path: `project ${projectId}` });
 }
 
 /** Throws `NotFound` naming the project when it does not exist; call inside a transaction. */
@@ -295,5 +298,123 @@ export async function writeText(
         return meta;
       },
     ),
+  );
+}
+
+export interface MoveOptions {
+  ifVersion?: string;
+}
+
+interface MoveStep {
+  source: FileMeta;
+  target: string;
+}
+
+/**
+ * Throws if writing `targets` would collide with a file that is not itself
+ * moving: an existing file (`AlreadyExists`), a folder (`IsDirectory`) or a
+ * file where a folder is needed (`NotDirectory`). `dst` is the move target,
+ * whose subtree holds every file that could make a target a folder.
+ */
+async function checkMoveTargets(
+  projectId: string,
+  plan: readonly MoveStep[],
+  dst: string,
+): Promise<void> {
+  const db = getClientDataDb();
+  const moving = new Set(plan.map((m) => m.source.id));
+  const targets = plan.map((m) => m.target);
+  const stays = (f: FileMeta) => !moving.has(f.id);
+  const occupied = new Set(
+    (
+      await db.projectFiles
+        .where('[projectId+path]')
+        .anyOf(targets.map((t) => [projectId, t]))
+        .toArray()
+    )
+      .filter(stays)
+      .map((f) => f.path),
+  );
+  const taken = targets.find((t) => occupied.has(t));
+  if (taken !== undefined) throw fsError('AlreadyExists', { path: taken });
+
+  const targetSet = new Set(targets);
+  for (const f of (await filesUnder(projectId, dst).toArray()).filter(stays)) {
+    const folder = ['/', ...ancestors(f.path)].find((a) => targetSet.has(a));
+    if (folder !== undefined) throw fsError('IsDirectory', { path: folder });
+  }
+
+  const above = [...new Set(targets.flatMap(ancestors))];
+  if (above.length > 0) {
+    const blocking = (
+      await db.projectFiles
+        .where('[projectId+path]')
+        .anyOf(above.map((a) => [projectId, a]))
+        .toArray()
+    ).find(stays);
+    if (blocking) throw fsError('NotDirectory', { path: blocking.path });
+  }
+}
+
+/**
+ * Moves a file, or a directory with everything below it, in one transaction.
+ * Every target is validated and checked before anything is written, so a
+ * failed move changes nothing. Moved files keep their id (and so their
+ * revisions) and get a fresh version; moving onto the same path is a no-op.
+ * `ifVersion` applies to files only.
+ */
+export async function move(
+  projectId: string,
+  from: string,
+  to: string,
+  opts: MoveOptions = {},
+): Promise<void> {
+  const src = normalisePath(from);
+  const dst = normalisePath(to);
+  const now = Date.now();
+  const db = getClientDataDb();
+
+  await mapQuota(
+    db.transaction('rw', db.projects, db.projectFiles, async () => {
+      await requireProject(projectId);
+      const file = src === '/' ? undefined : await fileByPath(projectId, src);
+      let plan: MoveStep[];
+      if (file) {
+        if (opts.ifVersion !== undefined && opts.ifVersion !== file.version) {
+          throw fsError('VersionConflict', {
+            path: src,
+            current: file.version,
+            passed: opts.ifVersion,
+          });
+        }
+        if (src === dst) return;
+        plan = [{ source: file, target: dst }];
+      } else {
+        const sources = await filesUnder(projectId, src).toArray();
+        if (sources.length === 0) throw fsError('NotFound', { path: src });
+        if (opts.ifVersion !== undefined) throw fsError('IsDirectory', { path: src });
+        if (src === dst) return;
+        if (isUnder(dst, src)) throw fsError('InvalidPath', { path: dst, reason: 'into-self' });
+        const base = dst === '/' ? '' : dst;
+        plan = sources.map((source) => ({
+          source,
+          target: normaliseFilePath(base + source.path.slice(src.length)),
+        }));
+      }
+
+      await checkMoveTargets(projectId, plan, dst);
+      // Checked after the folder checks so that naming a folder reports IsDirectory.
+      if (file) normaliseFilePath(dst);
+
+      // Moving a folder into an ancestor shortens every path by the same amount,
+      // so a target can only be the current path of a shorter source; moving the
+      // shorter paths first keeps the unique path index satisfied at every put.
+      plan.sort((a, b) => a.source.path.length - b.source.path.length);
+      for (const [n, { source, target }] of plan.entries()) {
+        fault('move-put', n);
+        await db.projectFiles.put({ ...source, path: target, version: uuidv7(), updatedAt: now });
+      }
+      await db.projects.update(projectId, { updatedAt: now });
+    }),
   );
 }

@@ -88,3 +88,8 @@ export function fsError(code: ProjectFsErrorCode, detail: ProjectFsErrorDetail):
   }
   return new ProjectFsError(code, message, detail);
 }
+
+/** `NotFound` naming a missing project rather than a path inside it. */
+export function projectNotFound(projectId: string): ProjectFsError {
+  return fsError('NotFound', { path: `project ${projectId}` });
+}
