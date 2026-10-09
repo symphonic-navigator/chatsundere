@@ -154,12 +154,31 @@ describe('deleteProject', () => {
     expect(card?.counts.files).toBe(2);
   });
 
+  it('shows an empty project as "0 files"', async () => {
+    const pid = await seed([]);
+    await deleteProject(pid);
+    const [card] = await listTrashCards();
+    expect(card?.counts.files).toBe(0);
+  });
+
   it('refuses a missing project', async () => {
     await expectFsError(deleteProject('missing'), 'NotFound');
   });
 });
 
 describe('undo', () => {
+  it('restores a single file in place with the same file id', async () => {
+    const pid = await seed(['/notes/plan.md']);
+    const id = (await stat(pid, '/notes/plan.md'))?.id;
+    const res = await deletePath(pid, '/notes/plan.md');
+
+    await res.handle.restore();
+
+    expect((await stat(pid, '/notes/plan.md'))?.id).toBe(id);
+    expect((await readText(pid, '/notes/plan.md')).text).toBe('text of /notes/plan.md');
+    expect(await db.trash.count()).toBe(0);
+  });
+
   it('restores a folder in place with the same file ids and clears its trash rows', async () => {
     const pid = await seed(['/notes/a.md', '/notes/b.md']);
     const ids = [(await stat(pid, '/notes/a.md'))?.id, (await stat(pid, '/notes/b.md'))?.id];

@@ -110,7 +110,8 @@ export async function listTrashCards(): Promise<TrashCard[]> {
     if (chats > 0) counts.chats = chats;
     if (memories > 0) counts.memories = memories;
     if (documents > 0) counts.documents = documents;
-    if (files.length > 0) counts.files = files.length;
+    // A project card always states its file count, even an empty "0 files".
+    if (files.length > 0 || root?.collection === 'projects') counts.files = files.length;
     if (earlierFiles > 0) counts.earlierFiles = earlierFiles;
     const card: TrashCard = {
       cardKey,

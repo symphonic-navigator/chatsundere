@@ -96,7 +96,7 @@ function purgeBody(card: TrashCard): string {
   const noun = ENTITY_NOUN[card.entityKind];
   const files = card.counts.files;
   if ((card.entityKind === 'projectFolder' || card.entityKind === 'project') && files) {
-    return `Permanently delete this ${noun} and its ${files} files? This cannot be undone.`;
+    return `Permanently delete this ${noun} and its ${plural(files, 'file')}? This cannot be undone.`;
   }
   const parts = cascadeParts(card.counts);
   const tail = parts.length > 0 ? ` and its ${joinWithAnd(parts)}` : '';

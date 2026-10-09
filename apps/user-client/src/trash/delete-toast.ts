@@ -19,7 +19,7 @@ export function showDeleteToast(
   showCardDeleteToast(`${collection}:${key}`, handle, invalidate);
 }
 
-/** {@link showDeleteToast} for any trash card; a refused Undo (path collision) becomes a warning toast. */
+/** {@link showDeleteToast} for any trash card; a failed Undo becomes a warning toast (naming the path on a collision). */
 export function showCardDeleteToast(
   cardKey: string,
   handle: TrashUndoHandle,
@@ -42,9 +42,11 @@ export function showCardDeleteToast(
               else throw e;
             }
           } catch (e) {
-            const reason = describeRestoreError(e);
-            if (reason === null) throw e;
-            toastStore.show({ message: reason, tone: 'warn', durationMs: 8000 });
+            toastStore.show({
+              message: describeRestoreError(e) ?? 'Could not restore. Please try again.',
+              tone: 'warn',
+              durationMs: 8000,
+            });
             return;
           }
           invalidate();

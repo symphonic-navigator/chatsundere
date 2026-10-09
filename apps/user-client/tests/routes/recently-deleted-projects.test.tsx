@@ -95,6 +95,16 @@ describe('RecentlyDeletedPage — project cards', () => {
     );
   });
 
+  it('says "1 file" in the purge confirmation of a single-file folder', async () => {
+    listTrashCards.mockResolvedValue([{ ...FOLDER_CARD, counts: { files: 1, items: 1 } }]);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /delete now/i }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'Permanently delete this folder and its 1 file? This cannot be undone.',
+    );
+  });
+
   it('explains a refused restore and keeps the card', async () => {
     listTrashCards.mockResolvedValue([FOLDER_CARD]);
     restoreCard.mockRejectedValue(fsError('AlreadyExists', { path: '/notes/plan.md', others: 2 }));

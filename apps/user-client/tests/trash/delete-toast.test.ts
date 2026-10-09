@@ -53,4 +53,22 @@ describe('showCardDeleteToast', () => {
       ]);
     });
   });
+
+  it('turns any other Undo failure into a warning toast', async () => {
+    const restore = vi.fn(async () => {
+      throw new Error('disk on fire');
+    });
+    const invalidate = vi.fn();
+    showCardDeleteToast('batch:k1', { kind: 'in-place', restore }, invalidate);
+
+    clickUndo();
+
+    await vi.waitFor(() => {
+      expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
+        'Could not restore. Please try again.',
+        'warn',
+      ]);
+    });
+    expect(invalidate).not.toHaveBeenCalled();
+  });
 });
