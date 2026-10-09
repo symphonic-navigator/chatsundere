@@ -20,6 +20,7 @@ pnpm --filter @chatsundere/user-client preview      # serve the production build
 pnpm --filter @chatsundere/user-client typecheck    # strict TS + test typecheck
 pnpm --filter @chatsundere/user-client test         # vitest run
 pnpm --filter @chatsundere/user-client test:watch   # vitest in watch mode
+pnpm --filter @chatsundere/user-client test:browser # real-browser smoke test (needs CHROMIUM_PATH)
 pnpm --filter @chatsundere/user-client generate:icons   # regenerate placeholder PWA icons
 ```
 
@@ -41,6 +42,19 @@ The user-client requires **no** environment to function. Optional hints:
 - **Change passphrase.** Three branches: local-only, linked-online (full OPAQUE re-registration with staging-slot reconciliation per spec §5.7), linked-offline (blocked with a tooltip pointing back to settings).
 - **PWA shell.** Manifest with maskable icons, soft-update banner driven by `vite-plugin-pwa`. Workbox runtime caching is fonts-only; every `/v1/` request is `NetworkOnly` (per spec §7.4 — no API responses cached).
 - **Connectivity badge.** Five-state machine per spec §7.3 (`Local`, `Linked`, `Server unreachable`, `Server auth failed`, locally-logged-out implied).
+
+## Projects (preview)
+
+Projects are a small in-app filesystem: folders and Markdown files that live alongside your chats. The feature is an opt-in preview, switched on under Settings → Previews, and it is unfinished.
+
+- **Device-only for now.** Project data is stored in this browser's IndexedDB and is not synced to a linked server. Clearing site data or deleting local data removes it.
+- **Zip backup.** A project can be exported to a zip archive and imported from one again. Treat the zip as your backup; there is no other copy.
+- **Real-browser smoke test.** `test:browser` runs the filesystem against genuine IndexedDB in headless Chromium. Browsers are never downloaded by this repository; point `CHROMIUM_PATH` at an existing Chromium executable:
+
+```bash
+CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
+  pnpm --filter @chatsundere/user-client test:browser
+```
 
 ## Manual verification
 
