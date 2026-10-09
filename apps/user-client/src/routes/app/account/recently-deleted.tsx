@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { toastStore } from '../../../state/toast.store.js';
+import { PURGE_FAILED } from '../../../trash/delete-toast.js';
 import { describeRestoreError } from '../../../trash/restore-error.js';
 import type { TrashEntityKind } from '../../../trash/trash-model.js';
 import {
@@ -140,6 +141,10 @@ export function RecentlyDeletedPage(): JSX.Element {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: TRASH_CARDS_KEY });
       toastStore.show({ message: 'Deleted.', tone: 'success', durationMs: 2500 });
+    },
+    onError: (e) => {
+      console.warn('Permanent delete failed', e);
+      toastStore.show({ message: PURGE_FAILED, tone: 'warn', durationMs: 8000 });
     },
   });
 

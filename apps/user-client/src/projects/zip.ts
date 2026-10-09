@@ -16,6 +16,17 @@ export const MANIFEST_NAME = 'chatsundere-project.json';
 
 const DEFAULT_NAME = 'Imported project';
 
+/** Longest project name taken from an imported manifest. */
+const MAX_MANIFEST_NAME = 200;
+
+/** An import refused because the zip holds no Markdown file to import; nothing was created. */
+export class NoMarkdownError extends Error {
+  constructor() {
+    super('NoMarkdown: the zip holds no Markdown file; nothing was imported.');
+    this.name = 'NoMarkdownError';
+  }
+}
+
 export interface ImportResult {
   project: ProjectRow;
   imported: number;
@@ -42,7 +53,11 @@ function manifestName(bytes: Uint8Array | undefined): string | undefined {
   try {
     const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
     const name = (parsed as { name?: unknown } | null)?.name;
-    return typeof name === 'string' && name.trim() ? name : undefined;
+    if (typeof name !== 'string') return undefined;
+    let trimmed = name.trim().slice(0, MAX_MANIFEST_NAME);
+    // Never leave half of a surrogate pair at the cut.
+    if (/[\uD800-\uDBFF]$/.test(trimmed)) trimmed = trimmed.slice(0, -1);
+    return trimmed.trimEnd() || undefined;
   } catch {
     return undefined;
   }
@@ -72,7 +87,8 @@ function rejectEntry(name: string): never {
 /**
  * Creates a new project from a zip. Every entry is validated before anything
  * is written, so a hostile or malformed archive creates nothing. Non-Markdown
- * and non-UTF-8 entries are reported in `skipped`.
+ * and non-UTF-8 entries are reported in `skipped`; a zip with no Markdown entry
+ * left is refused with {@link NoMarkdownError}.
  */
 export async function importZip(blob: Blob, opts: { name?: string } = {}): Promise<ImportResult> {
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()));
@@ -108,6 +124,7 @@ export async function importZip(blob: Blob, opts: { name?: string } = {}): Promi
     }
     accepted.set(path, text);
   }
+  if (accepted.size === 0) throw new NoMarkdownError();
 
   const fileName = (blob as { name?: unknown }).name;
   const fromFile = typeof fileName === 'string' ? fileName.replace(/\.zip$/i, '').trim() : '';

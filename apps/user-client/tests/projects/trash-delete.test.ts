@@ -9,7 +9,7 @@ import {
 import { isProjectFsError } from '../../src/projects/errors.js';
 import { createProject, readText, stat, writeText } from '../../src/projects/fs.js';
 import { deletePath, deleteProject } from '../../src/projects/trash.js';
-import { listTrashCards } from '../../src/trash/trash-repo.js';
+import { listTrashCards, purgeCard, restoreCard } from '../../src/trash/trash-repo.js';
 
 let db: ClientDataDb;
 
@@ -216,6 +216,45 @@ describe('undo', () => {
     expect(await stat(pid, '/notes/a.md')).toBeNull();
     expect((await readText(pid, '/notes/b.md')).text).toBe('new b');
     expect(await db.trash.count()).toBe(6);
+  });
+});
+
+describe('undo after the card was handled elsewhere', () => {
+  it('refuses with NotFound once the card was restored from Recently deleted, adding nothing', async () => {
+    const pid = await seed(['/a.md', '/b/c.md'], 'Keep');
+    const res = await deleteProject(pid);
+    await restoreCard(res.cardKey);
+    const projectsBefore = await db.projects.toArray();
+    const filesBefore = await db.projectFiles.toArray();
+
+    await expectFsError(res.handle.restore(), 'NotFound');
+
+    expect(await db.projects.toArray()).toEqual(projectsBefore);
+    expect(await db.projectFiles.toArray()).toEqual(filesBefore);
+    expect(await db.projects.get(pid)).toBeUndefined();
+  });
+
+  it('refuses with NotFound once the card was purged, restoring nothing', async () => {
+    const pid = await seed(['/notes/a.md', '/notes/b.md']);
+    const res = await deletePath(pid, '/notes');
+    await purgeCard(res.cardKey);
+
+    await expectFsError(res.handle.restore(), 'NotFound');
+
+    expect(await stat(pid, '/notes/a.md')).toBeNull();
+    expect(await db.projectContents.count()).toBe(0);
+  });
+
+  it('refuses when only part of the card is gone, keeping the rest in the trash', async () => {
+    const pid = await seed(['/a.md']);
+    const res = await deletePath(pid, '/a.md');
+    const [content] = (await db.trash.toArray()).filter((r) => r.collection === 'projectContents');
+    await db.trash.delete(content?.id ?? '');
+
+    await expectFsError(res.handle.restore(), 'NotFound');
+
+    expect(await stat(pid, '/a.md')).toBeNull();
+    expect(await db.trash.count()).toBe(1);
   });
 });
 

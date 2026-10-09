@@ -63,20 +63,26 @@ async function trashFiles(
 
 /**
  * An Undo that puts every snapshot back under its original id. It refuses with
- * `AlreadyExists` (naming the first taken path and how many others) when a live
- * file now holds any of the paths, restoring nothing and keeping the trash rows.
+ * `NotFound` when any of its trash rows is gone (the card was restored or purged
+ * meanwhile), and with `AlreadyExists` (naming the first taken path and how many
+ * others) when a live file now holds any of the paths; either way it restores
+ * nothing and keeps the trash rows.
  */
 function inPlaceUndo(projectId: string, snapshots: readonly Snapshot[]): TrashUndoHandle {
   const restoresProject = snapshots.some((s) => s.collection === 'projects');
   const paths = snapshots
     .filter((s) => s.collection === 'projectFiles')
     .map((s) => (s.row as FileMeta).path);
+  const trashIds = snapshots.map((s) => `${s.collection}:${s.key}`);
   return {
     kind: 'in-place',
     async restore(): Promise<void> {
       const db = getClientDataDb();
       await mapQuota(
         db.transaction('rw', [...SCOPE], async () => {
+          const rows = await db.trash.bulkGet(trashIds);
+          const missing = trashIds.find((_, i) => rows[i] === undefined);
+          if (missing !== undefined) throw fsError('NotFound', { path: `trash ${missing}` });
           if (!restoresProject && !(await db.projects.get(projectId))) {
             throw projectNotFound(projectId);
           }
@@ -95,7 +101,7 @@ function inPlaceUndo(projectId: string, snapshots: readonly Snapshot[]): TrashUn
           }
           for (const s of snapshots) await db.table(s.collection).put(s.row);
           if (!restoresProject) await db.projects.update(projectId, { updatedAt: Date.now() });
-          await db.trash.bulkDelete(snapshots.map((s) => `${s.collection}:${s.key}`));
+          await db.trash.bulkDelete(trashIds);
         }),
       );
     },

@@ -93,3 +93,8 @@ export function fsError(code: ProjectFsErrorCode, detail: ProjectFsErrorDetail):
 export function projectNotFound(projectId: string): ProjectFsError {
   return fsError('NotFound', { path: `project ${projectId}` });
 }
+
+/** True when `e` is the `NotFound` of {@link projectNotFound}, not a missing path. */
+export function isProjectNotFound(e: unknown): e is ProjectFsError {
+  return isProjectFsError(e, 'NotFound') && (e.detail.path ?? '').startsWith('project ');
+}

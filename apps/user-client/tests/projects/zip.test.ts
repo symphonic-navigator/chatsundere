@@ -9,7 +9,7 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { createProject, list, listProjects, readText, writeText } from '../../src/projects/fs.js';
-import { MANIFEST_NAME, exportZip, importZip } from '../../src/projects/zip.js';
+import { MANIFEST_NAME, NoMarkdownError, exportZip, importZip } from '../../src/projects/zip.js';
 
 let db: ClientDataDb;
 
@@ -118,10 +118,29 @@ describe('zip', () => {
     await expectInvalid(zipOf({ 'a.md': 'ok', './a.md': new Uint8Array([0xff, 0xfe]) }), './a.md');
   });
 
-  it('creates an empty project for a zip without Markdown', async () => {
-    const res = await importZip(zipOf({ 'a.txt': 'x' }));
-    expect(res.imported).toBe(0);
-    expect(res.skipped).toEqual(['a.txt']);
-    expect(await listProjects()).toHaveLength(1);
+  it('refuses a zip without Markdown and creates nothing', async () => {
+    await expect(importZip(zipOf({ 'a.txt': 'x' }))).rejects.toBeInstanceOf(NoMarkdownError);
+    await expect(
+      importZip(zipOf({ 'bin.md': new Uint8Array([0xff, 0xfe]), [MANIFEST_NAME]: '{}' })),
+    ).rejects.toBeInstanceOf(NoMarkdownError);
+    expect(await listProjects()).toHaveLength(0);
+    expect(await db.projectFiles.count()).toBe(0);
+  });
+
+  it('trims the manifest name and caps it at 200 characters', async () => {
+    const manifest = (name: string) =>
+      JSON.stringify({ format: 'chatsundere-project', version: 1, name });
+    const trimmed = await importZip(
+      zipOf({ 'a.md': 'a', [MANIFEST_NAME]: manifest('  Garden  ') }),
+    );
+    expect(trimmed.project.name).toBe('Garden');
+    const long = await importZip(
+      zipOf({ 'a.md': 'a', [MANIFEST_NAME]: manifest(`  ${'x'.repeat(300)}`) }),
+    );
+    expect(long.project.name).toBe('x'.repeat(200));
+    const emoji = await importZip(
+      zipOf({ 'a.md': 'a', [MANIFEST_NAME]: manifest(`${'x'.repeat(199)}🎸`) }),
+    );
+    expect(emoji.project.name).toBe('x'.repeat(199));
   });
 });

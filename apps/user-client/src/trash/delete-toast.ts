@@ -7,6 +7,9 @@ import { purgeCard, restoreCard } from './trash-repo.js';
 
 const DEFAULT_MESSAGE = 'Moved to Recently deleted · recoverable for 30 days';
 
+/** Shown when a permanent delete (toast or Recently deleted) fails. */
+export const PURGE_FAILED = 'Could not delete. Please try again.';
+
 /** After a soft-delete, surface the delete-time signal: a toast with Undo (fast,
  *  identity-preserving before drain; falls back to the new-identity restore once the
  *  delete has drained) and a "Delete permanently" that removes the recoverable copy. */
@@ -19,7 +22,7 @@ export function showDeleteToast(
   showCardDeleteToast(`${collection}:${key}`, handle, invalidate);
 }
 
-/** {@link showDeleteToast} for any trash card; a failed Undo becomes a warning toast (naming the path on a collision). */
+/** {@link showDeleteToast} for any trash card; a failed Undo or permanent delete becomes a warning toast (naming the path on a collision). */
 export function showCardDeleteToast(
   cardKey: string,
   handle: TrashUndoHandle,
@@ -60,7 +63,13 @@ export function showCardDeleteToast(
       label: 'Delete permanently',
       onClick: () => {
         void (async () => {
-          await purgeCard(cardKey);
+          try {
+            await purgeCard(cardKey);
+          } catch (e) {
+            console.warn('Permanent delete failed', e);
+            toastStore.show({ message: PURGE_FAILED, tone: 'warn', durationMs: 8000 });
+            return;
+          }
           invalidate();
           toastStore.show({ message: 'Deleted.', tone: 'success', durationMs: 2500 });
         })();

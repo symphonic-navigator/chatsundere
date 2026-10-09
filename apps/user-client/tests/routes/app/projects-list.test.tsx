@@ -7,6 +7,7 @@ vi.mock('../../../src/content/help/use-help.js', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { strToU8, zipSync } from 'fflate';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -63,6 +64,66 @@ function renderList() {
     </QueryClientProvider>,
   );
 }
+
+function zipFile(entries: Record<string, string>, name: string): File {
+  const data: Record<string, Uint8Array> = {};
+  for (const [k, v] of Object.entries(entries)) data[k] = strToU8(v);
+  const bytes = zipSync(data);
+  const file = new File([bytes as BlobPart], name, { type: 'application/zip' });
+  // jsdom's Blob has no arrayBuffer(); the browser's does.
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.slice().buffer });
+  return file;
+}
+
+async function importFile(file: File): Promise<void> {
+  fireEvent.change(await screen.findByTestId('project-import-input'), {
+    target: { files: [file] },
+  });
+}
+
+describe('ProjectsListPage import', () => {
+  it('names the project and counts in the toast, and opens it from there', async () => {
+    mockStorage({ persisted: true });
+    renderList();
+    await importFile(zipFile({ 'a.md': 'a', 'b/c.md': 'c', 'x.txt': 'x' }, 'Garden.zip'));
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.at(-1)?.message).toBe(
+        'Imported “Garden” · 2 files · skipped 1',
+      ),
+    );
+    const toast = useToastStore.getState().toasts.at(-1);
+    expect(toast?.tone).toBe('success');
+    expect(toast?.action?.label).toBe('Open');
+    const [project] = await getClientDataDb().projects.toArray();
+    expect(project?.name).toBe('Garden');
+    toast?.action?.onClick();
+    expect(await screen.findByText('Project page')).toBeInTheDocument();
+  });
+
+  it('says "1 file" and leaves out the skipped part when nothing was skipped', async () => {
+    mockStorage({ persisted: true });
+    renderList();
+    await importFile(zipFile({ 'a.md': 'a' }, 'Solo.zip'));
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.at(-1)?.message).toBe('Imported “Solo” · 1 file'),
+    );
+  });
+
+  it('refuses a zip without Markdown with a warning and creates nothing', async () => {
+    mockStorage({ persisted: true });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    renderList();
+    await importFile(zipFile({ 'a.txt': 'x' }, 'Plain.zip'));
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
+        'No Markdown files found in that .zip.',
+        'warn',
+      ]),
+    );
+    expect(await getClientDataDb().projects.count()).toBe(0);
+    warn.mockRestore();
+  });
+});
 
 describe('ProjectsListPage', () => {
   it('lists projects with their file counts', async () => {

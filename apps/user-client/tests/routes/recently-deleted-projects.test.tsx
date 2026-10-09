@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fsError } from '../../src/projects/errors.js';
+import { fsError, projectNotFound } from '../../src/projects/errors.js';
 import { toastStore, useToastStore } from '../../src/state/toast.store.js';
 
 const listTrashCards = vi.fn();
@@ -114,10 +114,46 @@ describe('RecentlyDeletedPage — project cards', () => {
 
     await vi.waitFor(() => {
       expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
-        "Can't restore: /notes/plan.md (and 2 more) already exists. Rename or move that file, then restore again.",
+        "Can't restore: /notes/plan.md and 2 other files already exist. Rename or move them, then restore again.",
         'warn',
       ]);
     });
     expect(screen.getByText('notes/ — Project X')).toBeInTheDocument();
+  });
+
+  it('explains a restore into a deleted project', async () => {
+    listTrashCards.mockResolvedValue([FOLDER_CARD]);
+    restoreCard.mockRejectedValue(projectNotFound('p1'));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /restore/i }));
+
+    await vi.waitFor(() => {
+      expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
+        "Can't restore here — its project was deleted. Restore the project from Recently deleted.",
+        'warn',
+      ]);
+    });
+  });
+
+  it('warns when a purge fails', async () => {
+    listTrashCards.mockResolvedValue([FOLDER_CARD]);
+    const failure = new Error('disk on fire');
+    purgeCard.mockRejectedValueOnce(failure);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /delete now/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete now' }));
+
+    await vi.waitFor(() => {
+      expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
+        'Could not delete. Please try again.',
+        'warn',
+      ]);
+    });
+    expect(warn).toHaveBeenCalledWith(expect.any(String), failure);
+    warn.mockRestore();
   });
 });

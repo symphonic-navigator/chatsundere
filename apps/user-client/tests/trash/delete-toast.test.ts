@@ -13,6 +13,12 @@ vi.mock('../../src/trash/trash-repo.js', () => ({
 
 import { showCardDeleteToast } from '../../src/trash/delete-toast.js';
 
+function clickDeletePermanently(): void {
+  const toast = useToastStore.getState().toasts[0];
+  if (!toast?.secondaryAction) throw new Error('no delete-permanently action');
+  toast.secondaryAction.onClick();
+}
+
 function clickUndo(): void {
   const toast = useToastStore.getState().toasts[0];
   if (!toast?.action) throw new Error('no undo toast');
@@ -23,6 +29,7 @@ describe('showCardDeleteToast', () => {
   beforeEach(() => {
     toastStore.clear();
     restoreCard.mockClear();
+    purgeCard.mockClear();
   });
 
   it('shows the given message and restores in place on Undo', async () => {
@@ -68,6 +75,37 @@ describe('showCardDeleteToast', () => {
     await vi.waitFor(() => {
       expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
         'Could not restore. Please try again.',
+        'warn',
+      ]);
+    });
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.any(String), failure);
+    warn.mockRestore();
+  });
+
+  it('purges on "Delete permanently" and confirms', async () => {
+    const invalidate = vi.fn();
+    showCardDeleteToast('batch:k1', { kind: 'in-place', restore: vi.fn() }, invalidate);
+
+    clickDeletePermanently();
+
+    await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+    expect(purgeCard).toHaveBeenCalledWith('batch:k1');
+    expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Deleted.');
+  });
+
+  it('turns a failed "Delete permanently" into a warning toast', async () => {
+    const failure = new Error('disk on fire');
+    purgeCard.mockRejectedValueOnce(failure);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const invalidate = vi.fn();
+    showCardDeleteToast('batch:k1', { kind: 'in-place', restore: vi.fn() }, invalidate);
+
+    clickDeletePermanently();
+
+    await vi.waitFor(() => {
+      expect(useToastStore.getState().toasts.map((t) => [t.message, t.tone])).toContainEqual([
+        'Could not delete. Please try again.',
         'warn',
       ]);
     });

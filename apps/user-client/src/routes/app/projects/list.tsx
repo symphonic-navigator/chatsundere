@@ -10,7 +10,7 @@ import { createProject, renameProject } from '../../../projects/fs.js';
 import { useProjectFileCounts, useProjects } from '../../../projects/hooks.js';
 import { requestPersistence } from '../../../projects/persistence.js';
 import { deleteProject } from '../../../projects/trash.js';
-import { exportZip, importZip } from '../../../projects/zip.js';
+import { NoMarkdownError, exportZip, importZip } from '../../../projects/zip.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { showCardDeleteToast } from '../../../trash/delete-toast.js';
 import { PathDialog, describeProjectError } from './PathDialog.js';
@@ -71,14 +71,21 @@ export function ProjectsListPage(): JSX.Element {
   async function onImport(file: File): Promise<void> {
     setImporting(true);
     try {
-      const { imported, skipped } = await importZip(file);
+      const { project, imported, skipped } = await importZip(file);
       await requestPersistence();
+      const files = `${imported} ${imported === 1 ? 'file' : 'files'}`;
+      const skip = skipped.length > 0 ? ` · skipped ${skipped.length}` : '';
       toastStore.show({
-        message: `Imported ${imported} files${skipped.length > 0 ? ` · skipped ${skipped.length}` : ''}`,
+        message: `Imported “${project.name}” · ${files}${skip}`,
         tone: 'success',
-        durationMs: 4000,
+        durationMs: 8000,
+        action: { label: 'Open', onClick: () => navigate(`/app/projects/${project.id}`) },
       });
     } catch (e) {
+      if (e instanceof NoMarkdownError) {
+        warn('No Markdown files found in that .zip.');
+        return;
+      }
       console.warn('Project import failed', e);
       const known = describeProjectError(e);
       warn(
