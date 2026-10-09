@@ -177,15 +177,3 @@ export function ProjectsListPage(): JSX.Element {
     </PageScaffold>
   );
 }
-
-/** Placeholder for project routes until their pages land. */
-export function ProjectsPlaceholderPage(): JSX.Element {
-  return (
-    <PageScaffold
-      crumbs={[{ label: 'Projects', to: '/app/projects' }, { label: 'Project' }]}
-      back="/app/projects"
-    >
-      <p className="px-4 pt-2 text-sm text-paper-soft">Coming in the next task.</p>
-    </PageScaffold>
-  );
-}

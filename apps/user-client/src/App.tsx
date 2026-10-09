@@ -37,7 +37,8 @@ import { PersonaMindspace } from './routes/app/persona/mindspace.js';
 import { PersonaModelBehaviour } from './routes/app/persona/model-behaviour.js';
 import { PersonaRoleplay } from './routes/app/persona/roleplay.js';
 import { ProjectsGate } from './routes/app/projects/ProjectsGate.js';
-import { ProjectsListPage, ProjectsPlaceholderPage } from './routes/app/projects/list.js';
+import { ProjectFilePage } from './routes/app/projects/file.js';
+import { ProjectsListPage } from './routes/app/projects/list.js';
 import { ProjectTreePage } from './routes/app/projects/tree.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { SettingsExpertPage } from './routes/app/settings/expert.js';
@@ -187,10 +188,7 @@ export function App() {
                   <Route element={<ProjectsGate />}>
                     <Route path="/app/projects" element={<ProjectsListPage />} />
                     <Route path="/app/projects/:projectId" element={<ProjectTreePage />} />
-                    <Route
-                      path="/app/projects/:projectId/file"
-                      element={<ProjectsPlaceholderPage />}
-                    />
+                    <Route path="/app/projects/:projectId/file" element={<ProjectFilePage />} />
                   </Route>
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/app/account/biometric" element={<BiometricPage />} />
