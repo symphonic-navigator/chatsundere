@@ -49,7 +49,7 @@ Projects are a small in-app filesystem: folders and Markdown files that live alo
 
 - **Device-only for now.** Project data is stored in this browser's IndexedDB and is not synced to a linked server. Clearing site data or deleting local data removes it.
 - **Zip backup.** A project can be exported to a zip archive and imported from one again. Treat the zip as your backup; there is no other copy.
-- **Real-browser smoke test.** `test:browser` runs the filesystem against genuine IndexedDB in headless Chromium. Browsers are never downloaded by this repository; point `CHROMIUM_PATH` at an existing Chromium executable:
+- **Real-browser smoke test.** `test:browser` runs the filesystem against genuine IndexedDB in headless Chromium. Browsers are never downloaded by this repository; point `CHROMIUM_PATH` at an existing Chromium executable (adjust the `chromium-NNNN` directory to your installed version):
 
 ```bash
 CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \

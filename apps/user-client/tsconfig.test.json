@@ -4,5 +4,5 @@
     "noEmit": true,
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src/**/*", "tests/**/*"]
+  "include": ["src/**/*", "tests/**/*", "tests-browser/**/*", "vitest.browser.config.ts"]
 }
