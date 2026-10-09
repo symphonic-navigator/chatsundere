@@ -5,7 +5,7 @@ import { type TrashRow, getClientDataDb } from '../boot/client-data-db.js';
 import { blobFieldsOf, isBlobRef } from '../sync/blob-transform.js';
 import { enqueueBlobPut, enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
-import { PARENT_FIELD_COLLECTION, type TrashEntityKind } from './trash-model.js';
+import { PARENT_FIELD_COLLECTION, type TrashEntityKind, isSyncCollection } from './trash-model.js';
 
 /** One grouped restore-unit card in the trashcan surface (§3.3). */
 export interface TrashCard {
@@ -254,13 +254,14 @@ export async function restoreCard(cardKey: string): Promise<void> {
       clone.restoredFrom = m.key;
 
       await tx.table(m.collection).put(clone);
-      if (linked) {
-        enqueueSync(tx, m.collection as SyncCollection, newId, 'upsert');
+      if (linked && isSyncCollection(m.collection)) {
+        const syncCollection = m.collection;
+        enqueueSync(tx, syncCollection, newId, 'upsert');
 
         // Audit #6 — re-establish the blob channel for every revived ref. A
         // delete → drain → restore otherwise leaves the restored record pointing
         // at a destroyed server object forever (irreversible byte loss).
-        for (const spec of blobFieldsOf(m.collection as SyncCollection)) {
+        for (const spec of blobFieldsOf(syncCollection)) {
           const ref = clone[spec.refField];
           if (!isBlobRef(ref)) continue;
 
@@ -279,7 +280,7 @@ export async function restoreCard(cardKey: string): Promise<void> {
           // safe. Only when this device still holds the bytes to seal.
           const bytes = clone[spec.bytesField];
           if (bytes instanceof Blob && bytes.size > 0) {
-            enqueueBlobPut(tx, m.collection as SyncCollection, newId, ref.blobId);
+            enqueueBlobPut(tx, syncCollection, newId, ref.blobId);
           }
         }
       }

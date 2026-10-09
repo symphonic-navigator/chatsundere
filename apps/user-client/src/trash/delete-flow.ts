@@ -8,6 +8,7 @@ import { rejectEntry } from '../memory/repo.js';
 import { isDeadKey } from '../sync/dead-keys.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { rewindWatermark, takeSuppressedRevs } from '../sync/watermark.js';
+import { isSyncCollection } from './trash-model.js';
 
 /** Thrown when a fast in-place Undo is attempted after the delete has already drained
  *  (a dead-key marker exists). The caller must fall back to the new-identity restore. */
@@ -101,7 +102,8 @@ export async function softDelete(
       // the in-place restore would resurrect a tombstoned identity, so refuse and let the
       // caller fall back to the new-identity restore (§3.5). Checked BEFORE any mutation.
       for (const snap of snapshots) {
-        if (await isDeadKey(snap.collection, snap.key)) throw new UndoDrainedError();
+        if (isSyncCollection(snap.collection) && (await isDeadKey(snap.collection, snap.key)))
+          throw new UndoDrainedError();
       }
       await db.transaction('rw', [...liveTables, 'syncOutbox', 'trash'], async (tx) => {
         // `bulkDelete` ignores any seq already drained — only the still-queued ones go.

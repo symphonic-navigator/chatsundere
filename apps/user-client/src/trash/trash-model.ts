@@ -1,7 +1,38 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 
 /** The card class a trashed row belongs to (§3.3). */
-export type TrashEntityKind = 'persona' | 'chat' | 'memory' | 'library' | 'document' | 'chatChild';
+export type TrashEntityKind =
+  | 'persona'
+  | 'chat'
+  | 'memory'
+  | 'library'
+  | 'document'
+  | 'chatChild'
+  | 'project'
+  | 'projectFile'
+  | 'projectFolder';
+
+/** Collections that exist only locally and never reach the sync engine. */
+export type ProjectCollection = 'projects' | 'projectFiles' | 'projectContents';
+
+/** Any collection that can appear in the local trash. */
+export type LocalCollection = SyncCollection | ProjectCollection;
+
+const PROJECT_COLLECTIONS: ReadonlySet<string> = new Set<ProjectCollection>([
+  'projects',
+  'projectFiles',
+  'projectContents',
+]);
+
+/** True for the local-only project collections. */
+export function isProjectCollection(c: string): c is ProjectCollection {
+  return PROJECT_COLLECTIONS.has(c);
+}
+
+/** True for collections the sync engine knows about (everything but project collections). */
+export function isSyncCollection(c: LocalCollection): c is SyncCollection {
+  return !isProjectCollection(c);
+}
 
 /** Grouping metadata a trashed row carries so the surface can render + restore it (§3.3). */
 export interface TrashMeta {

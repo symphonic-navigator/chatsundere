@@ -27,6 +27,9 @@ const ENTITY_NOUN: Record<TrashEntityKind, string> = {
   library: 'library',
   document: 'document',
   chatChild: 'item',
+  project: 'project',
+  projectFile: 'file',
+  projectFolder: 'folder',
 };
 
 /** Pluralise a labelled count the plain British way ("1 chat" / "2 chats"). */
