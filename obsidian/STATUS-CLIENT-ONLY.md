@@ -8,6 +8,38 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-10-09 — **PROJECT FILESYSTEM STAGE 1 BUILT (branch, not yet on
+`master`).** Chris's brief (Projects, Stage 1 of 3: "there be files in projects") went
+brainstorm → spec → Laura spec-pass → plan → subagent-driven build in one cloud session
+on branch `ccr-f8a4189c-8oq5jk` (18 + 4 commits, not squashed). Spec:
+[[../superpowers/specs/2026-10-09-project-filesystem-design]]; plan:
+[[../superpowers/plans/2026-10-09-project-filesystem]].
+- **Design deviations from the brief (agreed with Chris):** lives in the main Dexie DB
+  (v37: `projects`, `projectFiles`, `projectContents`, `projectRevisions`) shaped for the
+  existing sync engine — meta and content split by stable `fileId`; the brief's own
+  changelog/tombstones/device store are dropped; deletes use the app-wide *Recently
+  deleted* trash (file, folder-as-one-card, project cards), no `/.trash/`.
+- **Built:** path normalisation (NFC, limits, `.md` rule), optimistic `ifVersion`,
+  atomic directory moves (fault-injection rollback test), 20 revisions per file
+  surviving rename/restore, `scan()`, zip export/import (hardened against hostile
+  zips), orphan-revision sweep, transaction auto-commit guard test, harness UI behind
+  *My Settings → Previews → Projects (preview)* (list + storage card with `persist()`,
+  tree, file page with conflict notice, move-following, History, dirty guard), Vitest
+  browser smoke test (`test:browser`, real Chromium).
+- **Audits:** Laura spec-pass (6 hard, 11 soft — all in the spec) and pre-squash (no
+  hard defects; softs fixed, S3 deferred). Larissa not summoned (no auth/sync/proxy/
+  crypto change; project rows are guarded out of the sync engine). Deferrals logged in
+  [[insights/follow-ups-index]] and [[insights/ux-deferrals]].
+- Gate: user-client typecheck clean, Biome clean, build 9/9, user-client 3747/3747
+  (631 files), `test:browser` 1/1.
+
+**Next:** **2026-10-10 — sync decision session with Chris** (whether/when project tables
+join `SYNC_COLLECTIONS`, Markdown conflict model, whether revisions sync). Chris runs the
+spec §10 device checks, then squashes the branch to `master` (one commit "Add project
+filesystem stage 1"). Stage 2 (agent tools) follows its own spec.
+
+---
+
 **Last updated:** 2026-10-08 (latest) — **v0.3.1 RELEASED: TOOL RESULT SUMMARIES
 (+ tool history replay).** Squashed to `master` (`034c1704`), tagged **`v0.3.1`** on
 that commit and pushed together with the tool-history-replay squash (`e43eecad`).
