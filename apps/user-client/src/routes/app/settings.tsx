@@ -1,10 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { aggregateServiceKinds } from '@chatsundere/llm-unified';
-import { AudioLines, Boxes, Globe, Image as ImageIcon, Sparkles, User } from 'lucide-react';
+import {
+  AudioLines,
+  Boxes,
+  FlaskConical,
+  FolderOpen,
+  Globe,
+  Image as ImageIcon,
+  Sparkles,
+  User,
+} from 'lucide-react';
 import { NavTile } from '../../components/ui/NavTile.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
 import { useProviders } from '../../data/providers.js';
+import { usePreviewFlag } from '../../data/settings.js';
 import { useServerGate } from '../../lib/server-gate.js';
 import { usableTemplateIds } from '../../lib/usable-providers.js';
 
@@ -13,6 +23,7 @@ export function Settings(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings');
   const providers = useProviders();
   const hasProxy = useServerGate('proxy').enabled;
+  const projectsOn = usePreviewFlag('projects');
 
   const rows = providers.data ?? [];
   const usable = usableTemplateIds(rows, hasProxy);
@@ -71,6 +82,16 @@ export function Settings(): JSX.Element {
           to="/app/settings/expert"
           meta="delegate hard questions"
         />
+        <NavTile
+          colour="green"
+          icon={FlaskConical}
+          label="Previews"
+          to="/app/settings/previews"
+          meta="try early features"
+        />
+        {projectsOn ? (
+          <NavTile colour="green" icon={FolderOpen} label="Projects (preview)" to="/app/projects" />
+        ) : null}
       </div>
     </PageScaffold>
   );
