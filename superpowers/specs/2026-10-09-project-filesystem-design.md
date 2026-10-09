@@ -1,6 +1,6 @@
 # Project Filesystem (Stage 1) — Design Specification
 
-**Date:** 2026-10-09 · **Author:** Liz, brainstormed with Chris · **Status:** design approved in conversation (2026-10-09), awaiting Laura spec-pass and written-spec review
+**Date:** 2026-10-09 · **Author:** Liz, brainstormed with Chris · **Status:** design approved in conversation (2026-10-09), Laura spec-pass done (6 hard, 11 soft, all incorporated; Chris's picks 2026-10-09), awaiting written-spec review
 **Input:** Chris's project brief "Project Filesystem Layer (Chatsundere)", Stage 1 of 3 (brainstormed with Claude on the web).
 
 ## 1. Purpose and Scope
@@ -211,9 +211,16 @@ Only `hooks.ts` imports React. Stage 2 tools call `fs.ts`, `revisions.ts` and
 7. Reject a path longer than **1024** UTF-16 code units or a segment longer
    than **255** → `InvalidPath { reason: 'too-long' }`.
 
+8. A Markdown file's final segment must end in `.md` or `.markdown` →
+   otherwise `InvalidPath { reason: 'extension' }`. This keeps every file
+   representable in the zip round trip (§7); the UI appends `.md` for the user
+   (§6.3).
+
 Case-sensitive. A file path must not be `/`. Segments beginning with `.` are
-hidden: `list` omits them unless `includeHidden: true`; `scan` includes them
-only when `prefix` names them explicitly.
+hidden *from the API listings*: `list` omits them unless `includeHidden:
+true`; `scan` includes them only when `prefix` names them explicitly. This is
+groundwork for the Stage 2 tools (`ls`, `rg`). The human UI always passes
+`includeHidden: true` and never hides a file (§6.3).
 
 **Implicit directories:** a directory exists iff at least one file path has it
 as a proper prefix. Writing a file whose path is an existing directory throws
@@ -277,6 +284,8 @@ whole project is `deleteProject`. `subscribe` from the brief is dropped:
 - On mismatch: `VersionConflict { path, current, passed }`, and **nothing is
   written** (the check happens inside the write transaction before any put).
 - `createOnly: true` on an existing path → `AlreadyExists`.
+- `ifVersion` on a non-existent path → `NotFound`; a write that names a
+  version never creates a file.
 - `writeText` with identical content (same `contentHash`) is a no-op that
   returns the current meta: no new version, no revision.
 
@@ -361,14 +370,14 @@ pointing at export.
 
 - **File delete:** snapshot the `projectFiles` row and its `projectContents`
   row (content `parentRef` → the file via a new `fileId: 'projectFiles'`
-  mapping), then delete both. One card, titled by the file's basename,
-  subtitle the project name.
+  mapping), then delete both. One card, titled by the file's full path
+  without the leading slash (`notes/plan.md`), subtitle the project name.
 - **Folder delete:** every file under the prefix, as above, in one
   transaction. To make the folder **one card**, `TrashRow` gains an optional,
   non-indexed `batch?: { key: string; title: string; kind: TrashEntityKind }`.
   `cardKeyOf` returns `batch:<key>` when the row's own parent chain ends
   untrashed and a batch is present; `listTrashCards` renders a batch card from
-  `batch.title` (`notes/ — Project X`) and counts its members. Restoring or
+  `batch.title` (the full folder path, `notes/ideas/ — Project X`). Restoring or
   purging a batch card acts on all members. Existing rows carry no `batch` and
   behave exactly as before.
 - **Project delete:** snapshot the project, all its files and contents. The
@@ -377,11 +386,24 @@ pointing at export.
 
 Revisions are **not** snapshotted; they stay keyed by `fileId` (§5.4).
 
+**Counts and copy.** Card counts tally `projectFiles` rows only; content rows
+are never counted. `TrashCard.counts` gains `files?`. Card lines: file card →
+project name · deleted …; folder card → *"3 files"*; project card →
+*"12 files"*, plus *"includes 3 files deleted earlier"* when the card folded
+in earlier file or folder deletes. `ENTITY_NOUN` gains `project: 'project'`,
+`projectFile: 'file'`, `projectFolder: 'folder'`. Purge bodies read e.g.
+*"Permanently delete this folder and its 3 files? This cannot be undone."*
+
+**Toasts.** The folder-delete toast reads *"Moved notes/ (3 files) to Recently
+deleted"*; its Undo and Delete permanently act on the whole batch.
+`showDeleteToast` is widened to accept a card key instead of
+`(collection, key)` for project deletes.
+
 ### 5.3 Restore
 
 - **Undo toast** (in place, same ids): before re-putting, check every
   restored file path against the live index. A collision aborts the whole
-  undo with `AlreadyExists`, surfaced as a toast; nothing is restored.
+  undo with `AlreadyExists`; nothing is restored.
 - **Card restore** (new identity, `restoreCard`): same collision check in the
   same transaction, plus — for project rows — the fresh project id is mapped
   into each file's `projectId`, the fresh file id into each content row's
@@ -390,6 +412,18 @@ Revisions are **not** snapshotted; they stay keyed by `fileId` (§5.4).
   survives a restore. A file restored while its project is live goes back into
   that project; a file whose project is gone restores only as part of the
   project card (it folds into it by the ancestor walk).
+- **Collisions within one card** are resolved deterministically, never
+  refused (Chris, 2026-10-09). The file that was live when the project or
+  folder was deleted keeps its path. An earlier-deleted file with the same
+  path comes back as `<stem> (restored YYYY-MM-DD)<ext>` (with a numeric
+  suffix if that is taken too). Only collisions against **live** rows abort.
+- **A refused restore is never silent.** From the Undo toast or a Recently
+  deleted card, an error toast names the path and the way out: *"Can't
+  restore: /notes/plan.md already exists. Rename or move that file, then
+  restore again."* For a folder or project card it names the first colliding
+  path and the count of others. The card stays. `RecentlyDeletedPage`'s
+  restore mutation gains the `onError` handler it lacks today, and
+  `showDeleteToast` maps `AlreadyExists` to this toast instead of rethrowing.
 
 ### 5.4 Purge
 
@@ -407,57 +441,93 @@ CLAUDE.md §11, kept plain: this is a harness, not the final UX.
 ### 6.1 Preview flag
 
 - New non-indexed settings field `previews?: { projects?: boolean }`.
-- New page **My Settings → Previews** (`/app/settings/previews`), one toggle
-  "Projects (preview)" with a one-line explanation: *"An early look at project
-  files. Projects live on this device only for now."*
+- My Settings gains a permanent **Previews** tile (meta *"try early
+  features"*) → `/app/settings/previews`, one toggle "Projects (preview)" with
+  a one-line explanation: *"An early look at project files. Projects live on
+  this device only for now."* When the flag is on and projects exist, a line
+  under the toggle reads *"Turning this off hides Projects; your N projects
+  stay on this device and return when you turn it back on."*
 - When on, a **"Projects (preview)"** tile appears in the My Settings grid
-  linking to `/app/projects`. When off, there is no entry point; the routes
-  redirect to `/app/settings/previews`.
+  linking to `/app/projects`. When off, the tile is **hidden**, not disabled
+  (Chris, 2026-10-09: an opt-in preview should not advertise itself; the
+  permanent Previews tile is the discoverable entry). The project routes
+  redirect to Previews with a one-line notice: *"Projects is a preview — turn
+  it on here."*
 
 ### 6.2 `/app/projects`
 
 - Storage card at the top: persistence state (*"Storage is persistent"* or
-  *"The browser may clear this data when space runs low — export projects you
-  care about"*), usage from `navigator.storage.estimate()` (*"12 MB of 2 GB
-  used"*), and *"Projects live on this device only for now."*
+  one calm sentence *"The browser may clear this data when space runs low —
+  export projects you care about."* with an inline Export hint, never a
+  banner), origin-wide usage from `navigator.storage.estimate()`
+  (*"Chatsundere uses 12 MB of about 2 GB available"*), and *"Projects live
+  on this device only for now."*
 - Project list (by `updatedAt`), each row: name, file count, last change.
 - "New project" button → name prompt → project page.
-- Context menu per project: Rename, Export as .zip, Delete (undo toast).
+- Per-project menu (the existing `OverflowMenu` ⋯ on each row; long-press
+  may open it too but is never the only way): Rename, Export as .zip, Delete
+  (undo toast).
 - "Import .zip" button → file picker → new project named after the archive's
   `chatsundere-project.json` (or the file name), with a success toast.
 
 ### 6.3 `/app/projects/:id`
 
 - Header with project name and a menu: Rename, Export as .zip, Delete.
+  Deleting from here navigates to `/app/projects`, where the undo toast shows.
 - File tree: directories collapsible (collapsed state per session in
-  `sessionStorage`), files open the file page. Dotfiles hidden.
-- "New file" → path prompt prefilled with the currently expanded directory
-  (e.g. `/notes/`), creates an empty Markdown file and opens it in edit mode.
-  Directories are created implicitly.
-- Context menu per file and per directory: "Rename / Move" (path dialog,
-  prefilled with the full current path), "Delete" (undo toast).
+  `sessionStorage`), files open the file page. **Every file is shown**;
+  dotfiles and dot-directories are visually dimmed (Chris, 2026-10-09: the
+  human always sees everything; hiding is a Stage 2 tool concern).
+- The top-level "New file" prefills `/`; each directory's menu offers **New
+  file here** (prefilled `/<dir>/`). Placeholder: *"e.g. /notes/plan.md —
+  folders are created for you."* It creates an empty Markdown file and opens
+  it in edit mode.
+- **Extensions:** New file and Rename / Move append `.md` when the final
+  segment has no extension; any other extension is refused inline: *"Projects
+  hold Markdown files (.md) for now."* (Chris, 2026-10-09.)
+- Per-file and per-directory `OverflowMenu` (⋯): "Rename / Move" (path
+  dialog, prefilled with the full current path), "Delete" (undo toast).
+- Path dialogs show `AlreadyExists`, `InvalidPath` (incl. into-self,
+  too-long, extension) and `EscapesRoot` inline in plain words; the dialog
+  stays open with the input intact.
 - Empty state: *"No files yet"* with the "New file" button.
 
 ### 6.4 `/app/projects/:id/file?path=…`
 
+- The page tracks the file by **`fileId`**; `?path=` only resolves it on
+  entry.
 - View mode: Markdown rendered with the existing `MarkdownDoc` renderer.
 - "Edit" → a full-height textarea; "Save" writes with `ifVersion` = the
-  version loaded. "Cancel" discards.
-- On `VersionConflict`: an inline notice *"This file changed elsewhere."*
-  with **Reload** (discard my edit, show theirs) and **Keep mine**
-  (re-save with the new current version). The edit buffer is never lost
-  silently.
-- If the file is deleted or moved away while open: *"This file was moved or
-  deleted."* with a link back to the project.
+  version loaded. Edit mode reuses the knowledge editor's dirty guard
+  (`PageScaffold` `dirty`) and "● Unsaved" badge; leaving with changes asks
+  first, and "Cancel" with changes asks *"Discard your changes?"*. In edit
+  mode, live updates never replace the buffer; they surface as the conflict
+  notice on Save.
+- On `VersionConflict`: an inline notice *"This file changed elsewhere. If you
+  keep yours, the other version stays in History."* with **Use theirs
+  (discard my edit)** and **Keep mine** (re-save with the new current
+  version).
+- Any other failed save keeps the editor open with the buffer intact and an
+  inline message; `QuotaExceeded` reads *"This device is out of space for
+  projects — export a project to keep a copy, then free some space."*
+- **Moved while open** (rename, folder move, another tab, later the agent):
+  the page follows the `fileId`, updates the URL and shows a quiet note
+  *"Moved to /archive/plan.md."*; an edit in progress continues and saves to
+  the new path.
+- **Deleted while open:** *"This file was deleted."* with a link to the
+  project. An edit in progress keeps its buffer and offers **Save as new
+  file** (path prompt prefilled with the old path) and **Discard**.
 - A collapsible **History** section: revisions newest first (time, size),
   each with "View" and "Restore". Restore confirms, then writes.
 
 ### 6.5 Persistence request
 
-`navigator.storage.persist()` is requested on the first successful
-`createProject` or `importZip` when `navigator.storage.persisted()` is false.
-The result is shown on the storage card only; no modal, no repeated prompting.
-Browsers without the API show the "may clear" line.
+`navigator.storage.persist()` is requested after each successful
+`createProject` or `importZip` while `navigator.storage.persisted()` is false.
+Chromium decides silently (no prompt), so a retry costs the user nothing;
+Firefox prompts once and remembers the answer, so it is not asked again. The
+result is shown on the storage card only; no modal. Browsers without the API
+show the "may clear" line.
 
 ## 7. Zip Format
 
@@ -508,8 +578,18 @@ Browsers without the API show the "may clear" line.
 - Zip: round trip byte-identical; manifest handling; rejected entry paths;
   skipped non-Markdown entries.
 - `scan()`: 1,000 × ~8 KB under the §4.7 bound; prefix and hidden handling.
-- UI: preview flag gates tile and routes; conflict notice offers both
-  actions; storage card renders persisted / not persisted / unsupported.
+- Trash copy: counts tally files only; nouns for the three new kinds; batch
+  toast acts on the whole folder; within-card collision gets the
+  `(restored …)` suffix; a live collision shows the named error toast from
+  both Undo and the Recently deleted card, and the card stays.
+- `ifVersion` on a missing path → `NotFound`, nothing created; a path without
+  `.md`/`.markdown` → `InvalidPath { reason: 'extension' }`.
+- UI: preview flag gates tile and routes, Previews tile always present,
+  turn-off copy; tree shows dimmed dotfiles; New file appends `.md` and
+  refuses other extensions; path dialog errors inline; conflict notice offers
+  both actions; dirty guard and Cancel confirm; file page follows a move and
+  offers Save as new file after a delete; storage card renders persisted /
+  not persisted / unsupported.
 
 ### 8.2 Real browser
 
@@ -559,5 +639,21 @@ Chris, on the phone and on desktop:
    count; restore it.
 9. Export as .zip, import it; the new project matches (open a file in each).
 10. Reload the app and restart the PWA; everything is still there.
-11. Disable the preview flag; the tile disappears and `/app/projects`
-    redirects to Previews.
+11. Disable the preview flag with projects present; the turn-off line names
+    the count; the tile disappears and `/app/projects` redirects to Previews
+    with the notice. Turn it back on; the projects are back.
+12. Create `/.hidden.md`; it shows dimmed in the tree.
+13. Create `/todo`; it becomes `/todo.md`. Try `/x.txt`; refused inline.
+    Export and import; `todo.md` is in the new project.
+14. Delete `plan.md`, create a new `plan.md`, tap Undo: the named-collision
+    toast appears. Rename the new file, restore from the card: it works.
+15. Delete `/a.md`, create a new `/a.md`, delete the project, restore the
+    project card: both come back, the older as `a (restored …).md`.
+16. Check card wording ("3 files", "12 files") and the purge confirm naming
+    files; the folder-delete toast's Delete permanently removes the whole
+    folder card.
+17. Edit `plan.md` in tab A while tab B renames its folder: tab A follows and
+    saves to the new path. Repeat with a delete in tab B: Save as new file is
+    offered.
+18. Cancel with unsaved changes asks first; Back during an edit is guarded.
+19. Check the persistence line in Firefox (prompt) and Chromium (silent).
