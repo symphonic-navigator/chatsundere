@@ -86,7 +86,16 @@ export async function renameProject(projectId: string, name: string): Promise<vo
   const changed = await mapQuota(
     getClientDataDb().projects.update(projectId, { name: cleanName(name) }),
   );
-  if (changed === 0) throw fsError('NotFound', { path: `project ${projectId}` });
+  if (changed === 0) throw projectNotFound(projectId);
+}
+
+function projectNotFound(projectId: string): ProjectFsError {
+  return fsError('NotFound', { path: `project ${projectId}` });
+}
+
+/** Throws `NotFound` naming the project when it does not exist; call inside a transaction. */
+async function requireProject(projectId: string): Promise<void> {
+  if (!(await getClientDataDb().projects.get(projectId))) throw projectNotFound(projectId);
 }
 
 function fileByPath(projectId: string, path: string): Promise<FileMeta | undefined> {
@@ -149,7 +158,8 @@ export async function list(
 ): Promise<Entry[]> {
   const d = normalisePath(dir);
   const db = getClientDataDb();
-  const rows = await db.transaction('r', db.projectFiles, async () => {
+  const rows = await db.transaction('r', db.projects, db.projectFiles, async () => {
+    await requireProject(projectId);
     if (d !== '/' && (await fileByPath(projectId, d))) throw fsError('NotDirectory', { path: d });
     const found = await filesUnder(projectId, d).toArray();
     if (d !== '/' && found.length === 0) throw fsError('NotFound', { path: d });
@@ -183,7 +193,8 @@ export async function readText(
 ): Promise<{ meta: FileMeta; text: string }> {
   const p = normalisePath(path);
   const db = getClientDataDb();
-  return db.transaction('r', db.projectFiles, db.projectContents, async () => {
+  return db.transaction('r', db.projects, db.projectFiles, db.projectContents, async () => {
+    await requireProject(projectId);
     const meta = await fileByPath(projectId, p);
     if (!meta) throw fsError('NotFound', { path: p });
     const content = await db.projectContents.get(meta.id);
@@ -230,7 +241,7 @@ export async function writeText(
       'rw',
       [db.projects, db.projectFiles, db.projectContents, db.projectRevisions],
       async (tx) => {
-        if (!(await db.projects.get(projectId))) throw fsError('NotFound', { path: p });
+        await requireProject(projectId);
         if ((await filesUnder(projectId, p).count()) > 0) throw fsError('IsDirectory', { path: p });
         const above = ancestors(p);
         if (above.length > 0) {

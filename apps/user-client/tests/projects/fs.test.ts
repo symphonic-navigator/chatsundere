@@ -154,6 +154,28 @@ describe('files', () => {
     expect(await db.projectFiles.count()).toBe(0);
   });
 
+  it('names the project, not the file, when the project is missing', async () => {
+    for (const call of [
+      () => writeText('missing', '/a.md', 'x'),
+      () => readText('missing', '/a.md'),
+      () => list('missing', '/'),
+      () => list('missing', '/notes'),
+    ]) {
+      const e = await expectFsError(call(), 'NotFound');
+      expect((e as { detail: { path?: string } }).detail.path).toBe('project missing');
+    }
+  });
+
+  it('lists an explicitly named hidden directory without includeHidden', async () => {
+    const p = await createProject('P');
+    const meta = await writeText(p.id, '/.hidden/x.md', 'x');
+    await writeText(p.id, '/.hidden/sub/y.md', 'y');
+    expect(await list(p.id, '/.hidden')).toEqual([
+      { type: 'dir', path: '/.hidden/sub' },
+      { type: 'file', meta },
+    ]);
+  });
+
   it('applies createOnly and ifVersion', async () => {
     const p = await createProject('P');
     const meta = await writeText(p.id, '/a.md', 'old');
