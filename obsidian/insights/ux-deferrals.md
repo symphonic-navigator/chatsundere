@@ -798,3 +798,13 @@ No hard defects. One soft was fixed before the squash: an unusable family's reas
 ## 2026-10-08 — Persona quick access softs (Laura pre-squash pass)
 
 No hard defects. Both softs were fixed before the squash: Circle cards no longer show the default instruction as a subtitle (`circle.tsx`, the excerpt fallback stays for custom instructions), and the cleared Custom Instructions field shows the default as its placeholder (`instructions.tsx`), so emptying it visibly keeps the default. Nothing deferred. Laura's verdict on the open design question is recorded here: an empty subtitle beats a "No tagline yet" filler, which would nag.
+
+## 2026-10-09 — Project Filesystem Stage 1 harness (Laura pre-squash pass)
+
+No hard defect left open. Laura's softs L-S1, L-S2, L-S4 to L-S12 were fixed before the squash (earlier-version banner, visible "Save or cancel your edit first.", "Projects is on." with a way in, restore-error copy, purge-failure toast, named import toast with Open, Rename/Move label, project count on the settings tile, missing-path and read-failure states). Deferred:
+
+- **Browser back gesture and in-page links are not guarded by the dirty guard** — the scaffold guards the in-app Back only; a browser back gesture or a link elsewhere on the page drops an unsaved edit without asking. Pre-existing, the knowledge editor behaves the same. `beforeunload` now covers reload and tab close. Fix with a router-level blocker for every editor at once, not per page.
+- **Save/Cancel sit below the 60dvh textarea (L-S3)** — on a phone the buttons are a scroll away from the top of the text. Matches the knowledge editor; revisit with the Stage 2 editor rather than diverging now.
+- **Edit is briefly disabled without a tooltip while the view catches up** — after another writer's change, Edit stays disabled until the newer text is read (milliseconds). Self-clearing, so no reason line is shown.
+- **Projects live under My Settings** — the preview's only entry is a tile in My Settings, which is not where a user would look for their work. Fine for a preview harness; Laura to judge the real home at the Stage 2 spec-pass.
+- **Mode:** pre-squash. **Criterion:** least astonishment / reachability. **Follow-up commitment:** Stage 2 spec-pass (editor and home), or the v0.1.0 release cut, whichever comes first. **Chris sign-off:** not required (soft).

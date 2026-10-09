@@ -274,7 +274,13 @@ directories first, then names by code point; `'mtime'` sorts files by
 `updatedAt` desc with directories first.
 
 `deletePath` on `/` is refused (`InvalidPath { reason: 'root' }`); deleting a
-whole project is `deleteProject`. `subscribe` from the brief is dropped:
+whole project is `deleteProject`.
+
+As built, `deletePath` and `deleteProject` live in `projects/trash.ts` (not
+`fs.ts`) and return `ProjectDeleteResult { cardKey, handle, message }` — the
+trash card, the in-place Undo handle and the toast text — rather than a bare
+`TrashUndoHandle`. `importZip` returns `ImportResult { project, imported,
+skipped }` rather than the `ProjectRow` alone. `subscribe` from the brief is dropped:
 `liveQuery` covers React, and Stage 2 tools do not subscribe.
 
 ### 4.4 Optimistic concurrency
@@ -545,6 +551,9 @@ show the "may clear" line.
   Non-Markdown entries (by extension `.md`/`.markdown`; anything else) are
   skipped and reported in the result toast. Import writes everything in one
   transaction.
+- An import with zero accepted Markdown entries is refused and creates
+  nothing; the list page shows the warning toast "No Markdown files found in
+  that .zip." (ruling F-M3, final review).
 - Round trip: paths and contents byte-identical.
 
 ## 8. Testing
@@ -632,7 +641,7 @@ Chris, on the phone and on desktop:
    intact.
 6. Open `plan.md` in two tabs, edit and save in tab A; tab B's view updates;
    edit in tab B from the stale buffer and save → conflict notice; try both
-   Reload and Keep mine.
+   "Use theirs (discard my edit)" and "Keep mine".
 7. Delete `one.md`, tap Undo → back. Delete the folder `/archive`; Recently
    deleted shows one folder card; restore it; files and History are back.
 8. Delete the project; Recently deleted shows one project card with its file
@@ -655,5 +664,6 @@ Chris, on the phone and on desktop:
 17. Edit `plan.md` in tab A while tab B renames its folder: tab A follows and
     saves to the new path. Repeat with a delete in tab B: Save as new file is
     offered.
-18. Cancel with unsaved changes asks first; Back during an edit is guarded.
+18. Cancel with unsaved changes asks first; in-app Back is guarded; reload/tab
+    close warn.
 19. Check the persistence line in Firefox (prompt) and Chromium (silent).
