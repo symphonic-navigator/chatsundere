@@ -114,3 +114,42 @@ export async function restoreRevision(
   const { meta, text } = await revisionOf(projectId, p, version);
   return writeText(projectId, p, text, { ifVersion: opts.ifVersion ?? meta.version });
 }
+
+/**
+ * Moves every revision of `oldFileId` over to `newFileId` (put new, delete old),
+ * so a file restored under a fresh id keeps its history. Must run inside the
+ * caller's `rw` transaction that includes `projectRevisions`.
+ */
+export async function rekeyRevisions(
+  tx: Transaction,
+  oldFileId: string,
+  newFileId: string,
+): Promise<void> {
+  const table = tx.table<ProjectRevisionRow, [string, string]>('projectRevisions');
+  const rows = await table.where('fileId').equals(oldFileId).toArray();
+  if (rows.length === 0) return;
+  await table.bulkPut(rows.map((r) => ({ ...r, fileId: newFileId })));
+  await table.bulkDelete(rows.map((r): [string, string] => [oldFileId, r.version]));
+}
+
+/**
+ * Deletes every revision whose file is neither live nor held in Recently deleted
+ * (a `projectFiles:<fileId>` trash row). Reads keys only; idempotent. Returns
+ * how many revisions it removed.
+ */
+export async function sweepOrphanRevisions(): Promise<number> {
+  const db = getClientDataDb();
+  return db.transaction('rw', db.projectFiles, db.trash, db.projectRevisions, async () => {
+    const fileIds = (await db.projectRevisions.orderBy('fileId').uniqueKeys()) as string[];
+    if (fileIds.length === 0) return 0;
+    const live = new Set(await db.projectFiles.toCollection().primaryKeys());
+    const trashed = new Set(
+      (await db.trash.where('id').startsWith('projectFiles:').primaryKeys()).map((id) =>
+        id.slice('projectFiles:'.length),
+      ),
+    );
+    const orphans = fileIds.filter((id) => !live.has(id) && !trashed.has(id));
+    if (orphans.length === 0) return 0;
+    return db.projectRevisions.where('fileId').anyOf(orphans).delete();
+  });
+}

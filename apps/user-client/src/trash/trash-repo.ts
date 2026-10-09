@@ -2,10 +2,17 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 import { uuidv7 } from 'uuidv7';
 import { type TrashRow, getClientDataDb } from '../boot/client-data-db.js';
+import { sweepOrphanRevisions } from '../projects/revisions.js';
+import { restoreProjectMembers } from '../projects/trash.js';
 import { blobFieldsOf, isBlobRef } from '../sync/blob-transform.js';
 import { enqueueBlobPut, enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
-import { PARENT_FIELD_COLLECTION, type TrashEntityKind, isSyncCollection } from './trash-model.js';
+import {
+  PARENT_FIELD_COLLECTION,
+  type TrashEntityKind,
+  isProjectCollection,
+  isSyncCollection,
+} from './trash-model.js';
 
 /** One grouped restore-unit card in the trashcan surface (§3.3). */
 export interface TrashCard {
@@ -162,6 +169,7 @@ export async function purgeCard(cardKey: string): Promise<void> {
   const all = await db.trash.toArray();
   const memberIds = rowsOfCard(cardKey, all).map((r) => r.id);
   if (memberIds.length > 0) await db.trash.bulkDelete(memberIds);
+  await sweepOrphanRevisions();
 }
 
 /** §3.7 — retire this device's stale trash card for an entity restored elsewhere.
@@ -198,6 +206,10 @@ const RESTORE_SCOPE: readonly string[] = [
   'memoryJournal',
   'memoryBody',
   'compactionCheckpoints',
+  'projects',
+  'projectFiles',
+  'projectContents',
+  'projectRevisions',
   'trash',
   'syncOutbox',
 ];
@@ -222,16 +234,23 @@ function remapContentBlocks(blocks: unknown, newPillIdByOld: ReadonlyMap<string,
  * the existing live id; message pill references are rewritten; a `restoredFrom`
  * provenance marker (§3.7) rides inside each sealed payload; fresh upserts are
  * enqueued; and the trash snapshots — but never the dead-key markers (§3.9) — are
- * cleared.
+ * cleared. A card of project rows is handed to {@link restoreProjectMembers}
+ * in the same transaction and never touches the sync engine.
  */
 export async function restoreCard(cardKey: string): Promise<void> {
   const db = getClientDataDb();
   const linked = isLinkedForSync();
+  const now = Date.now();
 
-  await db.transaction('rw', [...RESTORE_SCOPE], async (tx) => {
+  // True when the card held sync collections, so a sync cycle may follow.
+  const synced = await db.transaction('rw', [...RESTORE_SCOPE], async (tx) => {
     const all = (await tx.table('trash').toArray()) as TrashRow[];
     const members = rowsOfCard(cardKey, all);
-    if (members.length === 0) return; // nothing to restore
+    if (members.length === 0) return false; // nothing to restore
+    if (members.every((m) => isProjectCollection(m.collection))) {
+      await restoreProjectMembers(tx, members, now);
+      return false;
+    }
 
     // Mint fresh ids, keyed by each member's trash id. personaAvatars are keyed by
     // their persona id (PK IS the personaId), so their new key reuses the restored
@@ -334,7 +353,8 @@ export async function restoreCard(cardKey: string): Promise<void> {
 
     // Retire the snapshots; leave the dead-key markers intact forever (§3.9).
     await tx.table('trash').bulkDelete(memberTrashIds);
+    return true;
   });
 
-  if (linked) scheduleClass1Sync();
+  if (linked && synced) scheduleClass1Sync();
 }

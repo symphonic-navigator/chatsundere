@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Transaction } from 'dexie';
 import { uuidv7 } from 'uuidv7';
-import { type ProjectRow, type TrashRow, getClientDataDb } from '../boot/client-data-db.js';
+import {
+  type ProjectContentRow,
+  type ProjectRow,
+  type TrashRow,
+  getClientDataDb,
+} from '../boot/client-data-db.js';
 import type { TrashUndoHandle } from '../trash/delete-flow.js';
 import { snapshotRowIntoTrash } from '../trash/snapshot.js';
 import type { ProjectCollection } from '../trash/trash-model.js';
 import { fsError, projectNotFound } from './errors.js';
 import { type FileMeta, fileByPath, filesUnder, mapQuota } from './fs.js';
-import { normalisePath } from './path.js';
+import { basename, dirname, normalisePath } from './path.js';
+import { rekeyRevisions } from './revisions.js';
 
 /** What a project delete hands the UI: the trash card, an in-place Undo and the toast text. */
 export interface ProjectDeleteResult {
@@ -172,4 +178,135 @@ export async function deleteProject(projectId: string): Promise<ProjectDeleteRes
       };
     }),
   );
+}
+
+/** The local-calendar `YYYY-MM-DD` of `now`. */
+function localDate(now: number): string {
+  const d = new Date(now);
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}
+
+/** `/dir/stem.md` → `/dir/stem (restored YYYY-MM-DD)[ n].md` for the n-th attempt. */
+function restoredPath(path: string, date: string, n: number): string {
+  const dir = dirname(path);
+  const name = basename(path);
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  const suffix = n === 1 ? '' : ` ${n}`;
+  return `${dir === '/' ? '' : dir}/${stem} (restored ${date})${suffix}${ext}`;
+}
+
+/** Newest delete first; equal times fall back to the newer (uuidv7) file id. */
+function newestFirst(a: TrashRow, b: TrashRow): number {
+  return b.deletedAt - a.deletedAt || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0);
+}
+
+/**
+ * Restores a card made only of project rows under fresh ids (spec §5.3), inside
+ * the caller's restore transaction. A project in the card gets a new id that its
+ * files follow; otherwise files go back into their live project. Within the card
+ * the most recently deleted file keeps a contested path and the others become
+ * `<stem> (restored YYYY-MM-DD)<ext>` (numbered when taken); a path held by a live
+ * file aborts with `AlreadyExists`. Revisions follow their file, `batch` is
+ * dropped, and nothing reaches the sync engine.
+ */
+export async function restoreProjectMembers(
+  tx: Transaction,
+  members: readonly TrashRow[],
+  now: number,
+): Promise<void> {
+  const db = getClientDataDb();
+  const projectMember = members.find((m) => m.collection === 'projects');
+  const fileMembers = members.filter((m) => m.collection === 'projectFiles');
+  const contentMembers = members.filter((m) => m.collection === 'projectContents');
+
+  let projectId: string;
+  if (projectMember) {
+    projectId = uuidv7();
+  } else {
+    const first = fileMembers[0];
+    if (!first) return; // a card always holds a project or a file
+    projectId = first.parentRef?.id ?? (first.row as FileMeta).projectId;
+    if (!(await db.projects.get(projectId))) throw projectNotFound(projectId);
+  }
+
+  // Within-card duplicates: the newest delete keeps the path.
+  const byPath = new Map<string, TrashRow[]>();
+  for (const m of fileMembers) {
+    const path = (m.row as FileMeta).path;
+    const group = byPath.get(path);
+    if (group) group.push(m);
+    else byPath.set(path, [m]);
+  }
+  const pathOf = new Map<string, string>();
+  const displaced: TrashRow[] = [];
+  for (const [path, group] of byPath) {
+    group.sort(newestFirst);
+    const [keeper, ...rest] = group;
+    if (keeper) pathOf.set(keeper.id, path);
+    displaced.push(...rest);
+  }
+
+  const kept = [...byPath.keys()];
+  const live = new Set(
+    (
+      await db.projectFiles
+        .where('[projectId+path]')
+        .anyOf(kept.map((p) => [projectId, p]))
+        .toArray()
+    ).map((f) => f.path),
+  );
+  const collisions = kept.filter((p) => live.has(p));
+  const [firstCollision] = collisions;
+  if (firstCollision !== undefined) {
+    throw fsError('AlreadyExists', { path: firstCollision, others: collisions.length - 1 });
+  }
+
+  const date = localDate(now);
+  const taken = new Set(kept);
+  displaced.sort((a, b) => {
+    const pa = (a.row as FileMeta).path;
+    const pb = (b.row as FileMeta).path;
+    return pa < pb ? -1 : pa > pb ? 1 : newestFirst(a, b);
+  });
+  for (const m of displaced) {
+    const path = (m.row as FileMeta).path;
+    let candidate = restoredPath(path, date, 1);
+    for (let n = 2; taken.has(candidate) || (await fileByPath(projectId, candidate)); n++) {
+      candidate = restoredPath(path, date, n);
+    }
+    taken.add(candidate);
+    pathOf.set(m.id, candidate);
+  }
+
+  if (projectMember) {
+    const row = structuredClone(projectMember.row) as ProjectRow;
+    await db.projects.put({ ...row, id: projectId, updatedAt: now });
+  } else {
+    await db.projects.update(projectId, { updatedAt: now });
+  }
+
+  const newFileIdByOld = new Map<string, string>();
+  for (const m of fileMembers) {
+    const fileId = uuidv7();
+    newFileIdByOld.set(m.key, fileId);
+    const { batch: _batch, ...row } = structuredClone(m.row) as FileMeta & { batch?: unknown };
+    await db.projectFiles.put({
+      ...row,
+      id: fileId,
+      projectId,
+      path: pathOf.get(m.id) ?? row.path,
+    });
+    await rekeyRevisions(tx, m.key, fileId);
+  }
+  for (const m of contentMembers) {
+    const fileId = newFileIdByOld.get(m.parentRef?.id ?? m.key);
+    if (fileId === undefined) continue; // a content row always folds into its file's card
+    const row = structuredClone(m.row) as ProjectContentRow;
+    await db.projectContents.put({ ...row, fileId });
+  }
+
+  await db.trash.bulkDelete(members.map((m) => m.id));
 }

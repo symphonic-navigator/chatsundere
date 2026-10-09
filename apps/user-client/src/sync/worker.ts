@@ -32,6 +32,7 @@ import { getDb } from '../boot/open-db.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
+import { sweepOrphanRevisions } from '../projects/revisions.js';
 import type { ApplyOutcome } from './apply.js';
 import {
   TOMBSTONE_CYCLE_CAP,
@@ -1138,10 +1139,12 @@ async function withSingleFlight(fn: () => Promise<void>): Promise<void> {
   }
 }
 
-/** Delete every trash row past its 30-day grace (spec §4, §7.3). */
+/** Delete every trash row past its 30-day grace (spec §4, §7.3), then the
+ *  project revisions those deletes orphaned. */
 async function purgeTrash(): Promise<void> {
   const db = getClientDataDb();
   await db.trash.where('purgeAt').belowOrEqual(Date.now()).delete();
+  await sweepOrphanRevisions();
 }
 
 // ===== The pull loop (spec §6 pull, §7 apply) =====

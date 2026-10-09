@@ -586,6 +586,37 @@ describe('runSyncCycle (spec §6)', () => {
     expect(await db.trash.get('chats:fresh')).toBeDefined();
   });
 
+  it('sweeps the revisions of project files whose trash rows expired', async () => {
+    const db = getClientDataDb();
+    const now = Date.now();
+    const snapshot = (key: string, purgeAt: number) => ({
+      id: `projectFiles:${key}`,
+      collection: 'projectFiles' as const,
+      key,
+      row: {},
+      deletedAt: now - 1,
+      purgeAt,
+      entityKind: 'projectFile' as const,
+      rootGroup: `projectFiles:${key}`,
+      parentRef: null,
+    });
+    await db.trash.bulkPut([snapshot('expired', now - 1), snapshot('kept', now + 1_000_000)]);
+    const revision = (fileId: string) => ({
+      fileId,
+      version: 'v1',
+      text: 'x',
+      size: 1,
+      createdAt: 1,
+    });
+    await db.projectRevisions.bulkPut([revision('expired'), revision('kept')]);
+    _setPushTransport(async () => okResponse([], 0));
+
+    await runSyncCycle();
+
+    expect(await db.projectRevisions.where('fileId').equals('expired').count()).toBe(0);
+    expect(await db.projectRevisions.where('fileId').equals('kept').count()).toBe(1);
+  });
+
   it('runs the pull loop when the drain reports a piggyback pull', async () => {
     const db = getClientDataDb();
     await db.personas.put({ id: 'p1' } as never);
