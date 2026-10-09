@@ -1,5 +1,5 @@
-// @vitest-environment node
 // SPDX-License-Identifier: AGPL-3.0-only
+// @vitest-environment node
 import 'fake-indexeddb/auto';
 import { strToU8, zipSync } from 'fflate';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -101,6 +101,21 @@ describe('zip', () => {
 
   it('rejects duplicate paths after normalisation', async () => {
     await expectInvalid(zipOf({ 'a.md': '1', './a.md': '2' }), './a.md');
+  });
+
+  it('rejects a path that is both a file and a folder, in either order', async () => {
+    await expectInvalid(zipOf({ 'a.md': '1', 'a.md/b.md': '2' }), 'a.md/b.md');
+    await expectInvalid(zipOf({ 'a.md/b.md': '2', 'a.md': '1' }), 'a.md');
+  });
+
+  it('skips Markdown names that the filesystem would refuse', async () => {
+    const res = await importZip(zipOf({ '.md': 'x', 'dir/.markdown': 'y', 'ok.md': 'ok' }));
+    expect(res.imported).toBe(1);
+    expect(res.skipped.sort()).toEqual(['.md', 'dir/.markdown']);
+  });
+
+  it('rejects a duplicate even when its second entry is not valid UTF-8', async () => {
+    await expectInvalid(zipOf({ 'a.md': 'ok', './a.md': new Uint8Array([0xff, 0xfe]) }), './a.md');
   });
 
   it('creates an empty project for a zip without Markdown', async () => {

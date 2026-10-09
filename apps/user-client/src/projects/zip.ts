@@ -9,13 +9,12 @@ import {
 } from '../boot/client-data-db.js';
 import { fsError, projectNotFound } from './errors.js';
 import { mapQuota, sha256B64Url } from './fs.js';
-import { normalisePath } from './path.js';
+import { dirname, isUnder, normaliseFilePath, normalisePath } from './path.js';
 import { scan } from './scan.js';
 
 export const MANIFEST_NAME = 'chatsundere-project.json';
 
 const DEFAULT_NAME = 'Imported project';
-const MARKDOWN_ENTRY = /\.(md|markdown)$/i;
 
 export interface ImportResult {
   project: ProjectRow;
@@ -49,6 +48,23 @@ function manifestName(bytes: Uint8Array | undefined): string | undefined {
   }
 }
 
+/** Same Markdown rule as the filesystem: a leading-dot name has no extension. */
+function isMarkdownPath(path: string): boolean {
+  try {
+    normaliseFilePath(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True when `path` would be both a file and a folder alongside an accepted path. */
+function collides(accepted: ReadonlyMap<string, string>, path: string): boolean {
+  for (let a = dirname(path); a !== '/'; a = dirname(a)) if (accepted.has(a)) return true;
+  for (const other of accepted.keys()) if (isUnder(other, path)) return true;
+  return false;
+}
+
 function rejectEntry(name: string): never {
   throw fsError('InvalidPath', { path: name });
 }
@@ -78,10 +94,11 @@ export async function importZip(blob: Blob, opts: { name?: string } = {}): Promi
       manifest = data;
       continue;
     }
-    if (!MARKDOWN_ENTRY.test(path)) {
+    if (!isMarkdownPath(path)) {
       skipped.push(name);
       continue;
     }
+    if (accepted.has(path) || collides(accepted, path)) rejectEntry(name);
     let text: string;
     try {
       text = decoder.decode(data);
@@ -89,7 +106,6 @@ export async function importZip(blob: Blob, opts: { name?: string } = {}): Promi
       skipped.push(name);
       continue;
     }
-    if (accepted.has(path)) rejectEntry(name);
     accepted.set(path, text);
   }
 
