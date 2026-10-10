@@ -101,3 +101,9 @@ export function useAdultMode(): {
     setMode: (m) => update.mutateAsync({ adultMode: m }).then(() => undefined),
   };
 }
+
+/** Whether a preview feature is switched on (`settings.previews`); false while loading. */
+export function usePreviewFlag(name: keyof NonNullable<SettingsRow['previews']>): boolean {
+  const settings = useSettings();
+  return settings.data?.previews?.[name] === true;
+}

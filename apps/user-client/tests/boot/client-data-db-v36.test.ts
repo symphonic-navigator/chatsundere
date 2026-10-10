@@ -75,7 +75,7 @@ describe('client-data-db v36 (built-in mindspace ids → deterministic slugs)', 
 
   it('opens at verno 36 on a fresh install and seeds slug ids', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(36);
+    expect(db.verno).toBe(37);
     const ids = (await db.mindspaces.toArray()).map((m) => m.id).sort();
     expect(ids).toEqual(SLUGS);
   });
@@ -91,7 +91,7 @@ describe('client-data-db v36 (built-in mindspace ids → deterministic slugs)', 
 
     await _resetClientDataDbForTests({ keepData: true });
     const db = await openClientDataDb();
-    expect(db.verno).toBe(36);
+    expect(db.verno).toBe(37);
 
     const all = (await db.mindspaces.toArray()) as MindspaceRow[];
     expect(all.map((m) => m.id).sort()).toEqual(SLUGS);

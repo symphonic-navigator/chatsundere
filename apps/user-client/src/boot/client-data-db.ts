@@ -9,6 +9,7 @@ import type { EncryptedBlob } from '../lib/secrets.js';
 import type { TtsHighpassSetting } from '../lib/voice/voice-filter.js';
 import type { WebBackendSetting } from '../lib/web-backends.js';
 import type { McpToolDefinition } from '../mcp/types.js';
+import type { LocalCollection, TrashEntityKind } from '../trash/trash-model.js';
 
 export const DB_NAME = 'chatsundere_client_data';
 
@@ -27,6 +28,8 @@ export interface StoredImageSlot {
 
 export interface SettingsRow {
   id: 1;
+  /** Opt-in flags for unfinished features (Settings → Previews). Non-indexed; absent ⇒ all off. */
+  previews?: { projects?: boolean };
   displayName: string;
   globalInstructions: string;
   globalAboutMe: string;
@@ -709,15 +712,62 @@ export interface SyncStateRow {
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */
 export interface TrashRow {
   id: string;
-  collection: SyncCollection;
+  collection: LocalCollection;
   key: string;
   row: unknown;
   deletedAt: number;
   purgeAt: number;
   // §3.3 — grouping metadata that decides which card this row displays under.
-  entityKind: 'persona' | 'chat' | 'memory' | 'library' | 'document' | 'chatChild';
+  entityKind: TrashEntityKind;
   rootGroup: string; // `persona:<id>` | `library:<id>` | `<collection>:<key>` fallback
   parentRef: { field: string; id: string } | null; // e.g. {field:'personaId', id:<originalId>}
+  /** Groups rows deleted together as one card (e.g. a folder of project files). */
+  batch?: { key: string; title: string; kind: TrashEntityKind };
+}
+
+/** A local-only project (never synced). */
+export interface ProjectRow {
+  id: string;
+  name: string;
+  createdAt: number;
+  /** Bumped by any file mutation in the project. */
+  updatedAt: number;
+}
+
+/** File metadata; content lives in `projectContents` so listing never loads it. */
+export interface ProjectFileRow {
+  /** Stable across rename/move. */
+  id: string;
+  projectId: string;
+  /** Normalised absolute path, e.g. '/notes/plan.md'. */
+  path: string;
+  kind: 'markdown' | 'image';
+  /** UTF-8 bytes for markdown. */
+  size: number;
+  /** uuidv7, new on every content write or move. */
+  version: string;
+  /** Base64url SHA-256 of the content bytes. */
+  contentHash: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** File content, keyed by file id. */
+export interface ProjectContentRow {
+  fileId: string;
+  text?: string;
+  blob?: Blob;
+}
+
+/** A superseded version of a markdown file. */
+export interface ProjectRevisionRow {
+  fileId: string;
+  /** The version this content HAD. */
+  version: string;
+  text: string;
+  size: number;
+  /** When it was superseded. */
+  createdAt: number;
 }
 
 /** §3.9 — a durable, server-authoritative record that a key's identity is dead (the permanent H-1 anchor). */
@@ -839,6 +889,10 @@ export class ClientDataDb extends Dexie {
   syncState!: Table<SyncStateRow, string>;
   trash!: Table<TrashRow, string>;
   deadKeys!: Table<DeadKeyRow, string>;
+  projects!: Table<ProjectRow, string>;
+  projectFiles!: Table<ProjectFileRow, string>;
+  projectContents!: Table<ProjectContentRow, string>;
+  projectRevisions!: Table<ProjectRevisionRow, [string, string]>;
 
   constructor() {
     super(DB_NAME);
@@ -1561,6 +1615,14 @@ export class ClientDataDb extends Dexie {
             if (mappedChat !== null) snap.resolvedMindspaceId = mappedChat;
           });
       });
+
+    // v37: local-only project filesystem. New tables only; no data migration.
+    this.version(37).stores({
+      projects: 'id, updatedAt',
+      projectFiles: 'id, &[projectId+path], [projectId+updatedAt], projectId',
+      projectContents: 'fileId',
+      projectRevisions: '[fileId+version], fileId, [fileId+createdAt]',
+    });
   }
 }
 

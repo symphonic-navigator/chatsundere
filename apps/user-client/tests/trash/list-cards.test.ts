@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
-import type { SyncCollection } from '@chatsundere/shared-types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { TrashRow } from '../../src/boot/client-data-db.js';
 import {
@@ -8,12 +7,13 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import type { LocalCollection } from '../../src/trash/trash-model.js';
 import { listTrashCards } from '../../src/trash/trash-repo.js';
 
 // ── Trash seeder ─────────────────────────────────────────────────────────────
 
 function makeTrashRow(
-  collection: SyncCollection,
+  collection: LocalCollection,
   key: string,
   row: unknown,
   parentRef: { field: string; id: string } | null,
@@ -195,5 +195,86 @@ describe('listTrashCards — grouped restore-unit cards (§3.3)', () => {
     expect(cards.length).toBe(2);
     expect(cards[0]?.cardKey).toBe('personas:new');
     expect(cards[1]?.cardKey).toBe('personas:old');
+  });
+});
+
+// ── Project rows and batch cards ─────────────────────────────────────────────
+
+const FOLDER_BATCH = { key: 'k1', title: 'notes/ — P', kind: 'projectFolder' } as const;
+
+/** A trashed project file + content under project `pr1`, optionally in a batch. */
+function projectFileRows(
+  fileId: string,
+  path: string,
+  deletedAt: number,
+  batch?: TrashRow['batch'],
+): TrashRow[] {
+  const file = makeTrashRow(
+    'projectFiles',
+    fileId,
+    { id: fileId, projectId: 'pr1', path },
+    { field: 'projectId', id: 'pr1' },
+    'projectFile',
+    'project:pr1',
+    deletedAt,
+  );
+  if (batch) file.batch = batch;
+  const content = makeTrashRow(
+    'projectContents',
+    fileId,
+    { fileId, text: 'x' },
+    { field: 'fileId', id: fileId },
+    'projectFile',
+    `projectFiles:${fileId}`,
+    deletedAt,
+  );
+  return [file, content];
+}
+
+describe('listTrashCards — project rows', () => {
+  it('round-trips a TrashRow carrying a batch', async () => {
+    const [file] = projectFileRows('f1', '/notes/a.md', 5, FOLDER_BATCH);
+    if (file === undefined) throw new Error('missing row');
+    await getClientDataDb().trash.put(file);
+    expect(await getClientDataDb().trash.get('projectFiles:f1')).toEqual(file);
+  });
+
+  it('renders batch members as one card from batch.title and batch.kind', async () => {
+    await getClientDataDb().trash.bulkPut([
+      ...projectFileRows('f1', '/notes/a.md', 5, FOLDER_BATCH),
+      ...projectFileRows('f2', '/notes/b.md', 7, FOLDER_BATCH),
+    ]);
+
+    const cards = await listTrashCards();
+
+    expect(cards).toEqual([
+      {
+        cardKey: 'batch:k1',
+        entityKind: 'projectFolder',
+        title: 'notes/ — P',
+        counts: { files: 2, items: 2 },
+        deletedAt: 7,
+      },
+    ]);
+  });
+
+  it('folds a batch into its project card once the project is trashed', async () => {
+    await getClientDataDb().trash.bulkPut([
+      ...projectFileRows('f1', '/notes/a.md', 5, FOLDER_BATCH),
+      ...projectFileRows('f2', '/live.md', 9),
+      makeTrashRow('projects', 'pr1', { id: 'pr1', name: 'P' }, null, 'project', 'project:pr1', 9),
+    ]);
+
+    const cards = await listTrashCards();
+
+    expect(cards).toEqual([
+      {
+        cardKey: 'projects:pr1',
+        entityKind: 'project',
+        title: 'P',
+        counts: { files: 2, earlierFiles: 1, items: 2 },
+        deletedAt: 9,
+      },
+    ]);
   });
 });

@@ -17,6 +17,7 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { upsertProviderRow } from '../../src/data/providers.js';
+import { sweepOrphanRevisions } from '../../src/projects/revisions.js';
 import { isDeadKey } from '../../src/sync/dead-keys.js';
 import { batchByBytes } from '../../src/sync/seal-batch.js';
 import { _resetTriggersForTests } from '../../src/sync/triggers.js';
@@ -48,6 +49,12 @@ vi.mock('../../src/boot/open-db.js', () => ({
 vi.mock('@chatsundere/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@chatsundere/crypto')>();
   return { ...actual, getLinkedAccount: vi.fn(async () => null) };
+});
+
+// The real sweep by default; a test can make it fail once.
+vi.mock('../../src/projects/revisions.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/projects/revisions.js')>();
+  return { ...actual, sweepOrphanRevisions: vi.fn(actual.sweepOrphanRevisions) };
 });
 
 /** Deterministic fake crypto — no key material, no real WebCrypto needed. */
@@ -584,6 +591,56 @@ describe('runSyncCycle (spec §6)', () => {
 
     expect(await db.trash.get('chats:old')).toBeUndefined();
     expect(await db.trash.get('chats:fresh')).toBeDefined();
+  });
+
+  it('sweeps the revisions of project files whose trash rows expired', async () => {
+    const db = getClientDataDb();
+    const now = Date.now();
+    const snapshot = (key: string, purgeAt: number) => ({
+      id: `projectFiles:${key}`,
+      collection: 'projectFiles' as const,
+      key,
+      row: {},
+      deletedAt: now - 1,
+      purgeAt,
+      entityKind: 'projectFile' as const,
+      rootGroup: `projectFiles:${key}`,
+      parentRef: null,
+    });
+    await db.trash.bulkPut([snapshot('expired', now - 1), snapshot('kept', now + 1_000_000)]);
+    const revision = (fileId: string) => ({
+      fileId,
+      version: 'v1',
+      text: 'x',
+      size: 1,
+      createdAt: 1,
+    });
+    await db.projectRevisions.bulkPut([revision('expired'), revision('kept')]);
+    _setPushTransport(async () => okResponse([], 0));
+    _setPullLoop(vi.fn(async () => undefined));
+
+    await runSyncCycle();
+
+    expect(await db.projectRevisions.where('fileId').equals('expired').count()).toBe(0);
+    expect(await db.projectRevisions.where('fileId').equals('kept').count()).toBe(1);
+  });
+
+  it('still drains the outbox when the revision sweep fails', async () => {
+    vi.mocked(sweepOrphanRevisions).mockRejectedValueOnce(new Error('sweep broke'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const db = getClientDataDb();
+    await db.personas.put({ id: 'p1' } as never);
+    await addOutbox('personas', 'p1', 'upsert');
+    const push = vi.fn(async () => okResponse([1], 1));
+    _setPushTransport(push);
+    _setPullLoop(vi.fn(async () => undefined));
+
+    await runSyncCycle();
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(await outbox()).toHaveLength(0);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('runs the pull loop when the drain reports a piggyback pull', async () => {

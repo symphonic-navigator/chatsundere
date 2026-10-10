@@ -1,7 +1,38 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 
 /** The card class a trashed row belongs to (§3.3). */
-export type TrashEntityKind = 'persona' | 'chat' | 'memory' | 'library' | 'document' | 'chatChild';
+export type TrashEntityKind =
+  | 'persona'
+  | 'chat'
+  | 'memory'
+  | 'library'
+  | 'document'
+  | 'chatChild'
+  | 'project'
+  | 'projectFile'
+  | 'projectFolder';
+
+/** Collections that exist only locally and never reach the sync engine. */
+export type ProjectCollection = 'projects' | 'projectFiles' | 'projectContents';
+
+/** Any collection that can appear in the local trash. */
+export type LocalCollection = SyncCollection | ProjectCollection;
+
+const PROJECT_COLLECTIONS: ReadonlySet<string> = new Set<ProjectCollection>([
+  'projects',
+  'projectFiles',
+  'projectContents',
+]);
+
+/** True for the local-only project collections. */
+export function isProjectCollection(c: string): c is ProjectCollection {
+  return PROJECT_COLLECTIONS.has(c);
+}
+
+/** True for collections the sync engine knows about (everything but project collections). */
+export function isSyncCollection(c: LocalCollection): c is SyncCollection {
+  return !isProjectCollection(c);
+}
 
 /** Grouping metadata a trashed row carries so the surface can render + restore it (§3.3). */
 export interface TrashMeta {
@@ -14,11 +45,13 @@ export interface TrashMeta {
  * Maps a `parentRef.field` to the parent's collection, so restore + grouping can
  * resolve a parentRef to the parent's trash key `${collection}:${id}` (§3.3/§3.5).
  */
-export const PARENT_FIELD_COLLECTION: Record<string, SyncCollection> = {
+export const PARENT_FIELD_COLLECTION: Record<string, LocalCollection> = {
   personaId: 'personas',
   chatId: 'chats',
   messageId: 'messages',
   libraryId: 'libraries',
+  projectId: 'projects',
+  fileId: 'projectFiles',
 };
 
 /**
@@ -61,7 +94,7 @@ function readStr(row: unknown, field: string): string | null {
  * grouping edge cases are accepted spec §7 deferrals).
  */
 export function deriveTrashMeta(
-  collection: SyncCollection,
+  collection: LocalCollection,
   key: string,
   row: unknown,
   resolvePersonaForChat?: (chatId: string) => string | null,
@@ -143,6 +176,28 @@ export function deriveTrashMeta(
         entityKind: 'chatChild',
         rootGroup: `persona:${key}`,
         parentRef: { field: 'personaId', id: key },
+      };
+
+    case 'projects':
+      return { entityKind: 'project', rootGroup: `project:${key}`, parentRef: null };
+
+    case 'projectFiles': {
+      const pid = readStr(row, 'projectId');
+      return pid
+        ? {
+            entityKind: 'projectFile',
+            rootGroup: `project:${pid}`,
+            parentRef: { field: 'projectId', id: pid },
+          }
+        : { entityKind: 'projectFile', rootGroup: `projectFiles:${key}`, parentRef: null };
+    }
+
+    case 'projectContents':
+      // Keyed by its file id, so `key` IS the file id; the content belongs to the file's card.
+      return {
+        entityKind: 'projectFile',
+        rootGroup: `projectFiles:${key}`,
+        parentRef: { field: 'fileId', id: key },
       };
 
     default:

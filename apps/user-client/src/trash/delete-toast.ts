@@ -2,7 +2,13 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 import { toastStore } from '../state/toast.store.js';
 import { type TrashUndoHandle, UndoDrainedError } from './delete-flow.js';
+import { describeRestoreError } from './restore-error.js';
 import { purgeCard, restoreCard } from './trash-repo.js';
+
+const DEFAULT_MESSAGE = 'Moved to Recently deleted · recoverable for 30 days';
+
+/** Shown when a permanent delete (toast or Recently deleted) fails. */
+export const PURGE_FAILED = 'Could not delete. Please try again.';
 
 /** After a soft-delete, surface the delete-time signal: a toast with Undo (fast,
  *  identity-preserving before drain; falls back to the new-identity restore once the
@@ -13,9 +19,18 @@ export function showDeleteToast(
   handle: TrashUndoHandle,
   invalidate: () => void,
 ): void {
-  const cardKey = `${collection}:${key}`;
+  showCardDeleteToast(`${collection}:${key}`, handle, invalidate);
+}
+
+/** {@link showDeleteToast} for any trash card; a failed Undo or permanent delete becomes a warning toast (naming the path on a collision). */
+export function showCardDeleteToast(
+  cardKey: string,
+  handle: TrashUndoHandle,
+  invalidate: () => void,
+  message: string = DEFAULT_MESSAGE,
+): void {
   toastStore.show({
-    message: 'Moved to Recently deleted · recoverable for 30 days',
+    message,
     tone: 'info',
     durationMs: 8000,
     action: {
@@ -23,10 +38,21 @@ export function showDeleteToast(
       onClick: () => {
         void (async () => {
           try {
-            await handle.restore();
+            try {
+              await handle.restore();
+            } catch (e) {
+              if (e instanceof UndoDrainedError) await restoreCard(cardKey);
+              else throw e;
+            }
           } catch (e) {
-            if (e instanceof UndoDrainedError) await restoreCard(cardKey);
-            else throw e;
+            const reason = describeRestoreError(e);
+            if (reason === null) console.warn('Undo of a delete failed', e);
+            toastStore.show({
+              message: reason ?? 'Could not restore. Please try again.',
+              tone: 'warn',
+              durationMs: 8000,
+            });
+            return;
           }
           invalidate();
           toastStore.show({ message: 'Restored.', tone: 'success', durationMs: 2500 });
@@ -37,7 +63,13 @@ export function showDeleteToast(
       label: 'Delete permanently',
       onClick: () => {
         void (async () => {
-          await purgeCard(cardKey);
+          try {
+            await purgeCard(cardKey);
+          } catch (e) {
+            console.warn('Permanent delete failed', e);
+            toastStore.show({ message: PURGE_FAILED, tone: 'warn', durationMs: 8000 });
+            return;
+          }
           invalidate();
           toastStore.show({ message: 'Deleted.', tone: 'success', durationMs: 2500 });
         })();

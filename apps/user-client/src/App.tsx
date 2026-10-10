@@ -36,9 +36,14 @@ import { PersonaKnowledge } from './routes/app/persona/knowledge.js';
 import { PersonaMindspace } from './routes/app/persona/mindspace.js';
 import { PersonaModelBehaviour } from './routes/app/persona/model-behaviour.js';
 import { PersonaRoleplay } from './routes/app/persona/roleplay.js';
+import { ProjectsGate } from './routes/app/projects/ProjectsGate.js';
+import { ProjectFilePage } from './routes/app/projects/file.js';
+import { ProjectsListPage } from './routes/app/projects/list.js';
+import { ProjectTreePage } from './routes/app/projects/tree.js';
 import { Settings as MySettings } from './routes/app/settings.js';
 import { SettingsExpertPage } from './routes/app/settings/expert.js';
 import { SettingsImagesPage } from './routes/app/settings/images.js';
+import { SettingsPreviewsPage } from './routes/app/settings/previews.js';
 import { SettingsProviderPage } from './routes/app/settings/provider.js';
 import { SettingsProvidersPage } from './routes/app/settings/providers.js';
 import { SettingsVoicePage } from './routes/app/settings/voice.js';
@@ -179,6 +184,12 @@ export function App() {
                   <Route path="/app/settings/voice" element={<SettingsVoicePage />} />
                   <Route path="/app/settings/images" element={<SettingsImagesPage />} />
                   <Route path="/app/settings/expert" element={<SettingsExpertPage />} />
+                  <Route path="/app/settings/previews" element={<SettingsPreviewsPage />} />
+                  <Route element={<ProjectsGate />}>
+                    <Route path="/app/projects" element={<ProjectsListPage />} />
+                    <Route path="/app/projects/:projectId" element={<ProjectTreePage />} />
+                    <Route path="/app/projects/:projectId/file" element={<ProjectFilePage />} />
+                  </Route>
                   <Route path="/app/account" element={<AccountPage />} />
                   <Route path="/app/account/biometric" element={<BiometricPage />} />
                   <Route path="/app/account/recovery" element={<RecoveryKeyPage />} />

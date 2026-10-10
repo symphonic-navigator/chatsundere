@@ -2,10 +2,17 @@
 import type { SyncCollection } from '@chatsundere/shared-types';
 import { uuidv7 } from 'uuidv7';
 import { type TrashRow, getClientDataDb } from '../boot/client-data-db.js';
+import { sweepOrphanRevisions } from '../projects/revisions.js';
+import { restoreProjectMembers } from '../projects/trash.js';
 import { blobFieldsOf, isBlobRef } from '../sync/blob-transform.js';
 import { enqueueBlobPut, enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
-import { PARENT_FIELD_COLLECTION, type TrashEntityKind } from './trash-model.js';
+import {
+  PARENT_FIELD_COLLECTION,
+  type TrashEntityKind,
+  isProjectCollection,
+  isSyncCollection,
+} from './trash-model.js';
 
 /** One grouped restore-unit card in the trashcan surface (§3.3). */
 export interface TrashCard {
@@ -14,8 +21,21 @@ export interface TrashCard {
   /** The card ROOT's kind — drives icon + title. */
   entityKind: TrashEntityKind;
   title: string;
-  /** Descendant tallies; `items` is always present, the rest only when > 0. */
-  counts: { chats?: number; memories?: number; documents?: number; items: number };
+  /**
+   * Descendant tallies; `items` is always present, the rest only when > 0.
+   * `files` counts project files including the root; `earlierFiles` those deleted
+   * before the root. Project content rows are never counted.
+   */
+  counts: {
+    chats?: number;
+    memories?: number;
+    documents?: number;
+    files?: number;
+    earlierFiles?: number;
+    items: number;
+  };
+  /** For a project file card: the name of the project it belongs to. */
+  projectName?: string;
   deletedAt: number;
 }
 
@@ -36,6 +56,10 @@ function titleOf(root: TrashRow): string {
       return readStr(root.row, 'title') ?? 'Untitled chat';
     case 'documents':
       return readStr(root.row, 'title') ?? root.key;
+    case 'projects':
+      return readStr(root.row, 'name') ?? root.key;
+    case 'projectFiles':
+      return readStr(root.row, 'path')?.slice(1) ?? root.key;
     case 'memoryJournal':
     case 'memoryBody': {
       const content = readStr(root.row, 'content');
@@ -68,25 +92,53 @@ export async function listTrashCards(): Promise<TrashCard[]> {
   const cards: TrashCard[] = [];
   for (const [cardKey, members] of groups) {
     const root = byId.get(cardKey);
-    if (root === undefined) continue; // defensive — cardKey is always a member id
-    const descendants = members.filter((m) => m.id !== cardKey);
+    // A batch card (one folder delete) has no root row; its members carry the batch.
+    const batch = root === undefined ? members.find((m) => m.batch)?.batch : undefined;
+    const head = root ? { kind: root.entityKind, title: titleOf(root) } : batch;
+    if (head === undefined) continue; // defensive — cardKey is a member id or a batch key
+    const deletedAt = root?.deletedAt ?? Math.max(...members.map((m) => m.deletedAt));
+    const descendants = members.filter(
+      (m) => m.id !== cardKey && m.collection !== 'projectContents',
+    );
     const counts: TrashCard['counts'] = { items: descendants.length };
     const chats = descendants.filter((d) => d.entityKind === 'chat').length;
     const memories = descendants.filter((d) => d.entityKind === 'memory').length;
     const documents = descendants.filter((d) => d.entityKind === 'document').length;
+    const files = members.filter((m) => m.collection === 'projectFiles');
+    // Only a root (project) card folds in earlier deletes; a batch is one delete.
+    const earlierFiles = root ? files.filter((f) => f.deletedAt < root.deletedAt).length : 0;
     if (chats > 0) counts.chats = chats;
     if (memories > 0) counts.memories = memories;
     if (documents > 0) counts.documents = documents;
-    cards.push({
+    // A project card always states its file count, even an empty "0 files".
+    if (files.length > 0 || root?.collection === 'projects') counts.files = files.length;
+    if (earlierFiles > 0) counts.earlierFiles = earlierFiles;
+    const card: TrashCard = {
       cardKey,
-      entityKind: root.entityKind,
-      title: titleOf(root),
+      entityKind: head.kind,
+      title: head.title,
       counts,
-      deletedAt: root.deletedAt,
-    });
+      deletedAt,
+    };
+    if (root?.collection === 'projectFiles') {
+      const name = await projectNameOf(readStr(root.row, 'projectId'), byId);
+      if (name !== null) card.projectName = name;
+    }
+    cards.push(card);
   }
 
   return cards.sort((a, b) => b.deletedAt - a.deletedAt);
+}
+
+/** The live project's name, else its trashed snapshot's name, else null. */
+async function projectNameOf(
+  projectId: string | null,
+  byId: ReadonlyMap<string, TrashRow>,
+): Promise<string | null> {
+  if (projectId === null) return null;
+  const live = await getClientDataDb().projects.get(projectId);
+  if (live) return live.name;
+  return readStr(byId.get(`projects:${projectId}`)?.row, 'name');
 }
 
 /**
@@ -94,6 +146,7 @@ export async function listTrashCards(): Promise<TrashCard[]> {
  * (`${collection}:${key}`). Computed by walking `parentRef` while the parent is
  * itself in trash — NOT the denormalised `rootGroup` hint (§3.2/§3.3). This is
  * what folds a chat into its persona card once the persona is also deleted.
+ * When that ancestor carries a `batch`, the card is `batch:<key>` instead.
  */
 export function cardKeyOf(row: TrashRow, byId: ReadonlyMap<string, TrashRow>): string {
   let cur = row;
@@ -106,7 +159,8 @@ export function cardKeyOf(row: TrashRow, byId: ReadonlyMap<string, TrashRow>): s
     if (parent === undefined) break; // parent not trashed → cur is the highest trashed ancestor
     cur = parent;
   }
-  return cur.id;
+  // A folder delete stamps its file rows with one batch so they form one card.
+  return cur.batch ? `batch:${cur.batch.key}` : cur.id;
 }
 
 /** Purge a whole trash card: delete its snapshot rows from db.trash only (§3.6).
@@ -116,6 +170,10 @@ export async function purgeCard(cardKey: string): Promise<void> {
   const all = await db.trash.toArray();
   const memberIds = rowsOfCard(cardKey, all).map((r) => r.id);
   if (memberIds.length > 0) await db.trash.bulkDelete(memberIds);
+  // The purge has committed; a failed sweep is retried by the next one.
+  await sweepOrphanRevisions().catch((e: unknown) => {
+    console.warn('Could not sweep orphaned project revisions after a purge', e);
+  });
 }
 
 /** §3.7 — retire this device's stale trash card for an entity restored elsewhere.
@@ -152,6 +210,10 @@ const RESTORE_SCOPE: readonly string[] = [
   'memoryJournal',
   'memoryBody',
   'compactionCheckpoints',
+  'projects',
+  'projectFiles',
+  'projectContents',
+  'projectRevisions',
   'trash',
   'syncOutbox',
 ];
@@ -176,16 +238,23 @@ function remapContentBlocks(blocks: unknown, newPillIdByOld: ReadonlyMap<string,
  * the existing live id; message pill references are rewritten; a `restoredFrom`
  * provenance marker (§3.7) rides inside each sealed payload; fresh upserts are
  * enqueued; and the trash snapshots — but never the dead-key markers (§3.9) — are
- * cleared.
+ * cleared. A card of project rows is handed to {@link restoreProjectMembers}
+ * in the same transaction and never touches the sync engine.
  */
 export async function restoreCard(cardKey: string): Promise<void> {
   const db = getClientDataDb();
   const linked = isLinkedForSync();
+  const now = Date.now();
 
-  await db.transaction('rw', [...RESTORE_SCOPE], async (tx) => {
+  // True when the card held sync collections, so a sync cycle may follow.
+  const synced = await db.transaction('rw', [...RESTORE_SCOPE], async (tx) => {
     const all = (await tx.table('trash').toArray()) as TrashRow[];
     const members = rowsOfCard(cardKey, all);
-    if (members.length === 0) return; // nothing to restore
+    if (members.length === 0) return false; // nothing to restore
+    if (members.every((m) => isProjectCollection(m.collection))) {
+      await restoreProjectMembers(tx, members, now);
+      return false;
+    }
 
     // Mint fresh ids, keyed by each member's trash id. personaAvatars are keyed by
     // their persona id (PK IS the personaId), so their new key reuses the restored
@@ -254,13 +323,14 @@ export async function restoreCard(cardKey: string): Promise<void> {
       clone.restoredFrom = m.key;
 
       await tx.table(m.collection).put(clone);
-      if (linked) {
-        enqueueSync(tx, m.collection as SyncCollection, newId, 'upsert');
+      if (linked && isSyncCollection(m.collection)) {
+        const syncCollection = m.collection;
+        enqueueSync(tx, syncCollection, newId, 'upsert');
 
         // Audit #6 — re-establish the blob channel for every revived ref. A
         // delete → drain → restore otherwise leaves the restored record pointing
         // at a destroyed server object forever (irreversible byte loss).
-        for (const spec of blobFieldsOf(m.collection as SyncCollection)) {
+        for (const spec of blobFieldsOf(syncCollection)) {
           const ref = clone[spec.refField];
           if (!isBlobRef(ref)) continue;
 
@@ -279,7 +349,7 @@ export async function restoreCard(cardKey: string): Promise<void> {
           // safe. Only when this device still holds the bytes to seal.
           const bytes = clone[spec.bytesField];
           if (bytes instanceof Blob && bytes.size > 0) {
-            enqueueBlobPut(tx, m.collection as SyncCollection, newId, ref.blobId);
+            enqueueBlobPut(tx, syncCollection, newId, ref.blobId);
           }
         }
       }
@@ -287,7 +357,8 @@ export async function restoreCard(cardKey: string): Promise<void> {
 
     // Retire the snapshots; leave the dead-key markers intact forever (§3.9).
     await tx.table('trash').bulkDelete(memberTrashIds);
+    return true;
   });
 
-  if (linked) scheduleClass1Sync();
+  if (linked && synced) scheduleClass1Sync();
 }

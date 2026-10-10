@@ -30,6 +30,7 @@ import { _resetTriggersForTests, _setTriggerCycle } from '../../src/sync/trigger
 import { getSyncState } from '../../src/sync/watermark.js';
 import { _resetWorkerForTests, _setPullTransport, runPullLoop } from '../../src/sync/worker.js';
 import { softDelete } from '../../src/trash/delete-flow.js';
+import { isSyncCollection } from '../../src/trash/trash-model.js';
 import { listTrashCards, purgeCard, restoreCard } from '../../src/trash/trash-repo.js';
 
 /**
@@ -420,7 +421,9 @@ describe('Scenario 5 — purge drops snapshots but the dead-key anchor still tri
     await softDelete('personas', 'p1');
     // The server ack marks each cascade key dead (production applyOk → markDead);
     // the drain is a no-op in this harness, so replay that durable write here.
-    for (const r of await db.trash.toArray()) await markDead(r.collection, r.key);
+    for (const r of await db.trash.toArray()) {
+      if (isSyncCollection(r.collection)) await markDead(r.collection, r.key);
+    }
 
     await purgeCard('personas:p1');
 
