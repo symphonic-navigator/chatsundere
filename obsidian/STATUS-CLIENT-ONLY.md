@@ -8,10 +8,13 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-10-09 — **PROJECT FILESYSTEM STAGE 1 BUILT (branch, not yet on
-`master`).** Chris's brief (Projects, Stage 1 of 3: "there be files in projects") went
+**Last updated:** 2026-10-10 — **v0.3.2 RELEASED (SILENT): PROJECT FILESYSTEM STAGE 1.**
+Chris's brief (Projects, Stage 1 of 3: "there be files in projects") went
 brainstorm → spec → Laura spec-pass → plan → subagent-driven build in one cloud session
-on branch `ccr-f8a4189c-8oq5jk` (18 + 4 commits, not squashed). Spec:
+(PR #32, branch `ccr-f8a4189c-8oq5jk`, 26 commits), squashed to `master` as `81caa78b`,
+tagged **`v0.3.2`** on that commit and pushed. **Silent release:** no announcement;
+the feature sits behind the *Projects (preview)* flag, and Chris invites two or three
+testers to try it on the live instance with him. Spec:
 [[../superpowers/specs/2026-10-09-project-filesystem-design]]; plan:
 [[../superpowers/plans/2026-10-09-project-filesystem]].
 - **Design deviations from the brief (agreed with Chris):** lives in the main Dexie DB
@@ -30,13 +33,14 @@ on branch `ccr-f8a4189c-8oq5jk` (18 + 4 commits, not squashed). Spec:
   hard defects; softs fixed, S3 deferred). Larissa not summoned (no auth/sync/proxy/
   crypto change; project rows are guarded out of the sync engine). Deferrals logged in
   [[insights/follow-ups-index]] and [[insights/ux-deferrals]].
-- Gate: user-client typecheck clean, Biome clean, build 9/9, user-client 3747/3747
-  (631 files), `test:browser` 1/1.
+- Gate (on the squashed tree): forced typecheck 14/14 (0 cached), build 9/9, Biome
+  clean, user-client 3747/3747 in three of four runs (one unidentified flake in the
+  first run). `test:browser` 1/1 in the cloud session; not re-run locally (Playwright
+  Chromium not installed).
 
 **Next:** **2026-10-10 — sync decision session with Chris** (whether/when project tables
-join `SYNC_COLLECTIONS`, Markdown conflict model, whether revisions sync). Chris runs the
-spec §10 device checks, then squashes the branch to `master` (one commit "Add project
-filesystem stage 1"). Stage 2 (agent tools) follows its own spec.
+join `SYNC_COLLECTIONS`, Markdown conflict model, whether revisions sync). Chris and his
+invited testers run the spec §10 device checks against the live instance. Stage 2 (agent tools) follows its own spec.
 
 ---
 
