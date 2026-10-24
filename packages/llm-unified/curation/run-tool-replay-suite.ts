@@ -59,6 +59,8 @@ const TARGETS: { provider: ProviderDefinition; keyFile: string; slug: string }[]
   { provider: mistral, keyFile: '.mistral-test-key', slug: 'mistral-large-4' },
   { provider: nanoGpt, keyFile: '.nano-test-key', slug: 'mistralai/mistral-large-4' },
   { provider: nanoGpt, keyFile: '.nano-test-key', slug: 'claude-haiku-4-5-20251001' },
+  { provider: nanoGpt, keyFile: '.nano-test-key', slug: 'anthropic/claude-sonnet-5.5' },
+  { provider: nanoGpt, keyFile: '.nano-test-key', slug: 'anthropic/claude-haiku-5.5' },
   { provider: chutes, keyFile: '.chutes-test-key', slug: 'zai-org/GLM-5.2-TEE' },
   { provider: novita, keyFile: '.novita-test-key', slug: 'moonshotai/kimi-k2.6' },
   { provider: ollamaCloud, keyFile: '.ollama-test-key', slug: 'glm-5.2:cloud' },

@@ -291,8 +291,9 @@ export const CANONICALS: CanonicalModel[] = [
   // --- Claude (Anthropic) — censored at source → not freedom-oriented;
   // surfaced with the CENSORED badge. Delivered via nano-gpt (the anonymising
   // router) per ADR 0032, except Sonnet 5 and Opus 5, which are also curated on
-  // OpenRouter (the user owns the upstream route there). Opus 5 is the family's
-  // one exception on freedom: `null`, not `false` — see its entry below. ---
+  // OpenRouter (the user owns the upstream route there). Opus 5 and the 5.5
+  // generation are the family's exceptions on freedom: `null`, not `false` —
+  // see their entries below. ---
   {
     id: 'claude-haiku-4.5',
     displayName: 'Claude Haiku 4.5',
@@ -391,6 +392,24 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: null,
     freedomNote:
       'Lex\'s SafetyMaxxed benchmark indicates unusually low censorship, but Anthropic can change alignment behaviour without notice. Kept deliberately unknown pending Chatsundere\'s own freedom eval (Chris, 2026-09-25), so the badge reads "Uncensored?".',
+  },
+  {
+    id: 'claude-sonnet-5.5',
+    displayName: 'Claude Sonnet 5.5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: null,
+    freedomNote:
+      'Freedom orientation NOT yet assessed — deliberately unknown. Added on community request (Chris, 2026-10-24) with no benchmark evidence either way, so Anthropic\'s family default is not assumed; pending Chatsundere\'s own freedom eval the badge reads "Uncensored?", not CENSORED.',
+  },
+  {
+    id: 'claude-haiku-5.5',
+    displayName: 'Claude Haiku 5.5',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: null,
+    freedomNote:
+      'Freedom orientation NOT yet assessed — deliberately unknown. Added on community request (Chris, 2026-10-24) with no benchmark evidence either way, so Anthropic\'s family default is not assumed; pending Chatsundere\'s own freedom eval the badge reads "Uncensored?", not CENSORED.',
   },
   {
     id: 'claude-fable-5',

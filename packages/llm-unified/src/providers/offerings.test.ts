@@ -73,6 +73,8 @@ describe('provider offerings', () => {
       'mistral:mistral-large-4',
       'nano-gpt:mistralai/mistral-large-4',
       'nano-gpt:claude-haiku-4-5-20251001',
+      'nano-gpt:anthropic/claude-sonnet-5.5',
+      'nano-gpt:anthropic/claude-haiku-5.5',
       'chutes:zai-org/GLM-5.2-TEE',
       'novita:moonshotai/kimi-k2.6',
       'ollama-cloud:glm-5.2:cloud',

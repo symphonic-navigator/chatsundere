@@ -41,11 +41,12 @@ describe('built-in providers', () => {
       // + 9 Claude (incl. Opus 5) + 2 Grok (4.3, 4.5, llm) + 6 ChatGPT (OpenAI,
       // censored) + 4 web + 3 tti (original) + 2 Grok voice (tts + stt) + 1 Inkling
       // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream)
-      // + 11 September 2026 additions + Z-Image Base + 8 October 2026 image models = 61
-      // (12 of the 61 are image offerings; Nano Banana 2.1 was withdrawn after
+      // + 11 September 2026 additions + Z-Image Base + 8 October 2026 image models
+      // + Claude Sonnet/Haiku 5.5 (October 2026, community request) = 63
+      // (12 of the 63 are image offerings; Nano Banana 2.1 was withdrawn after
       // nano-gpt 502'd it on 2026-10-08).
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(61);
+      expect(p.offerings).toHaveLength(63);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -91,7 +92,7 @@ describe('built-in providers', () => {
     expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
   });
 
-  it('registers eleven Claude offerings on nano-gpt with censored Fables and unknown Opus 5/5.5', () => {
+  it('registers thirteen Claude offerings on nano-gpt with censored Fables and unknown 5.5s and Opus 5', () => {
     const p = getProvider('nano-gpt');
     expect(p).toBeDefined();
     const claude = p?.offerings.filter((o) => o.canonicalRef?.startsWith('claude-')) ?? [];
@@ -99,6 +100,7 @@ describe('built-in providers', () => {
       'claude-fable-5',
       'claude-fable-5.1',
       'claude-haiku-4.5',
+      'claude-haiku-5.5',
       'claude-opus-4.5',
       'claude-opus-4.6',
       'claude-opus-4.7',
@@ -107,6 +109,7 @@ describe('built-in providers', () => {
       'claude-opus-5.5',
       'claude-sonnet-4.5',
       'claude-sonnet-4.6',
+      'claude-sonnet-5.5',
     ]);
     for (const o of claude) {
       expect(o.adapter.kind).toBe('catalogue');
@@ -119,10 +122,16 @@ describe('built-in providers', () => {
         canonical?.freedomOriented ?? null,
         o.freedomOrientedDeployment,
       );
-      // Opus 5 is the family's deliberate exception: freedom NOT yet assessed
-      // (SM-Bench clears the bar, the warmth/roleplay axes are unevaluated), so
-      // it resolves to 'unknown' → "Uncensored?" badge, not CENSORED.
-      if (o.canonicalRef === 'claude-opus-5' || o.canonicalRef === 'claude-opus-5.5') {
+      // Opus 5 and the 5.5 generation are the family's deliberate exceptions:
+      // freedom NOT yet assessed, so they resolve to 'unknown' → "Uncensored?"
+      // badge, not CENSORED.
+      const unknownFreedom = [
+        'claude-opus-5',
+        'claude-opus-5.5',
+        'claude-sonnet-5.5',
+        'claude-haiku-5.5',
+      ];
+      if (unknownFreedom.includes(o.canonicalRef ?? '')) {
         expect(canonical?.freedomOriented).toBeNull();
         expect(freedom).toBe('unknown');
       } else {
@@ -283,6 +292,29 @@ describe('built-in providers', () => {
       expect(wire?.model).toBe(slug);
       expect(wire?.body.model).toBe(slug);
       expect(wire?.body.reasoning).toEqual({ enabled: true, effort: 'high' });
+    }
+  });
+
+  it('steers Sonnet 5.5 by slug swap and Haiku 5.5 by body flag, both with a genuine off', () => {
+    const sonnet = getAdapter('nano-gpt:anthropic/claude-sonnet-5.5');
+    const on = sonnet?.buildRequest({ messages: [], reasoning: { enabled: true, effort: 'high' } });
+    expect(on?.model).toBe('anthropic/claude-sonnet-5.5:thinking');
+    expect(on?.body.reasoning_effort).toBe('high');
+    const off = sonnet?.buildRequest({ messages: [], reasoning: { enabled: false } });
+    expect(off?.model).toBe('anthropic/claude-sonnet-5.5');
+
+    const haiku = getAdapter('nano-gpt:anthropic/claude-haiku-5.5');
+    const haikuOff = haiku?.buildRequest({ messages: [], reasoning: { enabled: false } });
+    expect(haikuOff?.model).toBe('anthropic/claude-haiku-5.5');
+    expect(haikuOff?.body.reasoning).toEqual({ enabled: false });
+
+    const offerings = getProvider('nano-gpt')?.offerings ?? [];
+    for (const id of ['claude-sonnet-5.5', 'claude-haiku-5.5']) {
+      const o = offerings.find((x) => x.canonicalRef === id);
+      expect(o?.profile.reasoning).toMatchObject({ mode: 'steps', offStep: 'off' });
+      expect(o?.profile.toolCalls.orphanReplay).toBe(true);
+      expect(o?.confidence).toBe('partial');
+      expect(getCanonical(id)?.freedomOriented).toBeNull();
     }
   });
 

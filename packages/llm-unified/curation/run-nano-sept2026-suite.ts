@@ -53,6 +53,8 @@ const ALL = [
   'chatgpt-6-astra',
   'claude-fable-5.1',
   'claude-opus-5.5',
+  'claude-sonnet-5.5',
+  'claude-haiku-5.5',
 ];
 const selected = process.argv.slice(2);
 const VISION_PERM: ReasoningPermutation[] = [{ label: 'default', intent: { enabled: false } }];

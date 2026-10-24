@@ -162,6 +162,10 @@ interface ClaudeSpec {
   thinking: string;
   /** Hard context ceiling per Anthropic's published window. */
   max: number;
+  /** Probed reasoning control; defaults to the family's plain toggle. */
+  reasoning?: ReasoningControl;
+  /** Defaults to `verified`; adaptive thinking can keep a suite check red. */
+  confidence?: Offering['confidence'];
 }
 
 const CLAUDE_SPECS: ClaudeSpec[] = [
@@ -206,6 +210,28 @@ const CLAUDE_SPECS: ClaudeSpec[] = [
     base: 'anthropic/claude-opus-4.8',
     thinking: 'anthropic/claude-opus-4.8:thinking',
     max: 1_000_000,
+  },
+  // Sonnet 5.5 keeps the slug swap (the bare slug is a genuine off: the working
+  // lands in visible content, 0 reasoning chars) but, unlike the Claude 4
+  // family, `reasoning_effort` on the `:thinking` sibling DOES modulate — its
+  // adaptive thinking skipped the trace at low/medium on a word puzzle and
+  // reasoned at high (probed live 2026-10-24). So a steps control with a real
+  // off, mirroring Sonnet 5 on OpenRouter; the house three of the five-rung
+  // ladder nano-gpt advertises (low..max).
+  {
+    canonicalRef: 'claude-sonnet-5.5',
+    base: 'anthropic/claude-sonnet-5.5',
+    thinking: 'anthropic/claude-sonnet-5.5:thinking',
+    max: 1_000_000,
+    reasoning: {
+      mode: 'steps',
+      steps: ['off', 'low', 'medium', 'high'],
+      offStep: 'off',
+      defaultStep: 'medium',
+    },
+    // Adaptive thinking skips the trace on the suite's easy prompt at every
+    // step, so `reasoning-present` stays red by model choice (Fable 5.1's case).
+    confidence: 'partial',
   },
 ];
 
@@ -266,6 +292,12 @@ const FABLE51_SLUG = 'anthropic/claude-fable-5.1';
 const FABLE51_CANONICAL = 'claude-fable-5.1';
 const OPUS55_SLUG = 'anthropic/claude-opus-5.5';
 const OPUS55_CANONICAL = 'claude-opus-5.5';
+// Haiku 5.5 takes Fable 5's shape, genuine off included: no `:thinking` sibling
+// (`model_not_supported`), and `reasoning:{enabled:false}` truly stops thinking
+// — 5-7 completion tokens for a forced one-integer answer against 116 with
+// reasoning on (probed live 2026-10-24), unlike Opus 5.5's "off only hides".
+const HAIKU55_SLUG = 'anthropic/claude-haiku-5.5';
+const HAIKU55_CANONICAL = 'claude-haiku-5.5';
 
 /**
  * A Claude offering on nano-gpt. The model is censored by Anthropic
@@ -284,7 +316,7 @@ function claudeOffering(spec: ClaudeSpec): Offering {
     // generic slug-swap) by canonicalRef, not by a distinct id prefix.
     adapter: { kind: 'catalogue', adapterId: `nano-gpt:${spec.base}` },
     profile: {
-      reasoning: CLAUDE_TOGGLE,
+      reasoning: spec.reasoning ?? CLAUDE_TOGGLE,
       toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
       vision: true,
       // Signature replay deferred (spec §5.2) — no hard-CoT replay wired yet.
@@ -294,7 +326,7 @@ function claudeOffering(spec: ClaudeSpec): Offering {
     trust: { tee: false, zdr: false },
     freedomOrientedDeployment: true,
     source: 'curated',
-    confidence: 'verified',
+    confidence: spec.confidence ?? 'verified',
     serviceKind: 'llm',
   };
 }
@@ -888,7 +920,7 @@ const offerings: Offering[] = [
     ),
   ),
   ...CLAUDE_SPECS.map((s) =>
-    s.base === 'claude-haiku-4-5-20251001'
+    s.base === 'claude-haiku-4-5-20251001' || s.base === 'anthropic/claude-sonnet-5.5'
       ? withOrphanReplay(claudeOffering(s))
       : claudeOffering(s),
   ),
@@ -958,6 +990,26 @@ const offerings: Offering[] = [
     confidence: 'verified',
     serviceKind: 'llm',
   },
+  withOrphanReplay({
+    canonicalRef: HAIKU55_CANONICAL,
+    providerId: 'nano-gpt',
+    upstreamSlug: HAIKU55_SLUG,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${HAIKU55_SLUG}` },
+    profile: {
+      reasoning: FABLE_STEPS,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_000_000 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    // Adaptive thinking skips the trace at low/medium on the suite's easy
+    // prompt; a hard prompt reasons on every step through the same adapter.
+    confidence: 'partial',
+    serviceKind: 'llm',
+  }),
   {
     canonicalRef: FABLE51_CANONICAL,
     providerId: 'nano-gpt',
@@ -1165,7 +1217,8 @@ export function registerNanoGpt(): void {
       o.canonicalRef === FABLE_CANONICAL ||
       o.canonicalRef === FABLE51_CANONICAL ||
       o.canonicalRef === OPUS5_CANONICAL ||
-      o.canonicalRef === OPUS55_CANONICAL
+      o.canonicalRef === OPUS55_CANONICAL ||
+      o.canonicalRef === HAIKU55_CANONICAL
     ) {
       registerAdapter(
         o.adapter.adapterId,

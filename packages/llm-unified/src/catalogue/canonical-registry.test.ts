@@ -28,10 +28,10 @@ afterAll(() => {
 });
 
 describe('canonical-registry', () => {
-  test('lists forty-nine canonicals with unique ids', () => {
+  test('lists fifty-one canonicals with unique ids', () => {
     const ids = listCanonicals().map((c) => c.id);
-    expect(ids).toHaveLength(49);
-    expect(new Set(ids).size).toBe(49);
+    expect(ids).toHaveLength(51);
+    expect(new Set(ids).size).toBe(51);
     expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('mistral-large-4');
     expect(ids).toContain('claude-opus-5');
@@ -65,6 +65,8 @@ describe('canonical-registry', () => {
     expect(ids).toContain('chatgpt-6-astra');
     expect(ids).toContain('claude-fable-5.1');
     expect(ids).toContain('claude-opus-5.5');
+    expect(ids).toContain('claude-sonnet-5.5');
+    expect(ids).toContain('claude-haiku-5.5');
     expect(ids).toContain('glm-5.3');
     expect(ids).toContain('glm-5.3-flash');
     expect(ids).toContain('glm-5.3-flash-uncensored');
