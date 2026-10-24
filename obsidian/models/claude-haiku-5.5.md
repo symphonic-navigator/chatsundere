@@ -10,6 +10,16 @@
 - **replayReasoning:** false — signature replay deferred, as for the family (ADR 0032)
 - **🕊️ Freedom:** `null` — deliberately UNKNOWN (**Uncensored?** badge), Chris's call (2026-10-24): censorship state unclear, pending Chatsundere's own freedom eval. nano-gpt routes verbatim.
 
+## Field signal — community (2026-10-24)
+
+Haiku 5.5 drew an unusually high number of community requests ahead of its
+curation, and the recurring reason was its **pleasant tone** — warm, friendly
+conversation (Chris, 2026-10-24). This is anecdotal, not an evaluation: it moves
+nothing on the badge, which stays `null` until Chatsundere's own freedom eval.
+It does make Haiku 5.5 an early candidate for that eval, as persona warmth is one
+of the axes in [[../FREEDOM-CRITERIA]]. Chris intends to test it himself in due
+course.
+
 ## Offering — nano-gpt — body flag with `steps` and a genuine off
 
 - **slug:** `anthropic/claude-haiku-5.5` · adapter `claudeEffortAdapter` (Fable 5's shape)
