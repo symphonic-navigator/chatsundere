@@ -8,6 +8,28 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-10-24 — **v0.3.3 RELEASED: CLAUDE SONNET 5.5 + HAIKU 5.5 ON NANO-GPT.**
+A community request: both curated via `/curate` (mode 2) with live probes, the
+conversation-suite and the tool-replay suite, squashed to `master` as `1be1e554`,
+tagged **`v0.3.3`** on that commit and pushed. Records: [[models/claude-sonnet-5.5]],
+[[models/claude-haiku-5.5]].
+- **Freedom:** both `freedomOriented: null` → **Uncensored?** badge (Chris: censorship
+  state unclear), like Opus 5/5.5 — not the family's CENSORED default.
+- **Sonnet 5.5:** slug swap (`anthropic/claude-sonnet-5.5` = genuine off,
+  `:thinking` = on), but `reasoning_effort` genuinely steers its adaptive thinking →
+  steps off/low/medium/high (default medium), unlike the Claude 4 toggle.
+- **Haiku 5.5:** no thinking sibling → Fable 5's body-flag shape, genuine off
+  (5-7 completion tokens vs 116 on). $0.10 / $0.50 per M — the cheap Claude.
+- Both `orphanReplay: true`, tool-replay gate green, vision 4/4. Both stay
+  **`partial`**: adaptive thinking leaves the suite's easy-prompt `reasoning-present`
+  red at some steps (the Fable 5.1 case); a hard prompt reasons through the same adapter.
+- Gate on master: forced typecheck + build 19/19 (0 cached), llm-unified 508/508,
+  user-client 3747/3747, Biome clean. No Larissa/Laura (catalogue only).
+- **Spotted, not acted on:** nano-gpt now also lists `anthropic/claude-sonnet-5`
+  (+ `:thinking`); Sonnet 5 is curated on OpenRouter only. Add the nano-gpt route on request.
+
+---
+
 **Last updated:** 2026-10-10 — **v0.3.2 RELEASED (SILENT): PROJECT FILESYSTEM STAGE 1.**
 Chris's brief (Projects, Stage 1 of 3: "there be files in projects") went
 brainstorm → spec → Laura spec-pass → plan → subagent-driven build in one cloud session
