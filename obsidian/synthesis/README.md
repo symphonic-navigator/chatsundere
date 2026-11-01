@@ -14,6 +14,9 @@ graduates into a brief and then a spec under `superpowers/specs/`.
 
 ## Notes
 
+- [[2026-11-01-kumbu-port-and-memory-depth]] — porting Kumbu² with its tools plus
+  `sh` as the protocol layer (more or less settled, MCP first); possible way
+  forward for memory: a hybrid with extraction, in levels of depth.
 - [[2026-07-24-artefact-pilot-toolkit]] — **active pilot direction:** two-storey
   artefact toolkit (`list` / `modify` / `inspect` + subagent read/replace),
   chat-only scope, complete-brief / no-transcript standing principle.
