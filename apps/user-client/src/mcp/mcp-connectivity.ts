@@ -57,14 +57,19 @@ export async function resolveConnection(
  */
 export function liveProbe(
   auth: McpAuthResolved | null,
+  signal?: AbortSignal,
 ): (c: McpCandidate) => Promise<McpProbeResult> {
   return async (c) => {
     try {
-      const tools = await mcpToolsList({
-        url: c.url,
-        routing: c.routing,
-        auth,
-      });
+      const tools = await mcpToolsList(
+        {
+          url: c.url,
+          routing: c.routing,
+          auth,
+        },
+        undefined,
+        signal,
+      );
       return { ok: true, tools, error: null };
     } catch (e) {
       return { ok: false, tools: [], error: e instanceof Error ? e.message : String(e) };
@@ -78,9 +83,10 @@ export async function testMcpConnection(input: {
   hasProxy: boolean;
   allowDirect: boolean;
   auth: McpAuthResolved | null;
+  signal?: AbortSignal;
 }): Promise<McpConnectionResult> {
   return resolveConnection(
     buildCandidates(input.url, input.hasProxy, input.allowDirect),
-    liveProbe(input.auth),
+    liveProbe(input.auth, input.signal),
   );
 }

@@ -158,12 +158,17 @@ async function ensureSession(endpoint: McpEndpoint, signal?: AbortSignal): Promi
 export async function mcpToolsList(
   endpoint: McpEndpoint,
   timeoutMs = 10_000,
+  signal?: AbortSignal,
 ): Promise<McpToolDefinition[]> {
-  const sessionId = await ensureSession(endpoint, AbortSignal.timeout(timeoutMs));
+  const withTimeout = () => {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    return signal ? AbortSignal.any([signal, timeout]) : timeout;
+  };
+  const sessionId = await ensureSession(endpoint, withTimeout());
   const listId = nextId();
   const resp = await fetchWithProxyAuth(
     () => buildRequest(endpoint, { jsonrpc: '2.0', id: listId, method: 'tools/list' }, sessionId),
-    { proxied: endpoint.routing === 'proxy', signal: AbortSignal.timeout(timeoutMs) },
+    { proxied: endpoint.routing === 'proxy', signal: withTimeout() },
   );
   if (!resp.ok) {
     if (resp.status === 404) sessions.delete(endpoint.url);
@@ -183,10 +188,17 @@ export async function mcpToolsCall(
   timeoutMs = 30_000,
   signal?: AbortSignal,
 ): Promise<{ stdout: string; error: string | null }> {
+  // The caller's signal is the user's Stop button; it must not replace the
+  // timeout, or a hung server blocks the whole turn until someone presses Stop.
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const callSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+
   let sessionId: string | null;
   try {
-    sessionId = await ensureSession(endpoint, signal);
+    sessionId = await ensureSession(endpoint, callSignal);
   } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError')
+      return { stdout: '', error: `MCP server timed out after ${timeoutMs}ms` };
     return {
       stdout: '',
       error: `MCP initialise failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -207,7 +219,7 @@ export async function mcpToolsCall(
           },
           sid,
         ),
-      { proxied: endpoint.routing === 'proxy', signal: signal ?? AbortSignal.timeout(timeoutMs) },
+      { proxied: endpoint.routing === 'proxy', signal: callSignal },
     );
   };
 
@@ -217,7 +229,7 @@ export async function mcpToolsCall(
     if (resp.status === 404 && sessionId) {
       // Session expired — reinitialise and retry once.
       sessions.delete(endpoint.url);
-      sessionId = await ensureSession(endpoint, signal);
+      sessionId = await ensureSession(endpoint, callSignal);
       resp = await callOnce(sessionId);
     }
   } catch (e) {

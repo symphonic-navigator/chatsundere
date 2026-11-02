@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MasterKey } from '@chatsundere/crypto';
 import type { McpServerRow } from '../boot/client-data-db.js';
-import { openMcpKey } from '../data/mcp-servers.js';
+import { openMcpKey, persistMcpRoute } from '../data/mcp-servers.js';
+import { testMcpConnection } from './mcp-connectivity.js';
 import type { McpActiveServer, McpToolContext } from './mcp-tools.js';
-import { resolveActiveServers } from './resolve-active.js';
+import { resolveActiveServers, usableRoute } from './resolve-active.js';
 
 /** Inputs for assembling the per-send MCP context. */
 export interface BuildMcpContextArgs {
@@ -20,28 +21,21 @@ export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | nul
   if (active.length === 0) return null;
 
   const byId = new Map(active.map((s) => [s.id, s]));
-  // Defensive — resolveActiveServers already excludes untested servers; skip rather
-  // than crash the send if that invariant ever drifts.
-  const servers: McpActiveServer[] = active.flatMap((s) => {
-    if (s.routing === null || s.resolvedEndpoint === null) return [];
-    return [
-      {
-        id: s.id,
-        name: s.name,
-        prefix: s.prefix,
-        routing: s.routing,
-        resolvedEndpoint: s.resolvedEndpoint,
-        auth: s.auth
-          ? s.auth.scheme === 'bearer'
-            ? { scheme: 'bearer' }
-            : { scheme: 'header', headerName: s.auth.headerName }
-          : null,
-        autoRun: s.autoRun,
-        tools: s.tools,
-        hiddenTools: s.hiddenTools,
-      },
-    ];
-  });
+  const servers: McpActiveServer[] = active.map((s) => ({
+    id: s.id,
+    name: s.name,
+    prefix: s.prefix,
+    routing: usableRoute(s)?.routing ?? null,
+    resolvedEndpoint: usableRoute(s)?.resolvedEndpoint ?? null,
+    auth: s.auth
+      ? s.auth.scheme === 'bearer'
+        ? { scheme: 'bearer' }
+        : { scheme: 'header', headerName: s.auth.headerName }
+      : null,
+    autoRun: s.autoRun,
+    tools: s.tools,
+    hiddenTools: s.hiddenTools,
+  }));
 
   return {
     servers,
@@ -51,5 +45,22 @@ export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | nul
       return openMcpKey(row, args.mk);
     },
     requestApproval: args.requestApproval,
+    resolveRoute: async (serverId, auth, signal) => {
+      const row = byId.get(serverId);
+      if (!row) return { ok: false, error: 'This server is no longer configured.' };
+      const result = await testMcpConnection({
+        url: row.url,
+        hasProxy: args.hasProxy,
+        allowDirect: row.allowDirect,
+        auth,
+        signal,
+      });
+      if (!result.ok || !result.routing || !result.resolvedEndpoint) {
+        return { ok: false, error: result.error ?? 'No route to the server.' };
+      }
+      const route = { routing: result.routing, resolvedEndpoint: result.resolvedEndpoint };
+      await persistMcpRoute(serverId, route, { url: row.url, allowDirect: row.allowDirect });
+      return { ok: true, ...route };
+    },
   };
 }

@@ -121,10 +121,11 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     return null;
   }
 
+  // `tools` is synced and proves to other devices that this server connects, so
+  // only a new URL drops it; a changed key or a failed test clears just this device's route.
   function clearTestResult() {
     setRouting(null);
     setResolvedEndpoint(null);
-    setTools([]);
     setLastTestedAt(null);
     setLastError(null);
     setTest({ kind: 'idle' });
@@ -159,10 +160,17 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
 
       setRouting(result.routing);
       setResolvedEndpoint(result.resolvedEndpoint);
-      setTools(result.tools);
+      if (result.ok) setTools(result.tools);
       setLastError(result.error);
       setLastTestedAt(Date.now());
       setTest({ kind: 'done' });
+      // A new result lives only in this form until Save, so leaving must not lose it
+      // silently; re-checking a healthy server has nothing to save and must not nag.
+      const unchanged =
+        result.routing === (existing?.routing ?? null) &&
+        result.resolvedEndpoint === (existing?.resolvedEndpoint ?? null) &&
+        JSON.stringify(result.tools) === JSON.stringify(existing?.tools ?? []);
+      if (result.ok && !unchanged) setDirty(true);
     } catch (e) {
       setLastError(e instanceof Error ? e.message : String(e));
       setTest({ kind: 'done' });
@@ -175,7 +183,6 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     setRoutingChangedHint(routing !== null || resolvedEndpoint !== null);
     setRouting(null);
     setResolvedEndpoint(null);
-    setTools([]);
     setLastError(null);
     setLastTestedAt(null);
     setTest({ kind: 'idle' });
@@ -295,6 +302,7 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
               setUrl(e.target.value);
               setDirty(true);
               clearTestResult();
+              setTools([]);
             }}
             autoComplete="off"
             className={inputClass}

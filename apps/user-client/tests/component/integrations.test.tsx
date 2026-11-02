@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { vi } from 'vitest';
 
-const { useMcpServersMock } = vi.hoisted(() => ({
+const { useMcpServersMock, gate } = vi.hoisted(() => ({
   useMcpServersMock: vi.fn(() => ({ data: [] as unknown[] })),
+  gate: { enabled: false },
 }));
 
 vi.mock('../../src/data/mcp-servers.js', () => ({ useMcpServers: () => useMcpServersMock() }));
 vi.mock('../../src/data/settings.js', () => ({
   useSettings: () => ({ data: { corsProxy: null } }),
+}));
+vi.mock('../../src/lib/server-gate.js', () => ({
+  useServerGate: () => ({ enabled: gate.enabled, reason: null, tooltip: null }),
 }));
 vi.mock('../../src/content/help/use-help.js', () => ({
   useHelp: () => ({ onHelp: vi.fn(), helpOverlay: null }),
@@ -15,7 +19,7 @@ vi.mock('../../src/content/help/use-help.js', () => ({
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { McpServerRow } from '../../src/boot/client-data-db.js';
 import { Integrations } from '../../src/routes/app/integrations.js';
 
@@ -30,7 +34,7 @@ const ROW: McpServerRow = {
   allowDirect: false,
   enabled: true,
   routing: 'proxy',
-  resolvedEndpoint: 'https://proxy/x',
+  resolvedEndpoint: 'https://wiki.example/mcp',
   tools: [],
   hiddenTools: [],
   lastTestedAt: 1,
@@ -55,6 +59,58 @@ describe('Integrations list', () => {
   beforeEach(() => {
     cleanup();
     useMcpServersMock.mockReturnValue({ data: [] });
+  });
+
+  describe('a server synced from another device', () => {
+    beforeEach(() => {
+      gate.enabled = true;
+    });
+    afterEach(() => {
+      gate.enabled = false;
+    });
+
+    const pulled = (over: Partial<McpServerRow> = {}) => {
+      const { routing: _r, resolvedEndpoint: _e, ...rest } = ROW;
+      return {
+        ...rest,
+        allowDirect: false,
+        tools: [{ name: 'go', description: '', inputSchema: {} }],
+        ...over,
+      };
+    };
+
+    it('reads as connecting on first use, never as connected', () => {
+      useMcpServersMock.mockReturnValue({ data: [pulled()] });
+      wrap();
+      expect(screen.queryByText(/Connected/)).toBeNull();
+      expect(screen.getByText(/Connects on first use/)).toBeTruthy();
+    });
+
+    it('reads as not tested when it is a Local network server, which never probes itself', () => {
+      useMcpServersMock.mockReturnValue({ data: [pulled({ allowDirect: true })] });
+      wrap();
+      expect(screen.getByText(/Not tested/)).toBeTruthy();
+    });
+
+    it('shows the saved error rather than hiding a failed test', () => {
+      useMcpServersMock.mockReturnValue({ data: [pulled({ lastError: 'HTTP 503' })] });
+      wrap();
+      expect(screen.getByText(/HTTP 503/)).toBeTruthy();
+    });
+
+    it('does not read as connected when its stored route points elsewhere', () => {
+      useMcpServersMock.mockReturnValue({
+        data: [pulled({ routing: 'proxy', resolvedEndpoint: 'https://old.example/mcp' })],
+      });
+      wrap();
+      expect(screen.queryByText(/Connected/)).toBeNull();
+    });
+
+    it('still reads as not tested when no device has ever connected', () => {
+      useMcpServersMock.mockReturnValue({ data: [pulled({ tools: [] })] });
+      wrap();
+      expect(screen.getByText(/Not tested/)).toBeTruthy();
+    });
   });
 
   it('shows the empty state and an add affordance when there are no servers', () => {

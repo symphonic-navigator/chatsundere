@@ -953,3 +953,16 @@ Residuals found by the fix-wave re-review, also deferred:
   - **L-6 (Low, integrity) — a summariser refusal can become the summary** for a non-adult persona whose tool fetched explicit content; the refusal then replaces the more honest head-cut in history.
     - *Follow-up:* detect obvious refusals (or a moderation flag from the adapter) and skip the write; tracked in [[follow-ups-index]], trigger: first field report.
   - **I-2 (Info)** — `console.warn` of provider error objects in `tool-summary.ts` may echo input excerpts on device; folded into the existing L-7 logging pass.
+
+## 2026-11-02 — MCP connectors on synced devices and the 25-round tool cap
+
+- **Affected paths:** `apps/user-client/src/mcp/**`, `apps/user-client/src/lib/tool-loop.ts`, `apps/user-client/src/components/mcp/McpApprovalPrompt.tsx`
+- **Finding (Larissa's summary):** Fixing the synced-row crash makes a device resolve its own route on first tool call. **H1 (a remembered route survived a synced URL change, sending the new key to the old origin) and the automatic-probe halves of M1 and L1 were fixed before squash**: routes are dropped when `url` or `allowDirect` change, writes compare inside a transaction, `usableRoute` rejects any route off the row's origin, and only proxy-only servers probe by themselves, so Local network servers still need a manual test per device. The items below remain.
+  - **M1 remainder (medium):** `autoRun` syncs, so a device that never opened Integrations can decrypt the key and contact a proxy-routed server on a tool call without a prompt, and the approval prompt names no origin.
+  - **M2 (medium):** 25 rounds add no new capability over 5 (read-then-exfiltrate needs two), but they amplify the accepted prompt-injection M1 of 2026-06-08: longer steered chains, chunked exfiltration, approval fatigue because a denial does not end the loop, and no cap on calls per round or result size.
+  - **L2 (low, pre-existing):** direct requests use `redirect: 'follow'`, so a cross-origin 307/308 resends the body and any custom-header key. Only reachable if the origin itself redirects.
+  - **L-http (low, pre-existing):** the proxy accepts `http` targets, so a key for a plain-HTTP public server crosses the internet in clear.
+  - **L4 remainder (low):** the rev guard only protects rows already known locally, so a malicious sync server could give a fresh device an older sealed row version, which may now go live on first tool call. Whether the seal binds to the rev is unverified.
+- **Severity:** medium and low as listed; no critical or high remains.
+- **Rationale for deferral:** All need a compromised or hostile party that the existing threat model already accepts for MCP (the user's own configured server, or tool output steering the model). The key still only reaches the user-entered origin, and Stop works throughout. The fixes are product decisions on approval UX, not hygiene, and should not ride on a same-evening bug fix.
+- **Follow-up commitment:** Decide all of them in the agentic-loop spec (see [[follow-ups-index]], "Agentic tool loop"), v0.4.0 at the latest: first-use approval with the origin shown, origin in every prompt, ending tool use after repeated denials, MCP result cap, `redirect: 'error'` for direct requests, rejecting `http` targets when auth is present, and checking the rollback question.

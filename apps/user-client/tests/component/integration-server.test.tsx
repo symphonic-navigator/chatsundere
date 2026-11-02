@@ -115,6 +115,87 @@ describe('IntegrationServerPage', () => {
     expect(screen.getByText(/unsaved/i)).toBeInTheDocument();
   });
 
+  it('marks the form unsaved after a successful test, whose result only Save keeps', async () => {
+    useMcpServersMock.mockReturnValue({ data: [ROW] });
+    testConnMock.mockResolvedValue({
+      ok: true,
+      routing: 'proxy',
+      resolvedEndpoint: 'https://wiki.example/mcp',
+      tools: [],
+      error: null,
+    });
+    wrapAt('/app/integrations/s1');
+    expect(screen.queryByText(/Unsaved/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+    expect(await screen.findByText(/Unsaved/)).toBeTruthy();
+  });
+
+  describe('synced tools survive anything short of a good test or a new URL', () => {
+    const TOOLS = [{ name: 'go', description: '', inputSchema: {} }];
+    const WITH_TOOLS: McpServerRow = {
+      ...ROW,
+      name: 'Wiki tools',
+      routing: 'proxy',
+      resolvedEndpoint: 'https://wiki.example/mcp',
+      tools: TOOLS,
+    };
+
+    async function saveAndGetRow(): Promise<McpServerRow> {
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      await screen.findByText('integrations list');
+      return upsertMock.mock.calls.at(-1)?.[0] as McpServerRow;
+    }
+
+    it('keeps them when a test fails and the user saves', async () => {
+      useMcpServersMock.mockReturnValue({ data: [WITH_TOOLS] });
+      testConnMock.mockResolvedValue({
+        ok: false,
+        routing: null,
+        resolvedEndpoint: null,
+        tools: [],
+        error: 'HTTP 503',
+      });
+      wrapAt('/app/integrations/s1');
+      fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+      await screen.findByText(/HTTP 503/);
+      expect((await saveAndGetRow()).tools).toEqual(TOOLS);
+    });
+
+    it('keeps them when Local network is toggled and the user saves', async () => {
+      useMcpServersMock.mockReturnValue({ data: [WITH_TOOLS] });
+      wrapAt('/app/integrations/s1');
+      fireEvent.click(screen.getByRole('checkbox', { name: /Local network/ }));
+      const row = await saveAndGetRow();
+      expect(row.tools).toEqual(TOOLS);
+      expect(row.routing).toBeNull();
+    });
+
+    it('drops them when the URL changes', async () => {
+      useMcpServersMock.mockReturnValue({ data: [WITH_TOOLS] });
+      wrapAt('/app/integrations/s1');
+      fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://new.example' } });
+      expect((await saveAndGetRow()).tools).toEqual([]);
+    });
+  });
+
+  it('does not nag when re-testing a healthy server changes nothing', async () => {
+    const tools = [{ name: 'go', description: '', inputSchema: {} }];
+    useMcpServersMock.mockReturnValue({
+      data: [{ ...ROW, routing: 'proxy', resolvedEndpoint: 'https://wiki.example/mcp', tools }],
+    });
+    testConnMock.mockResolvedValue({
+      ok: true,
+      routing: 'proxy',
+      resolvedEndpoint: 'https://wiki.example/mcp',
+      tools,
+      error: null,
+    });
+    wrapAt('/app/integrations/s1');
+    fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+    await screen.findByText(/Connected/);
+    expect(screen.queryByText(/Unsaved/)).toBeNull();
+  });
+
   it('opens a remove confirm and deletes on confirm', () => {
     useMcpServersMock.mockReturnValue({ data: [ROW] });
     wrapAt('/app/integrations/s1');

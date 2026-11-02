@@ -8,7 +8,15 @@ query a database, control your homelab) a persona can call mid-conversation.
 
 Tap **Add MCP server**, give it a name and its URL, and — if it needs one — an
 authentication key. Tap **Test connection** to check it answers and to see the
-tools it offers. When you are happy, tap **Save**.
+tools it offers. The result is only kept once you tap **Save**.
+
+## On your other devices
+
+A server you added on another device appears here too, marked **Connects on first
+use**: this device finds its own route the first time a persona calls one of its
+tools, and if that fails, the tool call says why. A **Local network** server depends
+on where the device is, so tap **Test connection** and **Save** on each device that
+should use it.
 
 ## How a call reaches the server
 

@@ -63,3 +63,13 @@ describe('buildMcpToolNames', () => {
     expect(new Set(wireNames).size).toBe(wireNames.length); // all unique
   });
 });
+
+describe('buildMcpToolNames and built-in tools', () => {
+  it('never lets an MCP tool take the wire name of a built-in', () => {
+    const { tools } = buildMcpToolNames([
+      { id: 's', prefix: 'web', tools: [{ name: 'fetch' }, { name: 'other' }] },
+    ]);
+    expect(tools.map((t) => t.wireName)).toEqual(['web_fetch_2', 'web_other']);
+    expect(tools[0]?.originalName).toBe('fetch');
+  });
+});

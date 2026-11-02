@@ -2,7 +2,9 @@
 import type { MasterKey } from '@chatsundere/crypto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type McpServerRow, getClientDataDb } from '../boot/client-data-db.js';
+import { queryClient } from '../lib/queryClient.js';
 import { openSecret, sealSecret } from '../lib/secrets.js';
+import type { McpRouting } from '../mcp/types.js';
 import { mutateSynced } from '../sync/enqueue.js';
 import { QK } from './queryKeys.js';
 
@@ -35,6 +37,26 @@ export function useUpsertMcpServer() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.mcpServers }),
   });
+}
+
+/**
+ * Remember the route this device resolved. `routing` and `resolvedEndpoint` are
+ * device-local (never sealed), so this is a plain local write with no outbox entry.
+ * A probe takes seconds and the row may be edited or pulled meanwhile, so the write
+ * only lands if the row still has the URL and intent the probe was made for.
+ */
+export async function persistMcpRoute(
+  id: string,
+  route: { routing: McpRouting; resolvedEndpoint: string },
+  probedFor: { url: string; allowDirect: boolean },
+): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.mcpServers, async () => {
+    const row = await db.mcpServers.get(id);
+    if (row?.url !== probedFor.url || row.allowDirect !== probedFor.allowDirect) return;
+    await db.mcpServers.update(id, { ...route, lastTestedAt: Date.now(), lastError: null });
+  });
+  void queryClient.invalidateQueries({ queryKey: QK.mcpServers });
 }
 
 /** Delete an MCP server by id. */

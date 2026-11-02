@@ -6,17 +6,20 @@ import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { useServerGate } from '../../lib/server-gate.js';
+import { canResolveOnFirstUse, usableRoute } from '../../mcp/resolve-active.js';
 
 /** Row status string used in the integrations list. */
 function statusOf(row: McpServerRow, hasProxy: boolean): string {
   if (!row.enabled) return '✗ Disabled';
-  if (row.routing === null) {
+  const route = usableRoute(row);
+  if (!route) {
     if (!row.allowDirect && !hasProxy) return '✗ Needs proxy or Local network';
-    return '✗ Not tested';
+    if (row.lastError) return `✗ ${row.lastError}`;
+    return canResolveOnFirstUse(row, hasProxy) ? '○ Connects on first use' : '✗ Not tested';
   }
-  if (row.routing === 'proxy' && !hasProxy) return '✗ Needs proxy';
+  if (route.routing === 'proxy' && !hasProxy) return '✗ Needs proxy';
   if (row.lastError) return `✗ ${row.lastError}`;
-  return row.routing === 'proxy' ? '● Connected (via proxy)' : '● Connected (direct)';
+  return route.routing === 'proxy' ? '● Connected (via proxy)' : '● Connected (direct)';
 }
 
 /**

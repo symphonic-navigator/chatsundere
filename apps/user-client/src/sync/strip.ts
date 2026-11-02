@@ -105,6 +105,26 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
 };
 
 /**
+ * What a deny-listed field means on a device that has never set it. Without
+ * this a pulled row simply lacks the key, and `undefined` slips past every
+ * `=== null` check downstream. Only `mcpServers` needs it: its probe fields have
+ * a meaningful "not probed here" value, whereas `documents` re-defaults in
+ * `apply.ts` and `chats` treats absence as absence.
+ */
+const FRESH_DEVICE_DEFAULTS: Partial<Record<SyncCollection, Record<string, unknown>>> = {
+  mcpServers: { routing: null, resolvedEndpoint: null, lastTestedAt: null, lastError: null },
+};
+
+/**
+ * Synced fields a device-local value was derived from. When a pulled row changes
+ * one of these, the local value describes a server the user has moved away from:
+ * keeping it would send the new key to the old origin (Larissa H1, 2026-11-02).
+ */
+const LOCAL_VALUES_DERIVED_FROM: Partial<Record<SyncCollection, readonly string[]>> = {
+  mcpServers: ['url', 'allowDirect'],
+};
+
+/**
  * Whether a partial patch touches any field that is actually SYNCED for the
  * collection (spec §5/§10). Generic edit hooks (`useUpdateSettings`,
  * `useUpdateChat`) mix synced fields (e.g. `settings.displayName`,
@@ -174,9 +194,15 @@ export function restoreLocalFields(
   }
 
   const denied = DENY_LISTS[collection];
-  if (!denied || !isRecord(local)) return { ...pulled };
+  const defaults = FRESH_DEVICE_DEFAULTS[collection];
+  // Defaults win over the pulled row: these fields are device-local, whatever a
+  // sealed row may carry from an older client.
+  const restored: Record<string, unknown> = { ...pulled, ...defaults };
+  if (!denied || !isRecord(local)) return restored;
 
-  const restored: Record<string, unknown> = { ...pulled };
+  const derivedFrom = LOCAL_VALUES_DERIVED_FROM[collection];
+  if (derivedFrom?.some((field) => local[field] !== pulled[field])) return restored;
+
   for (const field of denied) {
     if (field in local) restored[field] = local[field];
   }

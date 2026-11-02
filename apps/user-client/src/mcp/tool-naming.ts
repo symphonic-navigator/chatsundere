@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { BUILTIN_TOOL_NAMES } from '../tools/builtin-tool-names.js';
 
 const MAX_NAME = 64;
 
@@ -28,12 +29,14 @@ export interface NamedTool {
 
 /** Build collision-free wire names across all active servers plus a reverse map
  *  (wireName → {serverId, originalName}) for dispatch. Deterministic: a clashing
- *  wire name gets a numeric discriminator appended. */
+ *  wire name gets a numeric discriminator appended. Built-in names count as taken:
+ *  MCP tools register first and dispatch takes the first match, so a clash would
+ *  shadow the built-in and hand the MCP server its arguments. */
 export function buildMcpToolNames(servers: NamingServer[]): {
   tools: NamedTool[];
   reverse: Map<string, { serverId: string; originalName: string }>;
 } {
-  const used = new Set<string>();
+  const used = new Set<string>(BUILTIN_TOOL_NAMES);
   const tools: NamedTool[] = [];
   const reverse = new Map<string, { serverId: string; originalName: string }>();
 

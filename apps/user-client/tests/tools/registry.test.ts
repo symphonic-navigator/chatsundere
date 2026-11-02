@@ -135,6 +135,7 @@ describe('tool registry composition', () => {
         },
       ],
       getServerKey: async () => null,
+      resolveRoute: async () => ({ ok: false, error: 'not expected' }),
       requestApproval: async () => true,
     };
     const tools = resolveActiveTools(dormantCtx, null, null, mcp);

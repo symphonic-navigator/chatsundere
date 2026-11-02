@@ -92,6 +92,61 @@ describe('strip — deny-list collections (§10)', () => {
     expect('lastError' in sealed).toBe(false);
   });
 
+  it('gives a pulled mcpServers row with no local row explicit null probe fields', () => {
+    const restored = restoreLocalFields('mcpServers', { id: 'srv-1', name: 'tools' }, undefined);
+    expect(restored).toEqual({
+      id: 'srv-1',
+      name: 'tools',
+      routing: null,
+      resolvedEndpoint: null,
+      lastTestedAt: null,
+      lastError: null,
+    });
+  });
+
+  it("keeps this device's probe fields when a pulled mcpServers row lands on a local one", () => {
+    const restored = restoreLocalFields(
+      'mcpServers',
+      { id: 'srv-1' },
+      { id: 'srv-1', routing: 'proxy', resolvedEndpoint: 'https://s/mcp', lastTestedAt: 5 },
+    ) as Record<string, unknown>;
+    expect(restored.routing).toBe('proxy');
+    expect(restored.resolvedEndpoint).toBe('https://s/mcp');
+    expect(restored.lastError).toBeNull();
+  });
+
+  it.each([
+    ['url', { url: 'https://new/mcp', allowDirect: false }],
+    ['allowDirect', { url: 'https://old/mcp', allowDirect: true }],
+  ])('drops the local route when the pulled row changes %s', (_field, changed) => {
+    const local = {
+      id: 's',
+      url: 'https://old/mcp',
+      allowDirect: false,
+      routing: 'proxy',
+      resolvedEndpoint: 'https://old/mcp',
+      lastTestedAt: 5,
+      lastError: null,
+    };
+    const restored = restoreLocalFields('mcpServers', { id: 's', ...changed }, local) as Record<
+      string,
+      unknown
+    >;
+    expect(restored.routing).toBeNull();
+    expect(restored.resolvedEndpoint).toBeNull();
+    expect(restored.lastTestedAt).toBeNull();
+  });
+
+  it('never takes device-local mcpServers fields from the pulled row', () => {
+    const restored = restoreLocalFields(
+      'mcpServers',
+      { id: 's', routing: 'direct', resolvedEndpoint: 'https://evil/mcp' },
+      undefined,
+    ) as Record<string, unknown>;
+    expect(restored.routing).toBeNull();
+    expect(restored.resolvedEndpoint).toBeNull();
+  });
+
   it('strips chats transient + derived fields', () => {
     const chat = {
       id: 'c1',
