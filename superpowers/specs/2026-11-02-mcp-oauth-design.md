@@ -84,16 +84,16 @@ One row per OAuth server, its `id` being the server's id. Add the name to `SYNC_
 | `scope` | Scope granted |
 | `tokenRoute` | `direct` or `proxy` (§7) |
 | `tokens` | `EncryptedBlob`: sealed `{ accessToken, refreshToken \| null, accessExpiresAt \| null }` |
-| `claim` | `{ deviceId, until } \| null`: the refresh claim (§5) |
+| `claim` | `{ deviceId, at } \| null`: the refresh claim (§5) |
 | `createdAt`, `updatedAt` | As other rows |
 
 Tokens are sealed with `sealSecret` under a stable slot, in the same way as `sealMcpKey` (`apps/user-client/src/data/mcp-servers.ts:81`), and the whole row is sealed by the sync engine on top.
 
 Device-local fields, deny-listed in `apps/user-client/src/sync/strip.ts`:
 
-- `pendingTokens`: the write-ahead copy of a fresh token pair not yet pushed.
+- `pendingTokens`, `pendingBaseRev`, `pendingNewFamily`: the write-ahead copy of a fresh token pair not yet published, and what its publish needs.
 
-This collection takes **no** LWW resolution: it must be left out of `LWW_COLLECTIONS` (`apps/user-client/src/sync/resolution.ts:34`). A pulled row always replaces the local one, except that `pendingTokens` survives until its own push has been decided. The grant's writes go through the path in §5, not through the outbox, apart from delete and backfill.
+This collection takes **no** LWW resolution: it must be left out of `LWW_COLLECTIONS` (`apps/user-client/src/sync/resolution.ts:34`). A pulled row always replaces the local one, except that the pending fields survive until their own push has been decided. The grant's writes go through the path in §5, not through the outbox, apart from delete and backfill. A tombstoned grant is deleted outright, never moved to the trash, because a restore must not revive sealed tokens.
 
 ### 4.2 Changes to `McpServerRow`
 
@@ -107,32 +107,52 @@ Holds the state of a sign-in in progress: `state`, `codeVerifier`, `serverId` or
 
 ## 5. Refresh serialisation (the core)
 
-**Invariant:** a device presents a refresh token only after the sync server has confirmed, by compare-and-set on the grant row, that this device holds the current revision and owns the claim.
+**Invariant:** a device presents a refresh token only if that exact token was in the row snapshot it just won a compare-and-set with, and that snapshot carried no claim it had not observed to lapse.
 
-The sync server already does per-record compare-and-set: a push whose `baseRev` differs returns `conflict` with the current record (`apps/sync-service/src/records/store.ts:199`). **No new server logic is needed**, and the server sees only ciphertext and revisions. It does need a direct push path on the client that returns the per-record result to the caller and does not go through the outbox (build on `defaultPush` and `prepareRecord` in `apps/user-client/src/sync/worker.ts`).
+The sync server already does per-record compare-and-set: a push whose `baseRev` differs returns `conflict` with the current record (`apps/sync-service/src/records/store.ts:199`). **No new server logic is needed**, and the server sees only ciphertext and revisions. The client needs a direct push path that returns the per-record result and does not go through the outbox.
 
 Why this is strict: Kumbu² revokes the whole connection's tokens if a used refresh token arrives after its 30-second grace period, and also if a token from an **earlier** sign-in arrives while a newer family is live (`OAuthTokens.cs:402`, `:418`). Other servers may have no grace period at all.
 
+### Rules for everything below
+
+- **Snapshots.** A row and its `syncRows` revision are read together in one Dexie transaction. The direct push takes that explicit row and `baseRev`, and never re-reads them, because pulls run concurrently and do not take the grant lock. Unconfirmed writes never go into the local row before the compare-and-set succeeds.
+- **Lock order.** The grant's Web Lock is the outer lock. Nothing holding it takes the sync lock or waits on a sync cycle. A wait only polls the local row and asks for a sync without blocking. `publishPendingTokens` runs outside the sync lock.
+- **Master key.** Take a private copy of the key at the start and zero it in `finally`, because locking the app zeroes the session's buffer in place. No key at the start means `locked`, and no push.
+- **Clocks.** Device clocks are never compared with each other. `claim` holds `{ deviceId, at }`; `at` is informational only. A device decides that a foreign claim has lapsed **by observation**: it has seen the same `(serverId, rev)` carrying that claim for the whole lease, on its own monotonic clock. Observations live in memory, so a restart simply observes again.
+- **Budgets.** Lease: **5 minutes**. Single refresh request timeout: **20 s**. Lost-response retry window: **25 s** from the first send. The lease must stay longer than timeout + window + timeout. A tool call waits for a foreign claim at most **20 s**, then returns `waiting`.
+
 ### Algorithm, on a linked device
 
-1. Take a Web Lock named per grant; this also serialises tabs.
-2. If the local row has a valid access token, or a newer row arrived while waiting, use it and stop.
-3. **Claim.** Push the row with `claim = { deviceId, until: now + 60 s }` and the known `baseRev`.
-   - `conflict`: adopt the returned record and go back to step 2. A foreign claim that is still valid means wait and poll until it clears or expires. An expired claim may be overwritten with another compare-and-set push.
-   - Network failure: stop. The status is `○ Waiting for your server`, and the tool call fails honestly.
-4. **Refresh.** POST `grant_type=refresh_token` with `client_id` and `resource` over `tokenRoute`.
-5. **Write ahead.** Store the new pair in `pendingTokens` first.
-6. **Publish.** Push the row with the new sealed tokens and `claim = null`, using the revision returned by step 3. Clear `pendingTokens` on `ok`. On a network failure, retry at every later sync opportunity.
-7. **Conflict at publish.** This can only follow a claim that was overwritten after expiry. The device with the newer revision wins; adopt it, and discard `pendingTokens`.
+1. Take the grant's Web Lock.
+2. Snapshot row and revision.
+3. **Own pending pair first.** If `pendingTokens` is set, it is the current pair. Refresh only ever uses `pendingTokens ?? tokens`. Try to publish it (step 9), then carry on with it.
+4. If the current access token is valid and is not the one a 401 just rejected, return it. This is also what stops a second tab rotating needlessly after a 401.
+5. **Foreign or leftover claim.** If the snapshot has a claim, including this device's own one left by a crash, whose token may already be spent: observe it. If the revision changes, go back to step 2. If the wait budget runs out, return `waiting`. Only a claim observed unchanged for the whole lease may be taken over.
+6. **Claim.** Push the snapshot with `claim = { deviceId, at: now }` and `baseRev` = the snapshot's revision. Check the response's epoch before trusting `ok`; a mismatch means `waiting`.
+   - `ok`: note the returned revision R.
+   - `conflict`: apply `current` with `applyRecord`, go back to step 2, at most 3 times, then `waiting`. An undecryptable or stale `current` also ends in `waiting`, never a loop.
+   - `tombstoned`: the server was removed; return `dead` and stop.
+   - `error` or network failure: `waiting`.
+7. **Refresh.** POST `grant_type=refresh_token` with `client_id` and `resource` over `tokenRoute`, using the token from the exact snapshot pushed, with the 20 s timeout.
+8. **Write ahead.** Seal the new pair with the private key copy, and store `pendingTokens` and `pendingBaseRev = R`.
+9. **Publish.** Push the row with the new sealed tokens and `claim = null`, with `baseRev = pendingBaseRev`.
+   - `ok`: clear both pending fields.
+   - Network failure: keep them. Retry at every later sync opportunity. Tokens remain usable on this device.
+   - `conflict`: open `current`. **If its refresh token is the one this device spent**, nothing newer exists (it may be another device's claim). Re-push this pair with the new revision. **If it differs**, a newer rotation or sign-in won: adopt it and discard the pending pair.
+   - `tombstoned`: revoke the pair, best-effort, and discard it.
 
-Behaviour of the token response, none of it Kumbu-specific:
+### New sign-ins
+
+A fresh family must always beat the old row, and the code is spent by the time we know the outcome. So the grant is stored locally with `pendingTokens`, `pendingBaseRev` and `pendingNewFamily: true`, then pushed through the direct path. On `conflict` it re-pushes with the current revision whatever the row holds. Being offline keeps it pending; a device never throws away tokens it has just obtained. Sign-in never uses `mutateSynced`, which would lose the tokens by throwing `SyncOfflineError` once the code is spent, or lose the conflict to the old family under pulled-wins.
+
+### Behaviour of the token response, none of it Kumbu-specific
 
 - A new `refresh_token` in the response replaces the old one. If there is none, the old one stays.
-- `invalid_grant`: the grant is dead. Write `tokens = null`, push, and show `⚠ Sign in again`.
+- `invalid_grant`: the grant is dead. Publish `tokens = null`, and show `⚠ Sign in again`.
 - No refresh token held at all: when the access token expires, `⚠ Sign in again`.
-- A lost response (timeout or network error after sending): retry with the same token within 25 s of the first send, on the same route. After that, treat the state as in doubt: clear the claim and leave the row. The next attempt may succeed or end in `invalid_grant`, and both outcomes are handled.
+- A lost response: retry with the same token within 25 s of the first send, on the same route. After that the state is **in doubt**: clear the claim, keep the row, and return `in-doubt`. The next attempt may succeed or end in `invalid_grant`, and both are handled.
 
-Refresh runs only on demand: when a tool call or list needs a token that expires within 60 s, or reactively on a 401. A reactive 401 refreshes once per call. No background refresh.
+Refresh runs only on demand: when a tool call or list needs a token that expires within 60 s, or reactively on a 401, passing the rejected token. A reactive 401 refreshes once per call. No background refresh.
 
 ### On an unlinked (local-only) device
 
@@ -140,9 +160,17 @@ The Web Lock alone serialises. There is no claim, and the grant is a plain local
 
 ### Accepted failure modes
 
+All end in `⚠ Sign in again`, which Chris accepted; none can leak a token.
+
 - **Backend unreachable and access token expired:** no refresh, deliberately. A stale refresh could revoke the connection.
-- **Device dies between steps 4 and 6:** the claim expires, another device presents the old token. On Kumbu², that is a revocation if more than 30 s have passed, then `⚠ Sign in again`. Chris accepted this.
+- **Device dies between steps 7 and 9, or has refreshed and stays offline for longer than the lease:** the claim lapses, another device presents the spent token. On Kumbu² this is a revocation. The second case is commoner on phones, which is why the lease is 5 minutes.
+- **In doubt after 25 s:** the next attempt re-presents a possibly spent token. On a server with no grace period that ends the grant.
+- **Sync server restored from an old backup, or epoch recovery:** a stale device can reseed the row, and others then adopt it. An honest restore is treated like a hostile replay: a revocation is possible, nothing more.
 - **Hostile sync server replays an old row:** a device might present an old token and cause a revocation. That is denial of service only. It cannot read tokens. Larissa to confirm against rollback deferral L4.
+
+### Rollout
+
+Backend and frontend ship together. An older sync service refuses a push batch naming the new collection, so deploy the backend first. A PWA not yet updated cannot apply a pulled grant and moves past that revision, so after updating it holds no grant until the next rotation. It shows `○ Connects on first use`, and tool calls report `waiting` until a rotation arrives; any device's sign-in or refresh delivers it. Accepted for this release.
 
 ## 6. Client identity
 
@@ -182,11 +210,13 @@ The browser's `client_id` is `location.origin + '/oauth/client-metadata.json'`. 
 
 A 401 with no OAuth metadata anywhere is treated as a key server: the key field appears as today. This is the expected result for Kumbu²'s plain `/mcp` (`Discovery.cs:11`).
 
-`buildCandidates` (`apps/user-client/src/mcp/mcp-connectivity.ts:16`) may append `/mcp`; the URL that answered the probe becomes the `resource`.
+`buildCandidates` (`apps/user-client/src/mcp/mcp-connectivity.ts:16`) may append `/mcp` before any credential exists. The URL that answered the probe becomes the `resource` **and is stored as the row's `url`**. An OAuth row is only ever probed at exactly that URL, with no `/mcp` variant, so a bearer token cannot reach another path.
 
 ### Routes
 
 The MCP endpoint keeps its existing rules (`allowDirect`, proxy) unchanged. OAuth requests (metadata, registration, token, revocation) go **direct from the browser where the authorisation server allows CORS, otherwise through the proxy**, so that tokens avoid the proxy where possible.
+
+Many authorisation servers will refuse the preflight's custom header and so land on the proxy. That is safe, but on a local-only device it means connecting is not possible, and the app says so.
 
 **Trap, and the required handling:** a form-encoded POST is a CORS "simple" request, so the browser sends it **without a preflight** and only hides the response afterwards. A refresh token sent that way is spent and its answer lost. Therefore:
 
@@ -224,7 +254,7 @@ Enforced in client code, each with a test:
 - **`iss`:** must equal the issuer when present, and is required if the server advertises `authorization_response_iss_parameter_supported`.
 - **HTTPS only** for all OAuth endpoints and the MCP URL of an OAuth server. Loopback `http` only in development builds. In particular, `authorization_endpoint` is validated before `window.open`, so a hostile server cannot supply a `javascript:` URL.
 - **Token chokepoint**, like `usableRoute` (`apps/user-client/src/mcp/resolve-active.ts:13`): the access token is sent only to the grant's `resource`, and the refresh token only to its pinned `tokenEndpoint`. A row whose URL no longer matches the grant sends nothing.
-- **Callback page:** a small standalone static page, not an SPA route, because `apps/user-client/index.html` loads Google Fonts and the service worker's navigation fallback would answer the path from the cached shell without these headers. Add `^/oauth/` to `navigateFallbackDenylist` (`apps/user-client/vite.config.ts:147`) and make this path resolve in `nginx`. It removes the code from the address bar with `history.replaceState`, sends `Referrer-Policy: no-referrer`, loads nothing third-party, needs no session, and has `access_log off`, because the query holds a code. Its look comes from a few inline styles matching the app's colours, with system fonts. (Liz)
+- **Callback page:** a small standalone static page, not an SPA route, because `apps/user-client/index.html` loads Google Fonts and the service worker's navigation fallback would answer the path from the cached shell without these headers. Add `^/oauth/` to `navigateFallbackDenylist` (`apps/user-client/vite.config.ts:147`) and make this path resolve in `nginx`. It removes the code from the address bar with `history.replaceState`, sends `Referrer-Policy: no-referrer`, loads nothing third-party, needs no session, and has `access_log off`, because the query holds a code. An operator's reverse proxy can still log it; the code alone is useless without the verifier, and the ADR records this. Its look comes from a few inline styles matching the app's colours, with system fonts. (Liz)
 - **Logging:** tokens, codes and verifiers never reach logs or `console.*`, `toString`, or error messages. The MCP call error must not echo a request.
 - **Plaintext through the proxy (accepted, ADR):** code, verifier and tokens pass through the proxy in memory when the direct route is unavailable, as Bearer keys do today. Tool calls usually carry the access token through it. It neither stores nor logs them.
 - **Remove server:** best-effort RFC 7009 revocation of the refresh token, then delete both rows via sync. There is one action with this one name. The confirmation says it applies to all devices and signs out at the server; if revocation fails, the app says so rather than implying it worked.
