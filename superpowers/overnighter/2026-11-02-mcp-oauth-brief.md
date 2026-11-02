@@ -20,10 +20,10 @@ Hi, thank you for taking this one on! We are making Chatsundere an OAuth client 
 
 ## How to work
 
-- Task by task as in the plan: red test, green, then every mutation individually (break, watch it fail, restore with `git checkout -- <file>`)
-- Subagent-driven: one fresh subagent per task, then a spec-compliance review and a code-quality review. Subagents never merge, push or switch branches; you commit and push. Please verify each commit landed on `feature/mcp-oauth` (`git branch --contains`)
+- Task by task as in the plan: red test, green, then every mutation individually (first `git add` your work, because `git checkout -- <file>` restores from the index and would otherwise wipe it; then break, watch it fail, restore)
+- Subagent-driven: one fresh subagent per task, then a spec-compliance review and a code-quality review. Subagents never merge, push or switch branches, and they leave their work uncommitted; you commit and push. Please verify each commit landed on `feature/mcp-oauth` (`git branch --contains`)
 - Commit and push after every task; commit messages are free-form imperative with a capitalised subject and no Conventional Commits prefix, ending with `Co-Authored-By: Liz (Claude Code) <noreply@anthropic.com>`. Commits touching only text get `[skip ci]` at the end of the subject
-- Full verification at the end of each phase (after Tasks 5, 9 and 11, and in Task 13): `pnpm exec turbo run test --continue` (plain `pnpm test` stops at the first failing package), `pnpm typecheck`, `pnpm run build`. All three count; `tsc --noEmit` alone does not. Known failures before you start: without Postgres and Redis, `sync-service` has 24 environmental failures (39 pass) and `auth-service` aborts with `ECONNREFUSED`. The user-client suite also fails one or two different tests per full run, each green alone (seen: `sync/doorbell`, `routes/app/settings-previews`, `projects/transaction-guard`). Exact counts are in the plan's Task 0
+- Full verification at the end of each phase (the gate steps in Tasks 5, 9 and 11, and in Task 13): `pnpm exec turbo run test --continue` (plain `pnpm test` stops at the first failing package), `pnpm typecheck`, `pnpm run build`, `pnpm lint`. All of them count; `tsc --noEmit` alone does not. Known failures before you start: without Postgres and Redis, `sync-service` has 24 environmental failures (39 pass) and `auth-service` aborts with `ECONNREFUSED`. The user-client suite also fails one or two different tests per full run, each green alone (seen: `sync/doorbell`, `routes/app/settings-previews`, `projects/transaction-guard`). Exact counts are in the plan's Task 0
 - Only those commands count as evidence
 - All text in the repository is British English, including code, comments, identifiers, commit messages, log strings and user-facing copy. New files under `apps/` start with `// SPDX-License-Identifier: AGPL-3.0-only`. TypeScript is strict, with `noUncheckedIndexedAccess`; no `any` without an inline comment saying why. Package-public functions have a one-line JSDoc. Comments explain why, never what. Biome is the linter (`pnpm lint`)
 - UI rules: mobile-first at 380 px; no drag-and-drop; show a capability disabled with a reason rather than hiding it
@@ -34,7 +34,7 @@ Hi, thank you for taking this one on! We are making Chatsundere an OAuth client 
 - No secrets in logs, assertions or the report. Tokens, codes and verifiers never appear in `console.*` or error messages, not even in tests' failure output
 - The backend must never be able to read a token at rest. If you find you need new server logic for the claim model, stop and write that down rather than adding it: the design rests on the sync server's existing compare-and-set
 - Specs outside this topic stay as they are, apart from the one note in the plan's Task 12; if one looks wrong, mention it in the report
-- Security boundary: the review paths are `apps/auth-service/**`, `apps/sync-service/**`, `apps/proxy-service/**` and `packages/crypto/**`. **This work touches `apps/proxy-service/**`** and adds a collection the sync service accepts through `packages/shared-types`; `apps/auth-service/**` and `packages/crypto/**` are not touched. So please run the Larissa-style audit of the plan's Task 13 before your final commit and list the findings in the report. Critical and high findings cannot be deferred without Chris
+- Security boundary: the review paths are `apps/auth-service/**`, `apps/sync-service/**`, `apps/proxy-service/**` and `packages/crypto/**`. **This work touches `apps/proxy-service/**`** and adds a collection the sync service accepts through `packages/shared-types`; `apps/auth-service/**`, `packages/crypto/**` and the source of `apps/sync-service/**` are not touched. So please run the Larissa-style audit of the plan's Task 13 before your final commit and list the findings in the report. Critical and high findings cannot be deferred without Chris
 - At the end: propose the changes for `obsidian/STATUS-CLIENT-ONLY.md` and `obsidian/STATUS-BACKEND.md` in your report rather than editing them. The STATUS commit follows Chris's squash
 
 ## Out of scope
@@ -48,7 +48,7 @@ Hi, thank you for taking this one on! We are making Chatsundere an OAuth client 
 
 ## The report
 
-Last commit: `superpowers/overnighter/2026-11-02-mcp-oauth-overnighter-report.md` with environment, Task 0 planned vs. measured, per task the commit and real test output, every mutation individually, deviations, surprises, open points for Chris and the PR link. Then open a **draft** PR to `master` (not merged) and add its link to `superpowers/open-items.md`.
+First push and open a **draft** PR to `master` (not merged). Then the last commit: `superpowers/overnighter/2026-11-02-mcp-oauth-overnighter-report.md` with environment, Task 0 planned vs. measured, per task the commit and real test output, every mutation individually, deviations, surprises, open points for Chris and the PR link, adding that link to `superpowers/open-items.md` in the same commit.
 
 ## When you are done or stuck
 
