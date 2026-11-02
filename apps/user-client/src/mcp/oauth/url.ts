@@ -12,6 +12,7 @@ export type OAuthErrorKind =
   | 'state-mismatch'
   | 'exchange-failed'
   | 'invalid-grant'
+  | 'refresh-failed'
   | 'network';
 
 /** Error raised by the OAuth layer. Its message never contains a token, code or verifier. */
