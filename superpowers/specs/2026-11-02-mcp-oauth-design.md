@@ -120,7 +120,7 @@ Why this is strict: Kumbu² revokes the whole connection's tokens if a used refr
 - **Generic sync paths stay out.** `reconcile.ts` must never enqueue this collection. Backfill must skip rows with `pendingNewFamily`, since they have no `tokens` to upload yet. Apart from these, backfill and delete use the outbox as normal.
 - **Key at every push.** The direct push takes the key as an argument, and every push under the lock gets the private copy. Sealing a record under the session's zeroed buffer would store it under an all-zero outer key.
 - **Lock order.** The grant's Web Lock is the outer lock. Nothing holding it takes the sync lock or waits on a sync cycle. A wait only polls the local row and asks for a sync without blocking. `publishPendingTokens` runs outside the sync lock.
-- **Master key.** Take a private copy of the key at the start and zero it in `finally`, because locking the app zeroes the session's buffer in place. No key at the start means `locked`, and no push.
+- **Master key.** Take a private copy of the key at the start, of a refresh and of a sign-in's completion alike, and zero it in `finally`, because locking the app zeroes the session's buffer in place. No key at the start means `locked`, and no push.
 - **Clocks.** Device clocks are never compared with each other. `claim` holds `{ deviceId, at }`; `at` is informational only. A device decides that a foreign claim has lapsed **by observation**: it has seen the same `(serverId, rev)` carrying that claim for the whole lease, on its own monotonic clock. Observations live in memory, so a restart simply observes again.
 - **Budgets.** Lease: **5 minutes**. Single refresh request timeout: **20 s**. Lost-response retry window: **25 s** from the first send. The lease must stay longer than timeout + window + timeout. A tool call waits for a foreign claim at most **20 s**, then returns `waiting`.
 
@@ -128,7 +128,7 @@ Why this is strict: Kumbu² revokes the whole connection's tokens if a used refr
 
 1. Take the grant's Web Lock.
 2. Snapshot row and revision.
-3. **Own pending pair first.** If `pendingTokens` is set, try to publish it (step 9, or the new-family rule below if `pendingNewFamily`), then re-snapshot. **While a pending pair remains unpublished, this device never claims:** it returns the pair's access token if valid, otherwise `waiting`. That pair's refresh token is never presented until it is published and is therefore what the row holds.
+3. **Own pending pair first.** If `pendingTokens` is set, try to publish it (step 9, or the new-family rule below if `pendingNewFamily`), then re-snapshot. **While a pending pair remains unpublished, this device never claims:** it returns the pair's access token if valid and not the one a 401 just rejected, otherwise `waiting`. That pair's refresh token is never presented until it is published and is therefore what the row holds.
 4. If the current access token is valid and is not the one a 401 just rejected, return it. This is also what stops a second tab rotating needlessly after a 401.
 5. **Foreign or leftover claim.** If the snapshot has a claim, including this device's own one left by a crash, whose token may already be spent: observe it. If the revision changes, go back to step 2. If the wait budget runs out, return `waiting`. Only a claim observed unchanged for the whole lease may be taken over.
 6. **Preconditions, then claim.** A held refresh token and, on `tokenRoute: 'proxy'`, an available proxy are checked first: no refresh token means `dead`, and no proxy means `no-proxy`, each without claiming. Push the snapshot with `claim = { deviceId, at: now }` and `baseRev` = the snapshot's revision. Check the response's epoch before trusting `ok`; a mismatch means `waiting`.
@@ -139,7 +139,7 @@ Why this is strict: Kumbu² revokes the whole connection's tokens if a used refr
 7. **Refresh.** POST `grant_type=refresh_token` with `client_id` and `resource` over `tokenRoute`, using the token from the exact snapshot pushed, with the 20 s timeout. **Immediately before every POST**, including retries, check the time since the claim was won on both the wall clock and the monotonic clock: over 60 s, a frozen tab has woken up, so do not send, and go back to step 2.
 8. **Write ahead.** Seal the new pair with the private key copy, and store `pendingTokens`, `pendingBaseRev = R`, and `pendingSpentRefresh`, the sealed refresh token just spent. A pull can replace `tokens`, so the spent token has to survive on its own.
 9. **Publish.** Push the row with the new sealed tokens and `claim = null`, with `baseRev = pendingBaseRev`.
-   - `ok`: clear both pending fields.
+   - `ok`: clear all four pending fields.
    - Network failure: keep them. Retry at every later sync opportunity. Tokens remain usable on this device.
    - `conflict`: open `current`. **If its refresh token equals `pendingSpentRefresh`**, nothing newer exists (it may be another device's claim). Re-push this pair with the new revision, at most 3 times in one attempt. **If it differs**, a newer rotation or sign-in won: adopt it and discard the pending pair.
    - `tombstoned`: revoke the pair, best-effort, and discard it.
@@ -151,13 +151,13 @@ A fresh family must always beat the old row, and the code is spent by the time w
 
 An unlinked device writes `tokens` directly, with no pending fields, so a later backfill uploads them.
 
-The server row is saved with `deferWhenOffline`, so being offline after a sign-in cannot orphan the grant. The pending row keeps its draft until the server row exists; a device that died before saving finishes the save at list load, or when the code is pasted again.
+The server row is saved with `deferWhenOffline`, so being offline after a sign-in cannot orphan the grant. The pending row keeps its draft until the server row exists, and the 10-minute sweep leaves completed rows whose server row is missing; a device that died before saving finishes the save at list load, or when the code is pasted again.
 
 ### Behaviour of the token response, none of it Kumbu-specific
 
 - A new `refresh_token` in the response replaces the old one. If there is none, the old one stays.
 - `invalid_grant`: the grant is dead. Publish `tokens = null` with the claim's revision, and show `⚠ Sign in again`. On `conflict`, adopt the newer row, and never overwrite it: it may be a new sign-in.
-- An abort from the 20 s timeout counts as a lost response.
+- An abort from the 20 s timeout counts as a lost response. A caller's abort, such as the Stop button, only cancels waiting and never reaches the POST: a request once sent is always seen through, so a rotated pair is not dropped.
 - Any other answered error (5xx, 429, `invalid_client`, non-JSON): nothing was spent as far as we can tell. Clear the claim by compare-and-set, and return `waiting`.
 - No refresh token held at all: when the access token expires, `⚠ Sign in again`.
 - A lost response: retry with the same token within 25 s of the first send, on the same route. After that the state is **in doubt**: clear the claim, keep the row, and return `in-doubt`. The next attempt may succeed or end in `invalid_grant`, and both are handled.
@@ -166,7 +166,7 @@ Refresh runs only on demand: when a tool call or list needs a token that expires
 
 ### On an unlinked (local-only) device
 
-The Web Lock alone serialises. There is no claim, and the grant is a plain local write. Linking later uploads the grant through backfill.
+The Web Lock alone serialises. There is no claim, and the grant is a plain local write. A device that decoupled while holding a pending pair first promotes `pendingTokens` into `tokens` and clears the pending fields, so the spent token is never presented. Linking later uploads the grant through backfill.
 
 ### Accepted failure modes
 
