@@ -8,6 +8,43 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-02 — **v0.3.4 RELEASED: MCP CONNECTORS ACROSS DEVICES + 25 TOOL
+ROUNDS.** Field report from testing Kumbu² in a chat (Opus 5.5 on nano-gpt): tool calls
+died with `MCP initialise failed: URL constructor: undefined is not a valid URL`, and five
+tool rounds were too few for agentic work. Same evening, on `master` as `490859d3` +
+`81c24f1b`, tagged **`v0.3.4`** on the second and pushed.
+- **Root cause:** `routing`/`resolvedEndpoint` are per device and never sync, so a row
+  pulled onto another device lacked them; `undefined` passed the `=== null` guards. Reproduced
+  on the unfixed code: tool visible, the same error, 0 fetches. Chris had set the connector up
+  on the PC that is becoming the inference machine.
+- **Fix:** pulled rows get explicit nulls; a **proxy-only** server resolves its own route on
+  first tool call (after approval, remembered locally). **Local network servers still need
+  Test + Save per device** by design. New list status `○ Connects on first use`.
+- **Larissa:** one High, fixed (a remembered route outlived a synced URL change, sending the
+  new key to the old origin; now `usableRoute` plus a compare-and-write); re-pass CLEAR. M1
+  remainder, M2, L2, `http` targets and rollback deferred ([[insights/security-deferrals]]).
+- **Laura:** two hard defects, both fixed (the stale route; saving a failed test wiped synced
+  tools on every device). Softs in [[insights/follow-ups-index]].
+- **Also:** MCP call timeout now applies alongside Stop and is 120 s; MCP tools can no longer
+  shadow a built-in (deferral closed); at the round limit the model is told and reports.
+- **Gate:** forced typecheck + build 19/19 (0 cached), Biome clean, llm-unified 508/508 (before
+  the audit fixes, which did not touch it), user-client 3786/3786 in the second of two final
+  runs. The first had one failure (`settings-previews`), green in isolation; earlier runs of the
+  evening failed `sync/doorbell` and `projects/transaction-guard` the same way. Logged as a
+  wider flake. Backend suites not run: no backend change.
+- **Toolchain on this PC:** `mise` from pacman, then `mise install`. System `libvips` breaks
+  `sharp`: install with `SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install --frozen-lockfile`.
+
+**Next:** Chris tests on the live instance: on the chat device the Kumbu connector shows
+`○ Connects on first use` (or a real status), a tool call works without Test + Save and the
+list then reads Connected; changing the URL on one device sends the other back to first use;
+a long agentic task runs past five rounds. **Then the agentic loop spec** (context budget,
+protecting the user message, round checkpoints, approval Stop): at 25 rounds a model can
+silently lose its task once the exchange fills the window. See
+[[insights/follow-ups-index]]. Still stale, not acted on: `version.txt` at `0.2.0`.
+
+---
+
 **Last updated:** 2026-10-24 — **v0.3.3 RELEASED: CLAUDE SONNET 5.5 + HAIKU 5.5 ON NANO-GPT.**
 A community request: both curated via `/curate` (mode 2) with live probes, the
 conversation-suite and the tool-replay suite, squashed to `master` as `1be1e554`,
