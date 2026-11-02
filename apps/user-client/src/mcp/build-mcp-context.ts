@@ -28,9 +28,9 @@ export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | nul
     routing: usableRoute(s)?.routing ?? null,
     resolvedEndpoint: usableRoute(s)?.resolvedEndpoint ?? null,
     auth: s.auth
-      ? s.auth.scheme === 'bearer'
-        ? { scheme: 'bearer' }
-        : { scheme: 'header', headerName: s.auth.headerName }
+      ? s.auth.scheme === 'header'
+        ? { scheme: 'header', headerName: s.auth.headerName }
+        : { scheme: s.auth.scheme }
       : null,
     autoRun: s.autoRun,
     tools: s.tools,

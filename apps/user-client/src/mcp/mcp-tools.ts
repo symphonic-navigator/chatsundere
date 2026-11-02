@@ -18,7 +18,11 @@ export interface McpActiveServer {
   /** Null until probed on this device; resolved on first use. */
   routing: McpRouting | null;
   resolvedEndpoint: string | null;
-  auth: { scheme: 'bearer' } | { scheme: 'header'; headerName: string } | null;
+  auth:
+    | { scheme: 'bearer' }
+    | { scheme: 'header'; headerName: string }
+    | { scheme: 'oauth' }
+    | null;
   autoRun: boolean;
   tools: McpToolDefinition[];
   hiddenTools: string[];
@@ -51,6 +55,8 @@ export type McpRouteResult =
 
 function resolveAuth(server: McpActiveServer, key: string | null): McpAuthResolved | null {
   if (!server.auth || !key) return null;
+  // OAuth sends no header yet; its bearer comes from the grant (a later task).
+  if (server.auth.scheme === 'oauth') return null;
   if (server.auth.scheme === 'bearer') return { header: 'Authorization', value: `Bearer ${key}` };
   return { header: server.auth.headerName, value: key };
 }

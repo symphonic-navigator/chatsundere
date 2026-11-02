@@ -86,7 +86,11 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
   const [url, setUrl] = useState(existing?.url ?? '');
   const [prefix, setPrefix] = useState(existing?.prefix ?? '');
   const [prefixEdited, setPrefixEdited] = useState(existing != null);
-  const [authScheme, setAuthScheme] = useState<AuthScheme>(existing?.auth?.scheme ?? 'none');
+  // The form has no OAuth choice yet; an OAuth row shows as "None" and keeps its
+  // scheme on save unless the user picks a key-based one.
+  const [authScheme, setAuthScheme] = useState<AuthScheme>(
+    existing?.auth?.scheme === 'oauth' ? 'none' : (existing?.auth?.scheme ?? 'none'),
+  );
   const [headerName, setHeaderName] = useState(
     existing?.auth?.scheme === 'header' ? existing.auth.headerName : '',
   );
@@ -209,7 +213,7 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     try {
       const id = existing?.id ?? uuidv7();
 
-      let auth: McpServerRow['auth'] = null;
+      let auth: McpServerRow['auth'] = existing?.auth?.scheme === 'oauth' ? existing.auth : null;
       if (authScheme === 'bearer') {
         const sealed = keyInput
           ? await sealMcpKey(keyInput, mk, id)
@@ -243,6 +247,7 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
         hiddenTools,
         lastTestedAt,
         lastError,
+        firstUseConsentFor: existing?.url === url ? (existing.firstUseConsentFor ?? null) : null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       };

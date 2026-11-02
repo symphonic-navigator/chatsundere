@@ -47,6 +47,7 @@ export const QK = {
   document: (id: string) => ['documents', 'item', id] as const,
   documentCounts: ['documents', 'counts'] as const,
   mcpServers: ['mcp-servers'] as const,
+  mcpOAuthGrants: ['mcp-oauth-grants'] as const,
   memory: (personaId: string) => ['memory', personaId] as const,
   memoryJournal: (personaId: string, state: 'uncommitted' | 'committed' | 'archived') =>
     ['memory', personaId, 'journal', state] as const,

@@ -14,7 +14,7 @@ describe('sync shared-types', () => {
     expect(revokedSubKey('s1')).toBe('revoked:sub:s1');
   });
 
-  test('the collection allowlist has the 18 v1 collections incl. the 3 blob collections', () => {
+  test('the collection allowlist has the 19 collections incl. the 3 blob collections and the OAuth grants', () => {
     expect(SYNC_COLLECTIONS).toContain('personas');
     expect(SYNC_COLLECTIONS).toContain('vectors');
     // WS-D (blob transport) admitted the three blob-bearing collections: their
@@ -23,7 +23,8 @@ describe('sync shared-types', () => {
     expect(SYNC_COLLECTIONS).toContain('personaAvatars');
     expect(SYNC_COLLECTIONS).toContain('artefacts');
     expect(SYNC_COLLECTIONS).toContain('attachments');
-    expect(SYNC_COLLECTIONS.length).toBe(18);
+    expect(SYNC_COLLECTIONS).toContain('mcpOAuthGrants');
+    expect(SYNC_COLLECTIONS.length).toBe(19);
   });
 
   test('the wire types compile with the documented shapes', () => {

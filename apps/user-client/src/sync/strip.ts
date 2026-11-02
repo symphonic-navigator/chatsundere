@@ -88,6 +88,18 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
     'lastTestedAt',
     'lastError',
     'routing',
+    // The URL this device approved for a first OAuth tool call; another
+    // device's approval must never count here (MCP OAuth spec §4.2).
+    'firstUseConsentFor',
+  ],
+  mcpOAuthGrants: [
+    // The write-ahead copy of a fresh token pair not yet published, and what
+    // its publish needs (MCP OAuth spec §4.1). Sealing it would hand an
+    // unconfirmed refresh token to every other device.
+    'pendingTokens',
+    'pendingBaseRev',
+    'pendingSpentRefresh',
+    'pendingNewFamily',
   ],
   documents: [
     // Device-local embedding pipeline state (Finding V). Vectors are
@@ -107,12 +119,24 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
 /**
  * What a deny-listed field means on a device that has never set it. Without
  * this a pulled row simply lacks the key, and `undefined` slips past every
- * `=== null` check downstream. Only `mcpServers` needs it: its probe fields have
- * a meaningful "not probed here" value, whereas `documents` re-defaults in
- * `apply.ts` and `chats` treats absence as absence.
+ * `=== null` check downstream. `mcpServers` and `mcpOAuthGrants` need it: their
+ * fields have a meaningful "nothing on this device" value, whereas `documents`
+ * re-defaults in `apply.ts` and `chats` treats absence as absence.
  */
 const FRESH_DEVICE_DEFAULTS: Partial<Record<SyncCollection, Record<string, unknown>>> = {
-  mcpServers: { routing: null, resolvedEndpoint: null, lastTestedAt: null, lastError: null },
+  mcpServers: {
+    routing: null,
+    resolvedEndpoint: null,
+    lastTestedAt: null,
+    lastError: null,
+    firstUseConsentFor: null,
+  },
+  mcpOAuthGrants: {
+    pendingTokens: null,
+    pendingBaseRev: null,
+    pendingSpentRefresh: null,
+    pendingNewFamily: false,
+  },
 };
 
 /**

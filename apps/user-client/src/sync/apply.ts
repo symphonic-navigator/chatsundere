@@ -412,6 +412,9 @@ function collectFor(collection: SyncCollection, key: string, chatId: string | un
     case 'mcpServers':
       collect(QK.mcpServers);
       break;
+    case 'mcpOAuthGrants':
+      collect(QK.mcpOAuthGrants);
+      break;
     case 'libraries':
       collect(QK.libraries);
       collect(QK.library(key));
@@ -628,6 +631,27 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
       if (seqs.length > 0) await db.syncOutbox.bulkDelete(seqs);
       await db.syncRows.delete([collection, key]);
     });
+    return { kind: 'tombstoned' };
+  }
+
+  // A grant is deleted outright, never moved to the trash: a restore must not
+  // revive sealed tokens (MCP OAuth spec §4.1). The death is still recorded.
+  if (collection === 'mcpOAuthGrants') {
+    await db.transaction(
+      'rw',
+      [db.syncRows, db.syncOutbox, db.deadKeys, db.mcpOAuthGrants],
+      async () => {
+        await db.mcpOAuthGrants.delete(key);
+        const seqs = await db.syncOutbox
+          .where('[collection+key]')
+          .equals([collection, key])
+          .primaryKeys();
+        if (seqs.length > 0) await db.syncOutbox.bulkDelete(seqs);
+        await db.syncRows.delete([collection, key]);
+        await markDead(collection, key);
+      },
+    );
+    collectFor(collection, key, undefined);
     return { kind: 'tombstoned' };
   }
 

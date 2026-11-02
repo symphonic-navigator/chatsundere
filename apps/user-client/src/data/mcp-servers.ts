@@ -82,8 +82,8 @@ export function sealMcpKey(plaintext: string, mk: MasterKey, serverId: string) {
   return sealSecret(plaintext, mk, `mcp/${serverId}/api-key`);
 }
 
-/** Open the sealed key for a server row, or null if it has no auth. */
+/** Open the sealed key for a server row, or null if it has no key (no auth, or OAuth). */
 export async function openMcpKey(row: McpServerRow, mk: MasterKey): Promise<string | null> {
-  if (!row.auth) return null;
+  if (!row.auth || row.auth.scheme === 'oauth') return null;
   return openSecret(row.auth.key, mk, `mcp/${row.id}/api-key`);
 }

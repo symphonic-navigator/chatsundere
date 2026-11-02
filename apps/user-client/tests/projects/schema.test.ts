@@ -26,7 +26,7 @@ describe('project schema (v37)', () => {
 
   it('opens at v37 with the project tables', async () => {
     const db = await openClientDataDb();
-    expect(db.verno).toBe(37);
+    expect(db.verno).toBe(38);
     const names = db.tables.map((t) => t.name);
     for (const n of ['projects', 'projectFiles', 'projectContents', 'projectRevisions']) {
       expect(names).toContain(n);
