@@ -123,6 +123,30 @@ describe('runToolLoop', () => {
     expect(toolsSeen).toEqual([1, 1, 0]);
   });
 
+  it('tells the model on the forced round, and only there, that the tools are gone', async () => {
+    const lastRoles: (string | undefined)[] = [];
+    const lastContents: unknown[] = [];
+    const deps: ToolLoopDeps = {
+      toolDefs: [{ name: 'calculate_js', description: '', parameters: {} }],
+      maxRounds: 1,
+      finalRoundNudge: 'no further tool rounds',
+      streamOnce: async (exchange) => {
+        lastRoles.push(exchange.at(-1)?.role);
+        lastContents.push(exchange.at(-1)?.content);
+        return {
+          finalContentBlocks: [],
+          pillRows: [toolCallPill(`p${lastRoles.length}`, 'calculate_js', '{}')],
+          finishReason: 'tool_calls',
+          usedTokens: 0,
+        };
+      },
+      dispatch: async () => ({ ok: true, output: '1', error: null }),
+    };
+    await runToolLoop(deps);
+    expect(lastRoles).toEqual([undefined, 'user']);
+    expect(lastContents[1]).toBe('no further tool rounds');
+  });
+
   it('executes multiple tool calls in one round and appends one assistant + N tool messages', async () => {
     const exchanges: number[] = [];
     let round = 0;

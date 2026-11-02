@@ -59,7 +59,7 @@ import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
-import { MAX_TOOL_ROUNDS, runToolLoop } from '../lib/tool-loop.js';
+import { MAX_TOOL_ROUNDS, TOOL_ROUND_LIMIT_NUDGE, runToolLoop } from '../lib/tool-loop.js';
 import { type ReplayContext, estimateReplayTokens } from '../lib/tool-replay.js';
 import { enqueueToolSummaries } from '../lib/tool-summary.js';
 import { runMemoryPipeline } from '../memory/pipeline.js';
@@ -962,6 +962,7 @@ async function runIntoDraft(
   runToolLoop({
     toolDefs: activeToolDefs,
     maxRounds: MAX_TOOL_ROUNDS,
+    finalRoundNudge: TOOL_ROUND_LIMIT_NUDGE,
     dispatch: async (name, toolArgs, signal, onProgress) => {
       const r = await dispatchTool(activeTools, name, toolArgs, signal, onProgress);
       if (

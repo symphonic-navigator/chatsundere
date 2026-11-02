@@ -5,8 +5,16 @@ import type { ToolResult } from '../tools/types.js';
 import { flattenAnswerText } from './content-blocks.js';
 import type { StreamEngineResult } from './stream-engine.js';
 
-/** Default cap on tool-executing rounds before a tools-less answer is forced. */
-export const MAX_TOOL_ROUNDS = 5;
+/**
+ * Default cap on tool-executing rounds before a tools-less answer is forced. A
+ * backstop against runaway loops, generous enough for agentic work; the user can
+ * always say "continue", which starts a fresh budget.
+ */
+export const MAX_TOOL_ROUNDS = 25;
+
+/** Tells the model why its tools vanished, so it reports rather than pretends. */
+export const TOOL_ROUND_LIMIT_NUDGE =
+  'You have used all the tool rounds available for this turn, so no tools are available now. Report honestly what you finished and what is still open, and tell the user they can ask you to continue. Do not claim work you did not complete.';
 
 export interface ToolLoopDeps {
   /** Run one engine pass with the given accumulated tool exchange and offered tools. */
@@ -22,6 +30,8 @@ export interface ToolLoopDeps {
   toolDefs: ToolDef[];
   /** Max tool-executing rounds (rounds 0..maxRounds-1). */
   maxRounds: number;
+  /** Told to the model on the forced tools-less pass, if set. */
+  finalRoundNudge?: string;
   /** Optional callback fired when a pill's status/payload changes, for live UI. */
   onPillUpdate?: (pill: PillRow) => void;
   /** Optional abort signal forwarded to tool execution. */
@@ -62,6 +72,9 @@ export async function runToolLoop(deps: ToolLoopDeps): Promise<StreamEngineResul
 
   for (let round = 0; ; round++) {
     const forceAnswer = round >= deps.maxRounds;
+    if (forceAnswer && deps.finalRoundNudge) {
+      toolExchange.push({ role: 'user', content: deps.finalRoundNudge });
+    }
     const result = await deps.streamOnce(toolExchange, forceAnswer ? [] : deps.toolDefs);
 
     allBlocks.push(...result.finalContentBlocks);
