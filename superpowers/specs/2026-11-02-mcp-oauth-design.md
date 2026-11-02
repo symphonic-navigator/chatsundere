@@ -103,7 +103,7 @@ This collection takes **no** LWW resolution: it must be left out of `LWW_COLLECT
 
 ### 4.3 Device-local table `mcpOAuthPending`
 
-Holds the state of a sign-in in progress: `state`, `codeVerifier`, `serverId` or draft server fields, `resource`, `issuer`, endpoints, `clientId`, `registration`, `createdAt`. Sealed under the master key, never synced, deleted on completion, cancellation, or after 10 minutes.
+Holds the state of a sign-in in progress: `state`, `codeVerifier`, `serverId` or draft server fields, `resource`, `issuer`, endpoints, `clientId`, `registration`, `createdAt`. Sealed under the master key, never synced, deleted on cancellation or after 10 minutes; a completed row stays until then and, if it has a draft, until its server row exists (§5).
 
 ## 5. Refresh serialisation (the core)
 
@@ -151,7 +151,7 @@ A fresh family must always beat the old row, and the code is spent by the time w
 
 An unlinked device writes `tokens` directly, with no pending fields, so a later backfill uploads them.
 
-The server row is saved with `deferWhenOffline`, so being offline after a sign-in cannot orphan the grant. The pending row keeps its draft until the server row exists, and the 10-minute sweep leaves completed rows whose server row is missing; a device that died before saving finishes the save at list load, or when the code is pasted again.
+The server row is saved with `deferWhenOffline`, so being offline after a sign-in cannot orphan the grant. The pending row keeps its draft until the server row exists, and the 10-minute sweep leaves completed rows with a draft whose server row is missing; a device that died before saving finishes the save at list load, or when the code is pasted again.
 
 ### Behaviour of the token response, none of it Kumbu-specific
 
