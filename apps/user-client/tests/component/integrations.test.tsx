@@ -1,12 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { vi } from 'vitest';
 
-const { useMcpServersMock, gate } = vi.hoisted(() => ({
-  useMcpServersMock: vi.fn(() => ({ data: [] as unknown[] })),
-  gate: { enabled: false },
-}));
+const { useMcpServersMock, gate, grants, pending, link, finishMock, sweepMock } = vi.hoisted(
+  () => ({
+    useMcpServersMock: vi.fn(() => ({ data: [] as unknown[] })),
+    gate: { enabled: false },
+    grants: { rows: [] as unknown[] },
+    pending: { rows: [] as unknown[] },
+    link: { status: 'local-only' },
+    finishMock: vi.fn(async () => undefined),
+    sweepMock: vi.fn(async () => undefined),
+  }),
+);
 
 vi.mock('../../src/data/mcp-servers.js', () => ({ useMcpServers: () => useMcpServersMock() }));
+vi.mock('../../src/data/mcp-oauth-grants.js', () => ({
+  useMcpOAuthGrants: () => ({ data: grants.rows }),
+}));
+vi.mock('../../src/data/mcp-oauth-pending.js', () => ({
+  usePendingSignIns: () => ({ data: pending.rows }),
+}));
+vi.mock('../../src/mcp/oauth/sign-in.js', () => ({
+  finishOrphanedSignIns: () => finishMock(),
+  sweepExpiredSignIns: () => sweepMock(),
+}));
+vi.mock('@chatsundere/ui-shared', () => ({
+  useAccountLinkStore: (sel: (s: { linkStatus: string }) => unknown) =>
+    sel({ linkStatus: link.status }),
+}));
 vi.mock('../../src/data/settings.js', () => ({
   useSettings: () => ({ data: { corsProxy: null } }),
 }));
@@ -50,6 +71,7 @@ function wrap() {
         <Route path="/app/integrations" element={<Integrations />} />
         <Route path="/app/integrations/new" element={<div>add server screen</div>} />
         <Route path="/app/integrations/:serverId" element={<div>detail screen</div>} />
+        <Route path="/app/integrations/sign-in/:state" element={<div>waiting screen</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -59,6 +81,10 @@ describe('Integrations list', () => {
   beforeEach(() => {
     cleanup();
     useMcpServersMock.mockReturnValue({ data: [] });
+    grants.rows = [];
+    pending.rows = [];
+    link.status = 'local-only';
+    finishMock.mockClear();
   });
 
   describe('a server synced from another device', () => {
@@ -133,5 +159,115 @@ describe('Integrations list', () => {
     expect(screen.getByText('Default: On')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Wiki tools'));
     expect(screen.getByText('detail screen')).toBeInTheDocument();
+  });
+
+  it('finishes orphaned sign-ins when the list loads', () => {
+    wrap();
+    expect(finishMock).toHaveBeenCalled();
+  });
+
+  describe('OAuth servers', () => {
+    const OAUTH: McpServerRow = {
+      ...ROW,
+      id: 'o1',
+      name: 'Kumbu',
+      url: 'https://kumbu.example/mcp',
+      resolvedEndpoint: 'https://kumbu.example/mcp',
+      auth: { scheme: 'oauth' },
+      tools: [{ name: 'go', description: '', inputSchema: {} }],
+    };
+    const grant = (over: Record<string, unknown> = {}) => ({
+      id: 'o1',
+      resource: 'https://kumbu.example/mcp',
+      tokens: { v: 1 },
+      claim: null,
+      ...over,
+    });
+
+    beforeEach(() => {
+      gate.enabled = true;
+    });
+    afterEach(() => {
+      gate.enabled = false;
+    });
+
+    it('shows a pending new server as a row leading back to the waiting screen', () => {
+      pending.rows = [
+        { state: 'st-1', serverId: 'new-1', isNewServer: true, name: 'Kumbu', createdAt: 1 },
+      ];
+      wrap();
+      expect(screen.getByText('○ Sign-in in progress')).toBeTruthy();
+      fireEvent.click(screen.getByText('Kumbu'));
+      expect(screen.getByText('waiting screen')).toBeTruthy();
+    });
+
+    it('reads a missing grant as connecting on first use, never as Sign in again', () => {
+      useMcpServersMock.mockReturnValue({
+        data: [{ ...OAUTH, routing: null, resolvedEndpoint: null }],
+      });
+      wrap();
+      expect(screen.getByText('○ Connects on first use')).toBeTruthy();
+      expect(screen.queryByText(/Sign in again/)).toBeNull();
+    });
+
+    it('reads a missing grant as connecting on first use even with a route', () => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH] });
+      wrap();
+      expect(screen.getByText('○ Connects on first use')).toBeTruthy();
+    });
+
+    it('asks to sign in again when the grant holds no tokens', () => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH] });
+      grants.rows = [grant({ tokens: null })];
+      wrap();
+      expect(screen.getByText('⚠ Sign in again')).toBeTruthy();
+    });
+
+    it('does not ask to sign in again while a fresh pair waits to be published', () => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH] });
+      grants.rows = [grant({ tokens: null, pendingTokens: { v: 1 } })];
+      wrap();
+      expect(screen.queryByText(/Sign in again/)).toBeNull();
+      expect(screen.getByText(/Connected/)).toBeTruthy();
+    });
+
+    it('puts a sign-in in progress ahead of a saved error', () => {
+      useMcpServersMock.mockReturnValue({ data: [{ ...OAUTH, lastError: 'HTTP 401' }] });
+      grants.rows = [grant()];
+      pending.rows = [
+        { state: 's', serverId: 'o1', isNewServer: false, name: 'Kumbu', createdAt: 1 },
+      ];
+      wrap();
+      expect(screen.getByText('○ Sign-in in progress')).toBeTruthy();
+      expect(screen.queryByText(/HTTP 401/)).toBeNull();
+      fireEvent.click(screen.getByText('Kumbu'));
+      expect(screen.getByText('detail screen')).toBeTruthy();
+    });
+
+    it('waits for the Chatsundere server rather than saying Needs proxy, when linked', () => {
+      gate.enabled = false;
+      link.status = 'linked';
+      useMcpServersMock.mockReturnValue({ data: [OAUTH] });
+      grants.rows = [grant()];
+      wrap();
+      expect(screen.getByText('○ Waiting for your Chatsundere server')).toBeTruthy();
+      expect(screen.queryByText(/Needs proxy/)).toBeNull();
+    });
+
+    it('says linking is needed on a device with no proxy at all', () => {
+      gate.enabled = false;
+      link.status = 'local-only';
+      useMcpServersMock.mockReturnValue({ data: [OAUTH] });
+      grants.rows = [grant()];
+      wrap();
+      expect(screen.getByText('○ Needs a linked Chatsundere server')).toBeTruthy();
+    });
+
+    it('reads as connected with a live grant and a usable route', () => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH] });
+      grants.rows = [grant()];
+      wrap();
+      expect(screen.getByText('● Connected (via proxy)')).toBeTruthy();
+    });
   });
 });

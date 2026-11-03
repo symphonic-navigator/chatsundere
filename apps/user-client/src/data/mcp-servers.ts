@@ -44,11 +44,16 @@ export async function upsertMcpServer(
   return row;
 }
 
-/** Insert or replace an MCP server row. */
-export function useUpsertMcpServer() {
+/**
+ * Insert or replace an MCP server row. `deferWhenOffline` is for the save after an OAuth
+ * sign-in, whose grant already exists and must not be orphaned by being offline.
+ */
+export function useUpsertMcpServer(opts: { deferWhenOffline?: boolean } = {}) {
   const qc = useQueryClient();
+  const deferWhenOffline = opts.deferWhenOffline === true;
   return useMutation({
-    mutationFn: (row: McpServerRow): Promise<McpServerRow> => upsertMcpServer(row),
+    mutationFn: (row: McpServerRow): Promise<McpServerRow> =>
+      upsertMcpServer(row, deferWhenOffline ? { deferWhenOffline: true } : {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.mcpServers }),
   });
 }
@@ -86,6 +91,15 @@ export async function recordMcpConsent(id: string, url: string): Promise<void> {
     await db.mcpServers.update(id, { firstUseConsentFor: url });
   });
   void queryClient.invalidateQueries({ queryKey: QK.mcpServers });
+}
+
+/**
+ * Consent for a server's current URL, for a reconnect that just signed in on this device.
+ * Reads the row itself, so it never depends on a list query having loaded.
+ */
+export async function recordMcpConsentForServer(id: string): Promise<void> {
+  const row = await getClientDataDb().mcpServers.get(id);
+  if (row) await recordMcpConsent(id, row.url);
 }
 
 /** Delete an MCP server by id. */

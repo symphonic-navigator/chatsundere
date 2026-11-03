@@ -58,6 +58,11 @@ export type PendingSignIn = {
   issParameterSupported: boolean;
   redirectUri: string;
   createdAt: number;
+  /**
+   * The URL the sign-in opened, so a reopened waiting screen can offer *Open sign-in
+   * again* without a new state. Absent on rows sealed before it was kept.
+   */
+  authorizationUrl?: string;
 };
 
 /** Collaborators of a sign-in; `now` exists so tests can fix the clock. */
@@ -199,6 +204,17 @@ export async function prepareSignIn(
     const { verifier, challenge } = await createPkce();
     const state = randomState();
     const now = clock(deps)();
+    const scope = unionScope(d.scope, args.extraScopes);
+    const url = new URL(d.authorizationEndpoint);
+    const q = url.searchParams;
+    q.set('response_type', 'code');
+    q.set('client_id', clientId);
+    q.set('redirect_uri', redirect);
+    q.set('state', state);
+    q.set('code_challenge', challenge);
+    q.set('code_challenge_method', 'S256');
+    q.set('resource', resource);
+    if (scope !== null) q.set('scope', scope);
     const pending: PendingSignIn = {
       state,
       verifier,
@@ -211,10 +227,11 @@ export async function prepareSignIn(
       revocationEndpoint: d.revocationEndpoint,
       clientId,
       registration,
-      scope: unionScope(d.scope, args.extraScopes),
+      scope,
       issParameterSupported: d.issParameterSupported,
       redirectUri: redirect,
       createdAt: now,
+      authorizationUrl: url.toString(),
     };
     const sealed = await sealSecret(JSON.stringify(pending), mk, pendingSlot(state));
     await getClientDataDb().mcpOAuthPending.put({
@@ -224,16 +241,6 @@ export async function prepareSignIn(
       createdAt: now,
     });
     held.add(state);
-    const url = new URL(d.authorizationEndpoint);
-    const q = url.searchParams;
-    q.set('response_type', 'code');
-    q.set('client_id', clientId);
-    q.set('redirect_uri', redirect);
-    q.set('state', state);
-    q.set('code_challenge', challenge);
-    q.set('code_challenge_method', 'S256');
-    q.set('resource', resource);
-    if (pending.scope !== null) q.set('scope', pending.scope);
     return { state, authorizationUrl: url.toString() };
   } finally {
     mk.fill(0);

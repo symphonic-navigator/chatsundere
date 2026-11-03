@@ -40,6 +40,39 @@ async function realEnsure(serverId: string, opts: EnsureOpts): Promise<EnsureRes
   }
 }
 
+/**
+ * The access token for an OAuth row, through the chokepoint and the refresh path. Shared
+ * by the chat's tool calls and the detail page's *Test connection*.
+ */
+export async function oauthTokenFor(
+  row: McpServerRow,
+  opts: EnsureOpts,
+  deps: {
+    getGrant?: BuildMcpContextArgs['getGrant'];
+    ensureToken?: BuildMcpContextArgs['ensureToken'];
+  } = {},
+): Promise<McpTokenResult> {
+  if (row.auth?.scheme !== 'oauth') return { ok: false, reason: 'not-oauth' };
+  let grant: McpOAuthGrantRow | undefined;
+  try {
+    grant = await (deps.getGrant ?? readGrant)(row.id);
+  } catch {
+    return { ok: false, reason: 'waiting' };
+  }
+  // A grant row that has not arrived yet is a wait, not an ended sign-in (spec §9).
+  if (!grant) return { ok: false, reason: 'no-grant' };
+  // The chokepoint: no token is even opened for a row the grant does not belong to.
+  if (
+    !tokenAllowedFor(grant, {
+      url: row.url,
+      resolvedEndpoint: usableRoute(row)?.resolvedEndpoint ?? null,
+    })
+  ) {
+    return { ok: false, reason: 'mismatch' };
+  }
+  return (deps.ensureToken ?? realEnsure)(row.id, opts);
+}
+
 /** Assemble the per-send MCP context, or null when no server is active. */
 export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | null {
   const active = resolveActiveServers(args.servers, args.overrides, args.hasProxy);
@@ -76,25 +109,8 @@ export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | nul
     },
     getOAuthToken: async (serverId, opts): Promise<McpTokenResult> => {
       const row = byId.get(serverId);
-      if (row?.auth?.scheme !== 'oauth') return { ok: false, reason: 'not-oauth' };
-      let grant: McpOAuthGrantRow | undefined;
-      try {
-        grant = await getGrant(serverId);
-      } catch {
-        return { ok: false, reason: 'waiting' };
-      }
-      // A grant row that has not arrived yet is a wait, not an ended sign-in (spec §9).
-      if (!grant) return { ok: false, reason: 'no-grant' };
-      // The chokepoint: no token is even opened for a row the grant does not belong to.
-      if (
-        !tokenAllowedFor(grant, {
-          url: row.url,
-          resolvedEndpoint: usableRoute(row)?.resolvedEndpoint ?? null,
-        })
-      ) {
-        return { ok: false, reason: 'mismatch' };
-      }
-      return ensureToken(serverId, opts);
+      if (!row) return { ok: false, reason: 'not-oauth' };
+      return oauthTokenFor(row, opts, { getGrant, ensureToken });
     },
     requestApproval: args.requestApproval,
     requestFirstUse: args.requestFirstUse,
