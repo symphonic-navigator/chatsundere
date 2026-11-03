@@ -59,7 +59,7 @@ streaming), explicitly including **public** servers. No stdio. No gateway.
 | D4 | Where tools become active | **Per-server `onByDefault` + per-persona tri-state override.** Persona override unset → server default applies; set → forces on/off. New `onByDefault:true` servers are immediately available everywhere without touching each persona. |
 | D5 | Tool-call approval | **Confirm by default, per-server `autoRun` opt-out.** A trusted server runs without prompts; otherwise the call is shown (server · tool · args) and awaits Approve/Deny. |
 | D6 | Capability scope | **Tools only.** |
-| D7 | Auth | **Bearer by default + optional custom header name.** OAuth deferred. |
+| D7 | Auth | **Bearer by default + optional custom header name.** OAuth deferred. *Superseded 2026-11-02 by `superpowers/specs/2026-11-02-mcp-oauth-design.md` and [ADR 0038](../../obsidian/decisions/0038-oauth-for-mcp-connectors.md).* |
 | D8 | Cockpit chip | **No** — persona-level resolution is sufficient. |
 | D9 | Code location | **`apps/user-client`** (no `packages/mcp-client` — admin-client has no AI surface and needs none). |
 | D10 | Larissa | **Yes — one round**, despite not being a §9-gated path, because of the new egress + credential handling + approval gate (trust positioning). |

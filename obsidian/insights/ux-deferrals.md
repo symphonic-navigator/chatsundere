@@ -808,3 +808,16 @@ No hard defect left open. Laura's softs L-S1, L-S2, L-S4 to L-S12 were fixed bef
 - **Edit is briefly disabled without a tooltip while the view catches up** — after another writer's change, Edit stays disabled until the newer text is read (milliseconds). Self-clearing, so no reason line is shown.
 - **Projects live under My Settings** — the preview's only entry is a tile in My Settings, which is not where a user would look for their work. Fine for a preview harness; Laura to judge the real home at the Stage 2 spec-pass.
 - **Mode:** pre-squash. **Criterion:** least astonishment / reachability. **Follow-up commitment:** Stage 2 spec-pass (editor and home), or the v0.1.0 release cut, whichever comes first. **Chris sign-off:** not required (soft).
+
+## 2026-11-03 — OAuth for MCP connectors: status approximations (proposed deferrals, for Chris)
+
+Proposed by Liz while documenting the unit; not yet confirmed by Chris. All three come from the same cause: the token and its scopes are sealed in the grant, so the status line cannot read them without opening it.
+
+- **A `needs more access` notice keeps offering *Grant access* after a successful grant** — scopes are sealed, so the notice cannot tell that the challenged scopes are now held. Pressing it again is harmless.
+- **A `can't renew access right now` pill does not update after recovery** — it clears at the next list load or tool call, not when the backend comes back.
+- **`Waiting for your Chatsundere server` is approximated** — token expiry is sealed, so the state is inferred from the proxy route and the absence of a proxy rather than from the real need to renew.
+- **Affected flow / surface:** Integrations list, OAuth server status line.
+- **Mode:** spec-pass follow-through. **Criterion:** least astonishment (status honesty).
+- **Rationale for deferral:** Each is a stale or approximate quiet status with a harmless action; none blocks a function or misdirects.
+- **Follow-up commitment:** Revisit if the iPhone device test or a field report shows confusion; otherwise the v0.2.0 release cut.
+- **Chris sign-off:** not required (soft); confirm the deferral.

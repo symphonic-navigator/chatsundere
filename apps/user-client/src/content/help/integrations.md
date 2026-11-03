@@ -10,6 +10,22 @@ Tap **Add MCP server**, give it a name and its URL, and — if it needs one — 
 authentication key. Tap **Test connection** to check it answers and to see the
 tools it offers. The result is only kept once you tap **Save**.
 
+## Signing in to a server
+
+Some servers ask you to sign in instead of pasting a key. Paste the server's link
+and tap **Check server**; if it supports sign-in, you can continue to the sign-in. It
+opens in its own window, and when you approve it there, this app picks it up
+by itself. The connection is shared with your other devices, so you only do this
+once. Prefer a key? Tap **Use a key instead**.
+
+If the two windows cannot talk to each other (this happens on some phones), the
+sign-in page shows a **copied code** starting with `csm1.`. Come back to Chatsundere
+and paste it into the box. The code works for about a minute on some servers, so be
+quick; if it has expired, simply start again, which is always fine.
+
+If a server stops accepting your sign-in, it shows **Sign in again**. Tap it and
+approve at the server once more.
+
 ## On your other devices
 
 A server you added on another device appears here too, marked **Connects on first
@@ -32,7 +48,12 @@ to the server, so they wait for your approval each time. Mark a server as
 whether a server's tools are armed in new chats; you can still override this per
 persona.
 
+The first time a device contacts a server, Chatsundere asks **Use this server
+here?** and shows where the call is going. Say yes once and it is remembered for
+that device; **Not now** answers that one call only.
+
 ## Removing a server
 
-Open the server and tap **Remove server**. Its stored key is deleted and your
-personas lose access to its tools.
+Open the server and tap **Remove server**. Its stored key or sign-in is deleted and
+your personas lose access to its tools. For a server you signed in to, this signs
+you out at the server on all your devices.

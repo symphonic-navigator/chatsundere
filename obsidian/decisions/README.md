@@ -55,3 +55,4 @@ For small, contained decisions (a variable name, a layout choice), a code commen
 - [0025](0025-uuidv7-across-the-data-model.md) — UUIDv7 is the universal identifier across the data model
 - [0026](0026-pre-disconnect-sync-pull-failure-modes.md) — Pre-disconnect-sync-pull failure modes and recovery flows
 - [0027](0027-step-up-authentication-policy.md) — Step-up authentication policy: tiers, mechanisms, and grace windows
+- [0038](0038-oauth-for-mcp-connectors.md) — OAuth for MCP connectors is client-side, and tokens sync as ciphertext
