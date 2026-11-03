@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#15131c" />
+    <title>Chatsundere sign-in</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: #15131c;
+        color: #ece9f2;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.5;
+      }
+      main { width: 100%; max-width: 380px; }
+      h1 { margin: 0 0 12px; font-family: Georgia, 'Times New Roman', serif; font-weight: 400; font-size: 28px; color: #e8c061; }
+      p { margin: 0 0 12px; }
+      .note { font-size: 14px; color: #b5b0c2; }
+      textarea {
+        width: 100%;
+        height: 120px;
+        margin: 4px 0 12px;
+        padding: 10px;
+        resize: none;
+        border: 1px solid #3a3548;
+        border-radius: 8px;
+        background: #0f0d15;
+        color: #ece9f2;
+        font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+        word-break: break-all;
+      }
+      button {
+        min-height: 44px;
+        padding: 0 20px;
+        border: 0;
+        border-radius: 8px;
+        background: #e8c061;
+        color: #15131c;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main id="oauth-callback">
+      <section data-view="loading">
+        <p class="note">One moment…</p>
+      </section>
+
+      <section data-view="done" hidden>
+        <h1>Done</h1>
+        <p>You're connected. Return to Chatsundere.</p>
+      </section>
+
+      <section data-view="code" hidden>
+        <h1>Almost there</h1>
+        <p>Copy this code and paste it into Chatsundere to finish signing in.</p>
+        <textarea data-paste readonly aria-label="Sign-in code"></textarea>
+        <button type="button" data-copy>Copy code</button>
+        <p class="note">
+          Some servers accept the code for only about a minute. If it has run out, starting again is fine.
+        </p>
+      </section>
+
+      <section data-view="cancelled" hidden>
+        <h1>Cancelled</h1>
+        <p>Sign-in was cancelled. Go back to Chatsundere to try again.</p>
+        <div data-cancel-paste hidden>
+          <p class="note">If Chatsundere does not notice by itself, paste this into it.</p>
+          <textarea data-paste readonly aria-label="Sign-in result"></textarea>
+          <button type="button" data-copy>Copy code</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/oauth-callback/main.ts"></script>
+  </body>
+</html>

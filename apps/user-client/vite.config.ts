@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Plugin, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { buildClientMetadata } from './src/mcp/oauth/client-metadata';
 
 /**
  * Dev-only POST /__dump-db endpoint. The DevDumpButton in the user-client
@@ -57,10 +58,54 @@ function dbDumpReceiver(): Plugin {
   };
 }
 
+/**
+ * Dev stand-ins for what nginx does in production: the OAuth client metadata
+ * document and the standalone callback page. `apply: 'serve'` keeps it out of
+ * builds (the page itself is a second rollup input).
+ */
+function oauthDevRoutes(): Plugin {
+  return {
+    name: 'chatsundere-oauth-dev-routes',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const pathname = (req.url ?? '').split('?')[0];
+        if (pathname === '/oauth/client-metadata.json') {
+          const host = req.headers.host ?? '';
+          // Same allow-list as nginx: the host is embedded in JSON.
+          if (!/^[A-Za-z0-9.-]+(:[0-9]+)?$/.test(host)) {
+            res.statusCode = 400;
+            res.end();
+            return;
+          }
+          const proto = req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(buildClientMetadata(`${proto}://${host}`)));
+          return;
+        }
+        if (pathname === '/oauth/callback') {
+          const file = path.resolve(server.config.root, 'oauth-callback.html');
+          const html = await server.transformIndexHtml(
+            '/oauth/callback',
+            fs.readFileSync(file, 'utf-8'),
+          );
+          res.setHeader('content-type', 'text/html; charset=utf-8');
+          res.setHeader('referrer-policy', 'no-referrer');
+          res.setHeader('cache-control', 'no-store');
+          res.end(html);
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
   build: {
     rollupOptions: {
+      input: { main: 'index.html', 'oauth-callback': 'oauth-callback.html' },
       output: {
         // Split the heavyweight, eagerly-imported vendors (katex, shiki core)
         // into their own chunks so the app-shell index chunk stays under
@@ -93,6 +138,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     dbDumpReceiver(),
+    oauthDevRoutes(),
     VitePWA({
       // 'prompt' keeps the generated sw.js waiting until it receives SKIP_WAITING.
       // injectRegister: false because src/sw/register.ts owns registration: the
@@ -144,7 +190,16 @@ export default defineConfig({
         // IndexedDB account (see apps/user-client/Dockerfile step 5). Without
         // it, navigating to /admin/ renders the user-client shell — the admin
         // never mounts and the page shows only our background.
-        navigateFallbackDenylist: [/^\/auth\/v1\//, /^\/api\//, /^\/model\//, /^\/admin\//],
+        // `/oauth/` holds the standalone callback page and the client metadata
+        // document; the shell would answer them without their headers and with
+        // Google Fonts attached, on a URL whose query carries a one-time code.
+        navigateFallbackDenylist: [
+          /^\/auth\/v1\//,
+          /^\/api\//,
+          /^\/model\//,
+          /^\/admin\//,
+          /^\/oauth\//,
+        ],
         runtimeCaching: [
           {
             urlPattern: ({ url }) =>
