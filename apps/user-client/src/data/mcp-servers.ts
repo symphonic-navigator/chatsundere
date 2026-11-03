@@ -73,6 +73,21 @@ export async function persistMcpRoute(
   void queryClient.invalidateQueries({ queryKey: QK.mcpServers });
 }
 
+/**
+ * Remember that this device's user agreed to contact a server at `url` (spec §8, M1).
+ * `firstUseConsentFor` is device-local, so this is a plain local write, and it only
+ * lands while the row still has that URL: consent never carries over to a new address.
+ */
+export async function recordMcpConsent(id: string, url: string): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.mcpServers, async () => {
+    const row = await db.mcpServers.get(id);
+    if (row?.url !== url) return;
+    await db.mcpServers.update(id, { firstUseConsentFor: url });
+  });
+  void queryClient.invalidateQueries({ queryKey: QK.mcpServers });
+}
+
 /** Delete an MCP server by id. */
 export function useDeleteMcpServer() {
   const qc = useQueryClient();

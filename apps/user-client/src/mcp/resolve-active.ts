@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { McpServerRow } from '../boot/client-data-db.js';
+import type { McpOAuthGrantRow, McpServerRow } from '../boot/client-data-db.js';
+import { assertSecureEndpoint, canonicalResource } from './oauth/url.js';
 import type { McpRouting } from './types.js';
 
 type RouteFields = Pick<McpServerRow, 'url' | 'allowDirect' | 'routing' | 'resolvedEndpoint'>;
@@ -25,13 +26,39 @@ export function usableRoute(
 }
 
 /**
+ * The token chokepoint (spec §8): an access token may be sent for this row only when
+ * the row's URL is, canonically, the resource the grant was issued for, and so is any
+ * endpoint this device resolved. Anything else, including a URL that does not parse or
+ * is not https, sends nothing.
+ */
+export function tokenAllowedFor(
+  grant: McpOAuthGrantRow,
+  row: Pick<McpServerRow, 'url' | 'resolvedEndpoint'>,
+): boolean {
+  try {
+    assertSecureEndpoint(row.url, 'MCP server');
+    const resource = canonicalResource(grant.resource);
+    if (canonicalResource(row.url) !== resource) return false;
+    // Rows pulled before the probe fields existed lack the field, hence no `!== null`.
+    if (row.resolvedEndpoint && canonicalResource(row.resolvedEndpoint) !== resource) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Whether a server without a route may find one by itself on first use. Synced
  * tools prove another device connected. Local network servers are excluded: their
  * reachability belongs to the device, and an automatic probe could hand the key to
  * whatever answers at that address on another network, so they need a manual test.
+ * OAuth servers are the exception (spec §7): their URL is https and the token
+ * chokepoint binds the grant to it, so any route this device has will do.
  */
 export function canResolveOnFirstUse(row: McpServerRow, hasProxy: boolean): boolean {
-  return !row.allowDirect && hasProxy && row.tools.length > 0;
+  if (row.tools.length === 0) return false;
+  if (row.auth?.scheme === 'oauth') return hasProxy || row.allowDirect;
+  return !row.allowDirect && hasProxy;
 }
 
 function reachable(s: McpServerRow, hasProxy: boolean): boolean {

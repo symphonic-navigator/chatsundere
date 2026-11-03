@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
-import type { McpServerRow } from '../../src/boot/client-data-db.js';
-import { resolveActiveServers, usableRoute } from '../../src/mcp/resolve-active.js';
+import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-db.js';
+import { candidatesFor } from '../../src/mcp/mcp-connectivity.js';
+import {
+  canResolveOnFirstUse,
+  resolveActiveServers,
+  tokenAllowedFor,
+  usableRoute,
+} from '../../src/mcp/resolve-active.js';
 
 const base = (over: Partial<McpServerRow>): McpServerRow => ({
   id: 's',
@@ -100,5 +106,111 @@ describe('resolveActiveServers', () => {
       expect(resolveActiveServers([pulled({ allowDirect: true })], {}, false)).toEqual([]);
       expect(resolveActiveServers([pulled({ allowDirect: true })], {}, true)).toEqual([]);
     });
+  });
+});
+
+const grant = (over: Partial<McpOAuthGrantRow> = {}): McpOAuthGrantRow => ({
+  id: 'o',
+  resource: 'https://kumbu.example/mcp/c/abc',
+  issuer: 'https://auth.example',
+  tokenEndpoint: 'https://auth.example/token',
+  revocationEndpoint: null,
+  clientId: 'c',
+  registration: 'cimd',
+  scope: null,
+  tokenRoute: 'proxy',
+  tokens: null,
+  claim: null,
+  createdAt: 1,
+  updatedAt: 1,
+  ...over,
+});
+const oauthRow = (over: Partial<McpServerRow> = {}): McpServerRow =>
+  base({
+    id: 'o',
+    url: 'https://kumbu.example/mcp/c/abc',
+    auth: { scheme: 'oauth' },
+    allowDirect: false,
+    routing: 'proxy',
+    resolvedEndpoint: 'https://kumbu.example/mcp/c/abc',
+    tools: [{ name: 'go', description: '', inputSchema: {} }],
+    ...over,
+  });
+
+describe('tokenAllowedFor (the token chokepoint)', () => {
+  it('allows the grant resource, also in a non-canonical spelling', () => {
+    expect(tokenAllowedFor(grant(), oauthRow())).toBe(true);
+    expect(
+      tokenAllowedFor(
+        grant(),
+        oauthRow({ url: 'https://KUMBU.example:443/mcp/c/abc/', resolvedEndpoint: null }),
+      ),
+    ).toBe(true);
+  });
+  it('refuses a differing origin', () => {
+    expect(tokenAllowedFor(grant(), oauthRow({ url: 'https://evil.example/mcp/c/abc' }))).toBe(
+      false,
+    );
+  });
+  it('refuses a differing path', () => {
+    expect(tokenAllowedFor(grant(), oauthRow({ url: 'https://kumbu.example/mcp' }))).toBe(false);
+  });
+  it('refuses a differing scheme', () => {
+    expect(tokenAllowedFor(grant(), oauthRow({ url: 'http://kumbu.example/mcp/c/abc' }))).toBe(
+      false,
+    );
+  });
+  it('refuses when the resolved endpoint differs from the resource', () => {
+    expect(
+      tokenAllowedFor(
+        grant(),
+        oauthRow({ resolvedEndpoint: 'https://kumbu.example/mcp/c/abc/mcp' }),
+      ),
+    ).toBe(false);
+  });
+  it('refuses an unparsable URL rather than throwing', () => {
+    expect(tokenAllowedFor(grant(), oauthRow({ url: 'nope' }))).toBe(false);
+  });
+});
+
+describe('candidatesFor', () => {
+  it('probes only the grant resource, never a /mcp variant', () => {
+    const cs = candidatesFor(oauthRow({ allowDirect: true }), grant(), true);
+    expect(cs).toEqual([
+      { routing: 'direct', url: 'https://kumbu.example/mcp/c/abc' },
+      { routing: 'proxy', url: 'https://kumbu.example/mcp/c/abc' },
+    ]);
+    expect(cs.some((c) => c.url.endsWith('/mcp'))).toBe(false);
+  });
+  it('is proxy-only without allowDirect', () => {
+    expect(candidatesFor(oauthRow(), grant(), true)).toEqual([
+      { routing: 'proxy', url: 'https://kumbu.example/mcp/c/abc' },
+    ]);
+  });
+  it('yields nothing when the grant does not belong to the row', () => {
+    expect(candidatesFor(oauthRow({ url: 'https://kumbu.example/other' }), grant(), true)).toEqual(
+      [],
+    );
+  });
+});
+
+describe('canResolveOnFirstUse for OAuth rows', () => {
+  it('resolves on first use with allowDirect, with or without a proxy', () => {
+    expect(canResolveOnFirstUse(oauthRow({ allowDirect: true }), false)).toBe(true);
+    expect(canResolveOnFirstUse(oauthRow({ allowDirect: true }), true)).toBe(true);
+  });
+  it('resolves on first use through the proxy', () => {
+    expect(canResolveOnFirstUse(oauthRow({ allowDirect: false }), true)).toBe(true);
+  });
+  it('does not resolve with no route at all', () => {
+    expect(canResolveOnFirstUse(oauthRow({ allowDirect: false }), false)).toBe(false);
+  });
+  it('key rows with allowDirect still do not', () => {
+    const keyRow = oauthRow({
+      allowDirect: true,
+      auth: { scheme: 'bearer', key: {} as unknown as never },
+    });
+    expect(canResolveOnFirstUse(keyRow, true)).toBe(false);
+    expect(canResolveOnFirstUse(keyRow, false)).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { MCP_PROTOCOL_VERSION } from '../protocol.js';
 import type { OAuthFetch } from './oauth-fetch.js';
 import { OAuthError, assertSecureEndpoint, canonicalResource } from './url.js';
 import { parseBearerChallenge } from './www-authenticate.js';
@@ -22,7 +23,6 @@ export type OAuthDiscovery = {
 export type DiscoveryResult = OAuthDiscovery | { kind: 'no-oauth' };
 
 const MAX_METADATA_BYTES = 256 * 1024;
-const MCP_PROTOCOL_VERSION = '2025-06-18';
 
 type Json = Record<string, unknown>;
 type Read = { status: 'ok'; value: Json } | { status: 'missing' } | { status: 'invalid' };

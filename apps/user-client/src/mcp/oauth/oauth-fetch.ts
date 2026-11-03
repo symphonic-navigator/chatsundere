@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getProxyAuthSource } from '@chatsundere/llm-unified';
+import { MCP_PROTOCOL_VERSION } from '../protocol.js';
 import { OAuthError } from './url.js';
-
-/** Version header that makes a cross-origin POST need a preflight (spec §7, trap). */
-const MCP_PROTOCOL_VERSION = '2025-06-18';
 
 const MAX_401_BODY_BYTES = 4 * 1024;
 
@@ -25,7 +23,7 @@ function joinUrl(base: string, path: string): string {
  * The body is read through its stream and capped, so a hostile upstream cannot make this
  * buffer a large payload; anything over the cap or unparsable is not a proxy-level 401.
  */
-async function isProxyUnauthorised(response: Response): Promise<boolean> {
+export async function isProxyUnauthorised(response: Response): Promise<boolean> {
   if (response.status !== 401) return false;
   try {
     const reader = response.clone().body?.getReader();
