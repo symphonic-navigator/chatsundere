@@ -2687,6 +2687,15 @@ h1 {
   flex-direction: column;
   gap: 0.25rem;
 }
+.pill-notice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
 .pill[data-pill-expandable] {
   cursor: pointer;
 }

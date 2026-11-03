@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { CheckResult } from '../../mcp/oauth/check-server.js';
 import type { CompleteFailure } from '../../mcp/oauth/sign-in.js';
 import { OAuthError } from '../../mcp/oauth/url.js';
 
@@ -105,4 +106,14 @@ export function hostOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+/** The sentence for a re-check that did not end in a sign-in, shown on the detail page and over a chat. */
+export function reconnectCheckMessage(checked: CheckResult): string {
+  if (checked.kind === 'unreachable') {
+    return checked.cause !== 'probe'
+      ? checked.error
+      : "Couldn't reach this server to sign in again. Try again in a moment.";
+  }
+  return 'This server no longer asks for a sign-in. Remove it and add it again.';
 }

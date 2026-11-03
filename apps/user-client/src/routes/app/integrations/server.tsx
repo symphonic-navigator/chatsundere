@@ -9,7 +9,11 @@ import { CheckServerStep } from '../../../components/mcp/CheckServerStep.js';
 import { OAuthConnectionPanel } from '../../../components/mcp/OAuthConnectionPanel.js';
 import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
 import { SignInSettings } from '../../../components/mcp/SignInSettings.js';
-import { SAVING_LATER, hostOf } from '../../../components/mcp/sign-in-copy.js';
+import {
+  SAVING_LATER,
+  hostOf,
+  reconnectCheckMessage,
+} from '../../../components/mcp/sign-in-copy.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
@@ -463,13 +467,7 @@ function IntegrationServerForm({
         setReconnect({ kind: 'flow', discovery: checked.discovery });
         return;
       }
-      setReconnectError(
-        checked.kind === 'unreachable' && checked.cause !== 'probe'
-          ? checked.error
-          : checked.kind === 'unreachable'
-            ? "Couldn't reach this server to sign in again. Try again in a moment."
-            : 'This server no longer asks for a sign-in. Remove it and add it again.',
-      );
+      setReconnectError(reconnectCheckMessage(checked));
     } catch {
       setReconnectError("Couldn't reach this server to sign in again. Try again in a moment.");
     }

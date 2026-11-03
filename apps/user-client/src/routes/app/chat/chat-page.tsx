@@ -27,6 +27,7 @@ import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js'
 import { Lightbox } from '../../../components/lightbox/Lightbox.js';
 import { artefactToViewable } from '../../../components/lightbox/viewable-item.js';
 import { McpApprovalPrompt } from '../../../components/mcp/McpApprovalPrompt.js';
+import { McpSignInOverlay } from '../../../components/mcp/McpSignInOverlay.js';
 import { PickerOverlay } from '../../../components/ui/PickerOverlay.js';
 import { SpectrumAnalyser } from '../../../components/voice/SpectrumAnalyser.js';
 import {
@@ -1161,6 +1162,8 @@ export function ChatPage(): JSX.Element {
 
       {/* MCP tool-call approval — explicit modal, not tap-to-dismiss; z-50 renders above the cockpit */}
       <McpApprovalPrompt />
+      {/* Sibling of the prompt, never a wrapper: opening it must not unmount the chat or reject approvals */}
+      <McpSignInOverlay />
 
       {isInteractionMode && effectivePersona && (!isLiveVoice || isPinned) ? (
         <InteractionMode

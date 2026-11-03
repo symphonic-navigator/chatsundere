@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
+import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
+import { McpAuthNotice } from '../mcp/McpAuthNotice.js';
 import { ArtefactPill } from './ArtefactPill.js';
 import { CondensationSlot, hasVisibleSummary } from './CondensationSlot.js';
 import { ExpertPill } from './ExpertPill.js';
@@ -30,6 +32,9 @@ interface PillPayloadShape {
   entries?: LoreEntryShape[];
   omittedCount?: number;
   truncatedCount?: number;
+  phase?: string;
+  /** Set by a failed MCP OAuth call; holds names only, never a token. */
+  mcpAuth?: McpAuthNoticePayload;
 }
 
 function labelFor(row: PillRow): string {
@@ -134,6 +139,10 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
         <span className="pill-icon">{ICON[row.kind]}</span>
         {labelFor(row)}
       </button>
+      {row.status === 'pending' && payload?.phase === 'renewing' && (
+        <output className="pill-notice">Renewing access…</output>
+      )}
+      {payload?.mcpAuth && <McpAuthNotice notice={payload.mcpAuth} />}
       {expandable && expanded && (
         <span className="pill-detail">
           {isLore ? (

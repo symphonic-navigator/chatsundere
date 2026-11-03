@@ -426,7 +426,7 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
  * The overlay above a chat: focus moves in when it opens and back when it closes, and
  * Escape closes it like the page's Back, keeping a sign-in already opened.
  */
-function OverlayFrame(props: {
+export function OverlayFrame(props: {
   label: string;
   onClose: () => void;
   children: JSX.Element;
