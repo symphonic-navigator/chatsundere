@@ -18,6 +18,8 @@ import {
 export interface GrantStore {
   /** Row and revision, read together. */
   snapshot(id: string): Promise<{ row: McpOAuthGrantRow; rev: number } | null>;
+  /** Writes a whole row locally, replacing any other; never reaches the server by itself. */
+  putLocal(row: McpOAuthGrantRow): Promise<void>;
   /** A local-only patch; never reaches the server by itself. */
   writeLocal(id: string, patch: Partial<McpOAuthGrantRow>): Promise<void>;
   /** The direct compare-and-set push of exactly this row at exactly this base. */
@@ -40,6 +42,9 @@ export function createDexieGrantStore(): GrantStore {
   let lastRequest = Number.NEGATIVE_INFINITY;
   return {
     snapshot: (id) => snapshotGrant(id),
+    putLocal: async (row) => {
+      await getClientDataDb().mcpOAuthGrants.put(row);
+    },
     writeLocal: async (id, patch) => {
       await getClientDataDb().mcpOAuthGrants.update(id, patch);
     },

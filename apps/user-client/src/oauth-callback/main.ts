@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { type CallbackPayload, encodeCallbackPayload } from '../mcp/oauth/callback-payload';
-
-/** Must match the name the waiting app tab listens on. */
-export const CALLBACK_CHANNEL = 'chatsundere-mcp-oauth';
+import {
+  CALLBACK_CHANNEL,
+  type CallbackPayload,
+  encodeCallbackPayload,
+} from '../mcp/oauth/callback-payload';
 
 /** How long the page waits for the app tab before it shows the code itself. */
 const ACK_WAIT_MS = 1500;

@@ -13,7 +13,8 @@ export type OAuthErrorKind =
   | 'exchange-failed'
   | 'invalid-grant'
   | 'refresh-failed'
-  | 'network';
+  | 'network'
+  | 'locked';
 
 /** Error raised by the OAuth layer. Its message never contains a token, code or verifier. */
 export class OAuthError extends Error {

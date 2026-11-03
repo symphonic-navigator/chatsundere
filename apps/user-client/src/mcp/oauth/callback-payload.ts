@@ -14,6 +14,9 @@ function fromBase64Url(s: string): Uint8Array {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
+/** The BroadcastChannel shared by the callback page and the waiting app tab. */
+export const CALLBACK_CHANNEL = 'chatsundere-mcp-oauth';
+
 /** What the relay page hands back after the authorisation redirect. */
 export type CallbackPayload =
   | { code: string; state: string; iss?: string }

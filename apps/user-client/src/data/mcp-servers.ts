@@ -17,24 +17,38 @@ export function useMcpServers() {
   });
 }
 
+/**
+ * Insert or replace an MCP server row through the synced write-through. With
+ * `deferWhenOffline` the local write still lands while sync is unreachable, which
+ * the save after an OAuth sign-in needs: its grant already exists and must not orphan.
+ * With `ifAbsent` an existing row makes it throw instead of being replaced.
+ */
+export async function upsertMcpServer(
+  row: McpServerRow,
+  opts: { deferWhenOffline?: boolean; ifAbsent?: boolean } = {},
+): Promise<McpServerRow> {
+  // Class-2 upsert (spec §5): device-probe fields are stripped before seal
+  // (§10 deny-list). Gated write-through — the integrations affordance is
+  // disabled offline.
+  await mutateSynced({
+    collection: 'mcpServers',
+    key: row.id,
+    tables: ['mcpServers'],
+    write: async (tx) => {
+      // `add` aborts the whole transaction on an existing key, so nothing is enqueued.
+      if (opts.ifAbsent) await tx.table('mcpServers').add(row);
+      else await tx.table('mcpServers').put(row);
+    },
+    ...(opts.deferWhenOffline ? { deferWhenOffline: true } : {}),
+  });
+  return row;
+}
+
 /** Insert or replace an MCP server row. */
 export function useUpsertMcpServer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (row: McpServerRow): Promise<McpServerRow> => {
-      // Class-2 upsert (spec §5): device-probe fields are stripped before seal
-      // (§10 deny-list). Gated write-through — the integrations affordance is
-      // disabled offline.
-      await mutateSynced({
-        collection: 'mcpServers',
-        key: row.id,
-        tables: ['mcpServers'],
-        write: async (tx) => {
-          await tx.table('mcpServers').put(row);
-        },
-      });
-      return row;
-    },
+    mutationFn: (row: McpServerRow): Promise<McpServerRow> => upsertMcpServer(row),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.mcpServers }),
   });
 }

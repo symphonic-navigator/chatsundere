@@ -177,6 +177,11 @@ export interface McpOAuthGrantRow {
   registration: 'cimd' | 'dcr';
   scope: string | null;
   tokenRoute: 'direct' | 'proxy';
+  /**
+   * The redirect URI the client was registered with. A reconnect reuses a dynamically
+   * registered client only while this is unchanged. Absent on grants made before it.
+   */
+  redirectUri?: string;
   tokens: EncryptedBlob | null;
   /** The refresh claim; `at` is informational only, never compared across devices. */
   claim: { deviceId: string; at: number } | null;

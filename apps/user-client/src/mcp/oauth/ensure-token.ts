@@ -97,7 +97,7 @@ export async function createEnsureDeps(): Promise<EnsureDeps> {
  * A private copy of the key, because locking the app zeroes the session's buffer in
  * place. Null when there is no key, or it is already zeroed.
  */
-function copyKey(mk: MasterKey | null): MasterKey | null {
+export function copyKey(mk: MasterKey | null): MasterKey | null {
   if (mk === null) return null;
   const copy = new Uint8Array(mk);
   if (copy.every((b) => b === 0)) return null;
