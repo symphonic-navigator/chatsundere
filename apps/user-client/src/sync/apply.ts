@@ -594,8 +594,8 @@ async function applyTombstone(mk: MasterKey, pulled: SyncPulledRecord): Promise<
   // above the threshold. `vectors` are excluded (§4.3, 2026-07-13): they are
   // invisible infrastructure and one document delete now carries a tombstone per
   // chunk (hundreds), which must never raise the "items removed on another device"
-  // alarm.
-  if (collection !== 'vectors') {
+  // alarm. Grants follow their server row, which already counts.
+  if (collection !== 'vectors' && collection !== 'mcpOAuthGrants') {
     tombstoneCycleCount += 1;
     if (tombstoneCycleCount >= TOMBSTONE_THRESHOLD) {
       await setAttention({ kind: 'tombstone_threshold', count: tombstoneCycleCount });

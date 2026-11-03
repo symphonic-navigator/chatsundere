@@ -557,6 +557,14 @@ async function enqueueFullRepush(
       // Built-in mindspaces never sync (engine spec §12.5): every device seeds
       // the same slug-keyed seven, so pushing them is redundant.
       if (collection === 'mindspaces' && (row as { builtIn?: boolean }).builtIn === true) continue;
+      // An unpublished new sign-in has no `tokens` yet: re-pushing it would reseed the
+      // server with a dead grant. Its own publish path delivers it (MCP OAuth spec §5).
+      if (
+        collection === 'mcpOAuthGrants' &&
+        (row as { pendingNewFamily?: boolean }).pendingNewFamily === true
+      ) {
+        continue;
+      }
       const key = syncKeyOfRow(collection, row);
       await db.syncOutbox.add({ collection, key, op: 'upsert', enqueuedAt: now });
     }

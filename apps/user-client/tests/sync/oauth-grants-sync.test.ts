@@ -24,6 +24,7 @@ import {
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { getDeviceId, openTokens, sealTokens } from '../../src/data/mcp-oauth-grants.js';
+import { sealSecret } from '../../src/lib/secrets.js';
 import type { TokenSet } from '../../src/mcp/oauth/token-client.js';
 import {
   _resetApplyForTests,
@@ -40,6 +41,7 @@ import {
 } from '../../src/sync/backfill.js';
 import { runReconciliationIfDue } from '../../src/sync/reconcile.js';
 import { prepareRecord } from '../../src/sync/seal-batch.js';
+import { getSyncState } from '../../src/sync/watermark.js';
 import { _resetWorkerForTests } from '../../src/sync/worker.js';
 
 // ===== Fixtures =====
@@ -143,6 +145,20 @@ describe('sealTokens / openTokens', () => {
     expect(await openTokens(blob, mk, 'srv-1')).toEqual(TOKENS);
   });
 
+  it('rejects a sealed body of the wrong shape', async () => {
+    for (const body of [
+      '{"accessToken":5,"refreshToken":null,"accessExpiresAt":null,"scope":null}',
+      '{"accessToken":"a","refreshToken":7,"accessExpiresAt":null,"scope":null}',
+      '{"accessToken":"a","refreshToken":null,"accessExpiresAt":"soon","scope":null}',
+      '{"accessToken":"a","refreshToken":null,"accessExpiresAt":null,"scope":3}',
+      '[]',
+      'null',
+    ]) {
+      const blob = await sealSecret(body, mk, 'mcp/srv-1/oauth-tokens');
+      await expect(openTokens(blob, mk, 'srv-1')).rejects.toThrow();
+    }
+  });
+
   it('returns null for a null blob', async () => {
     expect(await openTokens(null, mk, 'srv-1')).toBeNull();
   });
@@ -206,6 +222,22 @@ describe('applyRecord — mcpOAuthGrants', () => {
     expect(row?.pendingNewFamily).toBe(true);
     expect((await db.syncRows.get(['mcpOAuthGrants', 'srv-1']))?.rev).toBe(4);
     expect(await db.syncOutbox.count()).toBe(0);
+  });
+
+  it('grant tombstones never raise the mass-deletion notice', async () => {
+    const db = getClientDataDb();
+    for (let i = 0; i < 25; i++) {
+      await db.mcpOAuthGrants.put(grant(`srv-${i}`));
+      await db.syncRows.put({
+        collection: 'mcpOAuthGrants',
+        key: `srv-${i}`,
+        rev: 1,
+        ciphertextHash: 'x',
+      });
+    }
+    for (let i = 0; i < 25; i++) await applyRecord(pulledTombstone(`srv-${i}`, 10 + i));
+    expect(await db.mcpOAuthGrants.count()).toBe(0);
+    expect((await getSyncState()).attention).toBeNull();
   });
 
   it('a pulled grant tombstone deletes the row and creates no trash entry', async () => {
