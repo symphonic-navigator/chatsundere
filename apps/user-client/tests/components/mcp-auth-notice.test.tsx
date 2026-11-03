@@ -10,6 +10,10 @@ const grants = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>> })
 vi.mock('../../src/data/mcp-oauth-grants.js', () => ({
   useMcpOAuthGrants: () => ({ data: grants.rows }),
 }));
+const gate = vi.hoisted(() => ({ disabled: false }));
+vi.mock('../../src/sync/gate.js', () => ({
+  useClass2Gate: () => ({ disabled: gate.disabled, tooltip: null }),
+}));
 
 type Auth = { variant: 'dead' | 'waiting' | 'scope'; scope?: string };
 
@@ -42,7 +46,8 @@ function show(row: PillRow) {
 let open: ReturnType<typeof vi.fn>;
 let windowOpen: MockInstance<typeof window.open>;
 beforeEach(() => {
-  grants.rows = [{ id: 's1', tokens: null }];
+  grants.rows = [{ id: 's1', tokens: null, scope: null }];
+  gate.disabled = false;
   open = vi.fn();
   useMcpSignInOverlay.setState({ target: null, open: open as never });
   windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null);
@@ -90,6 +95,49 @@ describe('McpAuthNotice on a tool pill', () => {
     expect(screen.queryByRole('button', { name: 'Sign in again' })).not.toBeInTheDocument();
     expect(screen.queryByText('⚠ Kumbu: sign-in ended')).not.toBeInTheDocument();
     expect(screen.getByText('● Kumbu: connected again')).toBeInTheDocument();
+  });
+
+  it('a dead notice whose grant holds a pending pair also reads as connected again', () => {
+    grants.rows = [{ id: 's1', tokens: null, pendingTokens: { v: 1 } }];
+    show(pill({ variant: 'dead' }));
+    expect(screen.getByText('● Kumbu: connected again')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in again' })).not.toBeInTheDocument();
+  });
+
+  it('a scope notice whose scopes the live grant now holds says access granted, no action', () => {
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, scope: 'read write offline_access' }];
+    show(pill({ variant: 'scope', scope: 'write read' }));
+    expect(screen.getByText('● Kumbu: access granted')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Grant access' })).not.toBeInTheDocument();
+  });
+
+  it('a scope notice still offers Grant access while a scope is missing from the grant', () => {
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, scope: 'read' }];
+    show(pill({ variant: 'scope', scope: 'read write' }));
+    expect(screen.getByRole('button', { name: 'Grant access' })).toBeInTheDocument();
+  });
+
+  it('a scope notice without tokens on the grant still offers Grant access', () => {
+    grants.rows = [{ id: 's1', tokens: null, scope: 'read write' }];
+    show(pill({ variant: 'scope', scope: 'read write' }));
+    expect(screen.getByRole('button', { name: 'Grant access' })).toBeInTheDocument();
+  });
+
+  it('disables Sign in again and Grant access with the reason while the backend is unreachable', () => {
+    gate.disabled = true;
+    show(pill({ variant: 'dead' }));
+    const button = screen.getByRole('button', { name: 'Sign in again' });
+    expect(button).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Signing in again waits until your Chatsundere server is reachable, so it can't clash with your other devices.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(open).not.toHaveBeenCalled();
+    cleanup();
+    show(pill({ variant: 'scope', scope: 'write' }));
+    expect(screen.getByRole('button', { name: 'Grant access' })).toBeDisabled();
   });
 
   it('an old pill without mcpAuth renders no notice', () => {

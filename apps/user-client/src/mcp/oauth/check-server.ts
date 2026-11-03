@@ -3,7 +3,16 @@ import { buildCandidates, liveProbe } from '../mcp-connectivity.js';
 import type { McpCandidate, McpProbeResult, McpRouting, McpToolDefinition } from '../types.js';
 import { type OAuthDiscovery, discoverOAuth } from './discovery.js';
 import { type OAuthFetch, createOAuthFetch } from './oauth-fetch.js';
-import { OAuthError } from './url.js';
+import { OAuthError, assertSecureEndpoint } from './url.js';
+
+function isSecure(url: string): boolean {
+  try {
+    assertSecureEndpoint(url, 'MCP server');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** What *Check server* found out about a link (MCP OAuth spec §9 "Connect"). */
 export type CheckResult =
@@ -29,13 +38,15 @@ const HTTP_ONLY_WITHOUT_PROXY =
  * Checks a link before anything is saved. Without a proxy an `https` link is probed
  * directly whatever `allowDirect` says (spec §7), since the "Local network" toggle lives in
  * the manual path; no probe carries a credential. A `/mcp` suffix that answers becomes
- * the endpoint, and so the OAuth `resource`.
+ * the endpoint, and so the OAuth `resource`. `exact` probes only the link itself, for
+ * re-checking an OAuth row whose `resource` must stay its URL.
  */
 export async function checkServer(
   url: string,
   deps: {
     hasProxy: boolean;
     allowDirect: boolean;
+    exact?: boolean;
     oauthFetch?: OAuthFetch;
     probe?: (c: McpCandidate) => Promise<McpProbeResult>;
   },
@@ -61,7 +72,11 @@ export async function checkServer(
     };
   }
   const allowDirect = hasProxy ? deps.allowDirect : true;
-  const candidates = buildCandidates(url.trim(), hasProxy, allowDirect);
+  const trimmed = url.trim();
+  const exactUrl = trimmed.replace(/\/+$/, '');
+  const candidates = buildCandidates(trimmed, hasProxy, allowDirect).filter(
+    (c) => !deps.exact || c.url === exactUrl,
+  );
   const probe = deps.probe ?? liveProbe(null);
   let lastError = '';
   for (const c of candidates) {
@@ -72,6 +87,8 @@ export async function checkServer(
       continue;
     }
     // An auth answer proves this candidate is the server; the others are not tried.
+    // A plaintext server can only be a key server: OAuth needs https (spec §8).
+    if (!isSecure(c.url)) return { kind: 'key', route: c.routing, endpoint: c.url };
     try {
       const found = await discoverOAuth(c.url, {
         oauthFetch: deps.oauthFetch ?? createOAuthFetch(),

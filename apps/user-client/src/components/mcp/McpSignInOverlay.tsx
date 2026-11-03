@@ -10,9 +10,9 @@ import {
   useMcpSignInOverlay,
 } from '../../state/mcp-sign-in-overlay.store.js';
 import { toastStore } from '../../state/toast.store.js';
-import { Button } from '../ui/index.js';
+import { useClass2Gate } from '../../sync/gate.js';
 import { OAuthSignInFlow, OverlayFrame } from './OAuthSignInFlow.js';
-import { reconnectCheckMessage } from './sign-in-copy.js';
+import { SIGN_IN_WAITS_FOR_BACKEND, reconnectCheckMessage } from './sign-in-copy.js';
 
 type Phase =
   | { kind: 'checking' }
@@ -30,13 +30,18 @@ function Reconnect({
 }): JSX.Element {
   const close = useMcpSignInOverlay((s) => s.close);
   const hasProxy = useServerGate('proxy').enabled;
-  const [phase, setPhase] = useState<Phase>({ kind: 'checking' });
+  // Backstop for the notice's disabled button: a new family must not race a live one.
+  const blocked = useClass2Gate().disabled;
+  const [phase, setPhase] = useState<Phase>(
+    blocked ? { kind: 'error', message: SIGN_IN_WAITS_FOR_BACKEND } : { kind: 'checking' },
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one check per opening
   useEffect(() => {
+    if (blocked) return undefined;
     let live = true;
-    // The same discovery the detail page's *Sign in again* runs, for the row's own URL.
-    checkServer(server.url, { hasProxy, allowDirect: server.allowDirect })
+    // The same discovery the detail page's *Sign in again* runs, for exactly the row's URL.
+    checkServer(server.url, { hasProxy, allowDirect: server.allowDirect, exact: true })
       .then((checked: CheckResult) => {
         if (!live) return;
         if (checked.kind === 'sign-in') setPhase({ kind: 'flow', discovery: checked.discovery });
@@ -79,10 +84,7 @@ function Reconnect({
         {phase.kind === 'checking' ? (
           <p className="text-sm text-paper-soft">Checking {server.name}…</p>
         ) : (
-          <>
-            <p className="text-sm text-paper">{phase.message}</p>
-            <Button onClick={close}>Close</Button>
-          </>
+          <p className="text-sm text-paper">{phase.message}</p>
         )}
       </div>
     </OverlayFrame>
@@ -97,6 +99,8 @@ export function McpSignInOverlay(): JSX.Element | null {
   const target = useMcpSignInOverlay((s) => s.target);
   const close = useMcpSignInOverlay((s) => s.close);
   const servers = useMcpServers();
+  // Leaving the chat closes the overlay, so it never opens by itself somewhere else.
+  useEffect(() => () => useMcpSignInOverlay.getState().close(), []);
   const server = target ? (servers.data ?? []).find((s) => s.id === target.serverId) : undefined;
 
   if (!target) return null;
@@ -106,7 +110,6 @@ export function McpSignInOverlay(): JSX.Element | null {
       <OverlayFrame label="Sign in" onClose={close}>
         <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-ink p-4">
           <p className="text-sm text-paper">This server is no longer in My Integrations.</p>
-          <Button onClick={close}>Close</Button>
         </div>
       </OverlayFrame>
     );

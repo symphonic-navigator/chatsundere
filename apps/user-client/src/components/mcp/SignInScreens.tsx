@@ -33,6 +33,8 @@ function UseKeyButton({ onUseKey }: { onUseKey: (() => void) | undefined }): JSX
 export function SignInConfirm(props: {
   serverHost: string;
   authHost: string;
+  /** Only a linked account shares the grant with other devices. */
+  linked: boolean;
   ready: boolean;
   onContinue: () => void;
   onNotNow: () => void;
@@ -41,9 +43,14 @@ export function SignInConfirm(props: {
     <div className={cardClass}>
       <h2 className={headingClass}>Sign in to {props.serverHost}</h2>
       <p className="text-sm text-paper">
-        {props.serverHost} asks you to sign in. You'll sign in at {props.authHost}.
+        {props.serverHost} asks you to sign in.{' '}
+        {props.authHost === props.serverHost
+          ? `You'll sign in at ${props.authHost}.`
+          : `You'll sign in at ${props.authHost}, which is not ${props.serverHost}.`}
       </p>
-      <p className={noteClass}>Access applies on all your devices that use this account.</p>
+      {props.linked ? (
+        <p className={noteClass}>Access applies on all your devices that use this account.</p>
+      ) : null}
       <p className={noteClass}>
         Only connect servers you trust: their tools see what your Circle sends them.
       </p>

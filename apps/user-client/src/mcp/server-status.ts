@@ -25,7 +25,9 @@ function oauthStatus(row: McpServerRow, ctx: ServerStatusContext): string {
   if (!grant) return '○ Connects on first use';
   if (grant.tokens === null && !grant.pendingTokens) return '⚠ Sign in again';
   const route = usableRoute(row);
-  const needsProxy = route ? route.routing === 'proxy' : !row.allowDirect;
+  // Tokens renewed through the proxy need it however the tools are reached.
+  const needsProxy =
+    (route ? route.routing === 'proxy' : !row.allowDirect) || grant.tokenRoute === 'proxy';
   if (needsProxy && !ctx.hasProxy) {
     return ctx.linked
       ? '○ Waiting for your Chatsundere server'

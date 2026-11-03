@@ -1163,7 +1163,8 @@ export function ChatPage(): JSX.Element {
       {/* MCP tool-call approval — explicit modal, not tap-to-dismiss; z-50 renders above the cockpit */}
       <McpApprovalPrompt />
       {/* Sibling of the prompt, never a wrapper: opening it must not unmount the chat or reject approvals */}
-      <McpSignInOverlay />
+      {/* Keyed by chat: an overlay opened in one chat never reappears in the next. */}
+      <McpSignInOverlay key={activeChatId ?? 'new'} />
 
       {isInteractionMode && effectivePersona && (!isLiveVoice || isPinned) ? (
         <InteractionMode

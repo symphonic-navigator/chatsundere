@@ -56,13 +56,41 @@ Three constraints shape the design:
    exactly as Bearer keys already do, and tool calls usually carry the access token
    through it. The proxy neither stores nor logs them. This is the same trade as
    for static keys, and the direct route avoids it wherever the server permits.
+   **The proxy operator can also steer, not only read.** Discovery documents and
+   registration answers that come through the proxy are not authenticated end to
+   end, so a hostile operator can rewrite `authorization_servers` to a sign-in
+   page of its choosing or swap a registered `client_id` for its own. This is a
+   new kind of capability: before OAuth the operator could only read keys, now it
+   can send the user's browser somewhere. The confirmation names the sign-in host,
+   and says so outright when it is not the server's host ("You'll sign in at X,
+   which is not Y"), so a redirect to an unfamiliar host is visible. Marking the
+   documents that came through the proxy and fetching protected resource metadata
+   direct where possible are deferred (Larissa L3, 2026-11-03).
 7. **The sign-in code can appear in an operator's logs.** The callback page is a
    static page that removes the code from the address bar, sends
    `Referrer-Policy: no-referrer`, loads nothing third-party and has `access_log
    off`. An operator's reverse proxy can still log the request, and nginx's
-   `error_log` could record it on a hypothetical 404 of the callback. The code
-   alone is useless without the PKCE verifier, which never leaves the device that
-   started the sign-in.
+   `error_log` could record it on a hypothetical 404 of the callback. A code that
+   leaks this way is useless without the PKCE verifier, which never leaves the
+   device that started the sign-in.
+   **Residual risk: code phishing through the paste fallback.** PKCE does not help
+   when the attacker *started* the flow. An attacker begins a sign-in on their own
+   device, sends the authorisation URL to a victim ("connect your Notion to our
+   workspace"), the victim approves a consent screen that rightly names
+   Chatsundere, and the callback page in the victim's browser, where no app tab
+   holds that `state`, shows a pasteable code. If the victim sends the code on,
+   the attacker's waiting screen completes with the attacker's own verifier and
+   the attacker holds tokens for the victim's account. The page mitigates this
+   without closing it: the code view says, before the Copy button, to paste it
+   only into Chatsundere on this device where the sign-in was started at the
+   named `iss` host, and never to send it to anyone. Where the page can see the
+   app's IndexedDB (a normal browser) and the `state` is certainly absent, it
+   says the sign-in was not started here and hides the code behind a deliberate
+   "I started this on another device". Where it cannot tell (an iOS home-screen
+   app with partitioned storage, no database yet), it shows the ordinary warning,
+   so the iPhone path keeps working. The check opens the database read-only and
+   never creates or upgrades it. A relay for the code would remove the paste
+   step altogether and stays a follow-up.
 8. **First-use consent and the origin in every approval prompt** ship in the same
    unit, for OAuth and key servers alike. This closes the remainder of M1 of
    [security-deferrals](../insights/security-deferrals.md) (2026-11-02).
@@ -76,10 +104,15 @@ Three constraints shape the design:
   server restored from an old backup or recovered by epoch; a slow refresh
   crossing a new sign-in on another device; a long-offline new sign-in
   overwriting a newer one; and a hostile sync server replaying an old row. The
-  last is denial of service only, since it cannot read tokens.
+  last is denial of service only, since the sync role cannot read tokens. Because
+  the seal does not bind the revision and grants have no LWW, a replay reaches
+  devices that already know the row too (Larissa L2, 2026-11-03, deferred). The
+  same operator usually runs the proxy, which sees what §6 accepts.
 - **Known limitation: grant rows are not size-padded.** `PADDED_COLLECTIONS`
   lives in `packages/crypto` and is untouched, so the ciphertext length of a grant
-  row reflects its contents. Pending Larissa's judgement.
+  row reflects its contents, and the claim-then-publish pushes show when each
+  OAuth server is used. Rated Low and deferred (Larissa L4, 2026-11-03): padding
+  in a later crypto unit; the timing channel is accepted.
 - **Rollout order.** Backend first: an older sync service refuses a push batch
   naming the new collection. A PWA not yet updated holds no grant until the next
   rotation and shows "Connects on first use".

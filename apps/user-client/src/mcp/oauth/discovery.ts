@@ -100,6 +100,8 @@ export async function discoverOAuth(
 ): Promise<DiscoveryResult> {
   const { oauthFetch, route, hasProxy } = deps;
   const resource = canonicalResource(url);
+  // Before the probe: a token minted for a plaintext resource could never be used (spec §8).
+  assertSecureEndpoint(resource, 'MCP server');
   const resourceUrl = new URL(resource);
 
   // 1. Probe. Only a 401 starts OAuth.

@@ -7,6 +7,10 @@ const m = vi.hoisted(() => ({
   toast: vi.fn(),
   flowProps: null as null | Record<string, unknown>,
   servers: [] as Array<Record<string, unknown>>,
+  class2Disabled: false,
+}));
+vi.mock('../../src/sync/gate.js', () => ({
+  useClass2Gate: () => ({ disabled: m.class2Disabled, tooltip: null }),
 }));
 
 vi.mock('../../src/mcp/oauth/check-server.js', () => ({
@@ -55,6 +59,7 @@ beforeEach(() => {
   m.consent.mockClear();
   m.toast.mockClear();
   m.flowProps = null;
+  m.class2Disabled = false;
   m.servers = [{ id: 's1', name: 'Kumbu', url: 'https://kumbu.example/mcp', allowDirect: false }];
   m.check.mockResolvedValue({ kind: 'sign-in', discovery: DISCOVERY });
   useMcpApprovalStore.setState({ pending: [] });
@@ -80,6 +85,7 @@ describe('McpSignInOverlay', () => {
     expect(m.check).toHaveBeenCalledWith('https://kumbu.example/mcp', {
       hasProxy: true,
       allowDirect: false,
+      exact: true,
     });
     expect(m.flowProps).toMatchObject({
       mode: 'overlay',
@@ -139,12 +145,40 @@ describe('McpSignInOverlay', () => {
     expect(windowOpen).not.toHaveBeenCalled();
   });
 
-  it('says so, and offers Close, when the server no longer asks for a sign-in', async () => {
+  it('says so, and offers Back to chat, when the server no longer asks for a sign-in', async () => {
     m.check.mockResolvedValue({ kind: 'key', route: 'direct', endpoint: 'x' });
     render(<Chat />);
     act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
     await screen.findByText(/no longer asks for a sign-in/);
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }));
+    expect(useMcpSignInOverlay.getState().target).toBeNull();
+  });
+
+  it('offers Back to chat while still checking', async () => {
+    m.check.mockReturnValue(new Promise(() => undefined));
+    render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    expect(await screen.findByText('Checking Kumbu…')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }));
+    expect(useMcpSignInOverlay.getState().target).toBeNull();
+  });
+
+  it('refuses to start a sign-in while the backend is unreachable, without any check', async () => {
+    m.class2Disabled = true;
+    render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    expect(
+      await screen.findByText(/waits until your Chatsundere server is reachable/),
+    ).toBeTruthy();
+    expect(m.check).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('flow')).toBeNull();
+  });
+
+  it('closes when the chat goes away, so it never reopens in the next chat', async () => {
+    const { unmount } = render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    await screen.findByTestId('flow');
+    unmount();
     expect(useMcpSignInOverlay.getState().target).toBeNull();
   });
 });

@@ -372,6 +372,16 @@ describe('prepareSignIn', () => {
     expect(await getClientDataDb().mcpOAuthPending.count()).toBe(0);
   });
 
+  it('refuses a plaintext http resource before any registration or storage', async () => {
+    const d = discovery(w, { resource: 'http://kumbu.example/mcp' });
+    const err = await prepareSignIn(d, { draft: DRAFT }, deps({ origin: PRIVATE_ORIGIN })).catch(
+      (e: unknown) => e,
+    );
+    expect((err as OAuthError).kind).toBe('not-secure');
+    expect(w.auth.state.registrations).toHaveLength(0);
+    expect(await getClientDataDb().mcpOAuthPending.count()).toBe(0);
+  });
+
   it('builds the authorisation URL with every required parameter', async () => {
     const d = discovery(w, { scope: 'read' });
     const { state, authorizationUrl } = await prepareSignIn(d, { draft: DRAFT }, deps());
@@ -506,6 +516,21 @@ describe('completeSignIn', () => {
       reason: 'cancelled',
     });
     expect(w.counts.code).toBe(0);
+  });
+
+  it.each([
+    ['unauthorized_client', 'approved-apps-only'],
+    ['invalid_client', 'approved-apps-only'],
+    ['unsupported_response_type', 'approved-apps-only'],
+    ['server_error', 'server-problem'],
+    ['temporarily_unavailable', 'server-problem'],
+    ['invalid_scope', 'exchange-failed'],
+    ['something_new', 'exchange-failed'],
+  ])('an error callback %s is %s, ends the sign-in, and spends nothing', async (error, reason) => {
+    const { state } = await prepareSignIn(discovery(w), { draft: DRAFT }, deps());
+    expect(await completeSignIn({ error, state }, deps())).toEqual({ ok: false, reason });
+    expect(w.counts.code).toBe(0);
+    expect(await getClientDataDb().mcpOAuthPending.get(state)).toBeUndefined();
   });
 
   it('two tabs completing the same callback make one token request', async () => {

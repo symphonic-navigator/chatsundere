@@ -26,6 +26,7 @@ vi.mock('../../src/mcp/oauth/check-server.js', () => ({
   checkServer: (...a: unknown[]) => m.check(...a),
 }));
 
+import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type MockInstance, afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -124,15 +125,36 @@ describe('OAuthSignInFlow', () => {
   });
   afterEach(() => {
     openSpy.mockRestore();
+    useAccountLinkStore.setState({ linkStatus: 'unknown' });
   });
 
   describe('confirmation', () => {
     it('names the server and the sign-in host, says all devices, and warns to trust', async () => {
+      useAccountLinkStore.setState({ linkStatus: 'linked' });
       renderFlow();
       expect(screen.getByRole('heading', { name: /Sign in to kumbu\.example/ })).toBeTruthy();
       expect(screen.getByText(/You'll sign in at auth\.kumbu\.example/)).toBeTruthy();
       expect(screen.getByText(/all your devices/)).toBeTruthy();
       expect(screen.getByText(/Only connect servers you trust/)).toBeTruthy();
+    });
+
+    it('says plainly when the sign-in host is not the server host', () => {
+      renderFlow();
+      expect(
+        screen.getByText(/You'll sign in at auth\.kumbu\.example, which is not kumbu\.example\./),
+      ).toBeTruthy();
+    });
+
+    it('does not add "which is not" when both hosts are the same', () => {
+      renderFlow({ discovery: { ...DISCOVERY, issuer: 'https://kumbu.example' } });
+      expect(screen.getByText(/You'll sign in at kumbu\.example\./)).toBeTruthy();
+      expect(screen.queryByText(/which is not/)).toBeNull();
+    });
+
+    it('claims all devices only on a linked account', () => {
+      useAccountLinkStore.setState({ linkStatus: 'local-only' });
+      renderFlow();
+      expect(screen.queryByText(/all your devices/)).toBeNull();
     });
 
     it('keeps Continue disabled until the sign-in is prepared', async () => {
@@ -307,6 +329,25 @@ describe('OAuthSignInFlow', () => {
       expect(await screen.findByRole('heading', { name: 'Sign-in was cancelled' })).toBeTruthy();
     });
 
+    it('reports a client refusal as approved-apps-only, with Use a key instead and Back', async () => {
+      m.complete.mockResolvedValue({ ok: false, reason: 'approved-apps-only' });
+      await paste();
+      expect(
+        await screen.findByRole('heading', { name: 'This server only accepts approved apps' }),
+      ).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Use a key instead' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
+      expect(screen.queryByText(/unauthorized_client|invalid_client/)).toBeNull();
+    });
+
+    it('reports a server problem with try-again-shortly copy', async () => {
+      m.complete.mockResolvedValue({ ok: false, reason: 'server-problem' });
+      await paste();
+      expect(await screen.findByText('The server had a problem. Try again shortly.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Start again' })).toBeTruthy();
+      expect(screen.queryByText(/server_error|temporarily_unavailable/)).toBeNull();
+    });
+
     it('reports an already finished sign-in and still lets it be saved', async () => {
       m.complete.mockResolvedValue({
         ok: false,
@@ -367,6 +408,52 @@ describe('OAuthSignInFlow', () => {
   it('renders as a dialog in overlay mode', async () => {
     renderFlow({ mode: 'overlay' });
     expect(screen.getByRole('dialog', { name: /Sign in to kumbu\.example/ })).toBeTruthy();
+  });
+
+  describe('overlay exits', () => {
+    it('always shows a visible Back to chat that closes the overlay', async () => {
+      renderFlow({ mode: 'overlay' });
+      const back = screen.getByRole('button', { name: 'Back to chat' });
+      expect(back.className).toContain('min-h-[44px]');
+      fireEvent.click(back);
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('keeps Back to chat on the waiting screen, and it does not cancel the sign-in', async () => {
+      renderFlow({ mode: 'overlay' });
+      const cont = await screen.findByRole('button', { name: 'Continue to sign-in' });
+      await waitFor(() => expect(cont).toBeEnabled());
+      fireEvent.click(cont);
+      await screen.findByText('Waiting for sign-in…');
+      fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }));
+      expect(onClose).toHaveBeenCalled();
+      expect(m.cancel).not.toHaveBeenCalled();
+    });
+
+    it.each(['exchange-failed', 'cancelled', 'expired', 'iss-mismatch', 'server-problem'])(
+      'gives the %s screen a Back action over a chat',
+      async (reason) => {
+        m.complete.mockResolvedValue({ ok: false, reason });
+        renderFlow({ mode: 'overlay' });
+        const cont = await screen.findByRole('button', { name: 'Continue to sign-in' });
+        await waitFor(() => expect(cont).toBeEnabled());
+        fireEvent.click(cont);
+        await screen.findByText('Waiting for sign-in…');
+        fireEvent.change(screen.getByLabelText('Sign-in showed you a code?'), {
+          target: { value: code() },
+        });
+        const back = await screen.findByRole('button', { name: 'Back' });
+        fireEvent.click(back);
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+      },
+    );
+
+    it('lets the overlay content scroll inside the viewport', () => {
+      renderFlow({ mode: 'overlay' });
+      const inner = screen.getByRole('dialog').firstElementChild as HTMLElement;
+      expect(inner.className).toContain('max-h-full');
+      expect(inner.className).toContain('overflow-y-auto');
+    });
   });
 
   describe('fix round 1', () => {

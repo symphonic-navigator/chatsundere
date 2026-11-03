@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
 import { Button } from '../ui/Button.js';
-import { hostOf } from './sign-in-copy.js';
+import { SIGN_IN_IN_PROGRESS, SIGN_IN_WAITS_FOR_BACKEND, hostOf } from './sign-in-copy.js';
 
 /**
  * The head of an OAuth server's detail page (spec §9): its state, where it is signed in,
@@ -44,16 +44,15 @@ export function OAuthConnectionPanel(props: {
           <Button
             tone="primary"
             className="self-start"
-            disabled={props.backendUnreachable || props.starting}
+            disabled={props.backendUnreachable || props.starting || props.signingIn}
             onClick={props.onSignInAgain}
           >
             Sign in again
           </Button>
-          {props.backendUnreachable ? (
-            <span className="text-xs text-paper-soft">
-              Signing in again waits until your Chatsundere server is reachable, so it can't clash
-              with your other devices.
-            </span>
+          {props.signingIn ? (
+            <span className="text-xs text-paper-soft">{SIGN_IN_IN_PROGRESS}</span>
+          ) : props.backendUnreachable ? (
+            <span className="text-xs text-paper-soft">{SIGN_IN_WAITS_FOR_BACKEND}</span>
           ) : null}
           {props.startError ? (
             <span role="alert" className="text-xs text-danger">

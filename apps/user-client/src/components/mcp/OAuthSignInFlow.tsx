@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { QK } from '../../data/queryKeys.js';
@@ -17,6 +18,7 @@ import {
   prepareSignIn,
 } from '../../mcp/oauth/sign-in.js';
 import { assertSecureEndpoint } from '../../mcp/oauth/url.js';
+import { Button } from '../ui/Button.js';
 import {
   SignInAlreadyConnected,
   SignInConfirm,
@@ -33,6 +35,7 @@ import {
   completeFailure,
   hostOf,
   prepareFailure,
+  withClose,
 } from './sign-in-copy.js';
 
 /** A pending sign-in lives this long (spec §5); the visible screen expires with it. */
@@ -103,6 +106,7 @@ function secureOrNull(url: string | undefined): string | null {
 export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
   const timers = props.timers ?? realTimers;
   const qc = useQueryClient();
+  const linked = useAccountLinkStore((s) => s.linkStatus === 'linked');
   const [step, setStep] = useState<Step>(
     props.state !== undefined ? { kind: 'loading' } : { kind: 'preparing' },
   );
@@ -129,7 +133,9 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
 
   const refreshPending = () => void qc.invalidateQueries({ queryKey: QK.mcpOAuthPending });
 
-  const fail = (failure: SignInFailure) => setStep({ kind: 'failed', failure });
+  // Over a chat every failure needs a way back, whatever its own actions are.
+  const fail = (failure: SignInFailure) =>
+    setStep({ kind: 'failed', failure: props.mode === 'overlay' ? withClose(failure) : failure });
 
   async function prepare(d: OAuthDiscovery): Promise<void> {
     const gen = ++genRef.current;
@@ -229,6 +235,8 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
         return;
       case 'cancelled':
       case 'expired':
+      case 'approved-apps-only':
+      case 'server-problem':
         // completeSignIn deleted the pending row already.
         pendingRef.current = null;
         refreshPending();
@@ -327,6 +335,8 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
       const checked = await checkServer(resource, {
         hasProxy: isProxyAvailable(),
         allowDirect: argsRef.current.draft?.allowDirect ?? false,
+        // The resource is fixed by now; a /mcp variant would be another identity.
+        exact: true,
       }).catch(() => null);
       if (checked?.kind !== 'sign-in') {
         fail(FAILURES.network);
@@ -374,6 +384,7 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
         <SignInConfirm
           serverHost={hosts.server}
           authHost={hosts.auth}
+          linked={linked}
           ready={step.kind === 'confirm'}
           onContinue={onContinue}
           onNotNow={() => void dropAndClose()}
@@ -424,7 +435,8 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
 
 /**
  * The overlay above a chat: focus moves in when it opens and back when it closes, and
- * Escape closes it like the page's Back, keeping a sign-in already opened.
+ * Escape or the always-visible *Back to chat* closes it like the page's Back, keeping a
+ * sign-in already opened.
  */
 export function OverlayFrame(props: {
   label: string;
@@ -459,7 +471,12 @@ export function OverlayFrame(props: {
       tabIndex={-1}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 outline-none lg:items-center"
     >
-      <div className="w-full max-w-md">{props.children}</div>
+      <div className="flex max-h-full w-full max-w-md flex-col gap-2 overflow-y-auto">
+        <Button tone="neutral" className="min-h-[44px] self-start" onClick={props.onClose}>
+          Back to chat
+        </Button>
+        {props.children}
+      </div>
     </div>
   );
 }

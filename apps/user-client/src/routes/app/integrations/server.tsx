@@ -14,6 +14,10 @@ import {
   hostOf,
   reconnectCheckMessage,
 } from '../../../components/mcp/sign-in-copy.js';
+
+/** Why *Remove server* waits for the backend: the delete has to reach every device. */
+const REMOVE_WAITS_FOR_BACKEND =
+  "Removing this server waits until your Chatsundere server is reachable, so it's removed from all your devices.";
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
@@ -321,6 +325,17 @@ function IntegrationServerForm({
     setTest({ kind: 'testing' });
     try {
       const hasProxy = proxyGate.enabled;
+      // An OAuth row whose tokens are renewed through the proxy needs it even when direct.
+      const oauthNeedsProxy = isOAuth && grant?.tokenRoute === 'proxy';
+      if (isOAuth && !hasProxy && (!allowDirect || oauthNeedsProxy)) {
+        setLastError(
+          linked
+            ? "Your Chatsundere server can't be reached right now, and this server connects through it. Test again once it's back."
+            : 'This server connects through a linked Chatsundere server. Link one first.',
+        );
+        setTest({ kind: 'done' });
+        return;
+      }
       if (!allowDirect && !hasProxy) {
         setLastError(
           'The linked server relay is unavailable. Turn on Local network to connect directly, or link a server first.',
@@ -462,6 +477,8 @@ function IntegrationServerForm({
       const checked = await checkServer(existing.url, {
         hasProxy: proxyGate.enabled,
         allowDirect: existing.allowDirect,
+        // Exactly the row's URL: the new grant's resource must be it (spec §7).
+        exact: true,
       });
       if (checked.kind === 'sign-in') {
         setReconnect({ kind: 'flow', discovery: checked.discovery });
@@ -514,14 +531,14 @@ function IntegrationServerForm({
   const signInHost = grant ? hostOf(grant.issuer) : hostOf(existing?.url ?? url);
 
   if (existing && reconnect.kind === 'flow') {
+    const detail = `/app/integrations/${existing.id}`;
     return (
       <PageScaffold
-        crumbs={[
-          CRUMB_ROOT,
-          { label: existing.name, to: `/app/integrations/${existing.id}` },
-          { label: 'Sign in again' },
-        ]}
-        back={`/app/integrations/${existing.id}`}
+        crumbs={[CRUMB_ROOT, { label: existing.name, to: detail }, { label: 'Sign in again' }]}
+        back={detail}
+        // The flow shares the detail page's route, so going "there" means leaving the flow;
+        // an opened sign-in stays pending, as the flow's own Back keeps it.
+        onNavigate={(to) => (to === detail ? setReconnect({ kind: 'idle' }) : navigate(to))}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -840,14 +857,22 @@ function IntegrationServerForm({
         </div>
 
         {existing ? (
-          <Button
-            tone="destructive"
-            className="self-start"
-            disabled={removing}
-            onClick={() => setConfirmDelete(true)}
-          >
-            {removing ? 'Removing…' : 'Remove server'}
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button
+              tone="destructive"
+              className="self-start"
+              disabled={removing || (isOAuth && class2.disabled)}
+              aria-describedby={isOAuth && class2.disabled ? 'mcp-remove-reason' : undefined}
+              onClick={() => setConfirmDelete(true)}
+            >
+              {removing ? 'Removing…' : 'Remove server'}
+            </Button>
+            {isOAuth && class2.disabled ? (
+              <span id="mcp-remove-reason" className="text-xs text-paper-soft">
+                {REMOVE_WAITS_FOR_BACKEND}
+              </span>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

@@ -92,7 +92,29 @@ export type CompleteFailure =
   | 'expired'
   | 'iss-mismatch'
   | 'exchange-failed'
+  | 'approved-apps-only'
+  | 'server-problem'
   | 'locked';
+
+/**
+ * Maps the `error` of an authorisation response (RFC 6749 §4.1.2.1) to a reason. Only
+ * the user's own refusal reads as cancelled; the raw code never reaches the screen.
+ */
+export function callbackErrorReason(error: string): CompleteFailure {
+  switch (error) {
+    case 'access_denied':
+      return 'cancelled';
+    case 'unauthorized_client':
+    case 'invalid_client':
+    case 'unsupported_response_type':
+      return 'approved-apps-only';
+    case 'server_error':
+    case 'temporarily_unavailable':
+      return 'server-problem';
+    default:
+      return 'exchange-failed';
+  }
+}
 
 /** A pending sign-in lives this long; a completed one may outlive it (see the sweep). */
 const PENDING_LIFETIME_MS = 10 * 60_000;
@@ -157,6 +179,8 @@ export async function prepareSignIn(
   args: { serverId?: string; draft: ServerDraft | null; extraScopes?: string[] },
   deps: SignInDeps,
 ): Promise<{ state: string; authorizationUrl: string }> {
+  // Before any request: a token is never minted for a resource it may not be sent to.
+  assertSecureEndpoint(d.resource, 'MCP server');
   // Before any request: a hostile server must not get a `javascript:` URL opened.
   assertSecureEndpoint(d.authorizationEndpoint, 'authorisation');
   assertSecureEndpoint(d.tokenEndpoint, 'token');
@@ -332,7 +356,7 @@ async function completeLocked(
   if ('error' in payload) {
     await db.mcpOAuthPending.delete(row.state);
     held.delete(row.state);
-    return fail('cancelled');
+    return fail(callbackErrorReason(payload.error));
   }
   // Mix-up defence (RFC 9207): required when advertised, and exact when present.
   if (payload.iss !== undefined ? payload.iss !== p.issuer : p.issParameterSupported) {

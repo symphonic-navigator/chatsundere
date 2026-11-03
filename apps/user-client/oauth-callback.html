@@ -50,6 +50,15 @@
         font-weight: 600;
         cursor: pointer;
       }
+      button.secondary { background: transparent; color: #e8c061; border: 1px solid #e8c061; }
+      .warn {
+        padding: 10px 12px;
+        border-left: 3px solid #e8c061;
+        border-radius: 4px;
+        background: #221e2c;
+        font-size: 14px;
+      }
+      .warn strong { font-weight: 600; word-break: break-all; }
       [hidden] { display: none !important; }
     </style>
   </head>
@@ -60,28 +69,62 @@
       </section>
 
       <section data-view="done" hidden>
-        <h1>Done</h1>
-        <p>You're connected. Return to Chatsundere.</p>
+        <h1>Almost done</h1>
+        <p>Signed in. Return to Chatsundere to finish.</p>
       </section>
 
       <section data-view="code" hidden>
         <h1>Almost there</h1>
-        <p>Copy this code and paste it into Chatsundere to finish signing in.</p>
-        <textarea data-paste readonly aria-label="Sign-in code"></textarea>
-        <button type="button" data-copy>Copy code</button>
-        <p class="note">
-          Some servers accept the code for only about a minute. If it has run out, starting again is fine.
-        </p>
+        <div data-foreign hidden>
+          <p class="warn" role="alert">
+            This sign-in wasn't started in Chatsundere in this browser. If someone sent you the
+            sign-in link, close this page.
+          </p>
+          <button type="button" class="secondary" data-reveal>I started this on another device</button>
+        </div>
+        <div data-code-block>
+          <p>Copy this code and paste it into Chatsundere to finish signing in.</p>
+          <p class="warn" data-warning-here>
+            Only paste this into Chatsundere on this device, where you just started signing
+            in<span data-iss-phrase hidden> to <strong data-iss-host></strong></span>. Never send it
+            to anyone, including support.
+          </p>
+          <p class="warn" data-warning-elsewhere hidden>
+            Only paste this into Chatsundere on the device where you just started signing
+            in<span data-iss-phrase hidden> to <strong data-iss-host></strong></span>. Never send it
+            to anyone, including support.
+          </p>
+          <textarea data-paste readonly aria-label="Sign-in code"></textarea>
+          <button type="button" data-copy>Copy code</button>
+          <p class="note">
+            Some servers accept the code for only about a minute. If it has run out, starting again is fine.
+          </p>
+        </div>
       </section>
 
       <section data-view="cancelled" hidden>
         <h1>Cancelled</h1>
         <p>Sign-in was cancelled. Go back to Chatsundere to try again.</p>
-        <div data-cancel-paste hidden>
+        <div data-error-paste hidden>
           <p class="note">If Chatsundere does not notice by itself, paste this into it.</p>
           <textarea data-paste readonly aria-label="Sign-in result"></textarea>
           <button type="button" data-copy>Copy code</button>
         </div>
+      </section>
+
+      <section data-view="failed" hidden>
+        <h1>Sign-in didn't finish</h1>
+        <p>The server didn't complete the sign-in. Go back to Chatsundere to see what to do next.</p>
+        <div data-error-paste hidden>
+          <p class="note">If Chatsundere does not notice by itself, paste this into it.</p>
+          <textarea data-paste readonly aria-label="Sign-in result"></textarea>
+          <button type="button" data-copy>Copy code</button>
+        </div>
+      </section>
+
+      <section data-view="empty" hidden>
+        <h1>Nothing to finish</h1>
+        <p>This sign-in page has nothing to finish. Go back to Chatsundere.</p>
       </section>
     </main>
     <script type="module" src="/src/oauth-callback/main.ts"></script>

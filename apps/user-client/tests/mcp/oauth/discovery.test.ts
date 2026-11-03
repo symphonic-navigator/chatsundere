@@ -111,6 +111,18 @@ describe('discoverOAuth', () => {
     expect(await kindOf(run())).toBe('not-secure');
   });
 
+  it('refuses a plaintext http resource before any request goes out', async () => {
+    const oauthFetch = vi.fn();
+    const err = await discoverOAuth('http://mcp.example/mcp', {
+      oauthFetch,
+      route: 'proxy',
+      hasProxy: true,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OAuthError);
+    expect((err as OAuthError).kind).toBe('not-secure');
+    expect(oauthFetch).not.toHaveBeenCalled();
+  });
+
   it('refuses a javascript: authorisation endpoint', async () => {
     const { run } = setup({ authorisationEndpoint: 'javascript:alert(1)' });
     expect(await kindOf(run())).toBe('not-secure');

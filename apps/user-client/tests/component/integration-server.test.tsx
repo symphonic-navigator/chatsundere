@@ -717,6 +717,103 @@ describe('IntegrationServerPage', () => {
       expect(flowProps.current?.draft).toBeNull();
     });
 
+    it('re-checks exactly the row URL for Sign in again', async () => {
+      grants.rows = [{ ...GRANT, tokens: null }];
+      checkServerMock.mockResolvedValue({ kind: 'key', route: 'proxy', endpoint: 'x' });
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+      await waitFor(() => expect(checkServerMock).toHaveBeenCalled());
+      expect(checkServerMock).toHaveBeenCalledWith(
+        'https://kumbu.example/mcp',
+        expect.objectContaining({ exact: true }),
+      );
+    });
+
+    it.each([
+      ['‹ Back', () => screen.getByRole('button', { name: 'Back' })],
+      ['the server crumb', () => screen.getByRole('button', { name: 'Kumbu' })],
+    ])('%s on Sign in again returns to the detail page', async (_label, control) => {
+      grants.rows = [{ ...GRANT, tokens: null }];
+      checkServerMock.mockResolvedValue({
+        kind: 'sign-in',
+        discovery: { kind: 'oauth', resource: OAUTH_ROW.url },
+        route: 'proxy',
+        endpoint: OAUTH_ROW.url,
+      });
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+      await screen.findByText('sign-in flow');
+      fireEvent.click(control());
+      await waitFor(() => expect(screen.queryByText('sign-in flow')).toBeNull());
+      expect(screen.getByText('Signed in at auth.kumbu.example')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Sign in again' })).toBeTruthy();
+    });
+
+    it('the root crumb on Sign in again still leaves for My Integrations', async () => {
+      grants.rows = [{ ...GRANT, tokens: null }];
+      checkServerMock.mockResolvedValue({
+        kind: 'sign-in',
+        discovery: { kind: 'oauth', resource: OAUTH_ROW.url },
+        route: 'proxy',
+        endpoint: OAUTH_ROW.url,
+      });
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+      await screen.findByText('sign-in flow');
+      fireEvent.click(screen.getByRole('button', { name: 'My Integrations' }));
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+    });
+
+    it('disables Sign in again with a reason while a sign-in is already in progress', () => {
+      grants.rows = [{ ...GRANT, tokens: null }];
+      pending.rows = [
+        { state: 'st', serverId: 'o1', isNewServer: false, name: 'Kumbu', createdAt: 1 },
+      ];
+      wrapAt('/app/integrations/o1');
+      expect(screen.getByRole('button', { name: 'Sign in again' })).toBeDisabled();
+      expect(screen.getByText('A sign-in is already in progress')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Return to sign-in' })).toBeEnabled();
+    });
+
+    it('disables Remove server with a reason while the backend is unreachable', () => {
+      gates.class2 = { disabled: true, tooltip: 'offline' };
+      wrapAt('/app/integrations/o1');
+      expect(screen.getByRole('button', { name: /remove server/i })).toBeDisabled();
+      expect(
+        screen.getByText(/Removing this server waits until your Chatsundere server is reachable/),
+      ).toBeTruthy();
+    });
+
+    it('keeps Remove server of a key server enabled while the backend is unreachable', () => {
+      useMcpServersMock.mockReturnValue({ data: [ROW] });
+      gates.class2 = { disabled: true, tooltip: 'offline' };
+      wrapAt('/app/integrations/s1');
+      expect(screen.getByRole('button', { name: /remove server/i })).toBeEnabled();
+    });
+
+    it('explains a test without the proxy in OAuth terms, not key-server terms', async () => {
+      gates.proxy = false;
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+      expect(
+        await screen.findByText(/Your Chatsundere server can't be reached right now/),
+      ).toBeTruthy();
+      expect(screen.queryByText(/Turn on Local network/)).toBeNull();
+      expect(testOAuthMock).not.toHaveBeenCalled();
+    });
+
+    it('asks an unlinked device to link a server for an OAuth test without the proxy', async () => {
+      gates.proxy = false;
+      gates.link = 'local-only';
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+      expect(
+        await screen.findByText(
+          /This server connects through a linked Chatsundere server\. Link one first\./,
+        ),
+      ).toBeTruthy();
+    });
+
     it('disables Sign in again with a reason while the backend is unreachable', () => {
       grants.rows = [{ ...GRANT, tokens: null }];
       gates.class2 = { disabled: true, tooltip: 'offline' };

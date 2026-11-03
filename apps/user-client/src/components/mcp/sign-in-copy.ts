@@ -18,6 +18,13 @@ export const CODE_NOT_OURS = "This code doesn't belong to this sign-in.";
 export const UNLOCK_TO_FINISH =
   'Unlock Chatsundere to finish signing in, then paste the code again.';
 
+/** Why a new sign-in waits while the backend is unreachable, on the detail page and in a chat. */
+export const SIGN_IN_WAITS_FOR_BACKEND =
+  "Signing in again waits until your Chatsundere server is reachable, so it can't clash with your other devices.";
+
+/** Why *Sign in again* is unavailable while this device already has a sign-in open. */
+export const SIGN_IN_IN_PROGRESS = 'A sign-in is already in progress';
+
 /** The failure screens, keyed by what went wrong. Raw OAuth codes never appear here. */
 export const FAILURES = {
   expired: {
@@ -38,6 +45,11 @@ export const FAILURES = {
   exchangeFailed: {
     title: "Signing in didn't finish",
     body: 'The code may have run out, or the server turned it down. Starting again is fine.',
+    actions: ['start-again'],
+  },
+  serverProblem: {
+    title: "Signing in didn't finish",
+    body: 'The server had a problem. Try again shortly.',
     actions: ['start-again'],
   },
   issMismatch: {
@@ -83,6 +95,13 @@ export function prepareFailure(err: unknown): SignInFailure {
   }
 }
 
+/** Adds *Back* to a failure that lacks it, so a screen over a chat always has a way out. */
+export function withClose(failure: SignInFailure): SignInFailure {
+  return failure.actions.includes('close')
+    ? failure
+    : { ...failure, actions: [...failure.actions, 'close'] };
+}
+
 /** Maps a terminal completion failure to its screen; `unknown-state` and `locked` stay on the waiting screen. */
 export function completeFailure(
   reason: Exclude<CompleteFailure, 'unknown-state' | 'locked'>,
@@ -94,6 +113,10 @@ export function completeFailure(
       return FAILURES.expired;
     case 'iss-mismatch':
       return FAILURES.issMismatch;
+    case 'approved-apps-only':
+      return FAILURES.approvedAppsOnly;
+    case 'server-problem':
+      return FAILURES.serverProblem;
     default:
       return FAILURES.exchangeFailed;
   }

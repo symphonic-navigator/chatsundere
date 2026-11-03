@@ -159,4 +159,33 @@ describe('checkServer', () => {
     });
     expect(refused).toMatchObject({ kind: 'unreachable', cause: 'refused' });
   });
+
+  it('with exact, probes only the link itself, never the /mcp variant', async () => {
+    toolsListMock.mockRejectedValue(new Error('MCP initialize failed: HTTP 404'));
+    await checkServer('https://kumbu.example/api', {
+      hasProxy: true,
+      allowDirect: true,
+      exact: true,
+    });
+    const urls = toolsListMock.mock.calls.map((c) => (c[0] as McpEndpoint).url);
+    expect(urls.length).toBeGreaterThan(0);
+    expect(new Set(urls)).toEqual(new Set(['https://kumbu.example/api']));
+  });
+
+  it('without exact still tries the /mcp variant', async () => {
+    toolsListMock.mockRejectedValue(new Error('MCP initialize failed: HTTP 404'));
+    await checkServer('https://kumbu.example/api', { hasProxy: true, allowDirect: false });
+    const urls = toolsListMock.mock.calls.map((c) => (c[0] as McpEndpoint).url);
+    expect(urls).toContain('https://kumbu.example/api/mcp');
+  });
+
+  it('treats a plaintext server asking for auth as a key server, without discovery', async () => {
+    toolsListMock.mockRejectedValue(unauthorised());
+    const r = await checkServer('http://192.168.1.5:8080/mcp', {
+      hasProxy: true,
+      allowDirect: false,
+    });
+    expect(r).toEqual({ kind: 'key', route: 'proxy', endpoint: 'http://192.168.1.5:8080/mcp' });
+    expect(discoverMock).not.toHaveBeenCalled();
+  });
 });
