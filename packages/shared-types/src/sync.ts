@@ -22,6 +22,9 @@ export const SYNC_COLLECTIONS = [
   'personaAvatars',
   'artefacts',
   'attachments',
+  // MCP OAuth grants (MCP OAuth spec §4.1): one sealed row per OAuth server,
+  // its refresh claim serialised over the per-record compare-and-set.
+  'mcpOAuthGrants',
 ] as const;
 export type SyncCollection = (typeof SYNC_COLLECTIONS)[number];
 

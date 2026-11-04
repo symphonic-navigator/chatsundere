@@ -6,6 +6,7 @@ export interface ToolProgress {
   /** Multi-phase tools report which phase the count belongs to.
    *  ask_expert: 'reasoning'/'answer' (+ 'searching'/'fetching' with web).
    *  artefact craft (modify/inspect): 'starting'/'reading'/'writing'/'explaining'/'building'/'done'.
+   *  MCP: 'renewing' while an OAuth token waits on another device's refresh.
    *  Optional — single-phase tools (create author) may omit it. */
   phase?:
     | 'reasoning'
@@ -17,6 +18,7 @@ export interface ToolProgress {
     | 'explaining'
     | 'building'
     | 'starting'
+    | 'renewing'
     | 'done';
   /** Optional human-readable detail for the phase (search query, fetched host). */
   detail?: string;

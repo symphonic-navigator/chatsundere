@@ -61,3 +61,17 @@ export function buildMcpToolNames(servers: NamingServer[]): {
   }
   return { tools, reverse };
 }
+
+/**
+ * A tool prefix not yet used by another server: `base`, else `base_2`, `base_3` and so
+ * on, so two connections to one host keep their tools apart at a glance.
+ */
+export function uniquePrefix(base: string, taken: readonly string[]): string {
+  const used = new Set(taken);
+  if (!used.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const suffix = `_${n}`;
+    const candidate = `${base.slice(0, MAX_NAME - suffix.length)}${suffix}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}

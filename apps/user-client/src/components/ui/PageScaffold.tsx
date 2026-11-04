@@ -12,6 +12,10 @@ export interface PageScaffoldProps {
    *  prompts a discard-changes confirm. Omit (or false) for the plain
    *  pass-through used by every always-save page. */
   dirty?: boolean;
+  /** Intercepts the back control and ancestor crumbs, for a sub-state of a page that
+   *  shares its route: navigating to that route must leave the sub-state, not no-op.
+   *  Ignored while `dirty` guards the page. */
+  onNavigate?: (to: string) => void;
   /** A fixed sub-header (tabs / search / filters / count) rendered inside the
    *  sticky chrome block, directly beneath the PageBar. When given, the chrome
    *  block (PageBar + this header) stays put and only `children` scrolls — the
@@ -34,12 +38,13 @@ export function PageScaffold({
   back,
   onHelp,
   dirty,
+  onNavigate: intercept,
   stickyHeader,
   children,
 }: PageScaffoldProps): JSX.Element {
   const navigate = useNavigate();
   const [pending, setPending] = useState<string | null>(null);
-  const onNavigate = dirty ? (to: string) => setPending(to) : undefined;
+  const onNavigate = dirty ? (to: string) => setPending(to) : intercept;
   const bar = <PageBar crumbs={crumbs} back={back} onHelp={onHelp} onNavigate={onNavigate} />;
 
   return (

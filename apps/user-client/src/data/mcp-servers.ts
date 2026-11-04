@@ -17,24 +17,43 @@ export function useMcpServers() {
   });
 }
 
-/** Insert or replace an MCP server row. */
-export function useUpsertMcpServer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (row: McpServerRow): Promise<McpServerRow> => {
-      // Class-2 upsert (spec §5): device-probe fields are stripped before seal
-      // (§10 deny-list). Gated write-through — the integrations affordance is
-      // disabled offline.
-      await mutateSynced({
-        collection: 'mcpServers',
-        key: row.id,
-        tables: ['mcpServers'],
-        write: async (tx) => {
-          await tx.table('mcpServers').put(row);
-        },
-      });
-      return row;
+/**
+ * Insert or replace an MCP server row through the synced write-through. With
+ * `deferWhenOffline` the local write still lands while sync is unreachable, which
+ * the save after an OAuth sign-in needs: its grant already exists and must not orphan.
+ * With `ifAbsent` an existing row makes it throw instead of being replaced.
+ */
+export async function upsertMcpServer(
+  row: McpServerRow,
+  opts: { deferWhenOffline?: boolean; ifAbsent?: boolean } = {},
+): Promise<McpServerRow> {
+  // Class-2 upsert (spec §5): device-probe fields are stripped before seal
+  // (§10 deny-list). Gated write-through — the integrations affordance is
+  // disabled offline.
+  await mutateSynced({
+    collection: 'mcpServers',
+    key: row.id,
+    tables: ['mcpServers'],
+    write: async (tx) => {
+      // `add` aborts the whole transaction on an existing key, so nothing is enqueued.
+      if (opts.ifAbsent) await tx.table('mcpServers').add(row);
+      else await tx.table('mcpServers').put(row);
     },
+    ...(opts.deferWhenOffline ? { deferWhenOffline: true } : {}),
+  });
+  return row;
+}
+
+/**
+ * Insert or replace an MCP server row. `deferWhenOffline` is for the save after an OAuth
+ * sign-in, whose grant already exists and must not be orphaned by being offline.
+ */
+export function useUpsertMcpServer(opts: { deferWhenOffline?: boolean } = {}) {
+  const qc = useQueryClient();
+  const deferWhenOffline = opts.deferWhenOffline === true;
+  return useMutation({
+    mutationFn: (row: McpServerRow): Promise<McpServerRow> =>
+      upsertMcpServer(row, deferWhenOffline ? { deferWhenOffline: true } : {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.mcpServers }),
   });
 }
@@ -57,6 +76,30 @@ export async function persistMcpRoute(
     await db.mcpServers.update(id, { ...route, lastTestedAt: Date.now(), lastError: null });
   });
   void queryClient.invalidateQueries({ queryKey: QK.mcpServers });
+}
+
+/**
+ * Remember that this device's user agreed to contact a server at `url` (spec §8, M1).
+ * `firstUseConsentFor` is device-local, so this is a plain local write, and it only
+ * lands while the row still has that URL: consent never carries over to a new address.
+ */
+export async function recordMcpConsent(id: string, url: string): Promise<void> {
+  const db = getClientDataDb();
+  await db.transaction('rw', db.mcpServers, async () => {
+    const row = await db.mcpServers.get(id);
+    if (row?.url !== url) return;
+    await db.mcpServers.update(id, { firstUseConsentFor: url });
+  });
+  void queryClient.invalidateQueries({ queryKey: QK.mcpServers });
+}
+
+/**
+ * Consent for a server's current URL, for a reconnect that just signed in on this device.
+ * Reads the row itself, so it never depends on a list query having loaded.
+ */
+export async function recordMcpConsentForServer(id: string): Promise<void> {
+  const row = await getClientDataDb().mcpServers.get(id);
+  if (row) await recordMcpConsent(id, row.url);
 }
 
 /** Delete an MCP server by id. */
@@ -82,8 +125,8 @@ export function sealMcpKey(plaintext: string, mk: MasterKey, serverId: string) {
   return sealSecret(plaintext, mk, `mcp/${serverId}/api-key`);
 }
 
-/** Open the sealed key for a server row, or null if it has no auth. */
+/** Open the sealed key for a server row, or null if it has no key (no auth, or OAuth). */
 export async function openMcpKey(row: McpServerRow, mk: MasterKey): Promise<string | null> {
-  if (!row.auth) return null;
+  if (!row.auth || row.auth.scheme === 'oauth') return null;
   return openSecret(row.auth.key, mk, `mcp/${row.id}/api-key`);
 }

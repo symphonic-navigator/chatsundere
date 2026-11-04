@@ -162,6 +162,14 @@ export function resolveConflict(
     return { winner: 'local', repush: false };
   }
 
+  if (collection === 'mcpOAuthGrants') {
+    // No LWW (MCP OAuth spec §4.1): the server's row always wins. A grant is
+    // written only through the compare-and-set path, so a newer local
+    // `updatedAt` is an unconfirmed write that must never be re-pushed over a
+    // fresher token family. The pending fields survive via `restoreLocalFields`.
+    return { winner: 'pulled', repush: false };
+  }
+
   if (IMMUTABLE_COLLECTIONS.has(collection)) {
     // Immutable / creation-only: the record already exists identically.
     return { winner: 'local', repush: false };

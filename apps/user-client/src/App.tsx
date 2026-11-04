@@ -23,6 +23,7 @@ import { EntranceHall } from './routes/app/entrance-hall.js';
 import { HistoryPage } from './routes/app/history.js';
 import { Integrations } from './routes/app/integrations.js';
 import { IntegrationServerPage } from './routes/app/integrations/server.js';
+import { PendingSignInPage } from './routes/app/integrations/sign-in.js';
 import { KnowledgeList } from './routes/app/knowledge.js';
 import { KnowledgeDocumentPage } from './routes/app/knowledge/document.js';
 import { KnowledgeLibraryPage } from './routes/app/knowledge/library.js';
@@ -173,6 +174,7 @@ export function App() {
                   <Route path="/app/integrations" element={<Integrations />} />
                   <Route path="/app/integrations/new" element={<IntegrationServerPage />} />
                   <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />
+                  <Route path="/app/integrations/sign-in/:state" element={<PendingSignInPage />} />
                   <Route path="/app/settings" element={<MySettings />} />
                   <Route path="/app/settings/you" element={<SettingsYouPage />} />
                   <Route path="/app/settings/providers" element={<SettingsProvidersPage />} />

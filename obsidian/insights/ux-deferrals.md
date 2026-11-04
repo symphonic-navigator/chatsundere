@@ -808,3 +808,30 @@ No hard defect left open. Laura's softs L-S1, L-S2, L-S4 to L-S12 were fixed bef
 - **Edit is briefly disabled without a tooltip while the view catches up** — after another writer's change, Edit stays disabled until the newer text is read (milliseconds). Self-clearing, so no reason line is shown.
 - **Projects live under My Settings** — the preview's only entry is a tile in My Settings, which is not where a user would look for their work. Fine for a preview harness; Laura to judge the real home at the Stage 2 spec-pass.
 - **Mode:** pre-squash. **Criterion:** least astonishment / reachability. **Follow-up commitment:** Stage 2 spec-pass (editor and home), or the v0.1.0 release cut, whichever comes first. **Chris sign-off:** not required (soft).
+
+## 2026-11-03 — OAuth for MCP connectors: status approximations (proposed deferrals, for Chris)
+
+Proposed by Liz while documenting the unit; not yet confirmed by Chris. All three come from the same cause: the token and its scopes are sealed in the grant, so the status line cannot read them without opening it.
+
+- ~~**A `needs more access` notice keeps offering *Grant access* after a successful grant** — scopes are sealed, so the notice cannot tell that the challenged scopes are now held. Pressing it again is harmless.~~ **Fixed before squash (Laura H4, 2026-11-03):** `grant.scope` is plaintext metadata on the row, so once the grant holds live tokens and every challenged scope, the notice reads "● <server>: access granted" with no action. A challenge that named no scope still offers *Grant access*.
+- **A `can't renew access right now` pill does not update after recovery** — it clears at the next list load or tool call, not when the backend comes back.
+- **`Waiting for your Chatsundere server` is approximated** — token expiry is sealed, so the state is inferred from the proxy route and the absence of a proxy rather than from the real need to renew.
+- **Affected flow / surface:** Integrations list, OAuth server status line.
+- **Mode:** spec-pass follow-through. **Criterion:** least astonishment (status honesty).
+- **Rationale for deferral:** Each is a stale or approximate quiet status with a harmless action; none blocks a function or misdirects.
+- **Follow-up commitment:** Revisit if the iPhone device test or a field report shows confusion; otherwise the v0.2.0 release cut.
+- **Chris sign-off:** not required (soft); confirm the deferral.
+
+## 2026-11-03 — OAuth for MCP connectors (Laura pre-squash pass; five hard defects fixed, four softs deferred)
+
+All five hard defects (H1 to H5) and the softs S2, S3, S6, S8, S9, S10, S12 to S15 were fixed before the squash. S5 and the rest of S6 confirm decisions already taken. Deferred — **proposed, awaiting Chris**:
+
+- **S1 — the sign-in overlay can cover a pending tool approval.** Both sit at `z-50`; an overlay opened from a notice while an approval waits hides the approval until the overlay closes. Proposed fix: show the approval first, or hold the overlay until no approval is pending.
+- **S4 — *Sign in again* from a pill does not resume a kept pending sign-in.** If a sign-in for the same server is already pending (the window was opened, then the overlay closed), the pill starts a fresh one instead of returning to the waiting screen. Proposed fix: open the overlay on the pending sign-in's waiting screen when one exists for the server.
+- **S7 — "Needs a linked Chatsundere server" on the detail page has no way to act on it.** Proposed fix: a *Link a server* action beside the status, leading to server linking.
+- **S11 — *Not now* or *Back* from the sign-in confirmation resets the Add-server draft.** Name, prefix and toggles chosen before signing in are lost when the user backs out. A side effect of the endorsed decision 1 (the link and *Check server* first). Proposed fix: keep the draft in the Add phase state so going back restores it.
+- **Affected flow / surface:** chat sign-in overlay, tool-pill notices, OAuth server detail page, Add server.
+- **Mode:** pre-squash. **Criterion:** least astonishment / reachability.
+- **Rationale for deferral:** None blocks a function or misdirects: each has a working path (close the overlay to reach the approval, *Return to sign-in* on the detail page, Account → Server linking, re-entering the draft).
+- **Follow-up commitment:** Decide with Chris; if accepted, fix with the next touch of the MCP sign-in UI, v0.2.0 release cut at the latest.
+- **Chris sign-off:** not required (soft); confirm the deferral.

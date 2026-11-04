@@ -6,6 +6,12 @@ const DEFAULT_ALLOW_HEADERS =
   'x-chatsundere-authorization, x-cors-proxy-target, x-cors-proxy-kind, authorization, content-type';
 
 /**
+ * Response headers a browser may read cross-origin: the MCP session id and the
+ * `WWW-Authenticate` challenge that starts OAuth discovery.
+ */
+export const EXPOSED_RESPONSE_HEADERS = 'Mcp-Session-Id, WWW-Authenticate';
+
+/**
  * Exact, lowercased, full-origin match (scheme+host+port) — never a suffix.
  * `Origin: null` and a missing Origin never match: CORS is browser-only
  * defence-in-depth, never an auth layer (spec §6.3).
@@ -28,7 +34,7 @@ export function applyCorsHeaders(c: Context, origin: string): void {
 /**
  * Builds the CORS preflight response for a matched origin: echoes the requested
  * `Access-Control-Request-Headers`, advertises the method-agnostic surface, and
- * exposes `Mcp-Session-Id`. Returns 204.
+ * exposes the MCP headers. Returns 204.
  */
 export function preflightResponse(c: Context, origin: string): Response {
   const requested = c.req.header('access-control-request-headers');
@@ -39,7 +45,7 @@ export function preflightResponse(c: Context, origin: string): Response {
     'Access-Control-Allow-Headers',
     requested && requested.length > 0 ? requested : DEFAULT_ALLOW_HEADERS,
   );
-  c.header('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+  c.header('Access-Control-Expose-Headers', EXPOSED_RESPONSE_HEADERS);
   c.header('Access-Control-Max-Age', '600');
   return c.body(null, 204);
 }

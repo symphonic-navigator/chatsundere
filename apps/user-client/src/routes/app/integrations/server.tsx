@@ -1,17 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import type { McpServerRow } from '../../../boot/client-data-db.js';
+import { CheckServerStep } from '../../../components/mcp/CheckServerStep.js';
+import { OAuthConnectionPanel } from '../../../components/mcp/OAuthConnectionPanel.js';
+import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
+import { SignInSettings } from '../../../components/mcp/SignInSettings.js';
+import {
+  SAVING_LATER,
+  hostOf,
+  reconnectCheckMessage,
+} from '../../../components/mcp/sign-in-copy.js';
+
+/** Why *Remove server* waits for the backend: the delete has to reach every device. */
+const REMOVE_WAITS_FOR_BACKEND =
+  "Removing this server waits until your Chatsundere server is reachable, so it's removed from all your devices.";
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
+import { useMcpOAuthGrants } from '../../../data/mcp-oauth-grants.js';
+import { usePendingSignIns } from '../../../data/mcp-oauth-pending.js';
 import {
   openMcpKey,
+  recordMcpConsent,
   sealMcpKey,
   useDeleteMcpServer,
   useMcpServers,
@@ -19,8 +35,21 @@ import {
 } from '../../../data/mcp-servers.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
+import { type CheckResult, checkServer } from '../../../mcp/oauth/check-server.js';
+import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
+import type { OAuthDiscovery } from '../../../mcp/oauth/discovery.js';
+import { createSignInDeps, waitingScreenPath } from '../../../mcp/oauth/sign-in-session.js';
+import { type ServerDraft, removeGrant } from '../../../mcp/oauth/sign-in.js';
+import { statusOf } from '../../../mcp/server-status.js';
 import { sanitiseToolName } from '../../../mcp/tool-naming.js';
-import type { McpAuthResolved, McpToolDefinition } from '../../../mcp/types.js';
+import type {
+  McpAuthResolved,
+  McpConnectionResult,
+  McpToolDefinition,
+} from '../../../mcp/types.js';
+import { toastStore } from '../../../state/toast.store.js';
+import { SyncOfflineError } from '../../../sync/enqueue.js';
+import { useClass2Gate } from '../../../sync/gate.js';
 
 type AuthScheme = 'none' | 'bearer' | 'header';
 type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
@@ -70,36 +99,180 @@ export function IntegrationServerPage(): JSX.Element {
     );
   }
 
-  return <IntegrationServerForm existing={existing} />;
+  if (existing) return <IntegrationServerForm existing={existing} />;
+  return <AddServer rows={servers.data ?? []} />;
 }
 
-/** Inner form: add (existing undefined) or edit a single MCP server. */
-function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.Element {
+/** Seed of the manual form, from a check result or a typed link. */
+type FormSeed = {
+  url: string;
+  authScheme?: AuthScheme;
+  allowDirect?: boolean;
+  routing?: McpServerRow['routing'];
+  resolvedEndpoint?: string | null;
+  tools?: McpToolDefinition[];
+  /** An open server keeps its auth fields behind a visible *Add a key*. */
+  authBehindButton?: boolean;
+  dirty?: boolean;
+};
+
+type AddPhase =
+  | { kind: 'check' }
+  | { kind: 'sign-in'; check: Extract<CheckResult, { kind: 'sign-in' }> }
+  | { kind: 'flow'; discovery: OAuthDiscovery; draft: ServerDraft; back: AddPhase }
+  | { kind: 'form'; seed: FormSeed };
+
+/**
+ * *Add server* (spec §9 "Connect"): the link and *Check server* first; the result
+ * decides what follows. *Enter details manually* reveals today's whole form.
+ */
+function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
+  const { onHelp, helpOverlay } = useHelp('integrations');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const hasProxy = useServerGate('proxy').enabled;
+  const upsertDeferred = useUpsertMcpServer({ deferWhenOffline: true });
+  // The waiting screen's *Use a key instead* lands here with the link it was signing in to.
+  const keyFor = (location.state as { useKeyFor?: unknown } | null)?.useKeyFor;
+  const [phase, setPhase] = useState<AddPhase>(
+    typeof keyFor === 'string'
+      ? { kind: 'form', seed: { url: keyFor, authScheme: 'bearer' } }
+      : { kind: 'check' },
+  );
+  const [link, setLink] = useState('');
+
+  if (phase.kind === 'form') return <IntegrationServerForm seed={phase.seed} />;
+
+  function onResult(result: Exclude<CheckResult, { kind: 'unreachable' }>, checked: string) {
+    setLink(checked);
+    const allowDirect = result.route === 'direct';
+    if (result.kind === 'sign-in') {
+      setPhase({ kind: 'sign-in', check: result });
+    } else if (result.kind === 'key') {
+      setPhase({ kind: 'form', seed: { url: result.endpoint, authScheme: 'bearer', allowDirect } });
+    } else {
+      setPhase({
+        kind: 'form',
+        seed: {
+          url: result.endpoint,
+          allowDirect,
+          routing: result.route,
+          resolvedEndpoint: result.endpoint,
+          tools: result.tools,
+          authBehindButton: true,
+          dirty: true,
+        },
+      });
+    }
+  }
+
+  async function onConnected(serverId: string, draft: ServerDraft | null) {
+    if (draft && !rows.some((r) => r.id === serverId)) {
+      try {
+        await saveConnectedServer(serverId, draft, {
+          upsert: (row) => upsertDeferred.mutateAsync(row),
+          test: (row) => testOAuthConnection(row, hasProxy),
+        });
+      } catch {
+        // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
+        toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
+        navigate('/app/integrations');
+        return;
+      }
+    }
+    navigate(`/app/integrations/${serverId}`);
+  }
+
+  return (
+    <PageScaffold
+      crumbs={[CRUMB_ROOT, { label: 'Add MCP server' }]}
+      back="/app/integrations"
+      onHelp={onHelp}
+    >
+      {helpOverlay}
+      <div className="flex flex-col gap-3 px-4 pb-8 pt-2">
+        {phase.kind === 'check' ? (
+          <CheckServerStep
+            hasProxy={hasProxy}
+            initialLink={link}
+            onResult={onResult}
+            onManual={(typed) => setPhase({ kind: 'form', seed: { url: typed } })}
+          />
+        ) : null}
+        {phase.kind === 'sign-in' ? (
+          <SignInSettings
+            check={phase.check}
+            rows={rows}
+            onNext={(draft) =>
+              setPhase({ kind: 'flow', discovery: phase.check.discovery, draft, back: phase })
+            }
+            onUseKey={() =>
+              setPhase({ kind: 'form', seed: { url: phase.check.endpoint, authScheme: 'bearer' } })
+            }
+            onOpenExisting={(id) => navigate(`/app/integrations/${id}`)}
+          />
+        ) : null}
+        {phase.kind === 'flow' ? (
+          <OAuthSignInFlow
+            discovery={phase.discovery}
+            draft={phase.draft}
+            mode="page"
+            onConnected={(r) => onConnected(r.serverId, r.draft)}
+            onUseKey={() =>
+              setPhase({ kind: 'form', seed: { url: phase.draft.url, authScheme: 'bearer' } })
+            }
+            onClose={() => setPhase(phase.back)}
+          />
+        ) : null}
+      </div>
+    </PageScaffold>
+  );
+}
+
+/** Inner form: add (existing undefined, seeded by the check) or edit a single MCP server. */
+function IntegrationServerForm({
+  existing,
+  seed,
+}: {
+  existing?: McpServerRow;
+  seed?: FormSeed;
+}): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
   const proxyGate = useServerGate('proxy');
   const upsert = useUpsertMcpServer();
   const del = useDeleteMcpServer();
   const mk = useSessionStore((s) => s.mk);
+  // An OAuth row has no secret here; its grant is its own synced row (spec §4.2).
+  const isOAuth = existing?.auth?.scheme === 'oauth';
 
   const [name, setName] = useState(existing?.name ?? '');
-  const [url, setUrl] = useState(existing?.url ?? '');
+  const [url, setUrl] = useState(existing?.url ?? seed?.url ?? '');
   const [prefix, setPrefix] = useState(existing?.prefix ?? '');
   const [prefixEdited, setPrefixEdited] = useState(existing != null);
-  const [authScheme, setAuthScheme] = useState<AuthScheme>(existing?.auth?.scheme ?? 'none');
+  const [authScheme, setAuthScheme] = useState<AuthScheme>(
+    existing?.auth && existing.auth.scheme !== 'oauth'
+      ? existing.auth.scheme
+      : (seed?.authScheme ?? 'none'),
+  );
+  const [authShown, setAuthShown] = useState(!seed?.authBehindButton);
   const [headerName, setHeaderName] = useState(
     existing?.auth?.scheme === 'header' ? existing.auth.headerName : '',
   );
   const [keyInput, setKeyInput] = useState('');
   const [onByDefault, setOnByDefault] = useState(existing?.onByDefault ?? false);
   const [autoRun, setAutoRun] = useState(existing?.autoRun ?? false);
-  const [allowDirect, setAllowDirect] = useState(existing?.allowDirect ?? false);
-
-  const [routing, setRouting] = useState<McpServerRow['routing']>(existing?.routing ?? null);
-  const [resolvedEndpoint, setResolvedEndpoint] = useState<string | null>(
-    existing?.resolvedEndpoint ?? null,
+  const [allowDirect, setAllowDirect] = useState(
+    existing?.allowDirect ?? seed?.allowDirect ?? false,
   );
-  const [tools, setTools] = useState<McpToolDefinition[]>(existing?.tools ?? []);
+
+  const [routing, setRouting] = useState<McpServerRow['routing']>(
+    existing?.routing ?? seed?.routing ?? null,
+  );
+  const [resolvedEndpoint, setResolvedEndpoint] = useState<string | null>(
+    existing?.resolvedEndpoint ?? seed?.resolvedEndpoint ?? null,
+  );
+  const [tools, setTools] = useState<McpToolDefinition[]>(existing?.tools ?? seed?.tools ?? []);
   const [hiddenTools, setHiddenTools] = useState<string[]>(existing?.hiddenTools ?? []);
   const [lastError, setLastError] = useState<string | null>(existing?.lastError ?? null);
   const [lastTestedAt, setLastTestedAt] = useState<number | null>(existing?.lastTestedAt ?? null);
@@ -109,7 +282,21 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(seed?.dirty ?? false);
+  const [removing, setRemoving] = useState(false);
+  const [reconnect, setReconnect] = useState<
+    { kind: 'idle' } | { kind: 'checking' } | { kind: 'flow'; discovery: OAuthDiscovery }
+  >({ kind: 'idle' });
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+
+  const grants = useMcpOAuthGrants();
+  const pending = usePendingSignIns();
+  const linked = useAccountLinkStore((s) => s.linkStatus === 'linked');
+  const class2 = useClass2Gate();
+  const grant = existing ? (grants.data ?? []).find((g) => g.id === existing.id) : undefined;
+  const pendingHere = existing
+    ? (pending.data ?? []).find((p) => p.serverId === existing.id)
+    : undefined;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
   const back = () => navigate('/app/integrations');
@@ -138,11 +325,30 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     setTest({ kind: 'testing' });
     try {
       const hasProxy = proxyGate.enabled;
+      // An OAuth row whose tokens are renewed through the proxy needs it even when direct.
+      const oauthNeedsProxy = isOAuth && grant?.tokenRoute === 'proxy';
+      if (isOAuth && !hasProxy && (!allowDirect || oauthNeedsProxy)) {
+        setLastError(
+          linked
+            ? "Your Chatsundere server can't be reached right now, and this server connects through it. Test again once it's back."
+            : 'This server connects through a linked Chatsundere server. Link one first.',
+        );
+        setTest({ kind: 'done' });
+        return;
+      }
       if (!allowDirect && !hasProxy) {
         setLastError(
           'The linked server relay is unavailable. Turn on Local network to connect directly, or link a server first.',
         );
         setTest({ kind: 'done' });
+        return;
+      }
+
+      if (isOAuth && existing) {
+        const result = await testOAuthConnection({ ...existing, allowDirect }, hasProxy);
+        applyTestResult(result);
+        // A successful test counts as this device's first-use consent (spec §8, M1).
+        if (result.ok) await recordMcpConsent(existing.id, existing.url);
         return;
       }
 
@@ -157,24 +363,27 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
       const auth = buildAuth(plaintextKey);
 
       const result = await testMcpConnection({ url, hasProxy, allowDirect, auth });
-
-      setRouting(result.routing);
-      setResolvedEndpoint(result.resolvedEndpoint);
-      if (result.ok) setTools(result.tools);
-      setLastError(result.error);
-      setLastTestedAt(Date.now());
-      setTest({ kind: 'done' });
-      // A new result lives only in this form until Save, so leaving must not lose it
-      // silently; re-checking a healthy server has nothing to save and must not nag.
-      const unchanged =
-        result.routing === (existing?.routing ?? null) &&
-        result.resolvedEndpoint === (existing?.resolvedEndpoint ?? null) &&
-        JSON.stringify(result.tools) === JSON.stringify(existing?.tools ?? []);
-      if (result.ok && !unchanged) setDirty(true);
+      applyTestResult(result);
     } catch (e) {
       setLastError(e instanceof Error ? e.message : String(e));
       setTest({ kind: 'done' });
     }
+  }
+
+  function applyTestResult(result: McpConnectionResult) {
+    setRouting(result.routing);
+    setResolvedEndpoint(result.resolvedEndpoint);
+    if (result.ok) setTools(result.tools);
+    setLastError(result.error);
+    setLastTestedAt(Date.now());
+    setTest({ kind: 'done' });
+    // A new result lives only in this form until Save, so leaving must not lose it
+    // silently; re-checking a healthy server has nothing to save and must not nag.
+    const unchanged =
+      result.routing === (existing?.routing ?? null) &&
+      result.resolvedEndpoint === (existing?.resolvedEndpoint ?? null) &&
+      JSON.stringify(result.tools) === JSON.stringify(existing?.tools ?? []);
+    if (result.ok && !unchanged) setDirty(true);
   }
 
   function onToggleAllowDirect() {
@@ -209,8 +418,11 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     try {
       const id = existing?.id ?? uuidv7();
 
+      // Saving must never disturb the grant (spec §9): an OAuth row keeps its scheme.
       let auth: McpServerRow['auth'] = null;
-      if (authScheme === 'bearer') {
+      if (isOAuth) {
+        auth = { scheme: 'oauth' };
+      } else if (authScheme === 'bearer') {
         const sealed = keyInput
           ? await sealMcpKey(keyInput, mk, id)
           : existing?.auth?.scheme === 'bearer'
@@ -243,6 +455,7 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
         hiddenTools,
         lastTestedAt,
         lastError,
+        firstUseConsentFor: existing?.url === url ? (existing.firstUseConsentFor ?? null) : null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       };
@@ -256,6 +469,93 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     }
   }
 
+  async function onSignInAgain() {
+    if (!existing) return;
+    setReconnectError(null);
+    setReconnect({ kind: 'checking' });
+    try {
+      const checked = await checkServer(existing.url, {
+        hasProxy: proxyGate.enabled,
+        allowDirect: existing.allowDirect,
+        // Exactly the row's URL: the new grant's resource must be it (spec §7).
+        exact: true,
+      });
+      if (checked.kind === 'sign-in') {
+        setReconnect({ kind: 'flow', discovery: checked.discovery });
+        return;
+      }
+      setReconnectError(reconnectCheckMessage(checked));
+    } catch {
+      setReconnectError("Couldn't reach this server to sign in again. Try again in a moment.");
+    }
+    setReconnect({ kind: 'idle' });
+  }
+
+  async function onReconnected() {
+    if (!existing) return;
+    setReconnect({ kind: 'idle' });
+    // Connecting counts as this device's first-use consent (spec §8, M1).
+    await recordMcpConsent(existing.id, existing.url).catch(() => undefined);
+    void onTest();
+  }
+
+  async function onRemove() {
+    if (!existing) return;
+    if (!isOAuth) {
+      del.mutate(existing.id);
+      back();
+      return;
+    }
+    setRemoving(true);
+    try {
+      const { revoked } = await removeGrant(existing.id, await createSignInDeps());
+      if (!revoked) {
+        toastStore.show({
+          message: `${existing.name} is removed, but Chatsundere couldn't sign out at ${signInHost}. The server may still list it as signed in until that sign-in runs out.`,
+          tone: 'warn',
+          durationMs: 10_000,
+        });
+      }
+      back();
+    } catch (e) {
+      setError(
+        e instanceof SyncOfflineError
+          ? "Your Chatsundere server can't be reached, so this server can't be removed from all your devices yet. Try again once it's back."
+          : "This server couldn't be removed. Try again in a moment.",
+      );
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  const signInHost = grant ? hostOf(grant.issuer) : hostOf(existing?.url ?? url);
+
+  if (existing && reconnect.kind === 'flow') {
+    const detail = `/app/integrations/${existing.id}`;
+    return (
+      <PageScaffold
+        crumbs={[CRUMB_ROOT, { label: existing.name, to: detail }, { label: 'Sign in again' }]}
+        back={detail}
+        // The flow shares the detail page's route, so going "there" means leaving the flow;
+        // an opened sign-in stays pending, as the flow's own Back keeps it.
+        onNavigate={(to) => (to === detail ? setReconnect({ kind: 'idle' }) : navigate(to))}
+        onHelp={onHelp}
+      >
+        {helpOverlay}
+        <div className="flex flex-col gap-3 px-4 pb-8 pt-2">
+          <OAuthSignInFlow
+            discovery={reconnect.discovery}
+            serverId={existing.id}
+            draft={null}
+            mode="page"
+            onConnected={() => onReconnected()}
+            onClose={() => setReconnect({ kind: 'idle' })}
+          />
+        </div>
+      </PageScaffold>
+    );
+  }
+
   return (
     <PageScaffold
       crumbs={[CRUMB_ROOT, { label: existing ? existing.name : 'Add MCP server' }]}
@@ -265,6 +565,24 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
     >
       {helpOverlay}
       <div className="flex flex-col gap-3 px-4 pb-8 pt-2">
+        {isOAuth && existing ? (
+          <OAuthConnectionPanel
+            status={statusOf(existing, {
+              hasProxy: proxyGate.enabled,
+              linked,
+              grant,
+              signingIn: pendingHere !== undefined,
+            })}
+            grant={grant}
+            signingIn={pendingHere !== undefined}
+            backendUnreachable={class2.disabled}
+            starting={reconnect.kind === 'checking'}
+            startError={reconnectError}
+            onSignInAgain={() => void onSignInAgain()}
+            onReturnToSignIn={() => pendingHere && navigate(waitingScreenPath(pendingHere.state))}
+          />
+        ) : null}
+
         <div>
           <label
             htmlFor="mcp-name"
@@ -298,6 +616,8 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
             type="text"
             placeholder="https://example.com/mcp"
             value={url}
+            readOnly={isOAuth}
+            aria-describedby={isOAuth ? 'mcp-url-reason' : undefined}
             onChange={(e) => {
               setUrl(e.target.value);
               setDirty(true);
@@ -305,8 +625,13 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
               setTools([]);
             }}
             autoComplete="off"
-            className={inputClass}
+            className={`${inputClass}${isOAuth ? ' opacity-70' : ''}`}
           />
+          {isOAuth ? (
+            <p id="mcp-url-reason" className="mt-1 text-[11px] text-paper-soft">
+              To change the link, remove this server and connect it again
+            </p>
+          ) : null}
         </div>
 
         <div>
@@ -331,81 +656,91 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
           />
         </div>
 
-        <div>
-          <label
-            htmlFor="mcp-auth"
-            className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-          >
-            Authentication
-          </label>
-          <select
-            id="mcp-auth"
-            value={authScheme}
-            onChange={(e) => {
-              setAuthScheme(e.target.value as AuthScheme);
-              setDirty(true);
-              clearTestResult();
-            }}
-            className={inputClass}
-          >
-            <option value="none">None</option>
-            <option value="bearer">Bearer token</option>
-            <option value="header">Custom header</option>
-          </select>
-        </div>
-
-        {authScheme === 'header' ? (
-          <div>
-            <label
-              htmlFor="mcp-header-name"
-              className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-            >
-              Header name
-            </label>
-            <input
-              id="mcp-header-name"
-              type="text"
-              placeholder="X-API-Key"
-              value={headerName}
-              onChange={(e) => {
-                setHeaderName(e.target.value);
-                setDirty(true);
-              }}
-              autoComplete="off"
-              className={inputClass}
-            />
-          </div>
+        {!isOAuth && !authShown ? (
+          <Button tone="neutral" className="self-start" onClick={() => setAuthShown(true)}>
+            Add a key
+          </Button>
         ) : null}
 
-        {authScheme !== 'none' ? (
-          <div>
-            <label
-              htmlFor="mcp-key"
-              className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
-            >
-              Key
-            </label>
-            <input
-              id="mcp-key"
-              type="password"
-              placeholder={
-                existing != null && existing.auth?.scheme === authScheme
-                  ? 'leave blank to keep current'
-                  : 'token or key'
-              }
-              value={keyInput}
-              onChange={(e) => {
-                setKeyInput(e.target.value);
-                setDirty(true);
-                clearTestResult();
-              }}
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
-              name=""
-              className={inputClass}
-            />
-          </div>
+        {!isOAuth && authShown ? (
+          <>
+            <div>
+              <label
+                htmlFor="mcp-auth"
+                className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+              >
+                Authentication
+              </label>
+              <select
+                id="mcp-auth"
+                value={authScheme}
+                onChange={(e) => {
+                  setAuthScheme(e.target.value as AuthScheme);
+                  setDirty(true);
+                  clearTestResult();
+                }}
+                className={inputClass}
+              >
+                <option value="none">None</option>
+                <option value="bearer">Bearer token</option>
+                <option value="header">Custom header</option>
+              </select>
+            </div>
+
+            {authScheme === 'header' ? (
+              <div>
+                <label
+                  htmlFor="mcp-header-name"
+                  className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+                >
+                  Header name
+                </label>
+                <input
+                  id="mcp-header-name"
+                  type="text"
+                  placeholder="X-API-Key"
+                  value={headerName}
+                  onChange={(e) => {
+                    setHeaderName(e.target.value);
+                    setDirty(true);
+                  }}
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </div>
+            ) : null}
+
+            {authScheme !== 'none' ? (
+              <div>
+                <label
+                  htmlFor="mcp-key"
+                  className="mb-1 block text-xs uppercase tracking-widest text-paper-soft"
+                >
+                  Key
+                </label>
+                <input
+                  id="mcp-key"
+                  type="password"
+                  placeholder={
+                    existing != null && existing.auth?.scheme === authScheme
+                      ? 'leave blank to keep current'
+                      : 'token or key'
+                  }
+                  value={keyInput}
+                  onChange={(e) => {
+                    setKeyInput(e.target.value);
+                    setDirty(true);
+                    clearTestResult();
+                  }}
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  name=""
+                  className={inputClass}
+                />
+              </div>
+            ) : null}
+          </>
         ) : null}
 
         <label className="flex items-center gap-2 text-xs text-paper-soft">
@@ -522,25 +857,40 @@ function IntegrationServerForm({ existing }: { existing?: McpServerRow }): JSX.E
         </div>
 
         {existing ? (
-          <Button tone="destructive" className="self-start" onClick={() => setConfirmDelete(true)}>
-            Remove server
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button
+              tone="destructive"
+              className="self-start"
+              disabled={removing || (isOAuth && class2.disabled)}
+              aria-describedby={isOAuth && class2.disabled ? 'mcp-remove-reason' : undefined}
+              onClick={() => setConfirmDelete(true)}
+            >
+              {removing ? 'Removing…' : 'Remove server'}
+            </Button>
+            {isOAuth && class2.disabled ? (
+              <span id="mcp-remove-reason" className="text-xs text-paper-soft">
+                {REMOVE_WAITS_FOR_BACKEND}
+              </span>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
       <ConfirmDialog
         open={confirmDelete}
         title={`Remove ${existing?.name ?? ''}?`}
-        body="The server and its stored key are deleted. Personas lose access to its tools."
+        body={
+          isOAuth
+            ? `This removes the server from all your devices and signs Chatsundere out at ${signInHost}. Personas lose access to its tools.`
+            : 'The server and its stored key are deleted. Personas lose access to its tools.'
+        }
         confirmLabel="Remove"
         cancelLabel="Keep"
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          if (existing) {
-            del.mutate(existing.id);
-            back();
-          }
+          setConfirmDelete(false);
+          void onRemove();
         }}
       />
     </PageScaffold>

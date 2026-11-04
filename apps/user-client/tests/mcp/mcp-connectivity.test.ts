@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildCandidates, resolveConnection } from '../../src/mcp/mcp-connectivity.js';
 import type { McpCandidate, McpProbeResult } from '../../src/mcp/types.js';
 
@@ -88,5 +88,31 @@ describe('resolveConnection', () => {
     const r = await resolveConnection([{ routing: 'proxy', url: 'https://x.io/mcp' }], probe);
     expect(r.ok).toBe(false);
     expect(r.error).toBe('blocked by allowlist');
+  });
+});
+
+describe('resolveConnection with stopOnAuth', () => {
+  const cs = [
+    { routing: 'direct' as const, url: 'https://o/mcp' },
+    { routing: 'proxy' as const, url: 'https://o/mcp' },
+  ];
+  const refused = async () => ({
+    ok: false,
+    tools: [],
+    error: 'HTTP 401',
+    auth: 'required' as const,
+  });
+
+  it('stops at the first auth answer, so the token reaches one routing only', async () => {
+    const probe = vi.fn(refused);
+    const r = await resolveConnection(cs, probe, { stopOnAuth: true });
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ ok: false, auth: 'required' });
+  });
+
+  it('key rows keep trying every candidate, as before', async () => {
+    const probe = vi.fn(refused);
+    await resolveConnection(cs, probe);
+    expect(probe).toHaveBeenCalledTimes(2);
   });
 });

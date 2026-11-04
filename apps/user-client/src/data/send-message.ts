@@ -203,6 +203,9 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
     hasProxy,
     mk,
     requestApproval: (req) => useMcpApprovalStore.getState().request(req),
+    requestFirstUse: (req) => useMcpApprovalStore.getState().requestFirstUse(req),
+    // Lives with the send: one auth notice per server per turn (spec §9, "In a chat").
+    authNotices: new Map(),
   });
 
   return {

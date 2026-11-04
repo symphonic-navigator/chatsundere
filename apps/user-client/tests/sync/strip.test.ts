@@ -101,6 +101,7 @@ describe('strip — deny-list collections (§10)', () => {
       resolvedEndpoint: null,
       lastTestedAt: null,
       lastError: null,
+      firstUseConsentFor: null,
     });
   });
 
@@ -267,5 +268,109 @@ describe('chatFontScale is device-local', () => {
 
   it('a chatFontScale-only patch is a plain local write (not a synced field)', () => {
     expect(patchTouchesSyncedField('settings', ['chatFontScale'])).toBe(false);
+  });
+});
+
+describe('mcpOAuthGrants deny-list — the write-ahead copy stays on this device', () => {
+  const PENDING_FIELDS = [
+    'pendingTokens',
+    'pendingBaseRev',
+    'pendingSpentRefresh',
+    'pendingNewFamily',
+  ] as const;
+  const sealedBlob = { version: 1, ciphertext: new Uint8Array([9]), nonce: new Uint8Array(12) };
+
+  it('strips every pending field before seal and keeps the synced ones', () => {
+    const grant = {
+      id: 'srv-1',
+      issuer: 'https://auth.example',
+      tokens: sealedBlob,
+      claim: { deviceId: 'dev-a', at: 5 },
+      pendingTokens: sealedBlob,
+      pendingBaseRev: 4,
+      pendingSpentRefresh: sealedBlob,
+      pendingNewFamily: true,
+      updatedAt: 9,
+    };
+    const sealed = stripForSeal('mcpOAuthGrants', grant) as Record<string, unknown>;
+    for (const field of PENDING_FIELDS) expect(field in sealed).toBe(false);
+    expect(sealed.issuer).toBe('https://auth.example');
+    expect(sealed.tokens).toBe(sealedBlob);
+    expect(sealed.claim).toEqual({ deviceId: 'dev-a', at: 5 });
+  });
+
+  it('restores the local pending fields on open', () => {
+    const local = {
+      id: 'srv-1',
+      pendingTokens: sealedBlob,
+      pendingBaseRev: 4,
+      pendingSpentRefresh: null,
+      pendingNewFamily: true,
+    };
+    const restored = restoreLocalFields(
+      'mcpOAuthGrants',
+      { id: 'srv-1', tokens: null },
+      local,
+    ) as Record<string, unknown>;
+    expect(restored.pendingTokens).toBe(sealedBlob);
+    expect(restored.pendingBaseRev).toBe(4);
+    expect(restored.pendingSpentRefresh).toBeNull();
+    expect(restored.pendingNewFamily).toBe(true);
+    expect(restored.tokens).toBeNull();
+  });
+
+  it('never takes pending fields from a pulled row', () => {
+    const restored = restoreLocalFields(
+      'mcpOAuthGrants',
+      { id: 'srv-1', pendingTokens: sealedBlob, pendingNewFamily: true },
+      undefined,
+    ) as Record<string, unknown>;
+    expect(restored.pendingTokens).toBeNull();
+    expect(restored.pendingNewFamily).toBe(false);
+  });
+
+  it('a pending-only patch is not a synced mutation', () => {
+    expect(patchTouchesSyncedField('mcpOAuthGrants', ['pendingTokens', 'pendingBaseRev'])).toBe(
+      false,
+    );
+    expect(patchTouchesSyncedField('mcpOAuthGrants', ['claim'])).toBe(true);
+  });
+});
+
+describe('mcpServers firstUseConsentFor is device-local', () => {
+  it('is stripped before seal', () => {
+    const sealed = stripForSeal('mcpServers', {
+      id: 's',
+      url: 'https://a/mcp',
+      firstUseConsentFor: 'https://a/mcp',
+    }) as Record<string, unknown>;
+    expect('firstUseConsentFor' in sealed).toBe(false);
+  });
+
+  it('defaults to null on a device that never approved it', () => {
+    const restored = restoreLocalFields(
+      'mcpServers',
+      { id: 's', url: 'https://a/mcp', firstUseConsentFor: 'https://a/mcp' },
+      undefined,
+    ) as Record<string, unknown>;
+    expect(restored.firstUseConsentFor).toBeNull();
+  });
+
+  it('keeps the local approval while the url is unchanged', () => {
+    const restored = restoreLocalFields(
+      'mcpServers',
+      { id: 's', url: 'https://a/mcp', allowDirect: false },
+      { id: 's', url: 'https://a/mcp', allowDirect: false, firstUseConsentFor: 'https://a/mcp' },
+    ) as Record<string, unknown>;
+    expect(restored.firstUseConsentFor).toBe('https://a/mcp');
+  });
+
+  it('resets when a pulled url differs', () => {
+    const restored = restoreLocalFields(
+      'mcpServers',
+      { id: 's', url: 'https://b/mcp', allowDirect: false },
+      { id: 's', url: 'https://a/mcp', allowDirect: false, firstUseConsentFor: 'https://a/mcp' },
+    ) as Record<string, unknown>;
+    expect(restored.firstUseConsentFor).toBeNull();
   });
 });

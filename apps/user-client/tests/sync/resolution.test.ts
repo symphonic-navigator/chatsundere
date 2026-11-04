@@ -295,3 +295,23 @@ describe('memoryBodyAdoptsWinner — anti-ping-pong', () => {
     expect(memoryBodyAdoptsWinner(['e1', 'e9'], ['e1', 'e2'])).toBe(false);
   });
 });
+
+describe('resolveConflict — mcpOAuthGrants takes no LWW (OAuth spec §4.1)', () => {
+  it('the pulled row wins even when the local updatedAt is newer', () => {
+    const r = resolveConflict(
+      'mcpOAuthGrants',
+      { id: 'srv-1', updatedAt: 99 },
+      { id: 'srv-1', updatedAt: 1 },
+    );
+    expect(r).toEqual({ winner: 'pulled', repush: false });
+  });
+
+  it('the pulled row wins on a tie', () => {
+    const r = resolveConflict(
+      'mcpOAuthGrants',
+      { id: 'srv-1', updatedAt: 5, scope: 'b' },
+      { id: 'srv-1', updatedAt: 5, scope: 'a' },
+    );
+    expect(r).toEqual({ winner: 'pulled', repush: false });
+  });
+});

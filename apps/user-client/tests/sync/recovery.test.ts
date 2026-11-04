@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
-import type { SealedRecord } from '@chatsundere/crypto';
+import { type SealedRecord, fromBase64Url } from '@chatsundere/crypto';
 import type { SyncPullResponse, SyncPushRecord } from '@chatsundere/shared-types';
 import {
   useAccountLinkStore,
@@ -114,6 +114,52 @@ describe('runRecovery — full sequence (spec §8)', () => {
     expect(isRecovering()).toBe(false);
     // Outbox fully drained.
     expect(await db.syncOutbox.count()).toBe(0);
+  });
+});
+
+describe('runRecovery — MCP OAuth grants', () => {
+  it('re-pushes an ordinary grant but skips one holding an unpublished new family', async () => {
+    const db = getClientDataDb();
+    const base = {
+      resource: 'https://mcp.example/mcp',
+      issuer: 'https://auth.example',
+      tokenEndpoint: 'https://auth.example/token',
+      revocationEndpoint: null,
+      clientId: 'client-1',
+      registration: 'dcr' as const,
+      scope: null,
+      tokenRoute: 'direct' as const,
+      claim: null,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await db.mcpOAuthGrants.bulkPut([
+      { ...base, id: 'g-plain', tokens: null },
+      {
+        ...base,
+        id: 'g-new-family',
+        tokens: null,
+        pendingTokens: { version: 1, ciphertext: new Uint8Array([1]), nonce: new Uint8Array(12) },
+        pendingNewFamily: true,
+      },
+    ]);
+    _setRecoveryPull(async () => emptyPull('E2'));
+    const pushed: SyncPushRecord[] = [];
+    _setPushTransport(async (records) => {
+      pushed.push(...records);
+      return {
+        head: 10,
+        epoch: 'E2',
+        results: records.map((_r, i) => ({ status: 'ok', rev: 10 + i })),
+      };
+    });
+
+    await runRecovery();
+
+    const grants = pushed
+      .filter((r) => r.collection === 'mcpOAuthGrants')
+      .map((r) => new TextDecoder().decode(fromBase64Url(r.blindId)));
+    expect(grants).toEqual(['bid:mcpOAuthGrants:g-plain']);
   });
 });
 

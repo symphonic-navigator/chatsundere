@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Context, Hono } from 'hono';
-import { applyCorsHeaders, matchOrigin, preflightResponse } from '../cors.js';
+import {
+  EXPOSED_RESPONSE_HEADERS,
+  applyCorsHeaders,
+  matchOrigin,
+  preflightResponse,
+} from '../cors.js';
 import { normaliseLlmHost } from '../egress/known-hosts.js';
 import {
   type Target,
@@ -221,6 +226,7 @@ export function registerProxyRoute(app: Hono, deps: ProxyDeps): void {
       if (matched) {
         respHeaders.set('Access-Control-Allow-Origin', matched);
         respHeaders.set('Vary', 'Origin');
+        respHeaders.set('Access-Control-Expose-Headers', EXPOSED_RESPONSE_HEADERS);
       }
 
       let outBody: ReadableStream<Uint8Array> | null = null;

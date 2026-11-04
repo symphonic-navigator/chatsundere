@@ -255,7 +255,7 @@ A restrained list. Each item earned its place by costing time elsewhere.
 - No MongoDB — see [ADR 0001](obsidian/decisions/0001-postgres-over-mongodb.md).
 - No drag-and-drop in user-facing UI.
 - No parallel chats per user. One active chat at a time.
-- No OAuth or third-party identity providers.
+- No OAuth or third-party identity providers for signing in to Chatsundere. OAuth as a client of MCP servers is a different thing: see [ADR 0038](obsidian/decisions/0038-oauth-for-mcp-connectors.md).
 - No `email` or `phone` fields on `users`.
 - No server-side password complexity rules — OPAQUE never sees the password.
 - No "forgot password" feature — the recovery key is the only path, see [ADR 0007](obsidian/decisions/0007-recovery-key-required-at-registration.md).

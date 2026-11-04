@@ -12,8 +12,10 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type {
   SyncCollection,
   SyncPullResponse,
+  SyncPulledRecord,
   SyncPushRecord,
   SyncPushResponse,
+  SyncPushResult,
 } from '@chatsundere/shared-types';
 import {
   useAccountLinkStore,
@@ -22,6 +24,7 @@ import {
   useSessionStore,
 } from '@chatsundere/ui-shared';
 import type {
+  McpOAuthGrantRow,
   SyncAttention,
   SyncOutboxRow,
   SyncRowMeta,
@@ -156,6 +159,21 @@ let backfill: () => Promise<void> = async () => undefined;
  *  no-op until then. Runs at the cycle's tail, after backfill. */
 let reconcile: () => Promise<void> = async () => undefined;
 
+/**
+ * Publishes unpublished MCP OAuth token pairs after a cycle (spec §5). Imported lazily:
+ * the grant module depends on this one for its direct push.
+ */
+async function defaultGrantPublisher(): Promise<void> {
+  if (useSessionStore.getState().mk === null) return;
+  const pending = await getClientDataDb()
+    .mcpOAuthGrants.filter((r) => r.pendingTokens !== null && r.pendingTokens !== undefined)
+    .count();
+  if (pending === 0) return;
+  const { createEnsureDeps, publishPendingTokens } = await import('../mcp/oauth/ensure-token.js');
+  await publishPendingTokens(await createEnsureDeps());
+}
+let grantPublisher: () => Promise<void> = defaultGrantPublisher;
+
 /** Test seam: override the crypto used for sealing/blind-id derivation. */
 export function _setCryptoDeps(deps: Partial<SealCryptoDeps> | null): void {
   cryptoOverride = deps;
@@ -203,6 +221,10 @@ export function _setBackfill(fn: () => Promise<void>): void {
 export function _setReconcile(fn: () => Promise<void>): void {
   reconcile = fn;
 }
+/** Test seam: replace what the cycle runs after releasing the sync lock. */
+export function _setGrantPublisher(fn: (() => Promise<void>) | null): void {
+  grantPublisher = fn ?? defaultGrantPublisher;
+}
 /** Test seam: restore every override to its production default. */
 export function _resetWorkerForTests(): void {
   cryptoOverride = null;
@@ -217,6 +239,7 @@ export function _resetWorkerForTests(): void {
   recovery = async () => undefined;
   backfill = async () => undefined;
   reconcile = async () => undefined;
+  grantPublisher = defaultGrantPublisher;
   cycleMutex = false;
 }
 
@@ -706,6 +729,102 @@ function defaultPush(syncUrl: string, records: SyncPushRecord[]): Promise<SyncPu
   });
 }
 
+/** The outcome of a direct push: the per-record result, or why there is none. */
+export type DirectPushResult =
+  | SyncPushResult
+  | { status: 'network' }
+  | { status: 'epoch-mismatch' };
+
+/**
+ * Pushes one record outside the outbox and returns its per-record result (MCP OAuth
+ * spec §5). It seals exactly the `row` and `baseRev` given and never re-reads either,
+ * because pulls run concurrently. On `ok` the row and its `syncRows` revision are
+ * written in one transaction, only above the stored revision, before this returns.
+ */
+export async function pushRecordDirect(args: {
+  collection: SyncCollection;
+  key: string;
+  row: unknown;
+  baseRev: number;
+  mk: MasterKey;
+}): Promise<DirectPushResult> {
+  const syncUrl = effectiveSyncUrl();
+  if (!syncUrl && !pushOverride) return { status: 'network' };
+  const generation = await getLinkGeneration();
+  const prep = await prepareRecord(activeCrypto(), args.mk, {
+    collection: args.collection,
+    key: args.key,
+    op: 'upsert',
+    seqs: [],
+    row: args.row,
+    baseRev: args.baseRev,
+  });
+  const push = pushOverride ?? ((records: SyncPushRecord[]) => defaultPush(syncUrl ?? '', records));
+  let response: SyncPushResponse;
+  try {
+    response = await push([prep.record]);
+  } catch {
+    // Any failure leaves the outcome unknown to us, so the caller treats it as offline.
+    return { status: 'network' };
+  }
+  if ((await checkEpoch(response.epoch)) === 'mismatch') return { status: 'epoch-mismatch' };
+  const result = response.results[0];
+  if (!result) return { status: 'network' };
+  if (result.status === 'ok') {
+    const db = getClientDataDb();
+    const table = db.table(args.collection);
+    await db.transaction('rw', [table, db.syncRows, db.syncState], async () => {
+      // Audit #8: an engine reset since the push started makes the ack stale.
+      if (((await db.syncState.get('state'))?.linkGeneration ?? 0) !== generation) return;
+      const existing = await db.syncRows.get([args.collection, args.key]);
+      if (existing && result.rev <= existing.rev) return;
+      await table.put(args.row);
+      await db.syncRows.put({
+        collection: args.collection,
+        key: args.key,
+        rev: result.rev,
+        ciphertextHash: prep.ciphertextHashB64 ?? '',
+        localContentHash: prep.contentHashB64 ?? undefined,
+      });
+    });
+    await clearQuotaOnAcceptedWrite();
+  }
+  return result;
+}
+
+/** A grant row and its `syncRows` revision, read in one transaction; null without a row. */
+export async function snapshotGrant(
+  serverId: string,
+): Promise<{ row: McpOAuthGrantRow; rev: number } | null> {
+  const db = getClientDataDb();
+  return db.transaction('r', [db.mcpOAuthGrants, db.syncRows], async () => {
+    const row = await db.mcpOAuthGrants.get(serverId);
+    if (!row) return null;
+    const meta = await db.syncRows.get(['mcpOAuthGrants', serverId]);
+    return { row, rev: meta?.rev ?? 0 };
+  });
+}
+
+/** Opens a pulled or conflicting grant record under `mk`; null when it does not open. */
+export async function openPulledGrant(
+  mk: MasterKey,
+  record: SyncPulledRecord,
+): Promise<McpOAuthGrantRow | null> {
+  if (record.deleted || !record.nonce || !record.ciphertext) return null;
+  try {
+    const row = await activeOpenRecord()(
+      mk,
+      'mcpOAuthGrants',
+      fromBase64Url(record.blindId),
+      { nonce: fromBase64Url(record.nonce), ciphertext: fromBase64Url(record.ciphertext) },
+      extractKeyFor('mcpOAuthGrants'),
+    );
+    return row as McpOAuthGrantRow;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * §3.4 terminal disposition: a `record_too_large` refusal is permanent for
  * this payload — mark the covered outbox entries so they stop draining. The
@@ -1073,6 +1192,9 @@ export async function runSyncCycle(): Promise<void> {
       throw err;
     }
   });
+  // Outside the sync lock and not awaited: the grant lock is the outer one, and a grant
+  // holder that asked for this cycle must never wait on it (MCP OAuth spec §5).
+  void grantPublisher().catch(() => undefined);
 }
 
 /** Cycle preconditions (spec §6): any miss → no-op. */

@@ -19,11 +19,16 @@ export interface McpEndpoint {
   auth: { header: string; value: string } | null;
 }
 
+/** Set on a failed probe or call when the upstream refused the credentials. */
+export type McpAuthSignal = 'required' | 'insufficient-scope';
+
 /** Outcome of a single connection probe. */
 export interface McpProbeResult {
   ok: boolean;
   tools: McpToolDefinition[];
   error: string | null;
+  auth?: McpAuthSignal;
+  scope?: string;
 }
 
 /** A candidate (routing × URL variant) the connection test tries in order. */
@@ -39,6 +44,9 @@ export interface McpConnectionResult {
   resolvedEndpoint: string | null;
   tools: McpToolDefinition[];
   error: string | null;
+  /** The auth signal of the last candidate that gave one. */
+  auth?: McpAuthSignal;
+  scope?: string;
 }
 
 /** A resolved auth header (plaintext key already opened). */

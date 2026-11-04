@@ -52,6 +52,7 @@ export const BACKFILL_ORDER: readonly SyncCollection[] = [
   'settings',
   'providers',
   'mcpServers',
+  'mcpOAuthGrants',
   'mindspaces',
   'personas',
   'personaAvatars',
@@ -121,6 +122,15 @@ async function listLocalKeys(collection: SyncCollection): Promise<string[]> {
   return rows
     .filter(
       (row) => !(collection === 'mindspaces' && (row as { builtIn?: boolean }).builtIn === true),
+    )
+    .filter(
+      // A new token family still on its way through the direct push has no
+      // `tokens` to upload yet (MCP OAuth spec §5); its own push publishes it.
+      (row) =>
+        !(
+          collection === 'mcpOAuthGrants' &&
+          (row as { pendingNewFamily?: boolean }).pendingNewFamily === true
+        ),
     )
     .map((row) => syncKeyOfRow(collection, row));
 }

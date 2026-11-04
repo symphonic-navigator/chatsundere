@@ -126,6 +126,8 @@ describe('tool registry composition', () => {
           id: 's',
           name: 'S',
           prefix: 'srv',
+          url: 'https://s/mcp',
+          hasConsent: true,
           routing: 'direct',
           resolvedEndpoint: 'https://s/mcp',
           auth: null,
@@ -135,8 +137,11 @@ describe('tool registry composition', () => {
         },
       ],
       getServerKey: async () => null,
+      getOAuthToken: async () => ({ ok: false, reason: 'no-grant' }),
       resolveRoute: async () => ({ ok: false, error: 'not expected' }),
       requestApproval: async () => true,
+      requestFirstUse: async () => true,
+      recordConsent: async () => undefined,
     };
     const tools = resolveActiveTools(dormantCtx, null, null, mcp);
     expect(tools.some((t) => t.name === 'srv_go')).toBe(true);

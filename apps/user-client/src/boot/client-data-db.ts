@@ -135,6 +135,8 @@ export interface McpServerRow {
   auth:
     | { scheme: 'bearer'; key: EncryptedBlob }
     | { scheme: 'header'; headerName: string; key: EncryptedBlob }
+    // The tokens live in the `mcpOAuthGrants` row of the same id, never here.
+    | { scheme: 'oauth' }
     | null;
   onByDefault: boolean;
   autoRun: boolean;
@@ -147,8 +149,61 @@ export interface McpServerRow {
   hiddenTools: string[];
   lastTestedAt: number | null;
   lastError: string | null;
+  /**
+   * The URL this device's user approved for a first OAuth tool call.
+   * Device-local: deny-listed in `strip.ts`, and reset by a pulled `url` change.
+   */
+  firstUseConsentFor?: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * One OAuth grant per MCP server, keyed by the server's id (MCP OAuth spec
+ * §4.1). Synced and sealed; `tokens` is sealed once more under the slot
+ * `mcp/<id>/oauth-tokens`. The `pending*` fields are the device-local
+ * write-ahead copy of a fresh token pair not yet published (deny-listed in
+ * `strip.ts`).
+ */
+export interface McpOAuthGrantRow {
+  id: string;
+  /** Canonical MCP URL the grant is bound to. */
+  resource: string;
+  issuer: string;
+  /** Pinned at connect; never rediscovered on refresh. */
+  tokenEndpoint: string;
+  revocationEndpoint: string | null;
+  clientId: string;
+  registration: 'cimd' | 'dcr';
+  scope: string | null;
+  tokenRoute: 'direct' | 'proxy';
+  /**
+   * The redirect URI the client was registered with. A reconnect reuses a dynamically
+   * registered client only while this is unchanged. Absent on grants made before it.
+   */
+  redirectUri?: string;
+  tokens: EncryptedBlob | null;
+  /** The refresh claim; `at` is informational only, never compared across devices. */
+  claim: { deviceId: string; at: number } | null;
+  pendingTokens?: EncryptedBlob | null;
+  pendingBaseRev?: number | null;
+  pendingSpentRefresh?: EncryptedBlob | null;
+  pendingNewFamily?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A sign-in in progress (MCP OAuth spec §4.3), keyed by its OAuth `state`.
+ * Device-local and never synced; the sign-in details are sealed under the
+ * master key in `sealed`.
+ */
+export interface McpOAuthPendingRow {
+  state: string;
+  sealed: EncryptedBlob;
+  serverId: string;
+  createdAt: number;
+  completedAt?: number;
 }
 
 export interface MindspacePalette {
@@ -707,6 +762,11 @@ export interface SyncStateRow {
    * legacy rows (reads as "never run").
    */
   lastReconcileAt?: number | null;
+  /**
+   * This device's random id for MCP OAuth refresh claims, created on first use
+   * by `getDeviceId`. Lives here because `syncState` never syncs.
+   */
+  mcpDeviceId?: string;
 }
 
 /** A pulled-tombstone row held for its 30-day grace window (§7.3). */
@@ -879,6 +939,8 @@ export class ClientDataDb extends Dexie {
   libraries!: Table<LibraryRow, string>;
   documents!: Table<DocumentRow, string>;
   mcpServers!: Table<McpServerRow, string>;
+  mcpOAuthGrants!: Table<McpOAuthGrantRow, string>;
+  mcpOAuthPending!: Table<McpOAuthPendingRow, string>;
   voiceAudio!: Table<VoiceAudioRow, string>;
   memoryJournal!: Table<MemoryJournalRow, string>;
   memoryBody!: Table<MemoryBodyRow, string>;
@@ -1622,6 +1684,13 @@ export class ClientDataDb extends Dexie {
       projectFiles: 'id, &[projectId+path], [projectId+updatedAt], projectId',
       projectContents: 'fileId',
       projectRevisions: '[fileId+version], fileId, [fileId+createdAt]',
+    });
+
+    // v38: MCP OAuth. A synced, sealed grant per OAuth server, and the
+    // device-local sign-ins in progress. New tables only; no data migration.
+    this.version(38).stores({
+      mcpOAuthGrants: 'id',
+      mcpOAuthPending: 'state, serverId, createdAt',
     });
   }
 }

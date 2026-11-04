@@ -96,4 +96,38 @@ describe('proxy route', () => {
     });
     expect(res.headers.get('access-control-allow-origin')).toBe('https://app.chatsundere.me');
   });
+  const mcpUpstream = async () =>
+    new Response('unauthorised', {
+      status: 401,
+      headers: {
+        'www-authenticate': 'Bearer resource_metadata="https://mcp.example.com/m"',
+        'mcp-session-id': 'S',
+      },
+    });
+  test('exposes WWW-Authenticate and Mcp-Session-Id on a forwarded response', async () => {
+    const res = await build({ pinnedFetch: mcpUpstream }).request('/mcp', {
+      method: 'POST',
+      headers: {
+        origin: 'https://app.chatsundere.me',
+        'x-chatsundere-authorization': 'Bearer GOOD',
+        'x-cors-proxy-target': 'https://mcp.example.com',
+      },
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers.get('www-authenticate')).toContain('resource_metadata');
+    expect(res.headers.get('access-control-expose-headers')).toBe(
+      'Mcp-Session-Id, WWW-Authenticate',
+    );
+  });
+  test('does not add expose headers for an unmatched origin', async () => {
+    const res = await build({ pinnedFetch: mcpUpstream }).request('/mcp', {
+      method: 'POST',
+      headers: {
+        origin: 'https://evil.example',
+        'x-chatsundere-authorization': 'Bearer GOOD',
+        'x-cors-proxy-target': 'https://mcp.example.com',
+      },
+    });
+    expect(res.headers.get('access-control-expose-headers')).toBeNull();
+  });
 });

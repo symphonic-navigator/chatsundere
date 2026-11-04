@@ -133,7 +133,9 @@ export async function runReconciliationIfDue(): Promise<void> {
   let enqueuedAny = false;
   let processed = 0;
   for (const meta of metas) {
-    if (!outboxKeys.has(`${meta.collection}:${meta.key}`)) {
+    // Grants are written only through the compare-and-set path (MCP OAuth spec
+    // §5); an enqueued upsert would push a stale snapshot under a fresh base.
+    if (meta.collection !== 'mcpOAuthGrants' && !outboxKeys.has(`${meta.collection}:${meta.key}`)) {
       try {
         const row = await readLocalRow(meta.collection, meta.key);
         if (row !== undefined && row !== null) {
