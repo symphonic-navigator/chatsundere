@@ -19,7 +19,11 @@ import {
   publishNewFamily,
   publishPendingTokens,
 } from '../../../src/mcp/oauth/ensure-token.js';
-import { acceptedFields, judgePulledGrant } from '../../../src/mcp/oauth/grant-generation.js';
+import {
+  acceptedFields,
+  generationOf,
+  judgePulledGrant,
+} from '../../../src/mcp/oauth/grant-generation.js';
 import { createNamedMutex, withGrantLock } from '../../../src/mcp/oauth/grant-lock.js';
 import type { AdoptOutcome } from '../../../src/mcp/oauth/grant-store.js';
 import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
@@ -316,6 +320,11 @@ async function setup(
   a.pull();
   b.pull();
   return { world, auth, cas, mk, a, b, first };
+}
+
+/** Another up-to-date device's write: one generation above the server's row (spec §5.2). */
+function putNewer(s: Setup, row: McpOAuthGrantRow): number {
+  return s.cas.put({ ...row, generation: generationOf(s.cas.row(ID)) + 1 });
 }
 
 function expire(s: Setup): void {
@@ -653,7 +662,7 @@ describe('ensureAccessToken, linked device', () => {
     expire(s);
     await leavePending(s);
     const t3 = await otherPair(s, 'three');
-    s.cas.put(grantRow(s.auth, await sealTokens(t3, s.mk, ID)));
+    putNewer(s, grantRow(s.auth, await sealTokens(t3, s.mk, ID)));
     expect(okToken(await s.a.ensure())).toBe(t3.accessToken);
     expect((await serverTokens(s))?.refreshToken).toBe(t3.refreshToken);
     expect(s.a.row().pendingTokens).toBeNull();
@@ -662,7 +671,7 @@ describe('ensureAccessToken, linked device', () => {
     expire(s2);
     await leavePending(s2);
     const other = await otherPair(s2, 'three');
-    s2.cas.put(grantRow(s2.auth, await sealTokens(other, s2.mk, ID)));
+    putNewer(s2, grantRow(s2.auth, await sealTokens(other, s2.mk, ID)));
     s2.a.pull();
     expect((await tokensOf(s2, s2.a.row().tokens))?.refreshToken).toBe(other.refreshToken);
     s2.a.restart();
@@ -701,7 +710,7 @@ describe('ensureAccessToken, linked device', () => {
     s.a.onWriteLocal = (patch) => {
       if (patch.pendingTokens) {
         s.a.onWriteLocal = undefined;
-        s.cas.put(grantRow(s.auth, sealedNewer));
+        putNewer(s, grantRow(s.auth, sealedNewer));
         s.a.pull();
       }
     };
@@ -802,7 +811,7 @@ describe('ensureAccessToken, linked device', () => {
     const fresh = await otherPair(s2, 'fresh');
     let n = 0;
     s2.a.beforePush = async () => {
-      if (++n === 2) s2.cas.put(grantRow(s2.auth, await sealTokens(fresh, s2.mk, ID)));
+      if (++n === 2) putNewer(s2, grantRow(s2.auth, await sealTokens(fresh, s2.mk, ID)));
     };
     await s2.a.ensure();
     expect((await serverTokens(s2))?.refreshToken).toBe(fresh.refreshToken);
@@ -1110,11 +1119,76 @@ describe('ensureAccessToken, linked device', () => {
     await leavePending(s);
     const claimsBefore = s.a.claimPushes().length;
     const t3 = await otherPair(s, 'adopted');
-    s.cas.put(grantRow(s.auth, await sealTokens(t3, s.mk, ID)));
+    putNewer(s, grantRow(s.auth, await sealTokens(t3, s.mk, ID)));
     expect(okToken(await s.a.ensure())).toBe(t3.accessToken);
     expect(s.a.claimPushes()).toHaveLength(claimsBefore);
     expect(s.auth.state.refreshAttempts).toHaveLength(1);
     expect(s.auth.state.familyRevoked).toBe(false);
+  });
+});
+
+describe('grant generations on compare-and-set writes', () => {
+  const kinds = (d: Device): [string, number | undefined][] =>
+    d.pushes.map((p) => [
+      p.row.claim !== null ? 'claim' : p.row.tokens === null ? 'dead' : 'other',
+      p.row.generation,
+    ]);
+
+  it('each push kind pushes max(seen, base)+1', async () => {
+    const s = await setup({}, { generation: 7 });
+    expect(s.a.row().seenGeneration).toBe(7);
+    expire(s);
+    okToken(await s.a.ensure());
+    expect(kinds(s.a)).toEqual([
+      ['claim', 8],
+      ['other', 9],
+    ]);
+    expect(s.a.row().generation).toBe(9);
+    expect(s.a.row().seenGeneration).toBe(9);
+    expect(s.a.row().heldGeneration).toBeNull();
+    expect(generationOf(s.cas.row(ID))).toBe(9);
+
+    // The release after a failed refresh goes over the claim at 8.
+    const s2 = await setup({}, { generation: 7 });
+    expire(s2);
+    s2.a.tokenOverride = () => new Response('unavailable', { status: 503 });
+    expect(await s2.a.ensure()).toEqual({ ok: false, reason: 'waiting' });
+    expect(kinds(s2.a)).toEqual([
+      ['claim', 8],
+      ['other', 9],
+    ]);
+    expect(s2.cas.row(ID)?.claim).toBeNull();
+    expect(s2.a.row().generation).toBe(9);
+    expect(s2.a.row().seenGeneration).toBe(9);
+
+    // invalid_grant publishes `tokens: null` over the claim at 8.
+    const s3 = await setup({}, { generation: 7 });
+    const dead: TokenSet = {
+      accessToken: 'at-dead',
+      refreshToken: 'rt-unknown',
+      accessExpiresAt: s3.world.t - 1,
+      scope: null,
+    };
+    s3.cas.put(grantRow(s3.auth, await sealTokens(dead, s3.mk, ID), { generation: 7 }));
+    s3.a.pull();
+    expect(await s3.a.ensure()).toEqual({ ok: false, reason: 'dead' });
+    expect(kinds(s3.a)).toEqual([
+      ['claim', 8],
+      ['dead', 9],
+    ]);
+    expect(generationOf(s3.cas.row(ID))).toBe(9);
+    expect(s3.a.row().seenGeneration).toBe(9);
+  });
+
+  it('a failed push leaves local generation and seen untouched', async () => {
+    const s = await setup({}, { generation: 7 });
+    expire(s);
+    s.a.plan = ['network'];
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'waiting' });
+    expect(s.a.pushes.map((p) => p.row.generation)).toEqual([8]);
+    expect(s.a.row().generation).toBe(7);
+    expect(s.a.row().seenGeneration).toBe(7);
+    expect(s.a.row().claim).toBeNull();
   });
 });
 
@@ -1231,15 +1305,50 @@ describe('publishNewFamily', () => {
     await leavePending(s);
     expect(s.a.row().pendingNewFamily).toBe(false);
     const other = await otherPair(s, 'other');
-    s.cas.put(grantRow(s.auth, await sealTokens(other, s.mk, ID)));
+    putNewer(s, grantRow(s.auth, await sealTokens(other, s.mk, ID)));
     expect(okToken(await s.a.ensure())).toBe(other.accessToken);
     expect((await serverTokens(s))?.refreshToken).toBe(other.refreshToken);
     expect(s.auth.state.refreshAttempts).toHaveLength(1);
     expect(s.auth.state.familyRevoked).toBe(false);
   });
+  it('new family re-push after conflict stamps max(seen, current)+1', async () => {
+    const s = await setup({}, { generation: 9 });
+    expect(s.a.row().seenGeneration).toBe(9);
+    await stageNewFamily(s, s.cas.rev(ID));
+    // Another device moved the row on to generation 12 under another revision.
+    s.cas.put({ ...(s.cas.row(ID) as McpOAuthGrantRow), generation: 12 });
+    await s.a.lock(ID, () => publishNewFamily(ID, s.a.deps()));
+    expect(s.a.pushes.map((p) => p.row.generation)).toEqual([10, 13]);
+    expect(generationOf(s.cas.row(ID))).toBe(13);
+    expect(s.a.row().generation).toBe(13);
+    expect(s.a.row().seenGeneration).toBe(13);
+    expect(s.a.row().pendingTokens).toBeNull();
+  });
+
+  it('new family falls back to the local generation when current does not open', async () => {
+    const s = await setup({}, { generation: 9 });
+    await stageNewFamily(s, s.cas.rev(ID));
+    s.a.rows.set(ID, { ...s.a.row(), generation: 11 });
+    s.a.plan = ['poison-conflict'];
+    await s.a.lock(ID, () => publishNewFamily(ID, s.a.deps()));
+    const generations = s.a.pushes.map((p) => p.row.generation);
+    // Seen 9, local 11: both the first push and the one after the poison stamp 12.
+    expect(generations.slice(0, 2)).toEqual([12, 12]);
+    expect(s.a.row().pendingTokens).toBeNull();
+  });
 });
 
 describe('the device harness', () => {
+  it('a v0.3.5-shaped push is accepted', async () => {
+    const s = await setup({}, { generation: 7 });
+    // An older app spreads the row it read, so the generation stays as it was.
+    s.cas.put({ ...(s.cas.row(ID) as McpOAuthGrantRow), claim: { deviceId: 'dev-old', at: 1 } });
+    expect(s.b.adopt(s.cas.pulled(ID))).toBe('adopted');
+    expect(s.b.row().claim?.deviceId).toBe('dev-old');
+    expect(s.b.row().generation).toBe(7);
+    expect(s.b.row().heldGeneration).toBeNull();
+  });
+
   it('device adopt refuses an older generation', async () => {
     const s = await setup({}, { generation: 4 });
     s.b.rows.set(ID, { ...s.b.row(), generation: 9, seenGeneration: 9, pendingBaseRev: 1 });

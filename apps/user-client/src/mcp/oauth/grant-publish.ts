@@ -3,6 +3,7 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
 import { openSpentRefresh, openTokens } from '../../data/mcp-oauth-grants.js';
 import type { EncryptedBlob } from '../../lib/secrets.js';
+import { generationOf, stampForPush } from './grant-generation.js';
 import type { GrantStore } from './grant-store.js';
 import type { OAuthFetch } from './oauth-fetch.js';
 import { type TokenSet, revokeToken } from './token-client.js';
@@ -67,6 +68,20 @@ async function revokePair(
   );
 }
 
+/**
+ * Revokes the ordinary pending pair a new sign-in is about to replace (plan D-10): only
+ * this device holds that live refresh token, so dropping it unrevoked would leave it
+ * usable. A new-family pair is left alone. Best-effort; the caller swallows errors.
+ */
+export async function revokeOrdinaryPending(
+  row: McpOAuthGrantRow,
+  mk: MasterKey,
+  deps: PublishDeps,
+): Promise<void> {
+  if (!row.pendingTokens || row.pendingNewFamily === true) return;
+  await revokePair(row, row.pendingTokens, mk, deps);
+}
+
 /** The row as published: the pending pair becomes `tokens`, and the claim is released. */
 function publishedRow(
   row: McpOAuthGrantRow,
@@ -104,8 +119,9 @@ export async function publishPending(
     }
   }
   let baseRev = row.pendingBaseRev ?? 0;
+  let baseGeneration = generationOf(row);
   for (let attempt = 0; attempt <= MAX_REPUSHES; attempt++) {
-    const result = await deps.store.push(body, baseRev, mk);
+    const result = await deps.store.push(stampForPush(body, baseGeneration), baseRev, mk);
     if (result.status === 'ok') {
       await deps.store.writeLocal(serverId, CLEARED_PENDING);
       return 'published';
@@ -117,7 +133,10 @@ export async function publishPending(
     }
     if (result.status !== 'conflict') return 'kept';
     if (newFamily) {
-      // A fresh sign-in always beats the old row, whatever it holds.
+      // A fresh sign-in always beats the old row, whatever it holds; its generation still
+      // has to climb above the row it overwrites when that row opens (spec §5.2).
+      const opened = await deps.store.open(result.current, mk);
+      baseGeneration = opened ? generationOf(opened) : generationOf(row);
       baseRev = result.current.rev;
       continue;
     }
@@ -127,6 +146,7 @@ export async function publishPending(
     if (currentTokens === 'corrupt' || spent === null) return 'kept';
     if ((currentTokens?.refreshToken ?? null) === spent) {
       // Nothing newer exists; the row may carry another device's claim over the spent token.
+      baseGeneration = generationOf(current);
       baseRev = result.current.rev;
       continue;
     }

@@ -131,13 +131,15 @@ function casStore(world: () => World): GrantStore {
           ...acceptedFields(local, body),
         });
       }
+      // A refusal records the revision only; the stored row, and so its hash, stay as they were.
+      const refused = local !== undefined && verdict.kind === 'refuse';
       await db.syncRows.put({
         collection: 'mcpOAuthGrants',
         key: id,
         rev: record.rev,
-        ciphertextHash: '',
+        ciphertextHash: refused ? (meta?.ciphertextHash ?? '') : '',
       });
-      return local && verdict.kind === 'refuse' ? 'refused' : 'adopted';
+      return refused ? 'refused' : 'adopted';
     },
     requestSync: () => undefined,
   };
@@ -687,6 +689,115 @@ describe('completeSignIn', () => {
     w.pushHook = null;
     await publishPendingTokens(ensureDeps());
     expect(await accessOf(w.cas.row(ok.serverId)?.tokens, ok.serverId)).toBe(w.issued[0]);
+  });
+});
+
+describe('grant generations on a new sign-in', () => {
+  async function reconnect(id: string): Promise<void> {
+    const { authorizationUrl } = await prepareSignIn(
+      discovery(w),
+      { serverId: id, draft: null },
+      deps(),
+    );
+    expectOk(await completeSignIn(await approve(authorizationUrl), deps()));
+  }
+
+  /** Puts the server's row at `serverGeneration` and the local one at the given fields. */
+  async function stage(
+    id: string,
+    serverGeneration: number,
+    local: Partial<McpOAuthGrantRow>,
+  ): Promise<void> {
+    w.cas.put({ ...(w.cas.row(id) as McpOAuthGrantRow), generation: serverGeneration });
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.update(id, local);
+    await db.syncRows.put({
+      collection: 'mcpOAuthGrants',
+      key: id,
+      rev: w.cas.rev(id),
+      ciphertextHash: '',
+    });
+  }
+
+  it('storeGrant keeps the high-water mark', async () => {
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    await stage(id, 4, { generation: 9, seenGeneration: 9, heldGeneration: 4 });
+    const before = w.pushes.length;
+    await reconnect(id);
+    expect(w.pushes.slice(before).map((p) => p.row.generation)).toEqual([10]);
+    expect(w.cas.row(id)?.generation).toBe(10);
+    const row = await localGrant(id);
+    expect(row?.generation).toBe(10);
+    expect(row?.seenGeneration).toBe(10);
+    expect(row?.heldGeneration).toBeNull();
+    expect(row?.pendingTokens ?? null).toBeNull();
+  });
+
+  it('a refused record mid-sign-in keeps the pending pair and the push still carries the mark', async () => {
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    await stage(id, 9, { generation: 9, seenGeneration: 9 });
+    const inner = w.store;
+    const outcomes: AdoptOutcome[] = [];
+    let pendingIntact = false;
+    w.store = {
+      ...inner,
+      push: async (row, baseRev, mk) => {
+        if (outcomes.length === 0) {
+          // The server replays generation 4 under a new revision before it answers.
+          w.cas.put({ ...(w.cas.row(id) as McpOAuthGrantRow), generation: 4 });
+          outcomes.push(await inner.adopt(w.cas.pulled(id)));
+          const local = await localGrant(id);
+          pendingIntact =
+            local?.pendingNewFamily === true &&
+            local.pendingTokens != null &&
+            local.heldGeneration === 4;
+        }
+        return inner.push(row, baseRev, mk);
+      },
+    };
+    const before = w.pushes.length;
+    await reconnect(id);
+    expect(outcomes).toEqual(['refused']);
+    expect(pendingIntact).toBe(true);
+    const generations = w.pushes.slice(before).map((p) => p.row.generation);
+    expect(generations.length).toBeGreaterThan(0);
+    for (const g of generations) expect(g).toBe(10);
+    expect(w.cas.row(id)?.generation).toBe(10);
+    expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
+    const row = await localGrant(id);
+    expect(row?.seenGeneration).toBe(10);
+    expect(row?.heldGeneration).toBeNull();
+  });
+
+  it('sign-in revokes an ordinary pending pair it replaces', async () => {
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    w.t += HOUR;
+    // The claim goes out, the publish does not: an ordinary pair stays pending.
+    w.pushHook = (row) => (row.claim === null ? 'network' : null);
+    expect((await ensureAccessToken(id, ensureDeps())).ok).toBe(true);
+    w.pushHook = null;
+    const pendingRow = await localGrant(id);
+    expect(pendingRow?.pendingNewFamily).toBe(false);
+    const pending = await openTokens(pendingRow?.pendingTokens ?? null, w.mk, id);
+    const pendingRefresh = pending?.refreshToken ?? '';
+    expect(pendingRefresh.length > 0).toBe(true);
+    const revokedBefore = w.auth.state.revoked.length;
+    await reconnect(id);
+    const revocations = w.auth.state.revoked.slice(revokedBefore);
+    expect(revocations.length).toBe(1);
+    expect(revocations.filter((t) => t === pendingRefresh).length).toBe(1);
+    expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
+  });
+
+  it('a new-family pending pair a sign-in replaces is not revoked', async () => {
+    w.pushHook = () => 'network';
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    w.pushHook = null;
+    expect((await localGrant(id))?.pendingNewFamily).toBe(true);
+    const revokedBefore = w.auth.state.revoked.length;
+    await reconnect(id);
+    expect(w.auth.state.revoked.length - revokedBefore).toBe(0);
+    expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
   });
 });
 

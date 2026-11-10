@@ -4,6 +4,7 @@ import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
 import { getDeviceId, sealSpentRefresh, sealTokens } from '../../data/mcp-oauth-grants.js';
 import { isProxyAvailable } from '../../lib/proxy-auth.js';
+import { generationOf, stampForPush } from './grant-generation.js';
 import { type GrantLockFn, withGrantLock } from './grant-lock.js';
 import { type PublishOutcome, openTokensSafe, publishPending } from './grant-publish.js';
 import { type GrantStore, createDexieGrantStore } from './grant-store.js';
@@ -195,7 +196,8 @@ async function present(
 
 /** Releases our claim by compare-and-set at the claim's revision; the outcome is advisory. */
 async function releaseClaim(run: Run, claimed: McpOAuthGrantRow, rev: number): Promise<void> {
-  const result = await run.deps.store.push({ ...claimed, claim: null }, rev, run.mk);
+  const released = stampForPush({ ...claimed, claim: null }, generationOf(claimed));
+  const result = await run.deps.store.push(released, rev, run.mk);
   if (result.status === 'conflict') await run.deps.store.adopt(result.current);
 }
 
@@ -229,7 +231,10 @@ async function refreshUnderClaim(
       await releaseClaim(run, claimed, rev);
       return fail('in-doubt');
     case 'invalid': {
-      const dead = { ...claimed, tokens: null, claim: null, updatedAt: deps.wallNow() };
+      const dead = stampForPush(
+        { ...claimed, tokens: null, claim: null, updatedAt: deps.wallNow() },
+        generationOf(claimed),
+      );
       const result = await deps.store.push(dead, rev, mk);
       if (result.status !== 'conflict') return fail('dead');
       // Never overwrite a newer row: it may be a new sign-in.
@@ -309,10 +314,11 @@ async function linkedFlow(run: Run): Promise<EnsureResult> {
     if (row.tokenRoute === 'proxy' && !deps.hasProxy) return fail('no-proxy');
     // Taken before the push, so a freeze while its answer is in flight also counts.
     const wonAt = { wall: deps.wallNow(), mono: deps.monotonicNow() };
-    const claimed: McpOAuthGrantRow = {
-      ...row,
-      claim: { deviceId: deps.deviceId, at: wonAt.wall },
-    };
+    // Stamped, so the release and `invalid_grant` pushes over it land one generation higher.
+    const claimed = stampForPush(
+      { ...row, claim: { deviceId: deps.deviceId, at: wonAt.wall } },
+      generationOf(row),
+    );
     const result = await deps.store.push(claimed, rev, mk);
     if (result.status === 'conflict') {
       claimConflicts++;

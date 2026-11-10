@@ -24,7 +24,7 @@ import { clientMetadataUrl, isPubliclyFetchableOrigin, redirectUri } from './cli
 import type { OAuthDiscovery } from './discovery.js';
 import { type EnsureDeps, copyKey, publishNewFamily } from './ensure-token.js';
 import { createNamedMutex, withGrantLock } from './grant-lock.js';
-import { openTokensSafe } from './grant-publish.js';
+import { openTokensSafe, revokeOrdinaryPending } from './grant-publish.js';
 import type { OAuthFetch } from './oauth-fetch.js';
 import { createPkce, randomState } from './pkce.js';
 import { type TokenSet, exchangeCode, registerClient, revokeToken } from './token-client.js';
@@ -304,7 +304,18 @@ async function storeGrant(
       claim: null,
       createdAt: snap?.row.createdAt ?? now,
       updatedAt: now,
+      // The high-water mark must survive the replacement until an `ok` (spec §5.2).
+      generation: snap?.row.generation,
+      seenGeneration: snap?.row.seenGeneration,
+      heldGeneration: snap?.row.heldGeneration,
     };
+    if (snap) {
+      try {
+        await revokeOrdinaryPending(snap.row, mk, ensure);
+      } catch {
+        // Best-effort: the sign-in must not fail over the old pair.
+      }
+    }
     if (unlinked) {
       const row: McpOAuthGrantRow = { ...base, tokens: sealed };
       await ensure.store.putLocal(row);
