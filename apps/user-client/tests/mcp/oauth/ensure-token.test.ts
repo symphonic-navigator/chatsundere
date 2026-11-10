@@ -19,7 +19,9 @@ import {
   publishNewFamily,
   publishPendingTokens,
 } from '../../../src/mcp/oauth/ensure-token.js';
+import { acceptedFields, judgePulledGrant } from '../../../src/mcp/oauth/grant-generation.js';
 import { createNamedMutex, withGrantLock } from '../../../src/mcp/oauth/grant-lock.js';
+import type { AdoptOutcome } from '../../../src/mcp/oauth/grant-store.js';
 import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
 import { createPkce } from '../../../src/mcp/oauth/pkce.js';
 import { type TokenSet, exchangeCode } from '../../../src/mcp/oauth/token-client.js';
@@ -160,27 +162,38 @@ class Device {
     },
   };
 
-  /** Mirrors applyRecord for grants: pulled wins above the stored revision, pending survives. */
-  adopt(record: SyncPulledRecord): void {
+  /**
+   * Mirrors applyRecord for grants: pulled wins above the stored revision unless it is an
+   * older generation, which is refused with its revision recorded; pending survives.
+   */
+  adopt(record: SyncPulledRecord): AdoptOutcome {
     const id = record.blindId.replace(/^bid-/, '');
-    if (record.rev <= (this.revs.get(id) ?? 0)) return;
+    if (record.rev <= (this.revs.get(id) ?? 0)) return 'stale';
     if (record.deleted) {
       this.rows.delete(id);
       this.revs.delete(id);
-      return;
+      return 'stale';
     }
-    if (!record.ciphertext || record.ciphertext === 'poison') return;
+    if (!record.ciphertext || record.ciphertext === 'poison') return 'stale';
     const body = this.cas.body(record.ciphertext);
-    if (!body) return;
+    if (!body) return 'stale';
     const local = this.rows.get(id);
+    const verdict = judgePulledGrant(local, body);
+    if (local && verdict.kind === 'refuse') {
+      this.rows.set(id, { ...local, heldGeneration: verdict.heldGeneration });
+      this.revs.set(id, record.rev);
+      return 'refused';
+    }
     this.rows.set(id, {
       ...body,
       pendingTokens: local?.pendingTokens ?? null,
       pendingBaseRev: local?.pendingBaseRev ?? null,
       pendingSpentRefresh: local?.pendingSpentRefresh ?? null,
       pendingNewFamily: local?.pendingNewFamily ?? false,
+      ...acceptedFields(local, body),
     });
     this.revs.set(id, record.rev);
+    return 'adopted';
   }
 
   pull(): void {
@@ -1223,5 +1236,26 @@ describe('publishNewFamily', () => {
     expect((await serverTokens(s))?.refreshToken).toBe(other.refreshToken);
     expect(s.auth.state.refreshAttempts).toHaveLength(1);
     expect(s.auth.state.familyRevoked).toBe(false);
+  });
+});
+
+describe('the device harness', () => {
+  it('device adopt refuses an older generation', async () => {
+    const s = await setup({}, { generation: 4 });
+    s.b.rows.set(ID, { ...s.b.row(), generation: 9, seenGeneration: 9, pendingBaseRev: 1 });
+    const before = s.b.row();
+    s.cas.put(grantRow(s.auth, null, { generation: 2, scope: 'older' }));
+
+    expect(s.b.adopt(s.cas.pulled(ID))).toBe('refused');
+    expect(s.b.row()).toEqual({ ...before, heldGeneration: 2 });
+    expect(s.b.revs.get(ID)).toBe(s.cas.rev(ID));
+    expect(s.b.adopt(s.cas.pulled(ID))).toBe('stale');
+
+    s.cas.put(grantRow(s.auth, null, { generation: 9, scope: 'equal' }));
+    expect(s.b.adopt(s.cas.pulled(ID))).toBe('adopted');
+    expect(s.b.row().scope).toBe('equal');
+    expect(s.b.row().seenGeneration).toBe(9);
+    expect(s.b.row().heldGeneration).toBeNull();
+    expect(s.b.row().pendingBaseRev).toBe(1);
   });
 });

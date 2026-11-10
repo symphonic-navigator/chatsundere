@@ -1456,7 +1456,7 @@ export async function runPullLoop(): Promise<void> {
         // if the MK session died WHILE this record was being processed
         // (`closeAndForget()` racing the record's await(s)). Scoped to
         // `rejected` ONLY: a genuinely SUCCESSFUL outcome (inserted/resolved/
-        // echo/stale/tombstoned/suppressed/tamper) already committed its effect
+        // echo/stale/tombstoned/suppressed/tamper/refused) already committed its effect
         // under a validated key before any race could have corrupted it, so a
         // session death afterward must not un-count it — re-litigating a
         // success here would wedge the watermark on real progress forever.

@@ -19,7 +19,12 @@ import {
   ensureAccessToken,
   publishPendingTokens,
 } from '../../../src/mcp/oauth/ensure-token.js';
-import { type GrantStore, createDexieGrantStore } from '../../../src/mcp/oauth/grant-store.js';
+import { acceptedFields, judgePulledGrant } from '../../../src/mcp/oauth/grant-generation.js';
+import {
+  type AdoptOutcome,
+  type GrantStore,
+  createDexieGrantStore,
+} from '../../../src/mcp/oauth/grant-store.js';
 import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
 import {
   type CompleteResult,
@@ -101,31 +106,38 @@ function casStore(world: () => World): GrantStore {
       return result;
     },
     open: async (record) => (record.ciphertext ? world().cas.body(record.ciphertext) : null),
-    adopt: async (record: SyncPulledRecord) => {
+    adopt: async (record: SyncPulledRecord): Promise<AdoptOutcome> => {
       const id = record.blindId.replace(/^bid-/, '');
       const db = getClientDataDb();
       const meta = await db.syncRows.get(['mcpOAuthGrants', id]);
-      if (meta && record.rev <= meta.rev) return;
+      if (meta && record.rev <= meta.rev) return 'stale';
       if (record.deleted || !record.ciphertext) {
         await db.mcpOAuthGrants.delete(id);
-        return;
+        return 'stale';
       }
       const body = world().cas.body(record.ciphertext);
-      if (!body) return;
+      if (!body) return 'stale';
       const local = await db.mcpOAuthGrants.get(id);
-      await db.mcpOAuthGrants.put({
-        ...body,
-        pendingTokens: local?.pendingTokens ?? null,
-        pendingBaseRev: local?.pendingBaseRev ?? null,
-        pendingSpentRefresh: local?.pendingSpentRefresh ?? null,
-        pendingNewFamily: local?.pendingNewFamily ?? false,
-      });
+      const verdict = judgePulledGrant(local, body);
+      if (local && verdict.kind === 'refuse') {
+        await db.mcpOAuthGrants.update(id, { heldGeneration: verdict.heldGeneration });
+      } else {
+        await db.mcpOAuthGrants.put({
+          ...body,
+          pendingTokens: local?.pendingTokens ?? null,
+          pendingBaseRev: local?.pendingBaseRev ?? null,
+          pendingSpentRefresh: local?.pendingSpentRefresh ?? null,
+          pendingNewFamily: local?.pendingNewFamily ?? false,
+          ...acceptedFields(local, body),
+        });
+      }
       await db.syncRows.put({
         collection: 'mcpOAuthGrants',
         key: id,
         rev: record.rev,
         ciphertextHash: '',
       });
+      return local && verdict.kind === 'refuse' ? 'refused' : 'adopted';
     },
     requestSync: () => undefined,
   };

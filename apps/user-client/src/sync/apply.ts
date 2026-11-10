@@ -10,10 +10,11 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type { BlobRef, SyncCollection, SyncPulledRecord } from '@chatsundere/shared-types';
 import { SYNC_COLLECTIONS } from '@chatsundere/shared-types';
 import { useSessionStore } from '@chatsundere/ui-shared';
-import type { SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
+import type { McpOAuthGrantRow, SyncRowMeta, TrashRow } from '../boot/client-data-db.js';
 import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
 import { QK } from '../data/queryKeys.js';
 import { queryClient } from '../lib/queryClient.js';
+import { acceptedFields, judgePulledGrant } from '../mcp/oauth/grant-generation.js';
 import { retireTrashByOriginalKey } from '../trash/trash-repo.js';
 import { enqueueEager } from './blob-fetch.js';
 import { type BlobRepairDeps, maybeProactiveHeal } from './blob-repair.js';
@@ -81,7 +82,10 @@ export type ApplyOutcome =
   | { kind: 'tamper' } // §7.4 H-1 — upsert onto a live tombstone anchor, rejected
   | { kind: 'suppressed' } // §7.4 L-3 — pending local delete wins
   | { kind: 'inserted' } // upsert, no local row → inserted
-  | { kind: 'resolved'; winner: 'local' | 'pulled' }; // §7.5 conflict resolved
+  | { kind: 'resolved'; winner: 'local' | 'pulled' } // §7.5 conflict resolved
+  // MCP OAuth hardening §5.3 — an older grant generation than this device has
+  // seen; the local row is kept, the hold set, and the revision recorded.
+  | { kind: 'refused' };
 
 // ===== Module diagnostics / hooks =====
 
@@ -724,6 +728,8 @@ type UpsertTxResult = {
   suppressedRev?: boolean;
   /** A settings note the resolver raised — `onSettingsNote` fires after commit. */
   note?: 'settings-applied' | 'settings-precedence';
+  /** An older grant generation was refused — the grants query is invalidated after commit. */
+  refused?: true;
 };
 
 /**
@@ -875,6 +881,23 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
         return { outcome: { kind: 'inserted' }, appliedRow: row };
       }
 
+      // MCP OAuth hardening §5.3: a replayed older grant must never displace a
+      // newer one this device has seen. Its revision is still recorded, as the
+      // local-wins branch below does, so the watermark moves past it and a later
+      // push conflicts against the right revision; nothing is re-pushed from it.
+      if (collection === 'mcpOAuthGrants') {
+        const verdict = judgePulledGrant(local as McpOAuthGrantRow, row as McpOAuthGrantRow);
+        if (verdict.kind === 'refuse') {
+          await db.mcpOAuthGrants.update(key, { heldGeneration: verdict.heldGeneration });
+          if (meta) {
+            await db.syncRows.update([collection, key], { rev: pulled.rev });
+          } else {
+            await db.syncRows.put({ collection, key, rev: pulled.rev, ciphertextHash: localHash });
+          }
+          return { outcome: { kind: 'refused' }, refused: true };
+        }
+      }
+
       // §7.5 — conflict: the pure per-collection rule decides the winner.
       const resolution = resolveConflict(collection, local, row);
 
@@ -917,6 +940,7 @@ async function applyUpsert(mk: MasterKey, pulled: SyncPulledRecord): Promise<App
   if (result.tamper) await setAttention({ kind: 'tamper' });
   if (result.suppressedRev) await recordSuppressedRev(collection, key, pulled.rev);
   if (result.note) onSettingsNote(result.note);
+  if (result.refused) collectFor(collection, key, undefined);
 
   if (result.appliedRow !== undefined) {
     // Task B9 baseline maintenance: the row just committed (insert, or a
@@ -950,6 +974,13 @@ async function restoreAppliedRow(
   local: unknown | undefined,
 ): Promise<unknown> {
   const restored = restoreLocalFields(collection, row, local);
+  if (collection === 'mcpOAuthGrants') {
+    // After the restore, which would otherwise bring back a stale hold and mark.
+    return {
+      ...(restored as McpOAuthGrantRow),
+      ...acceptedFields(local as McpOAuthGrantRow | undefined, row as McpOAuthGrantRow),
+    };
+  }
   if (collection !== 'documents' || typeof restored !== 'object' || restored === null) {
     return restored;
   }
