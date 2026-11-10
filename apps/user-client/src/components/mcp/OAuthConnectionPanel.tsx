@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
+import { isGrantHeld, isGrantLive } from '../../mcp/oauth/grant-generation.js';
 import { Button } from '../ui/Button.js';
 import { SIGN_IN_IN_PROGRESS, SIGN_IN_WAITS_FOR_BACKEND, hostOf } from './sign-in-copy.js';
 
 /**
  * The head of an OAuth server's detail page (spec §9): its state, where it is signed in,
- * a sign-in in progress, and *Sign in again* once the grant has ended. *Sign in again* is
+ * a sign-in in progress, and *Sign in again* once the grant has ended or is paused on this
+ * device (MCP OAuth hardening spec §5.5). *Sign in again* is
  * disabled while the backend is unreachable, because a new family could compete with a
  * live one on another device.
  */
@@ -20,7 +22,9 @@ export function OAuthConnectionPanel(props: {
   onReturnToSignIn: () => void;
 }): JSX.Element {
   const { grant } = props;
-  const dead = grant !== undefined && grant.tokens === null && !grant.pendingTokens;
+  // An absent grant is a wait for sync, not something a new sign-in should replace.
+  const held = grant !== undefined && isGrantHeld(grant);
+  const offerSignIn = grant !== undefined && !isGrantLive(grant);
   return (
     <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-white/[0.02] p-3">
       <div className="font-display text-sm text-paper">{props.status}</div>
@@ -29,6 +33,13 @@ export function OAuthConnectionPanel(props: {
           ? `Signed in at ${hostOf(grant.issuer)}`
           : "Signed in on another device. The sign-in hasn't reached this one yet."}
       </div>
+      {held ? (
+        <p className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] px-3 py-2 text-xs text-paper-soft">
+          This device received a copy of this sign-in that is older than the one it already had, so
+          it has paused the sign-in to keep it safe. Nothing has been removed. Sign in again to
+          carry on, or wait: if your other devices catch up, it carries on by itself.
+        </p>
+      ) : null}
 
       {props.signingIn ? (
         <div className="flex flex-col gap-1">
@@ -39,7 +50,7 @@ export function OAuthConnectionPanel(props: {
         </div>
       ) : null}
 
-      {dead ? (
+      {offerSignIn ? (
         <div className="flex flex-col gap-1">
           <Button
             tone="primary"

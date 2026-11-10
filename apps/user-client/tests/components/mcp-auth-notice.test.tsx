@@ -15,7 +15,7 @@ vi.mock('../../src/sync/gate.js', () => ({
   useClass2Gate: () => ({ disabled: gate.disabled, tooltip: null }),
 }));
 
-type Auth = { variant: 'dead' | 'waiting' | 'scope'; scope?: string };
+type Auth = { variant: 'dead' | 'held' | 'waiting' | 'scope'; scope?: string };
 
 function pill(auth: Auth | null, over: Partial<PillRow> = {}): PillRow {
   return {
@@ -138,6 +138,52 @@ describe('McpAuthNotice on a tool pill', () => {
     cleanup();
     show(pill({ variant: 'scope', scope: 'write' }));
     expect(screen.getByRole('button', { name: 'Grant access' })).toBeDisabled();
+  });
+
+  it('held: with a held grant says paused here and Sign in again opens the overlay', () => {
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, heldGeneration: 4 }];
+    show(pill({ variant: 'held' }));
+    expect(screen.getByText('⚠ Kumbu: sign-in paused on this device')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+    expect(open).toHaveBeenCalledWith({ serverId: 's1', extraScopes: [] });
+  });
+
+  it('held: disables Sign in again with the reason while the backend is unreachable', () => {
+    gate.disabled = true;
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, heldGeneration: 4 }];
+    show(pill({ variant: 'held' }));
+    expect(screen.getByRole('button', { name: 'Sign in again' })).toBeDisabled();
+  });
+
+  it('held: with a live grant here says in use and offers no action', () => {
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, heldGeneration: null }];
+    show(pill({ variant: 'held' }));
+    expect(screen.getByText('● Kumbu: in use')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sign in|grant/i })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a dead grant', [{ id: 's1', tokens: null }]],
+    ['no grant', []],
+  ])('held: with %s reads as ended and offers Sign in again', (_label, rows) => {
+    grants.rows = rows;
+    show(pill({ variant: 'held' }));
+    expect(screen.getByText('⚠ Kumbu: sign-in ended')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
+  });
+
+  it('a dead notice whose grant is held never reads as connected again', () => {
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, heldGeneration: 4 }];
+    show(pill({ variant: 'dead' }));
+    expect(screen.queryByText('● Kumbu: connected again')).not.toBeInTheDocument();
+    expect(screen.getByText('⚠ Kumbu: sign-in ended')).toBeInTheDocument();
+  });
+
+  it('a scope notice whose grant is held never reads as access granted', () => {
+    grants.rows = [{ id: 's1', tokens: { v: 1 }, scope: 'read write', heldGeneration: 4 }];
+    show(pill({ variant: 'scope', scope: 'read write' }));
+    expect(screen.queryByText('● Kumbu: access granted')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Grant access' })).toBeInTheDocument();
   });
 
   it('an old pill without mcpAuth renders no notice', () => {

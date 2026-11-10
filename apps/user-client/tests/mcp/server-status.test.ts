@@ -58,3 +58,23 @@ describe('statusOf for an OAuth row', () => {
     );
   });
 });
+
+describe('statusOf for a held OAuth grant', () => {
+  const held = { ...GRANT, heldGeneration: 4, seenGeneration: 9 } as McpOAuthGrantRow;
+
+  it('reads as paused here while it still has tokens', () => {
+    expect(statusOf(ROW, { hasProxy: false, linked: true, grant: held })).toBe(
+      '⚠ Sign-in paused here',
+    );
+  });
+
+  it('reads as Sign in again when the held grant is also dead', () => {
+    const grant = { ...held, tokens: null } as McpOAuthGrantRow;
+    expect(statusOf(ROW, { hasProxy: false, linked: true, grant })).toBe('⚠ Sign in again');
+  });
+
+  it('ranks above waiting for the proxy', () => {
+    const grant = { ...held, tokenRoute: 'proxy' } as McpOAuthGrantRow;
+    expect(statusOf(ROW, { hasProxy: false, linked: true, grant })).toBe('⚠ Sign-in paused here');
+  });
+});

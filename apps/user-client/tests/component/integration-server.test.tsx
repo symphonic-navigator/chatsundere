@@ -854,6 +854,38 @@ describe('IntegrationServerPage', () => {
       expect(consentMock).toHaveBeenCalledWith('o1', 'https://kumbu.example/mcp');
     });
 
+    it('Test connection on a held grant says it is paused and keeps the last result to save', async () => {
+      useMcpServersMock.mockReturnValue({
+        data: [{ ...OAUTH_ROW, lastError: 'HTTP 503', lastTestedAt: 5 }],
+      });
+      testOAuthMock.mockResolvedValue({
+        ok: false,
+        held: true,
+        routing: null,
+        resolvedEndpoint: null,
+        tools: [],
+        error: 'Sign-in paused on this device. Sign in again to carry on.',
+      });
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+      expect(
+        await screen.findByText('Sign-in paused on this device. Sign in again to carry on.'),
+      ).toBeTruthy();
+      // Only the row's status line still names the last error; the test block does not.
+      expect(screen.getAllByText(/HTTP 503/)).toHaveLength(1);
+      fireEvent.click(screen.getByRole('checkbox', { name: /Trusted/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      await screen.findByText('integrations list');
+      const row = upsertMock.mock.calls.at(-1)?.[0] as McpServerRow;
+      expect(row).toMatchObject({
+        lastError: 'HTTP 503',
+        lastTestedAt: 5,
+        routing: 'proxy',
+        resolvedEndpoint: 'https://kumbu.example/mcp',
+      });
+      expect(consentMock).not.toHaveBeenCalled();
+    });
+
     it('does not record consent after a failed test', async () => {
       testOAuthMock.mockResolvedValue({
         ok: false,

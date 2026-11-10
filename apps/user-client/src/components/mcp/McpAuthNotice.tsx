@@ -2,6 +2,7 @@
 import { useId } from 'react';
 import { useMcpOAuthGrants } from '../../data/mcp-oauth-grants.js';
 import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
+import { isGrantHeld, isGrantLive } from '../../mcp/oauth/grant-generation.js';
 import { useMcpSignInOverlay } from '../../state/mcp-sign-in-overlay.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { Button } from '../ui/index.js';
@@ -24,18 +25,23 @@ export function McpAuthNotice({ notice }: { notice: McpAuthNoticePayload }): JSX
   const reasonId = useId();
   const grant = (grants.data ?? []).find((g) => g.id === notice.serverId);
   const name = notice.serverName;
-  // The same test as the list's status: a pending pair is live access too.
-  const live = grant !== undefined && (grant.tokens !== null || Boolean(grant.pendingTokens));
+  // The list's liveness rule: a paused grant never reads as connected again or granted.
+  const live = isGrantLive(grant);
+
+  if (notice.variant === 'held' && live) {
+    // Pills sync: one paused on another device reads this device's own grant.
+    return <output className="pill-notice">{`● ${name}: in use`}</output>;
+  }
 
   if (notice.variant === 'dead' && live) {
     return <output className="pill-notice">{`● ${name}: connected again`}</output>;
   }
 
-  if (notice.variant === 'scope' && live) {
+  if (notice.variant === 'scope' && live && grant) {
     const wanted = scopesOf(notice.scope);
-    const held = scopesOf(grant.scope ?? undefined);
+    const granted = scopesOf(grant.scope ?? undefined);
     // An empty challenge says nothing a grant could be checked against.
-    if (wanted.length > 0 && wanted.every((s) => held.includes(s))) {
+    if (wanted.length > 0 && wanted.every((s) => granted.includes(s))) {
       return <output className="pill-notice">{`● ${name}: access granted`}</output>;
     }
   }
@@ -45,9 +51,16 @@ export function McpAuthNotice({ notice }: { notice: McpAuthNoticePayload }): JSX
   }
 
   const scope = notice.variant === 'scope';
+  // A held pill whose grant is gone or not here yet reads as ended, as on an older app.
+  const paused = notice.variant === 'held' && grant !== undefined && isGrantHeld(grant);
+  const label = scope
+    ? `⚠ ${name}: needs more access`
+    : paused
+      ? `⚠ ${name}: sign-in paused on this device`
+      : `⚠ ${name}: sign-in ended`;
   return (
     <output className="pill-notice">
-      <span>{scope ? `⚠ ${name}: needs more access` : `⚠ ${name}: sign-in ended`}</span>
+      <span>{label}</span>
       <Button
         disabled={blocked}
         aria-describedby={blocked ? reasonId : undefined}

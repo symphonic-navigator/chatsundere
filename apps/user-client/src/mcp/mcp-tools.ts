@@ -50,7 +50,7 @@ export type McpTokenResult = EnsureResult | { ok: false; reason: 'mismatch' | 'n
 export interface McpAuthNotice {
   serverId: string;
   serverName: string;
-  variant: 'dead' | 'waiting' | 'scope';
+  variant: 'dead' | 'held' | 'waiting' | 'scope';
   scope?: string;
 }
 
@@ -195,9 +195,11 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
     const why =
       variant === 'dead'
         ? 'its sign-in has ended and the user needs to sign in again'
-        : variant === 'scope'
-          ? 'it needs more access than the user granted, which the user can grant'
-          : "access to it can't be renewed right now";
+        : variant === 'held'
+          ? 'its sign-in is paused on this device, and the user can sign in again'
+          : variant === 'scope'
+            ? 'it needs more access than the user granted, which the user can grant'
+            : "access to it can't be renewed right now";
     const error = `${server.name} is unavailable: ${why}. Tell the user, and do not retry this tool in this turn.`;
     notices.set(server.id, error);
     const mcpAuth: McpAuthNotice = {
@@ -226,6 +228,8 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
         );
       case 'dead':
         return notice(server, 'dead');
+      case 'held':
+        return notice(server, 'held');
       default:
         return notice(server, 'waiting');
     }

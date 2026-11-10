@@ -361,6 +361,7 @@ describe('OAuth tool calls', () => {
 
   it.each([
     ['dead', 'dead'],
+    ['held', 'held'],
     ['waiting', 'waiting'],
     ['in-doubt', 'waiting'],
     ['no-grant', 'waiting'],
@@ -377,6 +378,20 @@ describe('OAuth tool calls', () => {
       expect(mcpToolsCall).not.toHaveBeenCalled();
     },
   );
+
+  it('tells the model a held sign-in is paused, never that it ended', async () => {
+    const tool = one(oauthServer(), {
+      getOAuthToken: async () => ({ ok: false, reason: 'held' }),
+    });
+    const r = await tool?.execute({});
+    expect(r?.ok).toBe(false);
+    expect(r?.error).toBe(
+      'Kumbu is unavailable: its sign-in is paused on this device, and the user can sign in again. Tell the user, and do not retry this tool in this turn.',
+    );
+    expect(r?.error).not.toMatch(/has ended/);
+    expect(r?.meta).toEqual({ mcpAuth: { serverId: 'o', serverName: 'Kumbu', variant: 'held' } });
+    expect(mcpToolsCall).not.toHaveBeenCalled();
+  });
 
   it('asks the user to unlock when locked, with no notice', async () => {
     const tool = one(oauthServer(), {
