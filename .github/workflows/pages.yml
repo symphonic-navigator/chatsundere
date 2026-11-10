@@ -1,9 +1,14 @@
 name: GitHub Pages Deploy
 
+# Two artefacts on one site: the teaser (docs/) follows master, so its texts go
+# live with every push; the alpha PWA (/alpha/) is always built from the highest
+# stable release tag, so alpha users only ever get a release, never master's
+# next-release work. See obsidian/RELEASE-PROCESS.md.
 on:
   push:
     branches: [master]
     tags: ['v*.*.*']
+  workflow_dispatch:
 
 concurrency:
   group: pages
@@ -21,8 +26,27 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - name: Checkout
+      - name: Find the highest stable release
+        id: release
+        run: |
+          TAG=$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [[ -z "$TAG" ]]; then echo "No stable release tag found" >&2; exit 1; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "The alpha PWA is built from $TAG"
+
+      # The release's own tree, with its own .mise.toml and lockfile.
+      - name: Checkout the release
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      # The teaser site as it is on master.
+      - name: Checkout master's teaser site
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: _teaser
+          sparse-checkout: docs
 
       - name: Set up mise (bun, node, pnpm)
         uses: jdx/mise-action@v2
@@ -38,14 +62,11 @@ jobs:
 
       - name: Compute version
         id: version
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
-          BASE=$(cat version.txt | tr -d '[:space:]')
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            VERSION="${BASE}-pre.${GITHUB_RUN_NUMBER}"
-          fi
-          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          VERSION="${TAG#v}"
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
           BUILT_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "version=$VERSION"     >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
@@ -63,7 +84,7 @@ jobs:
       - name: Stage Pages output
         run: |
           mkdir -p _pages
-          cp -r docs/* _pages/
+          cp -r _teaser/docs/* _pages/
           cp -r apps/user-client/dist _pages/alpha
 
       - name: Write build manifest
@@ -71,13 +92,14 @@ jobs:
           VERSION:   ${{ steps.version.outputs.version }}
           SHORT_SHA: ${{ steps.version.outputs.short_sha }}
           BUILT_AT:  ${{ steps.version.outputs.built_at }}
+          TAG:       ${{ steps.release.outputs.tag }}
         run: |
           cat > _pages/alpha/build-manifest.json << EOF
           {
             "schema": "chatsundere-build/v1",
             "built_at": "$BUILT_AT",
             "trigger": "${GITHUB_EVENT_NAME}",
-            "ref": "$GITHUB_REF",
+            "ref": "refs/tags/$TAG",
             "artifact": {
               "name": "user-client",
               "type": "pwa",
