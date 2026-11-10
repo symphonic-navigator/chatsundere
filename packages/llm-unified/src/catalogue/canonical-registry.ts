@@ -291,9 +291,9 @@ export const CANONICALS: CanonicalModel[] = [
   // --- Claude (Anthropic) — censored at source → not freedom-oriented;
   // surfaced with the CENSORED badge. Delivered via nano-gpt (the anonymising
   // router) per ADR 0032, except Sonnet 5 and Opus 5, which are also curated on
-  // OpenRouter (the user owns the upstream route there). Opus 5 and the 5.5
-  // generation are the family's exceptions on freedom: `null`, not `false` —
-  // see their entries below. ---
+  // OpenRouter (the user owns the upstream route there). Opus 5, the 5.5
+  // generation and Fable 5.2 are the family's exceptions on freedom: `null`,
+  // not `false` — see their entries below. ---
   {
     id: 'claude-haiku-4.5',
     displayName: 'Claude Haiku 4.5',
@@ -428,6 +428,15 @@ export const CANONICALS: CanonicalModel[] = [
     freedomOriented: false,
     freedomNote:
       'Anthropic aligns/censors the model at source. Fable 5.1 inherits the family classification until a model-specific freedom eval provides contrary evidence; effectiveFreedom is "restricted" → CENSORED badge.',
+  },
+  {
+    id: 'claude-fable-5.2',
+    displayName: 'Claude Fable 5.2',
+    family: 'claude',
+    requiredCaps: { tools: true, reasoning: true, vision: true },
+    freedomOriented: null,
+    freedomNote:
+      'Freedom orientation NOT yet assessed — deliberately unknown. Chris (2026-11-10) expects it to behave as uncensored, as Anthropic models generally do over the API, but there is no evidence yet either way; pending Chatsundere\'s own freedom eval the badge reads "Uncensored?", not CENSORED.',
   },
   // --- ChatGPT (OpenAI) — censored at source → not freedom-oriented; surfaced
   // with the CENSORED badge. Onboarded 2026-07-06 on explicit user request

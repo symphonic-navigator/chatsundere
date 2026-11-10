@@ -290,6 +290,14 @@ const FABLE51_STEPS: ReasoningControl = {
 };
 const FABLE51_SLUG = 'anthropic/claude-fable-5.1';
 const FABLE51_CANONICAL = 'claude-fable-5.1';
+// Fable 5.2 makes Fable 5.1's missing off explicit: nano-gpt rejects every
+// opt-out (`reasoning:{enabled:false}`, `thinking:{type:'disabled'}`) with HTTP
+// 400 "This model requires reasoning and cannot honor an explicit reasoning
+// opt-out" (probed live 2026-11-10). No `:thinking` sibling either
+// (`model_not_supported`). Same ladder as Fable 5.1, so the adapter's off guard
+// is load-bearing here rather than cosmetic: an off on the wire is a hard error.
+const FABLE52_SLUG = 'anthropic/claude-fable-5.2';
+const FABLE52_CANONICAL = 'claude-fable-5.2';
 const OPUS55_SLUG = 'anthropic/claude-opus-5.5';
 const OPUS55_CANONICAL = 'claude-opus-5.5';
 // Haiku 5.5 takes Fable 5's shape, genuine off included: no `:thinking` sibling
@@ -1030,6 +1038,27 @@ const offerings: Offering[] = [
     confidence: 'partial',
     serviceKind: 'llm',
   },
+  // Orphaned tool replay accepted (HTTP 200 on every step, 2026-11-10).
+  withOrphanReplay({
+    canonicalRef: FABLE52_CANONICAL,
+    providerId: 'nano-gpt',
+    upstreamSlug: FABLE52_SLUG,
+    adapter: { kind: 'catalogue', adapterId: `nano-gpt:${FABLE52_SLUG}` },
+    profile: {
+      reasoning: FABLE51_STEPS,
+      toolCalls: { supported: true, streaming: false, concurrentWithReasoning: true },
+      vision: true,
+      replayReasoning: false,
+    },
+    context: { recommended: 200_000, max: 1_000_000 },
+    trust: { tee: false, zdr: false },
+    freedomOrientedDeployment: true,
+    source: 'curated',
+    // Adaptive thinking skips the trace on the suite's easy prompt at low and
+    // medium; a hard prompt reasons at medium and high through the same body.
+    confidence: 'partial',
+    serviceKind: 'llm',
+  }),
   // Grok 4.3 via nano-gpt (the anonymising-router path). Reasoning is a clean
   // toggle on the unified `reasoning` object; tool calls arrive single-block.
   // nano-gpt routes to the xAI upstream → no ZDR/TEE, US jurisdiction.
@@ -1216,6 +1245,7 @@ export function registerNanoGpt(): void {
     if (
       o.canonicalRef === FABLE_CANONICAL ||
       o.canonicalRef === FABLE51_CANONICAL ||
+      o.canonicalRef === FABLE52_CANONICAL ||
       o.canonicalRef === OPUS5_CANONICAL ||
       o.canonicalRef === OPUS55_CANONICAL ||
       o.canonicalRef === HAIKU55_CANONICAL

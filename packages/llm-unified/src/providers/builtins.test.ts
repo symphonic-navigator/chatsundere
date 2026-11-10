@@ -42,11 +42,12 @@ describe('built-in providers', () => {
       // censored) + 4 web + 3 tti (original) + 2 Grok voice (tts + stt) + 1 Inkling
       // + 2 July (Hy3, MiniMax M3) + 1 MiMo V2.5 Pro (CROF upstream)
       // + 11 September 2026 additions + Z-Image Base + 8 October 2026 image models
-      // + Claude Sonnet/Haiku 5.5 (October 2026, community request) = 63
-      // (12 of the 63 are image offerings; Nano Banana 2.1 was withdrawn after
+      // + Claude Sonnet/Haiku 5.5 (October 2026, community request)
+      // + Claude Fable 5.2 (November 2026) = 64
+      // (12 of the 64 are image offerings; Nano Banana 2.1 was withdrawn after
       // nano-gpt 502'd it on 2026-10-08).
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(63);
+      expect(p.offerings).toHaveLength(64);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });
@@ -92,13 +93,14 @@ describe('built-in providers', () => {
     expect(grok45?.context).toEqual({ recommended: 200_000, max: 500_000 });
   });
 
-  it('registers thirteen Claude offerings on nano-gpt with censored Fables and unknown 5.5s and Opus 5', () => {
+  it('registers fourteen Claude offerings on nano-gpt with censored early Fables and unknown 5.5s, Fable 5.2 and Opus 5', () => {
     const p = getProvider('nano-gpt');
     expect(p).toBeDefined();
     const claude = p?.offerings.filter((o) => o.canonicalRef?.startsWith('claude-')) ?? [];
     expect(claude.map((o) => o.canonicalRef).sort()).toEqual([
       'claude-fable-5',
       'claude-fable-5.1',
+      'claude-fable-5.2',
       'claude-haiku-4.5',
       'claude-haiku-5.5',
       'claude-opus-4.5',
@@ -122,7 +124,7 @@ describe('built-in providers', () => {
         canonical?.freedomOriented ?? null,
         o.freedomOrientedDeployment,
       );
-      // Opus 5 and the 5.5 generation are the family's deliberate exceptions:
+      // Opus 5, the 5.5 generation and Fable 5.2 are the family's deliberate exceptions:
       // freedom NOT yet assessed, so they resolve to 'unknown' → "Uncensored?"
       // badge, not CENSORED.
       const unknownFreedom = [
@@ -130,6 +132,7 @@ describe('built-in providers', () => {
         'claude-opus-5.5',
         'claude-sonnet-5.5',
         'claude-haiku-5.5',
+        'claude-fable-5.2',
       ];
       if (unknownFreedom.includes(o.canonicalRef ?? '')) {
         expect(canonical?.freedomOriented).toBeNull();
@@ -316,6 +319,27 @@ describe('built-in providers', () => {
       expect(o?.confidence).toBe('partial');
       expect(getCanonical(id)?.freedomOriented).toBeNull();
     }
+  });
+
+  it('steers Fable 5.2 by body flag and never sends the off it rejects', () => {
+    const adapter = getAdapter('nano-gpt:anthropic/claude-fable-5.2');
+    const on = adapter?.buildRequest({
+      messages: [],
+      reasoning: { enabled: true, effort: 'high' },
+    });
+    expect(on?.model).toBe('anthropic/claude-fable-5.2');
+    expect(on?.body.reasoning).toEqual({ enabled: true, effort: 'high' });
+    // nano-gpt answers an explicit opt-out with HTTP 400, so an off intent must
+    // be forced on at the default step.
+    const off = adapter?.buildRequest({ messages: [], reasoning: { enabled: false } });
+    expect(off?.body.reasoning).toEqual({ enabled: true, effort: 'medium' });
+
+    const o = getProvider('nano-gpt')?.offerings.find((x) => x.canonicalRef === 'claude-fable-5.2');
+    expect(o?.profile.reasoning).toMatchObject({ mode: 'steps', offStep: null });
+    expect(o?.profile.toolCalls.orphanReplay).toBe(true);
+    expect(o?.confidence).toBe('partial');
+    expect(o?.context).toEqual({ recommended: 200_000, max: 1_000_000 });
+    expect(getCanonical('claude-fable-5.2')?.freedomOriented).toBeNull();
   });
 
   it('keeps GPT censored, Opus 5.5 unknown, and explicit uncensored finetunes free', () => {
