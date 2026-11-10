@@ -14,10 +14,9 @@
 
 ## Field signal — Chris (2026-11-10)
 
-On the live instance the same day, Fable 5.2 worked Chris's Kumbu² notes through
-MCP with evident enjoyment: real multi-tool use (`sh` plus the write tools) beyond
-the suite's single `generate_image` call. Anecdotal, and nothing to do with the
-freedom badge.
+On the live instance the same day, Fable 5.2 "has fun with Kumbu" (Chris): it
+works Chris's Kumbu² notes through MCP, real-world tool use beyond the suite's
+single `generate_image` call. Anecdotal, and nothing to do with the freedom badge.
 
 ## Offering — nano-gpt — `steps` WITHOUT an off
 
