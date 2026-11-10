@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
-import { isGrantHeld, isGrantLive } from '../../mcp/oauth/grant-generation.js';
+import { isGrantDead, isGrantHeld, isGrantLive } from '../../mcp/oauth/grant-generation.js';
 import { Button } from '../ui/Button.js';
 import { SIGN_IN_IN_PROGRESS, SIGN_IN_WAITS_FOR_BACKEND, hostOf } from './sign-in-copy.js';
 
@@ -23,7 +23,8 @@ export function OAuthConnectionPanel(props: {
 }): JSX.Element {
   const { grant } = props;
   // An absent grant is a wait for sync, not something a new sign-in should replace.
-  const held = grant !== undefined && isGrantHeld(grant);
+  // Dead first, as in the list status: an ended sign-in has nothing paused to explain.
+  const held = grant !== undefined && isGrantHeld(grant) && !isGrantDead(grant);
   const offerSignIn = grant !== undefined && !isGrantLive(grant);
   return (
     <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-white/[0.02] p-3">

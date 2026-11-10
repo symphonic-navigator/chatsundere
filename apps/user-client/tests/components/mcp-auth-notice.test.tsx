@@ -148,6 +148,14 @@ describe('McpAuthNotice on a tool pill', () => {
     expect(open).toHaveBeenCalledWith({ serverId: 's1', extraScopes: [] });
   });
 
+  it('held: a held grant whose only access is a pending pair still reads as paused', () => {
+    grants.rows = [{ id: 's1', tokens: null, pendingTokens: { v: 1 }, heldGeneration: 4 }];
+    show(pill({ variant: 'held' }));
+    expect(screen.getByText('⚠ Kumbu: sign-in paused on this device')).toBeInTheDocument();
+    expect(screen.queryByText('● Kumbu: in use')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
+  });
+
   it('held: disables Sign in again with the reason while the backend is unreachable', () => {
     gate.disabled = true;
     grants.rows = [{ id: 's1', tokens: { v: 1 }, heldGeneration: 4 }];

@@ -53,6 +53,12 @@ describe('OAuthConnectionPanel', () => {
     expect(screen.getByText(SIGN_IN_WAITS_FOR_BACKEND)).toBeInTheDocument();
   });
 
+  it('a held grant that is also dead offers Sign in again without the paused paragraph', () => {
+    show({ ...GRANT, tokens: null, heldGeneration: 4 });
+    expect(screen.queryByText(PAUSED)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in again' })).toBeEnabled();
+  });
+
   it('a live grant shows neither the paused paragraph nor Sign in again', () => {
     show(GRANT);
     expect(screen.queryByText(PAUSED)).not.toBeInTheDocument();
