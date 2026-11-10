@@ -24,7 +24,7 @@ import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
 import { createPkce } from '../../../src/mcp/oauth/pkce.js';
 import { type TokenSet, exchangeCode } from '../../../src/mcp/oauth/token-client.js';
 import { type FakeAuthOptions, createFakeAuthServer } from './fake-auth-server.js';
-import { CasServer, PENDING_DEFAULTS, clone } from './grant-harness.js';
+import { CasServer, LOCAL_DEFAULTS, clone } from './grant-harness.js';
 
 // ===== The simulated world =====
 
@@ -281,7 +281,7 @@ function grantRow(
     tokenRoute: 'direct',
     tokens,
     claim: null,
-    ...PENDING_DEFAULTS,
+    ...LOCAL_DEFAULTS,
     createdAt: 1,
     updatedAt: 1,
     ...overrides,

@@ -329,6 +329,36 @@ describe('mcpOAuthGrants deny-list — the write-ahead copy stays on this device
     expect(restored.pendingNewFamily).toBe(false);
   });
 
+  it("keeps generation but strips this device's high-water mark and hold", () => {
+    const sealed = stripForSeal('mcpOAuthGrants', {
+      id: 'srv-1',
+      generation: 3,
+      seenGeneration: 9,
+      heldGeneration: 4,
+    }) as Record<string, unknown>;
+    expect(sealed.generation).toBe(3);
+    expect('seenGeneration' in sealed).toBe(false);
+    expect('heldGeneration' in sealed).toBe(false);
+  });
+
+  it('defaults the generation bookkeeping on a fresh device and restores it from local', () => {
+    const pulled = { id: 'srv-1', generation: 3, seenGeneration: 99, heldGeneration: 1 };
+    const fresh = restoreLocalFields('mcpOAuthGrants', pulled, undefined) as Record<
+      string,
+      unknown
+    >;
+    expect(fresh.seenGeneration).toBe(0);
+    expect(fresh.heldGeneration).toBeNull();
+    expect(fresh.generation).toBe(3);
+    const kept = restoreLocalFields('mcpOAuthGrants', pulled, {
+      id: 'srv-1',
+      seenGeneration: 9,
+      heldGeneration: 4,
+    }) as Record<string, unknown>;
+    expect(kept.seenGeneration).toBe(9);
+    expect(kept.heldGeneration).toBe(4);
+  });
+
   it('a pending-only patch is not a synced mutation', () => {
     expect(patchTouchesSyncedField('mcpOAuthGrants', ['pendingTokens', 'pendingBaseRev'])).toBe(
       false,

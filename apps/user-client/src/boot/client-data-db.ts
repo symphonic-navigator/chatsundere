@@ -189,6 +189,21 @@ export interface McpOAuthGrantRow {
   pendingBaseRev?: number | null;
   pendingSpentRefresh?: EncryptedBlob | null;
   pendingNewFamily?: boolean;
+  /**
+   * Synced. Bumped on every publish; a pulled grant older than this device's
+   * `seenGeneration` is a stale resurrection (hardening spec §5.1). Absent = 0.
+   */
+  generation?: number;
+  /**
+   * Device-local, deny-listed. The highest generation this device has seen or
+   * published; another device's mark must never count here. Absent = 0.
+   */
+  seenGeneration?: number;
+  /**
+   * Device-local, deny-listed. The generation of an older grant this device
+   * refused to apply; non-null means the grant is held and not live.
+   */
+  heldGeneration?: number | null;
   createdAt: number;
   updatedAt: number;
 }
