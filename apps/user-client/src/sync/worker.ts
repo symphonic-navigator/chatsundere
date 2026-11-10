@@ -953,7 +953,7 @@ async function ackGrant(key: string, pushedGeneration: number): Promise<boolean>
   if (!row) return false;
   const fields = ackFields(row, pushedGeneration);
   if (!fields) return false;
-  if (row.seenGeneration === fields.seenGeneration && row.heldGeneration === null) return false;
+  if (row.seenGeneration === fields.seenGeneration && row.heldGeneration == null) return false;
   await db.mcpOAuthGrants.update(key, fields);
   return true;
 }

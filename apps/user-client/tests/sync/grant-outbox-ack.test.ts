@@ -28,6 +28,7 @@ import {
   _setApplyOpenRecord,
   setInvalidator,
 } from '../../src/sync/apply.js';
+import { getSyncState } from '../../src/sync/watermark.js';
 import {
   _resetWorkerForTests,
   _setCryptoDeps,
@@ -264,6 +265,42 @@ describe('outbox acknowledgement of a grant', () => {
     await drainOutbox();
 
     expect(flushed).toContainEqual(QK.mcpOAuthGrants);
+  });
+
+  it('an ack made stale by a link-generation change leaves the hold alone', async () => {
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.put(grant({ generation: 9, seenGeneration: 9, heldGeneration: 4 }));
+    await enqueueGrant();
+    await getSyncState();
+    const flushed: (readonly unknown[])[] = [];
+    setInvalidator((keys) => flushed.push(...keys));
+    // Bumped directly rather than through a link reset, which would itself clear the hold.
+    _setPushTransport(async (records) => {
+      const state = await db.syncState.get('state');
+      await db.syncState.update('state', { linkGeneration: (state?.linkGeneration ?? 0) + 1 });
+      return server.push(records);
+    });
+
+    await drainOutbox();
+
+    expect(server.pushed).toHaveLength(1);
+    expect((await db.mcpOAuthGrants.get(KEY))?.heldGeneration).toBe(4);
+    expect(flushed).not.toContainEqual(QK.mcpOAuthGrants);
+  });
+
+  it('an ack on a legacy row without a hold field writes nothing and refreshes nothing', async () => {
+    const db = getClientDataDb();
+    const legacy = grant({ generation: 5, seenGeneration: 5 });
+    await db.mcpOAuthGrants.put(legacy);
+    await enqueueGrant();
+    const flushed: (readonly unknown[])[] = [];
+    setInvalidator((keys) => flushed.push(...keys));
+
+    await drainOutbox();
+
+    expect(server.pushed).toHaveLength(1);
+    expect('heldGeneration' in ((await db.mcpOAuthGrants.get(KEY)) ?? {})).toBe(false);
+    expect(flushed).not.toContainEqual(QK.mcpOAuthGrants);
   });
 
   it('an ordinary drain conflict with our own lost-ack record applies and pushes cleanly', async () => {
