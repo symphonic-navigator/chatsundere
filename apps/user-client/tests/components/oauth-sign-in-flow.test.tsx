@@ -152,6 +152,65 @@ describe('OAuthSignInFlow', () => {
       expect(screen.queryByText(/which is not/)).toBeNull();
     });
 
+    it('says the details came through the server when discovery went through the proxy', () => {
+      renderFlow({ discovery: { ...DISCOVERY, viaProxy: true } });
+      expect(screen.getByText(/came through your Chatsundere server/)).toBeTruthy();
+    });
+
+    it('omits that line when discovery was direct', () => {
+      renderFlow();
+      expect(screen.queryByText(/came through your Chatsundere server/)).toBeNull();
+    });
+
+    it('takes the proxy flag from the re-check on Start again', async () => {
+      m.load.mockResolvedValue({
+        state: 's9',
+        serverId: 'new-9',
+        isNewServer: true,
+        draft: DRAFT,
+        resource: DRAFT.url,
+        createdAt: clockNow - 60_000,
+        authorizationUrl: AUTH_URL,
+      });
+      m.check.mockResolvedValue({
+        kind: 'sign-in',
+        discovery: { ...DISCOVERY, viaProxy: true },
+      });
+      renderFlow({ discovery: undefined, draft: null, state: 's9' });
+      await screen.findByText('Waiting for sign-in…');
+      clockNow += 11 * 60_000;
+      act(() => {
+        for (const t of [...timers]) t.fn();
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Start again' }));
+      expect(await screen.findByText(/came through your Chatsundere server/)).toBeTruthy();
+    });
+
+    it('drops the line when the re-check says the details came direct', async () => {
+      m.load.mockResolvedValue({
+        state: 's9',
+        serverId: 'new-9',
+        isNewServer: true,
+        draft: DRAFT,
+        resource: DRAFT.url,
+        createdAt: clockNow - 60_000,
+        authorizationUrl: AUTH_URL,
+      });
+      m.check.mockResolvedValue({
+        kind: 'sign-in',
+        discovery: { ...DISCOVERY, viaProxy: false },
+      });
+      renderFlow({ discovery: undefined, draft: null, state: 's9' });
+      await screen.findByText('Waiting for sign-in…');
+      clockNow += 11 * 60_000;
+      act(() => {
+        for (const t of [...timers]) t.fn();
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Start again' }));
+      await screen.findByRole('button', { name: 'Continue to sign-in' });
+      expect(screen.queryByText(/came through your Chatsundere server/)).toBeNull();
+    });
+
     it('claims all devices only on a linked account', () => {
       useAccountLinkStore.setState({ linkStatus: 'local-only' });
       renderFlow();
