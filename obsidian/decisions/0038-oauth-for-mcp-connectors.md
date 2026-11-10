@@ -125,3 +125,11 @@ Three constraints shape the design:
 - A future relay for the sign-in code, a per-tool "Allow always", protocol
   `2026-07-28` and a manual client ID field are logged in
   [follow-ups-index](../insights/follow-ups-index.md).
+
+## Addendum — grant hardening (2026-11-10, v0.3.6)
+
+See [the hardening spec](../../superpowers/specs/2026-11-10-mcp-oauth-hardening-design.md).
+
+- **Generation counter.** Every grant row carries a monotonic `generation` inside the seal, raised on every compare-and-set write to `max(seenGeneration, base) + 1`. Each device keeps a device-local high-water mark (`seenGeneration`, raised only on an acknowledged push or an accepted pull) and refuses a pulled or conflicting grant below it: the grant is held on that device (`heldGeneration`, `⚠ Sign-in paused here`), no token is presented, and *Sign in again* or a later grant at or above the mark clears it. Epoch recovery's repush heals an honest restore. The sync server still sees ciphertext only; fresh devices stay unprotected (accepted). This closes Larissa L2 of 2026-11-03.
+- **Padded collection.** `mcpOAuthGrants` joins `PADDED_COLLECTIONS`, so grant records are padded to power-of-two buckets of at least 1 KiB; older unpadded records still open. The refresh timing channel is accepted (Chris, 2026-11-10). This closes L4.
+- **Proxy-sourced details.** Protected resource metadata is fetched direct first, and the sign-in confirmation says when the details came through the user's Chatsundere server. This closes the L3 remainder.
