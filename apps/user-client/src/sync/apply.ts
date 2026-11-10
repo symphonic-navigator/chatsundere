@@ -271,6 +271,11 @@ function collect(key: readonly unknown[]): void {
   pendingInvalidations.set(JSON.stringify(key), key);
 }
 
+/** Queue a query key for the next flush; for writers outside the pull path, such as the drain's acks. */
+export function collectInvalidation(key: readonly unknown[]): void {
+  collect(key);
+}
+
 /**
  * Flush the collected invalidations ONCE (§7.6 — the pull loop calls this per
  * page, never per record, so onboarding/recovery bulk pulls stay composed).

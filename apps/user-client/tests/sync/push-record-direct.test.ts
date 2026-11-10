@@ -15,9 +15,11 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { QK } from '../../src/data/queryKeys.js';
+import { stampForPush } from '../../src/mcp/oauth/grant-generation.js';
 import { withGrantLock } from '../../src/mcp/oauth/grant-lock.js';
 import { createDexieGrantStore } from '../../src/mcp/oauth/grant-store.js';
-import { _resetApplyForTests, _setApplyOpenRecord } from '../../src/sync/apply.js';
+import { _resetApplyForTests, _setApplyOpenRecord, setInvalidator } from '../../src/sync/apply.js';
 import {
   SYNC_LOCK_NAME,
   _resetWorkerForTests,
@@ -313,6 +315,75 @@ describe('pushRecordDirect', () => {
     expect(result).toEqual({ status: 'network' });
     expect((await db.mcpOAuthGrants.get(KEY))?.scope).toBe('before');
     expect(await db.syncRows.get(['mcpOAuthGrants', KEY])).toBeUndefined();
+  });
+});
+
+describe('pushRecordDirect — grant generations', () => {
+  it('an ok writes generation, raises seen and clears the hold', async () => {
+    const db = getClientDataDb();
+    const local = grant({ generation: 7, seenGeneration: 7, heldGeneration: 4 });
+    await db.mcpOAuthGrants.put(local);
+    await db.syncRows.put({ collection: 'mcpOAuthGrants', key: KEY, rev: 2, ciphertextHash: 'x' });
+    _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
+
+    await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: stampForPush(local, 7),
+      baseRev: 2,
+      mk: MK,
+    });
+
+    const row = await db.mcpOAuthGrants.get(KEY);
+    expect(row?.generation).toBe(8);
+    expect(row?.seenGeneration).toBe(8);
+    expect(row?.heldGeneration).toBeNull();
+    const sealed = sealedRows[0] as Record<string, unknown>;
+    expect(sealed.generation).toBe(8);
+    expect('seenGeneration' in sealed).toBe(false);
+    expect('heldGeneration' in sealed).toBe(false);
+  });
+
+  it('a failed push leaves generation and seen untouched', async () => {
+    const db = getClientDataDb();
+    const local = grant({ generation: 7, seenGeneration: 7, heldGeneration: 4 });
+    await db.mcpOAuthGrants.put(local);
+    _setPushTransport(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    const result = await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: stampForPush(local, 7),
+      baseRev: 0,
+      mk: MK,
+    });
+
+    expect(result).toEqual({ status: 'network' });
+    const row = await db.mcpOAuthGrants.get(KEY);
+    expect(row?.generation).toBe(7);
+    expect(row?.seenGeneration).toBe(7);
+    expect(row?.heldGeneration).toBe(4);
+  });
+
+  it('a committed ok for a grant refreshes the grants query', async () => {
+    const db = getClientDataDb();
+    const local = grant({ generation: 7, seenGeneration: 7, heldGeneration: 4 });
+    await db.mcpOAuthGrants.put(local);
+    const flushed: (readonly unknown[])[] = [];
+    setInvalidator((keys) => flushed.push(...keys));
+    _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
+
+    await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: stampForPush(local, 7),
+      baseRev: 0,
+      mk: MK,
+    });
+
+    expect(flushed).toContainEqual(QK.mcpOAuthGrants);
   });
 });
 

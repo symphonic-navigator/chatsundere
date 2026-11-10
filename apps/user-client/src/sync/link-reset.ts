@@ -3,6 +3,7 @@ import { getLinkedAccount } from '@chatsundere/crypto';
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { getDb } from '../boot/open-db.js';
 import { setAuthDegraded } from '../lib/auth-degrade.js';
+import { generationOf } from '../mcp/oauth/grant-generation.js';
 import { getSyncState } from './watermark.js';
 import { withSyncLock } from './worker.js';
 
@@ -40,26 +41,31 @@ async function resetForNewLinkBody(): Promise<void> {
   // a Dexie transaction callback would let Dexie auto-commit it early (no
   // Dexie op pending on that microtask tick).
   const linked = await getLinkedAccount(getDb());
-  await db.transaction('rw', db.syncRows, db.syncOutbox, db.syncState, async () => {
-    await db.syncRows.clear();
-    await db.syncOutbox.clear();
-    const current = await db.syncState.get('state');
-    await db.syncState.update('state', {
-      epoch: null,
-      watermarkRev: 0,
-      lastSyncAt: null,
-      pulling: null,
-      attention: null,
-      backfillPending: true,
-      backfillTotal: null,
-      backfillDone: null,
-      linkedServerUserId: linked?.server_user_id,
-      suppressedRevs: {},
-      // Audit #8: bump so an in-flight drain/pull from the previous link is
-      // recognised as stale and its write-backs discarded.
-      linkGeneration: (current?.linkGeneration ?? 0) + 1,
-    });
-  });
+  await db.transaction(
+    'rw',
+    [db.syncRows, db.syncOutbox, db.syncState, db.mcpOAuthGrants],
+    async () => {
+      await db.syncRows.clear();
+      await db.syncOutbox.clear();
+      await resetGrantGenerations();
+      const current = await db.syncState.get('state');
+      await db.syncState.update('state', {
+        epoch: null,
+        watermarkRev: 0,
+        lastSyncAt: null,
+        pulling: null,
+        attention: null,
+        backfillPending: true,
+        backfillTotal: null,
+        backfillDone: null,
+        linkedServerUserId: linked?.server_user_id,
+        suppressedRevs: {},
+        // Audit #8: bump so an in-flight drain/pull from the previous link is
+        // recognised as stale and its write-backs discarded.
+        linkGeneration: (current?.linkGeneration ?? 0) + 1,
+      });
+    },
+  );
   // Clear the in-memory auth-degraded latch too: this fresh account holds valid
   // tokens, so a stale latch from a prior account would otherwise keep the engine
   // gated off (`canRunCycle` returns false) until a full reload. The relink
@@ -80,23 +86,42 @@ async function resetForNewLinkBody(): Promise<void> {
 export async function resetEngineStateForLocalOnly(): Promise<void> {
   const db = getClientDataDb();
   await getSyncState(); // ensure the singleton exists before update()
-  await db.transaction('rw', db.syncRows, db.syncOutbox, db.syncState, async () => {
-    await db.syncRows.clear();
-    await db.syncOutbox.clear();
-    const current = await db.syncState.get('state');
-    await db.syncState.update('state', {
-      epoch: null,
-      watermarkRev: 0,
-      lastSyncAt: null,
-      pulling: null,
-      attention: null,
-      backfillPending: false,
-      backfillTotal: null,
-      backfillDone: null,
-      linkedServerUserId: undefined,
-      suppressedRevs: {},
-      // Audit #8: every engine reset bumps the generation (see the new-link path).
-      linkGeneration: (current?.linkGeneration ?? 0) + 1,
+  await db.transaction(
+    'rw',
+    [db.syncRows, db.syncOutbox, db.syncState, db.mcpOAuthGrants],
+    async () => {
+      await db.syncRows.clear();
+      await db.syncOutbox.clear();
+      await resetGrantGenerations();
+      const current = await db.syncState.get('state');
+      await db.syncState.update('state', {
+        epoch: null,
+        watermarkRev: 0,
+        lastSyncAt: null,
+        pulling: null,
+        attention: null,
+        backfillPending: false,
+        backfillTotal: null,
+        backfillDone: null,
+        linkedServerUserId: undefined,
+        suppressedRevs: {},
+        // Audit #8: every engine reset bumps the generation (see the new-link path).
+        linkGeneration: (current?.linkGeneration ?? 0) + 1,
+      });
+    },
+  );
+}
+
+/**
+ * MCP OAuth hardening §5.4: the new link starts its high-water mark at the row's
+ * own generation, never at 0, so a hostile server cannot defeat the rollback check
+ * merely by forcing a reset. Runs inside the caller's reset transaction.
+ */
+async function resetGrantGenerations(): Promise<void> {
+  await getClientDataDb()
+    .mcpOAuthGrants.toCollection()
+    .modify((row) => {
+      row.seenGeneration = generationOf(row);
+      row.heldGeneration = null;
     });
-  });
 }

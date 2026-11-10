@@ -32,14 +32,17 @@ import type {
 } from '../boot/client-data-db.js';
 import { deriveLegacyTrashMeta, getClientDataDb } from '../boot/client-data-db.js';
 import { getDb } from '../boot/open-db.js';
+import { QK } from '../data/queryKeys.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
+import { ackFields } from '../mcp/oauth/grant-generation.js';
 import { sweepOrphanRevisions } from '../projects/revisions.js';
 import type { ApplyOutcome } from './apply.js';
 import {
   TOMBSTONE_CYCLE_CAP,
   applyRecord,
+  collectInvalidation,
   flushInvalidations,
   resetBlindIdCycleCache,
   resetTombstoneCounter,
@@ -388,7 +391,7 @@ export async function drainOutbox(): Promise<DrainResult> {
   // Audit #8: capture the link generation now. Every ack write-back below re-checks
   // it, so a relink that happens during the push round-trip discards these acks
   // instead of re-inserting syncRows metas the backfill would then skip.
-  const generation = await getLinkGeneration();
+  const linkGeneration = await getLinkGeneration();
 
   // Terminally-refused entries (§3.4) never re-enter a drain phase: excluded
   // right after the read so they can neither hot-loop nor wedge the drain.
@@ -545,11 +548,11 @@ export async function drainOutbox(): Promise<DrainResult> {
         if (result.status === 'ok') {
           acceptedWrite = true;
           pushedHighestRev = Math.max(pushedHighestRev, result.rev);
-          await applyOk(prep, result.rev, generation);
+          await applyOk(prep, result.rev, linkGeneration);
         } else if (result.status === 'conflict') {
-          needsPull = (await applyConflict(mk, prep, result.current, generation)) || needsPull;
+          needsPull = (await applyConflict(mk, prep, result.current, linkGeneration)) || needsPull;
         } else if (result.status === 'tombstoned') {
-          await applyTombstoned(prep, result.current.rev, generation);
+          await applyTombstoned(prep, result.current.rev, linkGeneration);
         } else {
           if (result.code === 'record_too_large') await markTerminal(prep);
           await applyError(result);
@@ -750,7 +753,7 @@ export async function pushRecordDirect(args: {
 }): Promise<DirectPushResult> {
   const syncUrl = effectiveSyncUrl();
   if (!syncUrl && !pushOverride) return { status: 'network' };
-  const generation = await getLinkGeneration();
+  const linkGeneration = await getLinkGeneration();
   const prep = await prepareRecord(activeCrypto(), args.mk, {
     collection: args.collection,
     key: args.key,
@@ -773,12 +776,14 @@ export async function pushRecordDirect(args: {
   if (result.status === 'ok') {
     const db = getClientDataDb();
     const table = db.table(args.collection);
+    let wrote = false;
     await db.transaction('rw', [table, db.syncRows, db.syncState], async () => {
       // Audit #8: an engine reset since the push started makes the ack stale.
-      if (((await db.syncState.get('state'))?.linkGeneration ?? 0) !== generation) return;
+      if (((await db.syncState.get('state'))?.linkGeneration ?? 0) !== linkGeneration) return;
       const existing = await db.syncRows.get([args.collection, args.key]);
       if (existing && result.rev <= existing.rev) return;
       await table.put(args.row);
+      wrote = true;
       await db.syncRows.put({
         collection: args.collection,
         key: args.key,
@@ -787,6 +792,11 @@ export async function pushRecordDirect(args: {
         localContentHash: prep.contentHashB64 ?? undefined,
       });
     });
+    // The stamped row may just have cleared a hold (MCP OAuth hardening §5.4).
+    if (wrote && args.collection === 'mcpOAuthGrants') {
+      collectInvalidation(QK.mcpOAuthGrants);
+      flushInvalidations();
+    }
     await clearQuotaOnAcceptedWrite();
   }
   return result;
@@ -850,16 +860,29 @@ async function markTerminal(prep: PreparedRecord): Promise<void> {
  * removes the now-dead `syncRows` entry entirely — no baseline to maintain.
  * Either way the covered outbox seqs are cleared.
  */
-async function applyOk(prep: PreparedRecord, rev: number, generation: number): Promise<void> {
+async function applyOk(prep: PreparedRecord, rev: number, linkGeneration: number): Promise<void> {
   const db = getClientDataDb();
   let sweptTerminal = 0;
   let stale = false;
-  await db.transaction('rw', [db.syncRows, db.syncOutbox, db.deadKeys, db.syncState], async () => {
+  let grantAcked = false;
+  const scope = [
+    db.syncRows,
+    db.syncOutbox,
+    db.deadKeys,
+    db.syncState,
+    ...(prep.collection === 'mcpOAuthGrants' ? [db.mcpOAuthGrants] : []),
+  ];
+  await db.transaction('rw', scope, async () => {
     // Audit #8: an engine reset since this drain started makes the ack stale —
     // writing its syncRows meta would re-strand the row off the new account.
-    if (!(await generationStillCurrent(generation))) {
+    if (!(await generationStillCurrent(linkGeneration))) {
       stale = true;
       return;
+    }
+    // MCP OAuth hardening §5.2: applied even when the meta write below is skipped,
+    // because the ack is monotone and still entitles the pushed generation.
+    if (prep.op === 'upsert' && prep.grantGeneration !== undefined) {
+      grantAcked = await ackGrant(prep.key, prep.grantGeneration);
     }
     if (prep.op === 'delete') {
       await db.syncRows.delete([prep.collection, prep.key]);
@@ -895,6 +918,10 @@ async function applyOk(prep: PreparedRecord, rev: number, generation: number): P
       .delete();
   });
   if (stale) return; // discarded above — touch nothing else on the new account
+  if (grantAcked) {
+    collectInvalidation(QK.mcpOAuthGrants);
+    flushInvalidations();
+  }
   // Audit #5: the server-authoritative delete ack is terminal for this key — clear
   // any suppressed-rev the Undo rewind would have consumed (its own transaction, so
   // called OUTSIDE the scope above, which does not include `syncState`).
@@ -917,6 +944,21 @@ async function applyOk(prep: PreparedRecord, rev: number, generation: number): P
 }
 
 /**
+ * Applies an outbox acknowledgement to the local grant inside the caller's
+ * transaction; returns whether it changed the row.
+ */
+async function ackGrant(key: string, pushedGeneration: number): Promise<boolean> {
+  const db = getClientDataDb();
+  const row = await db.mcpOAuthGrants.get(key);
+  if (!row) return false;
+  const fields = ackFields(row, pushedGeneration);
+  if (!fields) return false;
+  if (row.seenGeneration === fields.seenGeneration && row.heldGeneration === null) return false;
+  await db.mcpOAuthGrants.update(key, fields);
+  return true;
+}
+
+/**
  * `conflict`: if the server's `current` is undecryptable (poison, M-1), adopt
  * its rev as the new CAS base and KEEP the outbox entry so the next drain
  * re-pushes our good copy — the honest client heals the poison. If it decrypts,
@@ -927,7 +969,7 @@ async function applyConflict(
   mk: MasterKey,
   prep: PreparedRecord,
   current: { rev: number; nonce?: string; ciphertext?: string; blindId: string },
-  generation: number,
+  linkGeneration: number,
 ): Promise<boolean> {
   const db = getClientDataDb();
 
@@ -935,7 +977,7 @@ async function applyConflict(
   if (!decryptable) {
     // Poison heal: bump the CAS base, keep our sealed hash and the outbox entry.
     // Audit #8: skip the CAS-base write when a relink has made this ack stale.
-    if (!(await generationStillCurrent(generation))) return false;
+    if (!(await generationStillCurrent(linkGeneration))) return false;
     const existing = await db.syncRows.get([prep.collection, prep.key]);
     // #4c: mirror the applyOk guard — a poison `current.rev` at or below the
     // existing watermark must never regress the CAS base (the same wedge risk
@@ -985,7 +1027,7 @@ async function isDecryptable(
 async function applyTombstoned(
   prep: PreparedRecord,
   tombstoneRev: number,
-  generation: number,
+  linkGeneration: number,
 ): Promise<void> {
   const db = getClientDataDb();
   const now = Date.now();
@@ -994,7 +1036,7 @@ async function applyTombstoned(
   // any read/route — a stale tombstone would otherwise route a NEW-account row
   // (same local key, pending backfill) into the trash. The in-transaction re-check
   // below closes the residual window across the `readLocalRow` await.
-  if (!(await generationStillCurrent(generation))) return;
+  if (!(await generationStillCurrent(linkGeneration))) return;
 
   // Provider ids became deterministic after some accounts had already hard-
   // deleted them. Preserve an intentional re-add, adopt the tombstone's exact
@@ -1005,7 +1047,7 @@ async function applyTombstoned(
     prep.providerResurrection === true
   ) {
     await db.transaction('rw', [db.syncRows, db.deadKeys, db.syncState], async () => {
-      if (!(await generationStillCurrent(generation))) return;
+      if (!(await generationStillCurrent(linkGeneration))) return;
       const existing = await db.syncRows.get([prep.collection, prep.key]);
       if (existing && tombstoneRev < existing.rev) return;
       await db.syncRows.put({
@@ -1037,7 +1079,7 @@ async function applyTombstoned(
     'rw',
     [db.syncRows, db.syncOutbox, db.trash, db.deadKeys, db.syncState, db.table(prep.collection)],
     async () => {
-      if (!(await generationStillCurrent(generation))) {
+      if (!(await generationStillCurrent(linkGeneration))) {
         stale = true;
         return;
       }
@@ -1360,7 +1402,7 @@ export async function runPullLoop(): Promise<void> {
   resetBlindIdCycleCache();
   // Audit #8: capture the link generation so a page that resolves after a relink
   // cannot apply against — or advance the watermark of — the fresh account.
-  const generation = await getLinkGeneration();
+  const linkGeneration = await getLinkGeneration();
   // Task B5: capture the session identity so a mid-page `closeAndForget()` (or
   // a relogin under a different session) can be detected after each record —
   // see `sessionStillLive`.
@@ -1402,7 +1444,7 @@ export async function runPullLoop(): Promise<void> {
       // Audit #8: the page resolved after a relink — discard it wholesale (do not
       // apply it, do not advance the fresh watermark, and do not let its stale
       // epoch trigger a recovery against the new account).
-      if (!(await generationStillCurrent(generation))) return;
+      if (!(await generationStillCurrent(linkGeneration))) return;
       pages += 1;
       await setPulling({ pages, startedAt });
 
@@ -1482,7 +1524,7 @@ export async function runPullLoop(): Promise<void> {
       // Audit #8: a relink during this page's applies (the loop above awaits) makes
       // the computed watermark belong to the previous account — never advance the
       // fresh watermark with it.
-      if (!(await generationStillCurrent(generation))) return;
+      if (!(await generationStillCurrent(linkGeneration))) return;
       await advanceWatermark(nextWatermark); // monotone clamp inside
       flushInvalidations();
 
