@@ -8,10 +8,21 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-11-10 — **v0.3.5 RELEASED: CLAUDE FABLE 5.2 ON NANO-GPT.**
-Curated via `/curate` (mode 2) the day nano-gpt listed it, with live probes, the
-conversation-suite and the tool-replay suite; one commit on `master` as `9c7598ad`,
-tagged **`v0.3.5`** on it and pushed. Record: [[models/claude-fable-5.2]].
+**Last updated:** 2026-11-10 — **v0.3.5 RELEASED: CLAUDE FABLE 5.2 ON NANO-GPT + OAUTH
+FOR MCP.** `v0.3.5` (on `9c7598ad`) is the first tag after the MCP OAuth merge (PR #34,
+`c83ea406`), so it ships both. That merge had no STATUS entry of its own; this one
+covers it.
+- **OAuth for MCP — device-tested by Chris, 2026-11-10:** sign-in works as smoothly as
+  on claude.ai. Built by the 2026-11-02 overnighter
+  ([[../superpowers/overnighter/2026-11-02-mcp-oauth-overnighter-report]],
+  [ADR 0038](decisions/0038-oauth-for-mcp-connectors.md)); Larissa 0 Critical/High,
+  Laura's hard defects fixed before the merge. Still **awaiting Chris**: the proposed
+  deferrals L2 (grant rollback), L4 (padding) and L3 remainder (proxy-marked discovery)
+  in [[insights/follow-ups-index]].
+- **Fable 5.2** curated via `/curate` (mode 2) the day nano-gpt listed it, with live
+  probes, the conversation-suite and the tool-replay suite. Record:
+  [[models/claude-fable-5.2]]. Field signal the same day: it works Kumbu² happily
+  through MCP.
 - **Freedom:** `freedomOriented: null` → **Uncensored?** badge. Chris expects it to be
   uncensored, as Anthropic models over the API generally are, but it is unassessed —
   so it joins Opus 5/5.5 and the 5.5 generation, not the earlier Fables' CENSORED.
@@ -27,12 +38,11 @@ tagged **`v0.3.5`** on it and pushed. Record: [[models/claude-fable-5.2]].
   Larissa/Laura (catalogue only). The push ran without lefthook (main tree has no
   `node_modules`); the gate above had already run.
 
-**Next:** Chris's device checks for v0.3.4 (2026-11-02 below). The **agentic loop spec
+**Next:** Chris's remaining device checks for v0.3.4 (2026-11-02 below). The **agentic loop spec
 is on hold**: models work linearly in Kumbu², so Chris is watching VAFS use there first;
 the project-filesystem **sync** resumes soon after. Phase 3 preview: the **Eidolon**
 standard (database VFS + `sh`, optional subsets). See
-[[synthesis/2026-11-10-eidolon-and-linear-agents]]. For Fable 5.2: a quick chat on the live instance (thinking chips
-show low/medium/high, no off; a tool call works).
+[[synthesis/2026-11-10-eidolon-and-linear-agents]]. Decide the three OAuth deferral proposals.
 
 ---
 

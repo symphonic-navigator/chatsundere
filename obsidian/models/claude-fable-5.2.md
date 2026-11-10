@@ -12,6 +12,13 @@
 - **replayReasoning:** false — extended-thinking signature replay stays deferred, as for the rest of the family (ADR 0032)
 - **🕊️ Freedom:** `null` — deliberately UNKNOWN (**Uncensored?** badge). Chris (2026-11-10) expects it to behave as uncensored, as Anthropic models generally do over the API, but there is no evidence yet either way; pending Chatsundere's own freedom eval it joins [[claude-opus-5]] and the 5.5 generation rather than inheriting the CENSORED badge of [[claude-fable-5]] and [[claude-fable-5.1]]. nano-gpt routes verbatim.
 
+## Field signal — Chris (2026-11-10)
+
+On the live instance the same day, Fable 5.2 worked Chris's Kumbu² notes through
+MCP with evident enjoyment: real multi-tool use (`sh` plus the write tools) beyond
+the suite's single `generate_image` call. Anecdotal, and nothing to do with the
+freedom badge.
+
 ## Offering — nano-gpt — `steps` WITHOUT an off
 
 - **slug:** `anthropic/claude-fable-5.2` · adapter `claudeEffortAdapter`
