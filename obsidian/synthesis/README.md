@@ -14,6 +14,10 @@ graduates into a brief and then a spec under `superpowers/specs/`.
 
 ## Notes
 
+- [[2026-11-10-eidolon-and-linear-agents]] — models work linearly in Kumbu², so
+  the agentic loop spec is on hold while Chris watches VAFS use; Phase 3 preview of
+  **Eidolon** (database VFS + `sh`) and its optional subsets (`eidolon_pdf`,
+  `eidolon_skills`, …).
 - [[2026-11-01-kumbu-port-and-memory-depth]] — porting Kumbu² with its tools plus
   `sh` as the protocol layer (more or less settled, MCP first); possible way
   forward for memory: a hybrid with extraction, in levels of depth.

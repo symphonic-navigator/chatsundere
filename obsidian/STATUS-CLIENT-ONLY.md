@@ -27,8 +27,11 @@ tagged **`v0.3.5`** on it and pushed. Record: [[models/claude-fable-5.2]].
   Larissa/Laura (catalogue only). The push ran without lefthook (main tree has no
   `node_modules`); the gate above had already run.
 
-**Next:** unchanged from 2026-11-02 below — Chris's device checks for v0.3.4, then the
-agentic loop spec. For Fable 5.2: a quick chat on the live instance (thinking chips
+**Next:** Chris's device checks for v0.3.4 (2026-11-02 below). The **agentic loop spec
+is on hold**: models work linearly in Kumbu², so Chris is watching VAFS use there first;
+the project-filesystem **sync** resumes soon after. Phase 3 preview: the **Eidolon**
+standard (database VFS + `sh`, optional subsets). See
+[[synthesis/2026-11-10-eidolon-and-linear-agents]]. For Fable 5.2: a quick chat on the live instance (thinking chips
 show low/medium/high, no off; a tool call works).
 
 ---
