@@ -131,7 +131,7 @@ Enforced as a hard rule in §3 because Chatsune drifted on this point repeatedly
 
 ## 8. Git Workflow
 
-- **Pre-public phase:** the project is private and we work directly on `master`. Squash chunks before pushing.
+- **Branches for releases:** `master` is the next minor release, `release/X.Y` the maintenance line of the released one (§12, [`obsidian/RELEASE-PROCESS.md`](obsidian/RELEASE-PROCESS.md)). A change for the released version is made on `release/X.Y` and forward-ported to `master` the same day. Squash chunks before pushing.
 - **Feature branches:** use one when work needs parallel iteration, when Larissa is about to audit, or when a chunk is large enough that I want a checkpoint.
 - **Always work in a dedicated git worktree, never by switching the main tree's branch.** Every feature branch is checked out in its own worktree under `.claude/worktrees/<name>`; the **main tree stays on `master`**. This is non-negotiable because we run parallel work (multiple Claudes, Chris editing): switching the *shared* main tree's branch yanks `HEAD` out from under in-flight subagents, so their commits land on the wrong branch. This bit us on 2026-06-29 (a parallel `feat/context-pre-seeding` checkout in the main tree diverted a transfer fix-commit; recovered, then the whole feature was relocated into its own worktree). Integration steps that touch `master` (squash-to-master, parking docs) also use a throwaway master worktree, never a checkout of the contested main tree. Verify each subagent commit landed on the intended branch (`git branch --contains`).
 - **Granularity:** one squashed commit per feature unit. Correct units: "Set up monorepo and tooling", "Add auth-service", "Wire user-client registration". Not finer, not coarser. See [ADR 0003](obsidian/decisions/0003-squash-per-feature.md).
@@ -218,14 +218,14 @@ These are not nice-to-haves; they are how Chatsundere differentiates from generi
 
 ## 12. Versioning & Releases
 
-- The project is **private** until the Block-2 tool/upload/artifact scope is complete. First public release at that point is **v0.1.0**, a deliberately **local-only alpha** (no account, no sync). See [ADR 0031](obsidian/decisions/0031-eight-block-roadmap-to-beta.md) and the living [ROADMAP](obsidian/ROADMAP.md).
-- The original "2-3 *mainstream* providers" gate is **relaxed**: freedom-/privacy-oriented providers are a deliberate identity, not a stopgap. v0.1.0 is gated on feature scope, not on onboarding OpenAI/Anthropic/Google.
-- Version gates: **v0.1.0** (Block 2, local-only alpha), **v0.2.0** (Block 5, knowledge base), **v0.3.0** (Block 6, encrypted backend live), **v0.4.0** (Block 8, beta).
-- SemVer from v0.1.0 onwards.
-- Manual release notes per release; format will be locked in when we hit v0.1.0.
-- Versioning automation: Chris has ideas in flight. A future ADR will fix the approach.
-
-Until v0.1.0 we do not cut versions. Internal milestones use commit hashes or ad-hoc tags.
+- **The process is [`obsidian/RELEASE-PROCESS.md`](obsidian/RELEASE-PROCESS.md)**, decided in [ADR 0039](obsidian/decisions/0039-maintenance-branches-and-version-diary.md). Read it before any release, any change meant for a released version, and any curation of a model.
+- SemVer, annotated tags `vX.Y.Z`. Version gates from [ADR 0031](obsidian/decisions/0031-eight-block-roadmap-to-beta.md) and the [ROADMAP](obsidian/ROADMAP.md): **v0.4.0** is Block 8, the beta. Freedom-/privacy-oriented providers are a deliberate identity, not a stopgap.
+- **`master` is the next minor release** and runs locally and on staging only. **`release/X.Y` is the maintenance line** of the released minor version (`release/0.3` now). `version.txt` holds the version a branch prepares.
+- **A maintenance release carries only** newly curated models and offerings, security fixes, and fixes of faults in the released version. No features, no UI reshaping, no refactors. When unsure whether something is a fix or a feature, it's a feature.
+- **Forward-port, same day.** Models and fixes land on `release/X.Y` first, then `git cherry-pick -x` to `master` in a pull request "Forward-port: …". No maintenance tag while a forward port is missing. CI and workflow changes go the other way, `master` to `release/X.Y`.
+- **Version diary in Kumbu²**, `/SWE/Chatsundere/Versions/<version>.md`: one entry per merged pull request, from the users' side, with its number, under New, Better, Fixed or Behind the scenes, written when it is merged. A forward-ported change goes into both diaries. The release notes in `CHANGELOG.md` are written from the diary at release time.
+- **Never release ad hoc.** A new model is not a reason to ship what `master` holds; it goes into the maintenance line. Releasing happens only when Chris asks for it.
+- **Artefacts:** only the highest stable tag moves `:latest` and the major image tag (WUD follows `:latest`); the alpha PWA on Pages is always built from the highest stable tag; the teaser site follows `master`.
 
 ---
 
@@ -277,7 +277,7 @@ Load these when their topic comes up. Do not preload.
 | Sync vault model | `obsidian/SYNC.md` *(Phase 1)* |
 | Proxy service | `obsidian/PROXY.md` *(Phase 2)* |
 | Deployment behind Traefik on Hetzner | `obsidian/DEPLOYMENT.md` *(later)* |
-| Release process | `obsidian/RELEASE-PROCESS.md` *(at v0.1.0)* |
+| Release process, maintenance branches, forward-porting, version diary | `obsidian/RELEASE-PROCESS.md` |
 | Past architectural decisions | `obsidian/decisions/` |
 | Project journal, gotchas, observations | `obsidian/insights/` |
 | Larissa audit deferrals | `obsidian/insights/security-deferrals.md` |
