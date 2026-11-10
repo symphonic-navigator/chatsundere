@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
 import type { McpOAuthGrantRow } from '../../../src/boot/client-data-db.js';
+import { isHoldBlocking } from '../../../src/mcp/oauth/ensure-token.js';
 import {
   acceptedFields,
   ackFields,
   generationOf,
+  hasPendingNewSignIn,
   isGrantDead,
   isGrantHeld,
   isGrantLive,
@@ -152,4 +154,22 @@ describe('liveness', () => {
     // The new-family flag alone, without a pair, exempts nothing.
     expect(isGrantPaused(row({ heldGeneration: 4, pendingNewFamily: true }))).toBe(true);
   });
+});
+
+describe('display and gate agree', () => {
+  const pendings: { name: string; fields: Partial<McpOAuthGrantRow> }[] = [
+    { name: 'no pending pair', fields: { pendingTokens: null, pendingNewFamily: false } },
+    { name: 'an ordinary pending pair', fields: { pendingTokens: blob, pendingNewFamily: false } },
+    { name: 'a new-family pending pair', fields: { pendingTokens: blob, pendingNewFamily: true } },
+    { name: 'a stray new-family flag', fields: { pendingTokens: null, pendingNewFamily: true } },
+  ];
+  for (const heldGeneration of [null, 0, 4]) {
+    for (const p of pendings) {
+      it(`held ${heldGeneration} with ${p.name}: paused exactly when the gate blocks`, () => {
+        const r = row({ heldGeneration, ...p.fields });
+        expect(isGrantPaused(r)).toBe(isHoldBlocking(r));
+        expect(isHoldBlocking(r)).toBe(heldGeneration !== null && !hasPendingNewSignIn(r));
+      });
+    }
+  }
 });

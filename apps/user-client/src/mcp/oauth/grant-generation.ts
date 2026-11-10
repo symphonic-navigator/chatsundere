@@ -70,11 +70,18 @@ export function isGrantDead(row: Pick<McpOAuthGrantRow, 'tokens' | 'pendingToken
   return row.tokens === null && !row.pendingTokens;
 }
 
+/** A new sign-in's pair waiting to publish here; the hold never blocks it (spec §5.4). */
+export function hasPendingNewSignIn(
+  row: Pick<McpOAuthGrantRow, 'pendingTokens' | 'pendingNewFamily'>,
+): boolean {
+  return row.pendingTokens != null && row.pendingNewFamily === true;
+}
+
 /** Display only, never a gate: held, unless a new sign-in pending here will publish regardless. */
 export function isGrantPaused(
   row: Pick<McpOAuthGrantRow, 'heldGeneration' | 'pendingTokens' | 'pendingNewFamily'>,
 ): boolean {
-  return isGrantHeld(row) && !(row.pendingTokens && row.pendingNewFamily === true);
+  return isGrantHeld(row) && !hasPendingNewSignIn(row);
 }
 
 /** The one liveness rule (spec §5.4): present, not paused, not dead. */

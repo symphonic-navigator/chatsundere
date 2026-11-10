@@ -744,20 +744,22 @@ export type DirectPushResult =
   | { status: 'epoch-mismatch' };
 
 /**
- * The grant row to store for an acknowledged direct push. The device-local mark comes
- * from the stored row: a pull may have raised `seenGeneration` or set a hold while the
- * push was out, and an ack below that mark must neither lower it nor clear the hold.
+ * The grant row to store for an acknowledged direct push, or null when the stored row
+ * must stay. The device-local mark comes from the stored row: a pull may have raised
+ * `seenGeneration` while the push was out. An ack below that mark only a hostile server
+ * can produce, so its content never replaces what this device already had.
  */
 function ackedGrantRow(
   stored: McpOAuthGrantRow | undefined,
   pushed: McpOAuthGrantRow,
-): McpOAuthGrantRow {
+): McpOAuthGrantRow | null {
   if (!stored) return pushed;
   const ack = ackFields(stored, generationOf(pushed));
+  if (!ack) return null;
   return {
     ...pushed,
-    seenGeneration: Math.max(seenOf(stored), seenOf(pushed)),
-    heldGeneration: ack ? ack.heldGeneration : (stored.heldGeneration ?? null),
+    seenGeneration: Math.max(seenOf(stored), seenOf(pushed), ack.seenGeneration),
+    heldGeneration: ack.heldGeneration,
   };
 }
 
@@ -800,18 +802,42 @@ export async function pushRecordDirect(args: {
     const db = getClientDataDb();
     const table = db.table(args.collection);
     let wrote = false;
+    let refused = false;
     await db.transaction('rw', [table, db.syncRows, db.syncState], async () => {
       // Audit #8: an engine reset since the push started makes the ack stale.
       if (((await db.syncState.get('state'))?.linkGeneration ?? 0) !== linkGeneration) return;
       const existing = await db.syncRows.get([args.collection, args.key]);
       if (existing && result.rev <= existing.rev) return;
+      const stored =
+        args.collection === 'mcpOAuthGrants'
+          ? ((await table.get(args.key)) as McpOAuthGrantRow | undefined)
+          : undefined;
       const row =
         args.collection === 'mcpOAuthGrants'
-          ? ackedGrantRow(
-              (await table.get(args.key)) as McpOAuthGrantRow | undefined,
-              args.row as McpOAuthGrantRow,
-            )
+          ? ackedGrantRow(stored, args.row as McpOAuthGrantRow)
           : args.row;
+      if (row === null && stored) {
+        // Treated as a refused pull (hardening spec §5.3): the hold keeps any pending pair
+        // out of reach of `publishPending`'s clearing, the revision moves so the next push
+        // bases on it, and the old ciphertext hash keeps an echo of this body from passing
+        // as ours.
+        await table.put({
+          ...stored,
+          heldGeneration: generationOf(args.row as McpOAuthGrantRow),
+        });
+        refused = true;
+        if (existing) {
+          await db.syncRows.update([args.collection, args.key], { rev: result.rev });
+        } else {
+          await db.syncRows.put({
+            collection: args.collection,
+            key: args.key,
+            rev: result.rev,
+            ciphertextHash: '',
+          });
+        }
+        return;
+      }
       await table.put(row);
       wrote = true;
       await db.syncRows.put({
@@ -822,8 +848,8 @@ export async function pushRecordDirect(args: {
         localContentHash: prep.contentHashB64 ?? undefined,
       });
     });
-    // The stamped row may just have cleared a hold (MCP OAuth hardening §5.4).
-    if (wrote && args.collection === 'mcpOAuthGrants') {
+    // The stamped row may just have cleared a hold, or a refusal set one (hardening §5.4).
+    if ((wrote || refused) && args.collection === 'mcpOAuthGrants') {
       collectInvalidation(QK.mcpOAuthGrants);
       flushInvalidations();
     }

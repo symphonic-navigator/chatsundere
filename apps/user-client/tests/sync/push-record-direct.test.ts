@@ -345,26 +345,35 @@ describe('pushRecordDirect — grant generations', () => {
     expect('heldGeneration' in sealed).toBe(false);
   });
 
-  it('an ok never lowers seen nor clears a hold below the stored mark', async () => {
+  it('an ok below the stored mark moves only the revision, never the row', async () => {
     const db = getClientDataDb();
-    // A pull raised the mark to 12 and refused 4 while this push of generation 9 was out.
-    await db.mcpOAuthGrants.put(grant({ generation: 8, seenGeneration: 12, heldGeneration: 4 }));
+    const tokensA = { ...placeholderBlob, ciphertext: new Uint8Array([0xa]) };
+    const tokensB = { ...placeholderBlob, ciphertext: new Uint8Array([0xb]) };
+    // Only a hostile server acknowledges a generation-9 body above a revision seen at 12.
+    await db.mcpOAuthGrants.put(
+      grant({ tokens: tokensA, generation: 12, seenGeneration: 12, heldGeneration: null }),
+    );
     await db.syncRows.put({ collection: 'mcpOAuthGrants', key: KEY, rev: 2, ciphertextHash: 'x' });
     _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
 
     const result = await pushRecordDirect({
       collection: 'mcpOAuthGrants',
       key: KEY,
-      row: grant({ generation: 9, seenGeneration: 9, heldGeneration: null }),
+      row: grant({ tokens: tokensB, generation: 9, seenGeneration: 9, heldGeneration: null }),
       baseRev: 2,
       mk: MK,
     });
 
-    expect(result).toEqual({ status: 'ok', rev: 3, written: true });
+    expect(result).toEqual({ status: 'ok', rev: 3, written: false });
     const row = await db.mcpOAuthGrants.get(KEY);
-    expect(row?.generation).toBe(9);
+    expect(Array.from(row?.tokens?.ciphertext ?? [])).toEqual([0xa]);
+    expect(row?.generation).toBe(12);
     expect(row?.seenGeneration).toBe(12);
-    expect(row?.heldGeneration).toBe(4);
+    // Refused like an older pulled copy: held, so a pending pair here would be kept.
+    expect(row?.heldGeneration).toBe(9);
+    const meta = await db.syncRows.get(['mcpOAuthGrants', KEY]);
+    expect(meta?.rev).toBe(3);
+    expect(meta?.ciphertextHash).toBe('x');
   });
 
   it('an ok at or above the stored mark raises seen and clears the hold', async () => {
