@@ -8,6 +8,31 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-10 — **v0.3.5 RELEASED: CLAUDE FABLE 5.2 ON NANO-GPT.**
+Curated via `/curate` (mode 2) the day nano-gpt listed it, with live probes, the
+conversation-suite and the tool-replay suite; one commit on `master` as `9c7598ad`,
+tagged **`v0.3.5`** on it and pushed. Record: [[models/claude-fable-5.2]].
+- **Freedom:** `freedomOriented: null` → **Uncensored?** badge. Chris expects it to be
+  uncensored, as Anthropic models over the API generally are, but it is unassessed —
+  so it joins Opus 5/5.5 and the 5.5 generation, not the earlier Fables' CENSORED.
+- **Reasoning:** body flag, no `:thinking` sibling. Any opt-out is **HTTP 400**
+  ("requires reasoning and cannot honor an explicit reasoning opt-out"), so steps
+  low/medium/high without an off (`FABLE51_STEPS`); the adapter's force-on guard is
+  now pinned by a unit test.
+- `orphanReplay: true`, tool-replay gate green, vision 4/4. **`partial`**: adaptive
+  thinking skips the easy prompt at low/medium (the Fable 5.1 case).
+- Gate (worktree): forced typecheck 14/14 + build 9/9 (0 cached), Biome clean,
+  llm-unified 509/509, user-client 4292/4293 (`settings-previews` flake, green in
+  isolation). auth-service not run green: no local Postgres; no backend change. No
+  Larissa/Laura (catalogue only). The push ran without lefthook (main tree has no
+  `node_modules`); the gate above had already run.
+
+**Next:** unchanged from 2026-11-02 below — Chris's device checks for v0.3.4, then the
+agentic loop spec. For Fable 5.2: a quick chat on the live instance (thinking chips
+show low/medium/high, no off; a tool call works).
+
+---
+
 **Last updated:** 2026-11-02 — **v0.3.4 RELEASED: MCP CONNECTORS ACROSS DEVICES + 25 TOOL
 ROUNDS.** Field report from testing Kumbu² in a chat (Opus 5.5 on nano-gpt): tool calls
 died with `MCP initialise failed: URL constructor: undefined is not a valid URL`, and five
@@ -42,28 +67,6 @@ a long agentic task runs past five rounds. **Then the agentic loop spec** (conte
 protecting the user message, round checkpoints, approval Stop): at 25 rounds a model can
 silently lose its task once the exchange fills the window. See
 [[insights/follow-ups-index]]. Still stale, not acted on: `version.txt` at `0.2.0`.
-
----
-
-**Last updated:** 2026-10-24 — **v0.3.3 RELEASED: CLAUDE SONNET 5.5 + HAIKU 5.5 ON NANO-GPT.**
-A community request: both curated via `/curate` (mode 2) with live probes, the
-conversation-suite and the tool-replay suite, squashed to `master` as `1be1e554`,
-tagged **`v0.3.3`** on that commit and pushed. Records: [[models/claude-sonnet-5.5]],
-[[models/claude-haiku-5.5]].
-- **Freedom:** both `freedomOriented: null` → **Uncensored?** badge (Chris: censorship
-  state unclear), like Opus 5/5.5 — not the family's CENSORED default.
-- **Sonnet 5.5:** slug swap (`anthropic/claude-sonnet-5.5` = genuine off,
-  `:thinking` = on), but `reasoning_effort` genuinely steers its adaptive thinking →
-  steps off/low/medium/high (default medium), unlike the Claude 4 toggle.
-- **Haiku 5.5:** no thinking sibling → Fable 5's body-flag shape, genuine off
-  (5-7 completion tokens vs 116 on). $0.10 / $0.50 per M — the cheap Claude.
-- Both `orphanReplay: true`, tool-replay gate green, vision 4/4. Both stay
-  **`partial`**: adaptive thinking leaves the suite's easy-prompt `reasoning-present`
-  red at some steps (the Fable 5.1 case); a hard prompt reasons through the same adapter.
-- Gate on master: forced typecheck + build 19/19 (0 cached), llm-unified 508/508,
-  user-client 3747/3747, Biome clean. No Larissa/Laura (catalogue only).
-- **Spotted, not acted on:** nano-gpt now also lists `anthropic/claude-sonnet-5`
-  (+ `:thinking`); Sonnet 5 is curated on OpenRouter only. Add the nano-gpt route on request.
 
 ---
 
