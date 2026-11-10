@@ -246,7 +246,8 @@ describe('discoverOAuth', () => {
     it('goes direct first for the pointer even when the probe used the proxy', async () => {
       const { fake, run } = setup({ metadata: 'header' }, 'proxy');
       const found = await run();
-      expect(found).toMatchObject({ kind: 'oauth', viaProxy: false });
+      // The pointer itself came from a proxied challenge, so the details still count as proxied.
+      expect(found).toMatchObject({ kind: 'oauth', viaProxy: true });
       expect(fake.state.log.some((l) => l.startsWith('GET proxy') && l.includes('/prm.json'))).toBe(
         false,
       );
@@ -302,6 +303,27 @@ describe('discoverOAuth', () => {
         hasProxy: true,
       });
       expect(found).toMatchObject({ kind: 'oauth', viaProxy: true });
+    });
+
+    it('reports viaProxy when the metadata pointer came from a proxied challenge', async () => {
+      const proxied = await setup({ metadata: 'header' }, 'proxy').run();
+      expect(proxied).toMatchObject({ kind: 'oauth', viaProxy: true });
+      const direct = await setup({ metadata: 'header' }, 'direct').run();
+      expect(direct).toMatchObject({ kind: 'oauth', viaProxy: false });
+    });
+
+    it('reports viaProxy when the scope came from a proxied challenge', async () => {
+      const fromChallenge = await setup(
+        { metadata: 'well-known-path', challengeScope: 'read' },
+        'proxy',
+      ).run();
+      expect(fromChallenge).toMatchObject({ kind: 'oauth', scope: 'read', viaProxy: true });
+      // Without a challenge scope or pointer, a proxied probe contributed nothing used.
+      const unused = await setup(
+        { metadata: 'well-known-path', prmScopes: ['read'] },
+        'proxy',
+      ).run();
+      expect(unused).toMatchObject({ kind: 'oauth', scope: 'read', viaProxy: false });
     });
 
     it('reports no viaProxy when everything was direct', async () => {

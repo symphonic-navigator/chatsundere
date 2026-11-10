@@ -73,6 +73,15 @@ describe('statusOf for a held OAuth grant', () => {
     expect(statusOf(ROW, { hasProxy: false, linked: true, grant })).toBe('⚠ Sign in again');
   });
 
+  it('a held grant with a new sign-in pending shows its normal status', () => {
+    const grant = {
+      ...held,
+      pendingTokens: held.tokens,
+      pendingNewFamily: true,
+    } as McpOAuthGrantRow;
+    expect(statusOf(ROW, { hasProxy: false, linked: true, grant })).toBe('● Connected (direct)');
+  });
+
   it('ranks above waiting for the proxy', () => {
     const grant = { ...held, tokenRoute: 'proxy' } as McpOAuthGrantRow;
     expect(statusOf(ROW, { hasProxy: false, linked: true, grant })).toBe('⚠ Sign-in paused here');

@@ -2,7 +2,7 @@
 import { useId } from 'react';
 import { useMcpOAuthGrants } from '../../data/mcp-oauth-grants.js';
 import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
-import { isGrantHeld, isGrantLive } from '../../mcp/oauth/grant-generation.js';
+import { isGrantLive, isGrantPaused } from '../../mcp/oauth/grant-generation.js';
 import { useMcpSignInOverlay } from '../../state/mcp-sign-in-overlay.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { Button } from '../ui/index.js';
@@ -51,8 +51,8 @@ export function McpAuthNotice({ notice }: { notice: McpAuthNoticePayload }): JSX
   }
 
   const scope = notice.variant === 'scope';
-  // A held pill whose grant is gone or not here yet reads as ended, as on an older app.
-  const paused = notice.variant === 'held' && grant !== undefined && isGrantHeld(grant);
+  // A held pill with no grant on this device falls back to the ended rendering.
+  const paused = notice.variant === 'held' && grant !== undefined && isGrantPaused(grant);
   const label = scope
     ? `⚠ ${name}: needs more access`
     : paused

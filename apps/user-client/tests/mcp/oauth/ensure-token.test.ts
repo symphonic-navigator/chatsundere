@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
 import { type MasterKey, asMasterKey, getRandomBytes } from '@chatsundere/crypto';
-import type { SyncPulledRecord, SyncPushResult } from '@chatsundere/shared-types';
+import type { SyncPulledRecord } from '@chatsundere/shared-types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type McpOAuthGrantRow,
@@ -31,6 +31,7 @@ import type { AdoptOutcome } from '../../../src/mcp/oauth/grant-store.js';
 import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
 import { createPkce } from '../../../src/mcp/oauth/pkce.js';
 import { type TokenSet, exchangeCode } from '../../../src/mcp/oauth/token-client.js';
+import type { DirectPushResult } from '../../../src/sync/worker.js';
 import { type FakeAuthOptions, createFakeAuthServer } from './fake-auth-server.js';
 import { CasServer, LOCAL_DEFAULTS, clone } from './grant-harness.js';
 
@@ -45,7 +46,7 @@ const HOUR = 3_600_000;
 type World = { t: number };
 
 type Forced = 'network' | 'error' | 'epoch-mismatch' | 'tombstoned' | 'poison-conflict' | null;
-type PushResult = SyncPushResult | { status: 'network' } | { status: 'epoch-mismatch' };
+type PushResult = DirectPushResult;
 type PushEntry = { row: McpOAuthGrantRow; baseRev: number; mkBytes: number[]; mkRef: MasterKey };
 
 /** One simulated device: its local rows and revisions, clocks, lock and push log. */
@@ -62,6 +63,8 @@ class Device {
   lock = createNamedMutex();
   beforePush?: (row: McpOAuthGrantRow, baseRev: number) => Promise<void> | void;
   afterPush?: (row: McpOAuthGrantRow, result: PushResult) => Promise<void> | void;
+  /** Runs after the server accepted a push and before the local write-back. */
+  beforeWriteBack?: (row: McpOAuthGrantRow) => Promise<void> | void;
   onSleep?: () => Promise<void> | void;
   onWriteLocal?: (patch: Partial<McpOAuthGrantRow>) => Promise<void> | void;
   /** Runs before a token request is forwarded to the authorisation server. */
@@ -93,11 +96,11 @@ class Device {
     return this.auth.fetch(input, init);
   };
 
-  private writeIfHigher(row: McpOAuthGrantRow, rev: number): void {
-    if (rev > (this.revs.get(row.id) ?? 0)) {
-      this.rows.set(row.id, clone(row));
-      this.revs.set(row.id, rev);
-    }
+  private writeIfHigher(row: McpOAuthGrantRow, rev: number): boolean {
+    if (rev <= (this.revs.get(row.id) ?? 0)) return false;
+    this.rows.set(row.id, clone(row));
+    this.revs.set(row.id, rev);
+    return true;
   }
 
   private forced(kind: Forced, row: McpOAuthGrantRow): PushResult | null {
@@ -151,7 +154,10 @@ class Device {
       let result = this.forced(kind, row);
       if (!result) {
         result = this.cas.push(row, baseRev);
-        if (result.status === 'ok') this.writeIfHigher(row, result.rev);
+        if (result.status === 'ok') {
+          await this.beforeWriteBack?.(row);
+          result = { ...result, written: this.writeIfHigher(row, result.rev) };
+        }
       }
       await this.afterPush?.(row, result);
       return result;
@@ -1566,6 +1572,82 @@ describe('a held grant (hardening spec §5.3, §5.4)', () => {
     expect(row.pendingNewFamily).toBe(false);
     expect(row.claim?.deviceId).toBe('dev-a');
   });
+
+  /** The four pending fields, compared as a unit. */
+  const pendingOf = (row: McpOAuthGrantRow) => ({
+    pendingTokens: row.pendingTokens,
+    pendingBaseRev: row.pendingBaseRev,
+    pendingSpentRefresh: row.pendingSpentRefresh,
+    pendingNewFamily: row.pendingNewFamily,
+  });
+
+  /** Leaves a new sign-in pending on device A, as storeGrant builds it. */
+  async function pendingNewFamily(s: Setup): Promise<void> {
+    const local = s.a.row();
+    const fresh = await signIn(s.auth, s.world);
+    s.a.rows.set(
+      ID,
+      grantRow(s.auth, null, {
+        generation: local.generation,
+        seenGeneration: local.seenGeneration,
+        heldGeneration: local.heldGeneration,
+        pendingTokens: await sealTokens(fresh, s.mk, ID),
+        pendingBaseRev: s.a.revs.get(ID) ?? 0,
+        pendingSpentRefresh: null,
+        pendingNewFamily: true,
+      }),
+    );
+  }
+
+  const PAIR_KINDS: { name: string; leave: (s: Setup) => Promise<unknown> }[] = [
+    {
+      name: 'an ordinary pair',
+      leave: (s) => {
+        expire(s);
+        return leavePending(s);
+      },
+    },
+    { name: 'a new-family pair', leave: pendingNewFamily },
+  ];
+
+  for (const kind of PAIR_KINDS) {
+    it(`${kind.name} accepted but not written back while a hold lands is kept`, async () => {
+      const s = await setup({}, { generation: 5 });
+      await kind.leave(s);
+      const before = pendingOf(s.a.row());
+      expect(before.pendingTokens).not.toBeNull();
+      let raced = false;
+      s.a.beforeWriteBack = async () => {
+        if (raced) return;
+        raced = true;
+        // A replay lands above the accepted revision and is refused: the write-back skips.
+        await putAt(s, 2);
+        s.a.pull();
+      };
+      expect(await s.a.lock(ID, () => publishPending(ID, s.a.deps(), s.mk))).toBe('kept');
+      expect(raced).toBe(true);
+      expect(s.a.row().heldGeneration).toBe(2);
+      expect(pendingOf(s.a.row())).toEqual(before);
+    });
+
+    it(`${kind.name} accepted but superseded before the write-back is cleared`, async () => {
+      const s = await setup({}, { generation: 5 });
+      await kind.leave(s);
+      let raced = false;
+      s.a.beforeWriteBack = async () => {
+        if (raced) return;
+        raced = true;
+        // A newer accepted row lands above the accepted revision; republishing could spend.
+        await putAt(s, 50, await signIn(s.auth, s.world));
+        s.a.pull();
+      };
+      expect(await s.a.lock(ID, () => publishPending(ID, s.a.deps(), s.mk))).toBe('published');
+      expect(raced).toBe(true);
+      expect(s.a.row().heldGeneration).toBeNull();
+      expect(s.a.row().pendingTokens).toBeNull();
+      expect(s.a.row().pendingNewFamily).toBe(false);
+    });
+  }
 
   it('a new sign-in publishes while held, its token usable at once, ok clears the hold', async () => {
     const s = await setup({}, { generation: 5 });

@@ -68,20 +68,6 @@ async function revokePair(
   );
 }
 
-/**
- * Revokes the ordinary pending pair a new sign-in is about to replace (plan D-10): only
- * this device holds that live refresh token, so dropping it unrevoked would leave it
- * usable. A new-family pair is left alone. Best-effort; the caller swallows errors.
- */
-export async function revokeOrdinaryPending(
-  row: McpOAuthGrantRow,
-  mk: MasterKey,
-  deps: PublishDeps,
-): Promise<void> {
-  if (!row.pendingTokens || row.pendingNewFamily === true) return;
-  await revokePair(row, row.pendingTokens, mk, deps);
-}
-
 /** The row as published: the pending pair becomes `tokens`, and the claim is released. */
 function publishedRow(
   row: McpOAuthGrantRow,
@@ -137,6 +123,14 @@ export async function publishPending(
       mk,
     );
     if (result.status === 'ok') {
+      if (result.written === false) {
+        // The server took the pair, but a newer local revision kept it out of the row. A
+        // hold means that revision was refused, so the pair may be the only copy this
+        // device has; otherwise an accepted newer row superseded it, and publishing it
+        // again could present a spent token.
+        const after = await deps.store.snapshot(serverId);
+        if (after && isGrantHeld(after.row)) return 'kept';
+      }
       await deps.store.writeLocal(serverId, CLEARED_PENDING);
       return 'published';
     }

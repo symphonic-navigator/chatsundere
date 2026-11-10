@@ -36,7 +36,7 @@ import { QK } from '../data/queryKeys.js';
 import { isAuthDegraded } from '../lib/auth-degrade.js';
 import { HttpError, apiFetch } from '../lib/fetch.js';
 import { effectiveSyncUrl } from '../lib/server-urls.js';
-import { ackFields } from '../mcp/oauth/grant-generation.js';
+import { ackFields, generationOf, seenOf } from '../mcp/oauth/grant-generation.js';
 import { sweepOrphanRevisions } from '../projects/revisions.js';
 import type { ApplyOutcome } from './apply.js';
 import {
@@ -732,11 +732,34 @@ function defaultPush(syncUrl: string, records: SyncPushRecord[]): Promise<SyncPu
   });
 }
 
-/** The outcome of a direct push: the per-record result, or why there is none. */
+/**
+ * The outcome of a direct push: the per-record result, or why there is none. On `ok`,
+ * `written` says whether the row itself reached the local table; an accepted push whose
+ * write-back was skipped (an engine reset, or a newer revision already stored) is false.
+ */
 export type DirectPushResult =
-  | SyncPushResult
+  | (Extract<SyncPushResult, { status: 'ok' }> & { written?: boolean })
+  | Exclude<SyncPushResult, { status: 'ok' }>
   | { status: 'network' }
   | { status: 'epoch-mismatch' };
+
+/**
+ * The grant row to store for an acknowledged direct push. The device-local mark comes
+ * from the stored row: a pull may have raised `seenGeneration` or set a hold while the
+ * push was out, and an ack below that mark must neither lower it nor clear the hold.
+ */
+function ackedGrantRow(
+  stored: McpOAuthGrantRow | undefined,
+  pushed: McpOAuthGrantRow,
+): McpOAuthGrantRow {
+  if (!stored) return pushed;
+  const ack = ackFields(stored, generationOf(pushed));
+  return {
+    ...pushed,
+    seenGeneration: Math.max(seenOf(stored), seenOf(pushed)),
+    heldGeneration: ack ? ack.heldGeneration : (stored.heldGeneration ?? null),
+  };
+}
 
 /**
  * Pushes one record outside the outbox and returns its per-record result (MCP OAuth
@@ -782,7 +805,14 @@ export async function pushRecordDirect(args: {
       if (((await db.syncState.get('state'))?.linkGeneration ?? 0) !== linkGeneration) return;
       const existing = await db.syncRows.get([args.collection, args.key]);
       if (existing && result.rev <= existing.rev) return;
-      await table.put(args.row);
+      const row =
+        args.collection === 'mcpOAuthGrants'
+          ? ackedGrantRow(
+              (await table.get(args.key)) as McpOAuthGrantRow | undefined,
+              args.row as McpOAuthGrantRow,
+            )
+          : args.row;
+      await table.put(row);
       wrote = true;
       await db.syncRows.put({
         collection: args.collection,
@@ -798,6 +828,7 @@ export async function pushRecordDirect(args: {
       flushInvalidations();
     }
     await clearQuotaOnAcceptedWrite();
+    return { ...result, written: wrote };
   }
   return result;
 }

@@ -89,21 +89,22 @@ function casStore(world: () => World): GrantStore {
       if (forced === 'network') return { status: 'network' };
       if (forced === 'throw') throw new Error('The simulated push failed unexpectedly.');
       const result = x.cas.push(row, baseRev);
-      if (result.status === 'ok') {
-        const db = getClientDataDb();
-        await db.transaction('rw', [db.mcpOAuthGrants, db.syncRows], async () => {
-          const meta = await db.syncRows.get(['mcpOAuthGrants', row.id]);
-          if (meta && result.rev <= meta.rev) return;
-          await db.mcpOAuthGrants.put(row);
-          await db.syncRows.put({
-            collection: 'mcpOAuthGrants',
-            key: row.id,
-            rev: result.rev,
-            ciphertextHash: '',
-          });
+      if (result.status !== 'ok') return result;
+      const db = getClientDataDb();
+      let written = false;
+      await db.transaction('rw', [db.mcpOAuthGrants, db.syncRows], async () => {
+        const meta = await db.syncRows.get(['mcpOAuthGrants', row.id]);
+        if (meta && result.rev <= meta.rev) return;
+        await db.mcpOAuthGrants.put(row);
+        await db.syncRows.put({
+          collection: 'mcpOAuthGrants',
+          key: row.id,
+          rev: result.rev,
+          ciphertextHash: '',
         });
-      }
-      return result;
+        written = true;
+      });
+      return { ...result, written };
     },
     open: async (record) => (record.ciphertext ? world().cas.body(record.ciphertext) : null),
     adopt: async (record: SyncPulledRecord): Promise<AdoptOutcome> => {
@@ -770,7 +771,7 @@ describe('grant generations on a new sign-in', () => {
     expect(row?.heldGeneration).toBeNull();
   });
 
-  it('sign-in revokes an ordinary pending pair it replaces', async () => {
+  it('sign-in replacing an ordinary pending pair sends no revocation', async () => {
     const id = expectOk((await signIn(discovery(w))).result).serverId;
     w.t += HOUR;
     // The claim goes out, the publish does not: an ordinary pair stays pending.
@@ -779,26 +780,14 @@ describe('grant generations on a new sign-in', () => {
     w.pushHook = null;
     const pendingRow = await localGrant(id);
     expect(pendingRow?.pendingNewFamily).toBe(false);
-    const pending = await openTokens(pendingRow?.pendingTokens ?? null, w.mk, id);
-    const pendingRefresh = pending?.refreshToken ?? '';
-    expect(pendingRefresh.length > 0).toBe(true);
-    const revokedBefore = w.auth.state.revoked.length;
-    await reconnect(id);
-    const revocations = w.auth.state.revoked.slice(revokedBefore);
-    expect(revocations.length).toBe(1);
-    expect(revocations.filter((t) => t === pendingRefresh).length).toBe(1);
-    expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
-  });
-
-  it('a new-family pending pair a sign-in replaces is not revoked', async () => {
-    w.pushHook = () => 'network';
-    const id = expectOk((await signIn(discovery(w))).result).serverId;
-    w.pushHook = null;
-    expect((await localGrant(id))?.pendingNewFamily).toBe(true);
+    expect(pendingRow?.pendingTokens != null).toBe(true);
+    // Revoking after the new code is exchanged could end the new family too (RFC 7009
+    // per-grant revocation), so the replaced pair is dropped without a revocation.
     const revokedBefore = w.auth.state.revoked.length;
     await reconnect(id);
     expect(w.auth.state.revoked.length - revokedBefore).toBe(0);
     expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
+    expect((await localGrant(id))?.pendingTokens ?? null).toBeNull();
   });
 });
 

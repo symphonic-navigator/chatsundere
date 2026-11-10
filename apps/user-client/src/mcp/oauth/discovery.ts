@@ -17,7 +17,7 @@ export type OAuthDiscovery = {
   cimdSupported: boolean;
   issParameterSupported: boolean;
   scope: string | null;
-  /** True when any of the sign-in details had to be fetched through the proxy. */
+  /** True when any sign-in detail used came through the proxy, the proxied challenge included. */
   viaProxy: boolean;
 };
 
@@ -138,6 +138,8 @@ export async function discoverOAuth(
   await probe.body?.cancel();
   if (probe.status !== 401) return { kind: 'no-oauth' };
   const challenge = parseBearerChallenge(probe.headers.get('www-authenticate') ?? '');
+  // Anything taken from this challenge passed through the user's server when the probe did.
+  const challengeViaProxy = route === 'proxy';
 
   // A GET spends nothing, so trying direct and then the proxy cannot lose a credential.
   // The probe's route is deliberately not reused: a probe that needed the proxy says
@@ -174,7 +176,7 @@ export async function discoverOAuth(
     }
     if (got.read.status === 'ok') {
       prm = got.read.value;
-      viaProxy = got.viaProxy;
+      viaProxy = got.viaProxy || challengeViaProxy;
     }
   }
   if (prm === null) {
@@ -294,6 +296,6 @@ export async function discoverOAuth(
     cimdSupported: meta.client_id_metadata_document_supported === true,
     issParameterSupported: meta.authorization_response_iss_parameter_supported === true,
     scope: composeScope(base, strings(meta.scopes_supported)),
-    viaProxy: viaProxy || asViaProxy,
+    viaProxy: viaProxy || asViaProxy || (challengeScope !== null && challengeViaProxy),
   };
 }

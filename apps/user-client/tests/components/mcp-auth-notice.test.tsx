@@ -156,6 +156,22 @@ describe('McpAuthNotice on a tool pill', () => {
     expect(screen.getByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
   });
 
+  it('held: a held grant with a new sign-in pending says in use and offers no action', () => {
+    grants.rows = [
+      {
+        id: 's1',
+        tokens: { v: 1 },
+        pendingTokens: { v: 1 },
+        pendingNewFamily: true,
+        heldGeneration: 4,
+      },
+    ];
+    show(pill({ variant: 'held' }));
+    expect(screen.getByText('● Kumbu: in use')).toBeInTheDocument();
+    expect(screen.queryByText('⚠ Kumbu: sign-in paused on this device')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sign in|grant/i })).not.toBeInTheDocument();
+  });
+
   it('held: disables Sign in again with the reason while the backend is unreachable', () => {
     gate.disabled = true;
     grants.rows = [{ id: 's1', tokens: { v: 1 }, heldGeneration: 4 }];

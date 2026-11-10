@@ -59,6 +59,12 @@ describe('OAuthConnectionPanel', () => {
     expect(screen.getByRole('button', { name: 'Sign in again' })).toBeEnabled();
   });
 
+  it('a held grant with a new sign-in pending shows no paused paragraph and no Sign in again', () => {
+    show({ ...GRANT, heldGeneration: 4, pendingTokens: GRANT.tokens, pendingNewFamily: true });
+    expect(screen.queryByText(PAUSED)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in again' })).not.toBeInTheDocument();
+  });
+
   it('a live grant shows neither the paused paragraph nor Sign in again', () => {
     show(GRANT);
     expect(screen.queryByText(PAUSED)).not.toBeInTheDocument();

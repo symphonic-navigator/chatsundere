@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { McpOAuthGrantRow, McpServerRow } from '../boot/client-data-db.js';
-import { isGrantDead, isGrantHeld } from './oauth/grant-generation.js';
+import { isGrantDead, isGrantPaused } from './oauth/grant-generation.js';
 import { canResolveOnFirstUse, usableRoute } from './resolve-active.js';
 
 /** What the status line needs beyond the row itself. */
@@ -26,7 +26,7 @@ function oauthStatus(row: McpServerRow, ctx: ServerStatusContext): string {
   if (!grant) return '○ Connects on first use';
   if (isGrantDead(grant)) return '⚠ Sign in again';
   // Above the proxy waits: nothing renews while held, whatever the route.
-  if (isGrantHeld(grant)) return '⚠ Sign-in paused here';
+  if (isGrantPaused(grant)) return '⚠ Sign-in paused here';
   const route = usableRoute(row);
   // Tokens renewed through the proxy need it however the tools are reached.
   const needsProxy =

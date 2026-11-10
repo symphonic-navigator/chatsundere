@@ -70,7 +70,14 @@ export function isGrantDead(row: Pick<McpOAuthGrantRow, 'tokens' | 'pendingToken
   return row.tokens === null && !row.pendingTokens;
 }
 
-/** The one liveness rule (spec §5.4): present, not held, not dead. */
+/** Display only, never a gate: held, unless a new sign-in pending here will publish regardless. */
+export function isGrantPaused(
+  row: Pick<McpOAuthGrantRow, 'heldGeneration' | 'pendingTokens' | 'pendingNewFamily'>,
+): boolean {
+  return isGrantHeld(row) && !(row.pendingTokens && row.pendingNewFamily === true);
+}
+
+/** The one liveness rule (spec §5.4): present, not paused, not dead. */
 export function isGrantLive(row: McpOAuthGrantRow | undefined): boolean {
-  return row !== undefined && !isGrantHeld(row) && !isGrantDead(row);
+  return row !== undefined && !isGrantPaused(row) && !isGrantDead(row);
 }

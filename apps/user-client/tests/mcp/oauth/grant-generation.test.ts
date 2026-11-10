@@ -8,6 +8,7 @@ import {
   isGrantDead,
   isGrantHeld,
   isGrantLive,
+  isGrantPaused,
   judgePulledGrant,
   nextGeneration,
   seenOf,
@@ -133,5 +134,22 @@ describe('liveness', () => {
     expect(isGrantLive(row({ tokens: null, pendingTokens: blob }))).toBe(true);
     expect(isGrantLive(row({ tokens: null }))).toBe(false);
     expect(isGrantLive(undefined)).toBe(false);
+    // A new sign-in waiting to publish is this device's own fresh grant, held or not.
+    expect(
+      isGrantLive(row({ heldGeneration: 4, pendingTokens: blob, pendingNewFamily: true })),
+    ).toBe(true);
+    expect(
+      isGrantLive(row({ heldGeneration: 4, pendingTokens: blob, pendingNewFamily: false })),
+    ).toBe(false);
+  });
+  it('isGrantPaused', () => {
+    expect(isGrantPaused(row({ heldGeneration: null }))).toBe(false);
+    expect(isGrantPaused(row({ heldGeneration: 4 }))).toBe(true);
+    expect(isGrantPaused(row({ heldGeneration: 4, pendingTokens: blob }))).toBe(true);
+    expect(
+      isGrantPaused(row({ heldGeneration: 4, pendingTokens: blob, pendingNewFamily: true })),
+    ).toBe(false);
+    // The new-family flag alone, without a pair, exempts nothing.
+    expect(isGrantPaused(row({ heldGeneration: 4, pendingNewFamily: true }))).toBe(true);
   });
 });
