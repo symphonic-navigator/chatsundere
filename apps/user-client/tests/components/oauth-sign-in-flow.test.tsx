@@ -51,6 +51,7 @@ const DISCOVERY: OAuthDiscovery = {
   revocationEndpoint: null,
   cimdSupported: true,
   issParameterSupported: false,
+  viaProxy: false,
   scope: null,
 };
 const DRAFT: ServerDraft = {

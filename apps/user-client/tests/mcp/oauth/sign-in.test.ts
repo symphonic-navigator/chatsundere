@@ -206,6 +206,7 @@ function discovery(
     revocationEndpoint: u.revocation,
     cimdSupported: options.cimd === true,
     issParameterSupported: options.advertiseIss === true,
+    viaProxy: false,
     scope: null,
     ...overrides,
   };

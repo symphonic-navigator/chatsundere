@@ -354,6 +354,7 @@ describe('IntegrationServerPage', () => {
       revocationEndpoint: null,
       cimdSupported: true,
       issParameterSupported: false,
+      viaProxy: false,
       scope: null,
     };
     const signIn = (over: Record<string, unknown> = {}) => ({
