@@ -3,7 +3,7 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
 import { openSpentRefresh, openTokens } from '../../data/mcp-oauth-grants.js';
 import type { EncryptedBlob } from '../../lib/secrets.js';
-import { generationOf, stampForPush } from './grant-generation.js';
+import { generationOf, isGrantHeld, seenOf, stampForPush } from './grant-generation.js';
 import type { GrantStore } from './grant-store.js';
 import type { OAuthFetch } from './oauth-fetch.js';
 import { type TokenSet, revokeToken } from './token-client.js';
@@ -108,8 +108,10 @@ export async function publishPending(
     await deps.store.writeLocal(serverId, { ...CLEARED_PENDING, tokens: pending, claim: null });
     return 'published';
   }
-  const body = publishedRow(row, pending, deps.wallNow());
   const newFamily = row.pendingNewFamily === true;
+  // A held grant publishes only a new sign-in (spec §5.4); the ordinary pair waits.
+  if (isGrantHeld(row) && !newFamily) return 'kept';
+  const body = publishedRow(row, pending, deps.wallNow());
   let spent: string | null = null;
   if (!newFamily && row.pendingSpentRefresh) {
     try {
@@ -142,6 +144,11 @@ export async function publishPending(
     }
     const current = await deps.store.open(result.current, mk);
     if (!current) return 'kept';
+    if (generationOf(current) < seenOf(row)) {
+      // An older copy than this device has seen: a refusal, never a base (spec §5.3).
+      await deps.store.adopt(result.current);
+      return 'kept';
+    }
     const currentTokens = await openTokensSafe(current.tokens, mk, serverId);
     if (currentTokens === 'corrupt' || spent === null) return 'kept';
     if ((currentTokens?.refreshToken ?? null) === spent) {
@@ -150,8 +157,8 @@ export async function publishPending(
       baseRev = result.current.rev;
       continue;
     }
-    // A newer rotation or sign-in won.
-    await deps.store.adopt(result.current);
+    // A newer rotation or sign-in won, unless the adopt itself was refused.
+    if ((await deps.store.adopt(result.current)) === 'refused') return 'kept';
     await deps.store.writeLocal(serverId, CLEARED_PENDING);
     return 'adopted';
   }

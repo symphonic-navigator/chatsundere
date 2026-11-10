@@ -23,8 +23,10 @@ import {
   acceptedFields,
   generationOf,
   judgePulledGrant,
+  seenOf,
 } from '../../../src/mcp/oauth/grant-generation.js';
 import { createNamedMutex, withGrantLock } from '../../../src/mcp/oauth/grant-lock.js';
+import { publishPending } from '../../../src/mcp/oauth/grant-publish.js';
 import type { AdoptOutcome } from '../../../src/mcp/oauth/grant-store.js';
 import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
 import { createPkce } from '../../../src/mcp/oauth/pkce.js';
@@ -1335,6 +1337,228 @@ describe('publishNewFamily', () => {
     // Seen 9, local 11: both the first push and the one after the poison stamp 12.
     expect(generations.slice(0, 2)).toEqual([12, 12]);
     expect(s.a.row().pendingTokens).toBeNull();
+  });
+});
+
+describe('a held grant (hardening spec §5.3, §5.4)', () => {
+  /** Another device's write at exactly this generation; absent means the v0.3.5 shape. */
+  async function putAt(s: Setup, generation: number | undefined, pair?: TokenSet): Promise<number> {
+    const tokens = pair ? await sealTokens(pair, s.mk, ID) : (s.cas.row(ID)?.tokens ?? null);
+    return s.cas.put(grantRow(s.auth, tokens, generation === undefined ? {} : { generation }));
+  }
+
+  it('held returns without pushing or fetching', async () => {
+    const s = await setup({}, { generation: 5 });
+    s.a.rows.set(ID, { ...s.a.row(), heldGeneration: 4 });
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expire(s);
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expect(s.a.pushes).toHaveLength(0);
+    expect(s.a.tokenPosts).toBe(0);
+  });
+
+  it('a v0.3.5 new sign-in at generation 0 after a higher one pauses the grant (§5.6)', async () => {
+    const s = await setup({}, { generation: 3 });
+    const fresh = await signIn(s.auth, s.world);
+    await putAt(s, undefined, fresh);
+    s.a.pull();
+    expect(s.a.row().heldGeneration).toBe(0);
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expect(s.a.pushes).toHaveLength(0);
+    expect(s.a.tokenPosts).toBe(0);
+  });
+
+  it('claim conflict with an older current returns held and pushes nothing more', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    let raced = false;
+    s.a.beforePush = async (row) => {
+      if (raced || !row.claim) return;
+      raced = true;
+      await putAt(s, 2);
+    };
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expect(s.a.pushes).toHaveLength(1);
+    expect(s.a.tokenPosts).toBe(0);
+  });
+
+  it('adopting the same refused current twice still holds', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    let raced = false;
+    s.a.beforePush = async (row) => {
+      if (raced || !row.claim) return;
+      raced = true;
+      await putAt(s, 2);
+      // A sync cycle refuses it first, so the claim conflict's own adopt is stale.
+      s.a.pull();
+    };
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expect(s.a.pushes).toHaveLength(1);
+    expect(s.a.tokenPosts).toBe(0);
+  });
+
+  type RacedPath = { name: string; push: number; arrange: (s: Setup) => Promise<void> };
+  const paths: RacedPath[] = [
+    { name: 'claim conflict', push: 1, arrange: async (s) => expire(s) },
+    {
+      name: 'release conflict',
+      push: 2,
+      arrange: async (s) => {
+        expire(s);
+        s.a.tokenOverride = () => new Response('unavailable', { status: 503 });
+      },
+    },
+    {
+      name: 'invalid_grant conflict',
+      push: 2,
+      arrange: async (s) => {
+        const unknown: TokenSet = {
+          accessToken: 'at-dead',
+          refreshToken: 'rt-unknown',
+          accessExpiresAt: s.world.t - 1,
+          scope: null,
+        };
+        await putAt(s, 5, unknown);
+        s.a.pull();
+      },
+    },
+    { name: 'publish adopt', push: 2, arrange: async (s) => expire(s) },
+  ];
+
+  it.each(paths)(
+    '$name: an older current holds, records its revision and presents nothing',
+    async (path) => {
+      const s = await setup({}, { generation: 5 });
+      await path.arrange(s);
+      const old = await otherPair(s, 'old');
+      const seen: { before?: McpOAuthGrantRow } = {};
+      let n = 0;
+      s.a.beforePush = async () => {
+        if (++n !== path.push) return;
+        seen.before = clone(s.a.row());
+        await putAt(s, 2, old);
+      };
+      const result = await s.a.ensure();
+      expect(result).toEqual({ ok: false, reason: 'held' });
+      expect(s.a.pushes).toHaveLength(path.push);
+      expect(s.a.revs.get(ID)).toBe(s.cas.rev(ID));
+      expect(s.a.row()).toEqual({ ...seen.before, heldGeneration: 2 });
+    },
+  );
+
+  it.each(paths)('$name: an equal current is applied and leaves no hold', async (path) => {
+    const s = await setup({}, { generation: 5 });
+    await path.arrange(s);
+    const newer = await otherPair(s, 'newer');
+    let n = 0;
+    s.a.beforePush = async () => {
+      if (++n !== path.push) return;
+      await putAt(s, seenOf(s.a.row()), newer);
+    };
+    const result = await s.a.ensure();
+    expect(result).not.toEqual({ ok: false, reason: 'held' });
+    const row = s.a.row();
+    expect(row.heldGeneration).toBeNull();
+    expect(row.seenGeneration).toBe(generationOf(s.cas.row(ID)));
+    expect((await tokensOf(s, row.tokens))?.refreshToken).toBe(newer.refreshToken);
+    expect(row.pendingTokens).toBeNull();
+    if (path.name !== 'release conflict') expect(okToken(result)).toBe(newer.accessToken);
+  });
+
+  it('a refusal during publish keeps the pending pair', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    await leavePending(s);
+    const before = clone(s.a.row());
+    await putAt(s, 2, await otherPair(s, 'old'));
+    const outcome = await s.a.lock(ID, () => publishPending(ID, s.a.deps(), s.mk));
+    expect(outcome).toBe('kept');
+    expect(s.a.row()).toEqual({ ...before, heldGeneration: 2 });
+    expect(s.a.row().pendingTokens).toEqual(before.pendingTokens);
+    expect(s.a.row().pendingBaseRev).toBe(before.pendingBaseRev);
+    expect(s.a.row().pendingSpentRefresh).toEqual(before.pendingSpentRefresh);
+    expect(s.a.row().pendingNewFamily).toBe(false);
+    expect(s.a.revs.get(ID)).toBe(s.cas.rev(ID));
+  });
+
+  it('an ordinary pending pair stays unpublished while held and publishes after the hold clears', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    const pair = await leavePending(s);
+    const claimedOnServer = s.cas.row(ID) as McpOAuthGrantRow;
+    await putAt(s, 2);
+    s.a.pull();
+    const before = clone(s.a.row());
+    const pushes = s.a.pushes.length;
+    await publishPendingTokens(s.a.deps());
+    await s.a.lock(ID, () => publishNewFamily(ID, s.a.deps()));
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expect(s.a.pushes).toHaveLength(pushes);
+    expect(s.a.row()).toEqual(before);
+
+    // A record at the seen generation clears the hold by itself; the pair survives the pull.
+    s.cas.put({ ...claimedOnServer, generation: seenOf(s.a.row()) });
+    s.a.pull();
+    expect(s.a.row().heldGeneration).toBeNull();
+    expect(s.a.row().pendingTokens).toEqual(before.pendingTokens);
+    await publishPendingTokens(s.a.deps());
+    expect((await serverTokens(s))?.refreshToken).toBe(pair.refreshToken);
+    expect(s.a.row().pendingTokens).toBeNull();
+    expect(s.auth.state.refreshAttempts).toHaveLength(1);
+  });
+
+  it('a hold between claim and publish keeps the pair and the claim', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    let raced = false;
+    s.a.afterPush = async (row, result) => {
+      if (raced || !row.claim || result.status !== 'ok') return;
+      raced = true;
+      await putAt(s, 2);
+      s.a.pull();
+    };
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    // Only the claim: no publish, and deliberately no release (plan D-9).
+    expect(s.a.pushes).toHaveLength(1);
+    expect(s.a.tokenPosts).toBe(1);
+    const row = s.a.row();
+    expect(row.heldGeneration).toBe(2);
+    expect(row.pendingTokens).not.toBeNull();
+    expect(row.pendingSpentRefresh).not.toBeNull();
+    expect(row.pendingNewFamily).toBe(false);
+    expect(row.claim?.deviceId).toBe('dev-a');
+  });
+
+  it('a new sign-in publishes while held, its token usable at once, ok clears the hold', async () => {
+    const s = await setup({}, { generation: 5 });
+    await putAt(s, 2);
+    s.a.pull();
+    const held = s.a.row();
+    expect(held.heldGeneration).toBe(2);
+    const fresh = await signIn(s.auth, s.world);
+    // As storeGrant builds it: a fresh row that carries the generation fields over.
+    s.a.rows.set(
+      ID,
+      grantRow(s.auth, null, {
+        generation: held.generation,
+        seenGeneration: held.seenGeneration,
+        heldGeneration: held.heldGeneration,
+        pendingTokens: await sealTokens(fresh, s.mk, ID),
+        pendingBaseRev: s.a.revs.get(ID) ?? 0,
+        pendingSpentRefresh: null,
+        pendingNewFamily: true,
+      }),
+    );
+    s.a.plan = ['network'];
+    expect(okToken(await s.a.ensure())).toBe(fresh.accessToken);
+    expect(s.a.row().pendingNewFamily).toBe(true);
+    await publishPendingTokens(s.a.deps());
+    expect((await serverTokens(s))?.refreshToken).toBe(fresh.refreshToken);
+    expect(generationOf(s.cas.row(ID))).toBe(6);
+    expect(s.a.row().heldGeneration).toBeNull();
+    expect(s.a.row().pendingTokens).toBeNull();
+    expect(s.a.claimPushes()).toHaveLength(0);
   });
 });
 

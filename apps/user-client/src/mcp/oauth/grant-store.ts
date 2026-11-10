@@ -20,7 +20,7 @@ import {
 export type AdoptOutcome = 'adopted' | 'refused' | 'stale';
 
 /** Maps an apply outcome onto what a grant caller needs to know. */
-function adoptOutcomeOf(outcome: ApplyOutcome): AdoptOutcome {
+export function adoptOutcomeOf(outcome: ApplyOutcome): AdoptOutcome {
   if (outcome.kind === 'inserted') return 'adopted';
   if (outcome.kind === 'resolved' && outcome.winner === 'pulled') return 'adopted';
   if (outcome.kind === 'refused') return 'refused';
