@@ -122,8 +122,20 @@ export async function publishPending(
   }
   let baseRev = row.pendingBaseRev ?? 0;
   let baseGeneration = generationOf(row);
+  let seen = seenOf(row);
   for (let attempt = 0; attempt <= MAX_REPUSHES; attempt++) {
-    const result = await deps.store.push(stampForPush(body, baseGeneration), baseRev, mk);
+    if (attempt > 0) {
+      // A pull may have refused a record or raised the mark since the last attempt.
+      const fresh = await deps.store.snapshot(serverId);
+      if (!fresh) return 'kept';
+      if (isGrantHeld(fresh.row) && !newFamily) return 'kept';
+      seen = Math.max(seen, seenOf(fresh.row));
+    }
+    const result = await deps.store.push(
+      stampForPush({ ...body, seenGeneration: seen }, baseGeneration),
+      baseRev,
+      mk,
+    );
     if (result.status === 'ok') {
       await deps.store.writeLocal(serverId, CLEARED_PENDING);
       return 'published';
@@ -144,8 +156,9 @@ export async function publishPending(
     }
     const current = await deps.store.open(result.current, mk);
     if (!current) return 'kept';
-    if (generationOf(current) < seenOf(row)) {
+    if (generationOf(current) < seen) {
       // An older copy than this device has seen: a refusal, never a base (spec §5.3).
+      // The adopt outcome is ignored on purpose: refused or stale, the pair is kept.
       await deps.store.adopt(result.current);
       return 'kept';
     }

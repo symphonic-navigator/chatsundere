@@ -1466,6 +1466,43 @@ describe('a held grant (hardening spec §5.3, §5.4)', () => {
     if (path.name !== 'release conflict') expect(okToken(result)).toBe(newer.accessToken);
   });
 
+  it('a release conflict whose current a pull already refused still holds', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    s.a.tokenOverride = () => new Response('unavailable', { status: 503 });
+    let n = 0;
+    s.a.beforePush = async () => {
+      if (++n !== 2) return;
+      await putAt(s, 2, await otherPair(s, 'old'));
+      // The refusal is recorded first, so the release conflict's own adopt is stale.
+      s.a.pull();
+    };
+    expect(await s.a.ensure()).toEqual({ ok: false, reason: 'held' });
+    expect(s.a.pushes).toHaveLength(2);
+    expect(s.a.row().heldGeneration).toBe(2);
+  });
+
+  it('a hold that lands between publish re-pushes stops the next one', async () => {
+    const s = await setup({}, { generation: 5 });
+    expire(s);
+    await leavePending(s);
+    const before = clone(s.a.row());
+    const pushes = s.a.pushes.length;
+    let n = 0;
+    s.a.beforePush = () => {
+      // Another device's write over the spent token at the seen generation: a re-push case.
+      if (++n === 1) s.cas.put({ ...(s.cas.row(ID) as McpOAuthGrantRow), generation: 6 });
+    };
+    s.a.afterPush = () => {
+      if (n === 1) s.a.rows.set(ID, { ...s.a.row(), heldGeneration: 2 });
+    };
+    const outcome = await s.a.lock(ID, () => publishPending(ID, s.a.deps(), s.mk));
+    expect(outcome).toBe('kept');
+    expect(s.a.pushes).toHaveLength(pushes + 1);
+    expect(s.a.row().pendingTokens).toEqual(before.pendingTokens);
+    expect(s.a.row().pendingSpentRefresh).toEqual(before.pendingSpentRefresh);
+  });
+
   it('a refusal during publish keeps the pending pair', async () => {
     const s = await setup({}, { generation: 5 });
     expire(s);

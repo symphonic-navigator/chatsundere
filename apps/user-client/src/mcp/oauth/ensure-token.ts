@@ -222,6 +222,17 @@ async function releaseClaim(
   return run.deps.store.adopt(result.current);
 }
 
+/**
+ * Whether a release conflict left the grant held. A `stale` adopt does not clear it: a
+ * pull may already have refused that very record and set the hold.
+ */
+async function heldAfterRelease(run: Run, released: AdoptOutcome | null): Promise<boolean> {
+  if (released === null) return false;
+  if (released === 'refused') return true;
+  const snap = await run.deps.store.snapshot(run.serverId);
+  return snap !== null && blocked(snap.row);
+}
+
 /** After `adopted`: the adopted row's token when usable and not held, otherwise `fallback`. */
 async function adoptedOr(run: Run, fallback: EnsureResult): Promise<EnsureResult> {
   const snap = await run.deps.store.snapshot(run.serverId);
@@ -244,15 +255,15 @@ async function refreshUnderClaim(
     case 'frozen':
       // Nothing went out, so the token is unspent: release the claim rather than leave
       // every device waiting out a lease over it.
-      if (!outcome.sent && (await releaseClaim(run, claimed, rev)) === 'refused') {
+      if (!outcome.sent && (await heldAfterRelease(run, await releaseClaim(run, claimed, rev)))) {
         return fail('held');
       }
       return null;
     case 'failed':
-      if ((await releaseClaim(run, claimed, rev)) === 'refused') return fail('held');
+      if (await heldAfterRelease(run, await releaseClaim(run, claimed, rev))) return fail('held');
       return fail('waiting');
     case 'in-doubt':
-      if ((await releaseClaim(run, claimed, rev)) === 'refused') return fail('held');
+      if (await heldAfterRelease(run, await releaseClaim(run, claimed, rev))) return fail('held');
       return fail('in-doubt');
     case 'invalid': {
       const dead = stampForPush(
