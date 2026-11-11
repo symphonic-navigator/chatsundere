@@ -139,8 +139,8 @@ SemVer with annotated tags `vX.Y.Z`; the whole process is
 - **`master`** is the next minor release. A push builds
   `<version.txt>-pre.<run-number>` images tagged `:master` and runs on
   staging; it never reaches alpha users.
-- **`release/X.Y`** is the maintenance line of the released minor version
-  (now `release/0.3`): newly curated models, security fixes and bug fixes
+- **`maintenance/X.Y`** is the maintenance line of the released minor version
+  (now `maintenance/0.3`): newly curated models, security fixes and bug fixes
   only, forward-ported to `master` the same day.
 - **A tag `vX.Y.Z`** builds `X.Y.Z` images. Only the highest stable tag
   moves `:latest`, which deployments follow.
