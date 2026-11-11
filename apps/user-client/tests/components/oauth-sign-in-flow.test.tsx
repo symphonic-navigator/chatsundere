@@ -178,6 +178,8 @@ describe('OAuthSignInFlow', () => {
       });
       renderFlow({ discovery: undefined, draft: null, state: 's9' });
       await screen.findByText('Waiting for sign-in…');
+      // The expiry timer is scheduled in an effect that may run after the text appears.
+      await waitFor(() => expect(timers.length).toBeGreaterThan(0));
       clockNow += 11 * 60_000;
       act(() => {
         for (const t of [...timers]) t.fn();
@@ -202,6 +204,8 @@ describe('OAuthSignInFlow', () => {
       });
       renderFlow({ discovery: undefined, draft: null, state: 's9' });
       await screen.findByText('Waiting for sign-in…');
+      // The expiry timer is scheduled in an effect that may run after the text appears.
+      await waitFor(() => expect(timers.length).toBeGreaterThan(0));
       clockNow += 11 * 60_000;
       act(() => {
         for (const t of [...timers]) t.fn();
