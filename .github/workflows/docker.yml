@@ -2,10 +2,10 @@ name: Docker Build & Push
 
 on:
   push:
-    branches: [master, "release/**"]
+    branches: [master, "maintenance/**"]
     tags: ["v*.*.*"]
   pull_request:
-    branches: [master, "release/**"]
+    branches: [master, "maintenance/**"]
 
 env:
   REGISTRY: ghcr.io
@@ -80,7 +80,7 @@ jobs:
           # `latest` moves ONLY on the highest stable v*.*.* tag, never on a
           # branch push or a maintenance tag below it — WUD watches :latest, so
           # a release is a conscious tag, not every merge. A push to master or
-          # release/** still builds + pushes a sha-/branch-tagged image,
+          # maintenance/** still builds + pushes a sha-/branch-tagged image,
           # but leaves the live alpha alone.
           tags: |
             type=ref,event=branch
@@ -198,7 +198,7 @@ jobs:
           # `latest` moves ONLY on the highest stable v*.*.* tag, never on a
           # branch push or a maintenance tag below it — WUD watches :latest, so
           # a release is a conscious tag, not every merge. A push to master or
-          # release/** still builds + pushes a sha-/branch-tagged image,
+          # maintenance/** still builds + pushes a sha-/branch-tagged image,
           # but leaves the live alpha alone.
           tags: |
             type=ref,event=branch
