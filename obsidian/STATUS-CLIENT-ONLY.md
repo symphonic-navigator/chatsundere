@@ -8,6 +8,28 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-11 — **MAINTENANCE LINES ADOPTED; OAUTH HARDENING STAGED FOR
+0.3.6.** PR #37 (ADR 0039, [[RELEASE-PROCESS]]) is merged to `master` (`d586e797`) and
+PR #38 to `maintenance/0.3` (`5e8babe3`). `master` now prepares 0.4.0, and
+`maintenance/0.3` prepares 0.3.6.
+- **PR #36 (MCP OAuth grant hardening, closes L2/L4/L3):** rebased off `master` onto
+  `maintenance/0.3`, so the five `[skip ci]` doc commits since `v0.3.5` stay out of it,
+  and retargeted there. Still a draft. Two new `oauth-sign-in-flow` tests raced the
+  effect that schedules the expiry timer and failed under CI load. Fixed in the tests,
+  not the component.
+- **CI is red on `master`, `maintenance/0.3` and #36:** the `beforeEach` hook of
+  `apps/auth-service/tests/integration/admin-users.test.ts` overruns Bun's 5 s default
+  (6 of the last 30 runs, and every run tonight). It is unrelated to #36, and its cause
+  is unconfirmed (presumably two OPAQUE registrations on slow runners).
+
+**Next:** fix the `admin-users` hook timeout on `master` and cherry-pick it to
+`maintenance/0.3` (a CI/test change, so `master` first). Chris device-tests #36's spec §11.
+Then squash-merge #36 into `maintenance/0.3`, forward-port it to `master` the same day
+(`cherry-pick -x`), and add entries to the Kumbu² diaries `0.3.6.md` and `0.4.0.md`.
+No 0.3.6 tag yet.
+
+---
+
 **Last updated:** 2026-11-10 — **v0.3.5 RELEASED: CLAUDE FABLE 5.2 ON NANO-GPT + OAUTH
 FOR MCP.** `v0.3.5` (on `9c7598ad`) is the first tag after the MCP OAuth merge (PR #34,
 `c83ea406`), so it ships both. That merge had no STATUS entry of its own; this one
