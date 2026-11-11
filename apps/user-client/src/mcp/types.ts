@@ -47,6 +47,8 @@ export interface McpConnectionResult {
   /** The auth signal of the last candidate that gave one. */
   auth?: McpAuthSignal;
   scope?: string;
+  /** Set when the grant is paused on this device; the test then says nothing about the route. */
+  held?: true;
 }
 
 /** A resolved auth header (plaintext key already opened). */

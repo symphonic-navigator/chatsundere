@@ -26,6 +26,8 @@ quick; if it has expired, simply start again, which is always fine.
 If a server stops accepting your sign-in, it shows **Sign in again**. Tap it and
 approve at the server once more.
 
+If a device receives an older copy of your sign-in than the one it already has, it shows **Sign-in paused here** and stops using it to keep it safe. Tap **Sign in again**, or wait: it carries on by itself once your devices catch up.
+
 ## On your other devices
 
 A server you added on another device appears here too, marked **Connects on first

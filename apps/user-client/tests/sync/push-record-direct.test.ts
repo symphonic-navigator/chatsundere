@@ -15,9 +15,11 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
+import { QK } from '../../src/data/queryKeys.js';
+import { stampForPush } from '../../src/mcp/oauth/grant-generation.js';
 import { withGrantLock } from '../../src/mcp/oauth/grant-lock.js';
 import { createDexieGrantStore } from '../../src/mcp/oauth/grant-store.js';
-import { _resetApplyForTests, _setApplyOpenRecord } from '../../src/sync/apply.js';
+import { _resetApplyForTests, _setApplyOpenRecord, setInvalidator } from '../../src/sync/apply.js';
 import {
   SYNC_LOCK_NAME,
   _resetWorkerForTests,
@@ -226,7 +228,7 @@ describe('pushRecordDirect', () => {
       mk: MK,
     });
 
-    expect(result).toEqual({ status: 'ok', rev: 7 });
+    expect(result).toEqual({ status: 'ok', rev: 7, written: true });
     expect((await db.mcpOAuthGrants.get(KEY))?.claim).toEqual({ deviceId: 'dev-a', at: 42 });
     const meta = await db.syncRows.get(['mcpOAuthGrants', KEY]);
     expect(meta?.rev).toBe(7);
@@ -270,7 +272,8 @@ describe('pushRecordDirect', () => {
       mk: MK,
     });
 
-    expect(result).toEqual({ status: 'ok', rev: 8 });
+    // Accepted by the server, but the write-back was skipped: the caller must know.
+    expect(result).toEqual({ status: 'ok', rev: 8, written: false });
     expect((await db.mcpOAuthGrants.get(KEY))?.scope).toBe('newer');
     expect((await db.syncRows.get(['mcpOAuthGrants', KEY]))?.rev).toBe(10);
   });
@@ -313,6 +316,156 @@ describe('pushRecordDirect', () => {
     expect(result).toEqual({ status: 'network' });
     expect((await db.mcpOAuthGrants.get(KEY))?.scope).toBe('before');
     expect(await db.syncRows.get(['mcpOAuthGrants', KEY])).toBeUndefined();
+  });
+});
+
+describe('pushRecordDirect — grant generations', () => {
+  it('an ok writes generation, raises seen and clears the hold', async () => {
+    const db = getClientDataDb();
+    const local = grant({ generation: 7, seenGeneration: 7, heldGeneration: 4 });
+    await db.mcpOAuthGrants.put(local);
+    await db.syncRows.put({ collection: 'mcpOAuthGrants', key: KEY, rev: 2, ciphertextHash: 'x' });
+    _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
+
+    await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: stampForPush(local, 7),
+      baseRev: 2,
+      mk: MK,
+    });
+
+    const row = await db.mcpOAuthGrants.get(KEY);
+    expect(row?.generation).toBe(8);
+    expect(row?.seenGeneration).toBe(8);
+    expect(row?.heldGeneration).toBeNull();
+    const sealed = sealedRows[0] as Record<string, unknown>;
+    expect(sealed.generation).toBe(8);
+    expect('seenGeneration' in sealed).toBe(false);
+    expect('heldGeneration' in sealed).toBe(false);
+  });
+
+  it('an ok below the stored mark moves only the revision, never the row', async () => {
+    const db = getClientDataDb();
+    const tokensA = { ...placeholderBlob, ciphertext: new Uint8Array([0xa]) };
+    const tokensB = { ...placeholderBlob, ciphertext: new Uint8Array([0xb]) };
+    // Only a hostile server acknowledges a generation-9 body above a revision seen at 12.
+    await db.mcpOAuthGrants.put(
+      grant({ tokens: tokensA, generation: 12, seenGeneration: 12, heldGeneration: null }),
+    );
+    await db.syncRows.put({ collection: 'mcpOAuthGrants', key: KEY, rev: 2, ciphertextHash: 'x' });
+    _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
+
+    const result = await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: grant({ tokens: tokensB, generation: 9, seenGeneration: 9, heldGeneration: null }),
+      baseRev: 2,
+      mk: MK,
+    });
+
+    expect(result).toEqual({ status: 'ok', rev: 3, written: false });
+    const row = await db.mcpOAuthGrants.get(KEY);
+    expect(Array.from(row?.tokens?.ciphertext ?? [])).toEqual([0xa]);
+    expect(row?.generation).toBe(12);
+    expect(row?.seenGeneration).toBe(12);
+    // Refused like an older pulled copy: held, so a pending pair here would be kept.
+    expect(row?.heldGeneration).toBe(9);
+    const meta = await db.syncRows.get(['mcpOAuthGrants', KEY]);
+    expect(meta?.rev).toBe(3);
+    expect(meta?.ciphertextHash).toBe('x');
+  });
+
+  it('an ok at or above the stored mark raises seen and clears the hold', async () => {
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.put(grant({ generation: 8, seenGeneration: 12, heldGeneration: 4 }));
+    await db.syncRows.put({ collection: 'mcpOAuthGrants', key: KEY, rev: 2, ciphertextHash: 'x' });
+    _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
+
+    await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: grant({ generation: 13, seenGeneration: 13, heldGeneration: null }),
+      baseRev: 2,
+      mk: MK,
+    });
+
+    const row = await db.mcpOAuthGrants.get(KEY);
+    expect(row?.generation).toBe(13);
+    expect(row?.seenGeneration).toBe(13);
+    expect(row?.heldGeneration).toBeNull();
+  });
+
+  it('an ok after an engine reset reports written: false and writes nothing', async () => {
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.put(grant({ scope: 'before' }));
+    await db.syncState.put({
+      id: 'state',
+      epoch: null,
+      watermarkRev: 0,
+      lastSyncAt: null,
+      pulling: null,
+      attention: null,
+      linkGeneration: 1,
+    });
+    _setPushTransport(async (records) => {
+      // A link reset lands while the push is out.
+      await db.syncState.update('state', { linkGeneration: 2 });
+      return respond(records, { status: 'ok', rev: 3 });
+    });
+
+    const result = await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: grant({ scope: 'after' }),
+      baseRev: 0,
+      mk: MK,
+    });
+
+    expect(result).toEqual({ status: 'ok', rev: 3, written: false });
+    expect((await db.mcpOAuthGrants.get(KEY))?.scope).toBe('before');
+  });
+
+  it('a failed push leaves generation and seen untouched', async () => {
+    const db = getClientDataDb();
+    const local = grant({ generation: 7, seenGeneration: 7, heldGeneration: 4 });
+    await db.mcpOAuthGrants.put(local);
+    _setPushTransport(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    const result = await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: stampForPush(local, 7),
+      baseRev: 0,
+      mk: MK,
+    });
+
+    expect(result).toEqual({ status: 'network' });
+    const row = await db.mcpOAuthGrants.get(KEY);
+    expect(row?.generation).toBe(7);
+    expect(row?.seenGeneration).toBe(7);
+    expect(row?.heldGeneration).toBe(4);
+  });
+
+  it('a committed ok for a grant refreshes the grants query', async () => {
+    const db = getClientDataDb();
+    const local = grant({ generation: 7, seenGeneration: 7, heldGeneration: 4 });
+    await db.mcpOAuthGrants.put(local);
+    const flushed: (readonly unknown[])[] = [];
+    setInvalidator((keys) => flushed.push(...keys));
+    _setPushTransport(async (records) => respond(records, { status: 'ok', rev: 3 }));
+
+    await pushRecordDirect({
+      collection: 'mcpOAuthGrants',
+      key: KEY,
+      row: stampForPush(local, 7),
+      baseRev: 0,
+      mk: MK,
+    });
+
+    expect(flushed).toContainEqual(QK.mcpOAuthGrants);
   });
 });
 
@@ -388,7 +541,7 @@ describe('lock order', () => {
         }),
       );
 
-      expect(result).toEqual({ status: 'ok', rev: 3 });
+      expect(result).toEqual({ status: 'ok', rev: 3, written: true });
       expect(fake.held.has(SYNC_LOCK_NAME)).toBe(true);
       expect(fake.requested).toContain('chatsundere-mcp-oauth-srv-1');
       releaseSync();

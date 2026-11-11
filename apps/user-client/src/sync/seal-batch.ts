@@ -2,6 +2,7 @@
 import { toBase64Url } from '@chatsundere/crypto';
 import type { MasterKey, SealedRecord } from '@chatsundere/crypto';
 import type { SyncCollection, SyncPushRecord } from '@chatsundere/shared-types';
+import { generationOf } from '../mcp/oauth/grant-generation.js';
 import { type NewBlob, isBlobCollection, stripBlobsForSeal } from './blob-transform.js';
 import { hashRow } from './content-hash.js';
 import { stripForSeal } from './strip.js';
@@ -76,6 +77,12 @@ export interface PreparedRecord {
    * behaviour rather than failing the push.
    */
   contentHashB64: string | null;
+  /**
+   * The grant generation this record carries (MCP OAuth hardening spec §5.2), read
+   * from the raw row at seal time so the `ok` acknowledges exactly what was pushed,
+   * never a row edited since. Set only for `mcpOAuthGrants` upserts.
+   */
+  grantGeneration?: number;
   /** Summed encoded size used for byte-batching. */
   encodedBytes: number;
   /**
@@ -195,6 +202,9 @@ export async function prepareRecord(
     record,
     ciphertextHashB64,
     contentHashB64,
+    ...(collection === 'mcpOAuthGrants'
+      ? { grantGeneration: generationOf(entry.row as { generation?: number }) }
+      : {}),
     encodedBytes: encodedBytesOf(record),
     newBlobs,
   };

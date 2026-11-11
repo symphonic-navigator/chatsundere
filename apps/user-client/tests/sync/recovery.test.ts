@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
-import { type SealedRecord, fromBase64Url } from '@chatsundere/crypto';
-import type { SyncPullResponse, SyncPushRecord } from '@chatsundere/shared-types';
+import { type MasterKey, type SealedRecord, fromBase64Url, toBase64Url } from '@chatsundere/crypto';
+import type {
+  SyncPullResponse,
+  SyncPulledRecord,
+  SyncPushRecord,
+  SyncPushResponse,
+  SyncPushResult,
+} from '@chatsundere/shared-types';
 import {
   useAccountLinkStore,
   useConnectivityStore,
@@ -10,6 +16,7 @@ import {
 } from '@chatsundere/ui-shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  type McpOAuthGrantRow,
   _resetClientDataDbForTests,
   getClientDataDb,
   openClientDataDb,
@@ -25,7 +32,12 @@ import {
 } from '../../src/sync/recovery.js';
 import { getSyncState } from '../../src/sync/watermark.js';
 import { isRecovering } from '../../src/sync/watermark.js';
-import { _resetWorkerForTests, _setCryptoDeps, _setPushTransport } from '../../src/sync/worker.js';
+import {
+  _resetWorkerForTests,
+  _setCryptoDeps,
+  _setOpenRecord,
+  _setPushTransport,
+} from '../../src/sync/worker.js';
 
 function fakeSealed(collection: string, key: string): SealedRecord {
   return {
@@ -258,5 +270,201 @@ describe('runRecovery — settings server-wins still honours the replay guard (I
     // The replay guard kept the newer local settings — NOT rolled back to 1000.
     const settings = await db.settings.get(1);
     expect((settings as unknown as { updatedAt: number }).updatedAt).toBe(2000);
+  });
+});
+
+// ===== MCP OAuth hardening §5.4 — epoch recovery heals a refused grant =====
+
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+async function jsonSeal(
+  _mk: MasterKey,
+  collection: string,
+  key: string,
+  row: unknown,
+): Promise<SealedRecord> {
+  const ciphertext = enc.encode(JSON.stringify(row));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', ciphertext as BufferSource);
+  return {
+    blindId: enc.encode(`bid:${collection}:${key}`),
+    envelopeVersion: 1,
+    nonce: new Uint8Array([0]),
+    ciphertext,
+    ciphertextHash: new Uint8Array(digest),
+  };
+}
+
+async function jsonOpen(
+  _mk: MasterKey,
+  _collection: string,
+  _blindId: Uint8Array,
+  sealed: { nonce: Uint8Array; ciphertext: Uint8Array },
+): Promise<unknown> {
+  return JSON.parse(dec.decode(sealed.ciphertext));
+}
+
+/** A restored server: compare-and-set on revisions, `failNextPush` stores and then fails. */
+class RestoredServer {
+  readonly log = new Map<string, SyncPulledRecord>();
+  readonly pushed: SyncPushRecord[] = [];
+  readonly results: SyncPushResult[] = [];
+  failNextPush = false;
+  constructor(public rev: number) {}
+
+  push(records: SyncPushRecord[]): SyncPushResponse {
+    const results: SyncPushResult[] = [];
+    for (const rec of records) {
+      this.pushed.push(rec);
+      const cur = this.log.get(rec.blindId);
+      if (rec.baseRev !== (cur?.rev ?? 0)) {
+        results.push({
+          status: 'conflict',
+          current: cur ?? {
+            blindId: rec.blindId,
+            collection: rec.collection,
+            rev: 0,
+            deleted: true,
+          },
+        });
+        continue;
+      }
+      this.rev += 1;
+      this.log.set(rec.blindId, {
+        blindId: rec.blindId,
+        collection: rec.collection,
+        envelopeVersion: 1,
+        rev: this.rev,
+        deleted: false,
+        nonce: rec.nonce,
+        ciphertext: rec.ciphertext,
+        ciphertextHash: rec.ciphertextHash,
+      });
+      results.push({ status: 'ok', rev: this.rev });
+    }
+    if (this.failNextPush) {
+      this.failNextPush = false;
+      throw new TypeError('Failed to fetch');
+    }
+    this.results.push(...results);
+    return { head: this.rev, epoch: 'E2', results };
+  }
+
+  pull(since: number): SyncPullResponse {
+    const records = [...this.log.values()].filter((r) => r.rev > since);
+    return { head: this.rev, epoch: 'E2', more: false, records };
+  }
+
+  async seed(row: McpOAuthGrantRow, rev: number): Promise<void> {
+    const sealed = await jsonSeal({} as MasterKey, 'mcpOAuthGrants', row.id, row);
+    const blindId = toBase64Url(sealed.blindId);
+    this.log.set(blindId, {
+      blindId,
+      collection: 'mcpOAuthGrants',
+      envelopeVersion: 1,
+      rev,
+      deleted: false,
+      nonce: toBase64Url(sealed.nonce),
+      ciphertext: toBase64Url(sealed.ciphertext),
+      ciphertextHash: toBase64Url(sealed.ciphertextHash),
+    });
+  }
+}
+
+function oauthGrant(overrides: Partial<McpOAuthGrantRow> = {}): McpOAuthGrantRow {
+  return {
+    id: 'srv-1',
+    resource: 'https://mcp.example/mcp',
+    issuer: 'https://auth.example',
+    tokenEndpoint: 'https://auth.example/token',
+    revocationEndpoint: null,
+    clientId: 'client-1',
+    registration: 'dcr',
+    scope: null,
+    tokenRoute: 'direct',
+    tokens: null,
+    claim: null,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  };
+}
+
+function wireRestoredServer(server: RestoredServer): void {
+  _setCryptoDeps({
+    computeBlindId: async (_mk, collection, key) => enc.encode(`bid:${collection}:${key}`),
+    sealRecord: jsonSeal,
+  });
+  _setOpenRecord(jsonOpen);
+  _setApplyOpenRecord(jsonOpen);
+  _setRecoveryPull(async (since) => server.pull(since));
+  _setPushTransport(async (records) => server.push(records));
+}
+
+function generationIn(rec: SyncPushRecord | undefined): unknown {
+  if (!rec?.ciphertext) return undefined;
+  return (JSON.parse(dec.decode(fromBase64Url(rec.ciphertext))) as { generation?: number })
+    .generation;
+}
+
+describe('runRecovery — a refused OAuth grant heals itself', () => {
+  it('an honest restore heals itself', async () => {
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.put(oauthGrant({ generation: 9, seenGeneration: 9 }));
+    await db.syncRows.put({
+      collection: 'mcpOAuthGrants',
+      key: 'srv-1',
+      rev: 20,
+      ciphertextHash: 'h',
+    });
+    const server = new RestoredServer(3);
+    await server.seed(oauthGrant({ generation: 4 }), 3);
+    wireRestoredServer(server);
+
+    await runRecovery();
+
+    const repush = server.pushed.find((r) => r.collection === 'mcpOAuthGrants');
+    expect(repush?.baseRev).toBe(3);
+    expect(generationIn(repush)).toBe(9);
+    const row = await db.mcpOAuthGrants.get('srv-1');
+    expect(row?.heldGeneration).toBeNull();
+    expect(row?.seenGeneration).toBe(9);
+    expect(await db.syncOutbox.count()).toBe(0);
+  });
+
+  it('a failed recovery drain heals on the re-run and leaves no conflicting entry', async () => {
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.put(oauthGrant({ generation: 9, seenGeneration: 9 }));
+    await db.syncRows.put({
+      collection: 'mcpOAuthGrants',
+      key: 'srv-1',
+      rev: 20,
+      ciphertextHash: 'h',
+    });
+    const server = new RestoredServer(20);
+    await server.seed(oauthGrant({ generation: 4 }), 3);
+    wireRestoredServer(server);
+
+    // The server stores our gen-9 record (above rev 20), but the drain never hears back.
+    server.failNextPush = true;
+    await expect(runRecovery()).rejects.toThrow();
+    expect((await db.mcpOAuthGrants.get('srv-1'))?.heldGeneration).toBe(4);
+    const stored = server.log.get(toBase64Url(enc.encode('bid:mcpOAuthGrants:srv-1')));
+    expect(generationIn(stored as SyncPushRecord | undefined)).toBe(9);
+    expect(stored?.rev).toBeGreaterThan(20);
+    expect((await getSyncState()).epoch).toBeNull();
+
+    await runRecovery();
+
+    const row = await db.mcpOAuthGrants.get('srv-1');
+    expect(row?.heldGeneration).toBeNull();
+    expect(row?.seenGeneration).toBe(9);
+    const retried = server.pushed.filter((r) => r.collection === 'mcpOAuthGrants').at(-1);
+    expect(retried?.baseRev).toBe(stored?.rev);
+    expect(generationIn(retried)).toBe(9);
+    expect(server.results.length).toBeGreaterThan(0);
+    expect(server.results.every((r) => r.status === 'ok')).toBe(true);
+    expect(await db.syncOutbox.count()).toBe(0);
+    expect((await getSyncState()).epoch).toBe('E2');
   });
 });

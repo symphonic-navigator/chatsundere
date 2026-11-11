@@ -17,6 +17,8 @@ export type OAuthDiscovery = {
   cimdSupported: boolean;
   issParameterSupported: boolean;
   scope: string | null;
+  /** True when any sign-in detail used came through the proxy, the proxied challenge included. */
+  viaProxy: boolean;
 };
 
 /** Outcome of probing a server: OAuth, or a plain key server. */
@@ -136,51 +138,56 @@ export async function discoverOAuth(
   await probe.body?.cancel();
   if (probe.status !== 401) return { kind: 'no-oauth' };
   const challenge = parseBearerChallenge(probe.headers.get('www-authenticate') ?? '');
+  // Anything taken from this challenge passed through the user's server when the probe did.
+  const challengeViaProxy = route === 'proxy';
 
-  // 2. Protected resource metadata: the challenge's pointer, then the two well-known paths.
-  const getResource = async (target: string): Promise<Read> => {
+  // A GET spends nothing, so trying direct and then the proxy cannot lose a credential.
+  // The probe's route is deliberately not reused: a probe that needed the proxy says
+  // nothing about whether these documents do.
+  const getDirectFirst = async (
+    target: string,
+  ): Promise<{ read: Read; viaProxy: boolean } | 'network'> => {
+    const attempt = async (r: 'direct' | 'proxy'): Promise<Read> =>
+      readJsonObject(await oauthFetch(target, { method: 'GET' }, { route: r }));
     try {
-      return await readJsonObject(await oauthFetch(target, { method: 'GET' }, { route }));
+      return { read: await attempt('direct'), viaProxy: false };
+    } catch (err) {
+      if (!(err instanceof TypeError) || !hasProxy) return 'network';
+    }
+    try {
+      return { read: await attempt('proxy'), viaProxy: true };
     } catch {
-      return { status: 'missing' };
+      return 'network';
     }
   };
 
+  // 2. Protected resource metadata: the challenge's pointer, then the two well-known paths.
   let prm: Json | null = null;
+  let viaProxy = false;
   if (challenge?.resourceMetadata !== undefined) {
     assertSecureEndpoint(challenge.resourceMetadata, 'resource metadata');
     // The server named this document itself, so a network failure is not "no OAuth".
-    // A GET spends nothing, which makes the proxy fallback safe.
-    const pointer = challenge.resourceMetadata;
-    let read: Read;
-    try {
-      read = await readJsonObject(await oauthFetch(pointer, { method: 'GET' }, { route }));
-    } catch {
-      if (route === 'direct' && hasProxy) {
-        try {
-          read = await readJsonObject(
-            await oauthFetch(pointer, { method: 'GET' }, { route: 'proxy' }),
-          );
-        } catch {
-          throw new OAuthError('network', "Couldn't reach this server's sign-in details.");
-        }
-      } else {
-        throw new OAuthError('network', "Couldn't reach this server's sign-in details.");
-      }
+    const got = await getDirectFirst(challenge.resourceMetadata);
+    if (got === 'network') {
+      throw new OAuthError('network', "Couldn't reach this server's sign-in details.");
     }
-    if (read.status === 'invalid') {
+    if (got.read.status === 'invalid') {
       throw new OAuthError('bad-metadata', "This server's sign-in details could not be read.");
     }
-    if (read.status === 'ok') prm = read.value;
+    if (got.read.status === 'ok') {
+      prm = got.read.value;
+      viaProxy = got.viaProxy || challengeViaProxy;
+    }
   }
   if (prm === null) {
     const wk = `${resourceUrl.origin}/.well-known/oauth-protected-resource`;
     const guesses = resourceUrl.pathname === '/' ? [wk] : [`${wk}${resourceUrl.pathname}`, wk];
     for (const guess of guesses) {
-      const read = await getResource(guess);
-      // A guessed path that answers with junk is just a server without OAuth.
-      if (read.status === 'ok') {
-        prm = read.value;
+      const got = await getDirectFirst(guess);
+      // A guessed path that is unreachable or answers with junk is just a server without OAuth.
+      if (got !== 'network' && got.read.status === 'ok') {
+        prm = got.read.value;
+        viaProxy = got.viaProxy;
         break;
       }
     }
@@ -220,34 +227,20 @@ export async function discoverOAuth(
           `${issuerUrl.origin}${issuerPath}/.well-known/openid-configuration`,
         ];
 
-  // A GET spends nothing, so trying direct and then the proxy cannot lose a credential.
-  const getAs = async (target: string): Promise<Read | 'network'> => {
-    const attempt = async (r: 'direct' | 'proxy'): Promise<Read> =>
-      readJsonObject(await oauthFetch(target, { method: 'GET' }, { route: r }));
-    try {
-      return await attempt('direct');
-    } catch (err) {
-      if (!(err instanceof TypeError) || !hasProxy) return 'network';
-    }
-    try {
-      return await attempt('proxy');
-    } catch {
-      return 'network';
-    }
-  };
-
   let meta: Json | null = null;
+  let asViaProxy = false;
   let sawNetworkFailure = false;
   let sawInvalid = false;
   for (const candidate of candidates) {
-    const read = await getAs(candidate);
-    if (read === 'network') {
+    const got = await getDirectFirst(candidate);
+    if (got === 'network') {
       sawNetworkFailure = true;
-    } else if (read.status === 'invalid') {
+    } else if (got.read.status === 'invalid') {
       // Another candidate may still serve a proper document.
       sawInvalid = true;
-    } else if (read.status === 'ok') {
-      meta = read.value;
+    } else if (got.read.status === 'ok') {
+      meta = got.read.value;
+      asViaProxy = got.viaProxy;
       break;
     }
   }
@@ -303,5 +296,6 @@ export async function discoverOAuth(
     cimdSupported: meta.client_id_metadata_document_supported === true,
     issParameterSupported: meta.authorization_response_iss_parameter_supported === true,
     scope: composeScope(base, strings(meta.scopes_supported)),
+    viaProxy: viaProxy || asViaProxy || (challengeScope !== null && challengeViaProxy),
   };
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { describe, expect, it } from 'bun:test';
 import { toBase64Url } from '../../src/encoding/base64url.js';
-import { computeBlindId } from '../../src/sync-envelope/blind-index.js';
+import { computeBlindId, deriveDek, encodeRow } from '../../src/index.js';
 import { PADDED_COLLECTIONS, openRecord, sealRecord } from '../../src/sync-envelope/seal.js';
 import { asMasterKey } from '../../src/types.js';
 
@@ -84,6 +84,46 @@ describe('sealRecord / openRecord', () => {
     // unpadded: plaintext = 4 (prefix) + json length; ciphertext = plaintext + 16
     const json = new TextEncoder().encode(JSON.stringify({ id: 'c1', title: 'hi' }));
     expect(chats.ciphertext.length).toBe(4 + json.length + 16);
+    const grants = await sealRecord(mk, 'mcpOAuthGrants', 'g1', { id: 'g1', tokens: null });
+    expect(PADDED_COLLECTIONS.has('mcpOAuthGrants')).toBe(true);
+    expect((grants.ciphertext.length - 16) % 1024).toBe(0);
+  });
+
+  it('opens an unpadded grant record sealed before padding', async () => {
+    const row = { id: 'g1', tokens: null };
+    const blindId = await computeBlindId(mk, 'mcpOAuthGrants', row.id);
+    // Hand-built legacy record: 4-byte LE length prefix + JSON, no bucket padding.
+    const encoded = encodeRow(row);
+    const plaintext = new Uint8Array(4 + encoded.length);
+    new DataView(plaintext.buffer).setUint32(0, encoded.length, true);
+    plaintext.set(encoded, 4);
+    const enc = new TextEncoder();
+    const aadParts = [enc.encode('chatsundere-sync-v1'), enc.encode('mcpOAuthGrants'), blindId];
+    const aad = new Uint8Array(aadParts.reduce((n, p) => n + p.length, 0));
+    let off = 0;
+    for (const part of aadParts) {
+      aad.set(part, off);
+      off += part.length;
+    }
+    const dek = await deriveDek(mk, 'sync/collection/mcpOAuthGrants-v1');
+    const key = await crypto.subtle.importKey(
+      'raw',
+      dek as BufferSource,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt'],
+    );
+    const nonce = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: aad },
+        key,
+        plaintext as BufferSource,
+      ),
+    );
+    expect(await openRecord(mk, 'mcpOAuthGrants', blindId, { nonce, ciphertext }, byId)).toEqual(
+      row,
+    );
   });
 
   it('ciphertextHash equals SHA-256(ciphertext)', async () => {

@@ -4,9 +4,15 @@ import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
 import { getDeviceId, sealSpentRefresh, sealTokens } from '../../data/mcp-oauth-grants.js';
 import { isProxyAvailable } from '../../lib/proxy-auth.js';
+import {
+  generationOf,
+  hasPendingNewSignIn,
+  isGrantHeld,
+  stampForPush,
+} from './grant-generation.js';
 import { type GrantLockFn, withGrantLock } from './grant-lock.js';
 import { type PublishOutcome, openTokensSafe, publishPending } from './grant-publish.js';
-import { type GrantStore, createDexieGrantStore } from './grant-store.js';
+import { type AdoptOutcome, type GrantStore, createDexieGrantStore } from './grant-store.js';
 import { type OAuthFetch, createOAuthFetch } from './oauth-fetch.js';
 import { type TokenSet, refreshTokens } from './token-client.js';
 import { OAuthError } from './url.js';
@@ -38,7 +44,10 @@ const MAX_STEPS = 64;
 /** The outcome of asking for a usable access token. */
 export type EnsureResult =
   | { ok: true; accessToken: string }
-  | { ok: false; reason: 'dead' | 'no-grant' | 'waiting' | 'in-doubt' | 'locked' | 'no-proxy' };
+  | {
+      ok: false;
+      reason: 'dead' | 'no-grant' | 'waiting' | 'in-doubt' | 'locked' | 'no-proxy' | 'held';
+    };
 
 /** Collaborators of the refresh algorithm; all time comes from here so tests can drive it. */
 export interface EnsureDeps {
@@ -72,6 +81,15 @@ const fail = (reason: Extract<EnsureResult, { ok: false }>['reason']): EnsureRes
   reason,
 });
 const ok = (accessToken: string): EnsureResult => ({ ok: true, accessToken });
+
+/**
+ * Whether the hold stops this row (MCP OAuth hardening spec §5.4). A new sign-in's
+ * pending pair is never blocked: it is this device's own fresh grant, and its `ok`
+ * clears the hold.
+ */
+export function isHoldBlocking(row: McpOAuthGrantRow): boolean {
+  return isGrantHeld(row) && !hasPendingNewSignIn(row);
+}
 
 /** One per tab: a lease is observed across many calls of at most 20 s each. */
 const observations = new Map<string, { rev: number; since: number }>();
@@ -193,15 +211,37 @@ async function present(
   }
 }
 
-/** Releases our claim by compare-and-set at the claim's revision; the outcome is advisory. */
-async function releaseClaim(run: Run, claimed: McpOAuthGrantRow, rev: number): Promise<void> {
-  const result = await run.deps.store.push({ ...claimed, claim: null }, rev, run.mk);
-  if (result.status === 'conflict') await run.deps.store.adopt(result.current);
+/**
+ * Releases our claim by compare-and-set at the claim's revision. The push is advisory;
+ * the returned adopt outcome of a conflict (null without one) tells the caller whether
+ * the server answered with an older generation it must hold off.
+ */
+async function releaseClaim(
+  run: Run,
+  claimed: McpOAuthGrantRow,
+  rev: number,
+): Promise<AdoptOutcome | null> {
+  const released = stampForPush({ ...claimed, claim: null }, generationOf(claimed));
+  const result = await run.deps.store.push(released, rev, run.mk);
+  if (result.status !== 'conflict') return null;
+  return run.deps.store.adopt(result.current);
 }
 
-/** After `adopted`: the adopted row's token when usable, otherwise `fallback`. */
+/**
+ * Whether a release conflict left the grant held. A `stale` adopt does not clear it: a
+ * pull may already have refused that very record and set the hold.
+ */
+async function heldAfterRelease(run: Run, released: AdoptOutcome | null): Promise<boolean> {
+  if (released === null) return false;
+  if (released === 'refused') return true;
+  const snap = await run.deps.store.snapshot(run.serverId);
+  return snap !== null && isHoldBlocking(snap.row);
+}
+
+/** After `adopted`: the adopted row's token when usable and not held, otherwise `fallback`. */
 async function adoptedOr(run: Run, fallback: EnsureResult): Promise<EnsureResult> {
   const snap = await run.deps.store.snapshot(run.serverId);
+  if (snap && isHoldBlocking(snap.row)) return fail('held');
   const t = snap ? await openTokensSafe(snap.row.tokens, run.mk, run.serverId) : null;
   return t && t !== 'corrupt' && usable(t, run) ? ok(t.accessToken) : fallback;
 }
@@ -220,20 +260,25 @@ async function refreshUnderClaim(
     case 'frozen':
       // Nothing went out, so the token is unspent: release the claim rather than leave
       // every device waiting out a lease over it.
-      if (!outcome.sent) await releaseClaim(run, claimed, rev);
+      if (!outcome.sent && (await heldAfterRelease(run, await releaseClaim(run, claimed, rev)))) {
+        return fail('held');
+      }
       return null;
     case 'failed':
-      await releaseClaim(run, claimed, rev);
+      if (await heldAfterRelease(run, await releaseClaim(run, claimed, rev))) return fail('held');
       return fail('waiting');
     case 'in-doubt':
-      await releaseClaim(run, claimed, rev);
+      if (await heldAfterRelease(run, await releaseClaim(run, claimed, rev))) return fail('held');
       return fail('in-doubt');
     case 'invalid': {
-      const dead = { ...claimed, tokens: null, claim: null, updatedAt: deps.wallNow() };
+      const dead = stampForPush(
+        { ...claimed, tokens: null, claim: null, updatedAt: deps.wallNow() },
+        generationOf(claimed),
+      );
       const result = await deps.store.push(dead, rev, mk);
       if (result.status !== 'conflict') return fail('dead');
       // Never overwrite a newer row: it may be a new sign-in.
-      await deps.store.adopt(result.current);
+      if ((await deps.store.adopt(result.current)) === 'refused') return fail('held');
       return adoptedOr(run, fail('dead'));
     }
     case 'ok':
@@ -256,6 +301,12 @@ async function refreshUnderClaim(
   const published = await publishPending(serverId, deps, mk);
   if (published === 'discarded') return fail('dead');
   if (published === 'adopted') return adoptedOr(run, ok(pair.accessToken));
+  if (published === 'kept') {
+    // A refusal may have landed since the claim (plan D-9): the fresh pair stays pending
+    // and our claim stays on the row, so no device presents the spent token meanwhile.
+    const snap = await deps.store.snapshot(serverId);
+    if (snap && isHoldBlocking(snap.row)) return fail('held');
+  }
   return ok(pair.accessToken);
 }
 
@@ -275,12 +326,16 @@ async function linkedFlow(run: Run): Promise<EnsureResult> {
     // Step 2.
     let snap = await deps.store.snapshot(serverId);
     if (!snap) return fail('no-grant');
+    // Checked at every snapshot, not only on entry: a pull may refuse an older copy at
+    // any point, and the next claim would otherwise be pushed over it.
+    if (isHoldBlocking(snap.row)) return fail('held');
     // Step 3.
     if (snap.row.pendingTokens) {
       const outcome: PublishOutcome = await publishPending(serverId, deps, mk);
       if (outcome === 'discarded') return fail('dead');
       snap = await deps.store.snapshot(serverId);
       if (!snap) return fail('no-grant');
+      if (isHoldBlocking(snap.row)) return fail('held');
       if (snap.row.pendingTokens) return pendingAnswer(run, snap.row);
     }
     const { row, rev } = snap;
@@ -309,14 +364,15 @@ async function linkedFlow(run: Run): Promise<EnsureResult> {
     if (row.tokenRoute === 'proxy' && !deps.hasProxy) return fail('no-proxy');
     // Taken before the push, so a freeze while its answer is in flight also counts.
     const wonAt = { wall: deps.wallNow(), mono: deps.monotonicNow() };
-    const claimed: McpOAuthGrantRow = {
-      ...row,
-      claim: { deviceId: deps.deviceId, at: wonAt.wall },
-    };
+    // Stamped, so the release and `invalid_grant` pushes over it land one generation higher.
+    const claimed = stampForPush(
+      { ...row, claim: { deviceId: deps.deviceId, at: wonAt.wall } },
+      generationOf(row),
+    );
     const result = await deps.store.push(claimed, rev, mk);
     if (result.status === 'conflict') {
       claimConflicts++;
-      await deps.store.adopt(result.current);
+      if ((await deps.store.adopt(result.current)) === 'refused') return fail('held');
       if (claimConflicts >= MAX_CLAIM_CONFLICTS) return fail('waiting');
       continue;
     }

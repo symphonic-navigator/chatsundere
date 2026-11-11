@@ -34,6 +34,7 @@ function discovery(resource: string): OAuthDiscovery {
     revocationEndpoint: null,
     cimdSupported: true,
     issParameterSupported: false,
+    viaProxy: false,
     scope: null,
   };
 }
