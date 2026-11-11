@@ -2,10 +2,10 @@ name: Docker Build & Push
 
 on:
   push:
-    branches: [master]
+    branches: [master, "maintenance/**"]
     tags: ["v*.*.*"]
   pull_request:
-    branches: [master]
+    branches: [master, "maintenance/**"]
 
 env:
   REGISTRY: ghcr.io
@@ -59,23 +59,37 @@ jobs:
           echo "built_at=$BUILT_AT" >> $GITHUB_OUTPUT
           echo "Resolved version: $VERSION (sha=$SHORT_SHA built_at=$BUILT_AT)"
 
+      - name: Is this the highest stable release?
+        id: highest
+        # A maintenance release (v0.3.7 after v0.4.0) must not move `latest` or the
+        # major tag back: WUD follows `latest`. Only the highest stable tag does.
+        run: |
+          HIGHEST=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [[ -n "$HIGHEST" && "$GITHUB_REF" == "refs/tags/$HIGHEST" ]]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Highest stable release: ${HIGHEST:-none} (this ref: $GITHUB_REF)"
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.FRONTEND_IMAGE }}
-          # `latest` moves ONLY on a v*.*.* tag push, never on a plain master
-          # push — WUD watches :latest, so a release is a conscious tag,
-          # not every merge. A master push still builds + pushes a sha-/branch-
-          # tagged image to keep the build green, but leaves the live alpha alone.
+          # `latest` moves ONLY on the highest stable v*.*.* tag, never on a
+          # branch push or a maintenance tag below it — WUD watches :latest, so
+          # a release is a conscious tag, not every merge. A push to master or
+          # maintenance/** still builds + pushes a sha-/branch-tagged image,
+          # but leaves the live alpha alone.
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{major}},enable=${{ steps.highest.outputs.latest == 'true' }}
             type=sha
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ steps.highest.outputs.latest == 'true' }}
 
       - name: Build and push Docker image
         id: build-and-push
@@ -163,23 +177,37 @@ jobs:
           echo "built_at=$BUILT_AT" >> $GITHUB_OUTPUT
           echo "Resolved version: $VERSION (sha=$SHORT_SHA built_at=$BUILT_AT)"
 
+      - name: Is this the highest stable release?
+        id: highest
+        # A maintenance release (v0.3.7 after v0.4.0) must not move `latest` or the
+        # major tag back: WUD follows `latest`. Only the highest stable tag does.
+        run: |
+          HIGHEST=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [[ -n "$HIGHEST" && "$GITHUB_REF" == "refs/tags/$HIGHEST" ]]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Highest stable release: ${HIGHEST:-none} (this ref: $GITHUB_REF)"
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.BACKEND_IMAGE }}
-          # `latest` moves ONLY on a v*.*.* tag push, never on a plain master
-          # push — WUD watches :latest, so a release is a conscious tag,
-          # not every merge. A master push still builds + pushes a sha-/branch-
-          # tagged image to keep the build green, but leaves the live alpha alone.
+          # `latest` moves ONLY on the highest stable v*.*.* tag, never on a
+          # branch push or a maintenance tag below it — WUD watches :latest, so
+          # a release is a conscious tag, not every merge. A push to master or
+          # maintenance/** still builds + pushes a sha-/branch-tagged image,
+          # but leaves the live alpha alone.
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{major}},enable=${{ steps.highest.outputs.latest == 'true' }}
             type=sha
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ steps.highest.outputs.latest == 'true' }}
 
       - name: Build and push Docker image
         id: build-and-push

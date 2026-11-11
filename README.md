@@ -132,21 +132,25 @@ run locally — never in CI, since provider keys never enter CI. The skill's
 
 ## Versioning & deployment
 
-This repo follows a `version.txt`-driven scheme adapted from
-[chatsune](https://github.com/symphonic-navigator/chatsune). The base
-version lives in `version.txt` at the repo root.
+SemVer with annotated tags `vX.Y.Z`; the whole process is
+[`obsidian/RELEASE-PROCESS.md`](obsidian/RELEASE-PROCESS.md)
+([ADR 0039](obsidian/decisions/0039-maintenance-branches-and-version-diary.md)).
 
-- A push to `master` builds `<base>-pre.<run-number>` and deploys to
-  `https://teaser.chatsundere.me/alpha/`.
-- A push of an annotated tag `vX.Y.Z` (matching `version.txt`) builds
-  `X.Y.Z` and replaces the `/alpha/` deployment.
+- **`master`** is the next minor release. A push builds
+  `<version.txt>-pre.<run-number>` images tagged `:master` and runs on
+  staging; it never reaches alpha users.
+- **`maintenance/X.Y`** is the maintenance line of the released minor version
+  (now `maintenance/0.3`): newly curated models, security fixes and bug fixes
+  only, forward-ported to `master` the same day.
+- **A tag `vX.Y.Z`** builds `X.Y.Z` images. Only the highest stable tag
+  moves `:latest`, which deployments follow.
+- **GitHub Pages** serves two artefacts: the public teaser site, from
+  `master` on every push, and the alpha PWA at
+  `https://teaser.chatsundere.me/alpha/`, always built from the highest
+  stable tag. There is intentionally no link from the teaser to the alpha;
+  access is invite-only by URL.
 
-The current alpha-deploy is a PWA served from GitHub Pages alongside
-the public teaser site. There is intentionally no link from the teaser
-to the alpha — access is invite-only by URL.
-
-See `superpowers/specs/2026-05-26-phase-4-alpha-prep-design.md` for
-the full design.
+`version.txt` at the repo root holds the version a branch is preparing.
 
 ## Licensing
 
