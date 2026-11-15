@@ -57,3 +57,4 @@ For small, contained decisions (a variable name, a layout choice), a code commen
 - [0027](0027-step-up-authentication-policy.md) — Step-up authentication policy: tiers, mechanisms, and grace windows
 - [0038](0038-oauth-for-mcp-connectors.md) — OAuth for MCP connectors is client-side, and tokens sync as ciphertext
 - [0039](0039-maintenance-branches-and-version-diary.md) — Maintenance branches, forward-ported models and a version diary
+- [0040](0040-filter-juvenile-voices.md) — Juvenile voices are filtered out, openly
