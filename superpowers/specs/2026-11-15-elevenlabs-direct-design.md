@@ -128,6 +128,9 @@ alone satisfies the hard constraint; the builder chooses.)
   is never used for chat; the builder either widens the type (`'none'`) or leaves the value
   with a comment. Settle it in the plan.
 - Trust on every offering: `{ tee: false, zdr: false, jurisdiction: 'US' }`.
+- `freedomOrientedDeployment: null` (the **Uncensored?** badge) and `confidence: 'verified'` after
+  curation. Decided by Chris: `null` until his manual moderation test (§11, step 10). If nothing is
+  refused there, it becomes `true`.
 - `catalogue/schema.ts` (`TtsOfferingMetaSchema` and the STT schema) gains the new `transport`
   value and voice `endpoint`; otherwise the catalogue entries fail validation.
 - The probe reads `{ data: [...] }` for a model count; ElevenLabs' `/v1/models` returns a bare
@@ -269,6 +272,12 @@ above the list:
   action (no dead end).
 - Empty account (none at all, or none left after the juvenile filter) with no search or filter
   active: "No voices on your ElevenLabs account yet — add them on the ElevenLabs website."
+- **Open about the filter:** when the juvenile filter removed at least one voice, a quiet line at
+  the foot of the list says "2 voices hidden by our juvenile-voice rule" (singular for one). It is
+  always shown when the count is above zero and is not dismissable. Decided by Chris, because we
+  set this limit openly: hard against harm, as free as possible as long as nobody comes to harm
+  (John Stuart Mill's harm principle). `listTtsVoices` therefore makes the hidden count available
+  next to the list (the exact return shape is the builder's call).
 - **No autofocus** on the search field (the mobile keyboard would cover the list). Each time the
   picker opens, search is empty and the filters are back on **All / Any**.
 - Sources without metadata (Grok, the nano-gpt static list) render exactly as today.
@@ -323,7 +332,14 @@ the stale case.
 `obsidian/decisions/0040-filter-juvenile-voices.md`, Nygard style: context (ElevenLabs account
 voices, no child label, the SCAI line), decision (hard keyword filter in `llm-unified`, list in
 a data file, synthesis guard), consequences (accepted false positives, the list grows by
-curation only, never by heuristics, and applies to every future voice provider with metadata).
+curation only, never by heuristics, and applies to every future voice provider with metadata; the
+picker states the hidden count openly).
+
+The ADR also records the stance in both directions, in Chris's words: hard against harm, as free
+as possible as long as nobody comes to harm (John Stuart Mill). It secures the reference deployment
+and sets a clear sign. Chatsundere cannot control what others do with the software. But under the
+AGPLv3 a deployer who removes the filter and offers the modified app to users has to publish that
+source, and so has to answer publicly why they make such a thing possible.
 
 ## 9. Curation records
 
@@ -348,7 +364,8 @@ one does, `passthrough` gets a narrow strip list for this transport, not a trans
     (`girl`, `young`, "kind and warm");
   - offerings registry entries.
 - **user-client (Vitest):** picker search and both filters; empty result with clear; stale-ID
-  hint names the service and appears only when loaded; empty-account state; "Test a model"
+  hint names the service and appears only when loaded; empty-account state; the hidden-count
+  line (absent at zero, singular and plural); "Test a model"
   disabled with a reason for a voice-only provider; `resolveTts` refuses an unknown ID on every
   listed source, before the cache lookup, falls back to the main voice for a stale narrator ID, and
   returns `voices-unavailable` when the ElevenLabs list cannot load; the shared memo is invalidated
@@ -385,7 +402,8 @@ one does, `passthrough` gets a narrow strip list for this transport, not a trans
 11. **Dictation.** Dictation service → **Scribe via ElevenLabs**, dictate a sentence and laugh
     once. Pass: the text is right, with no "[laughs]" inserted.
 12. **Juvenile filter.** On the ElevenLabs website, add a library voice named like "… Kid …"
-    or "… Teen …" to your account, then reopen the picker. Pass: it does not appear.
+    or "… Teen …" to your account, then reopen the picker (no app reload). Pass: it does not
+    appear, and the foot of the list says "1 voice hidden by our juvenile-voice rule".
 
 ## 12. The 0.4.0 ElevenLabs track
 
