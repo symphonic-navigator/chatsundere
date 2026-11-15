@@ -35,7 +35,7 @@ voices, in the product or in marketing.
 | D7 | Two TTS offerings, **Eleven v4** and **Eleven v4 Turbo**, plus one STT offering, **Scribe v2**. | My call: v4 for read-aloud quality, Turbo for Live Voice latency (1.6 s vs 2.2–2.6 s to first byte for ~150 characters, probed). The user picks in the existing slot pickers. |
 | D8 | **No voice-settings sliders** (stability, similarity, clone strength). The account's stored per-voice settings apply. | My call: omakase over options (CLAUDE.md §11). |
 | D9 | **REST per segment**, like Grok. WebSocket streaming is out of scope. | My call: it fits the existing voice machine unchanged. |
-| D10 | No moderation canary probes from Claude sessions. `contentModerated` is set after Chris's own manual test (§11, step 9). | Chris, because he does not want trouble with Anthropic. |
+| D10 | No moderation canary probes from Claude sessions. `contentModerated` is set after Chris's own manual test (§11, step 10). | Chris, because he does not want trouble with Anthropic. |
 
 ## 3. Goals, non-goals, anti-goals
 
@@ -90,7 +90,13 @@ voices, in the product or in marketing.
 
 ### 6.1 Auth scheme on the provider definition
 
-`ProviderDefinition` gains an optional `auth` field:
+`ProviderDefinition` gains an optional `auth` field. `buildRequest` sees only a `ProviderConfig`
+(`{ baseUrl, routing }`), which is assembled by hand in several places (`probe.ts`,
+`provider.tsx`, `lib/voice/voice-transport.ts`, `lib/model-debug.ts` …). So `ProviderConfig`
+gains the same optional `auth`, and every place that builds a config fills it from the definition,
+preferably via one helper that derives a config from a definition (my call: it closes the gap
+once instead of at each call site, and an omitted `auth` keeps today's Bearer behaviour). The
+field:
 
 ```ts
 /** How the API key travels; defaults to `{ header: 'Authorization', prefix: 'Bearer' }`. */
@@ -103,8 +109,8 @@ non-default header it must **not** also set `Authorization` (upstream refuses bo
 cors-proxy path keeps its own `x-chatsundere-authorization` header untouched.
 
 **Redaction:** `xi-api-key` joins `SECRET_REQUEST_HEADERS`. In addition, `redactRequestHeaders`
-redacts whatever header name the active provider's `auth.header` names, so a future scheme
-cannot slip through. (If threading the provider into the redactor is awkward, the static entry
+redacts whatever header name the request's `ProviderConfig.auth.header` names, so a future scheme
+cannot slip through. (If threading the config into the redactor is awkward, the static entry
 alone satisfies the hard constraint; the builder chooses.)
 
 ### 6.2 The provider
@@ -122,6 +128,10 @@ alone satisfies the hard constraint; the builder chooses.)
   is never used for chat; the builder either widens the type (`'none'`) or leaves the value
   with a comment. Settle it in the plan.
 - Trust on every offering: `{ tee: false, zdr: false, jurisdiction: 'US' }`.
+- `catalogue/schema.ts` (`TtsOfferingMetaSchema` and the STT schema) gains the new `transport`
+  value and voice `endpoint`; otherwise the catalogue entries fail validation.
+- The probe reads `{ data: [...] }` for a model count; ElevenLabs' `/v1/models` returns a bare
+  array, so no count is shown. That is harmless and needs no change.
 
 ### 6.3 The offerings
 
@@ -194,8 +204,9 @@ terms, matched case-insensitively on **whole words** against name and descriptio
 
 Deliberately **not** listed, with the reason in the ADR: `girl` (adult voices often call
 themselves that), `young` (ElevenLabs' `age: young` covers adults, 8 of the premade voices),
-and the German `kind` (it collides with English "kind"). `baby` is borderline (pet name in
-adult voices) and is a judgement for Chris at the spec review; see §13. Known accepted false
+and the German `kind` (it collides with English "kind"). `baby` **stays**, decided by Chris,
+because "baby" as a pet name for a woman normalises exactly what must not be normalised: a hard
+line that society should draw even harder, all liberality notwithstanding. Known accepted false
 positive: an adult narrator described as "children's storyteller" is filtered. Hard and narrow
 beats clever.
 
@@ -203,10 +214,31 @@ ElevenLabs has **no child label** (`age` is only `young`/`middle_aged`/`old`; th
 library holds kid and teen voices labelled `young`), which is why the filter works on text.
 This is written into ADR 0040.
 
-**Synthesis guard:** because D5 says "never synthesised", `resolveTts` refuses a stored voice
-ID that the (memoised, filtered) list does not contain for an `elevenlabs-v2` source. It returns
-the existing `no-voice` reason. The list fetch is already session-memoised, so the guard costs
-one call per session.
+**Synthesis guard:** because D5 says "never synthesised" and §3 forbids a surprise voice,
+`resolveTts` refuses a stored voice ID that the active offering's voice list does not contain,
+for **every** source with a list (fetched or static), not only ElevenLabs. For ElevenLabs that
+list is the filtered one. (Laura H3: without this, an ElevenLabs ID sent to Grok yields a surprise
+default voice or a vague error.)
+
+- **Main voice** not in the list → the existing `no-voice` reason.
+- **Narrator voice** not in the list → treated as unset, so narration uses the main voice, which
+  is the documented default ("defaults to the main voice"). The picker shows the stale hint on the
+  narrator slot.
+- The guard runs **before** the voice-cache lookup, so no cached audio of a refused ID is replayed.
+- **List cannot be loaded** (network, 401, timeout): for Grok and other non-ElevenLabs sources,
+  synthesis proceeds as today, because an outage must not silence voice. For an `elevenlabs-v2`
+  source it refuses with a new reason `voices-unavailable` and the copy "Couldn't load your
+  ElevenLabs voices — try again." The juvenile rule wins over availability (fail closed), and the
+  copy says what is actually wrong.
+
+### 6.6 One shared voice-list memo
+
+Today the memo is a private `Map` inside `components/voice/VoicePicker.tsx`, unreachable from
+`resolveTts`. It moves into `lib/voice/` as one shared module used by the picker (names, list) and
+by the guard. It is keyed by **provider and voice source**, not by offering, so Eleven v4 and
+v4 Turbo share one list. It is **invalidated each time a picker opens**, so a voice cloned or added
+on the ElevenLabs website appears without reloading the app. Opening a picker costs one free
+`GET`; the guard and the name resolution reuse the last result. No refresh control is needed.
 
 ## 7. Design — `apps/user-client`
 
@@ -233,8 +265,24 @@ above the list:
 - Two segmented filters (`cs-segmented`, as on the font page); defaults **All / Any**.
 - Each row carries small inline-marker pills (CLAUDE.md §11) for `own` and language; the gender
   glyph is the builder's styling call.
-- Empty result: "No voice matches — clear the filters" with a clear action (no dead end).
+- Empty result from search or filters: "No voice matches" with a **Clear search and filters**
+  action (no dead end).
+- Empty account (none at all, or none left after the juvenile filter) with no search or filter
+  active: "No voices on your ElevenLabs account yet — add them on the ElevenLabs website."
+- **No autofocus** on the search field (the mobile keyboard would cover the list). Each time the
+  picker opens, search is empty and the filters are back on **All / Any**.
 - Sources without metadata (Grok, the nano-gpt static list) render exactly as today.
+
+### 7.1a Which service the voices come from
+
+The persona voice block in `font-voice.tsx` gains one quiet line above the pickers:
+
+> Voices from **Eleven v4 via ElevenLabs** · change in My Settings → Voice
+
+The label comes from the active TTS offering, and the second half links to the Voice settings.
+Why (Laura H2): a user who already has nano-gpt or xAI keeps auto-resolving to Grok after adding
+the ElevenLabs key. Without this line their own voices are simply missing, and nothing says why or
+where to switch. The default order stays as it is (D7: the user picks).
 
 ### 7.2 Stale voice ID (D6)
 
@@ -243,9 +291,13 @@ instead of the raw ID:
 
 > This voice isn't available at **ElevenLabs** — choose a new one.
 
-with the service name from the active TTS offering. This replaces the current "fall back to the
-raw ID" last resort for all services. Read-aloud for that persona then fails the way it does
-today for `no-voice` (existing behaviour, existing copy).
+with the service name from the active TTS offering. It appears **only when the list loaded**
+(`status === 'loaded'`). If loading failed, the existing error and Retry copy stay, because
+"isn't available" would then be a false claim. This replaces the current "fall back to the raw ID"
+last resort for all services. Read-aloud for that persona then fails the way it does for `no-voice`,
+now on every service thanks to the guard in §6.5. The chat tooltip in `MessageControls.tsx:42`
+becomes "Choose a voice for this persona in its editor", which reads right for both the missing and
+the stale case.
 
 ### 7.3 Copy and wiring
 
@@ -258,10 +310,13 @@ today for `no-voice` (existing behaviour, existing copy).
   `TTS_DEFAULT_ORDER`, and `elevenlabs:scribe_v2` to the end of `STT_DEFAULT_ORDER`. Mistral (EU)
   stays first for STT; ElevenLabs is auto-picked only when it is the only voice provider.
 - `settings/provider.tsx`: "Test a model" is **disabled with a reason** for a provider without
-  chat offerings: "ElevenLabs offers voice only — test it from a persona's Font & Voice page."
-  (Disabled over hidden, CLAUDE.md §11.)
-- Any other "your Circle has no voice yet" / provider-list copy that names services is checked
-  for the same.
+  chat offerings: "ElevenLabs offers voices only. Choose it under My Settings → Voice, then pick a
+  voice on a persona's Font & Voice page." (Disabled over hidden, CLAUDE.md §11. Laura H1: there is
+  no test on the Font & Voice page, so the copy must not send the user there to test.)
+- `settings/provider.tsx:259`: the success copy "Key valid · LLM unlocked" depends on capabilities.
+  For a voice-only provider it reads "Key valid · voices unlocked".
+- `VoiceSection.tsx` `unconfiguredCopy` (lines 170 and 300), the `font-voice.tsx` hint, and any
+  other copy that names the voice services gain ElevenLabs.
 
 ## 8. ADR 0040 — Juvenile voices are filtered out
 
@@ -293,8 +348,11 @@ one does, `passthrough` gets a narrow strip list for this transport, not a trans
     (`girl`, `young`, "kind and warm");
   - offerings registry entries.
 - **user-client (Vitest):** picker search and both filters; empty result with clear; stale-ID
-  hint names the service; "Test a model" disabled with a reason for a voice-only provider;
-  `resolveTts` refuses a filtered or unknown ID for the ElevenLabs source.
+  hint names the service and appears only when loaded; empty-account state; "Test a model"
+  disabled with a reason for a voice-only provider; `resolveTts` refuses an unknown ID on every
+  listed source, before the cache lookup, falls back to the main voice for a stale narrator ID, and
+  returns `voices-unavailable` when the ElevenLabs list cannot load; the shared memo is invalidated
+  on picker open and shared between v4 and v4 Turbo.
 - **Gate:** `pnpm test`, `pnpm typecheck`, `pnpm run build`, Biome.
 - **Audits:** Laura spec-pass on §7 before the plan; Larissa on the diff for §6.1 (header
   scheme and redaction), although `llm-unified` is not a mandatory Larissa path. It is the
@@ -303,27 +361,30 @@ one does, `passthrough` gets a narrow strip list for this transport, not a trans
 ## 11. Manual verification (Chris, on device)
 
 1. **Add the provider.** *My Settings → Providers → ElevenLabs*, paste the key, **Test & Save**.
-   Pass: it saves with a success state.
-2. **Model test is honest.** On the same page, look at **Test a model**. Pass: it is greyed out,
-   with the "voice only" reason visible.
-3. **Pick the service.** *My Settings → Voice*, read-aloud service → **Eleven v4 via
-   ElevenLabs**. Pass: the egress note says "Sends message text to ElevenLabs (US)".
-4. **Search.** Open a persona → *Font & Voice* → **Voice**, type "cov". Pass: only Cove (or
+   Pass: "Key valid · voices unlocked" flashes and you land back on the provider list, with
+   ElevenLabs listed.
+2. **Model test is honest.** Open ElevenLabs in the provider list again and look at **Test a
+   model**. Pass: it is greyed out, and the reason points you to My Settings → Voice.
+3. **Your own voices are findable.** Before switching anything, open a persona → *Font & Voice*.
+   Pass: a line names the current service (e.g. Grok) and links to My Settings → Voice.
+4. **Pick the service.** Follow that link; read-aloud service → **Eleven v4 via ElevenLabs**.
+   Pass: the egress note says "Sends message text to ElevenLabs (US)".
+5. **Search.** Open a persona → *Font & Voice* → **Voice**, type "cov". Pass: only Cove (or
    your cloned voice) remains in the list.
-5. **Filters.** Tap **Own**, then **Female**. Pass: only your own female voices remain; **All /
+6. **Filters.** Tap **Own**, then **Female**. Pass: only your own female voices remain; **All /
    Any** brings back everything.
-6. **Expression.** Pick a voice, ask the persona for something with a whisper and a laugh, and
+7. **Expression.** Pick a voice, ask the persona for something with a whisper and a laugh, and
    let it read aloud. Pass: it whispers and laughs audibly, and no tag is ever spoken.
-7. **Turbo in Live Voice.** Switch the service to **Eleven v4 Turbo** and hold a short
+8. **Turbo in Live Voice.** Switch the service to **Eleven v4 Turbo** and hold a short
    Live Voice exchange. Pass: replies start noticeably faster than with v4.
-8. **Stale voice.** Switch the service back to Grok. Pass: the persona's voice slot says the
+9. **Stale voice.** Switch the service back to Grok. Pass: the persona's voice slot says the
    voice isn't available at xAI and asks for a new choice; nothing plays with a surprise voice.
-9. **Moderation, by hand (D10).** Read aloud a reply with strong profanity and an explicit
+10. **Moderation, by hand (D10).** Read aloud a reply with strong profanity and an explicit
    adult passage of your own choosing. Pass: tell Liz whether ElevenLabs refused anything; that
    sets `contentModerated`.
-10. **Dictation.** Dictation service → **Scribe via ElevenLabs**, dictate a sentence and laugh
+11. **Dictation.** Dictation service → **Scribe via ElevenLabs**, dictate a sentence and laugh
     once. Pass: the text is right, with no "[laughs]" inserted.
-11. **Juvenile filter.** On the ElevenLabs website, add a library voice named like "… Kid …"
+12. **Juvenile filter.** On the ElevenLabs website, add a library voice named like "… Kid …"
     or "… Teen …" to your account, then reopen the picker. Pass: it does not appear.
 
 ## 12. The 0.4.0 ElevenLabs track
@@ -341,4 +402,4 @@ Decided by Chris, step by step rather than at once:
 - Widening `shape` vs commenting it (§6.2); provider-aware vs static redaction (§6.1).
 - Gender glyph vs text pill, and the exact pill styling (§7.1).
 - Whether the provider list in the disabled hint is literal or built from the registry (§7.3).
-- Open for Chris at review: whether `baby` stays in the filter list (§6.5).
+- How the voice-list memo is keyed and invalidated internally, within §6.6.
