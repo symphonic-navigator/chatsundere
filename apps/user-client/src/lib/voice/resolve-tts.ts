@@ -36,6 +36,9 @@ export type TtsResolution =
  */
 export type TtsUnavailableReason = 'no-provider' | 'no-voice' | 'voices-unavailable';
 
+/** User-facing copy for `voices-unavailable`: the tapped voice control is the retry. */
+export const VOICES_UNAVAILABLE_COPY = "Couldn't load your ElevenLabs voices — tap to try again.";
+
 /** The resolved transport material shared by resolveTts and the voice picker UI. */
 export interface TtsTransport {
   providerConfig: ProviderConfig;

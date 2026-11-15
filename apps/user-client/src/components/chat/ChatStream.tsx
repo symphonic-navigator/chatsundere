@@ -82,7 +82,7 @@ export interface ChatStreamProps {
   /** Estimated system-prompt tokens, reserved before fitting history. */
   systemTokens?: number;
   /** Start reading a persona message aloud. */
-  onReadAloud?: (message: MessageRow) => void;
+  onReadAloud?: (message: MessageRow) => unknown;
   /** Provider/voice-level disable reason (null when TTS is actionable). The
    *  per-message 'nothing' tone is derived here from segmentation. */
   voiceDisabledReason?: TtsUnavailableReason | null;

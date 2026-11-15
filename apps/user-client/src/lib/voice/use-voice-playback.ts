@@ -50,6 +50,9 @@ export interface VoicePlayback {
   resumeOffer: { messageId: string; segmentIndex: number; paragraphIndex: number } | null;
   /** UI hint for the Read control's disabled state. */
   disabledReason: DisabledReason;
+  /** Re-run the TTS resolution and refresh `disabledReason` without playing —
+   *  the retry behind a `voices-unavailable` voice control. */
+  recheck: () => Promise<void>;
   /** The TTS playback analyser node for the spectrum visualiser, or null before first play. */
   getAnalyser: () => AnalyserNode | null;
   /** Whether read-aloud is currently sounding — lets the spectrum show the
@@ -249,6 +252,9 @@ export function useVoicePlayback(
       // inside `.then` and bail if the draft changed.
       autoReadRef.current = { draftId, sentCount: 0, doneSent: false };
       void resolveTts(persona).then((resolution) => {
+        // Write the outcome back, as playMessage does, so a failure here is
+        // visible on the voice controls rather than silently dropped.
+        setDisabledReason(resolution.ok ? null : resolution.reason);
         if (!resolution.ok) {
           autoReadRef.current = null;
           return;
@@ -409,6 +415,19 @@ export function useVoicePlayback(
     };
   }, [persona?.id, persona?.voice, persona?.narratorVoice]);
 
+  const recheck = async (): Promise<void> => {
+    if (!persona) {
+      setDisabledReason('no-provider');
+      return;
+    }
+    try {
+      const resolution = await resolveTts(persona);
+      setDisabledReason(resolution.ok ? null : resolution.reason);
+    } catch {
+      setDisabledReason('no-provider');
+    }
+  };
+
   return {
     transportState,
     currentSegmentId,
@@ -434,6 +453,7 @@ export function useVoicePlayback(
     },
     resumeOffer,
     disabledReason,
+    recheck,
     getAnalyser: () => sinkRef.current?.getAnalyser() ?? null,
     getIsAudible: () => sinkRef.current?.isAudible() ?? false,
   };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Offering } from '@chatsundere/llm-unified';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { AttachmentRow, PersonaRow } from '../../../src/boot/client-data-db.js';
@@ -103,7 +103,9 @@ const baseProps = {
   // Voice-mode defaults — overridden per test case below.
   autoReadAloud: false as boolean,
   onToggleAutoRead: vi.fn() as (next: boolean) => void,
-  voiceUnavailable: null as 'no-provider' | 'no-voice' | null,
+  voiceUnavailable: null as 'no-provider' | 'no-voice' | 'voices-unavailable' | null,
+  onEnterLiveVoice: vi.fn() as () => void,
+  onRecheckVoice: vi.fn(async () => {}) as () => Promise<void>,
   editingMessageId: null as string | null,
   canReplace: false,
   editAttachments: [] as AttachmentRow[],
@@ -156,5 +158,63 @@ describe('cockpit voice-mode toggle', () => {
     });
     fireEvent.click(getByLabelText(/read replies aloud/i));
     expect(getByText(/set up a voice provider/i)).toBeTruthy();
+  });
+});
+
+describe('cockpit voices-unavailable retry', () => {
+  const COPY = "Couldn't load your ElevenLabs voices — tap to try again.";
+
+  it('Live voice stays tappable, carries the retry tooltip and rechecks on tap', async () => {
+    let release: () => void = () => {};
+    const onRecheckVoice = vi.fn(
+      () =>
+        new Promise<void>((res) => {
+          release = res;
+        }),
+    );
+    const onEnterLiveVoice = vi.fn();
+    const { getByLabelText } = renderCockpit({
+      voiceUnavailable: 'voices-unavailable' as const,
+      onRecheckVoice,
+      onEnterLiveVoice,
+    });
+    const live = getByLabelText('Live voice mode');
+    expect(live).not.toBeDisabled();
+    expect(live).toHaveAttribute('title', COPY);
+    fireEvent.click(live);
+    expect(onRecheckVoice).toHaveBeenCalledTimes(1);
+    expect(onEnterLiveVoice).not.toHaveBeenCalled();
+    expect(live).toHaveAttribute('aria-busy', 'true');
+    await act(async () => {
+      release();
+    });
+    expect(live).not.toHaveAttribute('aria-busy');
+  });
+
+  it('Auto-read tap rechecks and shows the retry copy', async () => {
+    const onRecheckVoice = vi.fn(async () => {});
+    const onToggle = vi.fn();
+    const { getByLabelText, getByText } = renderCockpit({
+      voiceUnavailable: 'voices-unavailable' as const,
+      onRecheckVoice,
+      onToggleAutoRead: onToggle,
+    });
+    await act(async () => {
+      fireEvent.click(getByLabelText(/read replies aloud/i));
+    });
+    expect(onRecheckVoice).toHaveBeenCalledTimes(1);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(getByText(COPY)).toBeTruthy();
+  });
+
+  it('other reasons keep Live voice disabled and do not recheck', () => {
+    const onRecheckVoice = vi.fn(async () => {});
+    const { getByLabelText } = renderCockpit({
+      voiceUnavailable: 'no-provider' as const,
+      onRecheckVoice,
+    });
+    const live = getByLabelText('Live voice mode');
+    expect(live).toBeDisabled();
+    expect(live).toHaveAttribute('title', 'No voice provider — set one in Settings → Voice');
   });
 });

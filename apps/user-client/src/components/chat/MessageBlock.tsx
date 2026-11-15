@@ -71,7 +71,7 @@ export interface MessageBlockProps {
    *  snatching focus and selection away in a single gesture. */
   isPinned?: boolean;
   /** Start reading this message aloud (persona messages only). */
-  onReadAloud?: () => void;
+  onReadAloud?: () => unknown;
   /** Why the Read control is disabled, or null when actionable. */
   readDisabledReason?: ReadDisabledReason | null;
   /** The segment currently spoken aloud, or null. Drives the voice glow:

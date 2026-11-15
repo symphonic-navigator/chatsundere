@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageRow } from '../../../src/boot/client-data-db.js';
 import { MessageControls } from '../../../src/components/chat/MessageControls.js';
@@ -97,12 +97,42 @@ describe('MessageControls read-aloud button', () => {
     const btn = screen.getByRole('button', { name: /Read/ });
     // The tap is the retry, so the control is not marked disabled.
     expect(btn).not.toHaveAttribute('aria-disabled');
-    expect(btn).toHaveAttribute('title', "Couldn't load your ElevenLabs voices — try again.");
+    expect(btn).toHaveAttribute(
+      'title',
+      "Couldn't load your ElevenLabs voices — tap to try again.",
+    );
     fireEvent.click(btn);
     expect(onReadAloud).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByText("Couldn't load your ElevenLabs voices — try again."),
+      screen.getByText("Couldn't load your ElevenLabs voices — tap to try again."),
     ).toBeInTheDocument();
+  });
+
+  it('voices-unavailable tap marks the Read control busy while the retry runs', async () => {
+    let release: () => void = () => {};
+    const onReadAloud = vi.fn(
+      () =>
+        new Promise<void>((res) => {
+          release = res;
+        }),
+    );
+    render(
+      <MessageControls
+        message={msg}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onReadAloud={onReadAloud}
+        readDisabledReason="voices-unavailable"
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /Read/ });
+    expect(btn).not.toHaveAttribute('aria-busy');
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-busy', 'true');
+    await act(async () => {
+      release();
+    });
+    expect(btn).not.toHaveAttribute('aria-busy');
   });
 
   it('omits the Read button on user messages', () => {

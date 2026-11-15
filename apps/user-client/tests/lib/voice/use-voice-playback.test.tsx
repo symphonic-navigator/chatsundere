@@ -153,6 +153,30 @@ describe('useVoicePlayback', () => {
     expect(result.current.disabledReason).toBe('voices-unavailable');
   });
 
+  it('recheck re-runs resolveTts and clears voices-unavailable on success', async () => {
+    resolveTtsMock.mockResolvedValueOnce({ ok: false, reason: 'voices-unavailable' });
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await waitFor(() => expect(result.current.disabledReason).toBe('voices-unavailable'));
+
+    resolveTtsMock.mockResolvedValue(okResolution);
+    await act(async () => {
+      await result.current.recheck();
+    });
+    expect(resolveTtsMock).toHaveBeenCalledTimes(2);
+    expect(result.current.disabledReason).toBeNull();
+    expect(sinkPlay).not.toHaveBeenCalled();
+  });
+
+  it('a failed recheck keeps the reason', async () => {
+    resolveTtsMock.mockResolvedValue({ ok: false, reason: 'voices-unavailable' });
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await waitFor(() => expect(result.current.disabledReason).toBe('voices-unavailable'));
+    await act(async () => {
+      await result.current.recheck();
+    });
+    expect(result.current.disabledReason).toBe('voices-unavailable');
+  });
+
   it('remembers the position on unmount while non-idle (LEAVE_CHAT)', async () => {
     resolveTtsMock.mockResolvedValue(okResolution);
     sinkPlay.mockImplementation(() => new Promise<void>(() => {})); // never resolves → stays speaking

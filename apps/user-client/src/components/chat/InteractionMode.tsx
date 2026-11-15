@@ -61,6 +61,8 @@ interface Props {
   voiceUnavailable: TtsUnavailableReason | null;
   /** Opens live voice mode — forwarded to the cockpit's live button. */
   onEnterLiveVoice?: () => void;
+  /** Re-runs the TTS resolution — forwarded to the cockpit's voice controls. */
+  onRecheckVoice?: () => Promise<void>;
   /** Whether the conversation meets compaction preconditions. */
   compactable?: boolean;
   /** Called when the user taps the context gauge to request compaction. */
@@ -244,6 +246,7 @@ export function InteractionMode(p: Props): JSX.Element {
             onToggleAutoRead={p.onToggleAutoRead}
             voiceUnavailable={p.voiceUnavailable}
             onEnterLiveVoice={p.onEnterLiveVoice}
+            onRecheckVoice={p.onRecheckVoice}
           />
         </div>
       ) : p.resolution && p.resolution.kind !== 'ok' ? (
