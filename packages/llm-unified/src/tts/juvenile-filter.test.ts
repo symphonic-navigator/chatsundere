@@ -30,4 +30,9 @@ describe('isJuvenileVoice', () => {
       expect(isJuvenileVoice({ name, description })).toBe(false);
     });
   }
+
+  test('checks the descriptive label', () => {
+    expect(isJuvenileVoice({ name: 'Lea', descriptive: 'childish' })).toBe(true);
+    expect(isJuvenileVoice({ name: 'Lea', descriptive: 'warm' })).toBe(false);
+  });
 });

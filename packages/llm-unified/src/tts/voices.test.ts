@@ -158,4 +158,56 @@ describe('listTtsVoices', () => {
       hiddenCount: 1,
     });
   });
+
+  const EL_PROVIDER = {
+    baseUrl: 'https://api.elevenlabs.io/v1',
+    routing: { kind: 'direct' } as const,
+  };
+
+  test('elevenlabs-v2 hides by description and descriptive label, drops unknown gender', async () => {
+    const fetchFn = asMockFetch(async () =>
+      jsonResponse({
+        voices: [
+          { voice_id: 'a', name: 'Mia', category: 'premade', description: 'a little girl voice' },
+          {
+            voice_id: 'b',
+            name: 'Lea',
+            category: 'premade',
+            labels: { descriptive: 'childish' },
+          },
+          { voice_id: 'c', name: 'Sam', category: 'cloned', labels: { gender: 'non-binary' } },
+        ],
+        has_more: false,
+      }),
+    );
+    const result = await listTtsVoices({
+      providerConfig: EL_PROVIDER,
+      apiKey: 'k',
+      endpoint: 'elevenlabs-v2',
+      fetchFn,
+    });
+    expect(result.hiddenCount).toBe(2);
+    expect(result.voices).toEqual([{ id: 'c', name: 'Sam', origin: 'own' }]);
+    expect(result.voices[0]?.gender).toBeUndefined();
+  });
+
+  test('elevenlabs-v2 stops on a repeated next_page_token', async () => {
+    let calls = 0;
+    const fetchFn = asMockFetch(async () => {
+      calls += 1;
+      return jsonResponse({
+        voices: [{ voice_id: `v${calls}`, name: `V${calls}`, category: 'premade' }],
+        has_more: true,
+        next_page_token: 'same',
+      });
+    });
+    const result = await listTtsVoices({
+      providerConfig: EL_PROVIDER,
+      apiKey: 'k',
+      endpoint: 'elevenlabs-v2',
+      fetchFn,
+    });
+    expect(calls).toBe(2);
+    expect(result.voices).toHaveLength(2);
+  });
 });

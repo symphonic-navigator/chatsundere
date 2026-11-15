@@ -38,7 +38,10 @@ export interface ListTtsVoicesArgs {
 
 /**
  * Fetch all available TTS voices from the provider: `mistral-paginated` pages
- * through `/audio/voices`, `xai-flat` reads `/tts/voices` in one shot.
+ * through `/audio/voices`, `xai-flat` reads `/tts/voices` in one shot, and
+ * `elevenlabs-v2` pages through the account's `/v2/voices` with metadata.
+ * ElevenLabs voices matching the juvenile filter are dropped and counted in
+ * `hiddenCount`; the other sources always report 0.
  */
 export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceList> {
   const fetchFn = args.fetchFn ?? fetch;
@@ -134,6 +137,8 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceLi
   return { voices, hiddenCount: 0 };
 }
 
+const MAX_ELEVENLABS_PAGES = 50;
+
 const GENDERS = ['female', 'male', 'neutral'] as const;
 
 /** Pages through the account's ElevenLabs voices, mapping metadata and dropping juveniles. */
@@ -145,11 +150,14 @@ async function listElevenLabsVoices(
   const voices: TtsVoice[] = [];
   let hiddenCount = 0;
   let pageToken: string | null = null;
+  const seenTokens = new Set<string>();
+  let pages = 0;
 
   do {
     // baseUrl ends in /v1; the dot segment is normalised by URL parsing to /v2/voices.
     let path = `../v2/voices?page_size=${PAGE_LIMIT}`;
     if (pageToken !== null) path += `&next_page_token=${encodeURIComponent(pageToken)}`;
+    pages += 1;
     const response = await fetchWithProxyAuth(
       () =>
         buildRequest({
@@ -178,7 +186,7 @@ async function listElevenLabsVoices(
         name?: unknown;
         category?: unknown;
         description?: unknown;
-        labels?: { gender?: unknown; language?: unknown } | null;
+        labels?: { gender?: unknown; language?: unknown; descriptive?: unknown } | null;
       };
       if (typeof raw.voice_id !== 'string' || typeof raw.name !== 'string') continue;
       const voice: TtsVoice = {
@@ -194,16 +202,22 @@ async function listElevenLabsVoices(
       if (typeof raw.description === 'string' && raw.description !== '') {
         voice.description = raw.description;
       }
-      if (isJuvenileVoice(voice)) {
+      const descriptive =
+        typeof raw.labels?.descriptive === 'string' ? raw.labels.descriptive : undefined;
+      if (isJuvenileVoice({ ...voice, descriptive })) {
         hiddenCount += 1;
       } else {
         voices.push(voice);
       }
     }
-    pageToken =
+    const next =
       payload.has_more === true && typeof payload.next_page_token === 'string'
         ? payload.next_page_token
         : null;
+    // Stop on a repeated token or after the page cap rather than loop forever.
+    pageToken =
+      next !== null && !seenTokens.has(next) && pages < MAX_ELEVENLABS_PAGES ? next : null;
+    if (next !== null) seenTokens.add(next);
   } while (pageToken !== null);
 
   return { voices, hiddenCount };

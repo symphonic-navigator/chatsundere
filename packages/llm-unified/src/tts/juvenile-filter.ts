@@ -43,10 +43,13 @@ const JUVENILE_PATTERN = new RegExp(
   'iu',
 );
 
-/** True when the voice's name or description contains a whole-word juvenile term. */
-export function isJuvenileVoice(v: { name: string; description?: string }): boolean {
-  return (
-    JUVENILE_PATTERN.test(v.name) ||
-    (v.description !== undefined && JUVENILE_PATTERN.test(v.description))
+/** True when the voice's name, description or descriptive label contains a whole-word juvenile term. */
+export function isJuvenileVoice(v: {
+  name: string;
+  description?: string;
+  descriptive?: string;
+}): boolean {
+  return [v.name, v.description, v.descriptive].some(
+    (text) => text !== undefined && JUVENILE_PATTERN.test(text),
   );
 }
