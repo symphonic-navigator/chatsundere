@@ -61,6 +61,9 @@ export function MessageControls(p: Props): JSX.Element {
   // gated. Mirrors the Read control's tap-to-reveal note for touch reachability.
   const bookmarkGate = useClass2Gate();
   const isUser = p.message.role === 'user';
+  // A failed voice-list load is transient: the tap is the retry, so the control
+  // stays actionable and the note explains what went wrong.
+  const readBlocked = !!p.readDisabledReason && p.readDisabledReason !== 'voices-unavailable';
 
   // On a user message the Save action lives in the overflow (spec §5.1 — keeps
   // the flat row calm at 380px, mirroring the persona row's "Save as template").
@@ -153,14 +156,12 @@ export function MessageControls(p: Props): JSX.Element {
           <button
             type="button"
             data-ctrl="read"
-            data-disabled={!p.onReadAloud || p.readDisabledReason ? 'true' : undefined}
-            aria-disabled={!p.onReadAloud || p.readDisabledReason ? true : undefined}
+            data-disabled={!p.onReadAloud || readBlocked ? 'true' : undefined}
+            aria-disabled={!p.onReadAloud || readBlocked ? true : undefined}
             onClick={() => {
-              if (p.readDisabledReason) {
-                setReadNote(true);
-                return;
-              }
-              setReadNote(false);
+              if (p.readDisabledReason) setReadNote(true);
+              if (readBlocked) return;
+              if (!p.readDisabledReason) setReadNote(false);
               p.onReadAloud?.();
             }}
             title={

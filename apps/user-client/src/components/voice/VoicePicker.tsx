@@ -2,7 +2,7 @@
 
 import type { TtsVoice } from '@chatsundere/llm-unified';
 import { useEffect, useRef, useState } from 'react';
-import { loadVoiceList } from '../../lib/voice/voice-list.js';
+import { loadVoiceList } from '../../lib/voice/voice-list-active.js';
 
 /** Load the active offering's voices through the shared memo (empty without a transport). */
 async function fetchVoices(fresh = false): Promise<TtsVoice[]> {

@@ -105,12 +105,12 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
     // ElevenLabs is the only source a filter guards, so without its list we
     // cannot prove the voice is allowed. Other sources proceed as before.
     const { voices } = ttsMeta;
+    const error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     if (voices.kind === 'fetch' && voices.endpoint === 'elevenlabs-v2') {
-      console.warn('[voice-tts] voice list unavailable; refusing synthesis', {
-        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-      });
+      console.warn('[voice-tts] voice list unavailable; refusing synthesis', { error });
       return { ok: false, reason: 'voices-unavailable' };
     }
+    console.debug('[voice-tts] voice list unavailable; proceeding unchecked', { error });
   }
 
   // Snapshot the offering metadata used by both cacheKeyFor and fetchAudio.

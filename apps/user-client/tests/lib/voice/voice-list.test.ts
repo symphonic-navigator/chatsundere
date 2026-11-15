@@ -13,7 +13,8 @@ vi.mock('@chatsundere/llm-unified', () => ({
   listTtsVoices: (...args: unknown[]) => listTtsVoicesMock(...args),
 }));
 
-import { _resetVoiceListForTests, loadVoiceList } from '../../../src/lib/voice/voice-list.js';
+import { loadVoiceList } from '../../../src/lib/voice/voice-list-active.js';
+import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
 
 function transport(upstreamSlug: string) {
   return {

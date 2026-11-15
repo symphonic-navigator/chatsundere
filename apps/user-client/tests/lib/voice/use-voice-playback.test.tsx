@@ -126,6 +126,33 @@ describe('useVoicePlayback', () => {
     expect(sinkPlay).not.toHaveBeenCalled();
   });
 
+  it('a successful play clears voices-unavailable', async () => {
+    // The mount probe fails to load the ElevenLabs list…
+    resolveTtsMock.mockResolvedValueOnce({ ok: false, reason: 'voices-unavailable' });
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {}));
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await waitFor(() => expect(result.current.disabledReason).toBe('voices-unavailable'));
+
+    // …and the user's retry tap succeeds: the hint heals.
+    resolveTtsMock.mockResolvedValue(okResolution);
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    expect(result.current.disabledReason).toBeNull();
+  });
+
+  it('a failed play keeps the disabled hint accurate', async () => {
+    resolveTtsMock.mockResolvedValueOnce(okResolution);
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await waitFor(() => expect(resolveTtsMock).toHaveBeenCalledTimes(1));
+
+    resolveTtsMock.mockResolvedValue({ ok: false, reason: 'voices-unavailable' });
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    expect(result.current.disabledReason).toBe('voices-unavailable');
+  });
+
   it('remembers the position on unmount while non-idle (LEAVE_CHAT)', async () => {
     resolveTtsMock.mockResolvedValue(okResolution);
     sinkPlay.mockImplementation(() => new Promise<void>(() => {})); // never resolves → stays speaking

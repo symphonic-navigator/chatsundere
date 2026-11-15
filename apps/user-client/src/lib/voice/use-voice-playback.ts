@@ -311,6 +311,9 @@ export function useVoicePlayback(
     const segments = segmentMessage(message.contentBlocks, segmentationOpts);
     if (segments.length === 0) return null; // nothing speakable — belt-and-braces
     const resolution = await resolveTts(persona);
+    // Play-time is authoritative: write the outcome back so a hint from the
+    // mount probe (e.g. a transient voices-unavailable) heals or stays accurate.
+    setDisabledReason(resolution.ok ? null : resolution.reason);
     if (!resolution.ok) return resolution.reason;
     const start = Math.min(Math.max(startIndex, 0), segments.length - 1);
     startSegments(message.id, segments, resolution, start);

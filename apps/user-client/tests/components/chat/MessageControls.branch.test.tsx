@@ -65,7 +65,6 @@ describe('MessageControls read-aloud button', () => {
   it.each([
     ['no-provider', 'Set up a TTS provider in My Settings'],
     ['no-voice', 'Choose a voice for this persona in its editor'],
-    ['voices-unavailable', "Couldn't load your ElevenLabs voices — try again."],
     ['nothing', 'Nothing to read aloud in this message'],
   ] as const)('marks aria-disabled and sets tooltip for the %s tone', (reason, tooltip) => {
     render(
@@ -82,6 +81,28 @@ describe('MessageControls read-aloud button', () => {
     expect(btn).not.toBeDisabled();
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute('title', tooltip);
+  });
+
+  it('voices-unavailable tap still calls onReadAloud', () => {
+    const onReadAloud = vi.fn();
+    render(
+      <MessageControls
+        message={msg}
+        onCopy={() => {}}
+        onBookmark={() => {}}
+        onReadAloud={onReadAloud}
+        readDisabledReason="voices-unavailable"
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /Read/ });
+    // The tap is the retry, so the control is not marked disabled.
+    expect(btn).not.toHaveAttribute('aria-disabled');
+    expect(btn).toHaveAttribute('title', "Couldn't load your ElevenLabs voices — try again.");
+    fireEvent.click(btn);
+    expect(onReadAloud).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText("Couldn't load your ElevenLabs voices — try again."),
+    ).toBeInTheDocument();
   });
 
   it('omits the Read button on user messages', () => {

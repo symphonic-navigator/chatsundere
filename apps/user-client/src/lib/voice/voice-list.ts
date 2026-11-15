@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { type TtsVoiceList, listTtsVoices } from '@chatsundere/llm-unified';
-import { type TtsTransport, resolveTtsTransport } from './resolve-tts.js';
+import type { TtsTransport } from './resolve-tts.js';
 
 // Module-level memo keyed by voiceListKey: one fetch per voice source per
 // session, shared by every picker instance and the synthesis guard.
@@ -26,21 +26,10 @@ export function voiceListKey(t: TtsTransport): string {
 }
 
 /**
- * Load the active TTS offering's voice list, reusing the memoised promise.
- * Resolves null when no TTS transport is configured. `fresh` drops the memo
- * for this source first, forcing a refetch (the picker does this on open).
- */
-export async function loadVoiceList(
-  opts: { fresh?: boolean } = {},
-): Promise<{ key: string; list: TtsVoiceList } | null> {
-  const transport = await resolveTtsTransport();
-  if (!transport) return null;
-  return loadVoiceListFor(transport, opts);
-}
-
-/**
- * As loadVoiceList, for a transport the caller already resolved (the
- * synthesis guard), so the provider key is not decrypted twice.
+ * Load a transport's voice list, reusing the memoised promise. `fresh` drops
+ * the memo for this source first, forcing a refetch. The synthesis guard calls
+ * this with the transport it already resolved; loadVoiceList (in
+ * voice-list-active.ts) resolves the active one first.
  */
 export async function loadVoiceListFor(
   transport: TtsTransport,
