@@ -231,7 +231,9 @@ default voice or a vague error.)
 - **List cannot be loaded** (network, 401, timeout): for Grok and other non-ElevenLabs sources,
   synthesis proceeds as today, because an outage must not silence voice. For an `elevenlabs-v2`
   source it refuses with a new reason `voices-unavailable` and the copy "Couldn't load your
-  ElevenLabs voices — try again." The juvenile rule wins over availability (fail closed), and the
+  ElevenLabs voices — tap to try again." Tapping a voice control (Read, Auto-read, Live voice) while
+  this reason holds re-runs the lookup, with `aria-busy` while it runs (final review and Laura, 2026-11-15).
+  The juvenile rule wins over availability (fail closed), and the
   copy says what is actually wrong.
 
 ### 6.6 One shared voice-list memo
