@@ -13,6 +13,12 @@ export interface ConfigField {
   options?: { value: string; label: string }[];
 }
 
+/** How a provider expects its API key: header name plus optional value prefix. Omitted means `Authorization: Bearer`. */
+export interface ProviderAuthScheme {
+  header: string;
+  prefix?: string;
+}
+
 export interface ProviderDefinition {
   id: string;
   displayName: string;
@@ -22,6 +28,7 @@ export interface ProviderDefinition {
   capabilities: Capability[];
   configFields: ConfigField[];
   probe: { path: string; method: 'GET' | 'POST' };
+  auth?: ProviderAuthScheme;
   secretFields: ReadonlySet<string>;
   corsHint: 'direct' | 'inofficial' | 'requires-proxy';
   offerings: Offering[];
@@ -122,4 +129,5 @@ export interface ProbeResult {
 export interface ProviderConfig {
   baseUrl: string;
   routing: { kind: 'direct' } | { kind: 'cors-proxy' };
+  auth?: ProviderAuthScheme;
 }

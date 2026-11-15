@@ -26,7 +26,7 @@ export async function probeProvider(args: ProbeArgs): Promise<ProbeResult> {
     response = await fetchWithProxyAuth(
       () =>
         buildRequest({
-          provider: args.config,
+          provider: { ...args.config, auth: args.config.auth ?? args.definition.auth },
           apiKey: args.apiKey,
           path: args.definition.probe.path,
           method: args.definition.probe.method,
@@ -48,8 +48,8 @@ export async function probeProvider(args: ProbeArgs): Promise<ProbeResult> {
 
   let modelCount: number | undefined;
   try {
-    const json = (await response.json()) as { data?: Array<{ id?: string }> };
-    if (Array.isArray(json.data)) modelCount = json.data.length;
+    const json = (await response.json()) as { data?: Array<{ id?: string }> } | null;
+    if (Array.isArray(json?.data)) modelCount = json.data.length;
   } catch {
     // Non-JSON 200 is fine; we still report ok.
   }

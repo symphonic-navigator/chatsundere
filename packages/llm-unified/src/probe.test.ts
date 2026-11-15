@@ -93,3 +93,35 @@ describe('probeProvider', () => {
     expect(result.reason).toMatch(/Failed to fetch/);
   });
 });
+
+describe('probeProvider auth scheme and body shapes', () => {
+  it("probeProvider sends the definition's auth scheme", async () => {
+    let captured: Request | undefined;
+    const fetchFn = asMockFetch(async (input) => {
+      captured = input as Request;
+      return new Response('[]', { status: 200 });
+    });
+    await probeProvider({
+      definition: { ...novitaDef, auth: { header: 'xi-api-key' } },
+      config: novitaCfg,
+      apiKey: 'k',
+      fetchFn,
+    });
+    expect(captured?.headers.get('xi-api-key')).toBe('k');
+    expect(captured?.headers.get('authorization')).toBeNull();
+  });
+
+  it('probeProvider reports ok with no model count for a bare-array body', async () => {
+    const fetchFn = asMockFetch(
+      async () => new Response(JSON.stringify([{ model_id: 'eleven_v4' }]), { status: 200 }),
+    );
+    const result = await probeProvider({
+      definition: novitaDef,
+      config: novitaCfg,
+      apiKey: 'k',
+      fetchFn,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.modelCount).toBeUndefined();
+  });
+});

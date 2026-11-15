@@ -8,11 +8,13 @@ export interface StreamDiagnosticsSink {
   onResponse(info: { status: number; statusText: string; headers: Record<string, string> }): void;
 }
 
-const SECRET_REQUEST_HEADERS = new Set([
+/** Request headers whose values must never reach diagnostics. */
+export const SECRET_REQUEST_HEADERS = new Set([
   'authorization',
   'proxy-authorization',
   'x-api-key',
   'api-key',
+  'xi-api-key',
   'x-chatsundere-authorization',
 ]);
 
@@ -153,7 +155,10 @@ export interface BuildRequestArgs {
  */
 export function buildRequest(args: BuildRequestArgs): Request {
   const { provider, apiKey, path, method, body, extraHeaders } = args;
-  const headers = new Headers({ Authorization: `Bearer ${apiKey}` });
+  const scheme = provider.auth ?? { header: 'Authorization', prefix: 'Bearer' };
+  const headers = new Headers({
+    [scheme.header]: scheme.prefix ? `${scheme.prefix} ${apiKey}` : apiKey,
+  });
   // FormData carries its own multipart boundary — setting Content-Type here
   // would destroy it. Only JSON bodies get the explicit header.
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
