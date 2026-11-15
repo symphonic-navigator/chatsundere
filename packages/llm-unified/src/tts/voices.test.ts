@@ -36,7 +36,7 @@ describe('listTtsVoices', () => {
       });
     });
 
-    const voices = await listTtsVoices({
+    const { voices, hiddenCount: xaiHidden } = await listTtsVoices({
       providerConfig: XAI_PROVIDER,
       apiKey: 'k',
       endpoint: 'xai-flat',
@@ -45,6 +45,7 @@ describe('listTtsVoices', () => {
 
     const sentReq = captured as Request | null;
     expect(sentReq?.url).toBe('https://api.x.ai/v1/tts/voices');
+    expect(xaiHidden).toBe(0);
     expect(voices).toEqual([
       { id: 'ara', name: 'Ara' },
       { id: 'eve', name: 'Eve' },
@@ -94,15 +95,67 @@ describe('listTtsVoices', () => {
     ];
     let call = 0;
     const fetchFn = asMockFetch(async () => jsonResponse(pages[call++]));
-    const voices = await listTtsVoices({
+    const { voices, hiddenCount } = await listTtsVoices({
       providerConfig: MISTRAL_PROVIDER,
       apiKey: 'k',
       endpoint: 'mistral-paginated',
       fetchFn,
     });
+    expect(hiddenCount).toBe(0);
     expect(voices).toEqual([
       { id: 'a', name: 'Alice' },
       { id: 'b', name: 'Bob' },
     ]);
+  });
+
+  test('elevenlabs-v2 pages through next_page_token, maps metadata and filters juveniles', async () => {
+    const pages = [
+      {
+        voices: [
+          {
+            voice_id: 'j1',
+            name: 'Jessica',
+            category: 'premade',
+            description: 'Warm',
+            labels: { gender: 'female', language: 'en' },
+          },
+          { voice_id: 'c1', name: 'Cove', category: 'cloned', labels: {} },
+        ],
+        has_more: true,
+        next_page_token: 't',
+      },
+      {
+        voices: [{ voice_id: 'p1', name: 'Piku - Expressive Kid Character', category: 'premade' }],
+        has_more: false,
+      },
+    ];
+    const urls: string[] = [];
+    let call = 0;
+    const fetchFn = asMockFetch(async (input) => {
+      urls.push((input as Request).url);
+      return jsonResponse(pages[call++]);
+    });
+    const result = await listTtsVoices({
+      providerConfig: { baseUrl: 'https://api.elevenlabs.io/v1', routing: { kind: 'direct' } },
+      apiKey: 'k',
+      endpoint: 'elevenlabs-v2',
+      fetchFn,
+    });
+    expect(urls[0]).toBe('https://api.elevenlabs.io/v2/voices?page_size=100');
+    expect(urls[1]).toBe('https://api.elevenlabs.io/v2/voices?page_size=100&next_page_token=t');
+    expect(result).toEqual({
+      voices: [
+        {
+          id: 'j1',
+          name: 'Jessica',
+          origin: 'predefined',
+          gender: 'female',
+          language: 'en',
+          description: 'Warm',
+        },
+        { id: 'c1', name: 'Cove', origin: 'own' },
+      ],
+      hiddenCount: 1,
+    });
   });
 });

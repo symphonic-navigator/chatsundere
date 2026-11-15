@@ -42,7 +42,7 @@ import { VoicePicker } from '../../../src/components/voice/VoicePicker.js';
 beforeEach(() => {
   _resetVoicePickerCacheForTests();
   resolveTtsTransportMock.mockResolvedValue(STUB_TRANSPORT);
-  listTtsVoicesMock.mockResolvedValue(STUB_VOICES);
+  listTtsVoicesMock.mockResolvedValue({ voices: STUB_VOICES, hiddenCount: 0 });
 });
 
 afterEach(() => {
@@ -135,7 +135,7 @@ describe('VoicePicker — error state', () => {
   it('Retry clears the cache and refetches voices', async () => {
     // First call fails, second succeeds.
     listTtsVoicesMock.mockRejectedValueOnce(new Error('network error'));
-    listTtsVoicesMock.mockResolvedValue(STUB_VOICES);
+    listTtsVoicesMock.mockResolvedValue({ voices: STUB_VOICES, hiddenCount: 0 });
 
     const onSelect = vi.fn();
     render(<VoicePicker label="Voice" value={null} onSelect={onSelect} />);
@@ -201,7 +201,10 @@ describe('VoicePicker — per-offering memo', () => {
         voices: { kind: 'fetch' as const, endpoint: 'xai-flat' as const },
       },
     });
-    listTtsVoicesMock.mockResolvedValue([{ id: 'voice-c', name: 'Cleo' }]);
+    listTtsVoicesMock.mockResolvedValue({
+      voices: [{ id: 'voice-c', name: 'Cleo' }],
+      hiddenCount: 0,
+    });
 
     render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
 

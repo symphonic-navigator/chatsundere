@@ -70,7 +70,7 @@ vi.mock('@chatsundere/llm-unified', () => ({
   listSttOfferings: () => [],
   availableCanonicals: () => ({ available: [], hiddenCount: 0 }),
   effectiveFreedom: () => 'free',
-  listTtsVoices: vi.fn().mockResolvedValue([]),
+  listTtsVoices: vi.fn().mockResolvedValue({ voices: [], hiddenCount: 0 }),
 }));
 
 vi.mock('../../../src/routes/app/persona/use-persona-editing.js', () => ({

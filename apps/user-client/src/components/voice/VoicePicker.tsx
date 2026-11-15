@@ -33,7 +33,7 @@ async function fetchVoices(retry = false): Promise<TtsVoice[]> {
       apiKey: transport.apiKey,
       endpoint: meta.voices.endpoint,
       signal: AbortSignal.timeout(15_000),
-    });
+    }).then((list) => list.voices);
     voicesPromises.set(ref, promise);
     // On failure, clear the memo so the next call can retry — but only if this
     // promise still owns the slot; a stale rejection arriving after a retry has
