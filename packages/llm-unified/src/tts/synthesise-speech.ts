@@ -48,6 +48,17 @@ interface TtsWire {
 }
 
 /**
+ * The ElevenLabs voice id becomes a path segment. Percent-encoding alone does
+ * not stop a dot segment (`.`/`..`) from being normalised by URL parsing, so
+ * anything that could leave the `/text-to-speech/` segment is refused outright.
+ */
+function assertPathSafeVoiceId(voiceId: string): void {
+  if (voiceId === '' || voiceId === '.' || voiceId === '..' || /[/\\?#]/.test(voiceId)) {
+    throw new SpeechSynthesisError('invalid voice id', null);
+  }
+}
+
+/**
  * One exhaustive dispatch per transport: the explicit return type makes a new
  * `TtsTransportKind` member a compile error here instead of silently
  * inheriting another transport's wire shape.
@@ -73,6 +84,7 @@ function wireFor(args: SynthesiseSpeechArgs, input: string): TtsWire {
         decode: 'raw-audio',
       };
     case 'elevenlabs':
+      assertPathSafeVoiceId(args.voiceId);
       return {
         // The voice id is user-visible data from the upstream catalogue; encode it.
         path: `/text-to-speech/${encodeURIComponent(args.voiceId)}?output_format=mp3_44100_128`,

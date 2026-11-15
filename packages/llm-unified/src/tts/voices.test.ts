@@ -88,6 +88,44 @@ describe('listTtsVoices', () => {
     expect((thrown as SpeechSynthesisError).status).toBeNull();
   });
 
+  test('xai-flat: hides juvenile voices and counts them', async () => {
+    const fetchFn = asMockFetch(async () =>
+      jsonResponse({
+        voices: [
+          { voice_id: 'ara', name: 'Ara' },
+          { voice_id: 'kid', name: 'Kid Sparkle' },
+        ],
+      }),
+    );
+    const result = await listTtsVoices({
+      providerConfig: XAI_PROVIDER,
+      apiKey: 'k',
+      endpoint: 'xai-flat',
+      fetchFn,
+    });
+    expect(result).toEqual({ voices: [{ id: 'ara', name: 'Ara' }], hiddenCount: 1 });
+  });
+
+  test('mistral-paginated: hides juvenile voices and counts them', async () => {
+    const fetchFn = asMockFetch(async () =>
+      jsonResponse({
+        items: [
+          { id: 'a', name: 'Alice' },
+          { id: 't', name: 'Teen Narrator' },
+        ],
+        page: 1,
+        total_pages: 1,
+      }),
+    );
+    const result = await listTtsVoices({
+      providerConfig: MISTRAL_PROVIDER,
+      apiKey: 'k',
+      endpoint: 'mistral-paginated',
+      fetchFn,
+    });
+    expect(result).toEqual({ voices: [{ id: 'a', name: 'Alice' }], hiddenCount: 1 });
+  });
+
   test('paginates /audio/voices and maps id+name', async () => {
     const pages = [
       { items: [{ id: 'a', name: 'Alice' }], page: 1, total_pages: 2 },

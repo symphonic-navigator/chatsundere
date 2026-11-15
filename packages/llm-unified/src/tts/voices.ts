@@ -40,8 +40,8 @@ export interface ListTtsVoicesArgs {
  * Fetch all available TTS voices from the provider: `mistral-paginated` pages
  * through `/audio/voices`, `xai-flat` reads `/tts/voices` in one shot, and
  * `elevenlabs-v2` pages through the account's `/v2/voices` with metadata.
- * ElevenLabs voices matching the juvenile filter are dropped and counted in
- * `hiddenCount`; the other sources always report 0.
+ * Every source applies the juvenile filter (ADR 0040): matching voices are
+ * dropped and counted in `hiddenCount`.
  */
 export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceList> {
   const fetchFn = args.fetchFn ?? fetch;
@@ -72,6 +72,7 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceLi
       throw new SpeechSynthesisError('voices response missing voices array', null);
     }
     const voices: TtsVoice[] = [];
+    let hiddenCount = 0;
     for (const item of payload.voices) {
       if (
         typeof item === 'object' &&
@@ -79,16 +80,19 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceLi
         typeof (item as { voice_id?: unknown }).voice_id === 'string' &&
         typeof (item as { name?: unknown }).name === 'string'
       ) {
-        voices.push({
+        const voice: TtsVoice = {
           id: (item as { voice_id: string }).voice_id,
           name: (item as { name: string }).name,
-        });
+        };
+        if (isJuvenileVoice(voice)) hiddenCount += 1;
+        else voices.push(voice);
       }
     }
-    return { voices, hiddenCount: 0 };
+    return { voices, hiddenCount };
   }
 
   const voices: TtsVoice[] = [];
+  let hiddenCount = 0;
   let page = 1;
   let totalPages = 1;
   let offset = 0;
@@ -123,10 +127,12 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceLi
         typeof (item as { id?: unknown }).id === 'string' &&
         typeof (item as { name?: unknown }).name === 'string'
       ) {
-        voices.push({
+        const voice: TtsVoice = {
           id: (item as { id: string }).id,
           name: (item as { name: string }).name,
-        });
+        };
+        if (isJuvenileVoice(voice)) hiddenCount += 1;
+        else voices.push(voice);
       }
     }
     if (typeof payload.page === 'number') page = payload.page;
@@ -134,7 +140,7 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceLi
     offset += PAGE_LIMIT;
   } while (page < totalPages);
 
-  return { voices, hiddenCount: 0 };
+  return { voices, hiddenCount };
 }
 
 const MAX_ELEVENLABS_PAGES = 50;

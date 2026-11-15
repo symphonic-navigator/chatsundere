@@ -18,11 +18,19 @@ export const SECRET_REQUEST_HEADERS = new Set([
   'x-chatsundere-authorization',
 ]);
 
-/** Returns a plain object copy of `headers` with all secret-bearing headers removed. */
-export function redactRequestHeaders(headers: Headers): Record<string, string> {
+/**
+ * Returns a plain object copy of `headers` with all secret-bearing headers
+ * removed: the static set plus any `extraSecret` names (case-insensitive).
+ */
+export function redactRequestHeaders(
+  headers: Headers,
+  extraSecret: readonly string[] = [],
+): Record<string, string> {
+  const extra = new Set(extraSecret.map((name) => name.toLowerCase()));
   const out: Record<string, string> = {};
   headers.forEach((value, key) => {
-    if (SECRET_REQUEST_HEADERS.has(key.toLowerCase())) return;
+    const lower = key.toLowerCase();
+    if (SECRET_REQUEST_HEADERS.has(lower) || extra.has(lower)) return;
     out[key.toLowerCase()] = value;
   });
   return out;
@@ -211,7 +219,13 @@ export function buildRequest(args: BuildRequestArgs): Request {
     redirect,
     body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
-  args.onDiagnostics?.onRequest({ method, url, headers: redactRequestHeaders(headers) });
+  // The provider's own auth header is dropped too, so a scheme added later
+  // under a name outside the static set cannot leak its key into diagnostics.
+  args.onDiagnostics?.onRequest({
+    method,
+    url,
+    headers: redactRequestHeaders(headers, [scheme.header]),
+  });
   return request;
 }
 

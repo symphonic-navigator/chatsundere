@@ -111,6 +111,70 @@ describe('synthesiseSpeech', () => {
     ).rejects.toThrow('audio_data');
   });
 
+  test('elevenlabs transport refuses a voice id that could escape the path', async () => {
+    let calls = 0;
+    const fetchFn = asMockFetch(async () => {
+      calls += 1;
+      return new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+      });
+    });
+    for (const voiceId of ['', '.', '..', 'a/b', 'a\\b', 'a?b', 'a#b', '../v2/voices']) {
+      let thrown: unknown = null;
+      try {
+        await synthesiseSpeech({
+          providerConfig: {
+            baseUrl: 'https://api.elevenlabs.io/v1',
+            routing: { kind: 'direct' },
+            auth: { header: 'xi-api-key' },
+          },
+          apiKey: 'k',
+          upstreamSlug: 'eleven_v4',
+          teal: 'passthrough',
+          transport: 'elevenlabs',
+          text: 'Hello',
+          voiceId,
+          fetchFn,
+        });
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(SpeechSynthesisError);
+      expect((thrown as SpeechSynthesisError).status).toBeNull();
+      expect((thrown as SpeechSynthesisError).message).toBe('invalid voice id');
+    }
+    expect(calls).toBe(0);
+  });
+
+  test('elevenlabs transport accepts an ordinary voice id', async () => {
+    let url: string | null = null;
+    const fetchFn = asMockFetch(async (input) => {
+      url = (input instanceof Request ? input : new Request(String(input))).url;
+      return new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+      });
+    });
+    await synthesiseSpeech({
+      providerConfig: {
+        baseUrl: 'https://api.elevenlabs.io/v1',
+        routing: { kind: 'direct' },
+        auth: { header: 'xi-api-key' },
+      },
+      apiKey: 'k',
+      upstreamSlug: 'eleven_v4',
+      teal: 'passthrough',
+      transport: 'elevenlabs',
+      text: 'Hello',
+      voiceId: 'JBFqnCBsd6RMkjVDRZzb',
+      fetchFn,
+    });
+    expect(url as string | null).toBe(
+      'https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb?output_format=mp3_44100_128',
+    );
+  });
+
   test('xai-native: posts {text, voice_id, language} to /tts and returns the binary blob', async () => {
     let captured: Request | null = null;
     const mp3 = new Uint8Array([0x49, 0x44, 0x33, 0x04]); // ID3 sentinel bytes
