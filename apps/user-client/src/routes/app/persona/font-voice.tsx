@@ -2,7 +2,7 @@
 
 import { getProvider } from '@chatsundere/llm-unified';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { TtsModerationNotice } from '../../../components/voice/TtsModerationNotice.js';
 import { VoicePicker } from '../../../components/voice/VoicePicker.js';
@@ -21,6 +21,7 @@ export function PersonaFontVoice(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { onHelp, helpOverlay } = useHelp('persona-font-voice');
   const { persona, patch } = usePersonaEditing(id ?? null);
+  const location = useLocation();
 
   // One-time probe: resolve whether a TTS provider is configured. null = still
   // probing (treated as enabled so the picker isn't prematurely locked during
@@ -118,7 +119,11 @@ export function PersonaFontVoice(): JSX.Element {
           {serviceLabel ? (
             <p data-testid="voice-service-line" className="text-[11px] text-paper-soft">
               Voices from {serviceLabel} ·{' '}
-              <Link to="/app/settings/voice" className="underline">
+              <Link
+                to="/app/settings/voice"
+                state={{ returnTo: location.pathname }}
+                className="underline"
+              >
                 change in My Settings → Voice
               </Link>
             </p>

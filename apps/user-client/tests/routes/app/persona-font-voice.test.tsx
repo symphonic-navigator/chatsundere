@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PersonaFontVoice } from '../../../src/routes/app/persona/font-voice.js';
 
@@ -111,6 +111,11 @@ beforeEach(() => {
 
 // ── Render helper ─────────────────────────────────────────────────────────────
 
+function VoiceSettingsSentinel(): JSX.Element {
+  const location = useLocation();
+  return <div data-testid="voice-settings-sentinel">{JSON.stringify(location.state)}</div>;
+}
+
 function renderPage(personaId: string) {
   state.patch = vi.fn().mockResolvedValue(undefined);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -123,6 +128,7 @@ function renderPage(personaId: string) {
             path="/app/persona/:id"
             element={<div data-testid="persona-hub-sentinel">hub</div>}
           />
+          <Route path="/app/settings/voice" element={<VoiceSettingsSentinel />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -307,6 +313,21 @@ describe('PersonaFontVoice — service line and disabled hint', () => {
     expect(screen.getByRole('link', { name: 'change in My Settings → Voice' })).toHaveAttribute(
       'href',
       '/app/settings/voice',
+    );
+  });
+
+  it('the service link carries this page as the return target', async () => {
+    state.persona = { ...BASE_PERSONA };
+    resolveTtsTransportMock.mockResolvedValue({
+      providerConfig: {},
+      apiKey: 'k',
+      offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
+      ttsMeta: { displayName: 'Eleven v4', voices: { kind: 'static', voices: [] } },
+    });
+    renderPage('p-1');
+    fireEvent.click(await screen.findByRole('link', { name: 'change in My Settings → Voice' }));
+    expect(screen.getByTestId('voice-settings-sentinel').textContent).toBe(
+      JSON.stringify({ returnTo: '/app/persona/p-1/font-voice' }),
     );
   });
 

@@ -18,16 +18,19 @@ interface LoadedVoices {
   hiddenCount: number;
   /** The service the voices come from; null without a transport. */
   providerName: string | null;
+  /** Whether the list is the user's own account library (empty-state copy). */
+  accountSource: boolean;
 }
 
 /** Load the active offering's voices through the shared memo (empty without a transport). */
 async function fetchVoices(fresh = false): Promise<LoadedVoices> {
   const loaded = await loadVoiceList({ fresh });
-  if (!loaded) return { voices: [], hiddenCount: 0, providerName: null };
+  if (!loaded) return { voices: [], hiddenCount: 0, providerName: null, accountSource: false };
   return {
     voices: loaded.list.voices,
     hiddenCount: loaded.list.hiddenCount,
     providerName: loaded.providerDisplayName,
+    accountSource: loaded.accountSource,
   };
 }
 
@@ -205,6 +208,11 @@ export function VoicePicker({
                 </div>
               ) : (
                 <>
+                  {stale ? (
+                    <p className="border-b border-white/5 px-3 py-2 text-sm text-paper-soft">
+                      Your previous voice isn&apos;t available here — pick one below.
+                    </p>
+                  ) : null}
                   {showFilters ? <VoiceFilterBar filters={filters} onChange={setFilters} /> : null}
                   {/* None row */}
                   <button
@@ -261,11 +269,14 @@ function VoiceRows({
   onClearFilters: () => void;
 }): JSX.Element {
   const { hiddenCount, providerName } = loaded;
+  // Only an account library (or a list carrying account metadata) can be
+  // "empty on your account"; any other empty source simply has none yet.
+  const accountCopy = loaded.accountSource || hasVoiceMetadata(loaded.voices);
   return (
     <>
       {loaded.voices.length === 0 ? (
         <p className="px-3 py-2 text-sm text-paper-soft">
-          {providerName
+          {providerName && accountCopy
             ? `No voices on your ${providerName} account yet — add them on the ${providerName} website.`
             : 'No voices available yet.'}
         </p>

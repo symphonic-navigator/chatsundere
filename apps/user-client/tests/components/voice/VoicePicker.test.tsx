@@ -455,6 +455,14 @@ describe('VoicePicker — search and filters', () => {
     expect(screen.queryByText('No voice matches')).toBeNull();
   });
 
+  it('an empty list from a source without account metadata shows the plain copy', async () => {
+    listTtsVoicesMock.mockResolvedValue({ voices: [], hiddenCount: 0 });
+    render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
+    await openPicker();
+    expect(screen.getByText('No voices available yet.')).toBeTruthy();
+    expect(screen.queryByText(/No voices on your/)).toBeNull();
+  });
+
   it('each row shows an own pill and a language pill when set', async () => {
     useEleven();
     render(<VoicePicker label="Voice" value={null} onSelect={vi.fn()} />);
@@ -517,5 +525,25 @@ describe('VoicePicker — stale voice id', () => {
     expect(screen.getByRole('button', { name: /pick voice/i })).not.toHaveTextContent(
       /isn't available/,
     );
+  });
+
+  it('reminds at the top of the open list that the previous voice is gone', async () => {
+    useEleven();
+    render(<VoicePicker label="Voice" value="gone-voice" onSelect={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /pick voice/i })).toHaveTextContent(STALE_HINT);
+    });
+    await openPicker();
+    const reminder = screen.getByText("Your previous voice isn't available here — pick one below.");
+    // It sits above the None row, the first choice of the list.
+    const none = screen.getByRole('button', { name: 'None' });
+    expect(reminder.compareDocumentPosition(none) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows no reminder when the stored voice is listed', async () => {
+    useEleven();
+    render(<VoicePicker label="Voice" value="cove" onSelect={vi.fn()} />);
+    await openPicker();
+    expect(screen.queryByText(/previous voice isn't available/)).toBeNull();
   });
 });

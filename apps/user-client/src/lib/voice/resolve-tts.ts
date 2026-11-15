@@ -96,11 +96,14 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
   // service lists may speak. A stored or imported ID the list lacks, including
   // one the juvenile filter dropped, must never reach synthesis or replay from
   // cache; a stale narrator is treated as unset, so narration uses the main voice.
+  // Both voices are snapshotted here so the closures below speak exactly what
+  // the guard checked, even if the persona object is mutated later.
+  const mainVoice = persona.voice;
   let narratorVoice = persona.narratorVoice;
   try {
     const { list } = await loadVoiceListFor(transport);
     const listed = new Set(list.voices.map((v) => v.id));
-    if (!listed.has(persona.voice)) {
+    if (!listed.has(mainVoice)) {
       return { ok: false, reason: 'no-voice' };
     }
     if (narratorVoice && !listed.has(narratorVoice)) narratorVoice = null;
@@ -124,10 +127,9 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
   /** Resolve which voiceId to use for a given segment. */
   const voiceIdFor = (segment: SpeechSegment): string => {
     if (segment.voice === 'narrator') {
-      return narratorVoice ?? persona.voice ?? '';
+      return narratorVoice ?? mainVoice;
     }
-    // persona.voice is non-null here (guarded above).
-    return persona.voice ?? '';
+    return mainVoice;
   };
 
   const cacheKeyFor = (segment: SpeechSegment): string =>

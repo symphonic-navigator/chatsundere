@@ -12,17 +12,38 @@ export function _resetVoiceListForTests(): void {
   memo.clear();
 }
 
+const FNV64_OFFSET = 0xcbf29ce484222325n;
+const FNV64_PRIME = 0x100000001b3n;
+const MASK64 = 0xffffffffffffffffn;
+
+/**
+ * A short fingerprint of the API key, so the memo never outlives a key change
+ * or an account switch. FNV-1a 64 over the UTF-8 bytes, as 16 hex characters:
+ * synchronous (the memo key is computed on a sync path, which rules out
+ * WebCrypto's SHA-256) and lossy, so the raw key is never stored. It is not a
+ * cryptographic commitment; it lives only in this in-memory map.
+ */
+function keyFingerprint(apiKey: string): string {
+  let hash = FNV64_OFFSET;
+  for (const byte of new TextEncoder().encode(apiKey)) {
+    hash ^= BigInt(byte);
+    hash = (hash * FNV64_PRIME) & MASK64;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
 /**
  * Memo key for a transport's voice source. Static lists are per upstream
- * model; fetched lists are per provider endpoint, so every model of one
- * provider (e.g. v4 and v4 Turbo) shares a single list.
+ * model; fetched lists are per provider endpoint and API key fingerprint, so
+ * every model of one provider (e.g. v4 and v4 Turbo) shares a single list while
+ * a different key (another account) fetches its own.
  */
 export function voiceListKey(t: TtsTransport): string {
   const { providerId, upstreamSlug } = t.offering;
   const { voices } = t.ttsMeta;
   return voices.kind === 'static'
     ? `${providerId}:static:${upstreamSlug}`
-    : `${providerId}:${voices.endpoint}`;
+    : `${providerId}:${voices.endpoint}:${keyFingerprint(t.apiKey)}`;
 }
 
 /**

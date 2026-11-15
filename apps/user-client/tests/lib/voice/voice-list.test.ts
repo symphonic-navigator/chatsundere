@@ -17,10 +17,10 @@ vi.mock('@chatsundere/llm-unified', () => ({
 import { loadVoiceList } from '../../../src/lib/voice/voice-list-active.js';
 import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
 
-function transport(upstreamSlug: string) {
+function transport(upstreamSlug: string, apiKey = 'k') {
   return {
     providerConfig: { baseUrl: 'https://api.elevenlabs.io', routing: { kind: 'direct' } },
-    apiKey: 'k',
+    apiKey,
     offering: { providerId: 'elevenlabs', upstreamSlug },
     ttsMeta: { voices: { kind: 'fetch', endpoint: 'elevenlabs-v2' } },
   };
@@ -47,6 +47,22 @@ describe('loadVoiceList', () => {
     expect(listTtsVoicesMock).toHaveBeenCalledTimes(1);
     expect(first?.key).toBe(second?.key);
     expect(second?.list).toEqual(LIST);
+    expect(first?.accountSource).toBe(true);
+  });
+
+  it('a different API key fetches its own list; the same key shares', async () => {
+    resolveTtsTransportMock.mockResolvedValueOnce(transport('eleven_v4', 'key-one'));
+    resolveTtsTransportMock.mockResolvedValueOnce(transport('eleven_v4', 'key-two'));
+    resolveTtsTransportMock.mockResolvedValueOnce(transport('eleven_v4_turbo', 'key-two'));
+    const one = await loadVoiceList();
+    const two = await loadVoiceList();
+    const twoAgain = await loadVoiceList();
+    expect(listTtsVoicesMock).toHaveBeenCalledTimes(2);
+    expect(one?.key).not.toBe(two?.key);
+    expect(two?.key).toBe(twoAgain?.key);
+    // The memo key carries a fingerprint, never the key itself.
+    expect(one?.key).not.toContain('key-one');
+    expect(two?.key).not.toContain('key-two');
   });
 
   it('fresh refetches', async () => {
