@@ -80,3 +80,36 @@ describe('loadVoiceList', () => {
     expect(await loadVoiceList()).toBeNull();
   });
 });
+
+describe('loadVoiceList stale rejection', () => {
+  it('does not evict a newer in-flight promise', async () => {
+    resolveTtsTransportMock.mockResolvedValue(transport('eleven_v4'));
+    let rejectFirst!: (e: unknown) => void;
+    listTtsVoicesMock.mockReturnValueOnce(
+      new Promise((_res, rej) => {
+        rejectFirst = rej;
+      }),
+    );
+    let resolveSecond!: (v: unknown) => void;
+    listTtsVoicesMock.mockReturnValueOnce(
+      new Promise((res) => {
+        resolveSecond = res;
+      }),
+    );
+    const p1 = loadVoiceList();
+    await vi.waitFor(() => expect(listTtsVoicesMock).toHaveBeenCalledTimes(1));
+    const p2 = loadVoiceList({ fresh: true });
+    await vi.waitFor(() => expect(listTtsVoicesMock).toHaveBeenCalledTimes(2));
+
+    rejectFirst(new Error('stale'));
+    await expect(p1).rejects.toThrow('stale');
+    await Promise.resolve();
+
+    const p3 = loadVoiceList();
+    await vi.waitFor(() => expect(resolveTtsTransportMock).toHaveBeenCalledTimes(3));
+    resolveSecond(LIST);
+    await expect(p2).resolves.toMatchObject({ list: LIST });
+    await expect(p3).resolves.toMatchObject({ list: LIST });
+    expect(listTtsVoicesMock).toHaveBeenCalledTimes(2);
+  });
+});

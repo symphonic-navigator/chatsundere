@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { _resetVoiceListForTests as _resetVoicePickerCacheForTests } from '../../../src/lib/voice/voice-list.js';
+import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -40,14 +40,14 @@ import { VoicePicker } from '../../../src/components/voice/VoicePicker.js';
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  _resetVoicePickerCacheForTests();
+  _resetVoiceListForTests();
   resolveTtsTransportMock.mockResolvedValue(STUB_TRANSPORT);
   listTtsVoicesMock.mockResolvedValue({ voices: STUB_VOICES, hiddenCount: 0 });
 });
 
 afterEach(() => {
   vi.clearAllMocks();
-  _resetVoicePickerCacheForTests();
+  _resetVoiceListForTests();
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -234,5 +234,54 @@ describe('VoicePicker — no provider', () => {
     ).toBeTruthy();
     // No picker button should be rendered when disabled.
     expect(screen.queryByRole('button', { name: /pick voice/i })).toBeNull();
+  });
+});
+
+describe('VoicePicker — stale responses', () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it('a slow eager list resolving after the fresh one does not overwrite it', async () => {
+    const eager = deferred<{ voices: typeof STUB_VOICES; hiddenCount: number }>();
+    listTtsVoicesMock.mockReturnValueOnce(eager.promise);
+    listTtsVoicesMock.mockResolvedValueOnce({
+      voices: [{ id: 'voice-a', name: 'Fresh Adele' }],
+      hiddenCount: 0,
+    });
+
+    render(<VoicePicker label="Voice" value="voice-a" onSelect={vi.fn()} />);
+    await waitFor(() => expect(listTtsVoicesMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /pick voice/i }));
+    await waitFor(() => expect(screen.getAllByText('Fresh Adele').length).toBeGreaterThan(0));
+
+    eager.resolve({ voices: STUB_VOICES, hiddenCount: 0 });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(screen.getAllByText('Fresh Adele').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Bruno')).toBeNull();
+  });
+
+  it('a late eager rejection does not replace a loaded list with the error state', async () => {
+    const eager = deferred<never>();
+    listTtsVoicesMock.mockReturnValueOnce(eager.promise);
+    listTtsVoicesMock.mockResolvedValueOnce({ voices: STUB_VOICES, hiddenCount: 0 });
+
+    render(<VoicePicker label="Voice" value="voice-a" onSelect={vi.fn()} />);
+    await waitFor(() => expect(listTtsVoicesMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /pick voice/i }));
+    await waitFor(() => screen.getByRole('button', { name: 'Bruno' }));
+
+    eager.reject(new Error('late'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(screen.getByRole('button', { name: 'Bruno' })).toBeTruthy();
+    expect(screen.queryByText(/couldn.t load the voice list/i)).toBeNull();
   });
 });

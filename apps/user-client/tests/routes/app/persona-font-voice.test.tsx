@@ -94,12 +94,12 @@ vi.mock('../../../src/data/providers.js', () => ({
 }));
 
 // Reset the VoicePicker session cache between tests so each test gets a clean slate.
-import { _resetVoiceListForTests as _resetVoicePickerCacheForTests } from '../../../src/lib/voice/voice-list.js';
+import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  _resetVoicePickerCacheForTests();
+  _resetVoiceListForTests();
   // Default: no TTS provider → pickers render disabled.
   resolveTtsTransportMock.mockResolvedValue(null);
 });

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { TtsVoice } from '@chatsundere/llm-unified';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadVoiceList } from '../../lib/voice/voice-list.js';
 
 /** Load the active offering's voices through the shared memo (empty without a transport). */
@@ -31,7 +31,7 @@ interface Props {
 
 /**
  * A reusable voice picker for a single TTS voice slot (persona voice or narrator voice).
- * Voices load lazily on first open. When no TTS provider is configured the control
+ * Voices resolve eagerly for a selected value and refresh on every open. When no TTS provider is configured the control
  * renders disabled with a constructive hint.
  */
 export function VoicePicker({
@@ -43,6 +43,10 @@ export function VoicePicker({
 }: Props): JSX.Element {
   const [open, setOpen] = useState(false);
   const [loadState, setLoadState] = useState<VoiceLoadState>({ status: 'idle' });
+  // Request sequence: every fetch caller takes a number and applies its result
+  // only while it is still the latest, so a slow earlier request can never
+  // overwrite (or error over) a fresher list.
+  const seq = useRef(0);
 
   // Resolve the selected voice's display NAME without requiring the user to open
   // the picker. Voices load lazily on open, but the collapsed trigger needs the
@@ -53,16 +57,17 @@ export function VoicePicker({
   useEffect(() => {
     if (disabled || value === null) return;
     let cancelled = false;
+    const mine = ++seq.current;
     // Functional update (not a `loadState` dep) so the effect runs only when the
     // value/disabled inputs change — adding `status` would re-run the effect on
     // the idle→loading flip and its cleanup would cancel its own in-flight fetch.
     setLoadState((prev) => (prev.status === 'loaded' ? prev : { status: 'loading' }));
     fetchVoices().then(
       (voices) => {
-        if (!cancelled) setLoadState({ status: 'loaded', voices });
+        if (!cancelled && seq.current === mine) setLoadState({ status: 'loaded', voices });
       },
       () => {
-        if (!cancelled) setLoadState({ status: 'error' });
+        if (!cancelled && seq.current === mine) setLoadState({ status: 'error' });
       },
     );
     return () => {
@@ -76,17 +81,29 @@ export function VoicePicker({
     // Opening refreshes the list (a newly added voice must appear); an already
     // loaded list stays visible meanwhile instead of flashing back to loading.
     if (loadState.status !== 'loaded') setLoadState({ status: 'loading' });
+    const mine = ++seq.current;
     fetchVoices(true).then(
-      (voices) => setLoadState({ status: 'loaded', voices }),
-      () => setLoadState((prev) => (prev.status === 'loaded' ? prev : { status: 'error' })),
+      (voices) => {
+        if (seq.current === mine) setLoadState({ status: 'loaded', voices });
+      },
+      () => {
+        if (seq.current === mine) {
+          setLoadState((prev) => (prev.status === 'loaded' ? prev : { status: 'error' }));
+        }
+      },
     );
   }
 
   function handleRetry(): void {
     setLoadState({ status: 'loading' });
+    const mine = ++seq.current;
     fetchVoices(true).then(
-      (voices) => setLoadState({ status: 'loaded', voices }),
-      () => setLoadState({ status: 'error' }),
+      (voices) => {
+        if (seq.current === mine) setLoadState({ status: 'loaded', voices });
+      },
+      () => {
+        if (seq.current === mine) setLoadState({ status: 'error' });
+      },
     );
   }
 
