@@ -35,6 +35,17 @@ export async function loadVoiceList(
 ): Promise<{ key: string; list: TtsVoiceList } | null> {
   const transport = await resolveTtsTransport();
   if (!transport) return null;
+  return loadVoiceListFor(transport, opts);
+}
+
+/**
+ * As loadVoiceList, for a transport the caller already resolved (the
+ * synthesis guard), so the provider key is not decrypted twice.
+ */
+export async function loadVoiceListFor(
+  transport: TtsTransport,
+  opts: { fresh?: boolean } = {},
+): Promise<{ key: string; list: TtsVoiceList }> {
   const key = voiceListKey(transport);
   const { voices } = transport.ttsMeta;
   // Some providers expose no voice-list endpoint; their offering carries the list.

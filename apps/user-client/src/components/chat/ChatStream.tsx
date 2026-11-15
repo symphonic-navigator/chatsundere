@@ -51,8 +51,10 @@ export const MINDSPACE_FALLBACK: ResolvedMindspace = {
   createdAt: 0,
   updatedAt: 0,
 };
+import type { TtsUnavailableReason } from '../../lib/voice/resolve-tts.js';
 import { DateSeparator } from './DateSeparator.js';
 import { MessageBlock } from './MessageBlock.js';
+import type { ReadDisabledReason } from './MessageControls.js';
 import { ScrollToEnd } from './ScrollToEnd.js';
 import { StreamingCursor } from './StreamingCursor.js';
 
@@ -83,7 +85,7 @@ export interface ChatStreamProps {
   onReadAloud?: (message: MessageRow) => void;
   /** Provider/voice-level disable reason (null when TTS is actionable). The
    *  per-message 'nothing' tone is derived here from segmentation. */
-  voiceDisabledReason?: 'no-provider' | 'no-voice' | null;
+  voiceDisabledReason?: TtsUnavailableReason | null;
   /** Active segmentation mode (read at play time; here only for the
    *  speakability probe that drives the per-message 'nothing' tooltip). */
   voiceMode?: 'paragraph' | 'sentence';
@@ -208,7 +210,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
     return map;
   }, [p.messages, p.voiceMode, roleplay]);
 
-  const readReasonFor = (m: MessageRow): 'no-provider' | 'no-voice' | 'nothing' | null => {
+  const readReasonFor = (m: MessageRow): ReadDisabledReason | null => {
     if (p.voiceDisabledReason) return p.voiceDisabledReason;
     return speakable.get(m.id) ? null : 'nothing';
   };

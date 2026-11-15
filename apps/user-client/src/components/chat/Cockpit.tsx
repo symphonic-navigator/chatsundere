@@ -28,6 +28,7 @@ import { type ReasoningState, reasoningChoiceOf } from '../../lib/reasoning-reso
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
+import type { TtsUnavailableReason } from '../../lib/voice/resolve-tts.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import {
   DESKTOP_MEDIA_QUERY,
@@ -75,7 +76,7 @@ interface Props {
   autoReadAloud: boolean;
   onToggleAutoRead: (next: boolean) => void;
   /** Why read-aloud is unavailable, or null when a voice is configured. */
-  voiceUnavailable: 'no-provider' | 'no-voice' | null;
+  voiceUnavailable: TtsUnavailableReason | null;
   /** Enter live voice mode — disabled-with-reason when no voice provider is
    *  configured. Optional so this component stays self-contained; the chat page
    *  always supplies it through InteractionMode. */
@@ -650,7 +651,9 @@ export function Cockpit(p: Props): JSX.Element {
           <span>
             {p.voiceUnavailable === 'no-provider'
               ? 'No voice yet — set up a voice provider to read replies aloud.'
-              : 'No voice yet — give this companion a voice to read replies aloud.'}
+              : p.voiceUnavailable === 'voices-unavailable'
+                ? "Couldn't load your ElevenLabs voices — try again."
+                : 'No voice yet — give this companion a voice to read replies aloud.'}
           </span>
           <button type="button" onClick={() => navigate('/app/settings')}>
             Settings → Voice

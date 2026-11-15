@@ -27,7 +27,7 @@ import { toastStore } from '../../state/toast.store.js';
 import { Lightbox } from '../lightbox/Lightbox.js';
 import { attachmentToViewable } from '../lightbox/viewable-item.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
-import { MessageControls } from './MessageControls.js';
+import { MessageControls, type ReadDisabledReason } from './MessageControls.js';
 import { Pill } from './Pill.js';
 import { HiddenReasoningMarker, type MonologueController, ReasoningPill } from './ReasoningPill.js';
 import { MarkdownContent, type VoiceGlow } from './markdown/MarkdownContent.js';
@@ -73,7 +73,7 @@ export interface MessageBlockProps {
   /** Start reading this message aloud (persona messages only). */
   onReadAloud?: () => void;
   /** Why the Read control is disabled, or null when actionable. */
-  readDisabledReason?: 'no-provider' | 'no-voice' | 'nothing' | null;
+  readDisabledReason?: ReadDisabledReason | null;
   /** The segment currently spoken aloud, or null. Drives the voice glow:
    *  the matching `[data-voice-seg]` (or, on count-mismatch, the segment's
    *  `[data-voice-para]`) element wears `voice-glow-active`. */

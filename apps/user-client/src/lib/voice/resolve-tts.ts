@@ -13,6 +13,7 @@ import { getClientDataDb } from '../../boot/client-data-db.js';
 import type { SpeechSegment } from './segmentation.js';
 import { selectTtsOffering } from './select-offering.js';
 import { cacheGet, cachePut, voiceCacheKey } from './voice-cache.js';
+import { loadVoiceListFor } from './voice-list.js';
 import { resolveVoiceTransportMaterial } from './voice-transport.js';
 
 export type TtsResolution =
@@ -27,7 +28,13 @@ export type TtsResolution =
       /** The active offering's cleanup high-pass recommendation, for the 'auto' setting. */
       defaultHighpassHz: 50 | 100 | undefined;
     }
-  | { ok: false; reason: 'no-provider' | 'no-voice' };
+  | { ok: false; reason: TtsUnavailableReason };
+
+/**
+ * Why read-aloud cannot run: no TTS service, no (or an unlisted) voice, or
+ * the ElevenLabs voice list could not be loaded to check the voice against.
+ */
+export type TtsUnavailableReason = 'no-provider' | 'no-voice' | 'voices-unavailable';
 
 /** The resolved transport material shared by resolveTts and the voice picker UI. */
 export interface TtsTransport {
@@ -82,6 +89,30 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
     return { ok: false, reason: 'no-voice' };
   }
 
+  // Synthesis guard (spec §6.5), before any cache use: only a voice the active
+  // service lists may speak. A stored or imported ID the list lacks, including
+  // one the juvenile filter dropped, must never reach synthesis or replay from
+  // cache; a stale narrator is treated as unset, so narration uses the main voice.
+  let narratorVoice = persona.narratorVoice;
+  try {
+    const { list } = await loadVoiceListFor(transport);
+    const listed = new Set(list.voices.map((v) => v.id));
+    if (!listed.has(persona.voice)) {
+      return { ok: false, reason: 'no-voice' };
+    }
+    if (narratorVoice && !listed.has(narratorVoice)) narratorVoice = null;
+  } catch (err) {
+    // ElevenLabs is the only source a filter guards, so without its list we
+    // cannot prove the voice is allowed. Other sources proceed as before.
+    const { voices } = ttsMeta;
+    if (voices.kind === 'fetch' && voices.endpoint === 'elevenlabs-v2') {
+      console.warn('[voice-tts] voice list unavailable; refusing synthesis', {
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+      return { ok: false, reason: 'voices-unavailable' };
+    }
+  }
+
   // Snapshot the offering metadata used by both cacheKeyFor and fetchAudio.
   const { upstreamSlug } = offering;
   const { providerId } = offering;
@@ -90,7 +121,7 @@ export async function resolveTts(persona: PersonaRow): Promise<TtsResolution> {
   /** Resolve which voiceId to use for a given segment. */
   const voiceIdFor = (segment: SpeechSegment): string => {
     if (segment.voice === 'narrator') {
-      return persona.narratorVoice ?? persona.voice ?? '';
+      return narratorVoice ?? persona.voice ?? '';
     }
     // persona.voice is non-null here (guarded above).
     return persona.voice ?? '';

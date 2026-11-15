@@ -36,9 +36,9 @@ export interface VoiceTransportProps {
 }
 
 function unavailableNote(reason: DisabledReason): string {
-  return reason === 'no-provider'
-    ? 'Voice unavailable — no provider configured'
-    : 'Voice unavailable — this persona has no voice';
+  if (reason === 'no-provider') return 'Voice unavailable — no provider configured';
+  if (reason === 'voices-unavailable') return "Couldn't load your ElevenLabs voices — try again.";
+  return 'Voice unavailable — this persona has no voice';
 }
 
 function skipNote(n: number): string {

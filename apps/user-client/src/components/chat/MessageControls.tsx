@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { MessageRow } from '../../boot/client-data-db.js';
+import type { TtsUnavailableReason } from '../../lib/voice/resolve-tts.js';
 import { syncCopy } from '../../sync/copy.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { type OverflowItem, OverflowMenu } from '../ui/OverflowMenu.js';
@@ -31,15 +32,20 @@ interface Props {
    * Why the Read control is disabled, or null when it is actionable.
    * Drives the three constructive disabled-tooltip tones (spec §4):
    *   'no-provider' → set up a TTS provider
-   *   'no-voice'    → give this persona a voice
+   *   'no-voice'    → choose a voice (missing, or not listed by the service)
+   *   'voices-unavailable' → the ElevenLabs voice list did not load
    *   'nothing'     → nothing speakable in this message
    */
-  readDisabledReason?: 'no-provider' | 'no-voice' | 'nothing' | null;
+  readDisabledReason?: ReadDisabledReason | null;
 }
 
-const READ_TOOLTIP: Record<'no-provider' | 'no-voice' | 'nothing', string> = {
+/** A TTS unavailability reason, or 'nothing' when the message has nothing speakable. */
+export type ReadDisabledReason = TtsUnavailableReason | 'nothing';
+
+const READ_TOOLTIP: Record<ReadDisabledReason, string> = {
   'no-provider': 'Set up a TTS provider in My Settings',
-  'no-voice': 'Give this persona a voice in its editor',
+  'no-voice': 'Choose a voice for this persona in its editor',
+  'voices-unavailable': "Couldn't load your ElevenLabs voices — try again.",
   nothing: 'Nothing to read aloud in this message',
 };
 

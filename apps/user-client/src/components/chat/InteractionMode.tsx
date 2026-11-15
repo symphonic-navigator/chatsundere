@@ -5,6 +5,7 @@ import type { AttachmentRow, ChatRow, PersonaRow } from '../../boot/client-data-
 import { resolveContextWindow } from '../../lib/context-window.js';
 import type { OfferingResolution } from '../../lib/resolve-offering.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
+import type { TtsUnavailableReason } from '../../lib/voice/resolve-tts.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { useEffectiveChatMode } from '../../state/effective-chat-mode.js';
 import { Cockpit } from './Cockpit.js';
@@ -57,7 +58,7 @@ interface Props {
   autoReadAloud: boolean;
   onToggleAutoRead: (next: boolean) => void;
   /** Why read-aloud is unavailable, or null when a voice is configured. */
-  voiceUnavailable: 'no-provider' | 'no-voice' | null;
+  voiceUnavailable: TtsUnavailableReason | null;
   /** Opens live voice mode — forwarded to the cockpit's live button. */
   onEnterLiveVoice?: () => void;
   /** Whether the conversation meets compaction preconditions. */

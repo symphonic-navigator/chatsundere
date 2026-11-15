@@ -6,7 +6,7 @@ import { useSettings } from '../../data/settings.js';
 import { type StreamHandle, useStreamManagerStore } from '../../state/stream-manager.store.js';
 import { AudioSink } from './audio-sink.js';
 import { committedSegments } from './committed-prefix.js';
-import { type TtsResolution, resolveTts } from './resolve-tts.js';
+import { type TtsResolution, type TtsUnavailableReason, resolveTts } from './resolve-tts.js';
 import { clearPosition, peekPosition, rememberPosition } from './resume-memory.js';
 import { type SpeechSegment, segmentMessage } from './segmentation.js';
 import { cacheDelete } from './voice-cache.js';
@@ -22,7 +22,7 @@ import {
 } from './voice-machine.js';
 
 /** Why the per-message Read control is disabled (UI hint; play-time is authoritative). */
-export type DisabledReason = 'no-provider' | 'no-voice' | null;
+export type DisabledReason = TtsUnavailableReason | null;
 
 export interface VoicePlayback {
   transportState: TransportState;
@@ -34,10 +34,7 @@ export interface VoicePlayback {
   /** Count of segments the provider declined (auto-skipped) in the current/last read. */
   providerSkips: number;
   /** Start reading a message aloud from `startIndex`. Returns a not-ok reason if TTS cannot run. */
-  playMessage: (
-    message: MessageRow,
-    startIndex?: number,
-  ) => Promise<'no-provider' | 'no-voice' | null>;
+  playMessage: (message: MessageRow, startIndex?: number) => Promise<DisabledReason>;
   /** Resume from the same-session remembered position (the on-return offer). */
   resume: () => void;
   /** Discard the resume offer and play the remembered message from the top. */
@@ -309,10 +306,7 @@ export function useVoicePlayback(
     actor.send({ type: 'PLAY', messageId, segments, startIndex });
   };
 
-  const playMessage = async (
-    message: MessageRow,
-    startIndex = 0,
-  ): Promise<'no-provider' | 'no-voice' | null> => {
+  const playMessage = async (message: MessageRow, startIndex = 0): Promise<DisabledReason> => {
     if (!persona) return 'no-provider';
     const segments = segmentMessage(message.contentBlocks, segmentationOpts);
     if (segments.length === 0) return null; // nothing speakable — belt-and-braces
