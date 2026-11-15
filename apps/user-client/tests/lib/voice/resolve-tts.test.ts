@@ -11,12 +11,14 @@ import type { SpeechSegment } from '../../../src/lib/voice/segmentation.js';
 const synthesiseSpeechMock = vi.fn();
 const listTtsOfferingsMock = vi.fn();
 const getProviderMock = vi.fn();
+const listTtsVoicesMock = vi.fn();
 
 vi.mock('@chatsundere/llm-unified', () => ({
   synthesiseSpeech: (...args: unknown[]) => synthesiseSpeechMock(...args),
   listTtsOfferings: () => listTtsOfferingsMock(),
   // select-offering.ts imports this too; TTS resolution never calls it.
   listSttOfferings: () => [],
+  listTtsVoices: (...args: unknown[]) => listTtsVoicesMock(...args),
   getProvider: (id: string) => getProviderMock(id),
   // resolve-tts narrows errors with instanceof; mirror the real class shape.
   SpeechSynthesisError: class SpeechSynthesisError extends Error {
@@ -56,6 +58,7 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../../src/boot/client-data-db.js';
 import { resolveTts, resolveTtsTransport } from '../../../src/lib/voice/resolve-tts.js';
 import { cacheGet, cachePut, voiceCacheKey } from '../../../src/lib/voice/voice-cache.js';
+import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -108,10 +111,48 @@ const NANO_PROVIDER_DEF = {
   corsHint: 'inofficial' as const,
 };
 
+/** ElevenLabs v4 fixture — a fetched list from the elevenlabs-v2 endpoint. */
+const ELEVEN_OFFERING = {
+  providerId: 'elevenlabs',
+  upstreamSlug: 'eleven_v4',
+  serviceKind: 'tts',
+  corsOverride: 'direct' as const,
+  tts: {
+    displayName: 'Eleven v4',
+    teal: 'strip' as const,
+    contentModerated: false,
+    transport: 'elevenlabs' as const,
+    voices: { kind: 'fetch' as const, endpoint: 'elevenlabs-v2' as const },
+  },
+};
+
+const ELEVEN_PROVIDER_DEF = {
+  id: 'elevenlabs',
+  displayName: 'ElevenLabs',
+  baseUrl: 'https://api.elevenlabs.io',
+  corsHint: 'direct' as const,
+};
+
 const PROVIDER_DEFS: Record<string, unknown> = {
   xai: XAI_PROVIDER_DEF,
   'nano-gpt': NANO_PROVIDER_DEF,
+  elevenlabs: ELEVEN_PROVIDER_DEF,
 };
+
+/** Every voice ID the existing suites use, so the guard lets them through. */
+const KNOWN_VOICE_IDS = [
+  'fable-voice-v1',
+  'voice-alpha',
+  'voice-beta',
+  'voice-dedup',
+  'voice-dialogue',
+  'voice-narrator',
+  'voice-only',
+];
+
+function voiceList(ids: readonly string[]) {
+  return { voices: ids.map((id) => ({ id, name: id })), hiddenCount: 0 };
+}
 
 function seg(spokenText: string, voice: 'dialogue' | 'narrator' = 'dialogue'): SpeechSegment {
   return {
@@ -184,11 +225,13 @@ async function seedProvider(templateId = PROVIDER_ID, enabled = true): Promise<v
 // ─── Test lifecycle ───────────────────────────────────────────────────────────
 
 beforeEach(async () => {
+  _resetVoiceListForTests();
   await _resetClientDataDbForTests();
   await openClientDataDb();
 
   // Default happy-path mock state — each test overrides what it needs to.
-  listTtsOfferingsMock.mockReturnValue([XAI_OFFERING, NANO_OFFERING]);
+  listTtsOfferingsMock.mockReturnValue([XAI_OFFERING, NANO_OFFERING, ELEVEN_OFFERING]);
+  listTtsVoicesMock.mockResolvedValue(voiceList(KNOWN_VOICE_IDS));
   getProviderMock.mockImplementation((id: string) => PROVIDER_DEFS[id]);
   openSecretMock.mockResolvedValue('test-api-key');
   synthesiseSpeechMock.mockResolvedValue({
@@ -578,6 +621,83 @@ describe('resolveTts', () => {
       if (!resolution.ok) return;
 
       expect(resolution.voiceLabel).toBe('Grok TTS via xAI');
+    });
+  });
+  describe('(j) synthesis guard — only voices the active service lists', () => {
+    async function pickOffering(ref: string): Promise<void> {
+      const db = await openClientDataDb();
+      await db.settings.update(1, { ttsOffering: ref });
+    }
+
+    it('refuses an unknown main voice on a static list', async () => {
+      await seedProvider('nano-gpt');
+      await pickOffering('nano-gpt:xai-tts');
+      const result = await resolveTts(minimalPersona({ voice: 'abc123' }));
+      expect(result).toEqual({ ok: false, reason: 'no-voice' });
+      expect(listTtsVoicesMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unknown main voice on a fetched list', async () => {
+      await seedProvider('xai');
+      listTtsVoicesMock.mockResolvedValue(voiceList(['eve', 'ara']));
+      const result = await resolveTts(minimalPersona({ voice: 'abc123' }));
+      expect(result).toEqual({ ok: false, reason: 'no-voice' });
+    });
+
+    it('a stale narrator voice falls back to the main voice', async () => {
+      await seedProvider('xai');
+      listTtsVoicesMock.mockResolvedValue(voiceList(['voice-dialogue']));
+      const persona = minimalPersona({ voice: 'voice-dialogue', narratorVoice: 'gone-voice' });
+
+      const resolution = await resolveTts(persona);
+      expect(resolution.ok).toBe(true);
+      if (!resolution.ok) return;
+
+      const narratorSegment = seg('*a stale narrator*', 'narrator');
+      await resolution.fetchAudio(narratorSegment, new AbortController().signal);
+      expect(synthesiseSpeechMock.mock.calls[0]?.[0]?.voiceId).toBe('voice-dialogue');
+      expect(resolution.cacheKeyFor(narratorSegment)).toBe(
+        voiceCacheKey(narratorSegment.spokenText, PROVIDER_ID, UPSTREAM_SLUG, 'voice-dialogue'),
+      );
+    });
+
+    it('refuses a filtered ElevenLabs voice even when cached audio exists', async () => {
+      await seedProvider('elevenlabs');
+      await pickOffering('elevenlabs:eleven_v4');
+      // The list omits the voice because the juvenile filter dropped it.
+      listTtsVoicesMock.mockResolvedValue({
+        voices: [{ id: 'adult-voice', name: 'Adult' }],
+        hiddenCount: 1,
+      });
+      const segment = seg('Cached before the filter');
+      const key = voiceCacheKey(segment.spokenText, 'elevenlabs', 'eleven_v4', 'filtered-voice');
+      await cachePut({ key, blob: new Blob(['old']), mimeType: MIME_TYPE });
+
+      const db = await openClientDataDb();
+      const getSpy = vi.spyOn(db.voiceAudio, 'get');
+
+      const result = await resolveTts(minimalPersona({ voice: 'filtered-voice' }));
+      expect(result).toEqual({ ok: false, reason: 'no-voice' });
+      expect(getSpy).not.toHaveBeenCalled();
+      expect(synthesiseSpeechMock).not.toHaveBeenCalled();
+    });
+
+    it('returns voices-unavailable when the ElevenLabs list fails', async () => {
+      await seedProvider('elevenlabs');
+      await pickOffering('elevenlabs:eleven_v4');
+      listTtsVoicesMock.mockRejectedValue(new Error('network down'));
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = await resolveTts(minimalPersona({ voice: 'adult-voice' }));
+      expect(result).toEqual({ ok: false, reason: 'voices-unavailable' });
+      expect(synthesiseSpeechMock).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('proceeds as today when a non-ElevenLabs list fails', async () => {
+      await seedProvider('xai');
+      listTtsVoicesMock.mockRejectedValue(new Error('network down'));
+      const result = await resolveTts(minimalPersona({ voice: 'voice-alpha' }));
+      expect(result.ok).toBe(true);
     });
   });
 });

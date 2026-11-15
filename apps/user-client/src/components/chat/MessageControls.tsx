@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { MessageRow } from '../../boot/client-data-db.js';
+import { type TtsUnavailableReason, VOICES_UNAVAILABLE_COPY } from '../../lib/voice/resolve-tts.js';
 import { syncCopy } from '../../sync/copy.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { type OverflowItem, OverflowMenu } from '../ui/OverflowMenu.js';
@@ -25,21 +26,27 @@ interface Props {
   /** Save the conversation up to this persona message as a seed template.
    *  Lives in the overflow (⋯), not the flat row, to avoid crowding at 380px. */
   onSaveAsTemplate?: () => void;
-  /** Start reading this message aloud (persona messages only). */
-  onReadAloud?: () => void;
+  /** Start reading this message aloud (persona messages only). A returned
+   *  promise marks the control busy while a `voices-unavailable` retry runs. */
+  onReadAloud?: () => unknown;
   /**
    * Why the Read control is disabled, or null when it is actionable.
    * Drives the three constructive disabled-tooltip tones (spec §4):
    *   'no-provider' → set up a TTS provider
-   *   'no-voice'    → give this persona a voice
+   *   'no-voice'    → choose a voice (missing, or not listed by the service)
+   *   'voices-unavailable' → the ElevenLabs voice list did not load
    *   'nothing'     → nothing speakable in this message
    */
-  readDisabledReason?: 'no-provider' | 'no-voice' | 'nothing' | null;
+  readDisabledReason?: ReadDisabledReason | null;
 }
 
-const READ_TOOLTIP: Record<'no-provider' | 'no-voice' | 'nothing', string> = {
+/** A TTS unavailability reason, or 'nothing' when the message has nothing speakable. */
+export type ReadDisabledReason = TtsUnavailableReason | 'nothing';
+
+const READ_TOOLTIP: Record<ReadDisabledReason, string> = {
   'no-provider': 'Set up a TTS provider in My Settings',
-  'no-voice': 'Give this persona a voice in its editor',
+  'no-voice': 'Choose a voice for this persona in its editor',
+  'voices-unavailable': VOICES_UNAVAILABLE_COPY,
   nothing: 'Nothing to read aloud in this message',
 };
 
@@ -49,12 +56,16 @@ function stop(e: React.MouseEvent): void {
 
 export function MessageControls(p: Props): JSX.Element {
   const [readNote, setReadNote] = useState(false);
+  const [readBusy, setReadBusy] = useState(false);
   const [bookmarkNote, setBookmarkNote] = useState(false);
   // Offline bookmarking is disabled for a linked account (spec §5/§11.2), with
   // the gentlest copy in the catalogue (decision 5). A local-only user is never
   // gated. Mirrors the Read control's tap-to-reveal note for touch reachability.
   const bookmarkGate = useClass2Gate();
   const isUser = p.message.role === 'user';
+  // A failed voice-list load is transient: the tap is the retry, so the control
+  // stays actionable and the note explains what went wrong.
+  const readBlocked = !!p.readDisabledReason && p.readDisabledReason !== 'voices-unavailable';
 
   // On a user message the Save action lives in the overflow (spec §5.1 — keeps
   // the flat row calm at 380px, mirroring the persona row's "Save as template").
@@ -147,15 +158,19 @@ export function MessageControls(p: Props): JSX.Element {
           <button
             type="button"
             data-ctrl="read"
-            data-disabled={!p.onReadAloud || p.readDisabledReason ? 'true' : undefined}
-            aria-disabled={!p.onReadAloud || p.readDisabledReason ? true : undefined}
+            data-disabled={!p.onReadAloud || readBlocked ? 'true' : undefined}
+            aria-disabled={!p.onReadAloud || readBlocked ? true : undefined}
+            aria-busy={readBusy || undefined}
             onClick={() => {
-              if (p.readDisabledReason) {
-                setReadNote(true);
-                return;
+              if (p.readDisabledReason) setReadNote(true);
+              if (readBlocked) return;
+              if (!p.readDisabledReason) setReadNote(false);
+              const pending = p.onReadAloud?.();
+              if (p.readDisabledReason === 'voices-unavailable' && pending instanceof Promise) {
+                setReadBusy(true);
+                const done = (): void => setReadBusy(false);
+                pending.then(done, done);
               }
-              setReadNote(false);
-              p.onReadAloud?.();
             }}
             title={
               p.readDisabledReason ? READ_TOOLTIP[p.readDisabledReason] : 'Read this message aloud'

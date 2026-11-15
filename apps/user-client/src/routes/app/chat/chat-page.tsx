@@ -880,7 +880,7 @@ export function ChatPage(): JSX.Element {
             setInteractionMode(true);
             void enterEdit(m);
           }}
-          onReadAloud={(message) => void voice.playMessage(message)}
+          onReadAloud={(message) => voice.playMessage(message)}
           voiceDisabledReason={voice.disabledReason}
           voiceMode={settingsQuery.data?.voiceMode ?? 'paragraph'}
           currentSegmentId={voice.currentSegmentId}
@@ -1203,6 +1203,7 @@ export function ChatPage(): JSX.Element {
           onToggleAutoRead={onToggleAutoRead}
           voiceUnavailable={voiceUnavailable}
           onEnterLiveVoice={onEnterLiveVoice}
+          onRecheckVoice={voice.recheck}
           compactable={compactable}
           onCompact={() => setShowCompactConfirm(true)}
         />

@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PersonaFontVoice } from '../../../src/routes/app/persona/font-voice.js';
 
@@ -62,7 +62,12 @@ vi.mock('../../../src/lib/voice/resolve-tts.js', () => ({
 // Mock @chatsundere/llm-unified — needed by VoicePicker (listTtsVoices) and
 // TtsModerationNotice's transitive dep on select-offering (listTtsOfferings).
 vi.mock('@chatsundere/llm-unified', () => ({
-  getProvider: () => ({ id: 'p', displayName: 'P', baseUrl: 'x', offerings: [] }),
+  getProvider: (id: string) => ({
+    id: 'p',
+    displayName: id === 'elevenlabs' ? 'ElevenLabs' : 'P',
+    baseUrl: 'x',
+    offerings: [],
+  }),
   getCanonical: () => undefined,
   listCanonicals: () => [],
   listOfferings: () => [],
@@ -70,7 +75,7 @@ vi.mock('@chatsundere/llm-unified', () => ({
   listSttOfferings: () => [],
   availableCanonicals: () => ({ available: [], hiddenCount: 0 }),
   effectiveFreedom: () => 'free',
-  listTtsVoices: vi.fn().mockResolvedValue([]),
+  listTtsVoices: vi.fn().mockResolvedValue({ voices: [], hiddenCount: 0 }),
 }));
 
 vi.mock('../../../src/routes/app/persona/use-persona-editing.js', () => ({
@@ -94,17 +99,22 @@ vi.mock('../../../src/data/providers.js', () => ({
 }));
 
 // Reset the VoicePicker session cache between tests so each test gets a clean slate.
-import { _resetVoicePickerCacheForTests } from '../../../src/components/voice/VoicePicker.js';
+import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  _resetVoicePickerCacheForTests();
+  _resetVoiceListForTests();
   // Default: no TTS provider → pickers render disabled.
   resolveTtsTransportMock.mockResolvedValue(null);
 });
 
 // ── Render helper ─────────────────────────────────────────────────────────────
+
+function VoiceSettingsSentinel(): JSX.Element {
+  const location = useLocation();
+  return <div data-testid="voice-settings-sentinel">{JSON.stringify(location.state)}</div>;
+}
 
 function renderPage(personaId: string) {
   state.patch = vi.fn().mockResolvedValue(undefined);
@@ -118,6 +128,7 @@ function renderPage(personaId: string) {
             path="/app/persona/:id"
             element={<div data-testid="persona-hub-sentinel">hub</div>}
           />
+          <Route path="/app/settings/voice" element={<VoiceSettingsSentinel />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -213,7 +224,7 @@ describe('PersonaFontVoice — Voice picker (no TTS provider)', () => {
     // The probe resolves asynchronously; wait for the disabled-hint text.
     await waitFor(() => {
       expect(
-        screen.getAllByText(/add a voice provider \(xai or nano-gpt\)/i).length,
+        screen.getAllByText(/add a voice provider \(xai, nano-gpt or elevenlabs\)/i).length,
       ).toBeGreaterThanOrEqual(1);
     });
 
@@ -281,5 +292,55 @@ describe('PersonaFontVoice — Narrator voice picker (roleplay gating)', () => {
 
     const container = screen.getByTestId('persona-font-voice');
     expect(container).not.toHaveTextContent(/defaults to the main voice/i);
+  });
+});
+
+describe('PersonaFontVoice — service line and disabled hint', () => {
+  it('names the active voice service and links to the Voice settings', async () => {
+    state.persona = { ...BASE_PERSONA };
+    resolveTtsTransportMock.mockResolvedValue({
+      providerConfig: {},
+      apiKey: 'k',
+      offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
+      ttsMeta: { displayName: 'Eleven v4', voices: { kind: 'static', voices: [] } },
+    });
+    renderPage('p-1');
+
+    const line = await screen.findByTestId('voice-service-line');
+    expect(line.textContent).toBe(
+      'Voices from Eleven v4 via ElevenLabs · change in My Settings → Voice',
+    );
+    expect(screen.getByRole('link', { name: 'change in My Settings → Voice' })).toHaveAttribute(
+      'href',
+      '/app/settings/voice',
+    );
+  });
+
+  it('the service link carries this page as the return target', async () => {
+    state.persona = { ...BASE_PERSONA };
+    resolveTtsTransportMock.mockResolvedValue({
+      providerConfig: {},
+      apiKey: 'k',
+      offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
+      ttsMeta: { displayName: 'Eleven v4', voices: { kind: 'static', voices: [] } },
+    });
+    renderPage('p-1');
+    fireEvent.click(await screen.findByRole('link', { name: 'change in My Settings → Voice' }));
+    expect(screen.getByTestId('voice-settings-sentinel').textContent).toBe(
+      JSON.stringify({ returnTo: '/app/persona/p-1/font-voice' }),
+    );
+  });
+
+  it('omits the service line when no voice service is configured', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1');
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(
+          'Add a voice provider (xAI, nano-gpt or ElevenLabs) in My Settings to enable voice.',
+        ).length,
+      ).toBeGreaterThan(0),
+    );
+    expect(screen.queryByTestId('voice-service-line')).toBeNull();
   });
 });

@@ -16,7 +16,7 @@ beforeAll(() => {
 });
 
 describe('built-in providers', () => {
-  it('registers all nine built-ins in sortPriority order', () => {
+  it('registers all ten built-ins in sortPriority order', () => {
     const ids = listProviders().map((p) => p.id);
     expect(ids).toEqual([
       'chutes',
@@ -28,7 +28,27 @@ describe('built-in providers', () => {
       'ollama-cloud',
       'nano-gpt',
       'openrouter',
+      'elevenlabs',
     ]);
+  });
+
+  it('elevenlabs is a direct, header-authenticated voice-only provider', () => {
+    const p = getProvider('elevenlabs');
+    expect(p).toBeDefined();
+    if (p) {
+      expect(p.baseUrl).toBe('https://api.elevenlabs.io/v1');
+      expect(p.auth).toEqual({ header: 'xi-api-key' });
+      expect(p.capabilities).toEqual(['tts', 'stt']);
+      expect(p.shape).toBe('none');
+      expect(p.probe).toEqual({ path: '/models', method: 'GET' });
+      expect(p.corsHint).toBe('direct');
+      expect(p.offerings.map((o) => o.upstreamSlug)).toEqual([
+        'eleven_v4',
+        'eleven_v4_turbo',
+        'scribe_v2',
+      ]);
+      expect(p.offerings.every((o) => o.confidence === 'verified')).toBe(true);
+    }
   });
 
   it('nano-gpt has inofficial CORS hint and openai-chat-completions shape', () => {

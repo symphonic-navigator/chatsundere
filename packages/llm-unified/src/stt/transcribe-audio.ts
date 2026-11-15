@@ -47,6 +47,32 @@ function filenameForMime(mimeType: string): string {
   return 'recording.wav';
 }
 
+interface SttWire {
+  path: string;
+  /** Multipart text fields sent next to the audio file. */
+  fields: Record<string, string>;
+}
+
+/**
+ * One exhaustive dispatch per transport: a new `SttTransportKind` member is a
+ * compile error here instead of silently inheriting another wire shape.
+ */
+function wireFor(args: TranscribeAudioArgs): SttWire {
+  switch (args.transport) {
+    case 'openai-transcriptions':
+      return { path: '/audio/transcriptions', fields: { model: args.upstreamSlug } };
+    case 'xai-native':
+      // xAI's /stt endpoint takes no model field; the slug is internal-only there.
+      return { path: '/stt', fields: {} };
+    case 'elevenlabs':
+      // Audio-event tags ("(laughter)") would pollute the transcript sent to the LLM.
+      return {
+        path: '/speech-to-text',
+        fields: { model_id: args.upstreamSlug, tag_audio_events: 'false' },
+      };
+  }
+}
+
 /** Transcribe one captured utterance; returns the trimmed transcript text. */
 export async function transcribeAudio(args: TranscribeAudioArgs): Promise<TranscribeAudioResult> {
   const fetchFn = args.fetchFn ?? fetch;
@@ -61,18 +87,16 @@ export async function transcribeAudio(args: TranscribeAudioArgs): Promise<Transc
   const filename = spoof ? 'recording.mkv' : filenameForMime(args.mimeType);
   const form = new FormData();
   form.append('file', new File([args.blob], filename, { type: fileType }));
-  // Both transport checks key on the same literal so a future third transport
-  // coherently inherits the openai-style defaults (model field + path).
-  // xAI's /stt endpoint takes no model field; the slug is internal-only there.
-  if (args.transport !== 'xai-native') form.append('model', args.upstreamSlug);
-  // `language` deliberately omitted on both transports — auto-detect.
+  const wire = wireFor(args);
+  for (const [key, value] of Object.entries(wire.fields)) form.append(key, value);
+  // `language` deliberately omitted on every transport — auto-detect.
   const proxied = args.providerConfig.routing.kind === 'cors-proxy';
   const response = await fetchWithProxyAuth(
     () =>
       buildRequest({
         provider: args.providerConfig,
         apiKey: args.apiKey,
-        path: args.transport === 'xai-native' ? '/stt' : '/audio/transcriptions',
+        path: wire.path,
         method: 'POST',
         body: form,
       }),

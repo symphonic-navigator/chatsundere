@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { VOICES_UNAVAILABLE_COPY } from '../../lib/voice/resolve-tts.js';
 import type { DisabledReason } from '../../lib/voice/use-voice-playback.js';
 import type { TransportState } from '../../lib/voice/voice-machine.js';
 
@@ -36,9 +37,9 @@ export interface VoiceTransportProps {
 }
 
 function unavailableNote(reason: DisabledReason): string {
-  return reason === 'no-provider'
-    ? 'Voice unavailable — no provider configured'
-    : 'Voice unavailable — this persona has no voice';
+  if (reason === 'no-provider') return 'Voice unavailable — no provider configured';
+  if (reason === 'voices-unavailable') return VOICES_UNAVAILABLE_COPY;
+  return 'Voice unavailable — this persona has no voice';
 }
 
 function skipNote(n: number): string {

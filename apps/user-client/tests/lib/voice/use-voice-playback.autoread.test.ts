@@ -4,13 +4,15 @@ import { act, renderHook } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const okResolution = {
+  ok: true,
+  fetchAudio: async () => new Blob(),
+  voiceLabel: 'Test',
+  cacheKeyFor: () => 'k',
+};
+const resolveTtsMock = vi.fn(async (): Promise<unknown> => okResolution);
 vi.mock('../../../src/lib/voice/resolve-tts.js', () => ({
-  resolveTts: vi.fn(async () => ({
-    ok: true,
-    fetchAudio: async () => new Blob(),
-    voiceLabel: 'Test',
-    cacheKeyFor: () => 'k',
-  })),
+  resolveTts: () => resolveTtsMock(),
 }));
 
 vi.mock('../../../src/lib/voice/voice-cache.js', () => ({
@@ -61,6 +63,8 @@ describe('auto-read driver', () => {
   beforeEach(() => {
     handle = null;
     autoReadAloud = false;
+    resolveTtsMock.mockReset();
+    resolveTtsMock.mockResolvedValue(okResolution);
   });
 
   it('does not auto-play when mode is off', async () => {
@@ -84,6 +88,32 @@ describe('auto-read driver', () => {
     };
     const { result } = renderHook(() => useVoicePlayback('c1', persona, []), { wrapper });
     await act(async () => {});
+    expect(result.current.transportState).toBe('idle');
+  });
+
+  it('writes a failed resolution back to disabledReason', async () => {
+    autoReadAloud = true;
+    const { result, rerender } = renderHook(() => useVoicePlayback('c1', persona, []), {
+      wrapper,
+    });
+    await act(async () => {});
+    expect(result.current.disabledReason).toBeNull();
+
+    // The mount probe succeeded; the driver's own resolution then fails.
+    resolveTtsMock.mockResolvedValue({ ok: false, reason: 'voices-unavailable' });
+    handle = {
+      draftMessageId: 'm1',
+      status: 'streaming',
+      contentBuffer: [
+        {
+          type: 'text',
+          text: 'A first paragraph long enough to be committed and read aloud.\n\nmore',
+        },
+      ],
+    };
+    rerender();
+    await act(async () => {});
+    expect(result.current.disabledReason).toBe('voices-unavailable');
     expect(result.current.transportState).toBe('idle');
   });
 });

@@ -52,6 +52,11 @@ describe('modality derivation', () => {
   });
 
   it('providersContributing returns the contributing providers when a kind is offered', () => {
-    expect(providersContributing('tts').sort()).toEqual(['mistral', 'nano-gpt', 'xai']);
+    expect(providersContributing('tts').sort()).toEqual([
+      'elevenlabs',
+      'mistral',
+      'nano-gpt',
+      'xai',
+    ]);
   });
 });

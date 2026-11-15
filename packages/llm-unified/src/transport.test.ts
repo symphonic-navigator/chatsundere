@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { afterEach, describe, expect, it, test } from 'bun:test';
+import { registerBuiltinProviders } from './providers/_register-builtins.js';
 import { setProxyAuthSource } from './proxy-auth.js';
-import { ProxyUnavailableError, buildRequest, redactRequestHeaders } from './transport.js';
+import { listProviders } from './registry.js';
+import {
+  ProxyUnavailableError,
+  SECRET_REQUEST_HEADERS,
+  buildRequest,
+  redactRequestHeaders,
+} from './transport.js';
 import type { ProviderConfig } from './types.js';
 
 const directConfig: ProviderConfig = {
@@ -84,6 +91,28 @@ describe('buildRequest', () => {
     });
     expect(req.headers.get('x-cors-proxy-target')).toBe('https://api.x.ai');
     expect(req.url).toBe('https://proxy.example/v1/chat/completions');
+  });
+
+  it('cors-proxy routing with a custom auth scheme sends the key in that header only', () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
+    const req = buildRequest({
+      provider: {
+        baseUrl: 'https://api.elevenlabs.io/v1',
+        routing: { kind: 'cors-proxy' },
+        auth: { header: 'xi-api-key' },
+      },
+      apiKey: 'upstream-key',
+      path: '/models',
+      method: 'GET',
+    });
+    expect(req.headers.get('xi-api-key')).toBe('upstream-key');
+    expect(req.headers.get('x-chatsundere-authorization')).toBe('Bearer jwt-abc');
+    expect(req.headers.get('x-cors-proxy-target')).toBe('https://api.elevenlabs.io');
+    expect(req.headers.get('authorization')).toBeNull();
   });
 
   it('cors-proxy routing throws a typed ProxyUnavailableError without a registered source or token', () => {
@@ -185,5 +214,54 @@ describe('buildRequest bodies', () => {
     expect(req.headers.get('Authorization')).toBe('Bearer k');
     const echoed = await req.formData();
     expect(echoed.get('model')).toBe('voxtral-mini-latest');
+  });
+});
+
+describe('header auth scheme', () => {
+  const eleven: ProviderConfig = {
+    baseUrl: 'https://api.elevenlabs.io/v1',
+    routing: { kind: 'direct' },
+    auth: { header: 'xi-api-key' },
+  };
+
+  it('buildRequest uses the xi-api-key header and no Authorization when the scheme says so', () => {
+    const req = buildRequest({ provider: eleven, apiKey: 'k', path: '/models', method: 'GET' });
+    expect(req.headers.get('xi-api-key')).toBe('k');
+    expect(req.headers.get('authorization')).toBeNull();
+  });
+
+  it('buildRequest keeps Bearer Authorization when no scheme is given', () => {
+    const req = buildRequest({
+      provider: directConfig,
+      apiKey: 'k',
+      path: '/models',
+      method: 'GET',
+    });
+    expect(req.headers.get('authorization')).toBe('Bearer k');
+  });
+
+  it('buildRequest applies a prefix when the scheme carries one', () => {
+    const req = buildRequest({
+      provider: { ...directConfig, auth: { header: 'X-Api-Key', prefix: 'Token' } },
+      apiKey: 'k',
+      path: '/models',
+      method: 'GET',
+    });
+    expect(req.headers.get('x-api-key')).toBe('Token k');
+    expect(req.headers.get('authorization')).toBeNull();
+  });
+
+  it('redactRequestHeaders drops xi-api-key', () => {
+    const headers = new Headers({ 'xi-api-key': 'secret', accept: 'x' });
+    expect('xi-api-key' in redactRequestHeaders(headers)).toBe(false);
+  });
+
+  it("every built-in provider's auth header is redacted", () => {
+    registerBuiltinProviders();
+    const withAuth = listProviders().filter((p) => p.auth);
+    expect(withAuth.length).toBeGreaterThan(0);
+    for (const p of withAuth) {
+      expect(SECRET_REQUEST_HEADERS.has((p.auth?.header ?? '').toLowerCase())).toBe(true);
+    }
   });
 });

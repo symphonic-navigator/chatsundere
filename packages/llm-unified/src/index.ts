@@ -154,7 +154,13 @@ export {
   type SynthesiseSpeechArgs,
   type SynthesiseSpeechResult,
 } from './tts/synthesise-speech.js';
-export { listTtsVoices, type TtsVoice, type ListTtsVoicesArgs } from './tts/voices.js';
+export {
+  listTtsVoices,
+  type TtsVoice,
+  type TtsVoiceList,
+  type ListTtsVoicesArgs,
+} from './tts/voices.js';
+export { JUVENILE_VOICE_TERMS, isJuvenileVoice } from './tts/juvenile-filter.js';
 export {
   transcribeAudio,
   TranscriptionError,

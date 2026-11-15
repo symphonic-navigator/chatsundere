@@ -96,3 +96,31 @@ describe('buildRequest onDiagnostics', () => {
     expect('x-chatsundere-authorization' in (seen[0]?.headers ?? {})).toBe(false);
   });
 });
+
+describe('buildRequest diagnostics redaction', () => {
+  test("drops the provider's own auth header even when it is not in the static set", () => {
+    let seen: Record<string, string> | null = null;
+    const sink: StreamDiagnosticsSink = {
+      onRequest: (info) => {
+        seen = info.headers;
+      },
+      onResponse: () => {},
+    };
+    const request = buildRequest({
+      provider: {
+        baseUrl: 'https://api.example.com/v1',
+        routing: { kind: 'direct' },
+        auth: { header: 'X-Test-Key' },
+      },
+      apiKey: 'sk-very-secret',
+      path: '/thing',
+      method: 'GET',
+      onDiagnostics: sink,
+    });
+    expect(request.headers.get('x-test-key')).toBe('sk-very-secret');
+    const headers = seen as Record<string, string> | null;
+    if (headers === null) throw new Error('onRequest was never called');
+    expect('x-test-key' in headers).toBe(false);
+    expect(JSON.stringify(headers)).not.toContain('sk-very-secret');
+  });
+});

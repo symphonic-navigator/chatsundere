@@ -13,7 +13,12 @@ export function offeringRef(o: Offering): string {
  * is deliberately absent — superseded by the board decision 2026-06-12 (its
  * registry entry and transport stay for a possible Mistral comeback).
  */
-export const TTS_DEFAULT_ORDER: readonly string[] = ['xai:grok-tts', 'nano-gpt:xai-tts'];
+export const TTS_DEFAULT_ORDER: readonly string[] = [
+  'xai:grok-tts',
+  'nano-gpt:xai-tts',
+  'elevenlabs:eleven_v4',
+  'elevenlabs:eleven_v4_turbo',
+];
 
 /**
  * Curated STT auto-default order: Mistral first so microphone audio defaults
@@ -23,6 +28,7 @@ export const STT_DEFAULT_ORDER: readonly string[] = [
   'mistral:voxtral-mini-latest',
   'xai:grok-stt',
   'nano-gpt:xai/speech-to-text/v1',
+  'elevenlabs:scribe_v2',
 ];
 
 export interface SelectedOffering {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { registerChutes } from './chutes.js';
+import { registerElevenLabs } from './elevenlabs.js';
 import { registerMistral } from './mistral.js';
 import { registerNanoGpt } from './nano-gpt.js';
 import { registerNovita } from './novita.js';
@@ -24,4 +25,5 @@ export function registerBuiltinProviders(): void {
   registerOllamaCloud();
   registerNanoGpt();
   registerOpenRouter();
+  registerElevenLabs();
 }

@@ -143,3 +143,14 @@ describe('VoiceTransport recovery + notices', () => {
     expect(screen.getByText('¶3')).toBeInTheDocument();
   });
 });
+
+describe('VoiceTransport voices-unavailable', () => {
+  it('armed with voices-unavailable shows the retry copy', () => {
+    render(
+      <VoiceTransport state="idle" {...props()} autoReadOn voiceUnavailable="voices-unavailable" />,
+    );
+    expect(
+      screen.getByText("Couldn't load your ElevenLabs voices — tap to try again."),
+    ).toBeInTheDocument();
+  });
+});

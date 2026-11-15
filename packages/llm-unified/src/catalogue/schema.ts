@@ -46,11 +46,11 @@ const TtsOfferingMetaSchema = v.object({
   displayName: v.pipe(v.string(), v.minLength(1)),
   teal: v.picklist(['strip', 'passthrough']),
   contentModerated: v.boolean(),
-  transport: v.picklist(['mistral-speech', 'xai-native', 'openai-speech']),
+  transport: v.picklist(['mistral-speech', 'xai-native', 'openai-speech', 'elevenlabs']),
   voices: v.variant('kind', [
     v.object({
       kind: v.literal('fetch'),
-      endpoint: v.picklist(['mistral-paginated', 'xai-flat']),
+      endpoint: v.picklist(['mistral-paginated', 'xai-flat', 'elevenlabs-v2']),
     }),
     v.object({
       kind: v.literal('static'),

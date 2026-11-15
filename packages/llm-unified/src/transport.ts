@@ -8,19 +8,29 @@ export interface StreamDiagnosticsSink {
   onResponse(info: { status: number; statusText: string; headers: Record<string, string> }): void;
 }
 
-const SECRET_REQUEST_HEADERS = new Set([
+/** Request headers whose values must never reach diagnostics. */
+export const SECRET_REQUEST_HEADERS = new Set([
   'authorization',
   'proxy-authorization',
   'x-api-key',
   'api-key',
+  'xi-api-key',
   'x-chatsundere-authorization',
 ]);
 
-/** Returns a plain object copy of `headers` with all secret-bearing headers removed. */
-export function redactRequestHeaders(headers: Headers): Record<string, string> {
+/**
+ * Returns a plain object copy of `headers` with all secret-bearing headers
+ * removed: the static set plus any `extraSecret` names (case-insensitive).
+ */
+export function redactRequestHeaders(
+  headers: Headers,
+  extraSecret: readonly string[] = [],
+): Record<string, string> {
+  const extra = new Set(extraSecret.map((name) => name.toLowerCase()));
   const out: Record<string, string> = {};
   headers.forEach((value, key) => {
-    if (SECRET_REQUEST_HEADERS.has(key.toLowerCase())) return;
+    const lower = key.toLowerCase();
+    if (SECRET_REQUEST_HEADERS.has(lower) || extra.has(lower)) return;
     out[key.toLowerCase()] = value;
   });
   return out;
@@ -145,15 +155,19 @@ export interface BuildRequestArgs {
 /**
  * Build a fetch-ready Request for the given provider. The Request's URL
  * and headers reflect the routing choice — direct fetch hits the upstream
- * with a Bearer Authorization header; via-cors-proxy routes through the
+ * with the key in the provider's configured auth header (default
+ * `Authorization: Bearer`); via-cors-proxy routes through the
  * account's authenticated proxy, attaching the current account JWT (read
  * at build time from the registered ProxyAuthSource, spec §3) in
  * `x-chatsundere-authorization` while the forwarded upstream key stays in
- * `Authorization`.
+ * its auth header.
  */
 export function buildRequest(args: BuildRequestArgs): Request {
   const { provider, apiKey, path, method, body, extraHeaders } = args;
-  const headers = new Headers({ Authorization: `Bearer ${apiKey}` });
+  const scheme = provider.auth ?? { header: 'Authorization', prefix: 'Bearer' };
+  const headers = new Headers({
+    [scheme.header]: scheme.prefix ? `${scheme.prefix} ${apiKey}` : apiKey,
+  });
   // FormData carries its own multipart boundary — setting Content-Type here
   // would destroy it. Only JSON bodies get the explicit header.
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
@@ -205,7 +219,13 @@ export function buildRequest(args: BuildRequestArgs): Request {
     redirect,
     body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
-  args.onDiagnostics?.onRequest({ method, url, headers: redactRequestHeaders(headers) });
+  // The provider's own auth header is dropped too, so a scheme added later
+  // under a name outside the static set cannot leak its key into diagnostics.
+  args.onDiagnostics?.onRequest({
+    method,
+    url,
+    headers: redactRequestHeaders(headers, [scheme.header]),
+  });
   return request;
 }
 

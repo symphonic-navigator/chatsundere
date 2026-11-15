@@ -978,3 +978,23 @@ Residuals found by the fix-wave re-review, also deferred:
 - **Severity:** low; no critical, high or medium remains.
 - **Rationale for deferral:** Both need a hostile sync operator, which the threat model already treats as able to deny service, and neither discloses a token to the sync role. The generation counter changes the grant's sealed shape and the claim logic, and padding sits in `packages/crypto`; neither belongs in a pre-squash fix wave.
 - **Follow-up commitment:** Decide with Chris; if accepted, the generation counter lands with the next grant-touching unit and the padding with the next crypto unit, v0.4.0 at the latest. Tracked in [[follow-ups-index]].
+
+## 2026-11-15 — ElevenLabs direct (Larissa pre-squash; CLEAR TO SQUASH; L1, L3, L4, I6 fixed; two items deferred)
+
+- **Affected paths:** `packages/llm-unified/src/{transport,probe,types}.ts`, `packages/llm-unified/src/{tts,stt,providers/elevenlabs}.ts`, `apps/user-client/src/lib/voice/**`
+- **Fixed before squash:**
+  - L1: voice IDs that are empty, `.` or `..`, or that contain `/`, `\`, `?` or `#`, are refused before the path is built.
+  - L3: `buildRequest` also drops the header that the provider's own `auth.header` names from diagnostics.
+  - L4: the voice-list memo is keyed by a non-reversible fingerprint of the API key, so it cannot outlive a key change or an account switch.
+  - I6: the main voice is snapshotted at guard time.
+  - The juvenile filter now runs on every voice source, not only ElevenLabs.
+- **Deferred:**
+  - **L2 (low): the chat call sites build a `ProviderConfig` without `auth`.** The spec's §6.1 helper was not built. The sites are `send-message.ts` (4×), `stream-manager.store.ts`, `resolve-background-offering.ts`, `memory/resolve-args.ts`, `artefact-model-resolve.ts` and the model debugger in `provider.tsx`. If one of them ever resolved a header-scheme provider, the key would go out as `Authorization: Bearer` to that provider's own host. It would still be redacted, so the failure is safe, not open. Today no header-scheme provider has chat offerings.
+  - **I5 (info): words joined to other letters or digits slip past the juvenile filter** (`KidVoice`, `Teen2`). ADR 0040 accepts narrowness, and deliberate evasion on a voice the user names themselves cannot be stopped. A camelCase and letter/digit split before matching would be a curated, data-level change.
+  - **I7 (info, pre-existing):** `resolve-tts.ts` logs the first 160 characters of the spoken text on a synthesis failure.
+- **Severity:** low and info; no critical, high or medium.
+- **Rationale for deferral:** L2 needs a header-scheme chat provider, and none exists. Neither item discloses anything today.
+- **Follow-up commitment:**
+  - L2: a `providerConfigFrom(definition, routing)` helper used at every call site, plus chat resolution refusing `shape: 'none'`, before the first header-scheme chat provider and v0.4.0 at the latest.
+  - I5: decide with the ElevenLabs step 3 (via nano-gpt).
+  - I7: next voice-logging touch.

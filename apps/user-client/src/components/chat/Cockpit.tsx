@@ -28,6 +28,7 @@ import { type ReasoningState, reasoningChoiceOf } from '../../lib/reasoning-reso
 import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
+import { type TtsUnavailableReason, VOICES_UNAVAILABLE_COPY } from '../../lib/voice/resolve-tts.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import {
   DESKTOP_MEDIA_QUERY,
@@ -75,11 +76,14 @@ interface Props {
   autoReadAloud: boolean;
   onToggleAutoRead: (next: boolean) => void;
   /** Why read-aloud is unavailable, or null when a voice is configured. */
-  voiceUnavailable: 'no-provider' | 'no-voice' | null;
+  voiceUnavailable: TtsUnavailableReason | null;
   /** Enter live voice mode — disabled-with-reason when no voice provider is
    *  configured. Optional so this component stays self-contained; the chat page
    *  always supplies it through InteractionMode. */
   onEnterLiveVoice?: () => void;
+  /** Re-run the TTS resolution — the retry behind a `voices-unavailable`
+   *  Live voice or Auto-read tap. */
+  onRecheckVoice?: () => Promise<void>;
 }
 
 /**
@@ -188,6 +192,16 @@ export function Cockpit(p: Props): JSX.Element {
     },
     [objectUrls],
   );
+  // A failed voice-list load is transient: Live voice and Auto-read stay
+  // tappable for that reason alone, and the tap re-runs the resolution.
+  const voiceRetryable = p.voiceUnavailable === 'voices-unavailable';
+  const [recheckingVoice, setRecheckingVoice] = useState<'live' | 'autoread' | null>(null);
+  const recheckVoice = (control: 'live' | 'autoread'): void => {
+    if (recheckingVoice !== null || !p.onRecheckVoice) return;
+    setRecheckingVoice(control);
+    const done = (): void => setRecheckingVoice(null);
+    p.onRecheckVoice().then(done, done);
+  };
   // Clear any stale inline note if voice becomes available mid-session.
   useEffect(() => {
     if (!p.voiceUnavailable) setVoiceNote(false);
@@ -485,14 +499,23 @@ export function Cockpit(p: Props): JSX.Element {
           type="button"
           className="cockpit-icon-btn"
           data-control="live"
-          onClick={() => p.onEnterLiveVoice?.()}
-          disabled={p.voiceUnavailable !== null}
-          data-disabled={p.voiceUnavailable ? 'true' : undefined}
-          aria-disabled={p.voiceUnavailable ? true : undefined}
+          onClick={() => {
+            if (voiceRetryable) {
+              recheckVoice('live');
+              return;
+            }
+            p.onEnterLiveVoice?.();
+          }}
+          disabled={p.voiceUnavailable !== null && !voiceRetryable}
+          data-disabled={p.voiceUnavailable && !voiceRetryable ? 'true' : undefined}
+          aria-disabled={p.voiceUnavailable && !voiceRetryable ? true : undefined}
+          aria-busy={recheckingVoice === 'live' || undefined}
           title={
-            p.voiceUnavailable
-              ? 'No voice provider — set one in Settings → Voice'
-              : 'Live voice mode'
+            voiceRetryable
+              ? VOICES_UNAVAILABLE_COPY
+              : p.voiceUnavailable
+                ? 'No voice provider — set one in Settings → Voice'
+                : 'Live voice mode'
           }
           aria-label="Live voice mode"
         >
@@ -504,17 +527,26 @@ export function Cockpit(p: Props): JSX.Element {
           type="button"
           className={`cockpit-icon-btn${p.autoReadAloud ? ' active' : ''}`}
           data-control="autoread"
-          data-disabled={p.voiceUnavailable ? 'true' : undefined}
+          data-disabled={p.voiceUnavailable && !voiceRetryable ? 'true' : undefined}
           aria-pressed={p.autoReadAloud}
-          aria-disabled={p.voiceUnavailable ? true : undefined}
+          aria-disabled={p.voiceUnavailable && !voiceRetryable ? true : undefined}
+          aria-busy={recheckingVoice === 'autoread' || undefined}
+          title={voiceRetryable ? VOICES_UNAVAILABLE_COPY : undefined}
           aria-label={
-            p.voiceUnavailable
-              ? 'Read replies aloud (no voice configured)'
-              : p.autoReadAloud
-                ? 'Stop reading replies aloud'
-                : 'Read replies aloud'
+            voiceRetryable
+              ? 'Read replies aloud (voices did not load)'
+              : p.voiceUnavailable
+                ? 'Read replies aloud (no voice configured)'
+                : p.autoReadAloud
+                  ? 'Stop reading replies aloud'
+                  : 'Read replies aloud'
           }
           onClick={() => {
+            if (voiceRetryable) {
+              setVoiceNote(true);
+              recheckVoice('autoread');
+              return;
+            }
             if (p.voiceUnavailable) {
               setVoiceNote((v) => !v);
               return;
@@ -650,7 +682,9 @@ export function Cockpit(p: Props): JSX.Element {
           <span>
             {p.voiceUnavailable === 'no-provider'
               ? 'No voice yet — set up a voice provider to read replies aloud.'
-              : 'No voice yet — give this companion a voice to read replies aloud.'}
+              : p.voiceUnavailable === 'voices-unavailable'
+                ? VOICES_UNAVAILABLE_COPY
+                : 'No voice yet — give this companion a voice to read replies aloud.'}
           </span>
           <button type="button" onClick={() => navigate('/app/settings')}>
             Settings → Voice

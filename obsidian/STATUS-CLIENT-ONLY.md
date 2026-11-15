@@ -8,6 +8,38 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-15 — **ELEVENLABS DIRECT BUILT FOR 0.4.0 (step 1 of 3), AWAITING
+CHRIS'S DEVICE TEST.** On branch `claude/modest-pasteur-xy1gwx` (cloud session), not yet on
+`master`.
+- **What:** ElevenLabs as the first voice-only provider: Eleven v4, Eleven v4 Turbo and Scribe v2.
+  - Auth through header `xi-api-key`, via a new per-provider scheme; the key is redacted from
+    diagnostics.
+  - An account voice picker with search, Own/Predefined and gender filters, a "choose a new one"
+    hint for stale voices, and a service line.
+  - A synthesis guard that refuses voices the active service does not list, on every service.
+  - TEAL `passthrough`.
+- **Juvenile voices are filtered out openly**
+  ([ADR 0040](decisions/0040-filter-juvenile-voices.md)): a keyword filter on name, description
+  and the `descriptive` label; the picker states "N voices hidden by our juvenile-voice rule".
+- **Records:** spec [[../superpowers/specs/2026-11-15-elevenlabs-direct-design]] and plan
+  [[../superpowers/plans/2026-11-15-elevenlabs-direct]]; curation in [[providers/elevenlabs]] and
+  [[models/eleven-v4]]; memory at Kumbu² `/SWE/Chatsundere/Memory/elevenlabs.md`.
+- **Gates:**
+  - Larissa: CLEAR TO SQUASH. L2 and I5/I7 deferred in [[insights/security-deferrals]].
+  - Laura: no hard defects at spec-pass or pre-squash.
+  - Final whole-branch review clean after one fix wave.
+  - Tests: llm-unified 542/542, user-client 4352/4352. Typecheck 14/14, build 9/9, Biome clean.
+  - auth-service and sync-service tests were not run, for lack of a local Postgres (untouched
+    by this branch).
+- **Open:** `contentModerated` and the freedom badge are set by Chris's moderation hand test
+  (spec §11, step 10). Prosody-tag MP3s 07–10 are waiting for a listen.
+
+**Next:** Chris device-tests spec §11, then squash to `master`, then the Kumbu² diary entry in
+`0.4.0.md`. Then ElevenLabs step 2 (TEAL v2, emotion tags) and step 3 (ElevenLabs via
+nano-gpt).
+
+---
+
 **Last updated:** 2026-11-11 — **MAINTENANCE LINES ADOPTED; OAUTH HARDENING STAGED FOR
 0.3.6.** PR #37 (ADR 0039, [[RELEASE-PROCESS]]) is merged to `master` (`d586e797`) and
 PR #38 to `maintenance/0.3` (`5e8babe3`). `master` now prepares 0.4.0, and
