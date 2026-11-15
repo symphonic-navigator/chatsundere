@@ -230,6 +230,119 @@ describe('discoverOAuth', () => {
     });
   });
 
+  describe('direct first and viaProxy', () => {
+    /** Throws `error` for direct requests whose URL contains `needle`; proxied ones pass. */
+    const failingDirect = (
+      fake: ReturnType<typeof createFakeAuthServer>,
+      needle: string,
+      error: Error,
+    ) =>
+      (async (input, init) => {
+        const url = String(input);
+        if (!url.startsWith(fake.state.urls.proxyBase) && url.includes(needle)) throw error;
+        return fake.fetch(input, init);
+      }) as typeof fetch;
+
+    it('goes direct first for the pointer even when the probe used the proxy', async () => {
+      const { fake, run } = setup({ metadata: 'header' }, 'proxy');
+      const found = await run();
+      // The pointer itself came from a proxied challenge, so the details still count as proxied.
+      expect(found).toMatchObject({ kind: 'oauth', viaProxy: true });
+      expect(fake.state.log.some((l) => l.startsWith('GET proxy') && l.includes('/prm.json'))).toBe(
+        false,
+      );
+      expect(
+        fake.state.log.some((l) => l.startsWith('GET direct') && l.includes('/prm.json')),
+      ).toBe(true);
+    });
+
+    it('falls back to the proxy for the pointer only on a TypeError', async () => {
+      const { fake } = setup({ metadata: 'header' });
+      const viaTypeError = await discoverOAuth(fake.state.urls.mcp, {
+        oauthFetch: createOAuthFetch({
+          fetch: failingDirect(fake, 'prm.json', new TypeError('Failed to fetch')),
+        }),
+        route: 'direct',
+        hasProxy: true,
+      });
+      expect(viaTypeError).toMatchObject({ kind: 'oauth', viaProxy: true });
+
+      const other = setup({ metadata: 'header' });
+      const kind = await kindOf(
+        discoverOAuth(other.fake.state.urls.mcp, {
+          oauthFetch: createOAuthFetch({
+            fetch: failingDirect(other.fake, 'prm.json', new Error('boom')),
+          }),
+          route: 'direct',
+          hasProxy: true,
+        }),
+      );
+      expect(kind).toBe('network');
+      expect(other.fake.state.log.some((l) => l.startsWith('GET proxy'))).toBe(false);
+    });
+
+    it('applies the same rule to the well-known guesses', async () => {
+      const { fake } = setup({ metadata: 'well-known-path' });
+      const found = await discoverOAuth(fake.state.urls.mcp, {
+        oauthFetch: createOAuthFetch({
+          fetch: failingDirect(fake, 'oauth-protected-resource', new TypeError('Failed to fetch')),
+        }),
+        route: 'direct',
+        hasProxy: true,
+      });
+      expect(found).toMatchObject({ kind: 'oauth', viaProxy: true });
+    });
+
+    it('reports viaProxy when only the authorisation server metadata came through the proxy', async () => {
+      const { fake } = setup({ metadata: 'header' });
+      const found = await discoverOAuth(fake.state.urls.mcp, {
+        oauthFetch: createOAuthFetch({
+          fetch: failingDirect(fake, 'auth.example', new TypeError('Failed to fetch')),
+        }),
+        route: 'direct',
+        hasProxy: true,
+      });
+      expect(found).toMatchObject({ kind: 'oauth', viaProxy: true });
+    });
+
+    it('reports viaProxy when the metadata pointer came from a proxied challenge', async () => {
+      const proxied = await setup({ metadata: 'header' }, 'proxy').run();
+      expect(proxied).toMatchObject({ kind: 'oauth', viaProxy: true });
+      const direct = await setup({ metadata: 'header' }, 'direct').run();
+      expect(direct).toMatchObject({ kind: 'oauth', viaProxy: false });
+    });
+
+    it('reports viaProxy when the scope came from a proxied challenge', async () => {
+      const fromChallenge = await setup(
+        { metadata: 'well-known-path', challengeScope: 'read' },
+        'proxy',
+      ).run();
+      expect(fromChallenge).toMatchObject({ kind: 'oauth', scope: 'read', viaProxy: true });
+      // Without a challenge scope or pointer, a proxied probe contributed nothing used.
+      const unused = await setup(
+        { metadata: 'well-known-path', prmScopes: ['read'] },
+        'proxy',
+      ).run();
+      expect(unused).toMatchObject({ kind: 'oauth', scope: 'read', viaProxy: false });
+    });
+
+    it('reports no viaProxy when everything was direct', async () => {
+      expect(await setup({ metadata: 'header' }).run()).toMatchObject({ viaProxy: false });
+    });
+
+    it('treats an unreachable guess with no proxy as a server without OAuth', async () => {
+      const { fake } = setup({ metadata: 'well-known-path' });
+      const found = await discoverOAuth(fake.state.urls.mcp, {
+        oauthFetch: createOAuthFetch({
+          fetch: failingDirect(fake, 'oauth-protected-resource', new TypeError('Failed to fetch')),
+        }),
+        route: 'direct',
+        hasProxy: false,
+      });
+      expect(found).toEqual({ kind: 'no-oauth' });
+    });
+  });
+
   describe('scope', () => {
     it('lets the challenge win over scopes_supported', async () => {
       const { run } = setup({ challengeScope: 'read', prmScopes: ['read', 'write'] });

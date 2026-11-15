@@ -3,6 +3,7 @@ import type { MasterKey } from '@chatsundere/crypto';
 import type { McpOAuthGrantRow } from '../../boot/client-data-db.js';
 import { openSpentRefresh, openTokens } from '../../data/mcp-oauth-grants.js';
 import type { EncryptedBlob } from '../../lib/secrets.js';
+import { generationOf, isGrantHeld, seenOf, stampForPush } from './grant-generation.js';
 import type { GrantStore } from './grant-store.js';
 import type { OAuthFetch } from './oauth-fetch.js';
 import { type TokenSet, revokeToken } from './token-client.js';
@@ -93,8 +94,10 @@ export async function publishPending(
     await deps.store.writeLocal(serverId, { ...CLEARED_PENDING, tokens: pending, claim: null });
     return 'published';
   }
-  const body = publishedRow(row, pending, deps.wallNow());
   const newFamily = row.pendingNewFamily === true;
+  // A held grant publishes only a new sign-in (spec §5.4); the ordinary pair waits.
+  if (isGrantHeld(row) && !newFamily) return 'kept';
+  const body = publishedRow(row, pending, deps.wallNow());
   let spent: string | null = null;
   if (!newFamily && row.pendingSpentRefresh) {
     try {
@@ -104,9 +107,30 @@ export async function publishPending(
     }
   }
   let baseRev = row.pendingBaseRev ?? 0;
+  let baseGeneration = generationOf(row);
+  let seen = seenOf(row);
   for (let attempt = 0; attempt <= MAX_REPUSHES; attempt++) {
-    const result = await deps.store.push(body, baseRev, mk);
+    if (attempt > 0) {
+      // A pull may have refused a record or raised the mark since the last attempt.
+      const fresh = await deps.store.snapshot(serverId);
+      if (!fresh) return 'kept';
+      if (isGrantHeld(fresh.row) && !newFamily) return 'kept';
+      seen = Math.max(seen, seenOf(fresh.row));
+    }
+    const result = await deps.store.push(
+      stampForPush({ ...body, seenGeneration: seen }, baseGeneration),
+      baseRev,
+      mk,
+    );
     if (result.status === 'ok') {
+      if (result.written === false) {
+        // The server took the pair, but a newer local revision kept it out of the row. A
+        // hold means that revision was refused, so the pair may be the only copy this
+        // device has; otherwise an accepted newer row superseded it, and publishing it
+        // again could present a spent token.
+        const after = await deps.store.snapshot(serverId);
+        if (after && isGrantHeld(after.row)) return 'kept';
+      }
       await deps.store.writeLocal(serverId, CLEARED_PENDING);
       return 'published';
     }
@@ -117,21 +141,31 @@ export async function publishPending(
     }
     if (result.status !== 'conflict') return 'kept';
     if (newFamily) {
-      // A fresh sign-in always beats the old row, whatever it holds.
+      // A fresh sign-in always beats the old row, whatever it holds; its generation still
+      // has to climb above the row it overwrites when that row opens (spec §5.2).
+      const opened = await deps.store.open(result.current, mk);
+      baseGeneration = opened ? generationOf(opened) : generationOf(row);
       baseRev = result.current.rev;
       continue;
     }
     const current = await deps.store.open(result.current, mk);
     if (!current) return 'kept';
+    if (generationOf(current) < seen) {
+      // An older copy than this device has seen: a refusal, never a base (spec §5.3).
+      // The adopt outcome is ignored on purpose: refused or stale, the pair is kept.
+      await deps.store.adopt(result.current);
+      return 'kept';
+    }
     const currentTokens = await openTokensSafe(current.tokens, mk, serverId);
     if (currentTokens === 'corrupt' || spent === null) return 'kept';
     if ((currentTokens?.refreshToken ?? null) === spent) {
       // Nothing newer exists; the row may carry another device's claim over the spent token.
+      baseGeneration = generationOf(current);
       baseRev = result.current.rev;
       continue;
     }
-    // A newer rotation or sign-in won.
-    await deps.store.adopt(result.current);
+    // A newer rotation or sign-in won, unless the adopt itself was refused.
+    if ((await deps.store.adopt(result.current)) === 'refused') return 'kept';
     await deps.store.writeLocal(serverId, CLEARED_PENDING);
     return 'adopted';
   }

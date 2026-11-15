@@ -11,12 +11,18 @@ import { padPlaintext, unpadPlaintext } from './padding.js';
 const VERSION_TAG = 'chatsundere-sync-v1';
 const NONCE_BYTES = 12;
 
-/** Collections whose plaintext is size-padded because size alone is a sidechannel (spec §5.3). */
+/**
+ * Collections whose plaintext is size-padded because size alone is a sidechannel (spec §5.3).
+ * `mcpOAuthGrants` is padded because an unpadded record's size reveals whether a grant holds
+ * tokens, i.e. its token kind (MCP OAuth hardening spec §4). Records sealed before padding stay
+ * readable: `unpadPlaintext` honours the length prefix, so trailing padding is optional.
+ */
 export const PADDED_COLLECTIONS: ReadonlySet<string> = new Set([
   'personas',
   'memoryBody',
   'memoryJournal',
   'seedTemplates',
+  'mcpOAuthGrants',
 ]);
 
 /** The sealed form of a record — everything that goes on the sync wire. */

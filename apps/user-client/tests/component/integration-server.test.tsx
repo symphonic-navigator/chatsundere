@@ -354,6 +354,7 @@ describe('IntegrationServerPage', () => {
       revocationEndpoint: null,
       cimdSupported: true,
       issParameterSupported: false,
+      viaProxy: false,
       scope: null,
     };
     const signIn = (over: Record<string, unknown> = {}) => ({
@@ -851,6 +852,40 @@ describe('IntegrationServerPage', () => {
         expect.objectContaining({ url: OAUTH_ROW.url }),
       );
       expect(consentMock).toHaveBeenCalledWith('o1', 'https://kumbu.example/mcp');
+    });
+
+    it('Test connection on a held grant says it is paused and keeps the last result to save', async () => {
+      grants.rows = [{ ...GRANT, heldGeneration: 4, seenGeneration: 9 } as McpOAuthGrantRow];
+      useMcpServersMock.mockReturnValue({
+        data: [{ ...OAUTH_ROW, lastError: 'HTTP 503', lastTestedAt: 5 }],
+      });
+      testOAuthMock.mockResolvedValue({
+        ok: false,
+        held: true,
+        routing: null,
+        resolvedEndpoint: null,
+        tools: [],
+        error: 'Sign-in paused on this device. Sign in again to carry on.',
+      });
+      wrapAt('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+      expect(
+        await screen.findByText('Sign-in paused on this device. Sign in again to carry on.'),
+      ).toBeTruthy();
+      // The pause outranks the saved error in the status line, and the test block hides it too.
+      expect(screen.getByText('⚠ Sign-in paused here')).toBeTruthy();
+      expect(screen.queryByText(/HTTP 503/)).toBeNull();
+      fireEvent.click(screen.getByRole('checkbox', { name: /Trusted/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      await screen.findByText('integrations list');
+      const row = upsertMock.mock.calls.at(-1)?.[0] as McpServerRow;
+      expect(row).toMatchObject({
+        lastError: 'HTTP 503',
+        lastTestedAt: 5,
+        routing: 'proxy',
+        resolvedEndpoint: 'https://kumbu.example/mcp',
+      });
+      expect(consentMock).not.toHaveBeenCalled();
     });
 
     it('does not record consent after a failed test', async () => {

@@ -69,6 +69,19 @@ describe('testOAuthConnection', () => {
     expect(ensureToken.mock.calls[1]?.[1]).toMatchObject({ rejectedToken: 'old' });
   });
 
+  it('reads a held sign-in as paused and marks the result held, without contacting the server', async () => {
+    const r = await testOAuthConnection(ROW, true, {
+      getGrant: async () => GRANT,
+      ensureToken: async () => ({ ok: false, reason: 'held' }),
+    });
+    expect(r).toMatchObject({
+      ok: false,
+      held: true,
+      error: 'Sign-in paused on this device. Sign in again to carry on.',
+    });
+    expect(testConnMock).not.toHaveBeenCalled();
+  });
+
   it('reads an ended sign-in as such, without contacting the server', async () => {
     const r = await testOAuthConnection(ROW, true, {
       getGrant: async () => GRANT,
