@@ -21,7 +21,12 @@ const {
   return {
     getProviderMock: vi.fn((id: string) =>
       id === 'chutes'
-        ? { displayName: 'Chutes', corsHint: 'direct', baseUrl: 'https://chutes.ai' }
+        ? {
+            displayName: 'Chutes',
+            corsHint: 'direct',
+            capabilities: ['llm'],
+            baseUrl: 'https://chutes.ai',
+          }
         : undefined,
     ),
     probeProviderMock: vi.fn(),
@@ -131,7 +136,12 @@ describe('SettingsProviderPage', () => {
     cleanup();
     getProviderMock.mockImplementation((id: string) =>
       id === 'chutes'
-        ? { displayName: 'Chutes', corsHint: 'direct', baseUrl: 'https://chutes.ai' }
+        ? {
+            displayName: 'Chutes',
+            corsHint: 'direct',
+            capabilities: ['llm'],
+            baseUrl: 'https://chutes.ai',
+          }
         : undefined,
     );
     probeProviderMock.mockReset();
@@ -176,6 +186,7 @@ describe('SettingsProviderPage', () => {
       displayName: 'Ollama Cloud',
       baseUrl: 'https://ollama.com/v1',
       corsHint: 'requires-proxy',
+      capabilities: ['llm'],
     });
     wrapAt('/app/settings/providers/ollama-cloud');
     fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
@@ -190,6 +201,7 @@ describe('SettingsProviderPage', () => {
       displayName: 'Chutes',
       baseUrl: 'https://llm.chutes.ai/v1',
       corsHint: 'direct',
+      capabilities: ['llm'],
     });
     wrapAt('/app/settings/providers/chutes');
     fireEvent.change(await screen.findByPlaceholderText('sk-...'), {
@@ -214,6 +226,7 @@ describe('SettingsProviderPage', () => {
       displayName: 'Ollama Cloud',
       baseUrl: 'https://ollama.com/v1',
       corsHint: 'requires-proxy',
+      capabilities: ['llm'],
     });
     wrapAt('/app/settings/providers/ollama-cloud');
     fireEvent.change(await screen.findByPlaceholderText('sk-...'), {
@@ -277,5 +290,44 @@ describe('SettingsProviderPage', () => {
     providerRows.push({ id: 'chutes', templateId: 'chutes', apiKey: { blob: 'sealed' } });
     wrapAt('/app/settings/providers/chutes');
     expect(await screen.findByRole('button', { name: 'Test a model' })).toBeEnabled();
+  });
+
+  // ── Voice-only providers ──────────────────────────────────────────────────
+
+  it('disables "Test a model" for a voice-only provider and says why', async () => {
+    providerRows.push({ id: 'elevenlabs', templateId: 'elevenlabs', apiKey: { blob: 'k' } });
+    getProviderMock.mockReturnValue({
+      displayName: 'ElevenLabs',
+      baseUrl: 'https://api.elevenlabs.io',
+      corsHint: 'direct',
+      capabilities: ['tts', 'stt'],
+    });
+    wrapAt('/app/settings/providers/elevenlabs');
+    expect(await screen.findByRole('button', { name: /test a model/i })).toBeDisabled();
+    expect(
+      screen.getByText(
+        "ElevenLabs offers voices only. Choose it under My Settings → Voice, then pick a voice on a persona's Font & Voice page.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps "Test a model" enabled for an LLM provider', async () => {
+    providerRows.push({ id: 'chutes', templateId: 'chutes', apiKey: { blob: 'k' } });
+    getProviderMock.mockReturnValue({
+      displayName: 'Chutes',
+      baseUrl: 'https://llm.chutes.ai/v1',
+      corsHint: 'direct',
+      capabilities: ['llm'],
+    });
+    wrapAt('/app/settings/providers/chutes');
+    expect(await screen.findByRole('button', { name: /test a model/i })).not.toBeDisabled();
+  });
+
+  it('reads "voices unlocked" for a voice-only provider and "LLM unlocked" for an LLM one', async () => {
+    // The ok badge is transient (the page navigates back), so assert the copy via the helper.
+    const { keyValidCopy } = await import('../../src/routes/app/settings/provider.js');
+    expect(keyValidCopy(['tts', 'stt'])).toBe('✓ Key valid · voices unlocked');
+    expect(keyValidCopy(['llm'])).toBe('✓ Key valid · LLM unlocked');
+    expect(keyValidCopy(undefined)).toBe('✓ Key valid · LLM unlocked');
   });
 });

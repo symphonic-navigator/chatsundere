@@ -37,6 +37,13 @@ type Status =
   | { kind: 'ok' }
   | { kind: 'error'; reason: string };
 
+/** Success badge copy: voice-only providers unlock voices, LLM providers unlock the LLM. */
+export function keyValidCopy(capabilities: readonly string[] | undefined): string {
+  return capabilities && !capabilities.includes('llm')
+    ? '✓ Key valid · voices unlocked'
+    : '✓ Key valid · LLM unlocked';
+}
+
 export function SettingsProviderPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings-providers');
   const navigate = useNavigate();
@@ -62,11 +69,14 @@ export function SettingsProviderPage(): JSX.Element {
   // apiKey === null is the synced "removed" state: the row survives, the key does not.
   const hasSavedKey = existing?.apiKey != null;
   const proxyReady = !requiresProxy || proxyGate.enabled;
-  const testDisabledReason = !hasSavedKey
-    ? 'Save a key first'
-    : !proxyReady
-      ? (proxyGate.tooltip ?? 'Link a server first')
-      : null;
+  const voiceOnly = definition != null && !definition.capabilities.includes('llm');
+  const testDisabledReason = voiceOnly
+    ? `${definition.displayName} offers voices only. Choose it under My Settings → Voice, then pick a voice on a persona's Font & Voice page.`
+    : !hasSavedKey
+      ? 'Save a key first'
+      : !proxyReady
+        ? (proxyGate.tooltip ?? 'Link a server first')
+        : null;
 
   const [apiKey, setApiKey] = useState('');
   const [revealKey, setRevealKey] = useState(false);
@@ -256,7 +266,7 @@ export function SettingsProviderPage(): JSX.Element {
             {status.kind === 'probing'
               ? 'Probing…'
               : status.kind === 'ok'
-                ? '✓ Key valid · LLM unlocked'
+                ? keyValidCopy(definition.capabilities)
                 : `✗ ${(status as { kind: 'error'; reason: string }).reason}`}
           </div>
         ) : null}

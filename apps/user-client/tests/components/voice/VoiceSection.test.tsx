@@ -127,7 +127,9 @@ describe('VoiceSection — Read-aloud voice slot picker', () => {
     providerRowsMock.mockReturnValue(providerRows('mistral'));
     setup();
     const trigger = screen.getByRole('button', { name: /pick read-aloud voice/i });
-    expect(trigger.textContent).toContain('Add the xAI or nano-gpt provider to enable read-aloud.');
+    expect(trigger.textContent).toContain(
+      'Add the xAI, nano-gpt or ElevenLabs provider to enable read-aloud.',
+    );
     openTtsPicker();
     const xaiRow = screen.getByText('Grok TTS via xAI').closest('[aria-disabled]');
     expect(xaiRow?.getAttribute('aria-disabled')).toBe('true');
@@ -159,6 +161,35 @@ describe('VoiceSection — Read-aloud voice slot picker', () => {
         /personas keep their voice picks — if a voice came from the previous provider, re-pick it in the persona editor/i,
       ),
     ).toBeTruthy();
+  });
+});
+
+describe('VoiceSection — ElevenLabs egress notes', () => {
+  it('discloses ElevenLabs (US) egress for both TTS refs and the STT ref', () => {
+    providerRowsMock.mockReturnValue(providerRows('elevenlabs'));
+    setup();
+    openTtsPicker();
+    const v4 = screen.getByRole('button', { name: /eleven v4 via elevenlabs/i });
+    expect(v4.textContent).toContain('Sends message text to ElevenLabs (US)');
+    const turbo = screen.getByRole('button', { name: /eleven v4 turbo via elevenlabs/i });
+    expect(turbo.textContent).toContain('Sends message text to ElevenLabs (US)');
+  });
+
+  it('discloses microphone egress for Scribe', () => {
+    providerRowsMock.mockReturnValue(providerRows('elevenlabs'));
+    setup();
+    openSttPicker();
+    const scribe = screen.getByRole('button', { name: /scribe via elevenlabs/i });
+    expect(scribe.textContent).toContain('Sends microphone audio to ElevenLabs (US)');
+  });
+
+  it('shows the unconfigured dictation copy', () => {
+    providerRowsMock.mockReturnValue(providerRows());
+    setup();
+    const trigger = screen.getByRole('button', { name: /pick speech-to-text/i });
+    expect(trigger.textContent).toContain(
+      'Add the Mistral AI, xAI, nano-gpt or ElevenLabs provider to dictate.',
+    );
   });
 });
 

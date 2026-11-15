@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { getProvider } from '@chatsundere/llm-unified';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
@@ -25,9 +26,17 @@ export function PersonaFontVoice(): JSX.Element {
   // probing (treated as enabled so the picker isn't prematurely locked during
   // load); false = no provider.
   const [hasTtsProvider, setHasTtsProvider] = useState<boolean | null>(null);
+  const [serviceLabel, setServiceLabel] = useState<string | null>(null);
   useEffect(() => {
     void resolveTtsTransport()
-      .then((t) => setHasTtsProvider(t !== null))
+      .then((t) => {
+        setHasTtsProvider(t !== null);
+        if (t) {
+          const providerName =
+            getProvider(t.offering.providerId)?.displayName ?? t.offering.providerId;
+          setServiceLabel(`${t.ttsMeta.displayName} via ${providerName}`);
+        }
+      })
       .catch(() => setHasTtsProvider(false));
   }, []);
 
@@ -106,13 +115,21 @@ export function PersonaFontVoice(): JSX.Element {
 
         {/* 2. Voice block ──────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3">
+          {serviceLabel ? (
+            <p data-testid="voice-service-line" className="text-[11px] text-paper-soft">
+              Voices from {serviceLabel} ·{' '}
+              <Link to="/app/settings/voice" className="underline">
+                change in My Settings → Voice
+              </Link>
+            </p>
+          ) : null}
           <TtsModerationNotice />
           <VoicePicker
             label="Voice"
             value={persona.voice}
             onSelect={(v) => void patch({ voice: v })}
             disabled={hasTtsProvider === false}
-            disabledHint="Add a voice provider (xAI or nano-gpt) in My Settings to enable voice."
+            disabledHint="Add a voice provider (xAI, nano-gpt or ElevenLabs) in My Settings to enable voice."
           />
           {persona.roleplay ? (
             <div>
@@ -121,7 +138,7 @@ export function PersonaFontVoice(): JSX.Element {
                 value={persona.narratorVoice}
                 onSelect={(v) => void patch({ narratorVoice: v })}
                 disabled={hasTtsProvider === false}
-                disabledHint="Add a voice provider (xAI or nano-gpt) in My Settings to enable voice."
+                disabledHint="Add a voice provider (xAI, nano-gpt or ElevenLabs) in My Settings to enable voice."
               />
               <p className="mt-1 text-[11px] text-paper-soft">
                 Used for <em>asterisk narration</em> in roleplay; defaults to the main voice.

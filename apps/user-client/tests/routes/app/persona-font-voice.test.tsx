@@ -62,7 +62,12 @@ vi.mock('../../../src/lib/voice/resolve-tts.js', () => ({
 // Mock @chatsundere/llm-unified — needed by VoicePicker (listTtsVoices) and
 // TtsModerationNotice's transitive dep on select-offering (listTtsOfferings).
 vi.mock('@chatsundere/llm-unified', () => ({
-  getProvider: () => ({ id: 'p', displayName: 'P', baseUrl: 'x', offerings: [] }),
+  getProvider: (id: string) => ({
+    id: 'p',
+    displayName: id === 'elevenlabs' ? 'ElevenLabs' : 'P',
+    baseUrl: 'x',
+    offerings: [],
+  }),
   getCanonical: () => undefined,
   listCanonicals: () => [],
   listOfferings: () => [],
@@ -213,7 +218,7 @@ describe('PersonaFontVoice — Voice picker (no TTS provider)', () => {
     // The probe resolves asynchronously; wait for the disabled-hint text.
     await waitFor(() => {
       expect(
-        screen.getAllByText(/add a voice provider \(xai or nano-gpt\)/i).length,
+        screen.getAllByText(/add a voice provider \(xai, nano-gpt or elevenlabs\)/i).length,
       ).toBeGreaterThanOrEqual(1);
     });
 
@@ -281,5 +286,40 @@ describe('PersonaFontVoice — Narrator voice picker (roleplay gating)', () => {
 
     const container = screen.getByTestId('persona-font-voice');
     expect(container).not.toHaveTextContent(/defaults to the main voice/i);
+  });
+});
+
+describe('PersonaFontVoice — service line and disabled hint', () => {
+  it('names the active voice service and links to the Voice settings', async () => {
+    state.persona = { ...BASE_PERSONA };
+    resolveTtsTransportMock.mockResolvedValue({
+      providerConfig: {},
+      apiKey: 'k',
+      offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
+      ttsMeta: { displayName: 'Eleven v4', voices: { kind: 'static', voices: [] } },
+    });
+    renderPage('p-1');
+
+    const line = await screen.findByTestId('voice-service-line');
+    expect(line.textContent).toBe(
+      'Voices from Eleven v4 via ElevenLabs · change in My Settings → Voice',
+    );
+    expect(screen.getByRole('link', { name: 'change in My Settings → Voice' })).toHaveAttribute(
+      'href',
+      '/app/settings/voice',
+    );
+  });
+
+  it('omits the service line when no voice service is configured', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1');
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(
+          'Add a voice provider (xAI, nano-gpt or ElevenLabs) in My Settings to enable voice.',
+        ).length,
+      ).toBeGreaterThan(0),
+    );
+    expect(screen.queryByTestId('voice-service-line')).toBeNull();
   });
 });

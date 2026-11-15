@@ -41,6 +41,9 @@ const EGRESS_NOTES: Record<string, string> = {
   'xai:grok-stt': 'Sends microphone audio to xAI (US)',
   'nano-gpt:xai/speech-to-text/v1': 'Sends microphone audio via nano-gpt to xAI (US)',
   'mistral:voxtral-mini-latest': 'Sends microphone audio to Mistral AI (EU)',
+  'elevenlabs:eleven_v4': 'Sends message text to ElevenLabs (US)',
+  'elevenlabs:eleven_v4_turbo': 'Sends message text to ElevenLabs (US)',
+  'elevenlabs:scribe_v2': 'Sends microphone audio to ElevenLabs (US)',
 };
 
 /** "<offering> via <provider>" label, e.g. "Grok TTS via xAI". */
@@ -167,7 +170,7 @@ export function VoiceSection(): JSX.Element {
           entries={slotEntries(pickableTtsOfferings(), rows)}
           value={settings?.ttsOffering ?? null}
           autoLabel={autoLabel(ttsSelected)}
-          unconfiguredCopy="Add the xAI or nano-gpt provider to enable read-aloud."
+          unconfiguredCopy="Add the xAI, nano-gpt or ElevenLabs provider to enable read-aloud."
           onSelect={(refId) => {
             // Re-picking the current value changes nothing — no note for a no-op.
             if (refId === (settings?.ttsOffering ?? null)) return;
@@ -297,7 +300,7 @@ export function VoiceSection(): JSX.Element {
           entries={slotEntries(pickableSttOfferings(), rows)}
           value={settings?.sttOffering ?? null}
           autoLabel={autoLabel(sttSelected)}
-          unconfiguredCopy="Add the Mistral AI, xAI or nano-gpt provider to dictate."
+          unconfiguredCopy="Add the Mistral AI, xAI, nano-gpt or ElevenLabs provider to dictate."
           onSelect={(refId) => update.mutate({ sttOffering: refId })}
         />
       </div>

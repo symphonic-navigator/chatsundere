@@ -5,7 +5,9 @@ import type { ProviderRow } from '../../../src/boot/client-data-db.js';
 // Importing the real package registers the builtin providers as a module
 // load side-effect — the selector reads the genuine curated catalogue.
 import {
+  STT_DEFAULT_ORDER,
   type SelectedOffering,
+  TTS_DEFAULT_ORDER,
   offeringRef,
   pickableSttOfferings,
   pickableTtsOfferings,
@@ -72,14 +74,39 @@ describe('explicit pick', () => {
 
 describe('pickable lists', () => {
   it('lists TTS offerings in auto-order with Mistral TTS deliberately absent', () => {
-    expect(pickableTtsOfferings().map(offeringRef)).toEqual(['xai:grok-tts', 'nano-gpt:xai-tts']);
+    expect(pickableTtsOfferings().map(offeringRef)).toEqual([
+      'xai:grok-tts',
+      'nano-gpt:xai-tts',
+      'elevenlabs:eleven_v4',
+      'elevenlabs:eleven_v4_turbo',
+    ]);
   });
 
-  it('lists all three STT offerings in auto-order', () => {
+  it('lists all four STT offerings in auto-order', () => {
     expect(pickableSttOfferings().map(offeringRef)).toEqual([
       'mistral:voxtral-mini-latest',
       'xai:grok-stt',
       'nano-gpt:xai/speech-to-text/v1',
+      'elevenlabs:scribe_v2',
     ]);
+  });
+});
+
+describe('ElevenLabs in the default orders', () => {
+  it('ends the TTS order with the two ElevenLabs models', () => {
+    expect(TTS_DEFAULT_ORDER.slice(-2)).toEqual([
+      'elevenlabs:eleven_v4',
+      'elevenlabs:eleven_v4_turbo',
+    ]);
+  });
+
+  it('ends the STT order with Scribe, Mistral still first', () => {
+    expect(STT_DEFAULT_ORDER.at(-1)).toBe('elevenlabs:scribe_v2');
+    expect(STT_DEFAULT_ORDER[0]).toBe('mistral:voxtral-mini-latest');
+  });
+
+  it('auto-resolves TTS to eleven_v4 with only an ElevenLabs row', () => {
+    const result = sel(selectTtsOffering(null, [row('elevenlabs')]));
+    expect(offeringRef(result.offering)).toBe('elevenlabs:eleven_v4');
   });
 });
