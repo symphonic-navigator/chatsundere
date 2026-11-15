@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { TtsVoiceList } from '@chatsundere/llm-unified';
+import { type TtsVoiceList, getProvider } from '@chatsundere/llm-unified';
 import { resolveTtsTransport } from './resolve-tts.js';
 import { loadVoiceListFor } from './voice-list.js';
 
@@ -11,11 +11,15 @@ import { loadVoiceListFor } from './voice-list.js';
  * Load the active TTS offering's voice list, reusing the memoised promise.
  * Resolves null when no TTS transport is configured. `fresh` drops the memo
  * for this source first, forcing a refetch (the picker does this on open).
+ * `providerDisplayName` names the service the voices come from (the picker's
+ * stale and empty-account copy).
  */
 export async function loadVoiceList(
   opts: { fresh?: boolean } = {},
-): Promise<{ key: string; list: TtsVoiceList } | null> {
+): Promise<{ key: string; list: TtsVoiceList; providerDisplayName: string } | null> {
   const transport = await resolveTtsTransport();
   if (!transport) return null;
-  return loadVoiceListFor(transport, opts);
+  const loaded = await loadVoiceListFor(transport, opts);
+  const { providerId } = transport.offering;
+  return { ...loaded, providerDisplayName: getProvider(providerId)?.displayName ?? providerId };
 }

@@ -11,6 +11,7 @@ vi.mock('../../../src/lib/voice/resolve-tts.js', () => ({
 
 vi.mock('@chatsundere/llm-unified', () => ({
   listTtsVoices: (...args: unknown[]) => listTtsVoicesMock(...args),
+  getProvider: () => undefined,
 }));
 
 import { loadVoiceList } from '../../../src/lib/voice/voice-list-active.js';
