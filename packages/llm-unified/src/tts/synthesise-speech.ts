@@ -72,6 +72,13 @@ function wireFor(args: SynthesiseSpeechArgs, input: string): TtsWire {
         body: { model: args.upstreamSlug, input, voice: args.voiceId },
         decode: 'raw-audio',
       };
+    case 'elevenlabs':
+      return {
+        // The voice id is user-visible data from the upstream catalogue; encode it.
+        path: `/text-to-speech/${encodeURIComponent(args.voiceId)}?output_format=mp3_44100_128`,
+        body: { text: input, model_id: args.upstreamSlug },
+        decode: 'raw-audio',
+      };
   }
 }
 

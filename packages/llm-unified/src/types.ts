@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Offering } from './catalogue/types.js';
 
-export type Capability = 'llm' | 'streaming' | 'tools' | 'json-mode' | 'vision';
+export type Capability = 'llm' | 'streaming' | 'tools' | 'json-mode' | 'vision' | 'tts' | 'stt';
 
 export interface ConfigField {
   key: string;
@@ -24,7 +24,8 @@ export interface ProviderDefinition {
   displayName: string;
   iconKey: string;
   baseUrl: string;
-  shape: 'openai-chat-completions';
+  /** Chat wire shape; `'none'` for a voice-only provider that serves no chat. */
+  shape: 'openai-chat-completions' | 'none';
   capabilities: Capability[];
   configFields: ConfigField[];
   probe: { path: string; method: 'GET' | 'POST' };

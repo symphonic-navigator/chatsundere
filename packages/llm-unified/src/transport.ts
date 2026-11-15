@@ -147,11 +147,12 @@ export interface BuildRequestArgs {
 /**
  * Build a fetch-ready Request for the given provider. The Request's URL
  * and headers reflect the routing choice — direct fetch hits the upstream
- * with a Bearer Authorization header; via-cors-proxy routes through the
+ * with the key in the provider's configured auth header (default
+ * `Authorization: Bearer`); via-cors-proxy routes through the
  * account's authenticated proxy, attaching the current account JWT (read
  * at build time from the registered ProxyAuthSource, spec §3) in
  * `x-chatsundere-authorization` while the forwarded upstream key stays in
- * `Authorization`.
+ * its auth header.
  */
 export function buildRequest(args: BuildRequestArgs): Request {
   const { provider, apiKey, path, method, body, extraHeaders } = args;

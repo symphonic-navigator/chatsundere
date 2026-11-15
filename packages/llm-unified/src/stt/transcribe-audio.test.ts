@@ -37,6 +37,38 @@ describe('transcribeAudio', () => {
     expect(file.name).toBe('recording.webm');
   });
 
+  test('elevenlabs transport sends model_id and tag_audio_events=false to speech-to-text', async () => {
+    let captured: Request | null = null;
+    const fetchFn = (async (req: Request) => {
+      captured = req;
+      return new Response(JSON.stringify({ text: ' Hi ', language_code: 'eng' }), { status: 200 });
+    }) as typeof fetch;
+    const base = args(fetchFn);
+    const result = await transcribeAudio({
+      ...base,
+      providerConfig: {
+        baseUrl: 'https://api.elevenlabs.io/v1',
+        routing: { kind: 'direct' },
+        auth: { header: 'xi-api-key' },
+      },
+      upstreamSlug: 'scribe_v2',
+      transport: 'elevenlabs',
+    });
+    expect(result).toEqual({ text: 'Hi' });
+    const sentReq = captured as Request | null;
+    expect(sentReq?.url).toBe('https://api.elevenlabs.io/v1/speech-to-text');
+    expect(sentReq?.headers.get('xi-api-key')).toBe('k');
+    // The raw body, not formData(): Bun re-sniffs webm parts as video/webm on parse.
+    const raw = (await sentReq?.clone().text()) ?? '';
+    expect(raw).toContain('Content-Type: audio/webm');
+    expect(raw).not.toContain('matroska');
+    const form = await sentReq?.formData();
+    expect(form?.get('model_id')).toBe('scribe_v2');
+    expect(form?.get('tag_audio_events')).toBe('false');
+    expect(form?.get('model')).toBeNull();
+    expect((form?.get('file') as File).name).toBe('recording.webm');
+  });
+
   test('wav mime maps to recording.wav', async () => {
     let name = '';
     const fetchFn = (async (req: Request) => {

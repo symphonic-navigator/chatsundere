@@ -93,6 +93,28 @@ describe('buildRequest', () => {
     expect(req.url).toBe('https://proxy.example/v1/chat/completions');
   });
 
+  it('cors-proxy routing with a custom auth scheme sends the key in that header only', () => {
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt-abc',
+      refreshToken: async () => null,
+    });
+    const req = buildRequest({
+      provider: {
+        baseUrl: 'https://api.elevenlabs.io/v1',
+        routing: { kind: 'cors-proxy' },
+        auth: { header: 'xi-api-key' },
+      },
+      apiKey: 'upstream-key',
+      path: '/models',
+      method: 'GET',
+    });
+    expect(req.headers.get('xi-api-key')).toBe('upstream-key');
+    expect(req.headers.get('x-chatsundere-authorization')).toBe('Bearer jwt-abc');
+    expect(req.headers.get('x-cors-proxy-target')).toBe('https://api.elevenlabs.io');
+    expect(req.headers.get('authorization')).toBeNull();
+  });
+
   it('cors-proxy routing throws a typed ProxyUnavailableError without a registered source or token', () => {
     setProxyAuthSource(null);
     expect(() =>
@@ -236,8 +258,10 @@ describe('header auth scheme', () => {
 
   it("every built-in provider's auth header is redacted", () => {
     registerBuiltinProviders();
-    for (const p of listProviders()) {
-      if (p.auth) expect(SECRET_REQUEST_HEADERS.has(p.auth.header.toLowerCase())).toBe(true);
+    const withAuth = listProviders().filter((p) => p.auth);
+    expect(withAuth.length).toBeGreaterThan(0);
+    for (const p of withAuth) {
+      expect(SECRET_REQUEST_HEADERS.has((p.auth?.header ?? '').toLowerCase())).toBe(true);
     }
   });
 });

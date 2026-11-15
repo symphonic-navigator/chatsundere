@@ -17,7 +17,7 @@ export interface ListTtsVoicesArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
   /** Wire shape of the voice catalogue; mirrors `TtsVoiceSource`'s fetch endpoint. */
-  endpoint: 'mistral-paginated' | 'xai-flat';
+  endpoint: 'mistral-paginated' | 'xai-flat' | 'elevenlabs-v2';
   signal?: AbortSignal;
   /** Test injection; defaults to global fetch. */
   fetchFn?: typeof fetch;
@@ -29,6 +29,11 @@ export interface ListTtsVoicesArgs {
  */
 export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoice[]> {
   const fetchFn = args.fetchFn ?? fetch;
+
+  if (args.endpoint === 'elevenlabs-v2') {
+    // Implemented with the voice-metadata work; no offering is reachable here before then.
+    throw new SpeechSynthesisError('elevenlabs-v2 voice source not implemented', null);
+  }
 
   if (args.endpoint === 'xai-flat') {
     // xAI returns the whole catalogue in one unpaginated response (probed

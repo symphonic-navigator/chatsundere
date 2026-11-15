@@ -140,6 +140,40 @@ describe('synthesiseSpeech', () => {
     expect(result.blob.size).toBe(mp3.byteLength);
   });
 
+  test('elevenlabs transport posts to text-to-speech with model_id', async () => {
+    let captured: Request | null = null;
+    const mp3 = new Uint8Array([0x49, 0x44, 0x33, 0x04]);
+    const fetchFn = asMockFetch(async (input) => {
+      captured = input instanceof Request ? input : new Request(String(input));
+      return new Response(mp3, { status: 200, headers: { 'content-type': 'audio/mpeg' } });
+    });
+
+    const result = await synthesiseSpeech({
+      providerConfig: {
+        baseUrl: 'https://api.elevenlabs.io/v1',
+        routing: { kind: 'direct' },
+        auth: { header: 'xi-api-key' },
+      },
+      apiKey: 'k',
+      upstreamSlug: 'eleven_v4',
+      teal: 'passthrough',
+      transport: 'elevenlabs',
+      text: '[laughs] Hello',
+      voiceId: 'a b',
+      fetchFn,
+    });
+
+    const req = captured as Request | null;
+    if (req === null) throw new Error('fetch was never called');
+    expect(req.url).toBe(
+      'https://api.elevenlabs.io/v1/text-to-speech/a%20b?output_format=mp3_44100_128',
+    );
+    expect(req.headers.get('xi-api-key')).toBe('k');
+    expect(JSON.parse(await req.text())).toEqual({ text: '[laughs] Hello', model_id: 'eleven_v4' });
+    expect(result.mimeType).toBe('audio/mpeg');
+    expect(result.blob.size).toBe(mp3.byteLength);
+  });
+
   test('openai-speech: posts {model, input, voice} to /audio/speech and returns the binary blob', async () => {
     let captured: Request | null = null;
     const fetchFn = asMockFetch(async (input) => {

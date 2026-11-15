@@ -92,14 +92,14 @@ export interface Offering {
 }
 
 /** How a TTS offering's synthesis request is shaped on the wire. */
-export type TtsTransportKind = 'mistral-speech' | 'xai-native' | 'openai-speech';
+export type TtsTransportKind = 'mistral-speech' | 'xai-native' | 'openai-speech' | 'elevenlabs';
 
 /** How an STT offering's transcription request is shaped on the wire. */
-export type SttTransportKind = 'openai-transcriptions' | 'xai-native';
+export type SttTransportKind = 'openai-transcriptions' | 'xai-native' | 'elevenlabs';
 
 /** Where a TTS offering's voice list comes from. */
 export type TtsVoiceSource =
-  | { kind: 'fetch'; endpoint: 'mistral-paginated' | 'xai-flat' }
+  | { kind: 'fetch'; endpoint: 'mistral-paginated' | 'xai-flat' | 'elevenlabs-v2' }
   | { kind: 'static'; list: ReadonlyArray<{ id: string; name: string }> };
 
 /** Metadata carried by a `serviceKind: 'tts'` offering. */

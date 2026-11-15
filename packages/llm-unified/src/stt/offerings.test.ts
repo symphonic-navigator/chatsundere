@@ -18,6 +18,7 @@ describe('STT offerings', () => {
   test('STT offerings: mistral + the two probed Grok paths', () => {
     const stt = listSttOfferings();
     expect(stt.map((o) => `${o.providerId}:${o.upstreamSlug}`).sort()).toEqual([
+      'elevenlabs:scribe_v2',
       'mistral:voxtral-mini-latest',
       'nano-gpt:xai/speech-to-text/v1',
       'xai:grok-stt',
@@ -36,5 +37,12 @@ describe('STT offerings', () => {
     expect(nano?.stt?.transport).toBe('openai-transcriptions');
     expect(nano?.stt?.contentModerated).toBe(false);
     expect(nano?.stt?.spoofWebmAsMatroska).toBe(true);
+
+    const scribe = stt.find((o) => o.providerId === 'elevenlabs');
+    expect(scribe?.stt?.transport).toBe('elevenlabs');
+    expect(scribe?.stt?.displayName).toBe('Scribe');
+    expect(scribe?.stt?.spoofWebmAsMatroska).toBeUndefined();
+    expect(scribe?.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
+    expect(scribe?.freedomOrientedDeployment).toBeNull();
   });
 });
