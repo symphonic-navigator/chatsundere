@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { _resetVoicePickerCacheForTests } from '../../../src/components/voice/VoicePicker.js';
+import { _resetVoiceListForTests as _resetVoicePickerCacheForTests } from '../../../src/lib/voice/voice-list.js';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 

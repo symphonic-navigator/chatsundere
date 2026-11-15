@@ -1,48 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { type TtsVoice, listTtsVoices } from '@chatsundere/llm-unified';
+import type { TtsVoice } from '@chatsundere/llm-unified';
 import { useEffect, useState } from 'react';
-import { resolveTtsTransport } from '../../lib/voice/resolve-tts.js';
+import { loadVoiceList } from '../../lib/voice/voice-list.js';
 
-// Module-level memo keyed by offering ref: one fetch per offering per session,
-// shared across all picker instances. Switching the TTS slot re-resolves.
-const voicesPromises = new Map<string, Promise<TtsVoice[]>>();
-
-/** Reset the cached voices promises. Exposed for tests only. */
-export function _resetVoicePickerCacheForTests(): void {
-  voicesPromises.clear();
-}
-
-/**
- * Fetch the active offering's TTS voices, reusing the cached promise on
- * subsequent calls. Clears that offering's cache and retries on failure when
- * `retry` is true.
- */
-async function fetchVoices(retry = false): Promise<TtsVoice[]> {
-  const transport = await resolveTtsTransport();
-  if (!transport) return [];
-  const meta = transport.ttsMeta;
-  // nano-gpt exposes no voice-list endpoint; its offering carries the list.
-  if (meta.voices.kind === 'static') return [...meta.voices.list];
-  const ref = `${transport.offering.providerId}:${transport.offering.upstreamSlug}`;
-  if (retry) voicesPromises.delete(ref);
-  let promise = voicesPromises.get(ref);
-  if (!promise) {
-    promise = listTtsVoices({
-      providerConfig: transport.providerConfig,
-      apiKey: transport.apiKey,
-      endpoint: meta.voices.endpoint,
-      signal: AbortSignal.timeout(15_000),
-    }).then((list) => list.voices);
-    voicesPromises.set(ref, promise);
-    // On failure, clear the memo so the next call can retry — but only if this
-    // promise still owns the slot; a stale rejection arriving after a retry has
-    // replaced it must not evict the newer in-flight promise.
-    promise.catch(() => {
-      if (voicesPromises.get(ref) === promise) voicesPromises.delete(ref);
-    });
-  }
-  return promise;
+/** Load the active offering's voices through the shared memo (empty without a transport). */
+async function fetchVoices(fresh = false): Promise<TtsVoice[]> {
+  const loaded = await loadVoiceList({ fresh });
+  return loaded ? loaded.list.voices : [];
 }
 
 type VoiceLoadState =
@@ -108,13 +73,13 @@ export function VoicePicker({
   function handleOpen(): void {
     if (disabled) return;
     setOpen(true);
-    if (loadState.status === 'idle' || loadState.status === 'error') {
-      setLoadState({ status: 'loading' });
-      fetchVoices().then(
-        (voices) => setLoadState({ status: 'loaded', voices }),
-        () => setLoadState({ status: 'error' }),
-      );
-    }
+    // Opening refreshes the list (a newly added voice must appear); an already
+    // loaded list stays visible meanwhile instead of flashing back to loading.
+    if (loadState.status !== 'loaded') setLoadState({ status: 'loading' });
+    fetchVoices(true).then(
+      (voices) => setLoadState({ status: 'loaded', voices }),
+      () => setLoadState((prev) => (prev.status === 'loaded' ? prev : { status: 'error' })),
+    );
   }
 
   function handleRetry(): void {

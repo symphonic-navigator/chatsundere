@@ -2,6 +2,7 @@
 
 import {
   type Offering,
+  type ProviderConfig,
   SpeechSynthesisError,
   type TtsOfferingMeta,
   getProvider,
@@ -30,7 +31,7 @@ export type TtsResolution =
 
 /** The resolved transport material shared by resolveTts and the voice picker UI. */
 export interface TtsTransport {
-  providerConfig: { baseUrl: string; routing: { kind: 'direct' } | { kind: 'cors-proxy' } };
+  providerConfig: ProviderConfig;
   apiKey: string;
   offering: Offering;
   /** Full TTS metadata — always present when TtsTransport is returned. */

@@ -94,7 +94,7 @@ vi.mock('../../../src/data/providers.js', () => ({
 }));
 
 // Reset the VoicePicker session cache between tests so each test gets a clean slate.
-import { _resetVoicePickerCacheForTests } from '../../../src/components/voice/VoicePicker.js';
+import { _resetVoiceListForTests as _resetVoicePickerCacheForTests } from '../../../src/lib/voice/voice-list.js';
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { getProvider } from '@chatsundere/llm-unified';
+import { type ProviderConfig, getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import type { ProviderRow } from '../../boot/client-data-db.js';
 import { providerApiKeySlot } from '../../data/providers.js';
@@ -9,7 +9,7 @@ import type { SelectedOffering } from './select-offering.js';
 
 /** The transport material shared by the TTS and STT resolvers. */
 export interface VoiceTransportMaterial {
-  providerConfig: { baseUrl: string; routing: { kind: 'direct' } | { kind: 'cors-proxy' } };
+  providerConfig: ProviderConfig;
   apiKey: string;
 }
 
@@ -57,8 +57,9 @@ export async function resolveVoiceTransportMaterial(
   // Per-offering override first: xAI's voice endpoints are CORS-open even
   // though the provider-level hint says requires-proxy (probed 2026-06-12).
   const direct = offering.corsOverride === 'direct' || providerDef.corsHint !== 'requires-proxy';
-  const providerConfig = {
+  const providerConfig: ProviderConfig = {
     baseUrl: providerDef.baseUrl,
+    auth: providerDef.auth,
     routing: direct ? ({ kind: 'direct' } as const) : ({ kind: 'cors-proxy' } as const),
   };
 
