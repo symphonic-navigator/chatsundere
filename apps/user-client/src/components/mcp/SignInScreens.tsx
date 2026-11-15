@@ -33,6 +33,8 @@ function UseKeyButton({ onUseKey }: { onUseKey: (() => void) | undefined }): JSX
 export function SignInConfirm(props: {
   serverHost: string;
   authHost: string;
+  /** True when the server refused browser requests and discovery went through the user's server. */
+  viaProxy: boolean;
   /** Only a linked account shares the grant with other devices. */
   linked: boolean;
   ready: boolean;
@@ -48,6 +50,12 @@ export function SignInConfirm(props: {
           ? `You'll sign in at ${props.authHost}.`
           : `You'll sign in at ${props.authHost}, which is not ${props.serverHost}.`}
       </p>
+      {props.viaProxy ? (
+        <p className={noteClass}>
+          This sign-in service doesn't accept requests from browsers, so its details came through
+          your Chatsundere server. Check that the sign-in address above is the one you expect.
+        </p>
+      ) : null}
       {props.linked ? (
         <p className={noteClass}>Access applies on all your devices that use this account.</p>
       ) : null}

@@ -113,6 +113,7 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
   const [hosts, setHosts] = useState(() => ({
     server: props.discovery ? hostOf(props.discovery.resource) : '',
     auth: props.discovery ? hostOf(props.discovery.issuer) : '',
+    viaProxy: props.discovery?.viaProxy ?? false,
   }));
   const [paste, setPaste] = useState('');
   const [pasteError, setPasteError] = useState<string | null>(null);
@@ -174,7 +175,7 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
       ...(p.isNewServer ? {} : { serverId: p.serverId }),
       draft: p.draft,
     };
-    setHosts({ server: hostOf(p.resource), auth: hostOf(p.issuer) });
+    setHosts((h) => ({ ...h, server: hostOf(p.resource), auth: hostOf(p.issuer) }));
     if (timers.now() - p.createdAt >= LIFETIME_MS) {
       void cancelSignIn(state);
       fail(FAILURES.expired);
@@ -344,7 +345,7 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
       }
       d = checked.discovery;
       discoveryRef.current = d;
-      setHosts({ server: hostOf(d.resource), auth: hostOf(d.issuer) });
+      setHosts({ server: hostOf(d.resource), auth: hostOf(d.issuer), viaProxy: d.viaProxy });
     }
     await prepare(d);
   }
@@ -384,6 +385,7 @@ export function OAuthSignInFlow(props: OAuthSignInFlowProps): JSX.Element {
         <SignInConfirm
           serverHost={hosts.server}
           authHost={hosts.auth}
+          viaProxy={hosts.viaProxy}
           linked={linked}
           ready={step.kind === 'confirm'}
           onContinue={onContinue}

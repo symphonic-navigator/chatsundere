@@ -279,6 +279,8 @@ function IntegrationServerForm({
   const [routingChangedHint, setRoutingChangedHint] = useState(false);
 
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
+  // A test outcome that is no connection result, so it never reaches `lastError`.
+  const [testNote, setTestNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,12 +317,14 @@ function IntegrationServerForm({
     setResolvedEndpoint(null);
     setLastTestedAt(null);
     setLastError(null);
+    setTestNote(null);
     setTest({ kind: 'idle' });
   }
 
   async function onTest() {
     if (!mk || !url) return;
     setError(null);
+    setTestNote(null);
     setRoutingChangedHint(false);
     setTest({ kind: 'testing' });
     try {
@@ -371,6 +375,13 @@ function IntegrationServerForm({
   }
 
   function applyTestResult(result: McpConnectionResult) {
+    // A paused grant tells nothing about the route, so the row's last result stays to save.
+    if (result.held) {
+      setTestNote(result.error);
+      setTest({ kind: 'done' });
+      return;
+    }
+    setTestNote(null);
     setRouting(result.routing);
     setResolvedEndpoint(result.resolvedEndpoint);
     if (result.ok) setTools(result.tools);
@@ -791,13 +802,19 @@ function IntegrationServerForm({
           {test.kind === 'testing' ? 'Testing…' : 'Test connection'}
         </Button>
 
-        {test.kind === 'done' && lastError ? (
+        {test.kind === 'done' && testNote ? (
+          <div className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] px-3 py-2 text-xs text-paper-soft">
+            {testNote}
+          </div>
+        ) : null}
+
+        {test.kind === 'done' && !testNote && lastError ? (
           <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
             ✗ {lastError}
           </div>
         ) : null}
 
-        {test.kind === 'done' && !lastError && routing ? (
+        {test.kind === 'done' && !testNote && !lastError && routing ? (
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
             ● Connected ({routing === 'proxy' ? 'via proxy' : 'direct'}) · {resolvedEndpoint}
           </div>

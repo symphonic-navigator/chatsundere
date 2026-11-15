@@ -15,11 +15,15 @@ type TokenDeps = {
   ensureToken?: BuildMcpContextArgs['ensureToken'];
 };
 
+const HELD_ERROR = 'Sign-in paused on this device. Sign in again to carry on.';
+
 /** Readable copy for each way a token can be unavailable; never a raw reason code. */
 function tokenError(result: Extract<McpTokenResult, { ok: false }>): string {
   switch (result.reason) {
     case 'dead':
       return 'Your sign-in at this server has ended. Sign in again to reconnect.';
+    case 'held':
+      return HELD_ERROR;
     case 'no-grant':
       return "This server's sign-in hasn't reached this device yet. Give it a moment.";
     case 'mismatch':
@@ -69,7 +73,11 @@ export async function testOAuthConnection(
   let rejectedToken: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = await oauthTokenFor(fresh, rejectedToken ? { rejectedToken } : {}, tokenDeps);
-    if (!token.ok) return failed(tokenError(token));
+    if (!token.ok) {
+      // A pause is no connection fault: the caller keeps the row's last result as it is.
+      if (token.reason === 'held') return { ...failed(HELD_ERROR), held: true };
+      return failed(tokenError(token));
+    }
     const candidates = grant ? candidatesFor(row, grant, hasProxy) : [];
     if (candidates.length === 0) {
       return failed(
