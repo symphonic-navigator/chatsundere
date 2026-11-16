@@ -33,8 +33,18 @@ merged as PR #39.
   - GLM measurements were unreliable, because nano-gpt failed about half the requests.
   - nano-gpt's TTS answered HTTP 500 for every model on 2026-11-16, which matters for step 3.
 
-**Next:** Chris device-tests TEAL v2 (spec §10) and step 1 (PR #39, spec §11, including the
-moderation check). Then a PR and squash. Then ElevenLabs step 3 (via nano-gpt).
+**Also built (2026-11-16): ElevenLabs step 3, via nano-gpt.** Eleven v4 and v4 Turbo on the
+existing nano-gpt provider, with a live voice list from nano-gpt's audio-models catalogue (21 names,
+no labels) and TEAL `v2`. There is no STT through nano-gpt, because its Scribe is asynchronous.
+Spec: [[../superpowers/specs/2026-11-16-elevenlabs-via-nano-gpt-design]]. Gate green
+(user-client 4413/4413).
+
+**Next:** Chris merges to `master` and device-tests locally:
+- step 1 (spec §11 of the ElevenLabs direct spec, including the moderation check);
+- TEAL v2 (spec §10);
+- step 3 (its manual verification).
+
+The moderation result then sets `contentModerated` and the freedom badge on both ElevenLabs paths.
 
 ---
 
