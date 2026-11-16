@@ -31,4 +31,33 @@ describe('displayPlainText', () => {
     expect(displayPlainText('[laugh]')).toBe('😄');
     expect(displayPlainText('[laugh]')).toBe('😄');
   });
+
+  it('keeps list indentation when a tag is removed or replaced', () => {
+    expect(displayPlainText('- a\n  - [clear-throat] foo\n    1. [laugh] x')).toBe(
+      '- a\n  - foo\n    1. 😄 x',
+    );
+  });
+
+  it('keeps a trailing hard break and continuation indentation', () => {
+    expect(displayPlainText('line [clear-throat] one  \n  cont [laugh]')).toBe(
+      'line one  \n  cont 😄',
+    );
+  });
+
+  it('leaves indented code blocks literal but translates list continuations', () => {
+    expect(displayPlainText('para [sad]\n\n    [sad] code\n\tmore [sad]\n\nafter [sad]')).toBe(
+      'para 😔\n\n    [sad] code\n\tmore [sad]\n\nafter 😔',
+    );
+    expect(displayPlainText('- item\n\n    [sad] in list')).toBe('- item\n\n    😔 in list');
+  });
+
+  it('keeps double-backtick spans with an inner backtick literal', () => {
+    expect(displayPlainText('``a `[sad]` b`` and [sad]')).toBe('``a `[sad]` b`` and 😔');
+  });
+
+  it('keeps ~~~ fences, paragraph breaks and headings', () => {
+    expect(displayPlainText('~~~\n[sad]\n~~~\n\n# Title [laugh]\n\nnext')).toBe(
+      '~~~\n[sad]\n~~~\n\n# Title 😄\n\nnext',
+    );
+  });
 });
