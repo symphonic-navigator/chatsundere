@@ -66,3 +66,60 @@ ignores cost nothing.
 
 - Chris's moderation hand test sets `contentModerated` and the freedom badge.
 - Chris to listen to probes 07–10 for the prosody tags.
+
+## TEAL v2 (2026-11-16)
+
+ElevenLabs is TEAL level `v2`, so every known tag is sent. Grok (xAI direct and nano-gpt) is
+`v1`, and Mistral is `none`. Spec:
+[`2026-11-16-teal-v2-design`](../../superpowers/specs/2026-11-16-teal-v2-design.md).
+
+**Listening test** (Eleven v4, voice Jessica, `seed: 42`, the same sentence each time, all
+harmless):
+
+| Probe | Result |
+|---|---|
+| Companion tones `affectionate`, `teasing`, `flirtatious`, `seductive`, `shy`, `pouting` | **Confirmed by Chris's ear.** Each is audibly performed as named. Against the untagged control (5.0 s, −24.7 dB) they run 5.2–5.8 s and are up to 2 dB quieter; the strongest are seductive, pouting and shy. No tag is spoken. |
+| New sounds `clear-throat`, `gulp`, `yawn`, `sniffle`, `groan`, `scoff` | All six are audible. Scribe hears [clears throat], [gulps], [yawns], [sniffs], "Ugh" and [scoffs]. |
+| `[sarcastic]` against no tag, same words | 4.1 s against 3.5 s, a slower, drawn-out delivery. Chris confirmed the sarcasm. |
+
+**Tag mix with the v2 prompt** (spec D7: the guard that Grok users must not lose v1 sounds).
+Measured as 12 companion prompts × 4 samples through nano-gpt, at temperature 0.8:
+
+| Prompt | Grok 4.3: v1 inline / wrapping per reply | Moods per paragraph |
+|---|---|---|
+| v1 (before) | 0.98 / 0.27 | — |
+| v2, first draft | 0.88 / 0.19 | 0.36 |
+| v2 as merged ("a mood is never a substitute for a wrapping tag", "most paragraphs carry no mood") | 0.92 / 0.23 | 0.16 |
+
+GLM 5.3, re-measured on 2026-11-16 with lower concurrency and a larger token budget (48/48 replies each; the earlier failures were self-inflicted): v1 inline 1.90 → 1.69 (−11 %), wrapping 0.60 → 0.42 (−30 %), moods in 21 % of paragraphs. Read: GLM over-dosed v1 markup before (about 2.5 per reply against the prompt's 0–2) and now sits at about 2.1. Chris judges on device whether GLM with a Grok voice sounds any flatter.
+
+**Grok strip, verified:** at level `v1`, `[sarcastic] … [laugh] … [shy] … <whisper>…</whisper> [yawn]`
+reaches Grok as `… [laugh] … <whisper>…</whisper> …`. Audible check (nano-gpt `xai-tts`, voice `eve`, after a transient HTTP 500 on all TTS models earlier that day): Scribe hears "Oh, great. [laughs] That is just wonderful news. Come here and sit with me. Long day?". The laugh survives, and no mood is spoken.
+
+## Via nano-gpt (2026-11-16)
+
+Step 3 of the track. Spec: [`2026-11-16-elevenlabs-via-nano-gpt-design`](../../superpowers/specs/2026-11-16-elevenlabs-via-nano-gpt-design.md).
+
+| Offering ref | Kind | Transport | Voice source | TEAL |
+|---|---|---|---|---|
+| `nano-gpt:elevenlabs/eleven-v4` | TTS | `openai-speech` | `fetch` (`nano-gpt-audio-models`) | `v2` |
+| `nano-gpt:elevenlabs/eleven-v4-turbo` | TTS | `openai-speech` | `fetch` (`nano-gpt-audio-models`) | `v2` |
+
+- **Speech:** `POST /v1/audio/speech` with `{ model, input, voice }` returns `audio/mpeg`.
+  `voice` takes a name ("Laura") or an ElevenLabs voice ID; a public library voice (Raya) worked.
+  An unknown ID is rejected with 400 "is not a valid ElevenLabs voice ID". Private clones
+  presumably do not work, because nano-gpt uses its own ElevenLabs account.
+- **Voices:** `GET /api/v1/audio-models?type=tts&detailed=true` is public and CORS-open. It lists
+  21 names per model (Alicia, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam,
+  Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill), without
+  labels. The entry also gives `max_chars` 10000 and the price per 1000 characters (v4 $0.136,
+  Turbo $0.068; not shown in the UI, decided by Chris). Neither the models nor their voices
+  appear in `/v1/models`. Documentation index: `docs.nano-gpt.com/llms.txt`; OpenAPI:
+  `docs.nano-gpt.com/api-reference/openapi.json`.
+- **TEAL:** `[teasing] Hi Chris. [laugh] …`, heard back through Scribe as "Hi, Chris. [laughs]
+  What is up at the lab today?". The mood is performed and not spoken, and the laugh is audible.
+- **Latency:** 5.7–7.5 s for a short sentence, against about 2.5 s direct. That suits read-aloud;
+  Live Voice works but is slower.
+- **STT is not offered** (spec D3). nano-gpt's `Elevenlabs-Scribe-V2` and `Elevenlabs-STT` are
+  asynchronous: HTTP 202 `{status: pending, run_id}`, then status polling. webm is accepted;
+  Matroska is not.

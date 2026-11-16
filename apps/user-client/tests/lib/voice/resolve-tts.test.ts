@@ -75,7 +75,7 @@ const XAI_OFFERING = {
   corsOverride: 'direct' as const,
   tts: {
     displayName: 'Grok TTS',
-    teal: 'passthrough' as const,
+    teal: 'v1' as const,
     contentModerated: false,
     transport: 'xai-native' as const,
     voices: { kind: 'fetch' as const, endpoint: 'xai-flat' as const },
@@ -89,7 +89,7 @@ const NANO_OFFERING = {
   serviceKind: 'tts',
   tts: {
     displayName: 'Grok TTS',
-    teal: 'passthrough' as const,
+    teal: 'v1' as const,
     contentModerated: false,
     transport: 'openai-speech' as const,
     voices: { kind: 'static' as const, list: [{ id: 'Eve', name: 'Eve' }] },
@@ -119,7 +119,7 @@ const ELEVEN_OFFERING = {
   corsOverride: 'direct' as const,
   tts: {
     displayName: 'Eleven v4',
-    teal: 'strip' as const,
+    teal: 'v2' as const,
     contentModerated: false,
     transport: 'elevenlabs' as const,
     voices: { kind: 'fetch' as const, endpoint: 'elevenlabs-v2' as const },
@@ -336,7 +336,7 @@ describe('resolveTts', () => {
       // synthesiseSpeech called once with the right shape.
       expect(synthesiseSpeechMock).toHaveBeenCalledOnce();
       const callArgs = synthesiseSpeechMock.mock.calls[0]?.[0];
-      expect(callArgs?.teal).toBe('passthrough');
+      expect(callArgs?.teal).toBe('v1');
       expect(callArgs?.transport).toBe('xai-native');
       expect(callArgs?.text).toBe(segment.spokenText);
       expect(callArgs?.voiceId).toBe('voice-beta');

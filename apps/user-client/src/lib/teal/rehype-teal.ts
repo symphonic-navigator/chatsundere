@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Element, ElementContent, Root, Text } from 'hast';
 import { resolveDisplayGlow } from '../integrations/display.js';
-import { TEAL_MARK_END, TEAL_MARK_START } from './preprocess-teal.js';
+import { TEAL_MARK_END, TEAL_MARK_SEP, TEAL_MARK_START } from './preprocess-teal.js';
 import { resolveTealWrap } from './teal-render-map.js';
 
 /**
@@ -13,8 +13,9 @@ import { resolveTealWrap } from './teal-render-map.js';
  * mismatched markers are removed without effect.
  */
 
-// Matches a sentinel marker: START + optional '/' + tag-name + END
-const MARKER_SOURCE = `${TEAL_MARK_START}(/?)([a-z-]+)${TEAL_MARK_END}`;
+// Matches a sentinel marker: START + optional '/' + tag-name + END (a wrap
+// toggle), or START + label + SEP + emoji + END (a labelled emoji).
+const MARKER_SOURCE = `${TEAL_MARK_START}(?:(/?)([a-z-]+)|([^${TEAL_MARK_START}${TEAL_MARK_SEP}${TEAL_MARK_END}]+)${TEAL_MARK_SEP}([^${TEAL_MARK_END}${TEAL_MARK_SEP}]+))${TEAL_MARK_END}`;
 
 function makeMarker(): RegExp {
   return new RegExp(MARKER_SOURCE, 'g');
@@ -40,6 +41,18 @@ function transformText(node: Text, active: string[]): ElementContent[] {
     const before = node.value.slice(last, m.index);
     if (before.length > 0) out.push(wrapSegment(before, active));
     last = m.index + m[0].length;
+
+    const label = m[3];
+    const emoji = m[4];
+    if (label !== undefined && emoji !== undefined) {
+      out.push({
+        type: 'element',
+        tagName: 'span',
+        properties: { role: 'img', ariaLabel: label },
+        children: [{ type: 'text', value: emoji }],
+      } satisfies Element);
+      continue;
+    }
 
     const slash = m[1];
     const name = m[2];

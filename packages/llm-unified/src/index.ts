@@ -42,14 +42,20 @@ export { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js
 export { buildContentAxisPrompt } from './content-axis.js';
 
 export {
+  TEAL_BRACKET_RX,
   TEAL_EXPRESSION_PROMPT,
   TEAL_INLINE_TAGS,
   TEAL_WRAPPING_TAGS,
   TEAL_VERSION,
+  TEAL_MOOD_TAGS,
   type TealInlineTag,
+  type TealInlineMatch,
+  type TealLevel,
+  type TealMoodTag,
   type TealWrappingTag,
   isTealWrapping,
   matchTealInline,
+  resolveTealBracket,
   stripTeal,
 } from './teal/teal.js';
 

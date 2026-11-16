@@ -35,7 +35,7 @@ describe('synthesiseSpeech', () => {
       providerConfig: PROVIDER,
       apiKey: 'k',
       upstreamSlug: 'voxtral-mini-tts-2603',
-      teal: 'strip',
+      teal: 'none',
       transport: 'mistral-speech',
       text: 'Hello [laugh] there, <whisper>friend</whisper>.',
       voiceId: 'v1',
@@ -57,26 +57,32 @@ describe('synthesiseSpeech', () => {
     expect(result.blob.size).toBeGreaterThan(0);
   });
 
-  test('teal passthrough leaves tags in the input', async () => {
-    const bodies: Array<Record<string, unknown>> = [];
-    const fetchFn = asMockFetch(async (input) => {
-      const req = input instanceof Request ? input : new Request(String(input));
-      bodies.push(JSON.parse(await req.text()) as Record<string, unknown>);
-      return jsonResponse({ audio_data: 'abc=' });
-    });
-    await synthesiseSpeech({
-      providerConfig: PROVIDER,
-      apiKey: 'k',
-      upstreamSlug: 'voxtral-mini-tts-2603',
-      teal: 'passthrough',
-      transport: 'mistral-speech',
-      text: 'Hello [laugh].',
-      voiceId: 'v1',
-      fetchFn,
-    });
-    const body = bodies[0];
-    if (body === undefined) throw new Error('fetch was never called');
-    expect(body.input).toBe('Hello [laugh].');
+  test('teal level decides which tags reach the provider', async () => {
+    const text = '[sarcastic] Hi [laugh] <whisper>there</whisper>';
+    const expected = {
+      none: 'Hi there',
+      v1: 'Hi [laugh] <whisper>there</whisper>',
+      v2: text,
+    } as const;
+    for (const level of ['none', 'v1', 'v2'] as const) {
+      const bodies: Array<Record<string, unknown>> = [];
+      const fetchFn = asMockFetch(async (input) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        bodies.push(JSON.parse(await req.text()) as Record<string, unknown>);
+        return jsonResponse({ audio_data: 'abc=' });
+      });
+      await synthesiseSpeech({
+        providerConfig: PROVIDER,
+        apiKey: 'k',
+        upstreamSlug: 'voxtral-mini-tts-2603',
+        teal: level,
+        transport: 'mistral-speech',
+        text,
+        voiceId: 'v1',
+        fetchFn,
+      });
+      expect(bodies[0]?.input).toBe(expected[level]);
+    }
   });
 
   test('non-OK status throws SpeechSynthesisError carrying the status', async () => {
@@ -86,7 +92,7 @@ describe('synthesiseSpeech', () => {
         providerConfig: PROVIDER,
         apiKey: 'k',
         upstreamSlug: 'voxtral-mini-tts-2603',
-        teal: 'strip',
+        teal: 'none',
         transport: 'mistral-speech',
         text: 'x',
         voiceId: 'v1',
@@ -102,7 +108,7 @@ describe('synthesiseSpeech', () => {
         providerConfig: PROVIDER,
         apiKey: 'k',
         upstreamSlug: 'voxtral-mini-tts-2603',
-        teal: 'strip',
+        teal: 'none',
         transport: 'mistral-speech',
         text: 'x',
         voiceId: 'v1',
@@ -131,7 +137,7 @@ describe('synthesiseSpeech', () => {
           },
           apiKey: 'k',
           upstreamSlug: 'eleven_v4',
-          teal: 'passthrough',
+          teal: 'v2',
           transport: 'elevenlabs',
           text: 'Hello',
           voiceId,
@@ -164,7 +170,7 @@ describe('synthesiseSpeech', () => {
       },
       apiKey: 'k',
       upstreamSlug: 'eleven_v4',
-      teal: 'passthrough',
+      teal: 'v2',
       transport: 'elevenlabs',
       text: 'Hello',
       voiceId: 'JBFqnCBsd6RMkjVDRZzb',
@@ -187,7 +193,7 @@ describe('synthesiseSpeech', () => {
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
       upstreamSlug: 'grok-tts',
-      teal: 'passthrough',
+      teal: 'v2',
       transport: 'xai-native',
       text: '[laugh] Hello',
       voiceId: 'eve',
@@ -220,7 +226,7 @@ describe('synthesiseSpeech', () => {
       },
       apiKey: 'k',
       upstreamSlug: 'eleven_v4',
-      teal: 'passthrough',
+      teal: 'v2',
       transport: 'elevenlabs',
       text: '[laughs] Hello',
       voiceId: 'a b',
@@ -252,7 +258,7 @@ describe('synthesiseSpeech', () => {
       providerConfig: { baseUrl: 'https://nano-gpt.com/api/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
       upstreamSlug: 'xai-tts',
-      teal: 'passthrough',
+      teal: 'v2',
       transport: 'openai-speech',
       text: 'Hello',
       voiceId: 'eve',
@@ -279,7 +285,7 @@ describe('synthesiseSpeech', () => {
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
       upstreamSlug: 'grok-tts',
-      teal: 'passthrough',
+      teal: 'v2',
       transport: 'xai-native',
       text: 'Hello',
       voiceId: 'eve',
@@ -300,7 +306,7 @@ describe('synthesiseSpeech', () => {
       providerConfig: { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } },
       apiKey: 'k',
       upstreamSlug: 'grok-tts',
-      teal: 'passthrough',
+      teal: 'v2',
       transport: 'xai-native',
       text: 'Hello',
       voiceId: 'eve',

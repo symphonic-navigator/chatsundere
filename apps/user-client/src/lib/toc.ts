@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MessageRow } from '../boot/client-data-db.js';
 import { flattenAnswerText } from './content-blocks.js';
+import { displayPlainText } from './teal/display-plain-text.js';
 
 export interface TocEntry {
   messageId: string;
@@ -17,12 +18,18 @@ export interface Toc {
 }
 
 const SNIPPET_MAX = 40;
+/** Grapheme segmentation keeps surrogate pairs and ZWJ emoji whole when cutting. */
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 /** Short, word-boundary-trimmed label derived from a message's answer text. */
 export function snippet(message: MessageRow): string {
-  const firstLine = (flattenAnswerText(message.contentBlocks).split('\n')[0] ?? '').trim();
-  if (firstLine.length <= SNIPPET_MAX) return firstLine;
-  const cut = firstLine.slice(0, SNIPPET_MAX);
+  // Label what the chat shows (emojis, no raw TEAL tags), then cut on the visible text.
+  const firstLine = (
+    displayPlainText(flattenAnswerText(message.contentBlocks)).split('\n')[0] ?? ''
+  ).trim();
+  const graphemes = Array.from(GRAPHEMES.segment(firstLine), (g) => g.segment);
+  if (graphemes.length <= SNIPPET_MAX) return firstLine;
+  const cut = graphemes.slice(0, SNIPPET_MAX).join('');
   const lastSpace = cut.lastIndexOf(' ');
   const base = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd();
   return `${base}…`;

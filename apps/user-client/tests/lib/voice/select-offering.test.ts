@@ -79,6 +79,8 @@ describe('pickable lists', () => {
       'nano-gpt:xai-tts',
       'elevenlabs:eleven_v4',
       'elevenlabs:eleven_v4_turbo',
+      'nano-gpt:elevenlabs/eleven-v4',
+      'nano-gpt:elevenlabs/eleven-v4-turbo',
     ]);
   });
 
@@ -93,10 +95,12 @@ describe('pickable lists', () => {
 });
 
 describe('ElevenLabs in the default orders', () => {
-  it('ends the TTS order with the two ElevenLabs models', () => {
-    expect(TTS_DEFAULT_ORDER.slice(-2)).toEqual([
+  it('ends the TTS order with the ElevenLabs models, direct then via nano-gpt', () => {
+    expect(TTS_DEFAULT_ORDER.slice(-4)).toEqual([
       'elevenlabs:eleven_v4',
       'elevenlabs:eleven_v4_turbo',
+      'nano-gpt:elevenlabs/eleven-v4',
+      'nano-gpt:elevenlabs/eleven-v4-turbo',
     ]);
   });
 

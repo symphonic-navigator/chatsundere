@@ -28,6 +28,26 @@ describe('snippet', () => {
     expect(out.length).toBeLessThanOrEqual(41);
     expect(out).not.toMatch(/\s…$/);
   });
+  it('shows a mood-led reply as the chat does, without raw tags', () => {
+    expect(
+      snippet(
+        msg({ id: 'a', contentBlocks: [{ type: 'text', text: '[sarcastic] Oh, wonderful…' }] }),
+      ),
+    ).toBe('🙃 Oh, wonderful…');
+  });
+  it('counts the visible text when cutting', () => {
+    const text = '[sarcastic] the quick brown fox jumps over the lazy dog and keeps running';
+    const out = snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text }] }));
+    expect(out).toBe('🙃 the quick brown fox jumps over the…');
+  });
+  it('never cuts inside an astral or ZWJ emoji', () => {
+    const text = `${'a'.repeat(39)}😮‍💨 and then some more words`;
+    const out = snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text }] }));
+    expect(out).toBe(`${'a'.repeat(39)}😮‍💨…`);
+    expect(out).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    );
+  });
   it('uses only the first line', () => {
     expect(
       snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text: 'first\nsecond' }] })),

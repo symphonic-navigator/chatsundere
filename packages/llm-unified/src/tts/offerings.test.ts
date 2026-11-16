@@ -21,27 +21,29 @@ describe('TTS offerings', () => {
       'elevenlabs:eleven_v4',
       'elevenlabs:eleven_v4_turbo',
       'mistral:voxtral-mini-tts-2603',
+      'nano-gpt:elevenlabs/eleven-v4',
+      'nano-gpt:elevenlabs/eleven-v4-turbo',
       'nano-gpt:xai-tts',
       'xai:grok-tts',
     ]);
 
     const mistral = tts.find((o) => o.providerId === 'mistral');
-    expect(mistral?.tts?.teal).toBe('strip');
+    expect(mistral?.tts?.teal).toBe('none');
     expect(mistral?.tts?.contentModerated).toBe(true);
     expect(mistral?.tts?.transport).toBe('mistral-speech');
     expect(mistral?.tts?.voices).toEqual({ kind: 'fetch', endpoint: 'mistral-paginated' });
     expect(mistral?.corsOverride).toBeUndefined();
 
     const xaiDirect = tts.find((o) => o.providerId === 'xai');
-    expect(xaiDirect?.tts?.teal).toBe('passthrough');
+    expect(xaiDirect?.tts?.teal).toBe('v1');
     expect(xaiDirect?.tts?.contentModerated).toBe(false);
     expect(xaiDirect?.tts?.transport).toBe('xai-native');
     expect(xaiDirect?.tts?.voices).toEqual({ kind: 'fetch', endpoint: 'xai-flat' });
     expect(xaiDirect?.corsOverride).toBe('direct');
     expect(xaiDirect?.adapter.kind).toBe('generic');
 
-    const nano = tts.find((o) => o.providerId === 'nano-gpt');
-    expect(nano?.tts?.teal).toBe('passthrough');
+    const nano = tts.find((o) => o.providerId === 'nano-gpt' && o.upstreamSlug === 'xai-tts');
+    expect(nano?.tts?.teal).toBe('v1');
     expect(nano?.tts?.contentModerated).toBe(false);
     expect(nano?.tts?.transport).toBe('openai-speech');
     expect(nano?.tts?.voices).toEqual({
@@ -57,16 +59,37 @@ describe('TTS offerings', () => {
     expect(nano?.corsOverride).toBeUndefined();
   });
 
-  test('ElevenLabs: both Eleven v4 offerings pass TEAL through, are moderated and non-TEE', () => {
+  test('ElevenLabs: both Eleven v4 offerings are TEAL v2, are moderated and non-TEE', () => {
     const tts = listTtsOfferings().filter((o) => o.providerId === 'elevenlabs');
     expect(tts.map((o) => o.upstreamSlug).sort()).toEqual(['eleven_v4', 'eleven_v4_turbo']);
     for (const o of tts) {
-      expect(o.tts?.teal).toBe('passthrough');
+      expect(o.tts?.teal).toBe('v2');
       expect(o.tts?.transport).toBe('elevenlabs');
       expect(o.tts?.voices).toEqual({ kind: 'fetch', endpoint: 'elevenlabs-v2' });
       expect(o.tts?.contentModerated).toBe(true);
       expect(o.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
       expect(o.freedomOrientedDeployment).toBeNull();
+      expect(o.adapter.kind).toBe('generic');
+    }
+    expect(tts.map((o) => o.tts?.displayName).sort()).toEqual(['Eleven v4', 'Eleven v4 Turbo']);
+  });
+
+  test('nano-gpt: both Eleven v4 offerings are TEAL v2 and read the audio-models catalogue', () => {
+    const tts = listTtsOfferings().filter(
+      (o) => o.providerId === 'nano-gpt' && o.upstreamSlug.startsWith('elevenlabs/'),
+    );
+    expect(tts.map((o) => o.upstreamSlug).sort()).toEqual([
+      'elevenlabs/eleven-v4',
+      'elevenlabs/eleven-v4-turbo',
+    ]);
+    for (const o of tts) {
+      expect(o.tts?.teal).toBe('v2');
+      expect(o.tts?.transport).toBe('openai-speech');
+      expect(o.tts?.voices).toEqual({ kind: 'fetch', endpoint: 'nano-gpt-audio-models' });
+      expect(o.tts?.contentModerated).toBe(true);
+      expect(o.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
+      expect(o.freedomOrientedDeployment).toBeNull();
+      expect(o.confidence).toBe('verified');
       expect(o.adapter.kind).toBe('generic');
     }
     expect(tts.map((o) => o.tts?.displayName).sort()).toEqual(['Eleven v4', 'Eleven v4 Turbo']);

@@ -34,16 +34,17 @@ function keyFingerprint(apiKey: string): string {
 
 /**
  * Memo key for a transport's voice source. Static lists are per upstream
- * model; fetched lists are per provider endpoint and API key fingerprint, so
- * every model of one provider (e.g. v4 and v4 Turbo) shares a single list while
+ * model; fetched lists are per provider endpoint and API key fingerprint (plus the
+ * upstream slug for nano-gpt, whose voices are per model), so every model of one provider (e.g. v4 and v4 Turbo) shares a single list while
  * a different key (another account) fetches its own.
  */
 export function voiceListKey(t: TtsTransport): string {
   const { providerId, upstreamSlug } = t.offering;
   const { voices } = t.ttsMeta;
-  return voices.kind === 'static'
-    ? `${providerId}:static:${upstreamSlug}`
-    : `${providerId}:${voices.endpoint}:${keyFingerprint(t.apiKey)}`;
+  if (voices.kind === 'static') return `${providerId}:static:${upstreamSlug}`;
+  const base = `${providerId}:${voices.endpoint}:${keyFingerprint(t.apiKey)}`;
+  // nano-gpt lists voices per upstream model, so the slug is part of the key.
+  return voices.endpoint === 'nano-gpt-audio-models' ? `${base}:${upstreamSlug}` : base;
 }
 
 /**
@@ -69,6 +70,7 @@ export async function loadVoiceListFor(
       providerConfig: transport.providerConfig,
       apiKey: transport.apiKey,
       endpoint: voices.endpoint,
+      upstreamSlug: transport.offering.upstreamSlug,
       signal: AbortSignal.timeout(15_000),
     });
     memo.set(key, promise);

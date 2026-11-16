@@ -95,4 +95,37 @@ describe('parseCatalogueEntry', () => {
   it('rejects a structurally invalid entry', () => {
     expect(parseCatalogueEntry({ canonical: { id: 'x' } }).ok).toBe(false);
   });
+
+  it('accepts the TEAL levels and rejects the retired passthrough value', () => {
+    const withTeal = (teal: string) => {
+      const e = structuredClone(validEntry);
+      Object.assign(e.offerings[0] as object, {
+        tts: {
+          displayName: 'T',
+          teal,
+          contentModerated: false,
+          transport: 'xai-native',
+          voices: { kind: 'static', list: [] },
+        },
+      });
+      return parseCatalogueEntry(e);
+    };
+    for (const level of ['none', 'v1', 'v2']) expect(withTeal(level).ok).toBe(true);
+    expect(withTeal('passthrough').ok).toBe(false);
+    expect(withTeal('strip').ok).toBe(false);
+  });
+
+  it('accepts the nano-gpt-audio-models voice endpoint', () => {
+    const e = structuredClone(validEntry);
+    Object.assign(e.offerings[0] as object, {
+      tts: {
+        displayName: 'T',
+        teal: 'v2',
+        contentModerated: true,
+        transport: 'openai-speech',
+        voices: { kind: 'fetch', endpoint: 'nano-gpt-audio-models' },
+      },
+    });
+    expect(parseCatalogueEntry(e).ok).toBe(true);
+  });
 });

@@ -5,8 +5,9 @@ import { MarkdownContent } from '../../src/components/chat/markdown/MarkdownCont
 
 describe('MarkdownContent — TEAL rendering', () => {
   it('renders inline tags as emoji', () => {
-    render(<MarkdownContent text="Hello [laugh] there" />);
-    expect(screen.getByText(/Hello 😄 there/)).toBeTruthy();
+    const { container } = render(<MarkdownContent text="Hello [laugh] there" />);
+    expect(screen.getByRole('img', { name: 'laugh' }).textContent).toBe('😄');
+    expect(container.textContent).toBe('Hello 😄 there');
   });
 
   it('renders whisper as a classed span', () => {

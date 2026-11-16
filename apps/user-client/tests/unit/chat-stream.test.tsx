@@ -189,6 +189,37 @@ describe('ChatStream', () => {
     expect(writeText).toHaveBeenCalledWith('visible answer');
   });
 
+  it('Copy writes the text as it is displayed (TEAL tags resolved)', () => {
+    useCurrentChatStore.getState().reset();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const message: MessageRow = {
+      id: 'm-teal',
+      chatId: 'c1',
+      role: 'persona',
+      contentBlocks: [{ type: 'text', text: '[laugh] <whisper>hello</whisper>' }],
+      streamingState: 'complete',
+      bookmarked: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const { container } = renderWithQuery(
+      <ChatStream
+        chatId="c1"
+        messages={[message]}
+        pills={[]}
+        persona={aurum}
+        displayName="Chris"
+        streamHandle={null}
+      />,
+    );
+    fireEvent.click(container.querySelector('[data-msg-id="m-teal"] .msg') as HTMLElement);
+    fireEvent.click(
+      container.querySelector('[data-msg-id="m-teal"] [data-ctrl="copy"]') as HTMLButtonElement,
+    );
+    expect(writeText).toHaveBeenCalledWith('😄 hello');
+  });
+
   it('scrolling back into the bottom band re-enables auto-follow', () => {
     useCurrentChatStore.getState().reset();
     useCurrentChatStore.getState().setAutoFollow(false);

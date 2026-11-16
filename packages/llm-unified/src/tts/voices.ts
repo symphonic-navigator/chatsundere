@@ -30,7 +30,9 @@ export interface ListTtsVoicesArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
   /** Wire shape of the voice catalogue; mirrors `TtsVoiceSource`'s fetch endpoint. */
-  endpoint: 'mistral-paginated' | 'xai-flat' | 'elevenlabs-v2';
+  endpoint: 'mistral-paginated' | 'xai-flat' | 'elevenlabs-v2' | 'nano-gpt-audio-models';
+  /** The offering's upstream slug; required for `nano-gpt-audio-models`. */
+  upstreamSlug?: string;
   signal?: AbortSignal;
   /** Test injection; defaults to global fetch. */
   fetchFn?: typeof fetch;
@@ -39,7 +41,9 @@ export interface ListTtsVoicesArgs {
 /**
  * Fetch all available TTS voices from the provider: `mistral-paginated` pages
  * through `/audio/voices`, `xai-flat` reads `/tts/voices` in one shot, and
- * `elevenlabs-v2` pages through the account's `/v2/voices` with metadata.
+ * `elevenlabs-v2` pages through the account's `/v2/voices` with metadata, and
+ * `nano-gpt-audio-models` reads one model's voices from nano-gpt's public
+ * audio-models catalogue.
  * Every source applies the juvenile filter (ADR 0040): matching voices are
  * dropped and counted in `hiddenCount`.
  */
@@ -48,6 +52,10 @@ export async function listTtsVoices(args: ListTtsVoicesArgs): Promise<TtsVoiceLi
 
   if (args.endpoint === 'elevenlabs-v2') {
     return listElevenLabsVoices(args, fetchFn);
+  }
+
+  if (args.endpoint === 'nano-gpt-audio-models') {
+    return listNanoGptAudioModelVoices(args, fetchFn);
   }
 
   if (args.endpoint === 'xai-flat') {
@@ -226,5 +234,60 @@ async function listElevenLabsVoices(
     if (next !== null) seenTokens.add(next);
   } while (pageToken !== null);
 
+  return { voices, hiddenCount };
+}
+
+/** Reads one model's voice names from nano-gpt's public audio-models catalogue, dropping juveniles. */
+async function listNanoGptAudioModelVoices(
+  args: ListTtsVoicesArgs,
+  fetchFn: typeof fetch,
+): Promise<TtsVoiceList> {
+  if (args.upstreamSlug === undefined) {
+    throw new SpeechSynthesisError('voices: upstream slug required', null);
+  }
+  const proxied = args.providerConfig.routing.kind === 'cors-proxy';
+  const response = await fetchWithProxyAuth(
+    () =>
+      buildRequest({
+        provider: args.providerConfig,
+        apiKey: args.apiKey,
+        path: '/audio-models?type=tts&detailed=true',
+        method: 'GET',
+      }),
+    { proxied, signal: args.signal, doFetch: fetchFn },
+  );
+  if (!response.ok) {
+    throw new SpeechSynthesisError(`voices upstream ${response.status}`, response.status);
+  }
+  const payload = (await response.json()) as unknown;
+  const entries = Array.isArray(payload)
+    ? payload
+    : typeof payload === 'object' &&
+        payload !== null &&
+        Array.isArray((payload as { data?: unknown }).data)
+      ? (payload as { data: unknown[] }).data
+      : null;
+  if (entries === null) {
+    throw new SpeechSynthesisError('voices response missing model list', null);
+  }
+  const entry = entries.find(
+    (e): e is { id: string; supported_parameters?: { voices?: unknown } } =>
+      typeof e === 'object' && e !== null && (e as { id?: unknown }).id === args.upstreamSlug,
+  );
+  if (entry === undefined) {
+    throw new SpeechSynthesisError('voices: model not in catalogue', null);
+  }
+  const names = entry.supported_parameters?.voices;
+  if (!Array.isArray(names)) {
+    throw new SpeechSynthesisError('voices: model lists no voices', null);
+  }
+  const voices: TtsVoice[] = [];
+  let hiddenCount = 0;
+  for (const name of names) {
+    if (typeof name !== 'string') continue;
+    const voice: TtsVoice = { id: name, name };
+    if (isJuvenileVoice(voice)) hiddenCount += 1;
+    else voices.push(voice);
+  }
   return { voices, hiddenCount };
 }
