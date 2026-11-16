@@ -154,6 +154,10 @@ carries the prefix. For offerings below level 2 the prefix is stripped like any 
 key follows the spoken text as today. Why my call: it is the only reading of D3 that holds in
 both voice modes, and it costs one pass in segmentation.
 
+The carried mood is **kept per voice**: in roleplay, a character's mood never reaches the narrator
+voice, and the narrator's mood never reaches the character (my call during the build: D3 concerns
+the speaker who set the mood, and paragraph mode never carried across voices either).
+
 ### 6.3 Prompt segment
 
 `TEAL_EXPRESSION_PROMPT` gains a **Mood** section after the inline tags. It covers the
