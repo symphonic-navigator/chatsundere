@@ -302,7 +302,7 @@ const ELEVEN_TRANSPORT = {
   offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
   ttsMeta: {
     displayName: 'Eleven v4',
-    teal: 'none' as const,
+    teal: 'v2' as const,
     voices: { kind: 'fetch' as const, endpoint: 'elevenlabs-v2' as const },
   },
 };

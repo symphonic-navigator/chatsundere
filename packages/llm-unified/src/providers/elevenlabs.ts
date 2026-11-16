@@ -7,7 +7,7 @@ import { apiKeyField } from './_helpers.js';
 // ElevenLabs direct: the first voice-only provider (no chat). Wire shapes
 // live-probed 2026-11-15 (spec 2026-11-15-elevenlabs-direct §6.2–6.4).
 const TTS_BASE = {
-  // TEAL v1 tags travel verbatim; Eleven v4 voices its own audio tags.
+  // Level v2 sends the full TEAL set (moods included) verbatim; Eleven v4 voices its own audio tags.
   teal: 'v2',
   // TODO(Chris manual test, spec §11 step 10): set from the moderation hand test
   contentModerated: true,

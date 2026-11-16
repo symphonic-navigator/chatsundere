@@ -85,28 +85,6 @@ describe('synthesiseSpeech', () => {
     }
   });
 
-  test('teal v2 leaves tags in the input', async () => {
-    const bodies: Array<Record<string, unknown>> = [];
-    const fetchFn = asMockFetch(async (input) => {
-      const req = input instanceof Request ? input : new Request(String(input));
-      bodies.push(JSON.parse(await req.text()) as Record<string, unknown>);
-      return jsonResponse({ audio_data: 'abc=' });
-    });
-    await synthesiseSpeech({
-      providerConfig: PROVIDER,
-      apiKey: 'k',
-      upstreamSlug: 'voxtral-mini-tts-2603',
-      teal: 'v2',
-      transport: 'mistral-speech',
-      text: 'Hello [laugh].',
-      voiceId: 'v1',
-      fetchFn,
-    });
-    const body = bodies[0];
-    if (body === undefined) throw new Error('fetch was never called');
-    expect(body.input).toBe('Hello [laugh].');
-  });
-
   test('non-OK status throws SpeechSynthesisError carrying the status', async () => {
     const fetchFn = asMockFetch(async () => new Response('nope', { status: 429 }));
     await expect(

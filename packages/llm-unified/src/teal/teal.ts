@@ -299,7 +299,9 @@ A mood tag in square brackets sets the tone of the text that follows, until the 
 
 ${mood}
 
-Use at most one mood per paragraph as a rule, and often none, because tone usually follows from the words. Reach for one where the words alone would be misread (irony, sarcasm, tenderness on neutral wording) or where the mood shifts. Behave naturally and never dramatise. Moods complement sounds and wrapping tags and never replace them: a laugh is still \`[laugh]\`.
+Most paragraphs carry no mood at all: tone usually follows from the words. In a typical message use one mood or none. Reach for one only where the words alone would be misread (irony, sarcasm, tenderness on neutral wording) or where the mood shifts. Behave naturally and never dramatise.
+
+A mood is never a substitute for a sound or a wrapping tag. A mood colours the tone; a wrapping tag changes the delivery itself. When something is whispered, said louder, sung or stressed, still wrap it in \`<whisper>\`, \`<loud>\`, \`<singing>\` or \`<emphasis>\` — with or without a mood. A laugh is still \`[laugh]\`.
 
 ### Wrapping tags
 

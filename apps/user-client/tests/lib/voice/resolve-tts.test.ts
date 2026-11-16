@@ -119,7 +119,7 @@ const ELEVEN_OFFERING = {
   corsOverride: 'direct' as const,
   tts: {
     displayName: 'Eleven v4',
-    teal: 'none' as const,
+    teal: 'v2' as const,
     contentModerated: false,
     transport: 'elevenlabs' as const,
     voices: { kind: 'fetch' as const, endpoint: 'elevenlabs-v2' as const },
