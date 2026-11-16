@@ -1,17 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { TEAL_BRACKET_RX, isTealWrapping } from '@chatsundere/llm-unified';
+import {
+  INTEGRATION_TAG_RX,
+  MAX_INTEGRATION_TAG_LENGTH,
+  TEAL_BRACKET_RX,
+  getIntegration,
+  isTealWrapping,
+} from '@chatsundere/llm-unified';
 import { resolveTealInline } from './teal-render-map.js';
 
 const FENCE_RX = /^\s*(```|~~~)/;
 const CODE_SPAN_RX = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g;
 const LIST_ITEM_RX = /^\s*(?:[-*+]|\d+[.)])\s/;
 const INDENTED_CODE_RX = /^(?: {4}|\t)/;
+/** Link guard as in preprocess-teal: `[text](url)` is a Markdown link, never a tag. */
+const TEAL_TAG_RX = new RegExp(`${TEAL_BRACKET_RX.source}(?!\\()`, 'g');
+const INTEGRATION_RX = new RegExp(INTEGRATION_TAG_RX.source, 'g');
 const WRAP_TAG_RX = /<\/?([a-z-]+)>/g;
 
 /** Replaces TEAL tags in one prose segment. */
 function translateProse(segment: string): string {
   return segment
-    .replace(TEAL_BRACKET_RX, (m, content: string) => {
+    .replace(INTEGRATION_RX, (raw, prefix: string, command: string, rawArgs: string) => {
+      if (raw.length > MAX_INTEGRATION_TAG_LENGTH) return raw;
+      const result = getIntegration(prefix)?.handle(command, rawArgs) ?? null;
+      return result === null ? raw : result.display;
+    })
+    .replace(TEAL_TAG_RX, (m, content: string) => {
       const action = resolveTealInline(content);
       if (action === null) return m;
       if (action.kind === 'emoji' || action.kind === 'text') return action.value;

@@ -28,6 +28,18 @@ describe('snippet', () => {
     expect(out.length).toBeLessThanOrEqual(41);
     expect(out).not.toMatch(/\s…$/);
   });
+  it('shows a mood-led reply as the chat does, without raw tags', () => {
+    expect(
+      snippet(
+        msg({ id: 'a', contentBlocks: [{ type: 'text', text: '[sarcastic] Oh, wonderful…' }] }),
+      ),
+    ).toBe('🙃 Oh, wonderful…');
+  });
+  it('counts the visible text when cutting', () => {
+    const text = '[sarcastic] the quick brown fox jumps over the lazy dog and keeps running';
+    const out = snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text }] }));
+    expect(out).toBe('🙃 the quick brown fox jumps over the…');
+  });
   it('uses only the first line', () => {
     expect(
       snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text: 'first\nsecond' }] })),

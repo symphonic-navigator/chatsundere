@@ -66,4 +66,19 @@ describe('displayPlainText', () => {
       'para\n\n    code [sad]\n\n```\n[sad]\n```\nafter 😔',
     );
   });
+
+  it('leaves a Markdown link whose text looks like a tag untouched', () => {
+    expect(displayPlainText('[content](https://example.org)')).toBe(
+      '[content](https://example.org)',
+    );
+    expect(displayPlainText('[laugh](https://example.org) [laugh]')).toBe(
+      '[laugh](https://example.org) 😄',
+    );
+  });
+
+  it('shows an integration tag as the chat displays it', () => {
+    expect(displayPlainText('yay [sfx:emoji-shower 🔥🦊💖] ok')).toBe('yay 🚿🔥🦊💖🚿 ok');
+    expect(displayPlainText('`[sfx:emoji-shower 🔥]`')).toBe('`[sfx:emoji-shower 🔥]`');
+    expect(displayPlainText('[sfx:confetti 🎉]')).toBe('[sfx:confetti 🎉]');
+  });
 });

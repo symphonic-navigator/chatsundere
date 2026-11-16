@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MessageRow } from '../boot/client-data-db.js';
 import { flattenAnswerText } from './content-blocks.js';
+import { displayPlainText } from './teal/display-plain-text.js';
 
 export interface TocEntry {
   messageId: string;
@@ -20,7 +21,10 @@ const SNIPPET_MAX = 40;
 
 /** Short, word-boundary-trimmed label derived from a message's answer text. */
 export function snippet(message: MessageRow): string {
-  const firstLine = (flattenAnswerText(message.contentBlocks).split('\n')[0] ?? '').trim();
+  // Label what the chat shows (emojis, no raw TEAL tags), then cut on the visible text.
+  const firstLine = (
+    displayPlainText(flattenAnswerText(message.contentBlocks)).split('\n')[0] ?? ''
+  ).trim();
   if (firstLine.length <= SNIPPET_MAX) return firstLine;
   const cut = firstLine.slice(0, SNIPPET_MAX);
   const lastSpace = cut.lastIndexOf(' ');

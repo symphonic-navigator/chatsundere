@@ -237,7 +237,11 @@ export function isTealWrapping(name: string): name is TealWrappingTag {
   return WRAPPING_SET.has(name.toLowerCase());
 }
 
-/** The `[...]` bracket candidate TEAL recognises; content is group 1. Global flag. */
+/**
+ * The `[...]` bracket candidate TEAL recognises; content is group 1.
+ * Global: use with replace/matchAll or copy via new RegExp(source); never
+ * .test/.exec on this shared instance.
+ */
 export const TEAL_BRACKET_RX = /\[([A-Za-z][A-Za-z\- ]{0,38})\]/g;
 
 /**
