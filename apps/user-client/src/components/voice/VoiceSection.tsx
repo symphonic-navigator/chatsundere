@@ -43,6 +43,8 @@ const EGRESS_NOTES: Record<string, string> = {
   'mistral:voxtral-mini-latest': 'Sends microphone audio to Mistral AI (EU)',
   'elevenlabs:eleven_v4': 'Sends message text to ElevenLabs (US)',
   'elevenlabs:eleven_v4_turbo': 'Sends message text to ElevenLabs (US)',
+  'nano-gpt:elevenlabs/eleven-v4': 'Sends message text via nano-gpt to ElevenLabs (US)',
+  'nano-gpt:elevenlabs/eleven-v4-turbo': 'Sends message text via nano-gpt to ElevenLabs (US)',
   'elevenlabs:scribe_v2': 'Sends microphone audio to ElevenLabs (US)',
 };
 

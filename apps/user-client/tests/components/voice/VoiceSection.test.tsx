@@ -112,6 +112,16 @@ describe('VoiceSection — mode toggle', () => {
 });
 
 describe('VoiceSection — Read-aloud voice slot picker', () => {
+  it('notes the nano-gpt to ElevenLabs egress for both Eleven v4 entries', () => {
+    providerRowsMock.mockReturnValue(providerRows('nano-gpt'));
+    setup();
+    openTtsPicker();
+    for (const row of screen.getAllByRole('button', { name: /eleven v4.* via nano-gpt/i })) {
+      expect(row.textContent).toContain('Sends message text via nano-gpt to ElevenLabs (US)');
+    }
+    expect(screen.getAllByRole('button', { name: /eleven v4.* via nano-gpt/i })).toHaveLength(2);
+  });
+
   it('lists exactly the two Grok entries — Mistral TTS is fully absent', () => {
     providerRowsMock.mockReturnValue(providerRows('xai', 'nano-gpt', 'mistral'));
     setup();

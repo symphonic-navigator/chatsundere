@@ -15,7 +15,7 @@ vi.mock('@chatsundere/llm-unified', () => ({
 }));
 
 import { loadVoiceList } from '../../../src/lib/voice/voice-list-active.js';
-import { _resetVoiceListForTests } from '../../../src/lib/voice/voice-list.js';
+import { _resetVoiceListForTests, voiceListKey } from '../../../src/lib/voice/voice-list.js';
 
 function transport(upstreamSlug: string, apiKey = 'k') {
   return {
@@ -129,5 +129,40 @@ describe('loadVoiceList stale rejection', () => {
     await expect(p2).resolves.toMatchObject({ list: LIST });
     await expect(p3).resolves.toMatchObject({ list: LIST });
     expect(listTtsVoicesMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+function nanoTransport(upstreamSlug: string, apiKey = 'k') {
+  return {
+    providerConfig: { baseUrl: 'https://nano-gpt.com', routing: { kind: 'direct' } },
+    apiKey,
+    offering: { providerId: 'nano-gpt', upstreamSlug },
+    ttsMeta: { voices: { kind: 'fetch', endpoint: 'nano-gpt-audio-models' } },
+  };
+}
+
+describe('nano-gpt-audio-models voice source', () => {
+  it('keys per upstream slug, so v4 and Turbo differ', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: partial transport fixture
+    const key = (s: string) => voiceListKey(nanoTransport(s) as any);
+    expect(key('elevenlabs/eleven-v4')).not.toBe(key('elevenlabs/eleven-v4-turbo'));
+    expect(key('elevenlabs/eleven-v4')).toBe(key('elevenlabs/eleven-v4'));
+  });
+
+  it('leaves other fetched sources keyed without the slug', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: partial transport fixture
+    const key = (s: string) => voiceListKey(transport(s) as any);
+    expect(key('eleven_v4')).toBe(key('eleven_v4_turbo'));
+  });
+
+  it('passes the upstream slug to listTtsVoices', async () => {
+    resolveTtsTransportMock.mockResolvedValueOnce(nanoTransport('elevenlabs/eleven-v4-turbo'));
+    await loadVoiceList();
+    expect(listTtsVoicesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: 'nano-gpt-audio-models',
+        upstreamSlug: 'elevenlabs/eleven-v4-turbo',
+      }),
+    );
   });
 });
