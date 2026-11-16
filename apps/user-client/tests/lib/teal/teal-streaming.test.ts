@@ -100,4 +100,16 @@ describe('transformTealStream — integration tags', () => {
     expect(spans.map((s) => s.t).join('')).toBe('[sfx:confetti 🎉] hi');
     expect(spans.some((s) => s.c.includes('sfx-glow'))).toBe(false);
   });
+
+  it('suppresses a half-typed mood at the stream tip', () => {
+    expect(flat(['Hi [ner'])).toEqual([['Hi |']]);
+  });
+
+  it('renders a complete mood as its emoji', () => {
+    expect(flat(['Hi [nervous] there'])).toEqual([['Hi 😬 there|']]);
+  });
+
+  it('completes a mood split across chunks', () => {
+    expect(flat(['Hi [ner', 'vous] ok'])).toEqual([['Hi |'], ['😬 ok|']]);
+  });
 });

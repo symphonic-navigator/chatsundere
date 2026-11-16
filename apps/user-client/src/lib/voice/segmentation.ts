@@ -88,7 +88,7 @@ const MIN_FIRST = 20;
 const MIN_REST = 30;
 
 /** PUA sentinels emitted by `preprocessTeal`; stripped defensively. */
-const TEAL_PUA = /[\u{E000}\u{E001}]/gu;
+const TEAL_PUA = /[\u{E000}-\u{E002}]/gu;
 
 /**
  * Blank-line paragraph splitting over a code-masked copy of `source`, so

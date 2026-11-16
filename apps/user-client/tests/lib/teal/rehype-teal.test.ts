@@ -47,4 +47,41 @@ describe('rehypeTeal', () => {
   it('removes an orphan close tag without styling anything', () => {
     expect(render('hi</whisper> there')).toBe('<p>hi there</p>');
   });
+
+  describe('labelled emojis', () => {
+    it('renders a mood as a labelled image span', () => {
+      expect(render('[sarcastic] Oh great.')).toBe(
+        '<p><span role="img" aria-label="sarcastic">🙃</span> Oh great.</p>',
+      );
+    });
+
+    it('labels v1 sounds too', () => {
+      expect(render('ha [laugh] ha')).toBe(
+        '<p>ha <span role="img" aria-label="laugh">😄</span> ha</p>',
+      );
+    });
+
+    it('resolves a qualified sound by its core word', () => {
+      expect(render('[playful giggle] hi')).toBe(
+        '<p><span role="img" aria-label="giggle">🤭</span> hi</p>',
+      );
+    });
+
+    it('keeps unknown and near-miss brackets literal', () => {
+      expect(render('[content removed]')).toBe('<p>[content removed]</p>');
+      expect(render('[melancholic] x')).toBe('<p>[melancholic] x</p>');
+    });
+
+    it('leaves moods inside code untouched', () => {
+      expect(render('```\n[sad]\n```')).toContain('[sad]');
+      expect(render('see `[sad]` here')).toContain('<code>[sad]</code>');
+      expect(render('```\n[sad]\n```')).not.toContain('role="img"');
+    });
+
+    it('stays styled when a labelled emoji sits inside a wrap', () => {
+      expect(render('<whisper>hi [shy]</whisper>')).toBe(
+        '<p><span class="teal-whisper">hi </span><span role="img" aria-label="shy">🙈</span></p>',
+      );
+    });
+  });
 });

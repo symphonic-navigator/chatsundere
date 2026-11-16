@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
   type TealInlineTag,
+  type TealMoodTag,
   type TealWrappingTag,
   isTealWrapping,
-  matchTealInline,
+  resolveTealBracket,
 } from '@chatsundere/llm-unified';
 
 /**
@@ -15,42 +16,86 @@ import {
  * Spec: superpowers/specs/2026-06-11-teal-voice-expression-language-design.md §4.3.
  */
 export type TealRenderAction =
-  | { kind: 'emoji'; value: string }
+  | { kind: 'emoji'; value: string; label: string }
   | { kind: 'text'; value: string }
   | { kind: 'wrap'; className: string }
   | { kind: 'silent' };
 
-const BREATH = { kind: 'emoji', value: '😮‍💨' } as const;
+/** An emoji row; `label` is the core word a screen reader announces instead of the emoji's name. */
+function emoji(value: string, label: string): TealRenderAction {
+  return { kind: 'emoji', value, label };
+}
 
 /** Combination rows — matched before the core word (longest match, D3). */
 const INLINE_COMBINATIONS: Readonly<Record<string, TealRenderAction>> = {
-  'soft laugh': { kind: 'emoji', value: '🤭' },
+  'soft laugh': emoji('🤭', 'soft laugh'),
 };
 
 const INLINE_RENDER: Readonly<Record<TealInlineTag, TealRenderAction>> = {
   pause: { kind: 'text', value: ' … ' },
   'long-pause': { kind: 'text', value: ' …… ' },
-  'hum-tune': { kind: 'emoji', value: '🎶' },
-  laugh: { kind: 'emoji', value: '😄' },
-  chuckle: { kind: 'emoji', value: '😁' },
-  giggle: { kind: 'emoji', value: '🤭' },
-  cry: { kind: 'emoji', value: '😢' },
-  whoop: { kind: 'emoji', value: '🥳' },
-  tsk: { kind: 'emoji', value: '😒' },
+  'hum-tune': emoji('🎶', 'hum-tune'),
+  laugh: emoji('😄', 'laugh'),
+  chuckle: emoji('😁', 'chuckle'),
+  giggle: emoji('🤭', 'giggle'),
+  cry: emoji('😢', 'cry'),
+  whoop: emoji('🥳', 'whoop'),
+  tsk: emoji('😒', 'tsk'),
   'tongue-click': { kind: 'silent' },
   'lip-smack': { kind: 'silent' },
-  breath: BREATH,
-  inhale: BREATH,
-  exhale: BREATH,
-  sigh: BREATH,
-  gasp: { kind: 'emoji', value: '😲' },
+  breath: emoji('😮‍💨', 'breath'),
+  inhale: emoji('😮‍💨', 'inhale'),
+  exhale: emoji('😮‍💨', 'exhale'),
+  sigh: emoji('😮‍💨', 'sigh'),
+  gasp: emoji('😲', 'gasp'),
   'clear-throat': { kind: 'silent' },
-  gulp: { kind: 'silent' },
-  yawn: { kind: 'silent' },
-  sniffle: { kind: 'silent' },
-  groan: { kind: 'silent' },
-  scoff: { kind: 'silent' },
+  gulp: emoji('😅', 'gulp'),
+  yawn: emoji('🥱', 'yawn'),
+  sniffle: emoji('🤧', 'sniffle'),
+  groan: emoji('😩', 'groan'),
+  scoff: emoji('🙄', 'scoff'),
 };
+
+/** Mood rows (spec §7.1) — one emoji per mood, shown at the tag's position. */
+const MOOD_RENDER: Readonly<Record<TealMoodTag, TealRenderAction>> = {
+  excited: emoji('🤩', 'excited'),
+  playful: emoji('😜', 'playful'),
+  amazed: emoji('😮', 'amazed'),
+  proud: emoji('😎', 'proud'),
+  startled: emoji('😳', 'startled'),
+  annoyed: emoji('😤', 'annoyed'),
+  angry: emoji('😠', 'angry'),
+  sarcastic: emoji('🙃', 'sarcastic'),
+  bitter: emoji('😣', 'bitter'),
+  nervous: emoji('😬', 'nervous'),
+  anxious: emoji('😰', 'anxious'),
+  scared: emoji('😨', 'scared'),
+  hesitant: emoji('🫤', 'hesitant'),
+  confused: emoji('😕', 'confused'),
+  tired: emoji('😪', 'tired'),
+  bored: emoji('😑', 'bored'),
+  sad: emoji('😔', 'sad'),
+  'let-down': emoji('😞', 'let-down'),
+  curious: emoji('🤔', 'curious'),
+  thoughtful: emoji('💭', 'thoughtful'),
+  content: emoji('😌', 'content'),
+  peaceful: emoji('🕊️', 'peaceful'),
+  mischievous: emoji('😈', 'mischievous'),
+  affectionate: emoji('🥰', 'affectionate'),
+  teasing: emoji('😏', 'teasing'),
+  flirtatious: emoji('😘', 'flirtatious'),
+  seductive: emoji('💋', 'seductive'),
+  shy: emoji('🙈', 'shy'),
+  pouting: emoji('😗', 'pouting'),
+};
+
+/** Every emoji a mood row and a sound row both use; kept empty unless Chris accepts an overlap. */
+export function sharedMoodSoundEmojis(): string[] {
+  const used = (m: Readonly<Record<string, TealRenderAction>>): Set<string> =>
+    new Set(Object.values(m).flatMap((a) => (a.kind === 'emoji' ? [a.value] : [])));
+  const sounds = used(INLINE_RENDER);
+  return [...used(MOOD_RENDER)].filter((e) => sounds.has(e));
+}
 
 const WRAP_RENDER: Readonly<Record<TealWrappingTag, TealRenderAction>> = {
   soft: { kind: 'wrap', className: 'teal-italic' },
@@ -68,13 +113,16 @@ const WRAP_RENDER: Readonly<Record<TealWrappingTag, TealRenderAction>> = {
   fast: { kind: 'silent' },
 };
 
-/** Resolve inline bracket content: combination row first, then core word. */
+/** Resolve inline bracket content (sound or mood): combination row first, then core word. */
 export function resolveTealInline(content: string): TealRenderAction | null {
   const norm = content.trim().toLowerCase().replace(/\s+/g, ' ');
   const combo = INLINE_COMBINATIONS[norm];
   if (combo) return combo;
-  const core = matchTealInline(norm);
-  return core === null ? null : INLINE_RENDER[core];
+  const hit = resolveTealBracket(norm);
+  if (hit === null) return null;
+  return hit.kind === 'mood'
+    ? MOOD_RENDER[hit.tag as TealMoodTag]
+    : INLINE_RENDER[hit.tag as TealInlineTag];
 }
 
 /** Resolve a wrapping tag name; null for unknown tags. */
