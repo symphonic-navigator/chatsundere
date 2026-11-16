@@ -8,6 +8,23 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-16 (night) — **v0.4.0 RELEASED.** `v0.4.0` (on `fe046b5c`, the squash of
+#49) ships ElevenLabs direct and via nano-gpt, TEAL v2 moods and the MCP OAuth hardening.
+`CHANGELOG.md` starts with it. `maintenance/0.4` is cut from the tag (`version.txt` 0.4.1);
+`master` prepares 0.5.0. 0.3.6 was never tagged: 0.4.0 carries its OAuth hardening.
+- **Device test on a fresh local bootstrap** surfaced and fixed: `minio/minio` gone from Docker Hub
+  (dev stack on Garage, #45/#46); https discovery URLs against the http dev services and
+  ElevenLabs missing from the add-provider picker (#47); live voice diagnostics (#48).
+- **Open, see [[insights/follow-ups-index]]:** prior-turn attachment replay (0.4.1); the
+  deployment template's move to Garage with a blob migration (0.5.0, guided); the intermittent
+  dead mic on the listening floor (waiting for the next console); Komodo.
+- Kumbu² diaries `0.4.1.md` and `0.5.0.md` are open.
+
+**Next:** Chris deploys 0.4.0 and collects feedback. Then 0.4.1 on `maintenance/0.4`, starting with
+a short spec for prior-turn attachment replay; forward-port it to `master` the same day.
+
+---
+
 **Last updated:** 2026-11-16 (evening) — **OAUTH HARDENING FORWARD-PORTED; LINES IN STEP; CI
 GREEN.** `master` now carries everything from `maintenance/0.3`, and both lines have the OPAQUE
 hook budget.

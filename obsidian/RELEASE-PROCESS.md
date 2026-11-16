@@ -6,10 +6,10 @@ How Chatsundere is versioned and released, from [ADR 0039](decisions/0039-mainte
 
 | Branch | What it is | Where it runs |
 |---|---|---|
-| `master` | the next minor release (today: 0.4.0) | locally and on staging |
-| `maintenance/X.Y` | the maintenance line of a released minor version (today: `maintenance/0.3`, cut from `v0.3.5`) | in production, through its tags |
+| `master` | the next minor release (today: 0.5.0) | locally and on staging |
+| `maintenance/X.Y` | the maintenance line of a released minor version (today: `maintenance/0.4`, cut from `v0.4.0`) | in production, through its tags |
 
-`version.txt` holds the version a branch is preparing: `0.4.0` on `master`, `0.3.6` on `maintenance/0.3`. Untagged builds are `<version.txt>-pre.<run>`.
+`version.txt` holds the version a branch is preparing: `0.5.0` on `master`, `0.4.1` on `maintenance/0.4`. Untagged builds are `<version.txt>-pre.<run>`.
 
 ## What goes where
 
@@ -32,7 +32,7 @@ When unsure whether something is a fix or a feature, it's a feature.
 
 ## The version diary
 
-Per version a note in Kumbu²: `/SWE/Chatsundere/Versions/<version>.md` (`0.3.6.md` for the maintenance line, `0.4.0.md` for `master`). Each merged pull request adds one entry, from the users' side, with its number, under **New**, **Better**, **Fixed** or **Behind the scenes** (CI, tests, docs: not in the release notes). A forward-ported change gets an entry in both diaries. Write the entry when the pull request is merged, not at release time.
+Per version a note in Kumbu²: `/SWE/Chatsundere/Versions/<version>.md` (`0.4.1.md` for the maintenance line, `0.5.0.md` for `master`). Each merged pull request adds one entry, from the users' side, with its number, under **New**, **Better**, **Fixed** or **Behind the scenes** (CI, tests, docs: not in the release notes). A forward-ported change gets an entry in both diaries. Write the entry when the pull request is merged, not at release time.
 
 ## Releasing a maintenance version (`vX.Y.Z` on `maintenance/X.Y`)
 
