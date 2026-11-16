@@ -91,10 +91,7 @@ Measured as 12 companion prompts × 4 samples through nano-gpt, at temperature 0
 | v2, first draft | 0.88 / 0.19 | 0.36 |
 | v2 as merged ("a mood is never a substitute for a wrapping tag", "most paragraphs carry no mood") | 0.92 / 0.23 | 0.16 |
 
-GLM 5.3 runs were unreliable, because about half its requests failed through nano-gpt. They
-still point to fewer wrapping tags (0.64 → 0.23). This is flagged for Chris's device test.
+GLM 5.3, re-measured on 2026-11-16 with lower concurrency and a larger token budget (48/48 replies each; the earlier failures were self-inflicted): v1 inline 1.90 → 1.69 (−11 %), wrapping 0.60 → 0.42 (−30 %), moods in 21 % of paragraphs. Read: GLM over-dosed v1 markup before (about 2.5 per reply against the prompt's 0–2) and now sits at about 2.1. Chris judges on device whether GLM with a Grok voice sounds any flatter.
 
 **Grok strip, verified:** at level `v1`, `[sarcastic] … [laugh] … [shy] … <whisper>…</whisper> [yawn]`
-reaches Grok as `… [laugh] … <whisper>…</whisper> …`. The audible check was blocked:
-nano-gpt's `/v1/audio/speech` answered HTTP 500 for every model on 2026-11-16, while chat
-through the same key worked.
+reaches Grok as `… [laugh] … <whisper>…</whisper> …`. Audible check (nano-gpt `xai-tts`, voice `eve`, after a transient HTTP 500 on all TTS models earlier that day): Scribe hears "Oh, great. [laughs] That is just wonderful news. Come here and sit with me. Long day?". The laugh survives, and no mood is spoken.

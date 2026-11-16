@@ -193,7 +193,7 @@ Items that have been decided but not yet implemented in code.
 | ElevenLabs: juvenile filter on joined words (2026-11-15): `KidVoice`, `Teen2` slip past whole-word matching ([[security-deferrals]] I5) | ElevenLabs step 3 (via nano-gpt) | Info |
 | `cs-segmented` roles (2026-11-15): Segmented controls use `role="tablist"`/`tab` without tab panels, app-wide (now also the voice filters); `role="group"` + `aria-pressed` would be honest | Next accessibility pass | Low |
 | TEAL v2: mid-paragraph moods in sentence mode (2026-11-16): `Intl.Segmenter` does not split before a lower-case word after a full stop, so a mood often sits inside the previous segment (pre-existing SB8 behaviour; harmless on ElevenLabs) | Next segmentation touch | Low |
-| TEAL v2: GLM tag mix (2026-11-16): measurements through nano-gpt were unreliable (about half the requests failed) and point to fewer wrapping tags with the v2 prompt | Chris's device test; re-measure when nano-gpt is stable | Low |
+| TEAL v2: GLM tag mix (2026-11-16): re-measured at n=48, GLM's wrapping tags drop 30 % (0.60 → 0.42 per reply) and inline 11 %; it over-dosed before (about 2.5 markups per reply against 0–2) | Chris's device test with GLM chat plus a Grok voice | Low |
 | TEAL v2: a mood word as a qualifier reaches Grok (2026-11-16): `[sarcastic laugh]` resolves as a sound, so Grok receives the mood word as a qualifier (same as v1 qualifiers; the prompt forbids the combination) | First field report | Info |
 | TEAL v2: emoji styling and streaming labels (2026-11-16): an emoji inside a wrapping tag is not styled with the wrap class, and streaming draft emojis carry no aria label (the final render does) | Next TEAL display touch | Low |
 
