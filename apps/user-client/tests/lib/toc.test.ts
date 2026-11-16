@@ -40,6 +40,14 @@ describe('snippet', () => {
     const out = snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text }] }));
     expect(out).toBe('🙃 the quick brown fox jumps over the…');
   });
+  it('never cuts inside an astral or ZWJ emoji', () => {
+    const text = `${'a'.repeat(39)}😮‍💨 and then some more words`;
+    const out = snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text }] }));
+    expect(out).toBe(`${'a'.repeat(39)}😮‍💨…`);
+    expect(out).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    );
+  });
   it('uses only the first line', () => {
     expect(
       snippet(msg({ id: 'a', contentBlocks: [{ type: 'text', text: 'first\nsecond' }] })),

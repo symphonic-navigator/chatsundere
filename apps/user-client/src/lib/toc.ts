@@ -18,6 +18,8 @@ export interface Toc {
 }
 
 const SNIPPET_MAX = 40;
+/** Grapheme segmentation keeps surrogate pairs and ZWJ emoji whole when cutting. */
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 /** Short, word-boundary-trimmed label derived from a message's answer text. */
 export function snippet(message: MessageRow): string {
@@ -25,8 +27,9 @@ export function snippet(message: MessageRow): string {
   const firstLine = (
     displayPlainText(flattenAnswerText(message.contentBlocks)).split('\n')[0] ?? ''
   ).trim();
-  if (firstLine.length <= SNIPPET_MAX) return firstLine;
-  const cut = firstLine.slice(0, SNIPPET_MAX);
+  const graphemes = Array.from(GRAPHEMES.segment(firstLine), (g) => g.segment);
+  if (graphemes.length <= SNIPPET_MAX) return firstLine;
+  const cut = graphemes.slice(0, SNIPPET_MAX).join('');
   const lastSpace = cut.lastIndexOf(' ');
   const base = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd();
   return `${base}…`;
