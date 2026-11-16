@@ -86,7 +86,11 @@ does not perform audibly is removed from the vocabulary before the branch is mer
 2. Otherwise the first whitespace-separated token that is a **sound** core word. A sound wins
    over a mood in a mixed bracket (`[playful giggle]` is the giggle), because a sound is a
    concrete event and the display needs exactly one action.
-3. Otherwise the first token that is a mood core word.
+3. Otherwise, a mood only when the bracket holds **at most two tokens and the mood core word is
+   the last one** (`[slightly nervous]`, `[very sad]`). This is narrower than v1's sound
+   fallback because mood words are common English: `[content removed]`, `[tired of this]` and
+   `[sad but true]` stay literal. A bare `[shy]` is accepted as a mood (my call: rare in prose,
+   and harmless if it happens).
 4. Otherwise the bracket stays literal.
 
 Each tag carries its **level**: v1 sounds and wrapping tags are level 1; moods and the new
@@ -134,6 +138,23 @@ companion tones on neutral wording, mood changes mid-paragraph, and the new soun
 - `synthesiseSpeech` calls `stripTeal(text, { none: 0, v1: 1, v2: 2 }[teal])`.
 - The voice cache key gains no new input: the stored text is canonical, and the level is a
   function of the offering, which the key already contains.
+- **v1 wrapping tags on ElevenLabs** are already curated (step 1, `obsidian/models/eleven-v4.md`):
+  none is read aloud, `<whisper>` performs, `<slow>`/`<fast>` are ignored. Level `v2` therefore
+  passes them through unchanged, and no fourth level is needed.
+- The speakability gate in `segmentation.ts` keeps calling `stripTeal(spokenText)` at level 0, so
+  a segment holding only a mood tag is never emitted. A mixed bracket at level 1
+  (`[playful giggle]`) goes to Grok verbatim, qualifier included, which v1 already allows.
+
+### 6.2a Mood scope in sentence mode (my call)
+
+`voiceMode: 'sentence'` splits a paragraph into several segments, each synthesised on its own, so
+a mood set in sentence 1 would not reach sentence 2 on ElevenLabs. To keep D3 true in both
+modes, segmentation **carries the active mood forward**: a later segment of the same paragraph
+that does not open with its own mood tag gets the paragraph's active mood tag prepended to its
+`spokenText`. The display text and glow anchors are unchanged, because only the spoken text
+carries the prefix. For offerings below level 2 the prefix is stripped like any mood. The cache
+key follows the spoken text as today. Why my call: it is the only reading of D3 that holds in
+both voice modes, and it costs one pass in segmentation.
 
 ### 6.3 Prompt segment
 
@@ -167,18 +188,27 @@ The v1 strict rules (only listed tags, English names, no markup around tags) ext
 | excited | 🤩 | nervous | 😬 | curious | 🤔 |
 | playful | 😜 | anxious | 😰 | thoughtful | 💭 |
 | amazed | 😮 | scared | 😨 | content | 😌 |
-| proud | 😊 | hesitant | 😶 | peaceful | 🕊️ |
+| proud | 😎 | hesitant | 🫤 | peaceful | 🕊️ |
 | startled | 😳 | confused | 😕 | mischievous | 😈 |
-| annoyed | 😤 | tired | 🥱 | affectionate | 🥰 |
+| annoyed | 😤 | tired | 😪 | affectionate | 🥰 |
 | angry | 😠 | bored | 😑 | teasing | 😏 |
 | sarcastic | 🙃 | sad | 😔 | flirtatious | 😘 |
-| bitter | 😒 | let-down | 😞 | seductive | 💋 |
+| bitter | 😣 | let-down | 😞 | seductive | 💋 |
 | | | | | shy | 🙈 |
-| | | | | pouting | 🥺 |
+| | | | | pouting | 😗 |
 
 - **New sounds:**
   - `clear-throat` is silent;
-  - `gulp` 😧, `yawn` 🥱, `sniffle` 🥲, `groan` 😩, `scoff` 🙄.
+  - `gulp` 😅, `yawn` 🥱, `sniffle` 🤧, `groan` 😩, `scoff` 🙄.
+
+- **No emoji serves both a mood and a sound** unless Chris accepts the overlap on purpose. A
+  Vitest test lists the shared emojis, so any overlap stays a conscious choice (Laura). The drafts
+  above avoid every overlap with v1 (tired is 😪 because yawn is 🥱; bitter is 😣 because tsk
+  is 😒). The emojis Laura flagged as reading wrong were replaced: proud, hesitant, pouting,
+  sniffle, gulp.
+- **Screen readers hear the meaning, not the emoji's name** (my call, Laura). Every TEAL emoji
+  renders as `<span role="img" aria-label="{core word}">`, so VoiceOver says "sarcastic" rather
+  than "upside-down face". This applies to v1 sounds too.
 
 ### 7.2 Behaviour
 
@@ -232,7 +262,13 @@ Via `/curate`, recorded in `obsidian/models/eleven-v4.md` and a TEAL v2 note the
    aloud. Pass: no tag is spoken, and laughs and whispers still come through as before.
 5. **Paragraph scope.** Ask for a two-paragraph reply that starts angry. Pass (ElevenLabs): the
    second paragraph starts neutral unless it carries its own mood.
-6. **Code stays literal.** Ask for a code sample containing `[sad]`. Pass: it stays literal in
+6. **Moods are distinguishable at 380 px.** On your phone, read a reply that carries one mood from
+   each family. Pass: you can tell the moods apart. Tell Liz which rows to merge or change.
+7. **No raw tag anywhere.** Reload the chat, open reading mode, bookmark a mood-tagged message and
+   look at its preview. Pass: no `[sarcastic]` or similar appears anywhere.
+8. **Screen reader.** With VoiceOver or TalkBack, read a message with 🙃. Pass: it is read as
+   "sarcastic".
+9. **Code stays literal.** Ask for a code sample containing `[sad]`. Pass: it stays literal in
    the code block.
 
 ## 11. Left to the builder
