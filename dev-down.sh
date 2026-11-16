@@ -2,7 +2,7 @@
 # Tear down the local development infrastructure containers.
 #
 #   ./dev-down.sh          Stop the containers, PRESERVE all data (databases,
-#                          MinIO objects, Prometheus/Grafana state).
+#                          Garage objects, Prometheus/Grafana state).
 #   ./dev-down.sh --wipe   Stop AND delete every volume + bind-mount, so the next
 #                          ./dev-infra.sh re-creates fresh databases and buckets.
 #

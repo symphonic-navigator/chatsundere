@@ -27,18 +27,19 @@ describe('blobKey', () => {
   });
 });
 
-// The live legs need MinIO. They SKIP LOUDLY when S3_TEST_ENDPOINT is unset —
+// The live legs need an S3 store (the dev Garage of ./dev-infra.sh). They SKIP
+// LOUDLY when S3_TEST_ENDPOINT is unset —
 // the TEST_DATABASE_URL discipline, applied to the object store.
 const live = S3_TEST_ENDPOINT ? describe : describe.skip;
 if (!S3_TEST_ENDPOINT) {
   // eslint-disable-next-line no-console
   console.warn(
     '[s3.test] SKIPPING live S3 legs — set S3_TEST_ENDPOINT (e.g. http://localhost:9000) ' +
-      'with MinIO running to exercise put/get/delete/health/bootstrap.',
+      'with the dev Garage running to exercise put/get/delete/health/bootstrap.',
   );
 }
 
-live('S3 backend (live, against MinIO)', () => {
+live('S3 backend (live, against S3)', () => {
   const env = {
     ...loadEnv({
       DATABASE_URL: 'postgres://x/y',
@@ -48,8 +49,10 @@ live('S3 backend (live, against MinIO)', () => {
       // (bun's describe.skip still runs the callback body); the skipped tests
       // never issue a network call.
       S3_ENDPOINT: S3_TEST_ENDPOINT ?? 'http://127.0.0.1:1',
-      S3_ACCESS_KEY_ID: process.env.S3_TEST_ACCESS_KEY_ID ?? 'chatsundere-dev',
-      S3_SECRET_ACCESS_KEY: process.env.S3_TEST_SECRET_ACCESS_KEY ?? 'chatsundere-dev-secret',
+      S3_ACCESS_KEY_ID: process.env.S3_TEST_ACCESS_KEY_ID ?? 'GK000000000000000000000000',
+      S3_SECRET_ACCESS_KEY:
+        process.env.S3_TEST_SECRET_ACCESS_KEY ??
+        '0000000000000000000000000000000000000000000000000000000000000000',
       S3_BUCKET: process.env.S3_TEST_BUCKET ?? 'chatsundere-blobs-test',
     }),
   };
