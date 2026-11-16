@@ -1,7 +1,7 @@
 # TEAL v2 — Emotions, Companion Tones and New Sounds
 
 **Date:** 2026-11-16
-**Status:** Draft, pending Chris's approval
+**Status:** Approved by Chris (2026-11-16)
 **Target:** 0.4.0 (`master`)
 **Part of:** the 0.4.0 ElevenLabs track, step 2 of 3 (step 1:
 [`2026-11-15-elevenlabs-direct-design`](2026-11-15-elevenlabs-direct-design.md))
@@ -72,9 +72,7 @@ qualifier words (`[slightly nervous]`), and its core word decides what it is.
 | Calm and warm | `curious`, `thoughtful`, `content`, `peaceful`, `mischievous` |
 | Companion tones (A+) | `affectionate`, `teasing`, `flirtatious`, `seductive`, `shy`, `pouting` |
 
-**A+ is provisional.** These tones are not in ElevenLabs' published list and work only through
-free phrasing. Curation (§8) checks each one with a harmless listening sample. A tone that
-does not perform audibly is removed from the vocabulary before the branch is merged.
+**A+ is confirmed by ear** (Chris, 2026-11-16): the listening test (one sentence, the six tones and a neutral control) performed every tone as named. ElevenLabs offers these tones only through free phrasing; they are not in its published list.
 
 ### 4.2 New sounds (B): additions to the v1 inline sounds
 
@@ -218,6 +216,10 @@ The v1 strict rules (only listed tags, English names, no markup around tags) ext
 - Code blocks, inline code and links stay immune, unknown brackets stay literal, and qualifier
   fallback works as in §4.3.
 - Plain-text surfaces call `stripTeal(text)` with its default `0`, so they strip moods too.
+- **Copy gives what the user sees** (Chris, 2026-11-16; replaces v1's D7). The message Copy
+  control copies the display transform: emojis for sounds and moods, the text of wrapping tags
+  without the tags, and no raw tag. Why: with moods, tags appear far more often, and Copy and a
+  manual selection must not give two different results; emojis fit what Chatsundere is about.
 
 ## 8. Curation and verification of the voices
 
@@ -265,7 +267,7 @@ Via `/curate`, recorded in `obsidian/models/eleven-v4.md` and a TEAL v2 note the
 6. **Moods are distinguishable at 380 px.** On your phone, read a reply that carries one mood from
    each family. Pass: you can tell the moods apart. Tell Liz which rows to merge or change.
 7. **No raw tag anywhere.** Reload the chat, open reading mode, bookmark a mood-tagged message and
-   look at its preview. Pass: no `[sarcastic]` or similar appears anywhere.
+   look at its preview, then tap Copy on it and paste into a notes app. Pass: no `[sarcastic]` or similar appears anywhere; the pasted text carries the emojis.
 8. **Screen reader.** With VoiceOver or TalkBack, read a message with 🙃. Pass: it is read as
    "sarcastic".
 9. **Code stays literal.** Ask for a code sample containing `[sad]`. Pass: it stays literal in
