@@ -19,12 +19,16 @@ export class SpeechSynthesisError extends Error {
   }
 }
 
+/** Maps an offering's TEAL level to the numeric ceiling `stripTeal` takes. */
+const TEAL_LEVEL = { none: 0, v1: 1, v2: 2 } as const;
+
 /** All inputs needed to synthesise one speech segment. */
 export interface SynthesiseSpeechArgs {
   providerConfig: ProviderConfig;
   apiKey: string;
   upstreamSlug: string;
-  teal: 'strip' | 'passthrough';
+  /** The offering's TEAL level; tags above it are stripped before synthesis. */
+  teal: 'none' | 'v1' | 'v2';
   /** Wire shape of the synthesis request (path, body, response encoding). */
   transport: TtsTransportKind;
   text: string;
@@ -103,7 +107,7 @@ export async function synthesiseSpeech(
   args: SynthesiseSpeechArgs,
 ): Promise<SynthesiseSpeechResult> {
   const fetchFn = args.fetchFn ?? fetch;
-  const input = args.teal === 'strip' ? stripTeal(args.text) : args.text;
+  const input = stripTeal(args.text, TEAL_LEVEL[args.teal]);
   const timeoutSignal = AbortSignal.timeout(POST_TIMEOUT_MS);
   const signal = args.signal ? AbortSignal.any([args.signal, timeoutSignal]) : timeoutSignal;
   const wire = wireFor(args, input);

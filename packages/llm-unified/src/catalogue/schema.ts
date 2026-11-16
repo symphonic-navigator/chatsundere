@@ -44,7 +44,7 @@ const AdapterRefSchema = v.variant('kind', [
 
 const TtsOfferingMetaSchema = v.object({
   displayName: v.pipe(v.string(), v.minLength(1)),
-  teal: v.picklist(['strip', 'passthrough']),
+  teal: v.picklist(['none', 'v1', 'v2']),
   contentModerated: v.boolean(),
   transport: v.picklist(['mistral-speech', 'xai-native', 'openai-speech', 'elevenlabs']),
   voices: v.variant('kind', [

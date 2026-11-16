@@ -106,12 +106,11 @@ export type TtsVoiceSource =
 export interface TtsOfferingMeta {
   displayName: string;
   /**
-   * How this provider treats TEAL expression markup in the input text:
-   * 'strip' removes the tags before synthesis (provider has no expressive
-   * markup support); 'passthrough' sends them verbatim (TEAL v1 is the xAI
-   * snapshot, so the xAI offerings pass through natively).
+   * The highest TEAL level this provider can voice: 'none' strips every tag
+   * before synthesis; 'v1' keeps the xAI sounds and wrapping tags and strips
+   * the moods; 'v2' sends everything TEAL knows verbatim.
    */
-  teal: 'strip' | 'passthrough';
+  teal: 'none' | 'v1' | 'v2';
   /**
    * Whether this provider applies content moderation to the input text and may
    * refuse benign passages (e.g. Mistral Voxtral returns 403 on innocuous German

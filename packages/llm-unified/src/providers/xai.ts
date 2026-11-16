@@ -52,7 +52,7 @@ const TTI_META: TtiOfferingMeta = {
 const TTS_META: TtsOfferingMeta = {
   displayName: 'Grok TTS',
   // TEAL v1 IS the xAI tag snapshot — tags travel verbatim and are voiced.
-  teal: 'passthrough',
+  teal: 'v1',
   // Moderation canary (the Voxtral 403 trigger sentence) passed live 2026-06-12.
   contentModerated: false,
   transport: 'xai-native',

@@ -8,7 +8,7 @@ import { apiKeyField } from './_helpers.js';
 // live-probed 2026-11-15 (spec 2026-11-15-elevenlabs-direct §6.2–6.4).
 const TTS_BASE = {
   // TEAL v1 tags travel verbatim; Eleven v4 voices its own audio tags.
-  teal: 'passthrough',
+  teal: 'v2',
   // TODO(Chris manual test, spec §11 step 10): set from the moderation hand test
   contentModerated: true,
   transport: 'elevenlabs',

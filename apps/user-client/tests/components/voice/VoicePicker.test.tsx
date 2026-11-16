@@ -33,7 +33,7 @@ const STUB_TRANSPORT = {
   offering: { providerId: 'mistral', upstreamSlug: 'voxtral-tts' },
   ttsMeta: {
     displayName: 'Voxtral Mini TTS',
-    teal: 'strip' as const,
+    teal: 'none' as const,
     voices: { kind: 'fetch' as const, endpoint: 'mistral-paginated' as const },
   },
 };
@@ -302,7 +302,7 @@ const ELEVEN_TRANSPORT = {
   offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
   ttsMeta: {
     displayName: 'Eleven v4',
-    teal: 'strip' as const,
+    teal: 'none' as const,
     voices: { kind: 'fetch' as const, endpoint: 'elevenlabs-v2' as const },
   },
 };

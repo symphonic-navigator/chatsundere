@@ -760,7 +760,7 @@ const GROK_VOICES = [
 
 const GROK_TTS_META: TtsOfferingMeta = {
   displayName: 'Grok TTS',
-  teal: 'passthrough', // nano-gpt forwards xAI expression tags untranslated
+  teal: 'v1', // nano-gpt forwards xAI expression tags untranslated
   contentModerated: false, // moderation canary passed live 2026-06-12
   transport: 'openai-speech',
   voices: { kind: 'static', list: GROK_VOICES },
