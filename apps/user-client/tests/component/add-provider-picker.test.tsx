@@ -27,6 +27,13 @@ function renderPicker(ui: React.ReactElement) {
 }
 
 describe('AddProviderPicker', () => {
+  it('offers ElevenLabs, the voice-only provider', () => {
+    renderPicker(
+      <AddProviderPicker configuredTemplateIds={[]} hasProxy={true} onPick={noop} onClose={noop} />,
+    );
+    expect(screen.getByText('ElevenLabs')).toBeInTheDocument();
+  });
+
   it('excludes already-configured providers', () => {
     renderPicker(
       <AddProviderPicker
