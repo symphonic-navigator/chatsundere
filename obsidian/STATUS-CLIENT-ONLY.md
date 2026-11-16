@@ -46,6 +46,8 @@ Spec: [[../superpowers/specs/2026-11-16-elevenlabs-via-nano-gpt-design]]. Gate g
 
 The moderation result then sets `contentModerated` and the freedom badge on both ElevenLabs paths.
 
+**CI (2026-11-16):** the red `admin-users` hook on `master` and `maintenance/0.3` is not a hang. Its `beforeAll` registers three users via OPAQUE, and each runs the client's memory-hard KSF (about 0.4 s locally, about 2 s on CI), which overruns Bun's 5 s hook default. The fix is an explicit, documented 30 s budget for OPAQUE-registering hooks (`admin-users`, `admin-audit-log`), on its own PR. Once that is merged, cherry-pick it to `maintenance/0.3`.
+
 ---
 
 **Last updated:** 2026-11-15 — **ELEVENLABS DIRECT BUILT FOR 0.4.0 (step 1 of 3), AWAITING
