@@ -8,6 +8,7 @@ import { QK } from '../../data/queryKeys.js';
 import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { outOfWindowCount } from '../../lib/context-window.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
+import { displayPlainText } from '../../lib/teal/display-plain-text.js';
 import { estimateReplayTokens } from '../../lib/tool-replay.js';
 import { segmentMessage } from '../../lib/voice/segmentation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
@@ -307,7 +308,7 @@ function dayKey(ts: number): string {
 }
 
 function copyMessageText(m: MessageRow): void {
-  const text = flattenAnswerText(m.contentBlocks);
+  const text = displayPlainText(flattenAnswerText(m.contentBlocks));
   navigator.clipboard.writeText(text).then(
     () => toastStore.show({ message: 'Copied to clipboard', tone: 'success', durationMs: 2000 }),
     () =>
