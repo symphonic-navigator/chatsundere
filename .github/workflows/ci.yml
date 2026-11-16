@@ -77,5 +77,9 @@ jobs:
         env:
           DATABASE_URL: postgres://chatsundere:dev@localhost:5432/auth_test_db
 
+      # One package at a time: the suites are CPU-bound (OPAQUE and Argon2
+      # key stretching, vitest's own worker pool), and running them side by
+      # side on the runner's few cores pushed honest tests past their 5 s
+      # timeouts in whichever package lost the race.
       - name: Test
-        run: pnpm test
+        run: pnpm turbo run test --concurrency=1
