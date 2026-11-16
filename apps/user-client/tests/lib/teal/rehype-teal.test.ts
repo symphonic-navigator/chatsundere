@@ -61,6 +61,12 @@ describe('rehypeTeal', () => {
       );
     });
 
+    it('labels a combination row with its core word and leaks no label text', () => {
+      expect(render('a [soft laugh] b')).toBe(
+        '<p>a <span role="img" aria-label="laugh">🤭</span> b</p>',
+      );
+    });
+
     it('resolves a qualified sound by its core word', () => {
       expect(render('[playful giggle] hi')).toBe(
         '<p><span role="img" aria-label="giggle">🤭</span> hi</p>',
@@ -78,7 +84,7 @@ describe('rehypeTeal', () => {
       expect(render('```\n[sad]\n```')).not.toContain('role="img"');
     });
 
-    it('stays styled when a labelled emoji sits inside a wrap', () => {
+    it('renders a labelled emoji inside a wrap unstyled, after the styled text', () => {
       expect(render('<whisper>hi [shy]</whisper>')).toBe(
         '<p><span class="teal-whisper">hi </span><span role="img" aria-label="shy">🙈</span></p>',
       );

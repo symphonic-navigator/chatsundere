@@ -28,7 +28,7 @@ function emoji(value: string, label: string): TealRenderAction {
 
 /** Combination rows — matched before the core word (longest match, D3). */
 const INLINE_COMBINATIONS: Readonly<Record<string, TealRenderAction>> = {
-  'soft laugh': emoji('🤭', 'soft laugh'),
+  'soft laugh': emoji('🤭', 'laugh'),
 };
 
 const INLINE_RENDER: Readonly<Record<TealInlineTag, TealRenderAction>> = {
@@ -88,14 +88,6 @@ const MOOD_RENDER: Readonly<Record<TealMoodTag, TealRenderAction>> = {
   shy: emoji('🙈', 'shy'),
   pouting: emoji('😗', 'pouting'),
 };
-
-/** Every emoji a mood row and a sound row both use; kept empty unless Chris accepts an overlap. */
-export function sharedMoodSoundEmojis(): string[] {
-  const used = (m: Readonly<Record<string, TealRenderAction>>): Set<string> =>
-    new Set(Object.values(m).flatMap((a) => (a.kind === 'emoji' ? [a.value] : [])));
-  const sounds = used(INLINE_RENDER);
-  return [...used(MOOD_RENDER)].filter((e) => sounds.has(e));
-}
 
 const WRAP_RENDER: Readonly<Record<TealWrappingTag, TealRenderAction>> = {
   soft: { kind: 'wrap', className: 'teal-italic' },

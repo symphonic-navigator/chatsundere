@@ -1,5 +1,5 @@
-import { TEAL_INLINE_TAGS, TEAL_MOOD_TAGS } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
+import { TEAL_INLINE_TAGS, TEAL_MOOD_TAGS } from '@chatsundere/llm-unified';
 import { describe, expect, it } from 'vitest';
 import { resolveTealInline, resolveTealWrap } from '../../../src/lib/teal/teal-render-map.js';
 
@@ -16,12 +16,12 @@ describe('resolveTealInline', () => {
     expect(resolveTealInline('soft laugh')).toEqual({
       kind: 'emoji',
       value: '🤭',
-      label: 'soft laugh',
+      label: 'laugh',
     });
     expect(resolveTealInline('SOFT  laugh')).toEqual({
       kind: 'emoji',
       value: '🤭',
-      label: 'soft laugh',
+      label: 'laugh',
     });
   });
 

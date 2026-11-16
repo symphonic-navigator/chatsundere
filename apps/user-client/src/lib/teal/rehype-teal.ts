@@ -15,7 +15,7 @@ import { resolveTealWrap } from './teal-render-map.js';
 
 // Matches a sentinel marker: START + optional '/' + tag-name + END (a wrap
 // toggle), or START + label + SEP + emoji + END (a labelled emoji).
-const MARKER_SOURCE = `${TEAL_MARK_START}(?:(/?)([a-z-]+)|([a-z-]+)${TEAL_MARK_SEP}([^${TEAL_MARK_END}${TEAL_MARK_SEP}]+))${TEAL_MARK_END}`;
+const MARKER_SOURCE = `${TEAL_MARK_START}(?:(/?)([a-z-]+)|([^${TEAL_MARK_START}${TEAL_MARK_SEP}${TEAL_MARK_END}]+)${TEAL_MARK_SEP}([^${TEAL_MARK_END}${TEAL_MARK_SEP}]+))${TEAL_MARK_END}`;
 
 function makeMarker(): RegExp {
   return new RegExp(MARKER_SOURCE, 'g');

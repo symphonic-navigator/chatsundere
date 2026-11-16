@@ -14,7 +14,7 @@ describe('preprocessTeal — inline tags', () => {
   it('replaces known inline tags per the render map', () => {
     expect(preprocessTeal('Hello [laugh] there')).toBe(`Hello ${em('laugh', '😄')} there`);
     expect(preprocessTeal('Wait[pause]now')).toBe('Wait … now');
-    expect(preprocessTeal('a [soft laugh] b')).toBe(`a ${em('soft laugh', '🤭')} b`);
+    expect(preprocessTeal('a [soft laugh] b')).toBe(`a ${em('laugh', '🤭')} b`);
   });
 
   it('removes silent inline tags', () => {
