@@ -17,6 +17,13 @@ import { createServer } from '../../src/server.js';
 
 const skip = !process.env.DATABASE_URL || !process.env.REDIS_URL;
 
+/**
+ * Each OPAQUE registration runs the client's memory-hard key stretching on purpose
+ * (about 0.4 s locally, about 2 s on a CI runner). A hook that registers several users
+ * legitimately outlasts Bun's 5 s default, so it gets an explicit budget instead.
+ */
+const OPAQUE_REGISTRATION_HOOK_TIMEOUT_MS = 30_000;
+
 const ORIGIN = { Origin: 'http://localhost:3000' };
 const JSON_ORIGIN = { 'Content-Type': 'application/json', ...ORIGIN };
 
@@ -148,7 +155,7 @@ describe.skipIf(skip)('Admin user endpoints', () => {
     }));
     ({ accessToken: adminToken } = await issueTokens({ userId: adminId, role: 'admin' }));
     ({ accessToken: userToken } = await issueTokens({ userId, role: 'user' }));
-  });
+  }, OPAQUE_REGISTRATION_HOOK_TIMEOUT_MS);
 
   afterAll(async () => {
     // Tidy up all three users if they still exist.
