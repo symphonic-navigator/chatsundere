@@ -8,6 +8,36 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-16 — **TEAL v2 BUILT FOR 0.4.0 (ElevenLabs step 2 of 3), AWAITING
+CHRIS'S DEVICE TEST.** On branch `claude/modest-pasteur-xy1gwx`. Step 1 (ElevenLabs direct) was
+merged as PR #39.
+- **What:**
+  - 29 mood tags (emotions and companion tones) and six new sounds;
+  - a TEAL level per TTS offering (ElevenLabs `v2`, Grok `v1`, Mistral `none`), so moods never
+    reach Grok or Mistral;
+  - a paragraph's mood carried across sentence-mode segments, per voice;
+  - mood emojis in the chat with screen-reader labels;
+  - Copy, bookmark labels and the ToC show what the chat shows.
+- **Prompt measured:** Grok keeps its v1 sounds (v1 inline 0.98 → 0.92, wrapping 0.27 → 0.23 per
+  reply), and moods appear in 16 % of paragraphs.
+- **Records:** spec [[../superpowers/specs/2026-11-16-teal-v2-design]] and plan
+  [[../superpowers/plans/2026-11-16-teal-v2]]; curation in [[models/eleven-v4]]; memory at Kumbu²
+  `/SWE/Chatsundere/Memory/teal.md`.
+- **Gates:**
+  - Laura: spec-pass done; at pre-squash one hard defect, fixed.
+  - Final whole-branch review clean after one fix wave.
+  - Gate green (all test tasks except the DB-bound services; user-client 4409/4409), typecheck,
+    build, Biome.
+  - No Larissa path touched.
+- **Open:**
+  - GLM measurements were unreliable, because nano-gpt failed about half the requests.
+  - nano-gpt's TTS answered HTTP 500 for every model on 2026-11-16, which matters for step 3.
+
+**Next:** Chris device-tests TEAL v2 (spec §10) and step 1 (PR #39, spec §11, including the
+moderation check). Then a PR and squash. Then ElevenLabs step 3 (via nano-gpt).
+
+---
+
 **Last updated:** 2026-11-15 — **ELEVENLABS DIRECT BUILT FOR 0.4.0 (step 1 of 3), AWAITING
 CHRIS'S DEVICE TEST.** On branch `claude/modest-pasteur-xy1gwx` (cloud session), not yet on
 `master`.
