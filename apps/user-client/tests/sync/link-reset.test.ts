@@ -113,4 +113,42 @@ describe('resetEngineStateForNewLink', () => {
     const state = await getSyncState();
     expect(state.linkedServerUserId).toBeUndefined();
   });
+
+  it('sets seenGeneration to the row generation and clears the hold, touching nothing else', async () => {
+    const db = getClientDataDb();
+    const base = {
+      resource: 'https://mcp.example/mcp',
+      issuer: 'https://auth.example',
+      tokenEndpoint: 'https://auth.example/token',
+      revocationEndpoint: null,
+      clientId: 'client-1',
+      registration: 'dcr' as const,
+      scope: 'read',
+      tokenRoute: 'direct' as const,
+      tokens: null,
+      claim: null,
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    await db.mcpOAuthGrants.bulkPut([
+      { ...base, id: 'g-gen', generation: 6, seenGeneration: 9, heldGeneration: 4 },
+      { ...base, id: 'g-old', seenGeneration: 3, heldGeneration: 2 },
+    ]);
+
+    await resetEngineStateForNewLink();
+
+    expect(await db.mcpOAuthGrants.get('g-gen')).toEqual({
+      ...base,
+      id: 'g-gen',
+      generation: 6,
+      seenGeneration: 6,
+      heldGeneration: null,
+    });
+    expect(await db.mcpOAuthGrants.get('g-old')).toEqual({
+      ...base,
+      id: 'g-old',
+      seenGeneration: 0,
+      heldGeneration: null,
+    });
+  });
 });

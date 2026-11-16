@@ -4,23 +4,35 @@ import type { McpOAuthGrantRow } from '../../../src/boot/client-data-db.js';
 
 // Shared by the refresh and sign-in tests: the sync server's compare-and-set, simulated.
 
-export const PENDING_DEFAULTS = {
+export const LOCAL_DEFAULTS = {
   pendingTokens: null,
   pendingBaseRev: null,
   pendingSpentRefresh: null,
   pendingNewFamily: false,
+  seenGeneration: 0,
+  heldGeneration: null,
 } as const;
 
 export function clone<T>(v: T): T {
   return structuredClone(v);
 }
 
-export function stripPending(row: McpOAuthGrantRow): McpOAuthGrantRow {
-  const { pendingTokens, pendingBaseRev, pendingSpentRefresh, pendingNewFamily, ...rest } = row;
+export function stripLocal(row: McpOAuthGrantRow): McpOAuthGrantRow {
+  const {
+    pendingTokens,
+    pendingBaseRev,
+    pendingSpentRefresh,
+    pendingNewFamily,
+    seenGeneration,
+    heldGeneration,
+    ...rest
+  } = row;
   void pendingTokens;
   void pendingBaseRev;
   void pendingSpentRefresh;
   void pendingNewFamily;
+  void seenGeneration;
+  void heldGeneration;
   return rest as McpOAuthGrantRow;
 }
 
@@ -42,7 +54,7 @@ export class CasServer {
     }
     const rev = ++this.head;
     const ref = `ref-${rev}`;
-    this.bodies.set(ref, stripPending(clone(row)));
+    this.bodies.set(ref, stripLocal(clone(row)));
     this.records.set(row.id, { rev, deleted: false, ref });
     return { status: 'ok', rev };
   }

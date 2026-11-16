@@ -304,6 +304,10 @@ async function storeGrant(
       claim: null,
       createdAt: snap?.row.createdAt ?? now,
       updatedAt: now,
+      // The high-water mark must survive the replacement until an `ok` (spec §5.2).
+      generation: snap?.row.generation,
+      seenGeneration: snap?.row.seenGeneration,
+      heldGeneration: snap?.row.heldGeneration,
     };
     if (unlinked) {
       const row: McpOAuthGrantRow = { ...base, tokens: sealed };

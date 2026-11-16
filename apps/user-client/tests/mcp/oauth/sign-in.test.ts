@@ -19,7 +19,12 @@ import {
   ensureAccessToken,
   publishPendingTokens,
 } from '../../../src/mcp/oauth/ensure-token.js';
-import { type GrantStore, createDexieGrantStore } from '../../../src/mcp/oauth/grant-store.js';
+import { acceptedFields, judgePulledGrant } from '../../../src/mcp/oauth/grant-generation.js';
+import {
+  type AdoptOutcome,
+  type GrantStore,
+  createDexieGrantStore,
+} from '../../../src/mcp/oauth/grant-store.js';
 import { createOAuthFetch } from '../../../src/mcp/oauth/oauth-fetch.js';
 import {
   type CompleteResult,
@@ -84,48 +89,58 @@ function casStore(world: () => World): GrantStore {
       if (forced === 'network') return { status: 'network' };
       if (forced === 'throw') throw new Error('The simulated push failed unexpectedly.');
       const result = x.cas.push(row, baseRev);
-      if (result.status === 'ok') {
-        const db = getClientDataDb();
-        await db.transaction('rw', [db.mcpOAuthGrants, db.syncRows], async () => {
-          const meta = await db.syncRows.get(['mcpOAuthGrants', row.id]);
-          if (meta && result.rev <= meta.rev) return;
-          await db.mcpOAuthGrants.put(row);
-          await db.syncRows.put({
-            collection: 'mcpOAuthGrants',
-            key: row.id,
-            rev: result.rev,
-            ciphertextHash: '',
-          });
+      if (result.status !== 'ok') return result;
+      const db = getClientDataDb();
+      let written = false;
+      await db.transaction('rw', [db.mcpOAuthGrants, db.syncRows], async () => {
+        const meta = await db.syncRows.get(['mcpOAuthGrants', row.id]);
+        if (meta && result.rev <= meta.rev) return;
+        await db.mcpOAuthGrants.put(row);
+        await db.syncRows.put({
+          collection: 'mcpOAuthGrants',
+          key: row.id,
+          rev: result.rev,
+          ciphertextHash: '',
         });
-      }
-      return result;
+        written = true;
+      });
+      return { ...result, written };
     },
     open: async (record) => (record.ciphertext ? world().cas.body(record.ciphertext) : null),
-    adopt: async (record: SyncPulledRecord) => {
+    adopt: async (record: SyncPulledRecord): Promise<AdoptOutcome> => {
       const id = record.blindId.replace(/^bid-/, '');
       const db = getClientDataDb();
       const meta = await db.syncRows.get(['mcpOAuthGrants', id]);
-      if (meta && record.rev <= meta.rev) return;
+      if (meta && record.rev <= meta.rev) return 'stale';
       if (record.deleted || !record.ciphertext) {
         await db.mcpOAuthGrants.delete(id);
-        return;
+        return 'stale';
       }
       const body = world().cas.body(record.ciphertext);
-      if (!body) return;
+      if (!body) return 'stale';
       const local = await db.mcpOAuthGrants.get(id);
-      await db.mcpOAuthGrants.put({
-        ...body,
-        pendingTokens: local?.pendingTokens ?? null,
-        pendingBaseRev: local?.pendingBaseRev ?? null,
-        pendingSpentRefresh: local?.pendingSpentRefresh ?? null,
-        pendingNewFamily: local?.pendingNewFamily ?? false,
-      });
+      const verdict = judgePulledGrant(local, body);
+      if (local && verdict.kind === 'refuse') {
+        await db.mcpOAuthGrants.update(id, { heldGeneration: verdict.heldGeneration });
+      } else {
+        await db.mcpOAuthGrants.put({
+          ...body,
+          pendingTokens: local?.pendingTokens ?? null,
+          pendingBaseRev: local?.pendingBaseRev ?? null,
+          pendingSpentRefresh: local?.pendingSpentRefresh ?? null,
+          pendingNewFamily: local?.pendingNewFamily ?? false,
+          ...acceptedFields(local, body),
+        });
+      }
+      // A refusal records the revision only; the stored row, and so its hash, stay as they were.
+      const refused = local !== undefined && verdict.kind === 'refuse';
       await db.syncRows.put({
         collection: 'mcpOAuthGrants',
         key: id,
         rev: record.rev,
-        ciphertextHash: '',
+        ciphertextHash: refused ? (meta?.ciphertextHash ?? '') : '',
       });
+      return refused ? 'refused' : 'adopted';
     },
     requestSync: () => undefined,
   };
@@ -192,6 +207,7 @@ function discovery(
     revocationEndpoint: u.revocation,
     cimdSupported: options.cimd === true,
     issParameterSupported: options.advertiseIss === true,
+    viaProxy: false,
     scope: null,
     ...overrides,
   };
@@ -675,6 +691,103 @@ describe('completeSignIn', () => {
     w.pushHook = null;
     await publishPendingTokens(ensureDeps());
     expect(await accessOf(w.cas.row(ok.serverId)?.tokens, ok.serverId)).toBe(w.issued[0]);
+  });
+});
+
+describe('grant generations on a new sign-in', () => {
+  async function reconnect(id: string): Promise<void> {
+    const { authorizationUrl } = await prepareSignIn(
+      discovery(w),
+      { serverId: id, draft: null },
+      deps(),
+    );
+    expectOk(await completeSignIn(await approve(authorizationUrl), deps()));
+  }
+
+  /** Puts the server's row at `serverGeneration` and the local one at the given fields. */
+  async function stage(
+    id: string,
+    serverGeneration: number,
+    local: Partial<McpOAuthGrantRow>,
+  ): Promise<void> {
+    w.cas.put({ ...(w.cas.row(id) as McpOAuthGrantRow), generation: serverGeneration });
+    const db = getClientDataDb();
+    await db.mcpOAuthGrants.update(id, local);
+    await db.syncRows.put({
+      collection: 'mcpOAuthGrants',
+      key: id,
+      rev: w.cas.rev(id),
+      ciphertextHash: '',
+    });
+  }
+
+  it('storeGrant keeps the high-water mark', async () => {
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    await stage(id, 4, { generation: 9, seenGeneration: 9, heldGeneration: 4 });
+    const before = w.pushes.length;
+    await reconnect(id);
+    expect(w.pushes.slice(before).map((p) => p.row.generation)).toEqual([10]);
+    expect(w.cas.row(id)?.generation).toBe(10);
+    const row = await localGrant(id);
+    expect(row?.generation).toBe(10);
+    expect(row?.seenGeneration).toBe(10);
+    expect(row?.heldGeneration).toBeNull();
+    expect(row?.pendingTokens ?? null).toBeNull();
+  });
+
+  it('a refused record mid-sign-in keeps the pending pair and the push still carries the mark', async () => {
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    await stage(id, 9, { generation: 9, seenGeneration: 9 });
+    const inner = w.store;
+    const outcomes: AdoptOutcome[] = [];
+    let pendingIntact = false;
+    w.store = {
+      ...inner,
+      push: async (row, baseRev, mk) => {
+        if (outcomes.length === 0) {
+          // The server replays generation 4 under a new revision before it answers.
+          w.cas.put({ ...(w.cas.row(id) as McpOAuthGrantRow), generation: 4 });
+          outcomes.push(await inner.adopt(w.cas.pulled(id)));
+          const local = await localGrant(id);
+          pendingIntact =
+            local?.pendingNewFamily === true &&
+            local.pendingTokens != null &&
+            local.heldGeneration === 4;
+        }
+        return inner.push(row, baseRev, mk);
+      },
+    };
+    const before = w.pushes.length;
+    await reconnect(id);
+    expect(outcomes).toEqual(['refused']);
+    expect(pendingIntact).toBe(true);
+    const generations = w.pushes.slice(before).map((p) => p.row.generation);
+    expect(generations.length).toBeGreaterThan(0);
+    for (const g of generations) expect(g).toBe(10);
+    expect(w.cas.row(id)?.generation).toBe(10);
+    expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
+    const row = await localGrant(id);
+    expect(row?.seenGeneration).toBe(10);
+    expect(row?.heldGeneration).toBeNull();
+  });
+
+  it('sign-in replacing an ordinary pending pair sends no revocation', async () => {
+    const id = expectOk((await signIn(discovery(w))).result).serverId;
+    w.t += HOUR;
+    // The claim goes out, the publish does not: an ordinary pair stays pending.
+    w.pushHook = (row) => (row.claim === null ? 'network' : null);
+    expect((await ensureAccessToken(id, ensureDeps())).ok).toBe(true);
+    w.pushHook = null;
+    const pendingRow = await localGrant(id);
+    expect(pendingRow?.pendingNewFamily).toBe(false);
+    expect(pendingRow?.pendingTokens != null).toBe(true);
+    // Revoking after the new code is exchanged could end the new family too (RFC 7009
+    // per-grant revocation), so the replaced pair is dropped without a revocation.
+    const revokedBefore = w.auth.state.revoked.length;
+    await reconnect(id);
+    expect(w.auth.state.revoked.length - revokedBefore).toBe(0);
+    expect(await accessOf(w.cas.row(id)?.tokens, id)).toBe(w.issued[1]);
+    expect((await localGrant(id))?.pendingTokens ?? null).toBeNull();
   });
 });
 

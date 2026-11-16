@@ -100,6 +100,10 @@ const DENY_LISTS: Partial<Record<SyncCollection, readonly string[]>> = {
     'pendingBaseRev',
     'pendingSpentRefresh',
     'pendingNewFamily',
+    // This device's generation high-water mark and hold: another device's
+    // mark must never count here, or a stale grant would be judged by it.
+    'seenGeneration',
+    'heldGeneration',
   ],
   documents: [
     // Device-local embedding pipeline state (Finding V). Vectors are
@@ -136,6 +140,8 @@ const FRESH_DEVICE_DEFAULTS: Partial<Record<SyncCollection, Record<string, unkno
     pendingBaseRev: null,
     pendingSpentRefresh: null,
     pendingNewFamily: false,
+    seenGeneration: 0,
+    heldGeneration: null,
   },
 };
 
