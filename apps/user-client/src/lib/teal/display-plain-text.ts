@@ -67,6 +67,9 @@ export function displayPlainText(markdown: string): string {
       const blank = line.trim() === '';
       const wasBlank = prevBlank;
       prevBlank = blank;
+      if (fence === null && inIndentedCode && !blank && !INDENTED_CODE_RX.test(line)) {
+        inIndentedCode = false;
+      }
       const f = FENCE_RX.exec(line)?.[1];
       if (fence === null && f && !inIndentedCode) {
         fence = f;
@@ -76,10 +79,7 @@ export function displayPlainText(markdown: string): string {
         if (f === fence) fence = null;
         return line;
       }
-      if (inIndentedCode) {
-        if (blank || INDENTED_CODE_RX.test(line)) return line;
-        inIndentedCode = false;
-      }
+      if (inIndentedCode) return line;
       if (!blank) {
         if (LIST_ITEM_RX.test(line)) inList = true;
         else if (!/^\s/.test(line)) inList = false;

@@ -60,4 +60,10 @@ describe('displayPlainText', () => {
       '~~~\n[sad]\n~~~\n\n# Title 😄\n\nnext',
     );
   });
+
+  it('opens a fence after an indented code block and a blank line', () => {
+    expect(displayPlainText('para\n\n    code [sad]\n\n```\n[sad]\n```\nafter [sad]')).toBe(
+      'para\n\n    code [sad]\n\n```\n[sad]\n```\nafter 😔',
+    );
+  });
 });
