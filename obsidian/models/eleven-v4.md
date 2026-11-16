@@ -66,3 +66,35 @@ ignores cost nothing.
 
 - Chris's moderation hand test sets `contentModerated` and the freedom badge.
 - Chris to listen to probes 07–10 for the prosody tags.
+
+## TEAL v2 (2026-11-16)
+
+ElevenLabs is TEAL level `v2`, so every known tag is sent. Grok (xAI direct and nano-gpt) is
+`v1`, and Mistral is `none`. Spec:
+[`2026-11-16-teal-v2-design`](../../superpowers/specs/2026-11-16-teal-v2-design.md).
+
+**Listening test** (Eleven v4, voice Jessica, `seed: 42`, the same sentence each time, all
+harmless):
+
+| Probe | Result |
+|---|---|
+| Companion tones `affectionate`, `teasing`, `flirtatious`, `seductive`, `shy`, `pouting` | **Confirmed by Chris's ear.** Each is audibly performed as named. Against the untagged control (5.0 s, −24.7 dB) they run 5.2–5.8 s and are up to 2 dB quieter; the strongest are seductive, pouting and shy. No tag is spoken. |
+| New sounds `clear-throat`, `gulp`, `yawn`, `sniffle`, `groan`, `scoff` | All six are audible. Scribe hears [clears throat], [gulps], [yawns], [sniffs], "Ugh" and [scoffs]. |
+| `[sarcastic]` against no tag, same words | 4.1 s against 3.5 s, a slower, drawn-out delivery. Chris confirmed the sarcasm. |
+
+**Tag mix with the v2 prompt** (spec D7: the guard that Grok users must not lose v1 sounds).
+Measured as 12 companion prompts × 4 samples through nano-gpt, at temperature 0.8:
+
+| Prompt | Grok 4.3: v1 inline / wrapping per reply | Moods per paragraph |
+|---|---|---|
+| v1 (before) | 0.98 / 0.27 | — |
+| v2, first draft | 0.88 / 0.19 | 0.36 |
+| v2 as merged ("a mood is never a substitute for a wrapping tag", "most paragraphs carry no mood") | 0.92 / 0.23 | 0.16 |
+
+GLM 5.3 runs were unreliable, because about half its requests failed through nano-gpt. They
+still point to fewer wrapping tags (0.64 → 0.23). This is flagged for Chris's device test.
+
+**Grok strip, verified:** at level `v1`, `[sarcastic] … [laugh] … [shy] … <whisper>…</whisper> [yawn]`
+reaches Grok as `… [laugh] … <whisper>…</whisper> …`. The audible check was blocked:
+nano-gpt's `/v1/audio/speech` answered HTTP 500 for every model on 2026-11-16, while chat
+through the same key worked.
