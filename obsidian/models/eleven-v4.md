@@ -95,3 +95,31 @@ GLM 5.3, re-measured on 2026-11-16 with lower concurrency and a larger token bud
 
 **Grok strip, verified:** at level `v1`, `[sarcastic] … [laugh] … [shy] … <whisper>…</whisper> [yawn]`
 reaches Grok as `… [laugh] … <whisper>…</whisper> …`. Audible check (nano-gpt `xai-tts`, voice `eve`, after a transient HTTP 500 on all TTS models earlier that day): Scribe hears "Oh, great. [laughs] That is just wonderful news. Come here and sit with me. Long day?". The laugh survives, and no mood is spoken.
+
+## Via nano-gpt (2026-11-16)
+
+Step 3 of the track. Spec: [`2026-11-16-elevenlabs-via-nano-gpt-design`](../../superpowers/specs/2026-11-16-elevenlabs-via-nano-gpt-design.md).
+
+| Offering ref | Kind | Transport | Voice source | TEAL |
+|---|---|---|---|---|
+| `nano-gpt:elevenlabs/eleven-v4` | TTS | `openai-speech` | `fetch` (`nano-gpt-audio-models`) | `v2` |
+| `nano-gpt:elevenlabs/eleven-v4-turbo` | TTS | `openai-speech` | `fetch` (`nano-gpt-audio-models`) | `v2` |
+
+- **Speech:** `POST /v1/audio/speech` with `{ model, input, voice }` returns `audio/mpeg`.
+  `voice` takes a name ("Laura") or an ElevenLabs voice ID; a public library voice (Raya) worked.
+  An unknown ID is rejected with 400 "is not a valid ElevenLabs voice ID". Private clones
+  presumably do not work, because nano-gpt uses its own ElevenLabs account.
+- **Voices:** `GET /api/v1/audio-models?type=tts&detailed=true` is public and CORS-open. It lists
+  21 names per model (Alicia, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam,
+  Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill), without
+  labels. The entry also gives `max_chars` 10000 and the price per 1000 characters (v4 $0.136,
+  Turbo $0.068; not shown in the UI, decided by Chris). Neither the models nor their voices
+  appear in `/v1/models`. Documentation index: `docs.nano-gpt.com/llms.txt`; OpenAPI:
+  `docs.nano-gpt.com/api-reference/openapi.json`.
+- **TEAL:** `[teasing] Hi Chris. [laugh] …`, heard back through Scribe as "Hi, Chris. [laughs]
+  What is up at the lab today?". The mood is performed and not spoken, and the laugh is audible.
+- **Latency:** 5.7–7.5 s for a short sentence, against about 2.5 s direct. That suits read-aloud;
+  Live Voice works but is slower.
+- **STT is not offered** (spec D3). nano-gpt's `Elevenlabs-Scribe-V2` and `Elevenlabs-STT` are
+  asynchronous: HTTP 202 `{status: pending, run_id}`, then status polling. webm is accepted;
+  Matroska is not.
