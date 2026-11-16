@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { INTEGRATION_TAG_RX, getIntegration, stripTeal } from '@chatsundere/llm-unified';
+import {
+  INTEGRATION_TAG_RX,
+  getIntegration,
+  resolveTealBracket,
+  stripTeal,
+} from '@chatsundere/llm-unified';
 import type { ContentBlock } from '../../boot/client-data-db.js';
 import { maskCodeRegions } from '../markdown/code-mask.js';
 
@@ -13,10 +18,16 @@ import { maskCodeRegions } from '../markdown/code-mask.js';
  *
  * Every function here operates on the *raw* `ContentBlock` text. We apply NO
  * visual preprocessing: not `preprocessTeal`, not `preprocessMath`. The
- * `spokenText` we produce is the canonical speech text — TEAL tags such as
- * `[laugh]` are retained verbatim, because the provider/TTS hook downstream is
- * the layer that decides whether to strip them or pass them through as
- * expression cues.
+ * `spokenText` we produce is the canonical speech text — TEAL sounds such as
+ * `[laugh]` and moods such as `[sarcastic]` are retained verbatim, because the
+ * provider/TTS hook downstream strips each one above the offering's TEAL level
+ * and passes the rest through as expression cues.
+ *
+ * The one TEAL-aware step is the mood carry in sentence mode (spec §6.2a, D3:
+ * a mood holds until the next mood or the end of the paragraph). Each sentence
+ * segment is synthesised on its own, so a later segment of a paragraph that
+ * does not open with a mood gets the paragraph's active mood prepended to its
+ * `spokenText`. Ranges are untouched, so display and glow anchors never move.
  *
  * ## (b) The glow plugin shares these algorithms, not offsets
  *
@@ -325,6 +336,10 @@ export function emittedRangesForParagraph(
   const vRanges = voiceRanges(paragraphSource, 0, paragraphSource.length, opts.roleplay, isCode);
 
   const out: EmittedRange[] = [];
+  // Bracket content of the last mood seen in this paragraph, carried into
+  // later sentence segments (§6.2a). Updated before the speakability gate so a
+  // mood in a dropped segment still holds for what follows.
+  let activeMood: string | null = null;
   const collect = (
     range: [number, number],
     spokenText: string,
@@ -333,13 +348,17 @@ export function emittedRangesForParagraph(
     // Speakability gate: a segment without a single letter or digit (thematic
     // breaks like `---`, stray emphasis rubble, bare ellipses) must never reach
     // synthesis — providers reject such input (device finding 2026-06-11).
-    // Judged on the TEAL-stripped text: a tag-only segment such as `[laugh]`
-    // would survive a raw test but reach a strip-hook provider as EMPTY input.
-    // (A lone tag is genuinely speakable for a future passthrough provider —
-    // revisit at xAI TTS onboarding; logged in follow-ups.) Living here keeps
-    // the TTS side and the glow side identical by construction.
+    // Judged on the fully TEAL-stripped text (level 0): a tag-only segment such
+    // as `[laugh]` or `[sad]` would survive a raw test but reach an offering
+    // below the tag's level as EMPTY input. A lone tag says nothing on its own
+    // at any level, so dropping it everywhere is right. Living here keeps the
+    // TTS side and the glow side identical by construction.
+    const carried = opts.mode === 'sentence' ? activeMood : null;
+    activeMood = lastMood(spokenText) ?? activeMood;
     if (!/[\p{L}\p{N}]/u.test(stripTeal(spokenText))) return;
-    out.push({ range, spokenText, voice });
+    const spoken =
+      carried !== null && !opensWithMood(spokenText) ? `[${carried}] ${spokenText}` : spokenText;
+    out.push({ range, spokenText: spoken, voice });
   };
 
   for (const v of vRanges) {
@@ -355,6 +374,25 @@ export function emittedRangesForParagraph(
   }
 
   return out;
+}
+
+/** A `[...]` bracket candidate; nested or multi-line brackets never resolve. */
+const BRACKET = /\[([^[\]\n]*)\]/g;
+
+/** Trimmed content of the last mood bracket in `text`, or null if none. */
+function lastMood(text: string): string | null {
+  let found: string | null = null;
+  for (const m of text.matchAll(BRACKET)) {
+    const content = m[1] ?? '';
+    if (resolveTealBracket(content)?.kind === 'mood') found = content.trim();
+  }
+  return found;
+}
+
+/** Whether `text` opens with a mood bracket (it then needs no carried prefix). */
+function opensWithMood(text: string): boolean {
+  const m = /^\[([^[\]\n]*)\]/.exec(text);
+  return m !== null && resolveTealBracket(m[1] ?? '')?.kind === 'mood';
 }
 
 /**

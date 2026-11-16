@@ -324,3 +324,88 @@ describe('segmentBlock — TEAL-aware speakability (device finding 2026-06-11, s
     expect(segs[0]?.spokenText).toContain('a real secret');
   });
 });
+
+// The brief's paragraphs ('[sarcastic] Oh great. That is wonderful.') are too
+// short to survive the merge-forward rule as two segments (the second sentence
+// is under MIN_REST and merges backward), so each sentence is lengthened here
+// while keeping the brief's tags and structure.
+describe('segmentBlock — sentence-mode mood carry (TEAL v2 §6.2a, D3)', () => {
+  const sm = { mode: 'sentence' as const, roleplay: false };
+  const S1 = '[sarcastic] Oh great, another meeting about meetings.';
+  const S2 = 'That is truly wonderful news for all of us.';
+  const SARCASTIC = `${S1} ${S2}`;
+
+  it('prefixes a later segment of the paragraph with the active mood', () => {
+    const segs = segmentBlock(SARCASTIC, 0, sm);
+    expect(segs).toHaveLength(2);
+    expect(segs[0]?.spokenText).toBe(S1);
+    expect(segs[1]?.spokenText.startsWith('[sarcastic] ')).toBe(true);
+    expect(segs[1]?.spokenText).toBe(`[sarcastic] ${S2}`);
+  });
+
+  it('leaves display ranges and glow anchors as they would be without carrying', () => {
+    const segs = segmentBlock(SARCASTIC, 0, sm);
+    const slices = segs.map((s) => SARCASTIC.slice(...s.charRange).trim());
+    expect(slices).toEqual([S1, S2]);
+    expect(segs.map((s) => s.ordinalInParagraph)).toEqual([0, 1]);
+    // The glow plugin's primitive returns the same ranges as segmentBlock.
+    const glow = emittedRangesForParagraph(SARCASTIC, sm, true);
+    expect(glow.map((e) => e.range)).toEqual(segs.map((s) => s.charRange));
+    // Carrying alters only the spoken text: the raw range holds no prefix.
+    expect(SARCASTIC.slice(...(segs[1]?.charRange ?? [0, 0])).startsWith('[')).toBe(false);
+  });
+
+  it('a segment that opens with its own mood keeps it and gets no prefix', () => {
+    // '?' rather than '.': Intl.Segmenter does not break after a full stop
+    // when the next word ('[teasing' here) is lower-case (UAX #29 SB8).
+    const src =
+      '[shy] Hi, were you hoping I would come by today? [teasing] Come here and sit with me for a while.';
+    const segs = segmentBlock(src, 0, sm);
+    expect(segs).toHaveLength(2);
+    expect(segs[1]?.spokenText).toBe('[teasing] Come here and sit with me for a while.');
+  });
+
+  it('carries the last mood of a segment, even one that switched mid-segment', () => {
+    const src =
+      '[shy] Hi there, you came. [teasing] Come here and sit with me. And do not look away from me now, please.';
+    const segs = segmentBlock(src, 0, sm);
+    expect(segs).toHaveLength(2);
+    expect(segs[1]?.spokenText).toBe('[teasing] And do not look away from me now, please.');
+  });
+
+  it('does not treat a sound or an unknown bracket as a mood', () => {
+    const src =
+      '[laugh] Oh, you really did that again today? [whatever] That is entirely typical of you, my dear.';
+    const segs = segmentBlock(src, 0, sm);
+    expect(segs).toHaveLength(2);
+    expect(segs[1]?.spokenText).toBe('[whatever] That is entirely typical of you, my dear.');
+  });
+
+  it('prefixes a segment that opens with a sound, keeping the sound', () => {
+    const src =
+      '[sarcastic] Oh, you really did that again today? [laugh] That is entirely typical of you, my dear.';
+    const segs = segmentBlock(src, 0, sm);
+    expect(segs[1]?.spokenText).toBe(
+      '[sarcastic] [laugh] That is entirely typical of you, my dear.',
+    );
+  });
+
+  it("the next paragraph's first segment gets no prefix", () => {
+    const next = 'The next paragraph starts entirely neutral again, as it should.';
+    const segs = segmentBlock(`${SARCASTIC}\n\n${next}`, 0, sm);
+    expect(segs).toHaveLength(3);
+    expect(segs[2]?.paragraphIndex).toBe(1);
+    expect(segs[2]?.spokenText).toBe(next);
+  });
+
+  it('paragraph mode is unchanged', () => {
+    const segs = segmentBlock(SARCASTIC, 0, { mode: 'paragraph', roleplay: false });
+    expect(segs.map((s) => s.spokenText)).toEqual([SARCASTIC]);
+  });
+
+  it("a segment holding only '[sad]' is not emitted", () => {
+    expect(emittedRangesForParagraph('[sad]', sm, true)).toEqual([]);
+    const segs = segmentBlock(`${SARCASTIC}\n\n[sad]`, 0, sm);
+    expect(segs).toHaveLength(2);
+  });
+});
