@@ -8,6 +8,27 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-16 (evening) — **OAUTH HARDENING FORWARD-PORTED; LINES IN STEP; CI
+GREEN.** `master` now carries everything from `maintenance/0.3`, and both lines have the OPAQUE
+hook budget.
+- **#41** (OPAQUE hook budget, CI one package at a time) merged to `master`; back-ported to
+  `maintenance/0.3` as **#44**.
+- **#42:** forward port of #36 (MCP OAuth grant hardening) to `master`
+  (`cherry-pick -x -m 1 23cecb45`). One conflict, in [[insights/security-deferrals]]; both
+  entries kept, in date order.
+- **#43:** the `llm-unified` redaction test reset no registry and failed in full runs (order
+  dependent); it now resets both registries like the other built-in tests.
+- Kumbu² diaries: #36 and #44 in `0.3.6.md`; #41, #42 and #43 in `0.4.0.md`. The forward port
+  is in, so a 0.3.6 tag is no longer blocked by it.
+- Stale local branches and worktrees with deleted upstreams removed. `.claude/settings.local.json`
+  (git-ignored) allows `git push` and `gh pr create|merge`; Git hooks need
+  `eval "$(mise env -s bash)"` for `node`.
+
+**Next:** Chris device-tests 0.4.0 locally (ElevenLabs steps 1 and 3, TEAL v2, see below), with a
+fresh local bootstrap; then the 0.4.0 release per [[RELEASE-PROCESS]].
+
+---
+
 **Last updated:** 2026-11-16 — **TEAL v2 BUILT FOR 0.4.0 (ElevenLabs step 2 of 3), AWAITING
 CHRIS'S DEVICE TEST.** On branch `claude/modest-pasteur-xy1gwx`. Step 1 (ElevenLabs direct) was
 merged as PR #39.
@@ -46,7 +67,7 @@ Spec: [[../superpowers/specs/2026-11-16-elevenlabs-via-nano-gpt-design]]. Gate g
 
 The moderation result then sets `contentModerated` and the freedom badge on both ElevenLabs paths.
 
-**CI (2026-11-16):** the red `admin-users` hook on `master` and `maintenance/0.3` is not a hang. Its `beforeAll` registers three users via OPAQUE, and each runs the client's memory-hard KSF (about 0.4 s locally, about 2 s on CI), which overruns Bun's 5 s hook default. The fix is an explicit, documented 30 s budget for OPAQUE-registering hooks (`admin-users`, `admin-audit-log`), on its own PR. Once that is merged, cherry-pick it to `maintenance/0.3`.
+**CI (2026-11-16):** the red `admin-users` hook was the OPAQUE KSF (about 2 s per registration on CI) overrunning Bun's 5 s hook default; fixed by an explicit 30 s budget in #41, back-ported as #44.
 
 ---
 
@@ -79,28 +100,6 @@ CHRIS'S DEVICE TEST.** On branch `claude/modest-pasteur-xy1gwx` (cloud session),
 **Next:** Chris device-tests spec §11, then squash to `master`, then the Kumbu² diary entry in
 `0.4.0.md`. Then ElevenLabs step 2 (TEAL v2, emotion tags) and step 3 (ElevenLabs via
 nano-gpt).
-
----
-
-**Last updated:** 2026-11-11 — **MAINTENANCE LINES ADOPTED; OAUTH HARDENING STAGED FOR
-0.3.6.** PR #37 (ADR 0039, [[RELEASE-PROCESS]]) is merged to `master` (`d586e797`) and
-PR #38 to `maintenance/0.3` (`5e8babe3`). `master` now prepares 0.4.0, and
-`maintenance/0.3` prepares 0.3.6.
-- **PR #36 (MCP OAuth grant hardening, closes L2/L4/L3):** rebased off `master` onto
-  `maintenance/0.3`, so the five `[skip ci]` doc commits since `v0.3.5` stay out of it,
-  and retargeted there. Still a draft. Two new `oauth-sign-in-flow` tests raced the
-  effect that schedules the expiry timer and failed under CI load. Fixed in the tests,
-  not the component.
-- **CI is red on `master`, `maintenance/0.3` and #36:** the `beforeEach` hook of
-  `apps/auth-service/tests/integration/admin-users.test.ts` overruns Bun's 5 s default
-  (6 of the last 30 runs, and every run tonight). It is unrelated to #36, and its cause
-  is unconfirmed (presumably two OPAQUE registrations on slow runners).
-
-**Next:** fix the `admin-users` hook timeout on `master` and cherry-pick it to
-`maintenance/0.3` (a CI/test change, so `master` first). Chris device-tests #36's spec §11.
-Then squash-merge #36 into `maintenance/0.3`, forward-port it to `master` the same day
-(`cherry-pick -x`), and add entries to the Kumbu² diaries `0.3.6.md` and `0.4.0.md`.
-No 0.3.6 tag yet.
 
 ---
 
