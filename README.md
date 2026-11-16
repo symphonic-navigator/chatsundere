@@ -25,7 +25,7 @@ pnpm install
 ### Local development scripts
 
 The dev stack runs the supporting **infrastructure in Docker** (Postgres, Redis,
-MinIO, Prometheus, Grafana) and the **backend services on the host** via
+Garage, Prometheus, Grafana) and the **backend services on the host** via
 `bun --watch` for fast iteration. Three repo-root scripts drive it:
 
 | Script | What it does |

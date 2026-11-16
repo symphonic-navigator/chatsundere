@@ -11,8 +11,47 @@ cd "$(dirname "$0")"
 
 COMPOSE=(docker compose -f infra/compose.dev.yml)
 
-echo "▸ Starting dev infrastructure (postgres · redis · minio · prometheus · grafana)…"
+echo "▸ Starting dev infrastructure (postgres · redis · garage · prometheus · grafana)…"
 "${COMPOSE[@]}" up -d
+
+echo "▸ Preparing the Garage object store…"
+# RUST_LOG=warn keeps the CLI's per-call connection logs off the terminal.
+GARAGE=("${COMPOSE[@]}" exec -T -e RUST_LOG=warn garage /garage)
+for _ in $(seq 1 60); do
+  if "${GARAGE[@]}" status >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+if ! "${GARAGE[@]}" status >/dev/null 2>&1; then
+  echo "✗ Garage did not become ready in time." >&2
+  exit 1
+fi
+# A fresh node has no role, and Garage serves no requests until the layout
+# gives it one. Single node, single zone; the capacity is only a weight.
+if "${GARAGE[@]}" status 2>/dev/null | grep -q 'NO ROLE ASSIGNED'; then
+  node_id=$("${GARAGE[@]}" node id -q 2>/dev/null | cut -d@ -f1)
+  "${GARAGE[@]}" layout assign -z dev -c 10G "${node_id}" >/dev/null
+  "${GARAGE[@]}" layout apply --version 1 >/dev/null
+  echo "  assigned the one-node layout"
+fi
+# The dev key matches S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY in
+# apps/sync-service/.env.dev. Garage refuses to import a key ID twice, so check
+# first; same for the buckets (the app bucket and the live-test bucket of
+# apps/sync-service/tests/s3.test.ts).
+GARAGE_KEY_ID=GK000000000000000000000000
+GARAGE_KEY_SECRET=0000000000000000000000000000000000000000000000000000000000000000
+if ! "${GARAGE[@]}" key info chatsundere-dev >/dev/null 2>&1; then
+  "${GARAGE[@]}" key import --yes -n chatsundere-dev "${GARAGE_KEY_ID}" "${GARAGE_KEY_SECRET}" >/dev/null
+  echo "  imported the dev key"
+fi
+for bucket in chatsundere-blobs chatsundere-blobs-test; do
+  if ! "${GARAGE[@]}" bucket info "${bucket}" >/dev/null 2>&1; then
+    "${GARAGE[@]}" bucket create "${bucket}" >/dev/null
+    echo "  created ${bucket}"
+  fi
+  "${GARAGE[@]}" bucket allow --read --write --owner "${bucket}" --key chatsundere-dev >/dev/null
+done
 
 echo "▸ Waiting for Postgres to accept connections…"
 for _ in $(seq 1 60); do
@@ -52,4 +91,4 @@ for db in sync_db sync_db_test; do
 done
 
 echo "✓ Infrastructure ready."
-echo "  Postgres :5432 · Redis :6379 · MinIO :9000 · Prometheus :9090 · Grafana :3001 (admin/admin)"
+echo "  Postgres :5432 · Redis :6379 · Garage S3 :9000 · Prometheus :9090 · Grafana :3001 (admin/admin)"
