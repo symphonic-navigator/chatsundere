@@ -1,0 +1,21 @@
+# Garage — the S3-compatible object store backing the blob transport in the
+# LOCAL DEVELOPMENT stack (blob spec §14). Dev-only, secret-free lab values,
+# deliberately committed; never used in a deployment.
+#
+# One node, one copy: replication_factor = 1 is a single-machine dev setup.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[s3_api]
+# The sync-service signs SigV4 requests for this region (S3_REGION in
+# apps/sync-service/.env.dev); the two must match.
+s3_region = "us-east-1"
+api_bind_addr = "[::]:3900"
