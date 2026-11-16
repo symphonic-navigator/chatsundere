@@ -11,6 +11,7 @@ export const BUILT_IN_PROVIDERS = [
   { id: 'ollama-cloud', name: 'Ollama Cloud', monogram: 'Ol' },
   { id: 'nano-gpt', name: 'nano-gpt.com', monogram: 'nG' },
   { id: 'openrouter', name: 'OpenRouter', monogram: 'OR' },
+  { id: 'elevenlabs', name: 'ElevenLabs', monogram: 'El' },
 ] as const;
 
 export type ProviderTemplateId = (typeof BUILT_IN_PROVIDERS)[number]['id'];

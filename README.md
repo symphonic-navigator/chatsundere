@@ -115,8 +115,10 @@ rejects anything shorter than 40 characters.
 | Variable | Purpose | Example |
 |---|---|---|
 | `VITE_AUTH_URL` | Auth-service base URL | `http://localhost:3100` |
-| `VITE_SYNC_URL` | Sync-service base URL | `http://localhost:3200` |
-| `VITE_PROXY_URL` | Proxy-service base URL | `http://localhost:3300` |
+| `VITE_SYNC_URL` | Sync-service base URL; dev server only, overrides discovery | `http://localhost:3200` |
+| `VITE_PROXY_URL` | Proxy-service base URL; dev server only, overrides discovery | `http://localhost:8090` |
+
+The local dev values for both overrides are committed in `apps/user-client/.env.development`: discovery advertises https URLs, while the dev services listen on plain http.
 
 ## Curating model & provider support
 
