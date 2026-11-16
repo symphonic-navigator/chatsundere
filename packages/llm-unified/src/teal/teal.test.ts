@@ -117,7 +117,15 @@ describe('resolveTealBracket', () => {
   });
 
   it('keeps ordinary prose brackets literal', () => {
-    for (const c of ['content removed', 'tired of this', 'sad but true', 'melancholic', '']) {
+    for (const c of [
+      'content removed',
+      'tired of this',
+      'sad but true',
+      'melancholic',
+      'very very sad',
+      'sad today',
+      '',
+    ]) {
       expect(resolveTealBracket(c)).toBeNull();
     }
   });

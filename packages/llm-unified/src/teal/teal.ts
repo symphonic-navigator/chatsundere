@@ -4,8 +4,8 @@
  * TEAL v2 — Transformative Expression and Anthropomorphisation Layer.
  *
  * The canonical voice expression language: a closed, versioned vocabulary
- * (v1 = xAI voice-tag snapshot, 2026-06-11; v2 adds moods and sounds) that every consumer translates
- * from — the chat display renders it as friendly formatting, and future TTS
+ * (v1 = xAI voice-tag snapshot, 2026-06-11; v2 adds moods and sounds) that
+ * every consumer translates from — the chat display renders it as friendly formatting, and future TTS
  * translators map it onto each backend's capabilities. Extension is
  * deliberate curation (a new version), never heuristics. See the design spec
  * `superpowers/specs/2026-06-11-teal-voice-expression-language-design.md`.
@@ -268,13 +268,14 @@ export const TEAL_EXPRESSION_PROMPT = (() => {
   const { inline, wrapping, mood } = tagLines();
   return `## Expressive delivery
 
-The assistant's replies carry vocal expression. Two kinds of markup are understood: in text they render as friendly formatting; when the assistant speaks aloud they shape the voice itself.
+The assistant's replies carry vocal expression. Three kinds of markup are understood: in text they render as friendly formatting; when the assistant speaks aloud they shape the voice itself.
 
 ### Syntax
 
 - Inline tags in square brackets trigger a discrete sound or pause: \`[laugh]\`, \`[breath]\`, \`[pause]\`.
 - Inline tags may carry a short qualifier word in the same brackets: \`[soft laugh]\`, \`[exhale sharply]\`.
 - Wrapping tags in angle brackets modulate delivery across the text they enclose: \`<whisper>a secret</whisper>\`. Wrapping tags may nest.
+- Mood tags in square brackets set the tone of the text that follows: \`[sarcastic]\`. See the Mood section.
 
 ### Strict rules
 
@@ -306,6 +307,6 @@ ${wrapping}
 
 ### Dosage
 
-Typically 0–2 markups per message — not every sentence. Use a wrapping tag for genuine emphasis, a pause to let a punchline land, a breath where one would naturally fall. Expression reads as natural when markup is rare.
+Typically 0–2 markups per message, not every sentence; this budget covers sounds and wrapping tags only. Mood tags do NOT count toward it; they are governed by the dosage in the Mood section. Use a wrapping tag for genuine emphasis, a pause to let a punchline land, a breath where one would naturally fall. Expression reads as natural when markup is rare.
 When narrating an action between asterisks, do not additionally tag the same sound — \`*giggles softly*\` already carries the giggle.`;
 })();
