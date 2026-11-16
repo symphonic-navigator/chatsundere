@@ -7,6 +7,10 @@ const MISTRAL_PROVIDER = {
   baseUrl: 'https://api.mistral.ai/v1',
   routing: { kind: 'direct' } as const,
 };
+const NANO_PROVIDER = {
+  baseUrl: 'https://nano-gpt.com/api/v1',
+  routing: { kind: 'direct' } as const,
+};
 const XAI_PROVIDER = { baseUrl: 'https://api.x.ai/v1', routing: { kind: 'direct' } as const };
 
 function asMockFetch(
@@ -247,5 +251,69 @@ describe('listTtsVoices', () => {
     });
     expect(calls).toBe(2);
     expect(result.voices).toHaveLength(2);
+  });
+
+  describe('nano-gpt-audio-models', () => {
+    const catalogue = [
+      { id: 'other/model', supported_parameters: { voices: ['Nope'] } },
+      {
+        id: 'elevenlabs/eleven-v4',
+        name: 'ElevenLabs v4',
+        supported_parameters: { max_chars: 10000, voices: ['Laura', 'Roger', 'Kid Voice'] },
+      },
+    ];
+
+    test('requests the detailed tts catalogue and maps the matching entry', async () => {
+      let captured: Request | null = null;
+      const fetchFn = asMockFetch(async (input) => {
+        captured = input as Request;
+        return jsonResponse(catalogue);
+      });
+      const result = await listTtsVoices({
+        providerConfig: NANO_PROVIDER,
+        apiKey: 'k',
+        endpoint: 'nano-gpt-audio-models',
+        upstreamSlug: 'elevenlabs/eleven-v4',
+        fetchFn,
+      });
+      const sent = captured as Request | null;
+      expect(sent?.url).toBe('https://nano-gpt.com/api/v1/audio-models?type=tts&detailed=true');
+      expect(result.voices).toEqual([
+        { id: 'Laura', name: 'Laura' },
+        { id: 'Roger', name: 'Roger' },
+      ]);
+      expect(result.hiddenCount).toBe(1);
+    });
+
+    test('accepts a {data: [...]} envelope', async () => {
+      const fetchFn = asMockFetch(async () => jsonResponse({ data: catalogue }));
+      const result = await listTtsVoices({
+        providerConfig: NANO_PROVIDER,
+        apiKey: 'k',
+        endpoint: 'nano-gpt-audio-models',
+        upstreamSlug: 'elevenlabs/eleven-v4',
+        fetchFn,
+      });
+      expect(result.voices.map((v) => v.id)).toEqual(['Laura', 'Roger']);
+    });
+
+    test('a missing slug entry throws', async () => {
+      const fetchFn = asMockFetch(async () => jsonResponse(catalogue));
+      let thrown: unknown = null;
+      try {
+        await listTtsVoices({
+          providerConfig: NANO_PROVIDER,
+          apiKey: 'k',
+          endpoint: 'nano-gpt-audio-models',
+          upstreamSlug: 'elevenlabs/absent',
+          fetchFn,
+        });
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(SpeechSynthesisError);
+      expect((thrown as SpeechSynthesisError).message).toBe('voices: model not in catalogue');
+      expect((thrown as SpeechSynthesisError).status).toBeNull();
+    });
   });
 });

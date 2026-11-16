@@ -768,6 +768,15 @@ const GROK_TTS_META: TtsOfferingMeta = {
   defaultHighpassHz: 50,
 };
 
+const ELEVEN_V4_TTS_BASE = {
+  // Level v2 sends the full TEAL set (moods included) verbatim; Eleven v4 voices its own audio tags.
+  teal: 'v2',
+  // TODO(Chris manual test, spec §11 step 10): set from the moderation hand test
+  contentModerated: true,
+  transport: 'openai-speech',
+  voices: { kind: 'fetch', endpoint: 'nano-gpt-audio-models' },
+} as const satisfies Omit<TtsOfferingMeta, 'displayName'>;
+
 const GROK_STT_META: SttOfferingMeta = {
   displayName: 'Grok STT',
   contentModerated: false,
@@ -1194,6 +1203,32 @@ const offerings: Offering[] = [
     serviceKind: 'tts',
     tts: GROK_TTS_META,
   },
+  ...(
+    [
+      ['elevenlabs/eleven-v4', 'Eleven v4'],
+      ['elevenlabs/eleven-v4-turbo', 'Eleven v4 Turbo'],
+    ] as const
+  ).map(
+    ([upstreamSlug, displayName]): Offering => ({
+      canonicalRef: null,
+      providerId: 'nano-gpt',
+      upstreamSlug,
+      adapter: { kind: 'generic' }, // voice calls bypass chat adapters entirely
+      profile: {
+        reasoning: { mode: 'none' },
+        toolCalls: { supported: false, streaming: false, concurrentWithReasoning: false },
+        vision: false,
+        replayReasoning: false,
+      },
+      context: { recommended: 0, max: 0 },
+      trust: { tee: false, zdr: false, jurisdiction: 'US' },
+      freedomOrientedDeployment: null,
+      source: 'curated',
+      confidence: 'verified', // public /audio-models catalogue, 2026-11-16
+      serviceKind: 'tts',
+      tts: { ...ELEVEN_V4_TTS_BASE, displayName },
+    }),
+  ),
   // Grok STT via nano-gpt's xAI wrapper — speech-to-text.
   {
     canonicalRef: null,

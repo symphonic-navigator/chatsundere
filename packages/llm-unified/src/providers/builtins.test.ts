@@ -67,7 +67,8 @@ describe('built-in providers', () => {
       // (12 of the 64 are image offerings; Nano Banana 2.1 was withdrawn after
       // nano-gpt 502'd it on 2026-10-08).
       // (Nemotron 3 Ultra was probed but deferred — no self-invoked tools.)
-      expect(p.offerings).toHaveLength(64);
+      // + Eleven v4 / Eleven v4 Turbo TTS (November 2026) = 66
+      expect(p.offerings).toHaveLength(66);
       expect(p.shape).toBe('openai-chat-completions');
     }
   });

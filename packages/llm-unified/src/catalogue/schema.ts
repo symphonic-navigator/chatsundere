@@ -50,7 +50,12 @@ const TtsOfferingMetaSchema = v.object({
   voices: v.variant('kind', [
     v.object({
       kind: v.literal('fetch'),
-      endpoint: v.picklist(['mistral-paginated', 'xai-flat', 'elevenlabs-v2']),
+      endpoint: v.picklist([
+        'mistral-paginated',
+        'xai-flat',
+        'elevenlabs-v2',
+        'nano-gpt-audio-models',
+      ]),
     }),
     v.object({
       kind: v.literal('static'),

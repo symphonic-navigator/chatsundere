@@ -99,7 +99,10 @@ export type SttTransportKind = 'openai-transcriptions' | 'xai-native' | 'elevenl
 
 /** Where a TTS offering's voice list comes from. */
 export type TtsVoiceSource =
-  | { kind: 'fetch'; endpoint: 'mistral-paginated' | 'xai-flat' | 'elevenlabs-v2' }
+  | {
+      kind: 'fetch';
+      endpoint: 'mistral-paginated' | 'xai-flat' | 'elevenlabs-v2' | 'nano-gpt-audio-models';
+    }
   | { kind: 'static'; list: ReadonlyArray<{ id: string; name: string }> };
 
 /** Metadata carried by a `serviceKind: 'tts'` offering. */

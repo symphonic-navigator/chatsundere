@@ -114,4 +114,18 @@ describe('parseCatalogueEntry', () => {
     expect(withTeal('passthrough').ok).toBe(false);
     expect(withTeal('strip').ok).toBe(false);
   });
+
+  it('accepts the nano-gpt-audio-models voice endpoint', () => {
+    const e = structuredClone(validEntry);
+    Object.assign(e.offerings[0] as object, {
+      tts: {
+        displayName: 'T',
+        teal: 'v2',
+        contentModerated: true,
+        transport: 'openai-speech',
+        voices: { kind: 'fetch', endpoint: 'nano-gpt-audio-models' },
+      },
+    });
+    expect(parseCatalogueEntry(e).ok).toBe(true);
+  });
 });

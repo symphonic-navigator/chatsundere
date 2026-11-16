@@ -21,6 +21,8 @@ describe('TTS offerings', () => {
       'elevenlabs:eleven_v4',
       'elevenlabs:eleven_v4_turbo',
       'mistral:voxtral-mini-tts-2603',
+      'nano-gpt:elevenlabs/eleven-v4',
+      'nano-gpt:elevenlabs/eleven-v4-turbo',
       'nano-gpt:xai-tts',
       'xai:grok-tts',
     ]);
@@ -40,7 +42,7 @@ describe('TTS offerings', () => {
     expect(xaiDirect?.corsOverride).toBe('direct');
     expect(xaiDirect?.adapter.kind).toBe('generic');
 
-    const nano = tts.find((o) => o.providerId === 'nano-gpt');
+    const nano = tts.find((o) => o.providerId === 'nano-gpt' && o.upstreamSlug === 'xai-tts');
     expect(nano?.tts?.teal).toBe('v1');
     expect(nano?.tts?.contentModerated).toBe(false);
     expect(nano?.tts?.transport).toBe('openai-speech');
@@ -67,6 +69,27 @@ describe('TTS offerings', () => {
       expect(o.tts?.contentModerated).toBe(true);
       expect(o.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
       expect(o.freedomOrientedDeployment).toBeNull();
+      expect(o.adapter.kind).toBe('generic');
+    }
+    expect(tts.map((o) => o.tts?.displayName).sort()).toEqual(['Eleven v4', 'Eleven v4 Turbo']);
+  });
+
+  test('nano-gpt: both Eleven v4 offerings are TEAL v2 and read the audio-models catalogue', () => {
+    const tts = listTtsOfferings().filter(
+      (o) => o.providerId === 'nano-gpt' && o.upstreamSlug.startsWith('elevenlabs/'),
+    );
+    expect(tts.map((o) => o.upstreamSlug).sort()).toEqual([
+      'elevenlabs/eleven-v4',
+      'elevenlabs/eleven-v4-turbo',
+    ]);
+    for (const o of tts) {
+      expect(o.tts?.teal).toBe('v2');
+      expect(o.tts?.transport).toBe('openai-speech');
+      expect(o.tts?.voices).toEqual({ kind: 'fetch', endpoint: 'nano-gpt-audio-models' });
+      expect(o.tts?.contentModerated).toBe(true);
+      expect(o.trust).toEqual({ tee: false, zdr: false, jurisdiction: 'US' });
+      expect(o.freedomOrientedDeployment).toBeNull();
+      expect(o.confidence).toBe('verified');
       expect(o.adapter.kind).toBe('generic');
     }
     expect(tts.map((o) => o.tts?.displayName).sort()).toEqual(['Eleven v4', 'Eleven v4 Turbo']);
