@@ -237,13 +237,16 @@ export function isTealWrapping(name: string): name is TealWrappingTag {
   return WRAPPING_SET.has(name.toLowerCase());
 }
 
+/** The `[...]` bracket candidate TEAL recognises; content is group 1. Global flag. */
+export const TEAL_BRACKET_RX = /\[([A-Za-z][A-Za-z\- ]{0,38})\]/g;
+
 /**
  * Remove known TEAL markup above `maxLevel` from text (0 removes all, 1 keeps
  * the v1 vocabulary, 2 keeps everything). Unknown brackets/tags stay untouched.
  */
 export function stripTeal(text: string, maxLevel: TealLevel = 0): string {
   return text
-    .replace(/\[([A-Za-z][A-Za-z\- ]{0,38})\]/g, (m, content: string) => {
+    .replace(TEAL_BRACKET_RX, (m, content: string) => {
       const r = resolveTealBracket(content);
       return r === null || r.level <= maxLevel ? m : '';
     })

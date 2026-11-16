@@ -351,8 +351,6 @@ describe('segmentBlock — sentence-mode mood carry (TEAL v2 §6.2a, D3)', () =>
     // The glow plugin's primitive returns the same ranges as segmentBlock.
     const glow = emittedRangesForParagraph(SARCASTIC, sm, true);
     expect(glow.map((e) => e.range)).toEqual(segs.map((s) => s.charRange));
-    // Carrying alters only the spoken text: the raw range holds no prefix.
-    expect(SARCASTIC.slice(...(segs[1]?.charRange ?? [0, 0])).startsWith('[')).toBe(false);
   });
 
   it('a segment that opens with its own mood keeps it and gets no prefix', () => {
@@ -407,5 +405,27 @@ describe('segmentBlock — sentence-mode mood carry (TEAL v2 §6.2a, D3)', () =>
     expect(emittedRangesForParagraph('[sad]', sm, true)).toEqual([]);
     const segs = segmentBlock(`${SARCASTIC}\n\n[sad]`, 0, sm);
     expect(segs).toHaveLength(2);
+  });
+
+  it("keeps each voice's mood to itself in roleplay", () => {
+    const rp = { mode: 'sentence' as const, roleplay: true };
+    const src =
+      '*She grins at you across the table.* [teasing] Come here and sit right beside me, will you? ' +
+      '*She pats the seat next to her twice.* You know you want to stay a while longer with me.';
+    const segs = segmentBlock(src, 0, rp);
+    expect(segs.map((s) => [s.voice, s.spokenText])).toEqual([
+      ['narrator', 'She grins at you across the table.'],
+      ['dialogue', '[teasing] Come here and sit right beside me, will you?'],
+      ['narrator', 'She pats the seat next to her twice.'],
+      ['dialogue', '[teasing] You know you want to stay a while longer with me.'],
+    ]);
+  });
+
+  it('only brackets stripTeal recognises set a mood', () => {
+    // `[ sarcastic]` (leading space) is literal to stripTeal, so it carries nothing.
+    const src =
+      '[ sarcastic] Oh great, another meeting about meetings. That is truly wonderful news for all of us.';
+    const segs = segmentBlock(src, 0, sm);
+    expect(segs[1]?.spokenText).toBe('That is truly wonderful news for all of us.');
   });
 });

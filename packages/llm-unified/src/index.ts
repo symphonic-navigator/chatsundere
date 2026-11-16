@@ -42,6 +42,7 @@ export { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js
 export { buildContentAxisPrompt } from './content-axis.js';
 
 export {
+  TEAL_BRACKET_RX,
   TEAL_EXPRESSION_PROMPT,
   TEAL_INLINE_TAGS,
   TEAL_WRAPPING_TAGS,

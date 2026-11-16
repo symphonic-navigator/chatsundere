@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
   INTEGRATION_TAG_RX,
+  TEAL_BRACKET_RX,
   getIntegration,
   resolveTealBracket,
   stripTeal,
@@ -26,8 +27,9 @@ import { maskCodeRegions } from '../markdown/code-mask.js';
  * The one TEAL-aware step is the mood carry in sentence mode (spec §6.2a, D3:
  * a mood holds until the next mood or the end of the paragraph). Each sentence
  * segment is synthesised on its own, so a later segment of a paragraph that
- * does not open with a mood gets the paragraph's active mood prepended to its
- * `spokenText`. Ranges are untouched, so display and glow anchors never move.
+ * does not open with a mood gets the active mood of its own voice prepended to
+ * its `spokenText` (a character's mood never reaches the narrator). Ranges are
+ * untouched, so display and glow anchors never move.
  *
  * ## (b) The glow plugin shares these algorithms, not offsets
  *
@@ -336,10 +338,14 @@ export function emittedRangesForParagraph(
   const vRanges = voiceRanges(paragraphSource, 0, paragraphSource.length, opts.roleplay, isCode);
 
   const out: EmittedRange[] = [];
-  // Bracket content of the last mood seen in this paragraph, carried into
-  // later sentence segments (§6.2a). Updated before the speakability gate so a
-  // mood in a dropped segment still holds for what follows.
-  let activeMood: string | null = null;
+  // Bracket content of the last mood seen in this paragraph per voice, carried
+  // into that voice's later sentence segments (§6.2a). Keyed by voice so a
+  // character's mood never reaches the narrator. Updated before the
+  // speakability gate so a mood in a dropped segment still holds.
+  const activeMood: Record<VoiceRange['voice'], string | null> = {
+    dialogue: null,
+    narrator: null,
+  };
   const collect = (
     range: [number, number],
     spokenText: string,
@@ -353,8 +359,8 @@ export function emittedRangesForParagraph(
     // below the tag's level as EMPTY input. A lone tag says nothing on its own
     // at any level, so dropping it everywhere is right. Living here keeps the
     // TTS side and the glow side identical by construction.
-    const carried = opts.mode === 'sentence' ? activeMood : null;
-    activeMood = lastMood(spokenText) ?? activeMood;
+    const carried = opts.mode === 'sentence' ? activeMood[voice] : null;
+    activeMood[voice] = lastMood(spokenText) ?? activeMood[voice];
     if (!/[\p{L}\p{N}]/u.test(stripTeal(spokenText))) return;
     const spoken =
       carried !== null && !opensWithMood(spokenText) ? `[${carried}] ${spokenText}` : spokenText;
@@ -376,13 +382,13 @@ export function emittedRangesForParagraph(
   return out;
 }
 
-/** A `[...]` bracket candidate; nested or multi-line brackets never resolve. */
-const BRACKET = /\[([^[\]\n]*)\]/g;
+/** {@link TEAL_BRACKET_RX} anchored at the start of the text. */
+const LEADING_BRACKET = new RegExp(`^${TEAL_BRACKET_RX.source}`);
 
 /** Trimmed content of the last mood bracket in `text`, or null if none. */
 function lastMood(text: string): string | null {
   let found: string | null = null;
-  for (const m of text.matchAll(BRACKET)) {
+  for (const m of text.matchAll(TEAL_BRACKET_RX)) {
     const content = m[1] ?? '';
     if (resolveTealBracket(content)?.kind === 'mood') found = content.trim();
   }
@@ -391,7 +397,7 @@ function lastMood(text: string): string | null {
 
 /** Whether `text` opens with a mood bracket (it then needs no carried prefix). */
 function opensWithMood(text: string): boolean {
-  const m = /^\[([^[\]\n]*)\]/.exec(text);
+  const m = LEADING_BRACKET.exec(text);
   return m !== null && resolveTealBracket(m[1] ?? '')?.kind === 'mood';
 }
 
