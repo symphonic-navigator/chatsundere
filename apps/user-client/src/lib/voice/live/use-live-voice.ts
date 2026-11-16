@@ -136,10 +136,11 @@ export function useLiveVoice(args: LiveVoiceArgs): LiveVoice {
             },
             { sensitivity: a.sensitivity, redemptionMs: a.redemptionMs },
           )
-          .catch(() => {
+          .catch((error: unknown) => {
             // Permission denied or device error — the button is gated by
             // `available`, so reaching here is a belt-and-braces edge case.
             // The machine is left in listening; EXIT is the recovery path.
+            console.warn('[live-voice] capture start failed:', error);
             capturingRef.current = false;
             resetLevel();
           });
@@ -186,6 +187,15 @@ export function useLiveVoice(args: LiveVoiceArgs): LiveVoice {
 
   const floor = useSelector(actor, selectFloor);
   const fill = useSelector(actor, selectFill);
+
+  // Floor transitions in the console: with the [capture] lines they show which
+  // floor a stalled session was on and what led there.
+  const prevFloorRef = useRef(floor);
+  useEffect(() => {
+    if (prevFloorRef.current === floor) return;
+    console.info('[live-voice] floor %s → %s', prevFloorRef.current, floor);
+    prevFloorRef.current = floor;
+  }, [floor]);
 
   // ---- Persona-floor bridge --------------------------------------------------
   // The persona floor is driven by the streaming read-aloud transport (the same

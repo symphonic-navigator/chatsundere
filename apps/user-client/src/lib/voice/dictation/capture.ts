@@ -74,6 +74,8 @@ const VAD_CDN = 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.30/dist/';
 // browser's native rate (typically 48 kHz), but the PCM we build the
 // Tier-3 WAV from comes from the 16 kHz AudioContext.
 const VAD_SAMPLE_RATE = 16_000;
+/** A running VAD processes a frame every ~96 ms; this long without one is a stall. */
+const VAD_STALL_MS = 3_000;
 
 class AudioCaptureImpl {
   // -- shared state --
@@ -107,6 +109,11 @@ class AudioCaptureImpl {
   // visible via vadRecorder during that window.
   private vadDeliveryPending = false;
   private redemptionTracker: RedemptionTracker | null = null;
+  // Liveness diagnostics: a VAD whose AudioContext is suspended, or whose mic
+  // track died, stops processing frames without any error or event. The
+  // watchdog makes that silent stall visible in the console.
+  private vadLastFrameAt = 0;
+  private vadWatchdog: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Push-to-talk: record raw audio from mic. No VAD needed.
@@ -329,6 +336,7 @@ class AudioCaptureImpl {
       minSpeechMs: preset.minSpeechFrames * MS_PER_FRAME,
       redemptionMs: options.redemptionMs,
       onFrameProcessed: (probabilities: { isSpeech: number; notSpeech: number }) => {
+        this.vadLastFrameAt = performance.now();
         const fraction = this.redemptionTracker?.frame(probabilities.isSpeech) ?? 0;
         this.callbacks?.onRedemptionProgress?.(fraction);
       },
@@ -381,6 +389,51 @@ class AudioCaptureImpl {
     }
 
     await this.vad.start();
+
+    const track = capturedStream ? (capturedStream as MediaStream).getAudioTracks()[0] : undefined;
+    track?.addEventListener('ended', () => {
+      console.warn('[capture] mic track ended (session=%d)', session);
+    });
+    console.info(
+      '[capture] continuous started session=%d context=%s track=%s',
+      session,
+      this.vadContext?.state ?? 'none',
+      track?.readyState ?? 'none',
+    );
+    this.startVadWatchdog(session);
+  }
+
+  private startVadWatchdog(session: number): void {
+    this.stopVadWatchdog();
+    this.vadLastFrameAt = performance.now();
+    let reported = false;
+    this.vadWatchdog = setInterval(() => {
+      if (session !== this.vadSession) {
+        this.stopVadWatchdog();
+        return;
+      }
+      const silentMs = performance.now() - this.vadLastFrameAt;
+      if (silentMs > VAD_STALL_MS && !reported) {
+        reported = true;
+        console.warn(
+          '[capture] no VAD frames for %d ms (session=%d, context=%s, track=%s)',
+          Math.round(silentMs),
+          session,
+          this.vadContext?.state ?? 'none',
+          this.vadStream?.getAudioTracks()[0]?.readyState ?? 'none',
+        );
+      } else if (silentMs <= VAD_STALL_MS && reported) {
+        reported = false;
+        console.info('[capture] VAD frames resumed (session=%d)', session);
+      }
+    }, VAD_STALL_MS);
+  }
+
+  private stopVadWatchdog(): void {
+    if (this.vadWatchdog !== null) {
+      clearInterval(this.vadWatchdog);
+      this.vadWatchdog = null;
+    }
   }
 
   private handleVadSpeechStart(): void {
@@ -496,6 +549,8 @@ class AudioCaptureImpl {
     // Bump first so any in-flight startContinuous awaiting MicVAD.new sees
     // an invalidated session when it resolves and cleans up its own VAD.
     this.vadSession++;
+    console.info('[capture] stopContinuous session=%d', this.vadSession);
+    this.stopVadWatchdog();
     this.stopVolumeMeter();
 
     const cb = this.callbacks;
