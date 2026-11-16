@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { afterEach, describe, expect, it, test } from 'bun:test';
+import { _resetAdapterRegistryForTests } from './adapter-registry.js';
 import { registerBuiltinProviders } from './providers/_register-builtins.js';
 import { setProxyAuthSource } from './proxy-auth.js';
-import { listProviders } from './registry.js';
+import { _resetRegistryForTests, listProviders } from './registry.js';
 import {
   ProxyUnavailableError,
   SECRET_REQUEST_HEADERS,
@@ -257,11 +258,17 @@ describe('header auth scheme', () => {
   });
 
   it("every built-in provider's auth header is redacted", () => {
+    // Another test file may already have registered the built-ins (importing
+    // index.ts does), and registering twice throws.
+    _resetRegistryForTests();
+    _resetAdapterRegistryForTests();
     registerBuiltinProviders();
     const withAuth = listProviders().filter((p) => p.auth);
     expect(withAuth.length).toBeGreaterThan(0);
     for (const p of withAuth) {
       expect(SECRET_REQUEST_HEADERS.has((p.auth?.header ?? '').toLowerCase())).toBe(true);
     }
+    _resetRegistryForTests();
+    _resetAdapterRegistryForTests();
   });
 });
