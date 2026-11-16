@@ -46,10 +46,15 @@ export {
   TEAL_INLINE_TAGS,
   TEAL_WRAPPING_TAGS,
   TEAL_VERSION,
+  TEAL_MOOD_TAGS,
   type TealInlineTag,
+  type TealInlineMatch,
+  type TealLevel,
+  type TealMoodTag,
   type TealWrappingTag,
   isTealWrapping,
   matchTealInline,
+  resolveTealBracket,
   stripTeal,
 } from './teal/teal.js';
 

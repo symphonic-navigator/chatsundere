@@ -44,6 +44,12 @@ const INLINE_RENDER: Readonly<Record<TealInlineTag, TealRenderAction>> = {
   exhale: BREATH,
   sigh: BREATH,
   gasp: { kind: 'emoji', value: '😲' },
+  'clear-throat': { kind: 'silent' },
+  gulp: { kind: 'silent' },
+  yawn: { kind: 'silent' },
+  sniffle: { kind: 'silent' },
+  groan: { kind: 'silent' },
+  scoff: { kind: 'silent' },
 };
 
 const WRAP_RENDER: Readonly<Record<TealWrappingTag, TealRenderAction>> = {
