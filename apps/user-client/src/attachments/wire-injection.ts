@@ -9,6 +9,11 @@ export type ResolvedPart =
   | { kind: 'image-earlier'; fileName: string }
   | { kind: 'text'; fileName: string; text: string };
 
+/** The wire text of a text attachment: its file name and a fenced body. */
+export function renderTextAttachment(fileName: string, text: string): string {
+  return `Attachment: ${fileName}\n\`\`\`\n${text}\n\`\`\``;
+}
+
 /**
  * Build the wire `content` for a user turn from its text plus already-resolved attachment
  * parts. Returns a plain string when there are no attachments (unchanged behaviour), else the
@@ -49,7 +54,7 @@ export function buildUserWireContent(
         });
         break;
       case 'text':
-        out.push({ type: 'text', text: `Attachment: ${p.fileName}\n\`\`\`\n${p.text}\n\`\`\`` });
+        out.push({ type: 'text', text: renderTextAttachment(p.fileName, p.text) });
         break;
     }
   }

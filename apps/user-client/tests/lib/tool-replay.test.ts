@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { WireMessage } from '@chatsundere/llm-unified';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ContentBlock, MessageRow, PillRow } from '../../src/boot/client-data-db.js';
+import type {
+  AttachmentRow,
+  ContentBlock,
+  MessageRow,
+  PillRow,
+} from '../../src/boot/client-data-db.js';
 import { buildCompactionTranscript } from '../../src/compaction/compaction-prompt.js';
 import { flattenAnswerText } from '../../src/lib/content-blocks.js';
 import { wireTokens } from '../../src/lib/context-window.js';
@@ -357,6 +362,15 @@ describe('replayHistory', () => {
 });
 
 describe('estimateReplayTokens', () => {
+  it('adds the attachment cost for user rows only when the map is given', () => {
+    const row = msg('m-u', 'user', [{ type: 'text', text: 'look at this' }]);
+    const img = { id: 'a', kind: 'image', state: 'active', fileName: 'c.jpg' } as AttachmentRow;
+    const map = new Map([['m-u', [img, img]]]);
+    const base = estimateReplayTokens(row, new Map());
+    expect(estimateReplayTokens(row, new Map(), map)).toBe(base + 2000);
+    expect(estimateReplayTokens(row, new Map(), new Map())).toBe(base);
+  });
+
   it('equals the estimate over the structurally replayed wire messages (parity)', () => {
     const row = msg('m-p', 'persona', [
       { type: 'text', text: 'One moment…' },

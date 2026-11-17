@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
 import {
+  IMAGE_TOKEN_ESTIMATE,
   PRIOR_IMAGE_TURN_WINDOW,
+  estimateAttachmentTokens,
   imageWindowMessageIds,
   resolveEarlierParts,
 } from '../../src/attachments/prior-replay.js';
 import { resolveAttachmentParts } from '../../src/attachments/resolve-send.js';
 import type { AttachmentRow } from '../../src/boot/client-data-db.js';
+import { estimateTokens } from '../../src/lib/token-estimator.js';
 
 const row = (over: Partial<AttachmentRow> = {}): AttachmentRow =>
   ({
@@ -78,6 +81,21 @@ describe('resolveAttachmentParts missingBlob option', () => {
   it('skips a blob-less image by default', async () => {
     expect(await resolveAttachmentParts([row({ blob: undefined })], 'direct', null, deps)).toEqual(
       [],
+    );
+  });
+});
+
+describe('estimateAttachmentTokens', () => {
+  it('counts every live image at the flat estimate and deleted rows as zero', () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c', state: 'deleted' })];
+    expect(IMAGE_TOKEN_ESTIMATE).toBe(1000);
+    expect(estimateAttachmentTokens(rows)).toBe(2000);
+  });
+
+  it('counts a text row as its rendered Attachment fence', () => {
+    const t = row({ kind: 'text', fileName: 'notes.txt', text: 'hello there', mime: 'text/plain' });
+    expect(estimateAttachmentTokens([t])).toBe(
+      estimateTokens('Attachment: notes.txt\n```\nhello there\n```'),
     );
   });
 });

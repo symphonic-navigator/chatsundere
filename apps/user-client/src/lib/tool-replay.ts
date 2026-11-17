@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { WireContentPart, WireMessage, WireToolCall } from '@chatsundere/llm-unified';
-import type { MessageRow, PillRow } from '../boot/client-data-db.js';
+import { estimateAttachmentTokens } from '../attachments/prior-replay.js';
+import type { AttachmentRow, MessageRow, PillRow } from '../boot/client-data-db.js';
 import { BUILTIN_TOOL_NAMES } from '../tools/builtin-tool-names.js';
 import { flattenAnswerText } from './content-blocks.js';
 import { wireTokens } from './context-window.js';
@@ -287,8 +288,13 @@ export function replayHistory(rows: MessageRow[], ctx: ReplayContext | undefined
 export function estimateReplayTokens(
   row: MessageRow,
   pillsById: ReadonlyMap<string, PillRow>,
+  attachmentsByMessage?: ReadonlyMap<string, readonly AttachmentRow[]>,
 ): number {
-  if (row.role !== 'persona') return estimateTokens(flattenAnswerText(row.contentBlocks));
+  if (row.role !== 'persona') {
+    const text = estimateTokens(flattenAnswerText(row.contentBlocks));
+    if (row.role !== 'user') return text;
+    return text + estimateAttachmentTokens(attachmentsByMessage?.get(row.id) ?? []);
+  }
   return replayPersona(
     row,
     { pillsById, policy: PERMISSIVE },

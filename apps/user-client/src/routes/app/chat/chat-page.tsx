@@ -54,6 +54,7 @@ import { clearLazyDraft, loadLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
+import { loadReplayAttachments } from '../../../lib/replay-pills.js';
 import { resolveOffering } from '../../../lib/resolve-offering.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
@@ -562,6 +563,11 @@ export function ChatPage(): JSX.Element {
 
   const chat = chatQuery.data?.chat ?? null;
   const messages = chatQuery.data?.messages ?? [];
+  const replayAttachmentsQuery = useQuery({
+    queryKey: ['attachments', 'replay', activeChatId, messages.length],
+    queryFn: () => loadReplayAttachments(messages.map((m) => m.id)),
+    enabled: activeChatId != null,
+  });
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
 
@@ -868,6 +874,7 @@ export function ChatPage(): JSX.Element {
           streamHandle={streamHandle}
           contextBudget={contextBudget}
           systemTokens={systemTokens}
+          attachmentsByMessage={replayAttachmentsQuery.data}
           onRegenerate={onRegenerate}
           onBranch={(messageId) => {
             branchChat.reset();

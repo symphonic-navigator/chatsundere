@@ -15,7 +15,11 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
 import { blobToDataUrl } from '../attachments/blob-data-url.js';
-import { imageWindowMessageIds, resolveEarlierParts } from '../attachments/prior-replay.js';
+import {
+  estimateAttachmentTokens,
+  imageWindowMessageIds,
+  resolveEarlierParts,
+} from '../attachments/prior-replay.js';
 import { type ResolveDeps, resolveAttachmentParts } from '../attachments/resolve-send.js';
 import { describeImage } from '../attachments/substitute-vision.js';
 import { type Disposition, imageDisposition } from '../attachments/vision-gate.js';
@@ -35,6 +39,7 @@ import { shouldFireValve } from '../compaction/trigger.js';
 import {
   attachPendingToMessage,
   listMessageAttachments,
+  listPendingAttachments,
   snapshotPendingDocumentReferences,
 } from '../data/attachments.js';
 import { providerApiKeySlot } from '../data/providers.js';
@@ -401,8 +406,15 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     // (+ the injected summary) is sent, not the full history.
     const projected = await applyActiveCompaction(args.chat, args.priorMessages, '');
     const projectedPills = await loadReplayPills(projected.priorMessages.map((m) => m.id));
+    const projectedAttachments = await loadReplayAttachments(
+      projected.priorMessages.map((m) => m.id),
+    );
     const projectedUsed =
-      projected.priorMessages.reduce((sum, m) => sum + estimateReplayTokens(m, projectedPills), 0) +
+      projected.priorMessages.reduce(
+        (sum, m) => sum + estimateReplayTokens(m, projectedPills, projectedAttachments),
+        0,
+      ) +
+      estimateAttachmentTokens(await listPendingAttachments(args.chat.id)) +
       estimateTokens(projected.memoryContext) +
       estimateTokens(args.userText);
     if (wouldOverflow(projectedUsed, contextWindow)) {
