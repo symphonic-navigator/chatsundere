@@ -8,22 +8,21 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
-**Last updated:** 2026-11-17 — **PRIOR-TURN ATTACHMENT REPLAY BUILT FOR 0.4.1.** Prior user
-turns still in the replayed history carry their attachments again: text in full, images of the
-last 3 image-bearing turns in full (direct or substitute-described), older images as their cached
-description or `[Image: … — shown earlier, no longer attached]`. Token estimates (overflow
-failsafe, compaction runner, ChatStream marker, chat-page gauge, `wireTokens`) count attachments
-as an upper bound, 1000 per image.
+**Last updated:** 2026-11-17 (evening) — **v0.4.1 RELEASED.** `v0.4.1` (on `927845a4`, the
+squash of #52) ships prior-turn attachment replay: prior user turns still in the replayed
+history carry their attachments again (text in full, images of the last 3 image-bearing turns
+in full, older images as their cached description or `[Image: … — shown earlier, no longer
+attached]`), and every token estimate counts attachments as an upper bound, 1000 per image.
 - Spec `superpowers/specs/2026-11-17-prior-turn-attachment-replay-design.md` (N = 3 and the
   placeholder decided by Chris), plan beside it; built subagent-driven, each task and the whole
   branch reviewed (the final review caught `wireTokens` counting multimodal content as 0).
-- **#50** to `maintenance/0.4`, CI green; forward port to `master` in its own PR, which carries
-  this STATUS commit.
-- Open: Chris device-tests the spec's "Manual verification" steps; the Kumbu² diary entries
-  (`0.4.1.md` Fixed, `0.5.0.md`) once merged.
+- **#50** to `maintenance/0.4`, forward port **#51** to `master`; release **#52**, `version.txt`
+  0.4.2 **#53**, CHANGELOG forward port **#54**. Kumbu² diaries `0.4.1.md` and `0.5.0.md` hold
+  the entries.
+- The cloud session's Git proxy refuses tag pushes (403): Chris pushes release tags himself.
 
-**Next:** Chris device-tests and merges #50 and the forward port. Then 0.4.1 can be tagged when
-Chris asks; the Garage move of the deployment template (0.5.0, guided) and Komodo stay queued.
+**Next:** Chris deploys 0.4.1 and device-tests the spec's "Manual verification" steps. Queued:
+the Garage move of the deployment template (0.5.0, guided) and Komodo.
 
 ---
 
