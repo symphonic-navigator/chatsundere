@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import * as llmUnified from '../../../../packages/llm-unified/src/index';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
+import * as blobDataUrl from '../../src/attachments/blob-data-url';
 import * as resolveSend from '../../src/attachments/resolve-send';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
 import { queryClient } from '../../src/lib/queryClient';
@@ -1191,6 +1192,124 @@ describe('stream-manager.store', () => {
 
     const without = await run(undefined);
     expect(without?.policy.orphanReplay).toBe(false);
+  });
+
+  describe('prior-turn attachment replay', () => {
+    function row(id: string, chatId: string, role: 'user' | 'persona', text: string, at: number) {
+      return {
+        id,
+        chatId,
+        role,
+        contentBlocks: [{ type: 'text', text }],
+        createdAt: at,
+        updatedAt: at,
+        bookmarked: false,
+        streamingState: 'complete',
+      };
+    }
+
+    async function seedPrior(chatId: string) {
+      const db = await openClientDataDb();
+      const priorMessages = [];
+      for (let i = 1; i <= 4; i++) {
+        priorMessages.push(row(`u${i}`, chatId, 'user', `turn ${i}`, i * 10));
+        priorMessages.push(row(`r${i}`, chatId, 'persona', `answer ${i}`, i * 10 + 1));
+        await db.attachments.add({
+          id: `img-${i}`,
+          chatId,
+          messageId: `u${i}`,
+          origin: 'upload',
+          kind: 'image',
+          fileName: `photo-${i}.jpg`,
+          mime: 'image/jpeg',
+          order: 1,
+          state: 'active',
+          blob: new Blob(['x'], { type: 'image/jpeg' }),
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }
+      await db.attachments.add({
+        id: 'txt-2',
+        chatId,
+        messageId: 'u2',
+        origin: 'upload',
+        kind: 'text',
+        fileName: 'notes.md',
+        mime: 'text/markdown',
+        order: 0,
+        state: 'active',
+        text: 'remember the fox',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      return priorMessages;
+    }
+
+    async function sendWith(priorMessages: unknown[]) {
+      const { db, chatId, personaId } = await seedChat();
+      const persona = await db.personas.get(personaId);
+      const baseModel = nanoGpt.offerings[0];
+      const visionModel = {
+        ...(baseModel as object),
+        profile: { toolCalls: { supported: false }, vision: true },
+      };
+      vi.spyOn(llmUnified, 'getOffering').mockReturnValue(visionModel as never);
+      // fake-indexeddb does not round-trip a Blob, so the data-URL read is stubbed.
+      vi.spyOn(blobDataUrl, 'blobToDataUrl').mockResolvedValue('data:image/jpeg;base64,eA==');
+      type Captured = { replay?: { userContentById?: Map<string, unknown> } };
+      const captured: Captured[] = [];
+      vi.spyOn(engine, 'runStreamEngine').mockImplementation((async (a: Captured) => {
+        captured.push(a);
+        return {
+          finalContentBlocks: [{ type: 'text', text: 'Done.' }],
+          pillRows: [],
+          finishReason: 'stop',
+          usedTokens: 0,
+        };
+      }) as never);
+      await useStreamManagerStore.getState().start({
+        ...baseStartArgs(chatId, persona, visionModel),
+        priorMessages,
+      } as never);
+      await new Promise((r) => setTimeout(r, 80));
+      const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+      return {
+        byId: captured[0]?.replay?.userContentById ?? new Map<string, unknown>(),
+        personaRow: msgs.find((m) => m.role === 'persona'),
+      };
+    }
+
+    it('replays images on the three most recent prior turns and a placeholder on the oldest', async () => {
+      const prior = await seedPrior('c1');
+      const { byId } = await sendWith(prior);
+      for (const id of ['u2', 'u3', 'u4']) {
+        const parts = byId.get(id) as { type: string }[];
+        expect(parts.some((p) => p.type === 'image_url')).toBe(true);
+      }
+      const oldest = byId.get('u1') as { type: string; text?: string }[];
+      expect(oldest.some((p) => p.type === 'image_url')).toBe(false);
+      expect(oldest).toContainEqual({
+        type: 'text',
+        text: '[Image: photo-1.jpg — shown earlier, no longer attached]',
+      });
+      expect(oldest[0]).toEqual({ type: 'text', text: 'turn 1' });
+      const u2 = byId.get('u2') as { type: string; text?: string }[];
+      expect(u2).toContainEqual({
+        type: 'text',
+        text: 'Attachment: notes.md\n```\nremember the fox\n```',
+      });
+    });
+
+    it('replays a turn as plain text when its attachment resolution throws, and the send completes', async () => {
+      const prior = await seedPrior('c1');
+      const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(resolveSend, 'resolveAttachmentParts').mockRejectedValue(new Error('boom'));
+      const { byId, personaRow } = await sendWith(prior);
+      for (const id of ['u2', 'u3', 'u4']) expect(byId.has(id)).toBe(false);
+      expect(personaRow?.streamingState).toBe('complete');
+      expect(consoleErr).toHaveBeenCalled();
+    });
   });
 
   it('persists a kb-injection pill above the answer when lore fired', async () => {

@@ -244,7 +244,7 @@ function appendReasoning(buf: ContentBlock[], text: string): void {
  * history, the active user turn, then any accumulated tool exchange from prior
  * loop rounds. Prior persona turns replay their recorded tool rounds as
  * assistant(tool_calls) + tool messages when a replay context is given (see
- * `tool-replay.ts`); prior-turn attachments are still not replayed.
+ * `tool-replay.ts`), and prior user turns carry their resolved attachments.
  *
  * `userContent` accepts a plain string for text-only turns or a
  * `WireContentPart[]` for multimodal turns (text + images).

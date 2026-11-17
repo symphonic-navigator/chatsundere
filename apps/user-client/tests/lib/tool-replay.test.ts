@@ -131,6 +131,22 @@ describe('replayHistory', () => {
     expect(JSON.stringify(replayHistory(rows, undefined))).toBe(JSON.stringify(expected));
   });
 
+  it('sends a user row with resolved attachment content verbatim, leaving other rows unchanged', () => {
+    const rows = [
+      msg('u1', 'user', [{ type: 'text', text: 'hi' }]),
+      msg('p1', 'persona', [{ type: 'text', text: 'Hello!' }]),
+      msg('u2', 'user', [{ type: 'text', text: 'again' }]),
+    ];
+    const content = [
+      { type: 'text' as const, text: 'hi' },
+      { type: 'image_url' as const, image_url: { url: 'data:,' } },
+    ];
+    const out = replayHistory(rows, { ...ctx([]), userContentById: new Map([['u1', content]]) });
+    const textOnly = replayHistory(rows, ctx([]));
+    expect(out[0]).toEqual({ role: 'user', content });
+    expect(JSON.stringify(out.slice(1))).toBe(JSON.stringify(textOnly.slice(1)));
+  });
+
   it('splits a message into a tool round and a closing answer, parallel calls in one assistant', () => {
     const a = toolPill('pA', 'generate_image');
     const b = toolPill('pB', 'write_memory', {
