@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+/** Flat per-image token estimate; every image counts, in the window or not (an upper bound). */
+export const IMAGE_TOKEN_ESTIMATE = 1000;
+
 /**
  * Estimate tokens via the 4-chars-per-token heuristic. Cheap, fast, and
  * good enough for the Context-Gauge until a per-model tokeniser arrives.

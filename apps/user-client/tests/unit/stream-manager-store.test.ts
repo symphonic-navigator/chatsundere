@@ -1308,7 +1308,10 @@ describe('stream-manager.store', () => {
       const { byId, personaRow } = await sendWith(prior);
       for (const id of ['u2', 'u3', 'u4']) expect(byId.has(id)).toBe(false);
       expect(personaRow?.streamingState).toBe('complete');
-      expect(consoleErr).toHaveBeenCalled();
+      expect(consoleErr).toHaveBeenCalledWith(
+        expect.stringContaining('[stream-manager] prior attachment resolution failed for'),
+        expect.anything(),
+      );
     });
   });
 
