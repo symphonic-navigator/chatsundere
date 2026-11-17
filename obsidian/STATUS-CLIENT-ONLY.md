@@ -8,6 +8,25 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-17 — **PRIOR-TURN ATTACHMENT REPLAY BUILT FOR 0.4.1.** Prior user
+turns still in the replayed history carry their attachments again: text in full, images of the
+last 3 image-bearing turns in full (direct or substitute-described), older images as their cached
+description or `[Image: … — shown earlier, no longer attached]`. Token estimates (overflow
+failsafe, compaction runner, ChatStream marker, chat-page gauge, `wireTokens`) count attachments
+as an upper bound, 1000 per image.
+- Spec `superpowers/specs/2026-11-17-prior-turn-attachment-replay-design.md` (N = 3 and the
+  placeholder decided by Chris), plan beside it; built subagent-driven, each task and the whole
+  branch reviewed (the final review caught `wireTokens` counting multimodal content as 0).
+- **#50** to `maintenance/0.4`, CI green; forward port to `master` in its own PR, which carries
+  this STATUS commit.
+- Open: Chris device-tests the spec's "Manual verification" steps; the Kumbu² diary entries
+  (`0.4.1.md` Fixed, `0.5.0.md`) once merged.
+
+**Next:** Chris device-tests and merges #50 and the forward port. Then 0.4.1 can be tagged when
+Chris asks; the Garage move of the deployment template (0.5.0, guided) and Komodo stay queued.
+
+---
+
 **Last updated:** 2026-11-16 (night) — **v0.4.0 RELEASED.** `v0.4.0` (on `fe046b5c`, the squash of
 #49) ships ElevenLabs direct and via nano-gpt, TEAL v2 moods and the MCP OAuth hardening.
 `CHANGELOG.md` starts with it. `maintenance/0.4` is cut from the tag (`version.txt` 0.4.1);
@@ -22,27 +41,6 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 **Next:** Chris deploys 0.4.0 and collects feedback. Then 0.4.1 on `maintenance/0.4`, starting with
 a short spec for prior-turn attachment replay; forward-port it to `master` the same day.
-
----
-
-**Last updated:** 2026-11-16 (evening) — **OAUTH HARDENING FORWARD-PORTED; LINES IN STEP; CI
-GREEN.** `master` now carries everything from `maintenance/0.3`, and both lines have the OPAQUE
-hook budget.
-- **#41** (OPAQUE hook budget, CI one package at a time) merged to `master`; back-ported to
-  `maintenance/0.3` as **#44**.
-- **#42:** forward port of #36 (MCP OAuth grant hardening) to `master`
-  (`cherry-pick -x -m 1 23cecb45`). One conflict, in [[insights/security-deferrals]]; both
-  entries kept, in date order.
-- **#43:** the `llm-unified` redaction test reset no registry and failed in full runs (order
-  dependent); it now resets both registries like the other built-in tests.
-- Kumbu² diaries: #36 and #44 in `0.3.6.md`; #41, #42 and #43 in `0.4.0.md`. The forward port
-  is in, so a 0.3.6 tag is no longer blocked by it.
-- Stale local branches and worktrees with deleted upstreams removed. `.claude/settings.local.json`
-  (git-ignored) allows `git push` and `gh pr create|merge`; Git hooks need
-  `eval "$(mise env -s bash)"` for `node`.
-
-**Next:** Chris device-tests 0.4.0 locally (ElevenLabs steps 1 and 3, TEAL v2, see below), with a
-fresh local bootstrap; then the 0.4.0 release per [[RELEASE-PROCESS]].
 
 ---
 
