@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { AttachmentRow } from '../boot/client-data-db.js';
-import { estimateTokens } from '../lib/token-estimator.js';
+import { IMAGE_TOKEN_ESTIMATE, estimateTokens } from '../lib/token-estimator.js';
 import { type ResolvedPart, renderTextAttachment } from './wire-injection.js';
 
 /** How many of the most recent image-bearing user turns keep their images in the LLM context. */
 export const PRIOR_IMAGE_TURN_WINDOW = 3;
 
-/** Flat per-image token estimate; every image counts, in the window or not (an upper bound). */
-export const IMAGE_TOKEN_ESTIMATE = 1000;
+export { IMAGE_TOKEN_ESTIMATE };
 
 /** Upper-bound tokens a user turn's attachments cost on the wire. */
 export function estimateAttachmentTokens(attachments: readonly AttachmentRow[]): number {

@@ -12,6 +12,7 @@ import {
   truncateToWindow,
   wireTokens,
 } from '../../src/lib/context-window.js';
+import { IMAGE_TOKEN_ESTIMATE } from '../../src/lib/token-estimator.js';
 
 function offering(recommended: number, max: number): Offering {
   // Only the `context` field is read by these helpers.
@@ -101,6 +102,18 @@ describe('wireTokens with tool calls', () => {
 
   it('is unchanged for a plain text message', () => {
     expect(wireTokens({ role: 'user', content: 'abcdefgh' })).toBe(2);
+  });
+
+  it('counts text and image parts of multimodal array content', () => {
+    const m: WireMessage = {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'abcdefgh' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+      ],
+    };
+    expect(wireTokens(m)).toBe(2 + IMAGE_TOKEN_ESTIMATE);
+    expect(IMAGE_TOKEN_ESTIMATE).toBe(1000);
   });
 });
 
