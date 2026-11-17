@@ -6,7 +6,13 @@ export type ResolvedPart =
   | { kind: 'image-direct'; fileName: string; dataUrl: string }
   | { kind: 'image-description'; fileName: string; model: string; description: string }
   | { kind: 'image-placeholder'; fileName: string }
+  | { kind: 'image-earlier'; fileName: string }
   | { kind: 'text'; fileName: string; text: string };
+
+/** The wire text of a text attachment: its file name and a fenced body. */
+export function renderTextAttachment(fileName: string, text: string): string {
+  return `Attachment: ${fileName}\n\`\`\`\n${text}\n\`\`\``;
+}
 
 /**
  * Build the wire `content` for a user turn from its text plus already-resolved attachment
@@ -41,8 +47,14 @@ export function buildUserWireContent(
           text: `[Image: ${p.fileName} — current model cannot see images, image omitted]`,
         });
         break;
+      case 'image-earlier':
+        out.push({
+          type: 'text',
+          text: `[Image: ${p.fileName} — shown earlier, no longer attached]`,
+        });
+        break;
       case 'text':
-        out.push({ type: 'text', text: `Attachment: ${p.fileName}\n\`\`\`\n${p.text}\n\`\`\`` });
+        out.push({ type: 'text', text: renderTextAttachment(p.fileName, p.text) });
         break;
     }
   }

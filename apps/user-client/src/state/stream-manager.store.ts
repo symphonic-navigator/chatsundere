@@ -15,13 +15,19 @@ import { useSessionStore } from '@chatsundere/ui-shared';
 import { uuidv7 } from 'uuidv7';
 import { create } from 'zustand';
 import { blobToDataUrl } from '../attachments/blob-data-url.js';
-import { resolveAttachmentParts } from '../attachments/resolve-send.js';
+import {
+  estimateAttachmentTokens,
+  imageWindowMessageIds,
+  resolveEarlierParts,
+} from '../attachments/prior-replay.js';
+import { type ResolveDeps, resolveAttachmentParts } from '../attachments/resolve-send.js';
 import { describeImage } from '../attachments/substitute-vision.js';
-import { imageDisposition } from '../attachments/vision-gate.js';
+import { type Disposition, imageDisposition } from '../attachments/vision-gate.js';
 import { buildUserWireContent } from '../attachments/wire-injection.js';
 import {
   type AttachmentRow,
   type ContentBlock,
+  type MessageRow,
   type PillRow,
   getClientDataDb,
 } from '../boot/client-data-db.js';
@@ -33,6 +39,7 @@ import { shouldFireValve } from '../compaction/trigger.js';
 import {
   attachPendingToMessage,
   listMessageAttachments,
+  listPendingAttachments,
   snapshotPendingDocumentReferences,
 } from '../data/attachments.js';
 import { providerApiKeySlot } from '../data/providers.js';
@@ -45,6 +52,7 @@ import { buildIntegrationContext } from '../integrations/build-context.js';
 import type { OfferingRef } from '../integrations/types.js';
 import { buildWebTools } from '../integrations/web/build-web-tools.js';
 import { renderKnowledgeAwareness } from '../knowledge/query-tool.js';
+import { flattenAnswerText } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
 import {
   type DiagnosticReport,
@@ -54,7 +62,7 @@ import {
 import { buildOpenerInstruction } from '../lib/opener.js';
 import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { queryClient } from '../lib/queryClient.js';
-import { loadReplayPills } from '../lib/replay-pills.js';
+import { loadReplayAttachments, loadReplayPills } from '../lib/replay-pills.js';
 import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
@@ -398,8 +406,15 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     // (+ the injected summary) is sent, not the full history.
     const projected = await applyActiveCompaction(args.chat, args.priorMessages, '');
     const projectedPills = await loadReplayPills(projected.priorMessages.map((m) => m.id));
+    const projectedAttachments = await loadReplayAttachments(
+      projected.priorMessages.map((m) => m.id),
+    );
     const projectedUsed =
-      projected.priorMessages.reduce((sum, m) => sum + estimateReplayTokens(m, projectedPills), 0) +
+      projected.priorMessages.reduce(
+        (sum, m) => sum + estimateReplayTokens(m, projectedPills, projectedAttachments),
+        0,
+      ) +
+      estimateAttachmentTokens(await listPendingAttachments(args.chat.id)) +
       estimateTokens(projected.memoryContext) +
       estimateTokens(args.userText);
     if (wouldOverflow(projectedUsed, contextWindow)) {
@@ -642,6 +657,67 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
   },
 }));
 
+/** Live describe-pill callbacks fired around each uncached substitute describe. */
+type DescribeCallbacks = {
+  onDescribeStart: (a: AttachmentRow) => void;
+  onDescribeEnd: (
+    a: AttachmentRow,
+    outcome: { ok: true; text: string } | { ok: false; error: string },
+  ) => void;
+};
+
+/**
+ * The image disposition, substitute ref and resolver deps for one send, shared
+ * by the current and the prior turns so describing and caching behave alike.
+ */
+function attachmentResolveSetup(
+  args: StartArgs,
+  callbacks: DescribeCallbacks,
+): { disposition: Disposition; substituteRef: string | null; deps: ResolveDeps } {
+  // Refs are "providerTemplateId:upstreamSlug" (see settings substitute picker).
+  // The active provider's template id is ProviderDefinition.id (args.provider.id).
+  const activeRef = `${args.provider.id}:${args.offering.upstreamSlug}`;
+  const substituteRef = args.substituteVisionModel ?? null;
+  const lookup = (ref: string) => {
+    const idx = ref.indexOf(':');
+    if (idx < 0) return undefined;
+    return getOffering(ref.slice(0, idx), ref.slice(idx + 1));
+  };
+  const disposition = imageDisposition(activeRef, substituteRef, lookup);
+  const base = args.substituteOneShotBase;
+  const deps: ResolveDeps = {
+    toDataUrl: blobToDataUrl,
+    describe: async (dataUrl, model) => {
+      if (!base) throw new Error('substitute-vision: no resolved one-shot context');
+      return describeImage({
+        dataUrl,
+        model,
+        runOneShot: runOneShotCompletion,
+        oneShotBase: base,
+      });
+    },
+    cacheDescription: async (id, model, text) => {
+      // Class-2 record edit on a sent attachment (WS-D §5). A background job
+      // (substitute-vision) — offline-defer so a describe never throws or
+      // loses its cache; it converges on the next online edit / recovery.
+      await mutateSynced({
+        collection: 'attachments',
+        key: id,
+        tables: ['attachments'],
+        deferWhenOffline: true,
+        write: async (tx) => {
+          await tx
+            .table('attachments')
+            .update(id, { visionDescription: { model, text }, updatedAt: Date.now() });
+        },
+      });
+    },
+    onDescribeStart: callbacks.onDescribeStart,
+    onDescribeEnd: callbacks.onDescribeEnd,
+  };
+  return { disposition, substituteRef, deps };
+}
+
 /**
  * Resolve a user turn's bound attachments into the wire `content` for that turn:
  * a plain string when there are no attachments (unchanged behaviour), else a
@@ -649,78 +725,72 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
  * has vision; otherwise routed through the substitute-vision model (description
  * cached on the row); otherwise emitted as a text placeholder. Failures degrade
  * gracefully to the plain user text — a vision hiccup must not block the send.
- *
- * NOTE (prior-turn replay, spec §9): only the CURRENT user turn's attachments are
- * resolved here. Re-injecting attachments from PRIOR user messages on replay would
- * require resolving per-prior-message parts and a new attachment-parts mapping in
- * `buildEngineWireMessages` (which replays prior tool rounds but not prior attachments). That
- * is deferred — the current-turn path is the must-have. See the task report.
+ * Prior user turns are resolved separately by `resolvePriorUserContent`.
  */
 async function resolveUserContent(
   args: StartArgs,
   userMessageId: string,
   // signal reserved for describe cancellation (outer abort already tears down the send)
   _signal: AbortSignal,
-  callbacks: {
-    onDescribeStart: (a: AttachmentRow) => void;
-    onDescribeEnd: (
-      a: AttachmentRow,
-      outcome: { ok: true; text: string } | { ok: false; error: string },
-    ) => void;
-  },
+  callbacks: DescribeCallbacks,
 ): Promise<string | WireContentPart[]> {
-  const db = getClientDataDb();
   try {
     const atts = await listMessageAttachments(userMessageId);
     if (atts.length === 0) return args.userText;
-
-    // Refs are "providerTemplateId:upstreamSlug" (see settings substitute picker).
-    // The active provider's template id is ProviderDefinition.id (args.provider.id).
-    const activeRef = `${args.provider.id}:${args.offering.upstreamSlug}`;
-    const substituteRef = args.substituteVisionModel ?? null;
-    const lookup = (ref: string) => {
-      const idx = ref.indexOf(':');
-      if (idx < 0) return undefined;
-      return getOffering(ref.slice(0, idx), ref.slice(idx + 1));
-    };
-    const disposition = imageDisposition(activeRef, substituteRef, lookup);
-
-    const base = args.substituteOneShotBase;
-    const parts = await resolveAttachmentParts(atts, disposition, substituteRef, {
-      toDataUrl: blobToDataUrl,
-      describe: async (dataUrl, model) => {
-        if (!base) throw new Error('substitute-vision: no resolved one-shot context');
-        return describeImage({
-          dataUrl,
-          model,
-          runOneShot: runOneShotCompletion,
-          oneShotBase: base,
-        });
-      },
-      cacheDescription: async (id, model, text) => {
-        // Class-2 record edit on a sent attachment (WS-D §5). A background job
-        // (substitute-vision) — offline-defer so a describe never throws or
-        // loses its cache; it converges on the next online edit / recovery.
-        await mutateSynced({
-          collection: 'attachments',
-          key: id,
-          tables: ['attachments'],
-          deferWhenOffline: true,
-          write: async (tx) => {
-            await tx
-              .table('attachments')
-              .update(id, { visionDescription: { model, text }, updatedAt: Date.now() });
-          },
-        });
-      },
-      onDescribeStart: callbacks.onDescribeStart,
-      onDescribeEnd: callbacks.onDescribeEnd,
-    });
+    const { disposition, substituteRef, deps } = attachmentResolveSetup(args, callbacks);
+    const parts = await resolveAttachmentParts(atts, disposition, substituteRef, deps);
     return buildUserWireContent(args.userText, parts);
   } catch (err) {
     console.error('[stream-manager] attachment resolution failed; sending text only', err);
     return args.userText;
   }
+}
+
+/**
+ * Resolve the attachments of the prior user turns for replay, keyed by message
+ * id. The last `PRIOR_IMAGE_TURN_WINDOW` image-bearing turns resolve like the
+ * current turn (a blob-less image becomes the "shown earlier" marker); older
+ * turns keep text attachments and cached descriptions only. A turn without
+ * live attachments, or whose resolution fails, gets no entry and replays as text.
+ */
+async function resolvePriorUserContent(
+  args: StartArgs,
+  priorMessages: MessageRow[],
+  callbacks: DescribeCallbacks,
+): Promise<Map<string, string | WireContentPart[]>> {
+  const out = new Map<string, string | WireContentPart[]>();
+  const userRows = priorMessages.filter((m) => m.role === 'user');
+  if (userRows.length === 0) return out;
+  let byMessage: Map<string, AttachmentRow[]>;
+  try {
+    byMessage = await loadReplayAttachments(userRows.map((m) => m.id));
+  } catch (err) {
+    console.error('[stream-manager] prior attachment load failed; replaying text only', err);
+    return out;
+  }
+  const window = imageWindowMessageIds(
+    userRows.map((m) => m.id),
+    byMessage,
+  );
+  const setup = attachmentResolveSetup(args, callbacks);
+  for (const row of userRows) {
+    const atts = (byMessage.get(row.id) ?? []).filter((a) => a.state !== 'deleted');
+    if (atts.length === 0) continue;
+    try {
+      const parts = window.has(row.id)
+        ? await resolveAttachmentParts(atts, setup.disposition, setup.substituteRef, setup.deps, {
+            missingBlob: 'earlier',
+          })
+        : resolveEarlierParts(atts);
+      out.set(row.id, buildUserWireContent(flattenAnswerText(row.contentBlocks), parts));
+    } catch (err) {
+      console.error(
+        `[stream-manager] prior attachment resolution failed for ${row.id}; replaying text only`,
+        err,
+      );
+    }
+  }
+  return out;
 }
 
 /**
@@ -808,54 +878,62 @@ async function runIntoDraft(
   // re-roll/edit-replace (spec §9): a regenerate that skipped this replayed the
   // turn text-only, silently dropping its images. Vision-capable models send the
   // image directly (no pill); the substitute path reuses the cached description.
+  const rebuildBuffers = (): void => {
+    set((s) => {
+      const live = s.streams.get(args.chatId);
+      if (!live) return s;
+      const contentBuffer: ContentBlock[] = [
+        ...visionPills.map((vp) => ({ type: 'pill', pillId: vp.id }) as ContentBlock),
+        ...(lorePill ? [{ type: 'pill', pillId: lorePill.id } as ContentBlock] : []),
+      ];
+      const pillBuffer: PillRow[] = [...visionPills, ...(lorePill ? [lorePill] : [])];
+      const m = new Map(s.streams);
+      m.set(args.chatId, { ...live, contentBuffer, pillBuffer });
+      return { streams: m };
+    });
+  };
+  // Shared by the current and the prior turns, so every describe of this send
+  // lands in the same live pill list.
+  const describeCallbacks: DescribeCallbacks = {
+    onDescribeStart: (a) => {
+      visionPills.push({
+        id: uuidv7(),
+        messageId: '',
+        kind: 'tool-call',
+        positionHint: 'above-text',
+        status: 'pending',
+        payload: {
+          name: 'describe_image',
+          model: substituteLabel,
+          fileName: a.fileName,
+        },
+        createdAt: Date.now(),
+      });
+      rebuildBuffers();
+    },
+    onDescribeEnd: (a, outcome) => {
+      const vp = visionPills.find(
+        (x) =>
+          (x.payload as { fileName?: string }).fileName === a.fileName && x.status === 'pending',
+      );
+      if (vp) {
+        vp.status = outcome.ok ? 'completed' : 'failed';
+        vp.payload = {
+          ...(vp.payload as Record<string, unknown>),
+          ...(outcome.ok ? { result: outcome.text } : { error: outcome.error }),
+        };
+      }
+      rebuildBuffers();
+    },
+  };
   let userMessageText = args.userMessageText;
   if (userMessageId) {
-    const rebuildBuffers = (): void => {
-      set((s) => {
-        const live = s.streams.get(args.chatId);
-        if (!live) return s;
-        const contentBuffer: ContentBlock[] = [
-          ...visionPills.map((vp) => ({ type: 'pill', pillId: vp.id }) as ContentBlock),
-          ...(lorePill ? [{ type: 'pill', pillId: lorePill.id } as ContentBlock] : []),
-        ];
-        const pillBuffer: PillRow[] = [...visionPills, ...(lorePill ? [lorePill] : [])];
-        const m = new Map(s.streams);
-        m.set(args.chatId, { ...live, contentBuffer, pillBuffer });
-        return { streams: m };
-      });
-    };
-    userMessageText = await resolveUserContent(args, userMessageId, controller.signal, {
-      onDescribeStart: (a) => {
-        visionPills.push({
-          id: uuidv7(),
-          messageId: '',
-          kind: 'tool-call',
-          positionHint: 'above-text',
-          status: 'pending',
-          payload: {
-            name: 'describe_image',
-            model: substituteLabel,
-            fileName: a.fileName,
-          },
-          createdAt: Date.now(),
-        });
-        rebuildBuffers();
-      },
-      onDescribeEnd: (a, outcome) => {
-        const vp = visionPills.find(
-          (x) =>
-            (x.payload as { fileName?: string }).fileName === a.fileName && x.status === 'pending',
-        );
-        if (vp) {
-          vp.status = outcome.ok ? 'completed' : 'failed';
-          vp.payload = {
-            ...(vp.payload as Record<string, unknown>),
-            ...(outcome.ok ? { result: outcome.text } : { error: outcome.error }),
-          };
-        }
-        rebuildBuffers();
-      },
-    });
+    userMessageText = await resolveUserContent(
+      args,
+      userMessageId,
+      controller.signal,
+      describeCallbacks,
+    );
   }
 
   const toolsActive = args.offering.profile.toolCalls.supported;
@@ -928,6 +1006,11 @@ async function runIntoDraft(
   // active set: the live exchange already carries those calls (spec §5.2).
   const replay: ReplayContext = {
     pillsById: await loadReplayPills(compacted.priorMessages.map((m) => m.id)),
+    userContentById: await resolvePriorUserContent(
+      args,
+      compacted.priorMessages,
+      describeCallbacks,
+    ),
     policy: {
       toolsSupported: toolsActive,
       orphanReplay: args.offering.profile.toolCalls.orphanReplay ?? false,

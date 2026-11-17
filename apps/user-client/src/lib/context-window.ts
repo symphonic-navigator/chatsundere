@@ -2,7 +2,7 @@
 
 import type { Offering, WireMessage } from '@chatsundere/llm-unified';
 import type { PersonaRow } from '../boot/client-data-db.js';
-import { estimateTokens } from './token-estimator.js';
+import { IMAGE_TOKEN_ESTIMATE, estimateTokens } from './token-estimator.js';
 
 /** Smallest selectable context window. Our system prompts are substantial and
  *  every integrated model ships a generous window, so 64k is a safe floor. */
@@ -31,7 +31,14 @@ export const TOOL_CALL_OVERHEAD_TOKENS = 10;
 
 /** Estimated tokens of one wire message, including any tool calls it carries. */
 export function wireTokens(m: WireMessage): number {
-  const content = estimateTokens(typeof m.content === 'string' ? m.content : '');
+  const content =
+    typeof m.content === 'string'
+      ? estimateTokens(m.content)
+      : m.content.reduce(
+          (s, part) =>
+            s + (part.type === 'text' ? estimateTokens(part.text) : IMAGE_TOKEN_ESTIMATE),
+          0,
+        );
   const calls = (m.tool_calls ?? []).reduce(
     (s, c) =>
       s + estimateTokens(c.function.name + c.function.arguments) + TOOL_CALL_OVERHEAD_TOKENS,
