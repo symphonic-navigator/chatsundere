@@ -6,6 +6,7 @@ export type ResolvedPart =
   | { kind: 'image-direct'; fileName: string; dataUrl: string }
   | { kind: 'image-description'; fileName: string; model: string; description: string }
   | { kind: 'image-placeholder'; fileName: string }
+  | { kind: 'image-earlier'; fileName: string }
   | { kind: 'text'; fileName: string; text: string };
 
 /**
@@ -39,6 +40,12 @@ export function buildUserWireContent(
         out.push({
           type: 'text',
           text: `[Image: ${p.fileName} — current model cannot see images, image omitted]`,
+        });
+        break;
+      case 'image-earlier':
+        out.push({
+          type: 'text',
+          text: `[Image: ${p.fileName} — shown earlier, no longer attached]`,
         });
         break;
       case 'text':
