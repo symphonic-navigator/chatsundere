@@ -33,7 +33,7 @@ Decided by Chris (2026-11-17): a placeholder for older images is enough ("Platzh
 ## Design
 
 - **Text attachments** (uploaded documents, artefact snapshots, knowledge-base references; `kind === 'text'`) are always replayed in full, in every prior turn still in the history. They use the same `Attachment: <name>` fence as the current turn.
-- **Image window:** the most recent **3** prior user turns *that carry images* replay their images exactly as the current turn would: `direct` for a vision model, or the substitute description. *(N = 3 is Liz's call; Chris did not object. Keep it a named constant.)* The current turn does not count towards the 3.
+- **Image window:** the most recent **3** prior user turns *that carry images* replay their images exactly as the current turn would: `direct` for a vision model, or the substitute description. *(N = 3 decided by Chris, 2026-11-17, because it keeps the context from filling up with old images. Keep it a named constant.)* The current turn does not count towards the 3.
   - Within the window with disposition `substitute`, an uncached image is described and cached through the same path as the current turn, including its live `describe_image` pill. *(Liz's call: within the window the model should see what the user sees. This only happens after a switch from a vision model to a blind one.)*
 - **Older images** (outside the window) never trigger a vision call:
   - a cached `visionDescription` (from any model) → replayed as the usual `[Image description for …]` text;
@@ -41,7 +41,7 @@ Decided by Chris (2026-11-17): a placeholder for older images is enough ("Platzh
 - **Blob missing** (e.g. not yet hydrated on this device, or corrupt) → the same placeholder instead of today's silent skip, for prior turns. *(Liz's call, per the no-silent-drop anti-goal.)*
 - **Wire shape:** a prior user turn with attachments becomes a multimodal `WireContentPart[]`, built by the existing `buildUserWireContent`. A turn without attachments stays a plain string, so nothing changes for text-only chats.
 - **Where:** resolve prior attachments once per send, next to `resolveUserContent`. Feed them into `replayHistory` / `buildEngineWireMessages` as a map from message id to resolved content. `lib/tool-replay.ts` stays free of IndexedDB access.
-- **Counting:** `estimateReplayTokens` for a user row adds its attachments: text attachments by `estimateTokens` of the rendered part, a direct image at a fixed estimate (a named constant, ~1000 tokens), a description or placeholder by its text. The meter (`ChatStream`) and the overflow failsafe in `start` use it, and so does the current turn's attachments in the overflow estimate. The meter loads attachments alongside the replay pills.
+- **Counting:** `estimateReplayTokens` for a user row adds its attachments as an upper bound, like the existing tool-round estimate: text attachments by `estimateTokens` of the rendered part, every image at a fixed estimate (a named constant, 1000 tokens), whether or not it is in the window. *(Liz's call: the upper bound keeps the estimate a pure per-row function, and over-estimating only compacts slightly earlier.)* The meter (`ChatStream`) and the overflow failsafe in `start` use it, and so does the current turn's attachments in the overflow estimate. The meter loads attachments alongside the replay pills.
 - **Compaction:** unchanged. Messages folded into a summary are not replayed, so neither are their attachments. The compaction transcript keeps its existing per-block hints.
 
 ## Audit gates
