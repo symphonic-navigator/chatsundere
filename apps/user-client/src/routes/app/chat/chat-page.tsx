@@ -399,6 +399,14 @@ export function ChatPage(): JSX.Element {
     reasoning,
   ]);
 
+  // Shared by the gauge and ChatStream's marker so both count replayed attachments.
+  const replayAttachmentsQuery = useQuery({
+    queryKey: ['attachments', 'replay', activeChatId, chatQuery.data?.messages?.length ?? 0],
+    queryFn: () => loadReplayAttachments((chatQuery.data?.messages ?? []).map((m) => m.id)),
+    enabled: activeChatId != null,
+  });
+  const replayAttachments = replayAttachmentsQuery.data;
+
   // Token estimate for the context gauge and the out-of-window marker.
   const { usedTokens, systemTokens } = useMemo(() => {
     if (!offering || !effectivePersona || !settingsQuery.data)
@@ -432,7 +440,7 @@ export function ChatPage(): JSX.Element {
     const pillsById = new Map((chatQuery.data?.pills ?? []).map((p) => [p.id, p]));
     const historyTokens = (chatQuery.data?.messages ?? [])
       .filter(isContextMessage)
-      .reduce((s, m) => s + estimateReplayTokens(m, pillsById), 0);
+      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments), 0);
     const systemTokens = estimateTokens(sys);
     return { usedTokens: systemTokens + historyTokens, systemTokens };
   }, [
@@ -441,6 +449,7 @@ export function ChatPage(): JSX.Element {
     settingsQuery.data,
     chatQuery.data?.messages,
     chatQuery.data?.pills,
+    replayAttachments,
   ]);
 
   const contextBudget = useMemo(
@@ -563,11 +572,6 @@ export function ChatPage(): JSX.Element {
 
   const chat = chatQuery.data?.chat ?? null;
   const messages = chatQuery.data?.messages ?? [];
-  const replayAttachmentsQuery = useQuery({
-    queryKey: ['attachments', 'replay', activeChatId, messages.length],
-    queryFn: () => loadReplayAttachments(messages.map((m) => m.id)),
-    enabled: activeChatId != null,
-  });
   const pills = chatQuery.data?.pills ?? [];
   const hasMessages = messages.length > 0;
 
@@ -874,7 +878,7 @@ export function ChatPage(): JSX.Element {
           streamHandle={streamHandle}
           contextBudget={contextBudget}
           systemTokens={systemTokens}
-          attachmentsByMessage={replayAttachmentsQuery.data}
+          attachmentsByMessage={replayAttachments}
           onRegenerate={onRegenerate}
           onBranch={(messageId) => {
             branchChat.reset();
