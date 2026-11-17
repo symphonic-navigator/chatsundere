@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { WireMessage, WireToolCall } from '@chatsundere/llm-unified';
-import type { MessageRow, PillRow } from '../boot/client-data-db.js';
+import type { WireContentPart, WireMessage, WireToolCall } from '@chatsundere/llm-unified';
+import { estimateAttachmentTokens } from '../attachments/prior-replay.js';
+import type { AttachmentRow, MessageRow, PillRow } from '../boot/client-data-db.js';
 import { BUILTIN_TOOL_NAMES } from '../tools/builtin-tool-names.js';
 import { flattenAnswerText } from './content-blocks.js';
 import { wireTokens } from './context-window.js';
@@ -28,6 +29,8 @@ export interface ReplayPolicy {
 export interface ReplayContext {
   pillsById: ReadonlyMap<string, PillRow>;
   policy: ReplayPolicy;
+  /** Resolved wire content for prior user turns that carry attachments; absent ids replay as text. */
+  userContentById?: ReadonlyMap<string, string | WireContentPart[]>;
 }
 
 /** Estimation counts every recorded round structurally — the upper bound. */
@@ -267,14 +270,17 @@ function replayPersona(
 /**
  * Replay prior context messages for the wire. Persona messages with recorded
  * tool rounds expand into assistant(tool_calls) + tool messages (spec §3);
- * everything else maps 1:1 as before. Without a context, text only.
+ * user turns with resolved attachments carry that content; everything else
+ * maps 1:1 as before. Without a context, text only.
  */
 export function replayHistory(rows: MessageRow[], ctx: ReplayContext | undefined): WireMessage[] {
   if (!ctx) return rows.map(textOnlyWireMessage);
   const mint = createIdMinter();
-  return rows.flatMap((r) =>
-    r.role === 'persona' ? replayPersona(r, ctx, mint, true) : [textOnlyWireMessage(r)],
-  );
+  return rows.flatMap((r): WireMessage[] => {
+    if (r.role === 'persona') return replayPersona(r, ctx, mint, true);
+    const content = r.role === 'user' ? ctx.userContentById?.get(r.id) : undefined;
+    return [content === undefined ? textOnlyWireMessage(r) : { role: 'user', content }];
+  });
 }
 
 /** Estimated tokens one message costs on the wire once replayed (spec §6.1).
@@ -282,8 +288,13 @@ export function replayHistory(rows: MessageRow[], ctx: ReplayContext | undefined
 export function estimateReplayTokens(
   row: MessageRow,
   pillsById: ReadonlyMap<string, PillRow>,
+  attachmentsByMessage?: ReadonlyMap<string, readonly AttachmentRow[]>,
 ): number {
-  if (row.role !== 'persona') return estimateTokens(flattenAnswerText(row.contentBlocks));
+  if (row.role !== 'persona') {
+    const text = estimateTokens(flattenAnswerText(row.contentBlocks));
+    if (row.role !== 'user') return text;
+    return text + estimateAttachmentTokens(attachmentsByMessage?.get(row.id) ?? []);
+  }
   return replayPersona(
     row,
     { pillsById, policy: PERMISSIVE },

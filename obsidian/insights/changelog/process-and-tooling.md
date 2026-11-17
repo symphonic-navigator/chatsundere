@@ -6,6 +6,25 @@
 
 ## Session log
 
+**2026-11-16 (evening) — **OAUTH HARDENING FORWARD-PORTED; LINES IN STEP; CI
+GREEN.** `master` now carries everything from `maintenance/0.3`, and both lines have the OPAQUE
+hook budget.
+- **#41** (OPAQUE hook budget, CI one package at a time) merged to `master`; back-ported to
+  `maintenance/0.3` as **#44**.
+- **#42:** forward port of #36 (MCP OAuth grant hardening) to `master`
+  (`cherry-pick -x -m 1 23cecb45`). One conflict, in [[insights/security-deferrals]]; both
+  entries kept, in date order.
+- **#43:** the `llm-unified` redaction test reset no registry and failed in full runs (order
+  dependent); it now resets both registries like the other built-in tests.
+- Kumbu² diaries: #36 and #44 in `0.3.6.md`; #41, #42 and #43 in `0.4.0.md`. The forward port
+  is in, so a 0.3.6 tag is no longer blocked by it.
+- Stale local branches and worktrees with deleted upstreams removed. `.claude/settings.local.json`
+  (git-ignored) allows `git push` and `gh pr create|merge`; Git hooks need
+  `eval "$(mise env -s bash)"` for `node`.
+
+**Next:** Chris device-tests 0.4.0 locally (ElevenLabs steps 1 and 3, TEAL v2, see below), with a
+fresh local bootstrap; then the 0.4.0 release per [[RELEASE-PROCESS]].
+
 **2026-11-11 — MAINTENANCE LINES ADOPTED; OAUTH HARDENING STAGED FOR
 0.3.6.** PR #37 (ADR 0039, [[RELEASE-PROCESS]]) is merged to `master` (`d586e797`) and
 PR #38 to `maintenance/0.3` (`5e8babe3`). `master` now prepares 0.4.0, and
