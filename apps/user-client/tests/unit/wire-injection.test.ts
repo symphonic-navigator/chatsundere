@@ -34,6 +34,13 @@ describe('buildUserWireContent', () => {
     ]);
   });
 
+  it('emits a shown-earlier marker for an image no longer attached', () => {
+    expect(buildUserWireContent('hi', [{ kind: 'image-earlier', fileName: 'a.png' }])).toEqual([
+      { type: 'text', text: 'hi' },
+      { type: 'text', text: '[Image: a.png — shown earlier, no longer attached]' },
+    ]);
+  });
+
   it('emits a filename-headed fenced block for a text attachment', () => {
     const parts: ResolvedPart[] = [{ kind: 'text', fileName: 'n.md', text: '# Title' }];
     expect(buildUserWireContent('read this', parts)).toEqual([

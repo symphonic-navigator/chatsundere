@@ -22,6 +22,7 @@ export async function resolveAttachmentParts(
   disposition: Disposition,
   substituteModel: string | null,
   deps: ResolveDeps,
+  opts: { missingBlob?: 'skip' | 'earlier' } = {},
 ): Promise<ResolvedPart[]> {
   const parts: ResolvedPart[] = [];
   for (const a of attachments) {
@@ -30,8 +31,13 @@ export async function resolveAttachmentParts(
       parts.push({ kind: 'text', fileName: a.fileName, text: a.text ?? '' });
       continue;
     }
-    // Corrupt or blob-less image row (blob was never stored or was cleared) — skip silently.
-    if (!a.blob) continue;
+    // Corrupt or blob-less image row (blob was never stored or was cleared): skipped silently
+    // unless the caller wants a marker so the model knows an image once existed.
+    if (!a.blob) {
+      if (opts.missingBlob === 'earlier')
+        parts.push({ kind: 'image-earlier', fileName: a.fileName });
+      continue;
+    }
     if (disposition === 'direct') {
       parts.push({
         kind: 'image-direct',
