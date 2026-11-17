@@ -2,6 +2,12 @@
 
 What changed for Chatsundere's users, per release. Written from the version diary at release time; the process is [`obsidian/RELEASE-PROCESS.md`](obsidian/RELEASE-PROCESS.md).
 
+## 0.4.1 — 2026-11-17
+
+### Fixed
+
+- **Your companion remembers what you attached earlier in a chat** (#50). Before, it only saw the current message's attachments, so a screenshot it had just described was gone in the next turn. Documents and saved artefacts now stay in full, and images from your last three image messages stay visible. Older images remain known by their description, or at least by their name, so your companion knows they were there. The context meter now counts attachments too.
+
 ## 0.4.0 — 2026-11-16
 
 ### New
