@@ -19,7 +19,7 @@ import type {
 import { getClientDataDb } from '../boot/client-data-db.js';
 import { flattenAnswerText, isContextMessage } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
-import { loadReplayPills } from '../lib/replay-pills.js';
+import { loadReplayAttachments, loadReplayPills } from '../lib/replay-pills.js';
 import { estimateTokens } from '../lib/token-estimator.js';
 import { estimateReplayTokens, toolTranscriptRefs } from '../lib/tool-replay.js';
 import {
@@ -126,7 +126,8 @@ export async function runCompaction(args: CompactionArgs): Promise<CompactionChe
   if (all.length === 0) return null;
 
   const pillsById = await loadReplayPills(all.map((m) => m.id));
-  const tokenOf = (m: MessageRow): number => estimateReplayTokens(m, pillsById);
+  const attachmentsById = await loadReplayAttachments(all.map((m) => m.id));
+  const tokenOf = (m: MessageRow): number => estimateReplayTokens(m, pillsById, attachmentsById);
 
   const window = resolveContextWindow(args.persona, args.windowOffering ?? args.offering);
   const tokens = all.map(tokenOf);

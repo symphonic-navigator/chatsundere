@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
-import type { MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
+import type { AttachmentRow, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
 import { listCheckpoints } from '../../compaction/repo.js';
 import { useToggleBookmark } from '../../data/chats.js';
 import { QK } from '../../data/queryKeys.js';
@@ -78,6 +78,8 @@ export interface ChatStreamProps {
    *  Wired only to real user messages (`role === 'user' && !seedRole`) —
    *  seed-primer turns and persona replies never carry an Edit control. */
   onEdit?: (message: MessageRow) => void;
+  /** Attachments per user message id, so the out-of-window marker counts them. */
+  attachmentsByMessage?: ReadonlyMap<string, readonly AttachmentRow[]>;
   /** Resolved context window (tokens) for the marker. Undefined = no marker. */
   contextBudget?: number;
   /** Estimated system-prompt tokens, reserved before fitting history. */
@@ -140,7 +142,7 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
   const outCount =
     p.contextBudget != null
       ? outOfWindowCount(
-          sorted.map((m) => estimateReplayTokens(m, pillMap)),
+          sorted.map((m) => estimateReplayTokens(m, pillMap, p.attachmentsByMessage)),
           p.systemTokens ?? 0,
           p.contextBudget,
         )
