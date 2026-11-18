@@ -217,8 +217,8 @@ describe('PersonaModelBehaviour — Knows the date and time', () => {
   it('is on by default for a non-roleplay persona, with the privacy line visible', async () => {
     state.persona = { ...BASE_PERSONA };
     renderPage('p-1');
-    const toggle = await screen.findByRole('button', { name: /^knows the date and time$/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = await screen.findByRole('switch', { name: /^knows the date and time$/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText(PRIVACY)).toBeInTheDocument();
     expect(screen.queryByText(TIMELESS)).toBeNull();
     fireEvent.click(toggle);
@@ -228,8 +228,8 @@ describe('PersonaModelBehaviour — Knows the date and time', () => {
   it('is off for a roleplay persona while unset, and says why', async () => {
     state.persona = { ...BASE_PERSONA, roleplay: true };
     renderPage('p-1');
-    const toggle = await screen.findByRole('button', { name: /^knows the date and time$/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    const toggle = await screen.findByRole('switch', { name: /^knows the date and time$/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText(PRIVACY)).toBeInTheDocument();
     expect(screen.getByText(TIMELESS)).toBeInTheDocument();
     fireEvent.click(toggle);
@@ -239,8 +239,15 @@ describe('PersonaModelBehaviour — Knows the date and time', () => {
   it('drops the roleplay note once the owner has chosen', async () => {
     state.persona = { ...BASE_PERSONA, roleplay: true, timeAwareness: true } as typeof BASE_PERSONA;
     renderPage('p-1');
-    const toggle = await screen.findByRole('button', { name: /^knows the date and time$/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = await screen.findByRole('switch', { name: /^knows the date and time$/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByText(TIMELESS)).toBeNull();
+  });
+  it('toggles from its visible row label too', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1');
+    await screen.findByRole('switch', { name: /^knows the date and time$/i });
+    fireEvent.click(screen.getByText(/^knows the date and time$/i));
+    await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ timeAwareness: false }));
   });
 });

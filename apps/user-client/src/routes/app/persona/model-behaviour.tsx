@@ -147,7 +147,9 @@ export function PersonaModelBehaviour(): JSX.Element {
         {/* 4. Knows the date and time ─────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Knows the date and time</div>
+            <label htmlFor="persona-knows-time-switch" className="block text-sm text-paper">
+              Knows the date and time
+            </label>
             <p className="text-[11px] text-paper-soft">
               Each of your messages carries its local date and time, so your companion knows the
               time of day and how long you were away. Your AI provider sees these times too.
@@ -158,21 +160,12 @@ export function PersonaModelBehaviour(): JSX.Element {
               </p>
             )}
           </div>
-          <button
-            type="button"
-            aria-label="Knows the date and time"
-            aria-pressed={knowsTime}
-            onClick={() => void patch({ timeAwareness: !knowsTime })}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              knowsTime ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-            }`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                knowsTime ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <Switch
+            id="persona-knows-time-switch"
+            ariaLabel="Knows the date and time"
+            checked={knowsTime}
+            onChange={(next) => void patch({ timeAwareness: next })}
+          />
         </div>
       </div>
     </PageScaffold>

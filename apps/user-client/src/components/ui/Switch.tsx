@@ -14,6 +14,8 @@ export interface SwitchProps {
   ariaLabel?: string;
   /** Id of an existing visible element that names the switch. */
   labelledBy?: string;
+  /** Ids of visible helper text that describes the switch, space-separated. */
+  describedBy?: string;
   disabled?: boolean;
   /** Tooltip, typically the reason the switch is disabled. */
   title?: string;
@@ -31,6 +33,7 @@ export function Switch({
   id,
   ariaLabel,
   labelledBy,
+  describedBy,
   disabled,
   title,
   className,
@@ -43,6 +46,7 @@ export function Switch({
       aria-checked={checked}
       aria-label={ariaLabel}
       aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
       disabled={disabled}
       title={title}
       onClick={() => {
