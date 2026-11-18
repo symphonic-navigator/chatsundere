@@ -31,6 +31,8 @@ export interface McpProbeResult {
   scope?: string;
   /** Set when the server answered with a redirect, which MCP requests never follow. */
   redirect?: true;
+  /** The HTTP status of a failed answer, when the server answered at all. */
+  httpStatus?: number;
 }
 
 /** A candidate (routing × URL variant) the connection test tries in order. */

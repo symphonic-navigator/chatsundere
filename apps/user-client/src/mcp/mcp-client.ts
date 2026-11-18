@@ -40,6 +40,17 @@ export class McpProxySessionError extends Error {
  * requests never follow one, so the user is told to enter the final link instead; the
  * redirect's target is never read.
  */
+/** A non-OK HTTP answer to an MCP request; `status` lets callers tell "nothing here" apart. */
+export class McpHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'McpHttpError';
+  }
+}
+
 export class McpRedirectError extends Error {
   constructor() {
     super(MCP_REDIRECT_DETAIL);
@@ -223,7 +234,7 @@ async function doInitialise(endpoint: McpEndpoint, signal?: AbortSignal): Promis
     const message = `MCP initialise failed: HTTP ${initResp.status}`;
     void initResp.body?.cancel().catch(() => undefined);
     if (auth) throw new McpAuthRequiredError(message, auth.status, auth.challenge);
-    throw new Error(message);
+    throw new McpHttpError(message, initResp.status);
   }
   const sessionId = initResp.headers.get('mcp-session-id');
   let protocolVersion = MCP_PROTOCOL_VERSION;
@@ -281,7 +292,7 @@ export async function mcpToolsList(
     const message = `MCP tools/list failed: HTTP ${resp.status}`;
     void resp.body?.cancel().catch(() => undefined);
     if (auth) throw new McpAuthRequiredError(message, auth.status, auth.challenge);
-    throw new Error(message);
+    throw new McpHttpError(message, resp.status);
   }
   const body = await readJsonRpcResponse(resp);
   if (body.error) throw new Error(body.error.message || 'tools/list error');

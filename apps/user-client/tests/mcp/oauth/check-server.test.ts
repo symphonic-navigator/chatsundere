@@ -14,7 +14,11 @@ vi.mock('../../../src/mcp/oauth/discovery.js', () => ({
   discoverOAuth: (...args: unknown[]) => discoverMock(...args),
 }));
 
-import { McpAuthRequiredError, McpRedirectError } from '../../../src/mcp/mcp-client.js';
+import {
+  McpAuthRequiredError,
+  McpHttpError,
+  McpRedirectError,
+} from '../../../src/mcp/mcp-client.js';
 import { checkServer } from '../../../src/mcp/oauth/check-server.js';
 import type { OAuthDiscovery } from '../../../src/mcp/oauth/discovery.js';
 import { OAuthError } from '../../../src/mcp/oauth/url.js';
@@ -216,11 +220,33 @@ describe('checkServer', () => {
 
   it('names the redirect when the bare link redirects and only its /mcp variant fails otherwise', async () => {
     toolsListMock.mockImplementation(async (e: McpEndpoint) => {
-      if (e.url.endsWith('/mcp')) throw new Error('MCP initialise failed: HTTP 404');
+      if (e.url.endsWith('/mcp')) throw new McpHttpError('MCP initialise failed: HTTP 404', 404);
       throw new McpRedirectError();
     });
     const r = await checkServer('https://moved.example', { hasProxy: true, allowDirect: false });
     expect(r).toMatchObject({ kind: 'unreachable', error: MCP_REDIRECT_CHECK, cause: 'redirect' });
+  });
+
+  it('does not let an incidental redirect of the bare link hide a failing /mcp (T4 review)', async () => {
+    toolsListMock.mockImplementation(async (e: McpEndpoint) => {
+      if (e.url.endsWith('/mcp')) throw new McpHttpError('MCP initialise failed: HTTP 500', 500);
+      throw new McpRedirectError();
+    });
+    const r = await checkServer('https://moved.example', { hasProxy: true, allowDirect: false });
+    expect(r).toMatchObject({ kind: 'unreachable', cause: 'probe' });
+    expect((r as { error: string }).error).toContain('HTTP 500');
+  });
+
+  it('probes a trailing-slash link as entered first (T4 review)', async () => {
+    toolsListMock.mockImplementation(async (e: McpEndpoint) => {
+      if (e.url === 'https://slash.example/mcp/') return TOOLS;
+      throw new McpRedirectError();
+    });
+    const r = await checkServer('https://slash.example/mcp/', {
+      hasProxy: true,
+      allowDirect: false,
+    });
+    expect(r).toMatchObject({ kind: 'open', endpoint: 'https://slash.example/mcp/' });
   });
 
   it('still reports an answering /mcp variant when the bare link redirects', async () => {

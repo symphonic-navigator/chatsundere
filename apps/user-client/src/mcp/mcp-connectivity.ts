@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { McpOAuthGrantRow, McpServerRow } from '../boot/client-data-db.js';
-import { McpAuthRequiredError, McpRedirectError, mcpToolsList } from './mcp-client.js';
+import {
+  McpAuthRequiredError,
+  McpHttpError,
+  McpRedirectError,
+  mcpToolsList,
+} from './mcp-client.js';
+import { MCP_REDIRECT_DETAIL } from './redirect-copy.js';
 import { tokenAllowedFor } from './resolve-active.js';
 import type {
   McpAuthResolved,
@@ -32,7 +38,39 @@ export function buildCandidates(
  */
 export function linkVariants(url: string): string[] {
   const trimmed = url.replace(/\/+$/, '');
-  return trimmed.endsWith('/mcp') ? [trimmed] : [trimmed, `${trimmed}/mcp`];
+  const variants = trimmed.endsWith('/mcp') ? [trimmed] : [trimmed, `${trimmed}/mcp`];
+  // A link entered with a trailing slash is probed as entered first: some servers answer
+  // only there (`/mcp` → 307 → `/mcp/`), and redirects are never followed (spec §6.3).
+  // The bare origin is skipped: `https://h/` and `https://h` are the same request.
+  return url !== trimmed && !isBareOrigin(trimmed) ? [url, ...variants] : variants;
+}
+
+function isBareOrigin(url: string): boolean {
+  try {
+    return new URL(url).pathname === '/';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a redirect is the answer to report: some candidate redirected, and every link
+ * variant ended in a redirect or a plain "nothing here" (404, 405). Per variant, an answer
+ * on one route outweighs a network failure on another (a direct request refused by CORS
+ * while the proxy saw the redirect). A bare link redirecting to a landing page must not
+ * hide a real failure of its `/mcp` variant (spec §6.3).
+ */
+export function redirectIsTheAnswer(
+  failures: readonly { url: string; result: McpProbeResult }[],
+): boolean {
+  if (!failures.some((f) => f.result.redirect)) return false;
+  const answered = (r: McpProbeResult) => r.redirect === true || r.httpStatus !== undefined;
+  const byUrl = new Map<string, McpProbeResult[]>();
+  for (const f of failures) byUrl.set(f.url, [...(byUrl.get(f.url) ?? []), f.result]);
+  return [...byUrl.values()].every((results) => {
+    const relevant = results.some(answered) ? results.filter(answered) : results;
+    return relevant.every((r) => r.redirect || r.httpStatus === 404 || r.httpStatus === 405);
+  });
 }
 
 function routingsFor(hasProxy: boolean, allowDirect: boolean): McpRouting[] {
@@ -57,6 +95,19 @@ export function candidatesFor(
   }));
 }
 
+// An auth answer proves that candidate is the server, so its error stands; otherwise a
+// redirect is reported only when it is the whole story (spec §6.3).
+function connectionError(
+  authAnswered: boolean,
+  failures: readonly { url: string; result: McpProbeResult }[],
+  lastError: string,
+  plainError: string | null,
+): string {
+  if (authAnswered) return lastError;
+  if (redirectIsTheAnswer(failures)) return MCP_REDIRECT_DETAIL;
+  return plainError ?? lastError;
+}
+
 /**
  * Run candidates in order, stop at the first success, or with `stopOnAuth` at the first
  * auth answer. Pure over `probe`.
@@ -68,14 +119,16 @@ export async function resolveConnection(
 ): Promise<McpConnectionResult> {
   let lastError = 'No candidates';
   let lastAuth: Pick<McpProbeResult, 'auth' | 'scope'> = {};
-  let redirectError: string | null = null;
+  let plainError: string | null = null;
+  const failures: { url: string; result: McpProbeResult }[] = [];
   for (const c of candidates) {
     const r = await probe(c);
     if (r.ok) {
       return { ok: true, routing: c.routing, resolvedEndpoint: c.url, tools: r.tools, error: null };
     }
     lastError = r.error ?? 'unknown';
-    if (r.redirect) redirectError = lastError;
+    failures.push({ url: c.url, result: r });
+    if (!r.redirect) plainError = lastError;
     if (r.auth) {
       lastAuth = { auth: r.auth, ...(r.scope ? { scope: r.scope } : {}) };
       // An auth answer proves the server is reachable here; trying the next routing would
@@ -90,7 +143,7 @@ export async function resolveConnection(
     tools: [],
     // A redirect is the actionable answer (enter the final link) unless a candidate answered
     // with an auth refusal, which proves that candidate is the server (spec §6.3).
-    error: redirectError !== null && !lastAuth.auth ? redirectError : lastError,
+    error: connectionError(lastAuth.auth !== undefined, failures, lastError, plainError),
     ...lastAuth,
   };
 }
@@ -133,6 +186,9 @@ export function liveProbe(
       }
       if (e instanceof McpRedirectError) {
         return { ok: false, tools: [], error: e.message, redirect: true };
+      }
+      if (e instanceof McpHttpError) {
+        return { ok: false, tools: [], error: e.message, httpStatus: e.status };
       }
       return { ok: false, tools: [], error: e instanceof Error ? e.message : String(e) };
     }

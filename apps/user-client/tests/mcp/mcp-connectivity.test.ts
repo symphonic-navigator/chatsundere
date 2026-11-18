@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { McpServerRow } from '../../src/boot/client-data-db.js';
-import { __resetMcpSessions } from '../../src/mcp/mcp-client.js';
+import { McpHttpError, __resetMcpSessions } from '../../src/mcp/mcp-client.js';
 import {
   buildCandidates,
+  linkVariants,
   liveProbe,
   resolveConnection,
   testMcpConnection,
@@ -176,6 +177,7 @@ describe('redirects (spec §6.3)', () => {
         ok: false,
         tools: [],
         error: 'MCP initialise failed: HTTP 404',
+        httpStatus: 404,
       },
     };
     const r = await resolveConnection(
@@ -231,5 +233,101 @@ describe('redirects (spec §6.3)', () => {
     expect(statusOf(row, { hasProxy: false, linked: false })).toBe(
       "✗ This server answered with a redirect, which Chatsundere doesn't follow. Enter its final link.",
     );
+  });
+});
+
+describe('trailing slash and incidental redirects (T4 review, 2026-11-18)', () => {
+  afterEach(() => {
+    __resetMcpSessions();
+    vi.restoreAllMocks();
+  });
+
+  it('probes a link with a trailing slash as entered first, so /mcp/ servers can be reached', () => {
+    expect(linkVariants('https://h.example/mcp/')).toEqual([
+      'https://h.example/mcp/',
+      'https://h.example/mcp',
+    ]);
+    expect(linkVariants('https://h.example/api/')).toEqual([
+      'https://h.example/api/',
+      'https://h.example/api',
+      'https://h.example/api/mcp',
+    ]);
+  });
+
+  it('does not probe the bare origin twice for a trailing slash', () => {
+    expect(linkVariants('https://h.example/')).toEqual([
+      'https://h.example',
+      'https://h.example/mcp',
+    ]);
+  });
+
+  it('liveProbe carries the HTTP status of a failed answer', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 500 }));
+    const r = await liveProbe(null)({ routing: 'direct', url: 'https://r.example/mcp' });
+    expect(r).toMatchObject({ ok: false, httpStatus: 500 });
+  });
+
+  it('an incidental redirect of the bare link does not hide a real failure of /mcp', async () => {
+    const results: Record<string, McpProbeResult> = {
+      'direct https://r.example': {
+        ok: false,
+        tools: [],
+        error: MCP_REDIRECT_DETAIL,
+        redirect: true,
+      },
+      'direct https://r.example/mcp': {
+        ok: false,
+        tools: [],
+        error: 'MCP initialise failed: HTTP 500',
+        httpStatus: 500,
+      },
+    };
+    const r = await resolveConnection(
+      buildCandidates('https://r.example', false, true),
+      async (c) => results[`${c.routing} ${c.url}`] as McpProbeResult,
+    );
+    expect(r.error).toBe('MCP initialise failed: HTTP 500');
+  });
+
+  it('nor a network failure of /mcp', async () => {
+    const results: Record<string, McpProbeResult> = {
+      'direct https://r.example': {
+        ok: false,
+        tools: [],
+        error: MCP_REDIRECT_DETAIL,
+        redirect: true,
+      },
+      'direct https://r.example/mcp': { ok: false, tools: [], error: 'Failed to fetch' },
+    };
+    const r = await resolveConnection(
+      buildCandidates('https://r.example', false, true),
+      async (c) => results[`${c.routing} ${c.url}`] as McpProbeResult,
+    );
+    expect(r.error).toBe('Failed to fetch');
+  });
+
+  it('McpHttpError keeps the plain message', () => {
+    expect(new McpHttpError('MCP tools/list failed: HTTP 404', 404).message).toBe(
+      'MCP tools/list failed: HTTP 404',
+    );
+  });
+});
+
+describe('redirectIsTheAnswer per link variant (T4 review, 2026-11-18)', () => {
+  it('lets a proxy redirect outweigh a direct network failure of the same link', async () => {
+    const results: Record<string, McpProbeResult> = {
+      'direct https://r.example/mcp': { ok: false, tools: [], error: 'Failed to fetch' },
+      'proxy https://r.example/mcp': {
+        ok: false,
+        tools: [],
+        error: MCP_REDIRECT_DETAIL,
+        redirect: true,
+      },
+    };
+    const r = await resolveConnection(
+      buildCandidates('https://r.example/mcp', true, true),
+      async (c) => results[`${c.routing} ${c.url}`] as McpProbeResult,
+    );
+    expect(r.error).toBe(MCP_REDIRECT_DETAIL);
   });
 });

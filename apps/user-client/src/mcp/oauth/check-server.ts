@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { buildCandidates, liveProbe } from '../mcp-connectivity.js';
+import { buildCandidates, liveProbe, redirectIsTheAnswer } from '../mcp-connectivity.js';
 import { MCP_REDIRECT_CHECK } from '../redirect-copy.js';
 import type { McpCandidate, McpProbeResult, McpRouting, McpToolDefinition } from '../types.js';
 import { type OAuthDiscovery, discoverOAuth } from './discovery.js';
@@ -82,13 +82,14 @@ export async function checkServer(
   );
   const probe = deps.probe ?? liveProbe(null);
   let lastError = '';
-  let redirected = false;
+  const failures: { url: string; result: McpProbeResult }[] = [];
   for (const c of candidates) {
     const r = await probe(c);
     if (r.ok) return { kind: 'open', route: c.routing, endpoint: c.url, tools: r.tools };
     if (!r.auth) {
-      lastError = r.error ?? lastError;
-      if (r.redirect) redirected = true;
+      failures.push({ url: c.url, result: r });
+      // The detail worth showing is a real failure's, never the redirect sentence.
+      if (!r.redirect) lastError = r.error ?? lastError;
       continue;
     }
     // An auth answer proves this candidate is the server; the others are not tried.
@@ -109,10 +110,9 @@ export async function checkServer(
       return { kind: 'unreachable', directOnly: false, error, cause: 'refused' };
     }
   }
-  // Any redirect, not only the last candidate's: the usual case is the bare link
-  // redirecting (a missing or extra `/`) while its `/mcp` variant is a plain 404, and the
-  // redirect is then the one answer the user can act on.
-  if (redirected) {
+  // The usual case is the bare link redirecting (a missing or extra `/`) while its `/mcp`
+  // variant is a plain 404: then the redirect is the one answer the user can act on.
+  if (redirectIsTheAnswer(failures)) {
     return { kind: 'unreachable', directOnly: false, error: MCP_REDIRECT_CHECK, cause: 'redirect' };
   }
   return { kind: 'unreachable', directOnly: !hasProxy, error: lastError, cause: 'probe' };
