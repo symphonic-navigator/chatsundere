@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { McpOAuthGrantRow, McpServerRow } from '../boot/client-data-db.js';
-import { McpAuthRequiredError, mcpToolsList } from './mcp-client.js';
+import { McpAuthRequiredError, McpRedirectError, mcpToolsList } from './mcp-client.js';
 import { tokenAllowedFor } from './resolve-active.js';
 import type {
   McpAuthResolved,
@@ -68,12 +68,14 @@ export async function resolveConnection(
 ): Promise<McpConnectionResult> {
   let lastError = 'No candidates';
   let lastAuth: Pick<McpProbeResult, 'auth' | 'scope'> = {};
+  let redirectError: string | null = null;
   for (const c of candidates) {
     const r = await probe(c);
     if (r.ok) {
       return { ok: true, routing: c.routing, resolvedEndpoint: c.url, tools: r.tools, error: null };
     }
     lastError = r.error ?? 'unknown';
+    if (r.redirect) redirectError = lastError;
     if (r.auth) {
       lastAuth = { auth: r.auth, ...(r.scope ? { scope: r.scope } : {}) };
       // An auth answer proves the server is reachable here; trying the next routing would
@@ -86,7 +88,9 @@ export async function resolveConnection(
     routing: null,
     resolvedEndpoint: null,
     tools: [],
-    error: lastError,
+    // A redirect is the actionable answer (enter the final link) unless a candidate answered
+    // with an auth refusal, which proves that candidate is the server (spec §6.3).
+    error: redirectError !== null && !lastAuth.auth ? redirectError : lastError,
     ...lastAuth,
   };
 }
@@ -126,6 +130,9 @@ export function liveProbe(
           auth: e.status === 401 ? 'required' : 'insufficient-scope',
           ...(scope ? { scope } : {}),
         };
+      }
+      if (e instanceof McpRedirectError) {
+        return { ok: false, tools: [], error: e.message, redirect: true };
       }
       return { ok: false, tools: [], error: e instanceof Error ? e.message : String(e) };
     }

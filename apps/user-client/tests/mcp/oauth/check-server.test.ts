@@ -14,10 +14,11 @@ vi.mock('../../../src/mcp/oauth/discovery.js', () => ({
   discoverOAuth: (...args: unknown[]) => discoverMock(...args),
 }));
 
-import { McpAuthRequiredError } from '../../../src/mcp/mcp-client.js';
+import { McpAuthRequiredError, McpRedirectError } from '../../../src/mcp/mcp-client.js';
 import { checkServer } from '../../../src/mcp/oauth/check-server.js';
 import type { OAuthDiscovery } from '../../../src/mcp/oauth/discovery.js';
 import { OAuthError } from '../../../src/mcp/oauth/url.js';
+import { MCP_REDIRECT_CHECK } from '../../../src/mcp/redirect-copy.js';
 import type { McpEndpoint } from '../../../src/mcp/types.js';
 
 const TOOLS = [{ name: 'search', description: '', inputSchema: {} }];
@@ -188,5 +189,52 @@ describe('checkServer', () => {
     });
     expect(r).toEqual({ kind: 'key', route: 'proxy', endpoint: 'http://192.168.1.5:8080/mcp' });
     expect(discoverMock).not.toHaveBeenCalled();
+  });
+
+  it('says a redirecting link redirects, with its own sentence and cause', async () => {
+    toolsListMock.mockRejectedValue(new McpRedirectError());
+    const r = await checkServer('https://moved.example/mcp', {
+      hasProxy: true,
+      allowDirect: false,
+    });
+    expect(r).toEqual({
+      kind: 'unreachable',
+      directOnly: false,
+      error: MCP_REDIRECT_CHECK,
+      cause: 'redirect',
+    });
+  });
+
+  it('names the redirect even without a proxy, rather than asking for a linked server', async () => {
+    toolsListMock.mockRejectedValue(new McpRedirectError());
+    const r = await checkServer('https://moved.example/mcp', {
+      hasProxy: false,
+      allowDirect: false,
+    });
+    expect(r).toMatchObject({ kind: 'unreachable', directOnly: false, cause: 'redirect' });
+  });
+
+  it('names the redirect when the bare link redirects and only its /mcp variant fails otherwise', async () => {
+    toolsListMock.mockImplementation(async (e: McpEndpoint) => {
+      if (e.url.endsWith('/mcp')) throw new Error('MCP initialise failed: HTTP 404');
+      throw new McpRedirectError();
+    });
+    const r = await checkServer('https://moved.example', { hasProxy: true, allowDirect: false });
+    expect(r).toMatchObject({ kind: 'unreachable', error: MCP_REDIRECT_CHECK, cause: 'redirect' });
+  });
+
+  it('still reports an answering /mcp variant when the bare link redirects', async () => {
+    toolsListMock.mockImplementation(async (e: McpEndpoint) => {
+      if (e.url.endsWith('/mcp')) return TOOLS;
+      throw new McpRedirectError();
+    });
+    const r = await checkServer('https://moved.example', { hasProxy: true, allowDirect: false });
+    expect(r).toMatchObject({ kind: 'open', endpoint: 'https://moved.example/mcp' });
+  });
+
+  it('a plain network failure keeps the probe cause', async () => {
+    toolsListMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const r = await checkServer('https://down.example/mcp', { hasProxy: true, allowDirect: false });
+    expect(r).toMatchObject({ kind: 'unreachable', cause: 'probe' });
   });
 });

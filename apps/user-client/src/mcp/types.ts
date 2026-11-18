@@ -29,6 +29,8 @@ export interface McpProbeResult {
   error: string | null;
   auth?: McpAuthSignal;
   scope?: string;
+  /** Set when the server answered with a redirect, which MCP requests never follow. */
+  redirect?: true;
 }
 
 /** A candidate (routing × URL variant) the connection test tries in order. */

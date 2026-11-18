@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, it, vi } from 'vitest';
-import { buildCandidates, resolveConnection } from '../../src/mcp/mcp-connectivity.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { McpServerRow } from '../../src/boot/client-data-db.js';
+import { __resetMcpSessions } from '../../src/mcp/mcp-client.js';
+import {
+  buildCandidates,
+  liveProbe,
+  resolveConnection,
+  testMcpConnection,
+} from '../../src/mcp/mcp-connectivity.js';
+import { MCP_REDIRECT_DETAIL } from '../../src/mcp/redirect-copy.js';
+import { statusOf } from '../../src/mcp/server-status.js';
 import type { McpCandidate, McpProbeResult } from '../../src/mcp/types.js';
 
 describe('buildCandidates', () => {
@@ -114,5 +123,113 @@ describe('resolveConnection with stopOnAuth', () => {
     const probe = vi.fn(refused);
     await resolveConnection(cs, probe);
     expect(probe).toHaveBeenCalledTimes(2);
+  });
+});
+
+/** What fetch resolves with when a `redirect: 'manual'` request met a 3xx. */
+const opaqueRedirect = (): Response => {
+  const r = new Response(null, { status: 200 });
+  Object.defineProperty(r, 'type', { value: 'opaqueredirect' });
+  return r;
+};
+
+describe('redirects (spec §6.3)', () => {
+  afterEach(() => {
+    __resetMcpSessions();
+    vi.restoreAllMocks();
+  });
+
+  it('liveProbe flags a redirect and carries the detail sentence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(opaqueRedirect());
+    const r = await liveProbe(null)({ routing: 'direct', url: 'https://r.example/mcp' });
+    expect(r).toEqual({ ok: false, tools: [], error: MCP_REDIRECT_DETAIL, redirect: true });
+  });
+
+  it('liveProbe does not flag a network failure as a redirect', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const r = await liveProbe(null)({ routing: 'direct', url: 'https://r.example/mcp' });
+    expect(r.ok).toBe(false);
+    expect(r.redirect).toBeUndefined();
+    expect(r.error).toBe('Failed to fetch');
+  });
+
+  it('testMcpConnection puts the detail sentence in error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(opaqueRedirect());
+    const r = await testMcpConnection({
+      url: 'https://r.example/mcp',
+      hasProxy: false,
+      allowDirect: true,
+      auth: null,
+    });
+    expect(r).toMatchObject({ ok: false, routing: null, error: MCP_REDIRECT_DETAIL });
+  });
+
+  it('a redirect outweighs a later plain failure, so the bare link redirecting is what is said', async () => {
+    const results: Record<string, McpProbeResult> = {
+      'direct https://r.example': {
+        ok: false,
+        tools: [],
+        error: MCP_REDIRECT_DETAIL,
+        redirect: true,
+      },
+      'direct https://r.example/mcp': {
+        ok: false,
+        tools: [],
+        error: 'MCP initialise failed: HTTP 404',
+      },
+    };
+    const r = await resolveConnection(
+      buildCandidates('https://r.example', false, true),
+      async (c) => results[`${c.routing} ${c.url}`] as McpProbeResult,
+    );
+    expect(r.error).toBe(MCP_REDIRECT_DETAIL);
+  });
+
+  it('an auth answer still outweighs a redirect: that candidate is the server', async () => {
+    const results: Record<string, McpProbeResult> = {
+      'direct https://r.example': {
+        ok: false,
+        tools: [],
+        error: MCP_REDIRECT_DETAIL,
+        redirect: true,
+      },
+      'direct https://r.example/mcp': {
+        ok: false,
+        tools: [],
+        error: 'MCP initialise failed: HTTP 401',
+        auth: 'required',
+      },
+    };
+    const r = await resolveConnection(
+      buildCandidates('https://r.example', false, true),
+      async (c) => results[`${c.routing} ${c.url}`] as McpProbeResult,
+    );
+    expect(r).toMatchObject({ error: 'MCP initialise failed: HTTP 401', auth: 'required' });
+  });
+
+  it('the status line reads the detail sentence from lastError', () => {
+    const row = {
+      id: 'k',
+      name: 'Open',
+      url: 'https://r.example/mcp',
+      prefix: 'open',
+      auth: null,
+      onByDefault: true,
+      autoRun: false,
+      allowDirect: true,
+      enabled: true,
+      routing: null,
+      resolvedEndpoint: null,
+      tools: [],
+      hiddenTools: [],
+      lastTestedAt: 1,
+      lastError: MCP_REDIRECT_DETAIL,
+      firstUseConsentFor: null,
+      createdAt: 1,
+      updatedAt: 1,
+    } as McpServerRow;
+    expect(statusOf(row, { hasProxy: false, linked: false })).toBe(
+      "✗ This server answered with a redirect, which Chatsundere doesn't follow. Enter its final link.",
+    );
   });
 });

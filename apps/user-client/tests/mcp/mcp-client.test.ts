@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { setProxyAuthSource } from '@chatsundere/llm-unified';
+import { ProxyRedirectError, setProxyAuthSource } from '@chatsundere/llm-unified';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MCP_PROTOCOL_VERSION,
   McpAuthRequiredError,
+  McpRedirectError,
   __resetMcpSessions,
   mcpToolsCall,
   mcpToolsList,
@@ -11,6 +12,7 @@ import {
 } from '../../src/mcp/mcp-client.js';
 import { candidatesFor, testMcpConnection } from '../../src/mcp/mcp-connectivity.js';
 import { type McpToolContext, contributeMcpTools } from '../../src/mcp/mcp-tools.js';
+import { MCP_REDIRECT_DETAIL } from '../../src/mcp/redirect-copy.js';
 import type { McpEndpoint } from '../../src/mcp/types.js';
 
 const directEndpoint: McpEndpoint = {
@@ -571,24 +573,85 @@ describe('fix round 1', () => {
     expect(f).toHaveBeenCalledTimes(2);
     expect(r?.meta).toEqual({ mcpAuth: { serverId: 'o', serverName: 'Kumbu', variant: 'dead' } });
   });
+});
 
-  it('a direct request carrying a credential refuses redirects', async () => {
-    const f = vi
+/** What fetch resolves with when a `redirect: 'manual'` request met a 3xx. */
+const opaqueRedirect = (): Response => {
+  const r = new Response(null, { status: 200 });
+  Object.defineProperty(r, 'type', { value: 'opaqueredirect' });
+  return r;
+};
+
+describe('redirects (spec §6.3)', () => {
+  afterEach(() => setProxyAuthSource(null));
+  const proxySource = () =>
+    setProxyAuthSource({
+      getUrl: () => 'https://proxy.example',
+      getToken: () => 'jwt',
+      refreshToken: async () => null,
+    });
+  const happy = () =>
+    vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(initOk())
       .mockResolvedValueOnce(new Response(null, { status: 202 }))
       .mockResolvedValueOnce(callOk());
+
+  it('a direct request carrying a credential uses redirect manual', async () => {
+    const f = happy();
     await mcpToolsCall(directEndpoint, 'search', {});
-    for (let i = 0; i < 3; i++) expect(reqAt(f, i).redirect).toBe('error');
+    for (let i = 0; i < 3; i++) expect(reqAt(f, i).redirect).toBe('manual');
   });
 
-  it('a direct request without a credential still follows redirects', async () => {
-    const f = vi
-      .spyOn(globalThis, 'fetch')
+  it('a direct request without a credential no longer follows redirects', async () => {
+    const f = happy();
+    await mcpToolsCall({ ...directEndpoint, auth: null }, 'search', {});
+    for (let i = 0; i < 3; i++) expect(reqAt(f, i).redirect).toBe('manual');
+  });
+
+  it('a proxied request uses redirect manual on every request', async () => {
+    proxySource();
+    const f = happy();
+    await mcpToolsCall(proxyEndpoint, 'search', {});
+    for (let i = 0; i < 3; i++) expect(reqAt(f, i).redirect).toBe('manual');
+  });
+
+  it('an opaque redirect on a direct initialise throws McpRedirectError with the detail sentence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(opaqueRedirect());
+    const err = await mcpToolsList({ ...directEndpoint, auth: null }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(McpRedirectError);
+    expect((err as Error).message).toBe(MCP_REDIRECT_DETAIL);
+  });
+
+  it('an opaque redirect on a direct tools/list throws McpRedirectError', async () => {
+    vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(initOk())
       .mockResolvedValueOnce(new Response(null, { status: 202 }))
-      .mockResolvedValueOnce(callOk());
-    await mcpToolsCall({ ...directEndpoint, auth: null }, 'search', {});
-    expect(reqAt(f, 0).redirect).toBe('follow');
+      .mockResolvedValueOnce(opaqueRedirect());
+    await expect(mcpToolsList(directEndpoint)).rejects.toBeInstanceOf(McpRedirectError);
+  });
+
+  it('an opaque redirect through the proxy throws McpRedirectError, not ProxyRedirectError', async () => {
+    proxySource();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(opaqueRedirect());
+    const err = await mcpToolsList(proxyEndpoint).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(McpRedirectError);
+    expect(err).not.toBeInstanceOf(ProxyRedirectError);
+    expect((err as Error).message).toBe(MCP_REDIRECT_DETAIL);
+  });
+
+  it('a network failure stays a TypeError, never a redirect error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const err = await mcpToolsList({ ...directEndpoint, auth: null }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TypeError);
+    expect(err).not.toBeInstanceOf(McpRedirectError);
+  });
+
+  it('a network failure through the proxy stays a TypeError too', async () => {
+    proxySource();
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const err = await mcpToolsList(proxyEndpoint).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TypeError);
+    expect(err).not.toBeInstanceOf(McpRedirectError);
   });
 });

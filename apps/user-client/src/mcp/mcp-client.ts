@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { ProxyRedirectError, getProxyAuthSource, isOpaqueRedirect } from '@chatsundere/llm-unified';
+import { getProxyAuthSource, isOpaqueRedirect } from '@chatsundere/llm-unified';
 import { isProxyUnauthorised } from './oauth/oauth-fetch.js';
 import { type ParsedChallenge, parseBearerChallenge } from './oauth/www-authenticate.js';
 import { MCP_PROTOCOL_VERSION } from './protocol.js';
+import { MCP_REDIRECT_DETAIL } from './redirect-copy.js';
 import type { McpEndpoint, McpToolDefinition } from './types.js';
 
 export { MCP_PROTOCOL_VERSION } from './protocol.js';
@@ -31,6 +32,18 @@ export class McpProxySessionError extends Error {
   constructor() {
     super('Your Chatsundere server session has expired. Unlock or sign in to Chatsundere again.');
     this.name = 'McpProxySessionError';
+  }
+}
+
+/**
+ * The MCP server (or, through the proxy, its upstream) answered with a redirect. MCP
+ * requests never follow one, so the user is told to enter the final link instead; the
+ * redirect's target is never read.
+ */
+export class McpRedirectError extends Error {
+  constructor() {
+    super(MCP_REDIRECT_DETAIL);
+    this.name = 'McpRedirectError';
   }
 }
 
@@ -83,9 +96,6 @@ function buildRequest(endpoint: McpEndpoint, body: unknown, session: McpSession 
   if (session) headers.set('MCP-Protocol-Version', session.protocolVersion);
 
   let url: string;
-  // A proxied request must never chase an upstream redirect off-proxy (spec §5), and a
-  // direct one carrying a credential must not hand it to wherever a redirect points.
-  let redirect: RequestInit['redirect'] = endpoint.auth ? 'error' : 'follow';
   if (endpoint.routing === 'direct') {
     url = endpoint.url;
   } else {
@@ -99,8 +109,12 @@ function buildRequest(endpoint: McpEndpoint, body: unknown, session: McpSession 
     headers.set('x-cors-proxy-target', target.origin);
     headers.set('x-cors-proxy-kind', 'mcp');
     url = joinUrl(proxyUrl, target.pathname + target.search);
-    redirect = 'manual';
   }
+  // Never followed, on either route, credential or not: a followed redirect would list,
+  // and later call, the tools of wherever it points while the user sees the link they
+  // entered. `manual` (not `error`) keeps a redirect distinguishable from a network
+  // failure without learning its target (add-mcp-connector spec §6.3).
+  const redirect: RequestInit['redirect'] = 'manual';
   // Signal is passed to fetch() rather than Request() to avoid cross-realm
   // AbortSignal instanceof checks that fail in jsdom and some bundler environments.
   return new Request(url, { method: 'POST', headers, body: JSON.stringify(body), redirect });
@@ -118,7 +132,7 @@ async function send(
 ): Promise<Response> {
   const init = opts.signal ? { signal: opts.signal } : undefined;
   let response = await fetch(build(), init);
-  if (!opts.proxied) return response;
+  if (!opts.proxied) return refuseRedirect(response);
   if (await isProxyUnauthorised(response)) {
     const token = await getProxyAuthSource()?.refreshToken();
     if (token !== null && token !== undefined) {
@@ -130,7 +144,12 @@ async function send(
       throw new McpProxySessionError();
     }
   }
-  if (isOpaqueRedirect(response)) throw new ProxyRedirectError();
+  return refuseRedirect(response);
+}
+
+/** Passes a response through, or throws `McpRedirectError` for an opaque redirect. */
+function refuseRedirect(response: Response): Response {
+  if (isOpaqueRedirect(response)) throw new McpRedirectError();
   return response;
 }
 

@@ -17,6 +17,8 @@ type Unreachable = Extract<CheckResult, { kind: 'unreachable' }>;
 /**
  * Says why a check failed. Only a failed probe gets the "Couldn't reach" sentence; a
  * linked device without its relay is told to wait, an unlinked one where linking helps.
+ * Every other cause (a refused sign-in, an unusable link, a redirect) carries its own
+ * whole sentence in `error`.
  */
 function FailureMessage(props: {
   failure: Unreachable;
