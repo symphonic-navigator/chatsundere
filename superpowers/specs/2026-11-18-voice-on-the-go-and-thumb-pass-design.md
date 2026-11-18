@@ -56,7 +56,7 @@ What a headless browser cannot show is whether an OS draws lock-screen controls.
 - **The key fact:** our playback runs through an `AudioContext` (`audio-sink.ts`: decode, `AudioBufferSourceNode` → filter chain → `AnalyserNode` → `ctx.destination`). Platforms attach their media controls to **media elements** (`<audio>`/`<video>`), not to Web Audio output. Chrome on Android shows its media notification for media-element playback; Safari on iOS shows "Now Playing" for media-element playback. Web Audio alone is, as far as I know, not enough on either. So setting `navigator.mediaSession` alone would most likely do nothing on a phone. This is my understanding from the platforms' documented behaviour, not something this container can prove; it is the first thing the manual verification checks.
 - **The plan therefore routes the sink's output through a media element** (the "bridge"): the analyser connects to a `MediaStreamAudioDestinationNode` instead of `ctx.destination`, and one hidden `<audio>` element per `AudioSink` plays that stream. The filter chain, the analyser (spectrum visualiser) and sample-accurate pause all stay as they are. If the bridge element refuses to play (autoplay policy, an old browser), the sink falls back to `ctx.destination` for its lifetime and Media Session is simply not offered: today's behaviour.
 
-Expected support, to be confirmed on device (Manual verification, steps 1–14):
+Expected support, to be confirmed on device (Manual verification, steps 1–15):
 
 | Platform | Wake lock | Lock-screen / headset controls |
 |---|---|---|
@@ -100,6 +100,16 @@ Expected support, to be confirmed on device (Manual verification, steps 1–14):
 - **The element's own events feed back.** If the OS pauses or plays the element itself (a default action the browser takes when no handler is set, or a race), its `pause`/`play` events become `voice.pause()`/`voice.resumeAudio()`, so the app's state and what the OS shows can never split.
 - **Priming and retry.** iOS and Chrome allow `play()` on a media element only from a user gesture or after one. The element is primed (a muted `play()`) on the first gesture in the chat: send, the mic, a Read button. If the bridge is still refused, that read falls back to `direct` without lock-screen controls, and **the next read tries again**; it never gives up for the rest of the chat, so whether controls appear does not depend on whether the first read of a session was manual or automatic.
 - `dispose()` stops and detaches the element.
+
+### The bridge is separable, with a decision rule
+
+The bridge is the one risky piece of this unit: it moves read-aloud, the most used voice path, onto a different output route. 0.5.0 has to carry users for a long time with bug fixes only, so a regression in how read-aloud *sounds* would cost more than lock-screen controls are worth. Therefore:
+
+1. **Separable by construction.** The wake lock (A1) and the whole of Part B depend on nothing in the bridge. The bridge (`AudioSink` route) and the Media Session wiring land in **their own commits**, after A1 and Part B. One constant, `READ_ALOUD_MEDIA_BRIDGE` in `lib/voice/audio-sink.ts`, switches the read-aloud sink back to `direct` everywhere; with it off, the Media Session hook registers nothing, because there would be no element for the OS to attach controls to. For the A/B check on one installed build, a test-only override (`localStorage` key `cs.readAloudBridge` = `on`/`off`, read once when the sink is created, wrapped in `try`/`catch`) beats the constant; it is not a user setting and appears nowhere in the UI.
+2. **A/B listening check on device** (Manual verification, step 15): bridge against direct, on Chris's Android phone and iPhone.
+3. **Decision rule.** If any point of that check fails on either platform and cannot be fixed with a small change, the bridge is **dropped for 0.5.0, everywhere**: the constant goes off, no user-agent switch, no per-platform branch. The release then ships the wake lock alone, and the lock-screen controls are recorded as a follow-up for after 0.5.0. The Media Session code stays in the tree behind the constant, so the follow-up starts from working code.
+
+**Echo cancellation, dictation and live-voice capture.** Both capture paths ask for `echoCancellation: true` (`lib/voice/dictation/capture.ts`). Live voice stays on `direct`, so the audio its echo canceller has to remove is the same output it removes today: unchanged by construction. Dictation stops read-aloud before it opens the microphone (`stopPlayback: voice.stop` in `chat-page.tsx`), so the bridge element is paused before capture begins and nothing plays during dictation: nothing to cancel. The remaining risk is the other direction: on iOS, opening the microphone switches the page's audio session to play-and-record, and a `MediaStream`-fed element played *after* that may be treated like call audio (earpiece, call volume). Hence the "read-aloud after live voice and after dictation in the same chat" points in step 15. Whether Chrome's echo canceller also references audio played through a media element versus `ctx.destination` does not matter here, because no capture runs while the bridge plays.
 
 ### Questions for Chris (Part A)
 
@@ -204,7 +214,7 @@ Screens that need content the sweep could not create (a chat with replies, histo
 - `.cockpit` and `.cockpit-unavailable`: bottom padding `calc(<current> + env(safe-area-inset-bottom, 0px))`.
 - `.voice-transport:has(~ .cockpit, ~ .cockpit-unavailable)`: bottom padding back to `0.6rem`, so the inset is added once, at the real bottom edge. `:has()` is in Safari 15.4+ and Chrome 105+; where it is missing the inset is doubled (cosmetic, never covering).
 - Live voice without the cockpit already ends with the live-voice bar; the build checks it carries the inset too.
-- **With the keyboard open.** Some iOS versions and standalone modes keep reporting a non-zero `safe-area-inset-bottom` while the software keyboard is up, which would put a ~34 px dead band between the composer and the keyboard. Step 17 checks this; if the band shows, the inset applies only while the visual viewport is not shrunk (a small `visualViewport` listener setting a class on the chat; the client does not track the keyboard today).
+- **With the keyboard open.** Some iOS versions and standalone modes keep reporting a non-zero `safe-area-inset-bottom` while the software keyboard is up, which would put a ~34 px dead band between the composer and the keyboard. Step 18 checks this; if the band shows, the inset applies only while the visual viewport is not shrunk (a small `visualViewport` listener setting a class on the chat; the client does not track the keyboard today).
 
 ### Question for Chris (Part B)
 
@@ -229,8 +239,8 @@ Neither unit changes anything sent to a provider: no system prompt, wire message
 - **Soft — a forgotten live-voice session keeps the screen lit with an open mic.** Taken as Q5 with her recommended ceiling.
 - **Soft — overlap was asserted, not measured.** The sweep gains an overlap check that blocks the squash; switch rows toggle from their label; breadcrumb width added (B design).
 - **Soft — one refused bridge disabled Media Session for the whole chat.** Now primed on the first gesture and retried on every read.
-- **Soft — taller sliders may change values while scrolling.** New check in step 15.
-- **Soft — keyboard open with the safe-area inset.** New check in step 17 and a fallback in B4.
+- **Soft — taller sliders may change values while scrolling.** New check in step 16.
+- **Soft — keyboard open with the safe-area inset.** New check in step 18 and a fallback in B4.
 - **Soft — the mic/send button broke the spec's own technique rule.** Named as a deliberate exception.
 
 Her view on the questions: agrees with the recommendations for Q1–Q4; Q3 as a fixed default with no setting (the remaining exposure, a non-adult persona's name and avatar on the lock screen, is Chris's taste and privacy call). Q5 is hers.
@@ -262,10 +272,19 @@ Devices: **A** = a real Android phone with Chrome (browser tab and installed PWA
 12. **(A)** In live voice, while the persona speaks, press the headset button and pull down the notification shade. *Pass:* no media entry in the shade; the persona's speech is not silenced (a headset press may do nothing).
 13. **(A, I)** With Q5 as recommended: enter live voice, put the phone down in a quiet room for 6 minutes. *Pass:* after about 5 minutes the screen dims and locks on its normal timeout.
 14. **(A, I)** Turn on auto-read, send a message and let the reply be read aloud without touching a Read button, then lock the phone. *Pass:* the same lock-screen entry as in step 5 (or, on iOS, the same outcome as step 8): controls do not depend on whether the read was started by hand.
+15. **(A, I) A/B listening check — the bridge's gate.** Switch between bridge (A) and direct (B) on the same installed build with the test override (see the decision-rule section); reload the chat after switching. Read the same long reply aloud in each and compare:
+    - **Volume** is the same, and the **media** volume control governs it (not the call/ringer volume).
+    - **Output route:** loudspeaker (never the earpiece), Bluetooth earbuds, wired headphones, and switching between them mid-read.
+    - **Timing:** no added delay you can hear between the sentence glow and the sound.
+    - **Pause and resume:** no clicks, pops or lost words.
+    - **Spectrum visualiser** moves the same.
+    - **After live voice** in the same chat (enter, talk, leave, then Read): volume, route and timing as above, and not routed like a call.
+    - **After dictation** in the same chat (dictate a note, then Read): as above.
+    *Pass:* A matches B on every point on both phones. *Any fail that cannot be fixed small:* the bridge is dropped for 0.5.0 (decision rule above), and steps 5–9, 12 and 14 are then skipped; steps 1–4, 10 (no entry at all) and 11 still apply.
 
 **Part B — thumbs**
 
-15. **(A or I)** With one thumb, tap each control from the "Measured before" tables: the show-key eye, every sheet's ×, "Remove", "Open server linking →", "Select", the tabs in History and Treasury, "Test & Save", "Test a model", "+ Add provider", "+ Add MCP server", the ⋯ on Knowledge and My Circle, the switches, the breadcrumbs, the header chips. *Pass:* each hits on the first try, including taps slightly off the visible glyph, and never triggers the neighbouring control. Then scroll Settings → Voice and the persona's Model behaviour page by dragging across the sliders. *Pass:* no value changes.
-16. **(A, I)** Pinch to zoom on the Entrance Hall, in a chat, and on an image in the lightbox. *Pass:* the page zooms and zooms back. Then tap into the composer and a Settings field. *Pass:* no automatic zoom on focus. Tap Skip several times fast. *Pass:* no double-tap zoom.
-17. **(I)** Open a chat with the cockpit open. *Pass:* the send row sits clearly above the home indicator. Start read-aloud so the voice bar shows above the cockpit. *Pass:* no extra gap between the voice bar and the cockpit, and the cockpit still clears the indicator. Tap into the composer. *Pass:* no extra gap between the composer and the keyboard.
-18. **(A, I)** Look at the screens touched (provider page, sheets, persona hub, Treasury, History, Settings, persona sub-pages). *Pass:* everything looks as before, except the standalone action buttons, now as tall as the other big buttons (per Q1).
+16. **(A or I)** With one thumb, tap each control from the "Measured before" tables: the show-key eye, every sheet's ×, "Remove", "Open server linking →", "Select", the tabs in History and Treasury, "Test & Save", "Test a model", "+ Add provider", "+ Add MCP server", the ⋯ on Knowledge and My Circle, the switches, the breadcrumbs, the header chips. *Pass:* each hits on the first try, including taps slightly off the visible glyph, and never triggers the neighbouring control. Then scroll Settings → Voice and the persona's Model behaviour page by dragging across the sliders. *Pass:* no value changes.
+17. **(A, I)** Pinch to zoom on the Entrance Hall, in a chat, and on an image in the lightbox. *Pass:* the page zooms and zooms back. Then tap into the composer and a Settings field. *Pass:* no automatic zoom on focus. Tap Skip several times fast. *Pass:* no double-tap zoom.
+18. **(I)** Open a chat with the cockpit open. *Pass:* the send row sits clearly above the home indicator. Start read-aloud so the voice bar shows above the cockpit. *Pass:* no extra gap between the voice bar and the cockpit, and the cockpit still clears the indicator. Tap into the composer. *Pass:* no extra gap between the composer and the keyboard.
+19. **(A, I)** Look at the screens touched (provider page, sheets, persona hub, Treasury, History, Settings, persona sub-pages). *Pass:* everything looks as before, except the standalone action buttons, now as tall as the other big buttons (per Q1).
