@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useState } from 'react';
 import { QK } from '../data/queryKeys.js';
+import { ProviderKeyLockedError } from '../data/send-errors.js';
 import { type MemoryActionError, classifyMemoryActionError } from '../memory/classify-error.js';
 import { releaseMemoryLock, tryAcquireMemoryLock } from '../memory/mutex.js';
 import { type MemoryRawResponse, runDreaming, runExtraction } from '../memory/pipeline.js';
@@ -14,6 +15,8 @@ import { queryClient } from './queryClient.js';
 export interface MemoryActionState {
   status: 'idle' | 'pending' | 'error';
   error?: MemoryActionError;
+  /** Set with `key-locked`: which provider's key to re-enter (id and display name only). */
+  lockedKey?: { templateId: string; providerName: string };
   /** Consolidation slices checkpointed before a failure (partial progress). */
   partialSlices?: number;
   /**
@@ -108,6 +111,10 @@ export function useMemoryActions(
         setState({
           status: 'error',
           error: classifyMemoryActionError(e),
+          lockedKey:
+            e instanceof ProviderKeyLockedError
+              ? { templateId: e.templateId, providerName: e.providerName }
+              : undefined,
           partialSlices: slices,
           response: lastResponse,
         });

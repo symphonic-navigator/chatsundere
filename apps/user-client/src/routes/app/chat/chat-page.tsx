@@ -21,6 +21,7 @@ import { InteractionMode } from '../../../components/chat/InteractionMode.js';
 import { LiveVoiceBar } from '../../../components/chat/LiveVoiceBar.js';
 import { PersonaGreeting } from '../../../components/chat/PersonaGreeting.js';
 import { SeedTemplatePicker } from '../../../components/chat/SeedTemplatePicker.js';
+import { SendBlockedNotice } from '../../../components/chat/SendBlockedNotice.js';
 import { StreamInterruptedFooter } from '../../../components/chat/StreamInterruptedFooter.js';
 import { VoiceTransport } from '../../../components/chat/VoiceTransport.js';
 import { DocumentPicker } from '../../../components/knowledge/DocumentPicker.js';
@@ -47,7 +48,13 @@ import {
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { QK } from '../../../data/queryKeys.js';
 import { useFilteredSeedTemplates } from '../../../data/seed-templates.js';
-import { useRegenerate, useSendMessage, useStartOpener } from '../../../data/send-message.js';
+import { type SendBlock, sendBlockNote, sendBlockOf } from '../../../data/send-errors.js';
+import {
+  assertPersonaKeyUsable,
+  useRegenerate,
+  useSendMessage,
+  useStartOpener,
+} from '../../../data/send-message.js';
 import { useDisplayName, useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { chatFontScaleValue } from '../../../lib/chat-font-scale.js';
 import { clearLazyDraft, loadLazyDraft } from '../../../lib/cockpit-draft.js';
@@ -374,6 +381,21 @@ export function ChatPage(): JSX.Element {
     resetStartOpener();
   }, [activeChatId, resetStartOpener]);
 
+  // A send stopped before anything went out (a key that can't be opened, no
+  // master key): `sendBlock` is the cockpit's note for a typed send,
+  // `streamBlock` the in-stream notice for regenerate and the interrupted-reply
+  // Retry, which also run in reading mode. Both belong to the chat they were
+  // raised in.
+  const [sendBlock, setSendBlock] = useState<SendBlock | null>(null);
+  const [streamBlock, setStreamBlock] = useState<SendBlock | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger
+  useEffect(() => {
+    setSendBlock(null);
+    setStreamBlock(null);
+  }, [activeChatId]);
+  const returnHere = `${location.pathname}${location.search}`;
+  const openerBlock = startOpener.isError ? sendBlockOf(startOpener.error) : null;
+
   // Opener trigger. On a real chat whose opener is still pending and which has
   // no messages and no live stream, fire the opener exactly once per mount
   // (keyed on chat id). The store keeps openerPending set on failure, so the
@@ -509,7 +531,12 @@ export function ChatPage(): JSX.Element {
 
   const onRegenerate = (): void => {
     if (!activeChatId) return;
-    void regenerate.mutateAsync({ chatId: activeChatId, reasoning });
+    setStreamBlock(null);
+    void regenerate.mutateAsync({ chatId: activeChatId, reasoning }).catch((e: unknown) => {
+      const block = sendBlockOf(e);
+      if (!block) throw e;
+      setStreamBlock(block);
+    });
   };
 
   const onConfirmCompact = async (): Promise<void> => {
@@ -628,12 +655,23 @@ export function ChatPage(): JSX.Element {
       return;
     }
     if (!effectivePersona) return;
-    const newChatId = await sendMessage.mutateAsync({
-      chatId: activeChatId,
-      personaId: effectivePersona.id,
-      text,
-      reasoning,
-    });
+    let newChatId: string;
+    try {
+      newChatId = await sendMessage.mutateAsync({
+        chatId: activeChatId,
+        personaId: effectivePersona.id,
+        text,
+        reasoning,
+      });
+    } catch (e) {
+      // A typed stop gets the cockpit note; the draft stays (it is cleared only
+      // below, after success). Any other error keeps its old path.
+      const block = sendBlockOf(e);
+      if (!block) throw e;
+      setSendBlock(block);
+      return;
+    }
+    setSendBlock(null);
     setDraft('');
     if (isLazy && personaIdFromQuery) clearLazyDraft(personaIdFromQuery);
     if (isLazy && newChatId && newChatId !== activeChatId) {
@@ -861,6 +899,15 @@ export function ChatPage(): JSX.Element {
               ? `${effectivePersona.name} couldn't compose the greeting`
               : undefined
           }
+          cause={openerBlock ? sendBlockNote(openerBlock, returnHere).message : undefined}
+          action={
+            openerBlock
+              ? (() => {
+                  const note = sendBlockNote(openerBlock, returnHere);
+                  return { label: note.actionLabel, to: note.to };
+                })()
+              : undefined
+          }
           onRetry={
             startOpener.isError && activeChatId
               ? () => {
@@ -960,6 +1007,13 @@ export function ChatPage(): JSX.Element {
             onRetry={async () => {
               // activeChatId is non-null whenever messages exist (chat-mode only).
               if (!activeChatId) return;
+              setStreamBlock(null);
+              // A typed stop shows the in-stream notice; anything else keeps its old path.
+              const stopIfBlocked = (e: unknown): void => {
+                const block = sendBlockOf(e);
+                if (!block) throw e;
+                setStreamBlock(block);
+              };
               const db = getClientDataDb();
               const allMsgs = await db.messages
                 .where('chatId')
@@ -978,7 +1032,18 @@ export function ChatPage(): JSX.Element {
                 // greeting was stopped/interrupted. Re-roll the greeting in
                 // place; useRegenerate's opener branch reuses the existing row
                 // (so do NOT delete it first).
-                await regenerate.mutateAsync({ chatId: activeChatId, reasoning });
+                await regenerate
+                  .mutateAsync({ chatId: activeChatId, reasoning })
+                  .catch(stopIfBlocked);
+                return;
+              }
+              // The deletes below are synced and would lose the user's message on
+              // every device if the send then could not go out: check the key and
+              // the master key first, and delete nothing when either fails.
+              try {
+                await assertPersonaKeyUsable(activeChatId);
+              } catch (e) {
+                stopIfBlocked(e);
                 return;
               }
               if (incomplete) await db.messages.delete(incomplete.id);
@@ -1000,12 +1065,14 @@ export function ChatPage(): JSX.Element {
                   },
                 });
                 await qc.invalidateQueries({ queryKey: ['chats', activeChatId] });
-                await sendMessage.mutateAsync({
-                  chatId: activeChatId,
-                  personaId: effectivePersona.id,
-                  text,
-                  reasoning,
-                });
+                await sendMessage
+                  .mutateAsync({
+                    chatId: activeChatId,
+                    personaId: effectivePersona.id,
+                    text,
+                    reasoning,
+                  })
+                  .catch(stopIfBlocked);
               } else {
                 await qc.invalidateQueries({ queryKey: ['chats', activeChatId] });
               }
@@ -1017,6 +1084,13 @@ export function ChatPage(): JSX.Element {
           />
         );
       })()}
+
+      {streamBlock && activeChatId ? (
+        <SendBlockedNotice
+          note={sendBlockNote(streamBlock, returnHere)}
+          onDismiss={() => setStreamBlock(null)}
+        />
+      ) : null}
 
       {/*
         BottomAffordance is the "open the cockpit" cue — always visible in
@@ -1228,6 +1302,8 @@ export function ChatPage(): JSX.Element {
           onRecheckVoice={voice.recheck}
           compactable={compactable}
           onCompact={() => setShowCompactConfirm(true)}
+          sendBlock={sendBlock ? sendBlockNote(sendBlock, returnHere) : null}
+          onDismissSendBlock={() => setSendBlock(null)}
         />
       ) : null}
 

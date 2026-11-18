@@ -58,6 +58,7 @@ import { addGeneratedImageArtefact } from './artefacts.js';
 import { providerApiKeySlot } from './providers.js';
 import { type ChoreCallBundle, resolveBackgroundBundle } from './resolve-background-offering.js';
 import { buildImageSlot } from './resolve-image-slot.js';
+import { MasterKeyUnavailableError, openProviderKey } from './send-errors.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // lastCompanionText — lorebook companion-scan helper
@@ -123,20 +124,44 @@ interface PersonaContext {
   images: ImageToolContext;
 }
 
+/** The session's master key, or a typed {@link MasterKeyUnavailableError}. */
+function requireMasterKey(who: string): MasterKey {
+  const mk = useSessionStore.getState().mk;
+  if (!mk) throw new MasterKeyUnavailableError(who);
+  return mk;
+}
+
 /**
  * Resolve the persona → provider → ProviderDefinition → Offering chain for a
  * chat and decrypt its api-key via the master key. Proxy routing, when needed,
  * is late-bound at request-build time from the registered proxy auth source.
  * Shared by useSendMessage and useRegenerate. `who` prefixes error messages so
- * the originating hook is identifiable.
+ * the originating hook is identifiable. A missing master key throws
+ * {@link MasterKeyUnavailableError}, a key that can't be opened
+ * `ProviderKeyLockedError`; every other failure keeps its plain `Error`.
  */
 async function resolvePersonaContext(chatId: string, who: string): Promise<PersonaContext> {
   const db = getClientDataDb();
-  const mk = useSessionStore.getState().mk;
-  if (!mk) throw new Error(`${who}: master key unavailable — re-authenticate`);
+  const mk = requireMasterKey(who);
 
   const chat = await db.chats.get(chatId);
   if (!chat) throw new Error(`${who}: chat not found`);
+
+  return resolvePersonaContextForChat(chat, who, mk);
+}
+
+/**
+ * {@link resolvePersonaContext} for a chat row already in hand — also one not
+ * yet stored, so a lazy chat's first send resolves (and can fail) before its
+ * row is created.
+ */
+async function resolvePersonaContextForChat(
+  chat: ChatRow,
+  who: string,
+  mk: MasterKey,
+): Promise<PersonaContext> {
+  const db = getClientDataDb();
+  const chatId = chat.id;
 
   const persona = await db.personas.get(chat.personaId);
   if (!persona) throw new Error(`${who}: persona not found`);
@@ -156,7 +181,11 @@ async function resolvePersonaContext(chatId: string, who: string): Promise<Perso
       `${who}: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
     );
 
-  const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
+  const apiKey = await openProviderKey(
+    { ...provider, apiKey: provider.apiKey },
+    providerDef.displayName,
+    mk,
+  );
 
   const providerConfig: ProviderConfig = {
     baseUrl: providerDef.baseUrl,
@@ -519,6 +548,31 @@ export function useStartOpener() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// assertPersonaKeyUsable — pre-flight before a destructive retry
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check, without building any request, that the chat's persona key can be
+ * opened: throws {@link MasterKeyUnavailableError} or `ProviderKeyLockedError`
+ * exactly where the send would. Run before a retry deletes anything, so a send
+ * that can't go out loses no message. Any other gap (a chat, persona or provider
+ * that is missing) is left to the send itself, which reports it as before.
+ */
+export async function assertPersonaKeyUsable(chatId: string): Promise<void> {
+  const db = getClientDataDb();
+  const mk = requireMasterKey('assertPersonaKeyUsable');
+  const chat = await db.chats.get(chatId);
+  if (!chat) return;
+  const persona = await db.personas.get(chat.personaId);
+  if (!persona) return;
+  const provider = await db.providers.get(persona.providerId);
+  if (!provider || provider.apiKey === null) return;
+  const providerDef = getProvider(provider.templateId);
+  if (!providerDef) return;
+  await openProviderKey({ ...provider, apiKey: provider.apiKey }, providerDef.displayName, mk);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // useSendMessage
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -534,11 +588,13 @@ export interface SendMessageArgs {
 /**
  * Orchestrate the full send-flow:
  *
- * 1. For lazy chats (`chatId === null`): create the ChatRow, snapshotting the
- *    persona's mindspace at the time of first send.
- * 2. Resolve the persona → provider → ProviderDefinition → Offering chain.
- * 3. Decrypt the api-key via `openSecret` using the master key held in
- *    `useSessionStore`.
+ * 1. Resolve the persona → provider → ProviderDefinition → Offering chain and
+ *    decrypt the api-key using the master key held in `useSessionStore`
+ *    (typed errors: `MasterKeyUnavailableError`, `ProviderKeyLockedError`).
+ * 2. For lazy chats (`chatId === null`): only then create the ChatRow,
+ *    snapshotting the persona's mindspace at the time of first send, so a send
+ *    that fails in step 1 leaves no empty chat.
+ * 3. Read the prior messages for the wire (after the row exists, as before).
  * 4. Delegate to `useStreamManagerStore.start(...)` for the actual streaming.
  * 5. Return the `chatId` (useful for the lazy-chat navigation redirect).
  *
@@ -552,11 +608,13 @@ export function useSendMessage() {
   return useMutation({
     mutationFn: async (args: SendMessageArgs): Promise<string> => {
       const db = getClientDataDb();
-      const mk = useSessionStore.getState().mk;
-      if (!mk) throw new Error('useSendMessage: master key unavailable — re-authenticate');
+      const mk = requireMasterKey('useSendMessage');
 
       // ── Step 1: Lazy-chat creation ──────────────────────────────────────
+      // The persona chain (and its key) is resolved BEFORE the row is stored,
+      // so a send that can't go out leaves no empty chat behind.
       let chatId = args.chatId;
+      let ctx: PersonaContext;
       if (!chatId) {
         const persona = await db.personas.get(args.personaId);
         if (!persona) throw new Error('useSendMessage: persona not found');
@@ -566,30 +624,35 @@ export function useSendMessage() {
         if (!resolvedMindspaceId) throw new Error('useSendMessage: no mindspace to snapshot');
 
         const newChatId = uuidv7();
-        chatId = newChatId;
         const now = Date.now();
+        const newChat: ChatRow = {
+          id: newChatId,
+          personaId: args.personaId,
+          title: null,
+          resolvedMindspaceId,
+          createdAt: now,
+          updatedAt: now,
+          lastMessageAt: now,
+          bookmarkedMessageCount: 0,
+          draftInput: '',
+          libraryIds: [],
+        };
+
+        // ── Resolve persona chain + decrypt secrets ───────────────────────
+        ctx = await resolvePersonaContextForChat({ ...newChat }, 'useSendMessage', mk);
+
+        chatId = newChatId;
         const linked = isLinkedForSync();
         // Class-1 creation-insert (lazy chat): chat row + outbox row are atomic.
         await db.transaction('rw', [db.chats, db.syncOutbox], async (tx) => {
-          await db.chats.add({
-            id: newChatId,
-            personaId: args.personaId,
-            title: null,
-            resolvedMindspaceId,
-            createdAt: now,
-            updatedAt: now,
-            lastMessageAt: now,
-            bookmarkedMessageCount: 0,
-            draftInput: '',
-            libraryIds: [],
-          });
+          await db.chats.add({ ...newChat });
           if (linked) enqueueSync(tx, 'chats', newChatId, 'upsert');
         });
         if (linked) scheduleClass1Sync();
+      } else {
+        // ── Resolve persona chain + decrypt secrets ───────────────────────
+        ctx = await resolvePersonaContext(chatId, 'useSendMessage');
       }
-
-      // ── Resolve persona chain + decrypt secrets ─────────────────────────
-      const ctx = await resolvePersonaContext(chatId, 'useSendMessage');
 
       // ── Fetch prior messages and hand off to stream-manager ─────────────
       const priorMessages = await db.messages.where('chatId').equals(chatId).sortBy('createdAt');

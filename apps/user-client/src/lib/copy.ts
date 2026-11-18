@@ -57,6 +57,10 @@ export const copy = {
     unlockCta: 'Unlock',
     unlockingCta: 'Unlocking…',
     forgotLink: 'Forgot passphrase?',
+    /** Under the disabled passkey button when the app asked for the passphrase. */
+    needsPassphrase: 'This needs your passphrase',
+    /** Back to where the passphrase was asked for, while a session is still active. */
+    notNow: 'Not now',
     errors: {
       // Spec §5.6: single non-specific message — no distinction between
       // wrong passphrase and missing account to prevent information leakage.

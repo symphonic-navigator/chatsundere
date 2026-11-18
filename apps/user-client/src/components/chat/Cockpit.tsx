@@ -21,6 +21,7 @@ import { useFilteredLibraries } from '../../data/knowledge.js';
 import { useCurrentBody, useUncommittedCount } from '../../data/memory.js';
 import { usePersona } from '../../data/personas.js';
 import { QK } from '../../data/queryKeys.js';
+import type { SendBlockNote } from '../../data/send-errors.js';
 import { useSettings, useUpdateSettings } from '../../data/settings.js';
 import { computeEffectiveLibraries } from '../../knowledge/effective-libraries.js';
 import type { ChatFontScale } from '../../lib/chat-font-scale.js';
@@ -85,6 +86,10 @@ interface Props {
   /** Re-run the TTS resolution — the retry behind a `voices-unavailable`
    *  Live voice or Auto-read tap. */
   onRecheckVoice?: () => Promise<void>;
+  /** Why the last send stopped before anything went out (a key that can't be
+   *  opened, no master key), with its one way out; null when nothing is wrong. */
+  sendBlock?: SendBlockNote | null;
+  onDismissSendBlock?: () => void;
 }
 
 /**
@@ -136,6 +141,7 @@ export function Cockpit(p: Props): JSX.Element {
   const location = useLocation();
   // Every repair link leaving the chat carries the chat as `?return=`.
   const returnTo = `${location.pathname}${location.search}`;
+  const sendBlock = p.sendBlock ?? null;
   const { isPinned } = useEffectiveChatMode();
   const isDesktop = useIsDesktop();
   const togglePin = useCurrentChatStore((s) => s.togglePin);
@@ -675,6 +681,17 @@ export function Cockpit(p: Props): JSX.Element {
         <div className="cockpit-dictation-note" role="alert">
           The microphone could not be started. Check it is connected and not in use, then tap the
           mic to try again.
+        </div>
+      ) : null}
+      {sendBlock ? (
+        <div className="cockpit-artefact-note" role="alert">
+          <span>{sendBlock.message}</span>
+          <button type="button" onClick={() => navigate(sendBlock.to)}>
+            {sendBlock.actionLabel}
+          </button>
+          <button type="button" onClick={p.onDismissSendBlock}>
+            Dismiss
+          </button>
         </div>
       ) : null}
       {artefactExpertError ? (

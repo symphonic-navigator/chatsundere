@@ -11,6 +11,7 @@ const {
   upsertMock,
   proxyGate,
   providerRows,
+  session,
 } = vi.hoisted(() => {
   // Mutated in beforeEach / per-test to drive the proxy-gate branches.
   const proxyGate: { enabled: boolean; reason: string | null; tooltip: string | null } = {
@@ -34,6 +35,8 @@ const {
     openSecretMock: vi.fn(async (..._a: unknown[]) => 'decrypted-secret'),
     upsertMock: vi.fn(async (row: { id?: string }) => ({ id: row.id ?? 'r-new' })),
     proxyGate,
+    // The session's master key; null drives the "needs your passphrase" branch.
+    session: { mk: {} as unknown },
     // Rows seen by both useProviders and the fresh DB read in onSave.
     providerRows: [] as Array<{ id: string; templateId: string; apiKey: unknown }>,
   };
@@ -54,8 +57,7 @@ vi.mock('@chatsundere/llm-unified', () => ({
 }));
 
 vi.mock('@chatsundere/ui-shared', () => ({
-  useSessionStore: (selector: (s: { mk: CryptoKey }) => unknown) =>
-    selector({ mk: {} as CryptoKey }),
+  useSessionStore: (selector: (s: { mk: unknown }) => unknown) => selector({ mk: session.mk }),
   // The Class-2 sync gate (Remove provider) reads the link status directly;
   // local-only means the affordance is never gated for these provider tests.
   useAccountLinkStore: (selector: (s: { linkStatus: string }) => unknown) =>
@@ -96,7 +98,7 @@ vi.mock('../../src/lib/secrets.js', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SettingsProviderPage } from '../../src/routes/app/settings/provider.js';
 
@@ -115,6 +117,7 @@ function wrapAt(path: string) {
           <Route path="/app/settings/providers/:templateId" element={<SettingsProviderPage />} />
           <Route path="/app/settings/providers" element={<div>providers list</div>} />
           <Route path="/app/chat/:id" element={<ChatMarker />} />
+          <Route path="/login" element={<LoginMarker />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -126,6 +129,12 @@ function wrapAt(path: string) {
 function ChatMarker(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   return <div data-testid="chat-marker">{id}</div>;
+}
+
+/** Marker for the login page that records where it was asked to return to. */
+function LoginMarker(): JSX.Element {
+  const { search } = useLocation();
+  return <div data-testid="login-marker" data-search={search} />;
 }
 
 describe('SettingsProviderPage', () => {
@@ -153,6 +162,7 @@ describe('SettingsProviderPage', () => {
     proxyGate.reason = null;
     proxyGate.tooltip = null;
     providerRows.length = 0;
+    session.mk = {};
   });
 
   // ── Existing render tests ─────────────────────────────────────────────────
@@ -367,5 +377,52 @@ describe('SettingsProviderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
     expect(await screen.findByText(/chutes didn't accept this key/i)).toBeInTheDocument();
     expect(screen.getByTestId('sheet-status-detail').textContent).toBe('401 · Unauthorized');
+  });
+
+  it('maps an OperationError (a key sealed under an earlier master key) to "paste it again"', async () => {
+    providerRows.push({ id: 'chutes', templateId: 'chutes', apiKey: { blob: 'old' } });
+    openSecretMock.mockRejectedValue(
+      Object.assign(new Error('The operation failed for an operation-specific reason'), {
+        name: 'OperationError',
+      }),
+    );
+    wrapAt('/app/settings/providers/chutes');
+    fireEvent.click(await screen.findByRole('button', { name: /test & save/i }));
+    expect(
+      await screen.findByText(/the saved key can't be opened any more\. paste it again\./i),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('sheet-status').textContent).not.toContain('operation-specific');
+  });
+
+  it('without a master key, asks for the passphrase and links to the login page', async () => {
+    session.mk = null;
+    wrapAt('/app/settings/providers/chutes?return=%2Fapp%2Fchat%2Fc1');
+    fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
+    fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
+    expect(
+      await screen.findByText(
+        /chatsundere needs your passphrase once more before it can use your keys\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(probeProviderMock).not.toHaveBeenCalled();
+    // The "dirty" guard asks before leaving with an unsaved key; clear it first.
+    fireEvent.change(screen.getByPlaceholderText('sk-...'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('link', { name: 'Enter passphrase' }));
+    const login = await screen.findByTestId('login-marker');
+    expect(login.dataset.search).toBe(
+      `?return=${encodeURIComponent('/app/settings/providers/chutes?return=%2Fapp%2Fchat%2Fc1')}&need=passphrase`,
+    );
+  });
+
+  it('focuses the key field when opened with ?focus=key (from Re-enter key)', async () => {
+    wrapAt('/app/settings/providers/chutes?return=%2Fapp%2Fchat%2Fc1&focus=key');
+    const input = await screen.findByPlaceholderText('sk-...');
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it('leaves focus alone without ?focus=key', async () => {
+    wrapAt('/app/settings/providers/chutes');
+    const input = await screen.findByPlaceholderText('sk-...');
+    expect(document.activeElement).not.toBe(input);
   });
 });

@@ -2,9 +2,8 @@
 import { getOffering, getProvider } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { type PersonaRow, getClientDataDb } from '../boot/client-data-db.js';
-import { providerApiKeySlot } from '../data/providers.js';
 import { resolveBackgroundBundle } from '../data/resolve-background-offering.js';
-import { openSecret } from '../lib/secrets.js';
+import { MasterKeyUnavailableError, openProviderKey } from '../data/send-errors.js';
 import type { MemoryConsolidationArgs, MemoryPipelineArgs } from './pipeline.js';
 
 type Db = ReturnType<typeof getClientDataDb>;
@@ -33,7 +32,12 @@ async function resolvePersonaBundle(
       `${who}: no offering for "${persona.modelId}" on provider "${provider.templateId}" — re-pick the model`,
     );
 
-  const apiKey = await openSecret(provider.apiKey, mk, providerApiKeySlot(provider));
+  // A key that can't be opened is ProviderKeyLockedError (code `key-locked`), never a retryable failure.
+  const apiKey = await openProviderKey(
+    { ...provider, apiKey: provider.apiKey },
+    providerDef.displayName,
+    mk,
+  );
 
   // Manual memory runs on the persona's background helper when set + reachable,
   // else the persona's own model (silent fallback — same as the auto pipeline).
@@ -63,7 +67,7 @@ export async function resolveMemoryPipelineArgs(
 ): Promise<MemoryPipelineArgs> {
   const db = getClientDataDb();
   const mk = useSessionStore.getState().mk;
-  if (!mk) throw new Error(`${who}: master key unavailable — re-authenticate`);
+  if (!mk) throw new MasterKeyUnavailableError(who);
 
   const chat = await db.chats.get(chatId);
   if (!chat) throw new Error(`${who}: chat not found`);
@@ -85,7 +89,7 @@ export async function resolveMemoryConsolidationArgs(
 ): Promise<MemoryConsolidationArgs> {
   const db = getClientDataDb();
   const mk = useSessionStore.getState().mk;
-  if (!mk) throw new Error(`${who}: master key unavailable — re-authenticate`);
+  if (!mk) throw new MasterKeyUnavailableError(who);
 
   const persona = await db.personas.get(personaId);
   if (!persona) throw new Error(`${who}: persona not found`);

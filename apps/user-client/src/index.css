@@ -3565,6 +3565,7 @@ h1 {
 
 .cockpit-artefact-note {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 0.5rem;
   font-size: 11px;
@@ -4598,6 +4599,7 @@ h1 {
 }
 .memory-page-action-error {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   width: 100%;
