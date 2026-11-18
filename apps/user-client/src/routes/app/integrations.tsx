@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Badge } from '../../components/ui/Badge.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
 import { useHelp } from '../../content/help/use-help.js';
@@ -10,6 +10,7 @@ import { usePendingSignIns } from '../../data/mcp-oauth-pending.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { QK } from '../../data/queryKeys.js';
 import { queryClient } from '../../lib/queryClient.js';
+import { safeReturnPath } from '../../lib/safe-return.js';
 import { useServerGate } from '../../lib/server-gate.js';
 import { waitingScreenPath } from '../../mcp/oauth/sign-in-session.js';
 import { finishOrphanedSignIns, sweepExpiredSignIns } from '../../mcp/oauth/sign-in.js';
@@ -27,6 +28,7 @@ const iconClass =
 export function Integrations(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
+  const [search] = useSearchParams();
   const servers = useMcpServers();
   const grants = useMcpOAuthGrants();
   const pending = usePendingSignIns();
@@ -50,7 +52,11 @@ export function Integrations(): JSX.Element {
   );
 
   return (
-    <PageScaffold crumbs={[{ label: 'My Integrations' }]} back="/app" onHelp={onHelp}>
+    <PageScaffold
+      crumbs={[{ label: 'My Integrations' }]}
+      back={safeReturnPath(search.get('return'), '/app')}
+      onHelp={onHelp}
+    >
       {helpOverlay}
       <div className="flex flex-col gap-3 px-4 pb-8 pt-2">
         <p className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.04] p-3 text-[11px] text-paper-soft">

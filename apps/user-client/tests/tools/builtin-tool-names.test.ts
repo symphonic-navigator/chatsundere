@@ -56,6 +56,7 @@ describe('BUILTIN_TOOL_NAMES', () => {
         persistImage: vi.fn(),
       },
       { personaId: 'p1' },
+      { userTexts: () => [], servers: async () => [] },
     );
     // The web integration resolves catalogue offerings first; its tools come
     // from buildWebTools, which it calls with the resolved backends.
@@ -67,5 +68,9 @@ describe('BUILTIN_TOOL_NAMES', () => {
     });
     const produced = new Set([...registryTools, ...webTools].map((t) => t.name));
     expect(produced).toEqual(new Set(BUILTIN_TOOL_NAMES));
+  });
+
+  it('includes add_mcp_connector', () => {
+    expect(BUILTIN_TOOL_NAMES.has('add_mcp_connector')).toBe(true);
   });
 });

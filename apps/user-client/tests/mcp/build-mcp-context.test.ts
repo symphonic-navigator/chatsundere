@@ -152,6 +152,19 @@ describe('buildMcpContext route resolution', () => {
     expect(r).toEqual({ ok: false, error: 'HTTP 503' });
     expect(persistMcpRoute).not.toHaveBeenCalled();
   });
+
+  it('carries the redirect flag of a probe that ended in a redirect', async () => {
+    vi.mocked(testMcpConnection).mockResolvedValue({
+      ok: false,
+      routing: null,
+      resolvedEndpoint: null,
+      tools: [],
+      error: 'redirected',
+      redirect: true,
+    });
+    const r = await build()?.resolveRoute('s', null);
+    expect(r).toEqual({ ok: false, error: 'redirected', redirect: true });
+  });
 });
 
 const oauthGrant = (over: Partial<McpOAuthGrantRow> = {}): McpOAuthGrantRow => ({

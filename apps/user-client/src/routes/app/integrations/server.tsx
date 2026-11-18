@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import type { McpServerRow } from '../../../boot/client-data-db.js';
-import { CheckServerStep } from '../../../components/mcp/CheckServerStep.js';
+import { CheckServerStep, SuggestedInChat } from '../../../components/mcp/CheckServerStep.js';
 import { OAuthConnectionPanel } from '../../../components/mcp/OAuthConnectionPanel.js';
 import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
 import { SignInSettings } from '../../../components/mcp/SignInSettings.js';
 import {
   SAVING_LATER,
+  addedToast,
+  connectedToast,
   hostOf,
   reconnectCheckMessage,
 } from '../../../components/mcp/sign-in-copy.js';
@@ -33,6 +35,7 @@ import {
   useMcpServers,
   useUpsertMcpServer,
 } from '../../../data/mcp-servers.js';
+import { readReturnTo, withReturn } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { useAppNav } from '../../../lib/use-app-nav.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
@@ -40,7 +43,11 @@ import { type CheckResult, checkServer } from '../../../mcp/oauth/check-server.j
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
 import type { OAuthDiscovery } from '../../../mcp/oauth/discovery.js';
 import { createSignInDeps, waitingScreenPath } from '../../../mcp/oauth/sign-in-session.js';
-import { type ServerDraft, removeGrant } from '../../../mcp/oauth/sign-in.js';
+import {
+  type ServerDraft,
+  finishOrphanedSignIns,
+  removeGrant,
+} from '../../../mcp/oauth/sign-in.js';
 import { statusOf } from '../../../mcp/server-status.js';
 import { sanitiseToolName } from '../../../mcp/tool-naming.js';
 import type {
@@ -51,6 +58,7 @@ import type {
 import { toastStore } from '../../../state/toast.store.js';
 import { SyncOfflineError } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { normaliseConnectorLink } from '../../../tools/connector-link.js';
 
 type AuthScheme = 'none' | 'bearer' | 'header';
 type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
@@ -58,7 +66,11 @@ type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
 /** `statusOf`'s line for an OAuth row that needs a server this account has not linked. */
 const NEEDS_LINKED_SERVER = '○ Needs a linked Chatsundere server';
 
-const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as const;
+/** My Integrations, where the flow's exits go when there is no chat to return to. */
+export const INTEGRATIONS_LIST = '/app/integrations';
+/** The root crumb of every page under My Integrations. */
+export const INTEGRATIONS_CRUMB = { label: 'My Integrations', to: INTEGRATIONS_LIST } as const;
+
 const inputClass =
   'w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none';
 
@@ -70,14 +82,16 @@ const inputClass =
  */
 export function IntegrationServerPage(): JSX.Element {
   const { serverId } = useParams();
+  const [search] = useSearchParams();
+  const returnTo = readReturnTo(search);
   const servers = useMcpServers();
   const { onHelp, helpOverlay } = useHelp('integrations');
 
   if (serverId && !servers.data) {
     return (
       <PageScaffold
-        crumbs={[CRUMB_ROOT, { label: 'Loading…' }]}
-        back="/app/integrations"
+        crumbs={[INTEGRATIONS_CRUMB, { label: 'Loading…' }]}
+        back={returnTo ?? INTEGRATIONS_LIST}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -91,8 +105,8 @@ export function IntegrationServerPage(): JSX.Element {
   if (serverId && !existing) {
     return (
       <PageScaffold
-        crumbs={[CRUMB_ROOT, { label: 'Unknown' }]}
-        back="/app/integrations"
+        crumbs={[INTEGRATIONS_CRUMB, { label: 'Unknown' }]}
+        back={returnTo ?? INTEGRATIONS_LIST}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -103,8 +117,8 @@ export function IntegrationServerPage(): JSX.Element {
     );
   }
 
-  if (existing) return <IntegrationServerForm existing={existing} />;
-  return <AddServer rows={servers.data ?? []} />;
+  if (existing) return <IntegrationServerForm existing={existing} returnTo={returnTo} />;
+  return <AddServer rows={servers.data ?? []} returnTo={returnTo} />;
 }
 
 /** Seed of the manual form, from a check result or a typed link. */
@@ -118,7 +132,34 @@ type FormSeed = {
   /** An open server keeps its auth fields behind a visible *Add a key*. */
   authBehindButton?: boolean;
   dirty?: boolean;
+  /** Starting name; after a link proposed in the chat, its host. */
+  name?: string;
+  /** Starting *On by default*; ticked after a link proposed in the chat. */
+  onByDefault?: boolean;
+  /** The host of a link proposed in the chat, named above the form. */
+  suggestedHost?: string;
 };
+
+/** A link the connector card handed over in navigation state, re-validated (spec §5.2). */
+type FromChat = { url: string; host: string };
+
+function readProposedLink(state: unknown): FromChat | null {
+  const s = state as { useKeyFor?: unknown; proposedLink?: unknown } | null;
+  // *Use a key instead* and the card are different callers; the key wins.
+  if (typeof s?.useKeyFor === 'string' || typeof s?.proposedLink !== 'string') return null;
+  const checked = normaliseConnectorLink(s.proposedLink);
+  // `URL.host` keeps a port, as "Checking <host>…" does: one host notion on every screen.
+  return checked.ok ? { url: checked.url, host: new URL(checked.url).host } : null;
+}
+
+/** The host of a link as typed in the form, or null while it does not parse. */
+function hostOfLink(link: string): string | null {
+  try {
+    return new URL(link.trim()).host;
+  } catch {
+    return null;
+  }
+}
 
 type AddPhase =
   | { kind: 'check' }
@@ -135,7 +176,13 @@ type AddPhase =
  * *Add server* (spec §9 "Connect"): the link and *Check server* first; the result
  * decides what follows. *Enter details manually* reveals today's whole form.
  */
-function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
+function AddServer({
+  rows,
+  returnTo,
+}: {
+  rows: McpServerRow[];
+  returnTo: string | null;
+}): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
   const nav = useAppNav();
@@ -149,9 +196,24 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
       ? { kind: 'form', seed: { url: keyFor, authScheme: 'bearer' } }
       : { kind: 'check' },
   );
-  const [link, setLink] = useState('');
+  // Kept here, not in history: the state is consumed below, and an edit of the link drops it.
+  const [fromChat, setFromChat] = useState<FromChat | null>(() => readProposedLink(location.state));
+  const [link, setLink] = useState(fromChat?.url ?? '');
 
-  if (phase.kind === 'form') return <IntegrationServerForm seed={phase.seed} />;
+  // Consumed at once, so a reload or Back/Forward into this entry never re-runs the check.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on arrival only.
+  useEffect(() => {
+    const proposed = (location.state as { proposedLink?: unknown } | null)?.proposedLink;
+    if (proposed !== undefined && typeof keyFor !== 'string') {
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+  }, []);
+
+  if (phase.kind === 'form') return <IntegrationServerForm seed={phase.seed} returnTo={returnTo} />;
+
+  // The form that follows a proposal starts named after the host, and on by default (§5.3).
+  const proposalSeed = (): Partial<FormSeed> =>
+    fromChat ? { name: fromChat.host, onByDefault: true, suggestedHost: fromChat.host } : {};
 
   function onResult(result: Exclude<CheckResult, { kind: 'unreachable' }>, checked: string) {
     setLink(checked);
@@ -159,11 +221,15 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
     if (result.kind === 'sign-in') {
       setPhase({ kind: 'sign-in', check: result });
     } else if (result.kind === 'key') {
-      setPhase({ kind: 'form', seed: { url: result.endpoint, authScheme: 'bearer', allowDirect } });
+      setPhase({
+        kind: 'form',
+        seed: { url: result.endpoint, authScheme: 'bearer', allowDirect, ...proposalSeed() },
+      });
     } else {
       setPhase({
         kind: 'form',
         seed: {
+          ...proposalSeed(),
           url: result.endpoint,
           allowDirect,
           routing: result.route,
@@ -184,20 +250,41 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
           test: (row) => testOAuthConnection(row, hasProxy),
         });
       } catch {
-        // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
+        // The grant exists; finishOrphanedSignIns saves the row from the draft. My
+        // Integrations runs it on load, but the chat does not, so a return retries here.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        nav.returnTo('/app/integrations');
+        if (returnTo) {
+          void finishOrphanedSignIns().catch(() => undefined);
+          nav.returnTo(returnTo);
+        } else {
+          nav.returnTo(INTEGRATIONS_LIST);
+        }
         return;
       }
     }
-    // The add form is done: the server's page takes its place in the history.
-    navigate(`/app/integrations/${serverId}`, { replace: true });
+    if (!returnTo) {
+      // The add form is done: the server's page takes its place in the history.
+      navigate(`/app/integrations/${serverId}`, { replace: true });
+      return;
+    }
+    const row = rows.find((r) => r.id === serverId);
+    const name = row?.name ?? draft?.name ?? hostOfLink(link);
+    const onByDefault = row?.onByDefault ?? draft?.onByDefault ?? false;
+    if (name) {
+      toastStore.show({
+        message: connectedToast(name, onByDefault),
+        tone: 'success',
+        durationMs: 6_000,
+      });
+    }
+    // Unwind to the chat the card was tapped in, rather than stacking a second one.
+    nav.returnTo(returnTo);
   }
 
   return (
     <PageScaffold
-      crumbs={[CRUMB_ROOT, { label: 'Add MCP server' }]}
-      back="/app/integrations"
+      crumbs={[INTEGRATIONS_CRUMB, { label: 'Add MCP server' }]}
+      back={returnTo ?? INTEGRATIONS_LIST}
       onHelp={onHelp}
     >
       {helpOverlay}
@@ -206,8 +293,14 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
           <CheckServerStep
             hasProxy={hasProxy}
             initialLink={link}
+            autoCheck={fromChat !== null}
+            suggestedHost={fromChat?.host ?? null}
+            returnTo={returnTo}
+            onLinkEdited={() => setFromChat(null)}
             onResult={onResult}
-            onManual={(typed) => setPhase({ kind: 'form', seed: { url: typed } })}
+            onManual={(typed) =>
+              setPhase({ kind: 'form', seed: { url: typed, ...proposalSeed() } })
+            }
           />
         ) : null}
         {phase.kind === 'sign-in' ? (
@@ -215,6 +308,7 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
             check={phase.check}
             rows={rows}
             initial={phase.draft}
+            suggestedHost={fromChat?.host ?? null}
             onNext={(draft) =>
               setPhase({
                 kind: 'flow',
@@ -224,9 +318,17 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
               })
             }
             onUseKey={() =>
-              setPhase({ kind: 'form', seed: { url: phase.check.endpoint, authScheme: 'bearer' } })
+              setPhase({
+                kind: 'form',
+                seed: { url: phase.check.endpoint, authScheme: 'bearer', ...proposalSeed() },
+              })
             }
-            onOpenExisting={(id) => navigate(`/app/integrations/${id}`)}
+            onOpenExisting={(id) =>
+              // As *Link a server*: with a return, ‹ there reaches the chat (review S-A).
+              navigate(withReturn(`/app/integrations/${id}`, returnTo), {
+                replace: Boolean(returnTo),
+              })
+            }
           />
         ) : null}
         {phase.kind === 'flow' ? (
@@ -236,7 +338,10 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
             mode="page"
             onConnected={(r) => onConnected(r.serverId, r.draft)}
             onUseKey={() =>
-              setPhase({ kind: 'form', seed: { url: phase.draft.url, authScheme: 'bearer' } })
+              setPhase({
+                kind: 'form',
+                seed: { url: phase.draft.url, authScheme: 'bearer', ...proposalSeed() },
+              })
             }
             onClose={() => setPhase(phase.back)}
           />
@@ -250,9 +355,12 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
 function IntegrationServerForm({
   existing,
   seed,
+  returnTo,
 }: {
   existing?: McpServerRow;
   seed?: FormSeed;
+  /** Where every exit goes when the page was opened from a chat (spec §5.5). */
+  returnTo: string | null;
 }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
@@ -264,8 +372,10 @@ function IntegrationServerForm({
   // An OAuth row has no secret here; its grant is its own synced row (spec §4.2).
   const isOAuth = existing?.auth?.scheme === 'oauth';
 
-  const [name, setName] = useState(existing?.name ?? '');
+  const [name, setName] = useState(existing?.name ?? seed?.name ?? '');
   const [url, setUrl] = useState(existing?.url ?? seed?.url ?? '');
+  // Once the link no longer points at the suggested host, the line goes for good.
+  const [suggestionKept, setSuggestionKept] = useState(true);
   const [prefix, setPrefix] = useState(existing?.prefix ?? '');
   const [prefixEdited, setPrefixEdited] = useState(existing != null);
   const [authScheme, setAuthScheme] = useState<AuthScheme>(
@@ -278,7 +388,9 @@ function IntegrationServerForm({
     existing?.auth?.scheme === 'header' ? existing.auth.headerName : '',
   );
   const [keyInput, setKeyInput] = useState('');
-  const [onByDefault, setOnByDefault] = useState(existing?.onByDefault ?? false);
+  const [onByDefault, setOnByDefault] = useState(
+    existing?.onByDefault ?? seed?.onByDefault ?? false,
+  );
   const [autoRun, setAutoRun] = useState(existing?.autoRun ?? false);
   const [allowDirect, setAllowDirect] = useState(
     existing?.allowDirect ?? seed?.allowDirect ?? false,
@@ -330,7 +442,7 @@ function IntegrationServerForm({
   const offerLinking = !linked && oauthStatus === NEEDS_LINKED_SERVER;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
-  const back = () => nav.returnTo('/app/integrations');
+  const back = () => nav.returnTo(returnTo ?? INTEGRATIONS_LIST);
 
   function buildAuth(key: string | null): McpAuthResolved | null {
     if (!key) return null;
@@ -501,8 +613,17 @@ function IntegrationServerForm({
       };
       await upsert.mutateAsync(row);
       setDirty(false);
-      // Save leaves the way ‹ does; Remove (below) goes up to the list.
-      nav.back('/app/integrations');
+      if (returnTo && !existing) {
+        toastStore.show({
+          message: addedToast(name, onByDefault),
+          tone: 'success',
+          durationMs: 6_000,
+        });
+      }
+      // Save leaves the way ‹ does, or to the chat it came from; Remove goes to that chat
+      // too, else up to the list.
+      if (returnTo) nav.returnTo(returnTo);
+      else nav.back(INTEGRATIONS_LIST);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -575,7 +696,11 @@ function IntegrationServerForm({
     const detail = `/app/integrations/${existing.id}`;
     return (
       <PageScaffold
-        crumbs={[CRUMB_ROOT, { label: existing.name, to: detail }, { label: 'Sign in again' }]}
+        crumbs={[
+          INTEGRATIONS_CRUMB,
+          { label: existing.name, to: detail },
+          { label: 'Sign in again' },
+        ]}
         back={detail}
         // The flow shares the detail page's route, so going "there" means leaving the flow;
         // an opened sign-in stays pending, as the flow's own Back keeps it.
@@ -603,8 +728,8 @@ function IntegrationServerForm({
 
   return (
     <PageScaffold
-      crumbs={[CRUMB_ROOT, { label: existing ? existing.name : 'Add MCP server' }]}
-      back="/app/integrations"
+      crumbs={[INTEGRATIONS_CRUMB, { label: existing ? existing.name : 'Add MCP server' }]}
+      back={returnTo ?? INTEGRATIONS_LIST}
       onHelp={onHelp}
       dirty={dirty}
     >
@@ -619,8 +744,13 @@ function IntegrationServerForm({
             starting={reconnect.kind === 'checking'}
             startError={reconnectError}
             onSignInAgain={() => void onSignInAgain()}
-            onReturnToSignIn={() => pendingHere && navigate(waitingScreenPath(pendingHere.state))}
+            onReturnToSignIn={() =>
+              pendingHere && navigate(withReturn(waitingScreenPath(pendingHere.state), returnTo))
+            }
           />
+        ) : null}
+        {seed?.suggestedHost && !existing && suggestionKept ? (
+          <SuggestedInChat host={seed.suggestedHost} />
         ) : null}
         {existing && offerLinking ? (
           <Button
@@ -628,7 +758,10 @@ function IntegrationServerForm({
             className="self-start"
             onClick={() =>
               navigate(
-                `/app/account/server-linking?return=${encodeURIComponent(`/app/integrations/${existing.id}`)}`,
+                withReturn(
+                  '/app/account/server-linking',
+                  withReturn(`/app/integrations/${existing.id}`, returnTo),
+                ),
               )
             }
           >
@@ -673,6 +806,7 @@ function IntegrationServerForm({
             aria-describedby={isOAuth ? 'mcp-url-reason' : undefined}
             onChange={(e) => {
               setUrl(e.target.value);
+              if (hostOfLink(e.target.value) !== seed?.suggestedHost) setSuggestionKept(false);
               setDirty(true);
               clearTestResult();
               setTools([]);

@@ -12,6 +12,21 @@ export type SignInFailure = { title: string; body: string; actions: OutcomeActio
 /** Shown when a sign-in succeeded but saving the server has to wait for the list load. */
 export const SAVING_LATER = 'Connected. Saving will finish shortly.';
 
+const READY_NEXT_MESSAGE = 'Its tools are ready on your next message.';
+
+/**
+ * Shown on the chat after a server from it was connected (OAuth). The second sentence
+ * only holds for a server that is on by default, so it is left out otherwise.
+ */
+export function connectedToast(name: string, onByDefault: boolean): string {
+  return onByDefault ? `${name} is connected. ${READY_NEXT_MESSAGE}` : `${name} is connected.`;
+}
+
+/** Shown on the chat after a key or open server from it was saved; see {@link connectedToast}. */
+export function addedToast(name: string, onByDefault: boolean): string {
+  return onByDefault ? `${name} is added. ${READY_NEXT_MESSAGE}` : `${name} is added.`;
+}
+
 /** Shown for a pasted code that is malformed or belongs to another sign-in. */
 export const CODE_NOT_OURS = "This code doesn't belong to this sign-in.";
 /** Shown when finishing needs the key and the app is locked. */

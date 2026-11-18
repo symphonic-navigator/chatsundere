@@ -83,6 +83,7 @@ import { loadMemoryContext } from '../memory/repo.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
+import { connectorUserTexts } from '../tools/connector-user-texts.js';
 import {
   dispatch as dispatchTool,
   resolveActiveTools,
@@ -1010,6 +1011,11 @@ async function runIntoDraft(
             void queryClient.invalidateQueries({ queryKey: QK.memory(args.persona.id) }),
         }
       : null;
+  // Regenerating a seed reply replays the template's user turn, which the user never wrote.
+  const currentIsSeed =
+    toolsActive && userMessageId !== null
+      ? (await db.messages.get(userMessageId))?.kind === 'seed'
+      : false;
   const activeTools = toolsActive
     ? resolveActiveTools(
         integrationCtx,
@@ -1018,6 +1024,11 @@ async function runIntoDraft(
         args.mcp ?? null,
         args.images ?? null,
         memoryCtx,
+        {
+          userTexts: () =>
+            connectorUserTexts(args.priorMessages, { text: args.userText, seed: currentIsSeed }),
+          servers: () => getClientDataDb().mcpServers.orderBy('createdAt').toArray(),
+        },
       )
     : [];
   const activeToolDefs = toolDefs(activeTools);

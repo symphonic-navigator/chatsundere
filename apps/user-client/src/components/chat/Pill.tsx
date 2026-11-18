@@ -4,8 +4,10 @@ import type { PillRow } from '../../boot/client-data-db.js';
 import { toolDisplayName } from '../../lib/tool-display-name.js';
 import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
 import { McpAuthNotice } from '../mcp/McpAuthNotice.js';
+import { McpRedirectNotice, readMcpRedirectNotice } from '../mcp/McpRedirectNotice.js';
 import { ArtefactPill } from './ArtefactPill.js';
 import { CondensationSlot, hasVisibleSummary } from './CondensationSlot.js';
+import { ConnectorPill } from './ConnectorPill.js';
 import { ExpertPill } from './ExpertPill.js';
 import { ImagePill } from './ImagePill.js';
 import { VisionPill } from './VisionPill.js';
@@ -36,6 +38,8 @@ interface PillPayloadShape {
   phase?: string;
   /** Set by a failed MCP OAuth call; holds names only, never a token. */
   mcpAuth?: McpAuthNoticePayload;
+  /** Set by an MCP call whose server answered with a redirect; unchecked until read. */
+  mcpRedirect?: unknown;
 }
 
 function labelFor(row: PillRow): string {
@@ -69,7 +73,19 @@ function codeOf(p: PillPayloadShape | undefined): string | null {
   }
 }
 
-export function Pill({ row }: { row: PillRow }): JSX.Element {
+/**
+ * One pill of a message. `chatId` and `personaId` are where the message is rendered;
+ * only the connector card reads them.
+ */
+export function Pill({
+  row,
+  chatId,
+  personaId,
+}: {
+  row: PillRow;
+  chatId?: string | null;
+  personaId?: string | null;
+}): JSX.Element {
   const [expanded, setExpanded] = useState(false);
 
   const toolName = (row.payload as { name?: string } | undefined)?.name;
@@ -80,6 +96,11 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
       toolName === 'inspect_artefact')
   ) {
     return <ArtefactPill row={row} />;
+  }
+
+  if (row.kind === 'tool-call' && toolName === 'add_mcp_connector') {
+    // A block of its own, like the image pill; it renders nothing for a refusal without a card.
+    return <ConnectorPill row={row} chatId={chatId} personaId={personaId} />;
   }
 
   if (
@@ -124,6 +145,8 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
     (row.kind === 'tool-call' && (!!codeOf(payload) || !!payload?.result || !!payload?.error)) ||
     (isLore && (payload?.entries?.length ?? 0) > 0);
   const code = codeOf(payload);
+  const redirectNotice =
+    row.kind === 'tool-call' ? readMcpRedirectNotice(payload?.mcpRedirect) : null;
 
   return (
     <span className="pill-wrap">
@@ -143,6 +166,7 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
         <output className="pill-notice">Renewing access…</output>
       )}
       {payload?.mcpAuth && <McpAuthNotice notice={payload.mcpAuth} />}
+      {redirectNotice && <McpRedirectNotice notice={redirectNotice} />}
       {expandable && expanded && (
         <span className="pill-detail">
           {isLore ? (

@@ -4,6 +4,7 @@ import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-
 import { candidatesFor } from '../../src/mcp/mcp-connectivity.js';
 import {
   canResolveOnFirstUse,
+  isOnForPersona,
   resolveActiveServers,
   tokenAllowedFor,
   usableRoute,
@@ -212,5 +213,23 @@ describe('canResolveOnFirstUse for OAuth rows', () => {
     });
     expect(canResolveOnFirstUse(keyRow, true)).toBe(false);
     expect(canResolveOnFirstUse(keyRow, false)).toBe(false);
+  });
+});
+
+describe('isOnForPersona', () => {
+  it('is off for a disabled row whatever the override', () => {
+    expect(isOnForPersona(base({ enabled: false }), { s: 'on' })).toBe(false);
+  });
+  it('follows the override when there is one', () => {
+    expect(isOnForPersona(base({ onByDefault: true }), { s: 'off' })).toBe(false);
+    expect(isOnForPersona(base({ onByDefault: false }), { s: 'on' })).toBe(true);
+  });
+  it('falls back to onByDefault without an override', () => {
+    expect(isOnForPersona(base({ onByDefault: true }), {})).toBe(true);
+    expect(isOnForPersona(base({ onByDefault: false }), { other: 'on' })).toBe(false);
+  });
+  it('ignores an override value that is neither on nor off', () => {
+    const junk = { s: 'maybe' } as unknown as Record<string, 'on' | 'off'>;
+    expect(isOnForPersona(base({ onByDefault: false }), junk)).toBe(false);
   });
 });

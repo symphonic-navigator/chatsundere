@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { buildCandidates, liveProbe } from '../mcp-connectivity.js';
+import { buildCandidates, liveProbe, redirectIsTheAnswer } from '../mcp-connectivity.js';
+import { MCP_REDIRECT_CHECK } from '../redirect-copy.js';
 import type { McpCandidate, McpProbeResult, McpRouting, McpToolDefinition } from '../types.js';
 import { type OAuthDiscovery, discoverOAuth } from './discovery.js';
 import { type OAuthFetch, createOAuthFetch } from './oauth-fetch.js';
@@ -26,9 +27,11 @@ export type CheckResult =
       /**
        * Why: `probe` when no candidate answered (`error` is then the last probe's detail),
        * `refused` when the server answered but its sign-in cannot be used, `link` when the
-       * link itself cannot be checked. For the last two `error` is a whole sentence.
+       * link itself cannot be checked, `redirect` when no candidate answered and at least
+       * one answered with a redirect, which is never followed (add-mcp-connector spec
+       * §6.3). For all but `probe`, `error` is a whole sentence.
        */
-      cause: 'probe' | 'refused' | 'link';
+      cause: 'probe' | 'refused' | 'link' | 'redirect';
     };
 
 const HTTP_ONLY_WITHOUT_PROXY =
@@ -79,11 +82,14 @@ export async function checkServer(
   );
   const probe = deps.probe ?? liveProbe(null);
   let lastError = '';
+  const failures: { url: string; result: McpProbeResult }[] = [];
   for (const c of candidates) {
     const r = await probe(c);
     if (r.ok) return { kind: 'open', route: c.routing, endpoint: c.url, tools: r.tools };
     if (!r.auth) {
-      lastError = r.error ?? lastError;
+      failures.push({ url: c.url, result: r });
+      // The detail worth showing is a real failure's, never the redirect sentence.
+      if (!r.redirect) lastError = r.error ?? lastError;
       continue;
     }
     // An auth answer proves this candidate is the server; the others are not tried.
@@ -103,6 +109,11 @@ export async function checkServer(
         err instanceof OAuthError ? err.message : "This server's sign-in could not be read.";
       return { kind: 'unreachable', directOnly: false, error, cause: 'refused' };
     }
+  }
+  // The usual case is the bare link redirecting (a missing or extra `/`) while its `/mcp`
+  // variant is a plain 404: then the redirect is the one answer the user can act on.
+  if (redirectIsTheAnswer(failures)) {
+    return { kind: 'unreachable', directOnly: false, error: MCP_REDIRECT_CHECK, cause: 'redirect' };
   }
   return { kind: 'unreachable', directOnly: !hasProxy, error: lastError, cause: 'probe' };
 }

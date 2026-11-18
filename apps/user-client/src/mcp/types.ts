@@ -29,6 +29,10 @@ export interface McpProbeResult {
   error: string | null;
   auth?: McpAuthSignal;
   scope?: string;
+  /** Set when the server answered with a redirect, which MCP requests never follow. */
+  redirect?: true;
+  /** The HTTP status of a failed answer, when the server answered at all. */
+  httpStatus?: number;
 }
 
 /** A candidate (routing × URL variant) the connection test tries in order. */
@@ -49,6 +53,8 @@ export interface McpConnectionResult {
   scope?: string;
   /** Set when the grant is paused on this device; the test then says nothing about the route. */
   held?: true;
+  /** Set when a redirect is the whole answer and no candidate answered with an auth refusal. */
+  redirect?: true;
 }
 
 /** A resolved auth header (plaintext key already opened). */

@@ -1,7 +1,18 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import type { PillRow } from '../../../src/boot/client-data-db.js';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { McpServerRow, PillRow } from '../../../src/boot/client-data-db.js';
 import { Pill } from '../../../src/components/chat/Pill.js';
+
+const servers = vi.hoisted(() => ({
+  current: { data: undefined, isLoading: true } as {
+    data: Pick<McpServerRow, 'id'>[] | undefined;
+    isLoading: boolean;
+  },
+}));
+vi.mock('../../../src/data/mcp-servers.js', () => ({
+  useMcpServers: () => servers.current,
+}));
 
 interface KbPayload {
   entries?: { libraryName: string; documentTitle: string; injectedText: string }[];
@@ -126,5 +137,94 @@ describe('Pill — condensation slot', () => {
     render(<Pill row={longPill()} />);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.queryByText('Full result')).toBeNull();
+  });
+});
+
+describe('Pill — MCP redirect notice', () => {
+  function redirectPill(mcpRedirect: unknown): PillRow {
+    return {
+      id: 'p9',
+      messageId: 'm9',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'failed',
+      payload: {
+        name: 'docs_search',
+        argumentsJson: '{}',
+        error: 'Docs answered with a redirect.',
+        mcpRedirect,
+      },
+      createdAt: 9,
+    };
+  }
+  const showAt = (row: PillRow) =>
+    render(
+      <MemoryRouter initialEntries={['/app/chat/c1?persona=p1']}>
+        <Pill row={row} />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    servers.current = { data: [{ id: 's/1' }], isLoading: false };
+  });
+
+  it('says the server redirected and links to its page with the chat as return', () => {
+    showAt(redirectPill({ serverId: 's/1', serverName: 'Docs' }));
+    expect(
+      screen.getByText("Docs answered with a redirect, which Chatsundere doesn't follow."),
+    ).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open Docs' });
+    expect(link).toHaveAttribute(
+      'href',
+      `/app/integrations/${encodeURIComponent('s/1')}?return=${encodeURIComponent('/app/chat/c1?persona=p1')}`,
+    );
+  });
+
+  it('links to My Integrations when the server is no longer on this device', () => {
+    servers.current = { data: [{ id: 'other' }], isLoading: false };
+    showAt(redirectPill({ serverId: 's/1', serverName: 'Docs' }));
+    expect(screen.queryByRole('link', { name: 'Open Docs' })).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open My Integrations' });
+    expect(link).toHaveAttribute(
+      'href',
+      `/app/integrations?return=${encodeURIComponent('/app/chat/c1?persona=p1')}`,
+    );
+  });
+
+  it('keeps Open <name> while the servers are still loading', () => {
+    servers.current = { data: undefined, isLoading: true };
+    showAt(redirectPill({ serverId: 's/1', serverName: 'Docs' }));
+    expect(screen.getByRole('link', { name: 'Open Docs' })).toBeInTheDocument();
+  });
+
+  it('lets a long name wrap inside the link', () => {
+    showAt(redirectPill({ serverId: 's/1', serverName: 'D'.repeat(80) }));
+    const link = screen.getByRole('link', { name: `Open ${'D'.repeat(80)}` });
+    expect(link).toHaveClass('max-w-full', '[overflow-wrap:anywhere]');
+  });
+
+  it('shows no notice on a pill that is not a tool call', () => {
+    const row: PillRow = {
+      ...kbPill(),
+      payload: {
+        ...(kbPill().payload as object),
+        mcpRedirect: { serverId: 's/1', serverName: 'Docs' },
+      },
+    };
+    showAt(row);
+    expect(screen.queryByText(/answered with a redirect, which/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a number for the id', { serverId: 1, serverName: 'Docs' }],
+    ['a missing name', { serverId: 's1' }],
+    ['an object for the name', { serverId: 's1', serverName: { x: 1 } }],
+    ['a string instead of an object', 'Docs'],
+    ['null', null],
+  ])('renders nothing for a malformed notice (%s)', (_label, payload) => {
+    showAt(redirectPill(payload));
+    expect(screen.queryByText(/answered with a redirect, which/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

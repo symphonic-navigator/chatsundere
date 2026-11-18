@@ -9,6 +9,7 @@ const {
   checkServerMock,
   testOAuthMock,
   removeGrantMock,
+  finishOrphanedMock,
   consentMock,
   consentForMock,
   grants,
@@ -23,6 +24,7 @@ const {
   checkServerMock: vi.fn(),
   testOAuthMock: vi.fn(),
   removeGrantMock: vi.fn(),
+  finishOrphanedMock: vi.fn(async () => undefined),
   consentMock: vi.fn(async () => undefined),
   consentForMock: vi.fn(async () => undefined),
   grants: { rows: [] as unknown[] },
@@ -84,10 +86,12 @@ vi.mock('../../src/mcp/oauth/connect-server.js', async (orig) => ({
 }));
 vi.mock('../../src/mcp/oauth/sign-in-session.js', () => ({
   createSignInDeps: async () => ({ fake: true }),
+  waitingScreenPath: (state: string) => `/app/integrations/sign-in/${encodeURIComponent(state)}`,
 }));
 vi.mock('../../src/mcp/oauth/sign-in.js', async (orig) => ({
   ...(await orig<typeof import('../../src/mcp/oauth/sign-in.js')>()),
   removeGrant: (...a: unknown[]) => removeGrantMock(...a),
+  finishOrphanedSignIns: (...a: unknown[]) => finishOrphanedMock(...(a as [])),
 }));
 vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
   OAuthSignInFlow: (p: Record<string, unknown>) => {
@@ -135,9 +139,19 @@ vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { StrictMode } from 'react';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-db.js';
+import { NavTrailTracker } from '../../src/components/NavTrailTracker.js';
+import { useAppNav } from '../../src/lib/use-app-nav.js';
 import type { OAuthDiscovery } from '../../src/mcp/oauth/discovery.js';
 import { IntegrationServerPage } from '../../src/routes/app/integrations/server.js';
 import { PendingSignInPage } from '../../src/routes/app/integrations/sign-in.js';
@@ -187,6 +201,60 @@ function wrapAt(path: string) {
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
+  );
+}
+
+// Every pending check is settled after each test, so a failing test leaves no check in flight.
+const unsettled: Array<() => void> = [];
+afterEach(() => {
+  for (const settle of unsettled.splice(0)) settle();
+});
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  unsettled.push(() =>
+    resolve({ kind: 'unreachable', directOnly: false, error: '', cause: 'other' } as T),
+  );
+  return { promise, resolve };
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  const type = useNavigationType();
+  return (
+    <div>
+      <div data-testid="probe-state">{JSON.stringify(location.state ?? null)}</div>
+      <div data-testid="probe-search">{location.search}</div>
+      <div data-testid="probe-type">{type}</div>
+    </div>
+  );
+}
+
+/** Mounts *Add server* as the connector card's tap does: a `?return=` and navigation state. */
+function wrapAdd(state: unknown, search = '?return=%2Fapp%2Fchat%2Fc1', strict = false) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const Outer = strict ? StrictMode : ({ children }: { children: React.ReactNode }) => children;
+  return render(
+    <Outer>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[{ pathname: '/app/integrations/new', search, state }]}>
+          <Routes>
+            <Route
+              path="/app/integrations/new"
+              element={
+                <>
+                  <IntegrationServerPage />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="/app/integrations" element={<div>integrations list</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </Outer>,
   );
 }
 
@@ -647,6 +715,277 @@ describe('IntegrationServerPage', () => {
     });
   });
 
+  describe('Add server: a link proposed in the chat', () => {
+    const SUGGESTED =
+      'Suggested in the chat. Check that kumbu.example is the server you want — it will receive what your companion sends to its tools.';
+    const DISCOVERY: OAuthDiscovery = {
+      kind: 'oauth',
+      resource: 'https://kumbu.example/mcp',
+      issuer: 'https://auth.kumbu.example',
+      resourceName: 'Kumbu',
+      authorizationEndpoint: 'https://auth.kumbu.example/authorize',
+      tokenEndpoint: 'https://auth.kumbu.example/token',
+      registrationEndpoint: null,
+      revocationEndpoint: null,
+      cimdSupported: true,
+      issParameterSupported: false,
+      viaProxy: false,
+      scope: null,
+    };
+    const SIGN_IN = {
+      kind: 'sign-in',
+      discovery: DISCOVERY,
+      route: 'proxy',
+      endpoint: 'https://kumbu.example/mcp',
+    };
+    const FAILED = { kind: 'unreachable', directOnly: false, error: 'Nope.', cause: 'other' };
+
+    it('prefills the link, checks it at once, and consumes the navigation state', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: ' https://Kumbu.example/mcp ' });
+
+      const field = screen.getByLabelText('Server link') as HTMLInputElement;
+      expect(field).toHaveValue('https://kumbu.example/mcp');
+      expect(field.readOnly).toBe(true);
+      expect(await screen.findByRole('button', { name: 'Checking kumbu.example…' })).toBeTruthy();
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+      expect(checkServerMock).toHaveBeenCalledWith('https://kumbu.example/mcp', {
+        hasProxy: true,
+        allowDirect: false,
+      });
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      await waitFor(() => expect(screen.getByTestId('probe-state')).toHaveTextContent('null'));
+      expect(screen.getByTestId('probe-type')).toHaveTextContent('REPLACE');
+      expect(screen.getByTestId('probe-search')).toHaveTextContent('?return=%2Fapp%2Fchat%2Fc1');
+
+      await act(async () => pendingCheck.resolve(SIGN_IN));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('checks exactly once under StrictMode', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' }, undefined, true);
+      expect(await screen.findByRole('button', { name: 'Checking kumbu.example…' })).toBeTruthy();
+      await waitFor(() => expect(screen.getByTestId('probe-state')).toHaveTextContent('null'));
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+      await act(async () => pendingCheck.resolve(SIGN_IN));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('consumes the navigation state of an invalid link too', async () => {
+      wrapAdd({ proposedLink: 'http://kumbu.example/mcp' });
+      await waitFor(() => expect(screen.getByTestId('probe-state')).toHaveTextContent('null'));
+      expect(screen.getByTestId('probe-type')).toHaveTextContent('REPLACE');
+      expect(checkServerMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the manual form when a check still running resolves afterwards', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      await screen.findByRole('button', { name: 'Checking kumbu.example…' });
+      const manual = screen.getByRole('button', { name: 'Enter details manually' });
+      expect(manual).toBeEnabled();
+      fireEvent.click(manual);
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Kumbu' } });
+      await act(async () => pendingCheck.resolve(SIGN_IN));
+      expect(screen.queryByText('Sign-in required')).toBeNull();
+      expect(screen.getByLabelText('Name')).toHaveValue('My Kumbu');
+      expect(screen.getByLabelText('URL')).toHaveValue('https://kumbu.example/mcp');
+    });
+
+    it('names host and port alike in the line and while checking', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: 'https://kumbu.example:8443/mcp' });
+      const button = await screen.findByRole('button', { name: 'Checking kumbu.example:8443…' });
+      const line = screen.getByText(/^Suggested in the chat/);
+      expect(line).toHaveTextContent('Check that kumbu.example:8443 is the server you want');
+      // Long hosts wrap at 380 px instead of overflowing.
+      expect(line.className).toContain('[overflow-wrap:anywhere]');
+      expect(button.className).toContain('[overflow-wrap:anywhere]');
+    });
+
+    it('drops the line on the form once the URL no longer has the suggested host', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'key',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+      });
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      await screen.findByLabelText('Key');
+      const url = screen.getByLabelText('URL');
+      fireEvent.change(url, { target: { value: 'https://kumbu.example/other' } });
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      fireEvent.change(url, { target: { value: 'https://evil.example/mcp' } });
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      fireEvent.change(url, { target: { value: 'https://kumbu.example/mcp' } });
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    it.each([
+      ['an http link', 'http://kumbu.example/mcp'],
+      ['a private host', 'https://192.168.1.5/mcp'],
+      ['a non-string', 42],
+    ])('ignores %s and opens empty', (_label, proposedLink) => {
+      wrapAdd({ proposedLink });
+      expect(screen.getByLabelText('Server link')).toHaveValue('');
+      expect(screen.getByRole('button', { name: 'Check server' })).toBeDisabled();
+      expect(checkServerMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    it('lets useKeyFor win over a proposed link', () => {
+      wrapAdd({ useKeyFor: 'https://wiki.example/mcp', proposedLink: 'https://kumbu.example/mcp' });
+      expect(screen.getByLabelText('URL')).toHaveValue('https://wiki.example/mcp');
+      expect(screen.getByLabelText('Authentication')).toHaveValue('bearer');
+      expect(screen.getByLabelText('Name')).toHaveValue('');
+      expect(checkServerMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    it('opens an empty page for a ?return= without state', () => {
+      wrapAdd(null);
+      expect(screen.getByLabelText('Server link')).toHaveValue('');
+      expect(checkServerMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    describe('Sign-in required after a proposal', () => {
+      it('repeats the line, keeps Trusted unticked, and holds prefix and Local network behind More settings', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+        expect(await screen.findByText('Sign-in required')).toBeTruthy();
+        expect(screen.getByText(SUGGESTED)).toBeTruthy();
+        expect(screen.getByLabelText('Name')).toHaveValue('Kumbu');
+        expect(screen.getByRole('checkbox', { name: 'On by default' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Trusted/ })).not.toBeChecked();
+        expect(screen.queryByLabelText('Tool prefix')).toBeNull();
+        expect(screen.queryByRole('checkbox', { name: /Local network/ })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'More settings' }));
+        expect(screen.getByLabelText('Tool prefix')).toHaveValue('Kumbu');
+        expect(screen.getByRole('checkbox', { name: /Local network/ })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+      });
+
+      it('still hands the flow the hidden prefix and Local network', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+        await screen.findByText('Sign-in required');
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        expect(flowProps.current?.draft).toMatchObject({
+          name: 'Kumbu',
+          prefix: 'Kumbu',
+          onByDefault: true,
+          autoRun: false,
+          allowDirect: false,
+        });
+      });
+
+      it('opens More settings again on return when a hidden setting was changed', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+        await screen.findByText('Sign-in required');
+        fireEvent.click(screen.getByRole('button', { name: 'More settings' }));
+        fireEvent.change(screen.getByLabelText('Tool prefix'), { target: { value: 'kb' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        act(() => (flowProps.current?.onClose as () => void)());
+        expect(await screen.findByLabelText('Tool prefix')).toHaveValue('kb');
+        expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      });
+
+      it('shows no More settings without a proposal', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAt('/app/integrations/new');
+        fireEvent.change(screen.getByLabelText('Server link'), {
+          target: { value: 'https://kumbu.example/mcp' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+        await screen.findByText('Sign-in required');
+        expect(screen.getByLabelText('Tool prefix')).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+        expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      });
+    });
+
+    it('drops the line, here and on the next screen, once the link is edited after a failure', async () => {
+      checkServerMock.mockResolvedValueOnce(FAILED).mockResolvedValueOnce(SIGN_IN);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      expect(await screen.findByText('Nope.')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Server link'), {
+        target: { value: 'https://kumbu.example/mcp/' },
+      });
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      expect(screen.getByLabelText('Tool prefix')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+    });
+
+    it('keeps the line after Try again without an edit', async () => {
+      checkServerMock.mockResolvedValueOnce(FAILED).mockResolvedValueOnce(SIGN_IN);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+    });
+
+    it('seeds the key form with the host as name and On by default ticked', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'key',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+      });
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      expect(await screen.findByLabelText('Key')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      expect(screen.getByLabelText('Name')).toHaveValue('kumbu.example');
+      expect(screen.getByRole('checkbox', { name: 'On by default' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /Trusted/ })).not.toBeChecked();
+    });
+
+    it('seeds the open-server form the same way', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'open',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+        tools: [{ name: 'lookup', description: 'Look up', inputSchema: {} }],
+      });
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      expect(await screen.findByText('lookup')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      expect(screen.getByLabelText('Name')).toHaveValue('kumbu.example');
+      expect(screen.getByRole('checkbox', { name: 'On by default' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /Trusted/ })).not.toBeChecked();
+    });
+
+    it('leaves the key form unseeded without a proposal', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'key',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+      });
+      wrapAt('/app/integrations/new');
+      fireEvent.change(screen.getByLabelText('Server link'), {
+        target: { value: 'https://kumbu.example/mcp' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+      expect(await screen.findByLabelText('Key')).toBeTruthy();
+      expect(screen.getByLabelText('Name')).toHaveValue('');
+      expect(screen.getByRole('checkbox', { name: 'On by default' })).not.toBeChecked();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+  });
+
   describe('check failures: fix round 1', () => {
     async function checkWith(result: unknown) {
       checkServerMock.mockResolvedValue(result);
@@ -1041,6 +1380,761 @@ describe('IntegrationServerPage', () => {
       (flowProps.current?.onUseKey as (link: string | null) => void)('https://kumbu.example/mcp');
       expect(await screen.findByLabelText('URL')).toHaveValue('https://kumbu.example/mcp');
       expect(screen.getByLabelText('Authentication')).toHaveValue('bearer');
+    });
+  });
+});
+
+/** Where the router is now, path and query, whatever route rendered. */
+function PathProbe() {
+  const { pathname, search } = useLocation();
+  return <div data-testid="path">{pathname + search}</div>;
+}
+
+const CHAT = '/app/chat/c1';
+const RETURN = `?return=${encodeURIComponent(CHAT)}`;
+
+/** Mounts any integrations route with the chat behind it, and a probe of the location. */
+function wrapWay(path: string, state: unknown = null) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const [pathname, search = ''] = path.split('?');
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[{ pathname, search: search ? `?${search}` : '', state }]}>
+        <Routes>
+          <Route path="/app/integrations/new" element={<IntegrationServerPage />} />
+          <Route path="/app/integrations/sign-in/:state" element={<PendingSignInPage />} />
+          <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />
+          <Route path="/app/integrations" element={<div>integrations list</div>} />
+          <Route path="/app/account/server-linking" element={<ServerLinkingStub />} />
+          <Route path="/app/chat/:chatId" element={<div>chat page</div>} />
+        </Routes>
+        <PathProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+const toastMessages = () => useToastStore.getState().toasts.map((t) => t.message);
+const backButton = () => screen.getByRole('button', { name: 'Back' });
+
+describe('the way back to the chat (spec §5.5)', () => {
+  const DISCOVERY: OAuthDiscovery = {
+    kind: 'oauth',
+    resource: 'https://kumbu.example/mcp',
+    issuer: 'https://auth.kumbu.example',
+    resourceName: 'Kumbu',
+    authorizationEndpoint: 'https://auth.kumbu.example/authorize',
+    tokenEndpoint: 'https://auth.kumbu.example/token',
+    registrationEndpoint: null,
+    revocationEndpoint: null,
+    cimdSupported: true,
+    issParameterSupported: false,
+    viaProxy: false,
+    scope: null,
+  };
+  const SIGN_IN = {
+    kind: 'sign-in',
+    discovery: DISCOVERY,
+    route: 'proxy',
+    endpoint: 'https://kumbu.example/mcp',
+  };
+  const KEY = { kind: 'key', route: 'proxy', endpoint: 'https://kumbu.example/mcp' };
+  const OPEN = {
+    kind: 'open',
+    route: 'proxy',
+    endpoint: 'https://kumbu.example/mcp',
+    tools: [{ name: 'lookup', description: 'Look up', inputSchema: {} }],
+  };
+  const CONNECTED = {
+    ok: true,
+    routing: 'proxy',
+    resolvedEndpoint: 'https://kumbu.example/mcp',
+    tools: [],
+    error: null,
+  };
+  const PROPOSED = { proposedLink: 'https://kumbu.example/mcp' };
+  const CRAFTED = [
+    ['a protocol-relative return', '?return=%2F%2Fevil.example'],
+    ['an absolute return', `?return=${encodeURIComponent('https://evil.example')}`],
+  ] as const;
+
+  beforeEach(() => {
+    cleanup();
+    useMcpServersMock.mockReturnValue({ data: [] });
+    upsertMock.mockReset();
+    upsertMock.mockImplementation(async (row: unknown) => row);
+    deleteMock.mockClear();
+    checkServerMock.mockReset();
+    testOAuthMock.mockReset();
+    testOAuthMock.mockResolvedValue(CONNECTED);
+    removeGrantMock.mockReset();
+    finishOrphanedMock.mockClear();
+    grants.rows = [];
+    pending.rows = [];
+    gates.proxy = true;
+    gates.link = 'linked';
+    gates.class2 = { disabled: false, tooltip: null };
+    flowProps.current = null;
+    useToastStore.getState().clear();
+  });
+
+  describe('Add server', () => {
+    async function toSignIn(search: string) {
+      checkServerMock.mockResolvedValue(SIGN_IN);
+      wrapWay(`/app/integrations/new${search}`, PROPOSED);
+      await screen.findByText('Sign-in required');
+    }
+    async function toFlow(search: string) {
+      await toSignIn(search);
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      await screen.findByText('sign-in flow');
+    }
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Back on the check goes %s', async (_label, search, target) => {
+      wrapWay(`/app/integrations/new${search}`);
+      fireEvent.click(backButton());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it('Back on Sign-in required goes to the chat', async () => {
+      await toSignIn(RETURN);
+      fireEvent.click(backButton());
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+    });
+
+    it('Back during the sign-in goes to the chat', async () => {
+      await toFlow(RETURN);
+      fireEvent.click(backButton());
+      expect(await screen.findByText('chat page')).toBeTruthy();
+    });
+
+    it('Back on the key form goes to the chat', async () => {
+      checkServerMock.mockResolvedValue(KEY);
+      wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
+      await screen.findByLabelText('Key');
+      fireEvent.click(backButton());
+      expect(await screen.findByText('chat page')).toBeTruthy();
+    });
+
+    it('OAuth connected goes to the chat, with the connected toast', async () => {
+      await toFlow(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+      expect(toastMessages()).toContain(
+        'Kumbu is connected. Its tools are ready on your next message.',
+      );
+    });
+
+    it('OAuth connected without a return goes to the detail page, without a toast', async () => {
+      await toFlow('');
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new-id'),
+      );
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it('saving later goes to the chat, with the saving-later toast', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await toFlow(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['Connected. Saving will finish shortly.']);
+    });
+
+    it('saving later with a return retries the save, as the list would', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await toFlow(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(finishOrphanedMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('saving later still goes to the chat when the retry fails', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      finishOrphanedMock.mockRejectedValueOnce(new Error('still offline'));
+      await toFlow(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(finishOrphanedMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('saving later without a return leaves the retry to My Integrations', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await toFlow('');
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+      expect(finishOrphanedMock).not.toHaveBeenCalled();
+    });
+
+    it('OAuth connected with On by default off says only that it is connected', async () => {
+      await toSignIn(RETURN);
+      fireEvent.click(screen.getByRole('checkbox', { name: 'On by default' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['Kumbu is connected.']);
+    });
+
+    it('a saved key server with On by default off says only that it is added', async () => {
+      checkServerMock.mockResolvedValue(KEY);
+      wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'On by default' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['kumbu.example is added.']);
+    });
+
+    it('a saved key server goes to the chat, with the added toast', async () => {
+      checkServerMock.mockResolvedValue(KEY);
+      wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toContain(
+        'kumbu.example is added. Its tools are ready on your next message.',
+      );
+    });
+
+    it('a saved open server goes to the chat, with the added toast', async () => {
+      checkServerMock.mockResolvedValue(OPEN);
+      wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
+      await screen.findByText('lookup');
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toContain(
+        'kumbu.example is added. Its tools are ready on your next message.',
+      );
+    });
+
+    it('a saved server without a return goes to My Integrations, without a toast', async () => {
+      wrapWay('/app/integrations/new');
+      fireEvent.click(screen.getByRole('button', { name: 'Enter details manually' }));
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Wiki' } });
+      fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://wiki.example' } });
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it.each(CRAFTED)('falls back to today’s exits for %s', async (_label, search) => {
+      checkServerMock.mockResolvedValue(KEY);
+      wrapWay(`/app/integrations/new${search}`, PROPOSED);
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it.each(CRAFTED)('Back falls back to My Integrations for %s', async (_label, search) => {
+      wrapWay(`/app/integrations/new${search}`);
+      fireEvent.click(backButton());
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+    });
+
+    it.each(CRAFTED)('connected falls back to the detail page for %s', async (_label, search) => {
+      await toFlow(search);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new-id'),
+      );
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it('Link a server carries the return to server linking', async () => {
+      gates.proxy = false;
+      gates.link = 'local-only';
+      checkServerMock.mockResolvedValue({
+        kind: 'unreachable',
+        directOnly: true,
+        error: 'x',
+        cause: 'probe',
+      });
+      wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
+      fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
+      expect(await screen.findByText('server linking')).toBeTruthy();
+      expect(screen.getByTestId('linking-return').textContent).toBe(CHAT);
+    });
+
+    it('Link a server without a return carries none', async () => {
+      gates.proxy = false;
+      gates.link = 'local-only';
+      checkServerMock.mockResolvedValue({
+        kind: 'unreachable',
+        directOnly: true,
+        error: 'x',
+        cause: 'probe',
+      });
+      wrapWay('/app/integrations/new');
+      fireEvent.change(screen.getByLabelText('Server link'), {
+        target: { value: 'https://kumbu.example/mcp' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
+      expect(await screen.findByText('server linking')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe('/app/account/server-linking');
+    });
+
+    it.each([
+      ['with a return, keeping it', RETURN, `/app/integrations/oauth-1${RETURN}`],
+      ['without one, as today', '', '/app/integrations/oauth-1'],
+    ])('Open on an existing connection goes to its detail page %s', async (_l, search, target) => {
+      useMcpServersMock.mockReturnValue({
+        data: [
+          {
+            ...ROW,
+            id: 'oauth-1',
+            name: 'My Kumbu',
+            auth: { scheme: 'oauth' },
+            url: 'https://kumbu.example/mcp',
+          },
+        ],
+      });
+      checkServerMock.mockResolvedValue(SIGN_IN);
+      wrapWay(`/app/integrations/new${search}`, search ? PROPOSED : null);
+      if (!search) {
+        fireEvent.change(screen.getByLabelText('Server link'), {
+          target: { value: 'https://kumbu.example/mcp' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+      }
+      fireEvent.click(await screen.findByRole('button', { name: 'Open My Kumbu' }));
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    describe('Back from a side trip reaches the chat (whole-branch review S-A)', () => {
+      /** The chat behind *Add server*, tapped into as the card does, with the real trail. */
+      function wrapFromChat(search: string) {
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        function ChatStandIn() {
+          const navigate = useNavigate();
+          return (
+            <div>
+              <div>chat page</div>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(`/app/integrations/new${search}`, { state: search ? PROPOSED : null })
+                }
+              >
+                tap the card
+              </button>
+            </div>
+          );
+        }
+        function ServerLinkingWithBack() {
+          const nav = useAppNav();
+          return (
+            <div>
+              <div>server linking</div>
+              <button type="button" onClick={() => nav.back('/app/account')}>
+                linking back
+              </button>
+            </div>
+          );
+        }
+        render(
+          <QueryClientProvider client={qc}>
+            <MemoryRouter initialEntries={[CHAT]}>
+              <NavTrailTracker />
+              <Routes>
+                <Route path="/app/integrations/new" element={<IntegrationServerPage />} />
+                <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />
+                <Route path="/app/integrations" element={<div>integrations list</div>} />
+                <Route path="/app/account/server-linking" element={<ServerLinkingWithBack />} />
+                <Route path="/app/chat/:chatId" element={<ChatStandIn />} />
+              </Routes>
+              <PathProbe />
+            </MemoryRouter>
+          </QueryClientProvider>,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'tap the card' }));
+      }
+
+      function localOnly() {
+        gates.proxy = false;
+        gates.link = 'local-only';
+        checkServerMock.mockResolvedValue({
+          kind: 'unreachable',
+          directOnly: true,
+          error: 'x',
+          cause: 'probe',
+        });
+      }
+
+      it('‹ on server linking from Link a server goes to the chat', async () => {
+        localOnly();
+        wrapFromChat(RETURN);
+        fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
+        expect(await screen.findByText('server linking')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'linking back' }));
+        expect(await screen.findByText('chat page')).toBeTruthy();
+        expect(screen.getByTestId('path').textContent).toBe(CHAT);
+      });
+
+      it('‹ on server linking without a return goes back to Add server, as today', async () => {
+        localOnly();
+        wrapFromChat('');
+        fireEvent.change(screen.getByLabelText('Server link'), {
+          target: { value: 'https://kumbu.example/mcp' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
+        expect(await screen.findByText('server linking')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'linking back' }));
+        await waitFor(() =>
+          expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new'),
+        );
+      });
+
+      it.each([
+        ['with a return, to the chat', RETURN, CHAT],
+        ['without one, back to Add server as today', '', '/app/integrations/new'],
+      ])(
+        '‹ on an existing connection opened from the check goes %s',
+        async (_l, search, target) => {
+          useMcpServersMock.mockReturnValue({
+            data: [
+              {
+                ...ROW,
+                id: 'oauth-1',
+                name: 'My Kumbu',
+                auth: { scheme: 'oauth' },
+                url: 'https://kumbu.example/mcp',
+              },
+            ],
+          });
+          checkServerMock.mockResolvedValue(SIGN_IN);
+          wrapFromChat(search);
+          if (!search) {
+            fireEvent.change(screen.getByLabelText('Server link'), {
+              target: { value: 'https://kumbu.example/mcp' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+          }
+          fireEvent.click(await screen.findByRole('button', { name: 'Open My Kumbu' }));
+          await waitFor(() =>
+            expect(screen.getByTestId('path').textContent).toBe(
+              `/app/integrations/oauth-1${search}`,
+            ),
+          );
+          fireEvent.click(backButton());
+          await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+        },
+      );
+    });
+
+    it('Use a key instead keeps the return for Back', async () => {
+      await toSignIn(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'Use a key instead' }));
+      expect(screen.getByLabelText('Authentication')).toHaveValue('bearer');
+      expect(screen.getByTestId('path').textContent).toBe(`/app/integrations/new${RETURN}`);
+      fireEvent.click(backButton());
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+    });
+
+    it('Use a key instead keeps the return for Save, with the added toast', async () => {
+      await toSignIn(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'Use a key instead' }));
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+      expect(upsertMock).toHaveBeenCalled();
+      expect(toastMessages()).toContain(
+        'kumbu.example is added. Its tools are ready on your next message.',
+      );
+    });
+
+    it('Use a key instead during the sign-in keeps the return for Save', async () => {
+      await toFlow(RETURN);
+      act(() => (flowProps.current?.onUseKey as () => void)());
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toContain(
+        'kumbu.example is added. Its tools are ready on your next message.',
+      );
+    });
+  });
+
+  describe('the detail page', () => {
+    const OAUTH_ROW: McpServerRow = {
+      ...ROW,
+      id: 'o1',
+      name: 'Kumbu',
+      url: 'https://kumbu.example/mcp',
+      auth: { scheme: 'oauth' },
+    };
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Back goes %s', async (_label, search, target) => {
+      useMcpServersMock.mockReturnValue({ data: [ROW] });
+      wrapWay(`/app/integrations/s1${search}`);
+      fireEvent.click(backButton());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Save goes %s, with no added toast', async (_label, search, target) => {
+      useMcpServersMock.mockReturnValue({ data: [ROW] });
+      wrapWay(`/app/integrations/s1${search}`);
+      fireEvent.click(screen.getByRole('checkbox', { name: /Trusted/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+      expect(upsertMock).toHaveBeenCalled();
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Remove of a key server goes %s', async (_label, search, target) => {
+      useMcpServersMock.mockReturnValue({ data: [ROW] });
+      wrapWay(`/app/integrations/s1${search}`);
+      fireEvent.click(screen.getByRole('button', { name: /remove server/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^remove$/i }));
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+      expect(deleteMock).toHaveBeenCalledWith('s1');
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Remove of an OAuth server goes %s', async (_label, search, target) => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH_ROW] });
+      removeGrantMock.mockResolvedValue({ revoked: true });
+      wrapWay(`/app/integrations/o1${search}`);
+      fireEvent.click(screen.getByRole('button', { name: /remove server/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^remove$/i }));
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Back while loading goes %s', async (_label, search, target) => {
+      useMcpServersMock.mockReturnValue({ data: undefined as unknown as unknown[] });
+      wrapWay(`/app/integrations/s1${search}`);
+      expect(screen.getByText('Loading…', { selector: 'p' })).toBeTruthy();
+      fireEvent.click(backButton());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Back on an unknown server goes %s', async (_label, search, target) => {
+      wrapWay(`/app/integrations/gone${search}`);
+      expect(screen.getByText(/no longer here/)).toBeTruthy();
+      fireEvent.click(backButton());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it.each(CRAFTED)('Back and Save fall back to My Integrations for %s', async (_l, search) => {
+      useMcpServersMock.mockReturnValue({ data: [ROW] });
+      wrapWay(`/app/integrations/s1${search}`);
+      fireEvent.click(screen.getByRole('checkbox', { name: /Trusted/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/app/integrations'));
+      cleanup();
+      wrapWay(`/app/integrations/s1${search}`);
+      fireEvent.click(backButton());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/app/integrations'));
+    });
+
+    it('Link a server returns to this page with the same return', async () => {
+      gates.proxy = false;
+      gates.link = 'local-only';
+      useMcpServersMock.mockReturnValue({ data: [OAUTH_ROW] });
+      grants.rows = [
+        {
+          id: 'o1',
+          resource: OAUTH_ROW.url,
+          issuer: 'https://auth.kumbu.example',
+          tokenEndpoint: 'https://auth.kumbu.example/token',
+          revocationEndpoint: null,
+          clientId: 'c',
+          registration: 'cimd',
+          scope: null,
+          tokenRoute: 'proxy',
+          tokens: { v: 1 },
+          claim: null,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ];
+      wrapWay(`/app/integrations/o1${RETURN}`);
+      fireEvent.click(screen.getByRole('button', { name: 'Link a server' }));
+      expect(await screen.findByText('server linking')).toBeTruthy();
+      expect(screen.getByTestId('linking-return').textContent).toBe(
+        `/app/integrations/o1${RETURN}`,
+      );
+    });
+
+    it('Return to sign-in keeps the return', async () => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH_ROW] });
+      pending.rows = [
+        { state: 'st', serverId: 'o1', isNewServer: false, name: 'Kumbu', createdAt: 1 },
+      ];
+      wrapWay(`/app/integrations/o1${RETURN}`);
+      fireEvent.click(screen.getByRole('button', { name: 'Return to sign-in' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('path').textContent).toBe(
+          `/app/integrations/sign-in/st${RETURN}`,
+        ),
+      );
+    });
+
+    it('Return to sign-in without a return goes to the waiting screen as today', async () => {
+      useMcpServersMock.mockReturnValue({ data: [OAUTH_ROW] });
+      pending.rows = [
+        { state: 'st', serverId: 'o1', isNewServer: false, name: 'Kumbu', createdAt: 1 },
+      ];
+      wrapWay('/app/integrations/o1');
+      fireEvent.click(screen.getByRole('button', { name: 'Return to sign-in' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('path').textContent).toBe('/app/integrations/sign-in/st'),
+      );
+    });
+  });
+
+  describe('the waiting screen', () => {
+    const waiting = (search: string) => {
+      wrapWay(`/app/integrations/sign-in/st-9${search}`);
+      return screen.findByText('sign-in flow');
+    };
+
+    it('connected goes to the chat, with the connected toast', async () => {
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub resumed connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toContain(
+        'Kumbu is connected. Its tools are ready on your next message.',
+      );
+    });
+
+    it('connected without a return goes to the detail page, without a toast', async () => {
+      await waiting('');
+      fireEvent.click(screen.getByRole('button', { name: 'stub resumed connected' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new-9'),
+      );
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it('a reconnect goes to the chat, named after its row', async () => {
+      useMcpServersMock.mockReturnValue({
+        data: [{ ...ROW, id: 'new-id', name: 'Notes', onByDefault: true }],
+      });
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toContain(
+        'Notes is connected. Its tools are ready on your next message.',
+      );
+    });
+
+    it('a reconnect of a server not on by default says only that it is connected', async () => {
+      useMcpServersMock.mockReturnValue({ data: [{ ...ROW, id: 'new-id', name: 'Notes' }] });
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['Notes is connected.']);
+    });
+
+    it('a reconnect whose row has not loaded is named after its grant’s host', async () => {
+      useMcpServersMock.mockReturnValue({ data: undefined as unknown as unknown[] });
+      pending.rows = [
+        { state: 'st-9', serverId: 'new-id', isNewServer: false, name: '', createdAt: 1 },
+      ];
+      grants.rows = [{ id: 'new-id', resource: 'https://kumbu.example/mcp' }];
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['kumbu.example is connected.']);
+    });
+
+    it('a reconnect with nothing to name it by goes to the chat without a toast', async () => {
+      useMcpServersMock.mockReturnValue({ data: undefined as unknown as unknown[] });
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it('saving later goes to the chat, with the saving-later toast, and retries the save', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub resumed connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+      expect(toastMessages()).toEqual(['Connected. Saving will finish shortly.']);
+      expect(finishOrphanedMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('saving later without a return goes to My Integrations, which retries the save', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await waiting('');
+      fireEvent.click(screen.getByRole('button', { name: 'stub resumed connected' }));
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+      expect(toastMessages()).toEqual(['Connected. Saving will finish shortly.']);
+      expect(finishOrphanedMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Cancel goes %s', async (_label, search, target) => {
+      await waiting(search);
+      act(() => (flowProps.current?.onClose as () => void)());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it.each([
+      ['with a return, to the chat', RETURN, CHAT],
+      ['without one, to My Integrations', '', '/app/integrations'],
+    ])('Back goes %s', async (_label, search, target) => {
+      await waiting(search);
+      fireEvent.click(backButton());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    it('Use a key instead keeps the return, so Back still leads to the chat', async () => {
+      await waiting(RETURN);
+      act(() =>
+        (flowProps.current?.onUseKey as (link: string | null) => void)('https://kumbu.example/mcp'),
+      );
+      expect(await screen.findByLabelText('URL')).toHaveValue('https://kumbu.example/mcp');
+      expect(screen.getByTestId('path').textContent).toBe(`/app/integrations/new${RETURN}`);
+      fireEvent.click(backButton());
+      expect(await screen.findByText('chat page')).toBeTruthy();
+    });
+
+    it('Use a key instead without a return goes to Add server as today', async () => {
+      await waiting('');
+      act(() =>
+        (flowProps.current?.onUseKey as (link: string | null) => void)('https://kumbu.example/mcp'),
+      );
+      expect(await screen.findByLabelText('URL')).toHaveValue('https://kumbu.example/mcp');
+      expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new');
+    });
+
+    it.each(CRAFTED)('falls back to today’s exits for %s', async (_label, search) => {
+      await waiting(search);
+      act(() => (flowProps.current?.onClose as () => void)());
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/app/integrations'));
     });
   });
 });

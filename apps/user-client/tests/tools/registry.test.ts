@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
+import type { McpServerRow } from '../../src/boot/client-data-db.js';
 import type { IntegrationContext } from '../../src/integrations/types.js';
 import type { KnowledgeContext } from '../../src/knowledge/query-tool.js';
 import type { McpToolContext } from '../../src/mcp/mcp-tools.js';
+import type { ConnectorToolContext } from '../../src/tools/add-mcp-connector.js';
 import type { ExpertBase } from '../../src/tools/ask-expert.js';
 import {
   type ExpertToolContext,
@@ -150,5 +152,30 @@ describe('tool registry composition', () => {
   it('omits MCP tools when mcp context is null', () => {
     const tools = resolveActiveTools(dormantCtx, null, null, null);
     expect(tools.every((t) => !t.name.startsWith('srv_'))).toBe(true);
+  });
+
+  it('places add_mcp_connector directly after calculate_js when a connector context is given', () => {
+    const connector: ConnectorToolContext = { userTexts: () => [], servers: async () => [] };
+    const tools = resolveActiveTools(dormantCtx, null, null, null, null, null, connector);
+    expect(tools.map((t) => t.name).slice(0, 2)).toEqual(['calculate_js', 'add_mcp_connector']);
+  });
+
+  it('omits add_mcp_connector when no connector context is given', () => {
+    expect(resolveActiveTools(dormantCtx).some((t) => t.name === 'add_mcp_connector')).toBe(false);
+  });
+
+  it('keeps tool definitions and prompt segment byte-identical across connector contexts', () => {
+    const rowA = { id: 'a', url: 'https://a.example.com/mcp', createdAt: 1 } as McpServerRow;
+    const rowB = { id: 'b', url: 'https://b.example.com/mcp', createdAt: 2 } as McpServerRow;
+    const first = resolveActiveTools(dormantCtx, null, null, null, null, null, {
+      userTexts: () => ['add https://a.example.com/mcp'],
+      servers: async () => [rowA],
+    });
+    const second = resolveActiveTools(dormantCtx, null, null, null, null, null, {
+      userTexts: () => ['add https://b.example.com/mcp', 'and https://c.example.com'],
+      servers: async () => [rowA, rowB],
+    });
+    expect(JSON.stringify(toolDefs(second))).toBe(JSON.stringify(toolDefs(first)));
+    expect(systemPromptSegment(second)).toBe(systemPromptSegment(first));
   });
 });
