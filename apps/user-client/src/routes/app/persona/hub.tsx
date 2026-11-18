@@ -145,6 +145,17 @@ export function PersonaHub(): JSX.Element {
     });
   }, [persona, mindspaces.data, settings.data, setMindspace]);
 
+  // `#model` (the cockpit menu's "change on the persona ›") lands on the model
+  // picker, which sits below the fold at 380 px. Once per arrival.
+  const modelRef = useRef<HTMLDivElement | null>(null);
+  const scrolledToModelRef = useRef(false);
+  const personaLoaded = persona !== undefined && persona !== null;
+  useEffect(() => {
+    if (location.hash !== '#model' || !personaLoaded || scrolledToModelRef.current) return;
+    scrolledToModelRef.current = true;
+    modelRef.current?.scrollIntoView({ block: 'start' });
+  }, [location.hash, personaLoaded]);
+
   // ── Guard: unknown persona ──────────────────────────────────────────────────
   if (persona === null) {
     return (
@@ -469,7 +480,7 @@ export function PersonaHub(): JSX.Element {
 
             {/* Models — the persona's own model plus an optional background helper. */}
             <div className="flex flex-col gap-3">
-              <div>
+              <div id="model" ref={modelRef} className="scroll-mt-4">
                 <div className="mb-1 flex items-center gap-2">
                   <span className="text-xs uppercase tracking-wider text-paper-soft">Model</span>
                   {missingRequirement(persona) === 'model' ? (

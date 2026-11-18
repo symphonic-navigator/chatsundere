@@ -25,6 +25,7 @@ import {
   useProviders,
   useUpsertProvider,
 } from '../../../data/providers.js';
+import { keyTestFailure } from '../../../lib/key-test-failure.js';
 import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
 import { safeReturnPath } from '../../../lib/safe-return.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
@@ -35,7 +36,8 @@ type Status =
   | { kind: 'idle' }
   | { kind: 'probing' }
   | { kind: 'ok' }
-  | { kind: 'error'; reason: string };
+  /** `detail` is raw technical text, shown smaller under the plain `reason`. */
+  | { kind: 'error'; reason: string; detail?: string };
 
 /** Success badge copy: voice-only providers unlock voices, LLM providers unlock the LLM. */
 export function keyValidCopy(capabilities: readonly string[] | undefined): string {
@@ -139,7 +141,13 @@ export function SettingsProviderPage(): JSX.Element {
         setStatus({ kind: 'ok' });
         back();
       } else {
-        setStatus({ kind: 'error', reason: `${result.status} · ${result.reason ?? ''}` });
+        const failure = keyTestFailure({
+          providerName: definition.displayName ?? templateId,
+          viaRelay: requiresProxy,
+          status: result.status,
+          reason: result.reason,
+        });
+        setStatus({ kind: 'error', reason: failure.message, detail: failure.detail });
       }
     } catch (e) {
       setStatus({ kind: 'error', reason: e instanceof Error ? e.message : String(e) });
@@ -267,7 +275,17 @@ export function SettingsProviderPage(): JSX.Element {
               ? 'Probing…'
               : status.kind === 'ok'
                 ? keyValidCopy(definition.capabilities)
-                : `✗ ${(status as { kind: 'error'; reason: string }).reason}`}
+                : status.kind === 'error'
+                  ? `✗ ${status.reason}`
+                  : null}
+            {status.kind === 'error' && status.detail ? (
+              <div
+                data-testid="sheet-status-detail"
+                className="mt-1 font-mono text-[10px] opacity-70"
+              >
+                {status.detail}
+              </div>
+            ) : null}
           </div>
         ) : null}
 

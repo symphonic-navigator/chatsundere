@@ -142,11 +142,11 @@ vi.mock('../../../src/lib/usable-providers.js', () => ({
 
 // ── Render helper ────────────────────────────────────────────────────────────
 
-function renderHub(personaId: string) {
+function renderHub(personaId: string, suffix = '') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/app/persona/${personaId}`]}>
+      <MemoryRouter initialEntries={[`/app/persona/${personaId}${suffix}`]}>
         <Routes>
           <Route path="/app/persona/:id" element={<PersonaHub />} />
           <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel">chat</div>} />
@@ -375,5 +375,42 @@ describe('PersonaHub — background helper privacy', () => {
       expect(screen.queryByRole('dialog', { name: 'Privacy & data handling' })).toBeNull(),
     );
     expect(screen.getByTestId('persona-hub')).toBeInTheDocument();
+  });
+});
+
+describe('PersonaHub — #model (the cockpit menu\'s "change on the persona ›")', () => {
+  it('scrolls the model picker into view when the URL carries #model', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      renderHub('p-complete', '?return=%2Fapp%2Fchat%2Fc-1#model');
+      await waitFor(() => expect(scrolled.length).toBe(1));
+      expect(scrolled[0]?.id).toBe('model');
+      expect(scrolled[0]?.contains(screen.getAllByTestId('model-slot-picker')[0] ?? null)).toBe(
+        true,
+      );
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('does not scroll without #model', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    const spy = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = spy;
+    try {
+      renderHub('p-complete');
+      await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 });

@@ -27,6 +27,7 @@ vi.mock('../../../src/data/personas.js', () => ({
   useFilteredPersonas: () => ({ data: [persona] }),
   compareByLastInteraction: () => 0,
   useDeletePersona: () => ({ mutateAsync: vi.fn() }),
+  usePersonas: () => ({ data: [persona] }),
 }));
 vi.mock('../../../src/data/providers.js', () => ({
   useProviders: () => ({ data: providerRows }),
@@ -43,6 +44,7 @@ vi.mock('../../../src/components/PersonaAvatar.js', () => ({
   PersonaAvatar: () => <span data-testid="avatar" />,
 }));
 vi.mock('../../../src/components/StreamingOrb.js', () => ({ StreamingOrb: () => null }));
+vi.mock('../../../src/sync/first-sync.js', () => ({ useFirstSyncPending: () => false }));
 vi.mock('../../../src/content/help/use-help.js', () => ({
   useHelp: () => ({ onHelp: vi.fn(), helpOverlay: null }),
 }));

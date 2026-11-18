@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { SearchTier } from '@chatsundere/llm-unified';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { CockpitMenu } from '../../../src/components/chat/CockpitMenu.js';
 
@@ -544,5 +545,43 @@ describe('CockpitMenu — steps reasoning control', () => {
     );
     fireEvent.click(screen.getByRole('menuitemradio', { name: /^off$/i }));
     expect(onReasoningChange).toHaveBeenCalledWith({ kind: 'off' });
+  });
+});
+
+describe('CockpitMenu — model row (which model answers)', () => {
+  function renderWithModel() {
+    return render(
+      <MemoryRouter>
+        <CockpitMenu
+          control={noReasoning}
+          reasoning={{ kind: 'off' }}
+          onReasoningChange={() => {}}
+          onClose={() => {}}
+          chatFontScale="standard"
+          onChatFontScaleChange={() => {}}
+          model={{
+            name: 'GLM 5.1',
+            provider: 'Nano-GPT',
+            changeHref: '/app/persona/p1?return=%2Fapp%2Fchat%2Fc1#model',
+          }}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  it('names the model and its provider in the first row, read-only', () => {
+    const { container } = renderWithModel();
+    const first = container.querySelector('.cockpit-menu-section');
+    expect(first?.getAttribute('data-section')).toBe('model');
+    expect(first?.textContent).toContain('Model');
+    expect(first?.textContent).toContain('GLM 5.1 · Nano-GPT');
+    // Read-only: no choice chips in the model row.
+    expect(first?.querySelector('[role="menuitemradio"]')).toBeNull();
+  });
+
+  it('links "change on the persona ›" to the persona hub, returning to the chat at #model', () => {
+    renderWithModel();
+    const link = screen.getByRole('menuitem', { name: /change on the persona/i });
+    expect(link.getAttribute('href')).toBe('/app/persona/p1?return=%2Fapp%2Fchat%2Fc1#model');
   });
 });

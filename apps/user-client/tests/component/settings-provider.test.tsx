@@ -330,4 +330,42 @@ describe('SettingsProviderPage', () => {
     expect(keyValidCopy(['llm'])).toBe('✓ Key valid · LLM unlocked');
     expect(keyValidCopy(undefined)).toBe('✓ Key valid · LLM unlocked');
   });
+
+  // ── Failed key test: cause + next step, raw detail kept smaller (item 6) ────
+
+  it('maps a failed direct probe (status 0) to a cause and keeps the raw detail underneath', async () => {
+    probeProviderMock.mockResolvedValue({ ok: false, status: 0, reason: 'Failed to fetch' });
+    wrapAt('/app/settings/providers/chutes');
+    fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
+    fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
+    const status = await screen.findByTestId('sheet-status');
+    await waitFor(() => expect(status.textContent).toContain("Couldn't reach Chutes."));
+    expect(screen.getByTestId('sheet-status-detail').textContent).toBe('0 · Failed to fetch');
+    expect(status.textContent).not.toContain('✗ 0 · Failed to fetch');
+  });
+
+  it('names the relay for a failed probe routed through the server', async () => {
+    probeProviderMock.mockResolvedValue({ ok: false, status: 0, reason: 'Failed to fetch' });
+    getProviderMock.mockReturnValue({
+      displayName: 'Ollama Cloud',
+      baseUrl: 'https://ollama.com/v1',
+      corsHint: 'requires-proxy',
+      capabilities: ['llm'],
+    });
+    wrapAt('/app/settings/providers/ollama-cloud');
+    fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
+    fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
+    expect(
+      await screen.findByText(/couldn't reach ollama cloud through your server's relay/i),
+    ).toBeInTheDocument();
+  });
+
+  it('says the key was not accepted on a 401', async () => {
+    probeProviderMock.mockResolvedValue({ ok: false, status: 401, reason: 'Unauthorized' });
+    wrapAt('/app/settings/providers/chutes');
+    fireEvent.change(await screen.findByPlaceholderText('sk-...'), { target: { value: 'k' } });
+    fireEvent.click(screen.getByRole('button', { name: /test & save/i }));
+    expect(await screen.findByText(/chutes didn't accept this key/i)).toBeInTheDocument();
+    expect(screen.getByTestId('sheet-status-detail').textContent).toBe('401 · Unauthorized');
+  });
 });

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { Offering } from '@chatsundere/llm-unified';
+import { type Offering, getCanonical, getProvider } from '@chatsundere/llm-unified';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Bookmark, Brain, Gem, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -479,6 +479,13 @@ export function Cockpit(p: Props): JSX.Element {
           </button>
           {menuOpen ? (
             <CockpitMenu
+              model={{
+                name:
+                  getCanonical(p.offering.canonicalRef ?? '')?.displayName ??
+                  p.offering.upstreamSlug,
+                provider: getProvider(p.offering.providerId)?.displayName ?? p.offering.providerId,
+                changeHref: `/app/persona/${p.persona.id}?return=${encodeURIComponent(returnTo)}#model`,
+              }}
               control={p.offering.profile.reasoning}
               reasoning={reasoning}
               onReasoningChange={onReasoningChange}
