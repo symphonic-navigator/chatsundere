@@ -179,6 +179,9 @@ Review criterion from Chris (2026-11-18): losing the provider's prefix cache mak
 
   **Decided by Chris, 2026-11-18: safeguard it and put it under observation; no separate Larissa-gated unit now.** Why: he has never met the fault himself and cannot test it right now. Items 7 and 9 go ahead exactly as specified (typed errors, visible notes, the `need=passphrase` way out, the context resolved before anything is deleted or created), so that if it happens the user sees what is wrong and has a way forward. If it shows up in the field despite that, a 0.5.1 follows with the proper fix in `packages/crypto`. For the observation, this unit tries to settle in a test whether the fault is real (a passkey unlock from a cold start, then a send) and reports the result plainly; it does not change MK custody whatever the result.
 
+  **Result, 2026-11-18:** reproduced in a test (real passkey registration and a software authenticator with PRF; after the unlock `mk` is null and a send fails with "master key unavailable"). It also stops sync for linked passkey users without a word.
+  **Decided by Chris, 2026-11-18: fixed in 0.5.0 by its own unit** (branch `fix/050-passkey-master-key`, Larissa-gated), which takes the observation test over as its regression test. This unit's safeguards stay, for the orphaned provider key and as defence in depth.
+
 ## Left to the builder
 
 - Exact copy may be shortened, keeping its content and British English.
