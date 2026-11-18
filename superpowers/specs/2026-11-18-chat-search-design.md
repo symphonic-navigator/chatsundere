@@ -4,7 +4,7 @@
 **Release:** 0.5.0 (unit "search inside chats")
 **Branch:** `feat/050-chat-search`
 **Scope:** `apps/user-client` only. No server, no sync, no schema change. Larissa paths (§9.1) are **not** touched.
-**Status:** Spec. Laura spec-pass worked in (§13). Waiting for Chris's answers to §12 (Q1–Q8).
+**Status:** Approved by Chris, 2026-11-18. Laura spec-pass and the coordinator's review worked in (§13). Questions decided in §12.
 
 ---
 
@@ -273,7 +273,9 @@ Tests (Vitest, `fake-indexeddb`): folding and snippets (accents, emoji graphemes
 
 ---
 
-## 12. Open questions for Chris
+## 12. Questions — decided by Chris, 2026-11-18
+
+**Decided by Chris, 2026-11-18:** every question as recommended below — Q1 one field with two sections; Q2 all words in any order; Q3 reasoning left out; Q4 the Bookmarks tab also matches message text; Q5 title matches collapsed to five; Q6 the one-entry return cache with partial results and a resume point; Q7 cleared by the coordinator; Q8 the quick-menu route, no chip in the chat. Nothing is cut: Q4 and the hub label (§10.2) stay in.
 
 **Q1 — One field, two sections?** Recommendation: **yes**, as in §4 (titles first, then "In messages"). *Reason:* nobody knows in advance whether what they remember is a title or a sentence; a third tab or a switch makes them guess first. Alternative: a third "Messages" tab — cleaner list, but the better half of search is one tap further and the field would mean different things per tab.
 
