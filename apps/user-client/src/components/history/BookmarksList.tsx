@@ -3,12 +3,22 @@ import { useState } from 'react';
 import { type BookmarkGroup, useSetBookmarkLabel } from '../../data/bookmarks.js';
 import { useToggleBookmark } from '../../data/chats.js';
 import { displayTitle } from '../../lib/chat-title.js';
+import type { Snippet } from '../../lib/search/message-snippet.js';
 import { PersonaAvatar } from '../PersonaAvatar.js';
 import { OverflowMenu } from '../ui/OverflowMenu.js';
 import { HistoryRowRenameInput } from './HistoryRowRenameInput.js';
+import { SnippetText } from './SearchHitList.js';
+
+/**
+ * A bookmark group as the list renders it: a bookmark found through its
+ * message text rather than its label carries the snippet that explains why.
+ */
+export type BookmarkListGroup = Omit<BookmarkGroup, 'bookmarks'> & {
+  bookmarks: (BookmarkGroup['bookmarks'][number] & { snippet?: Snippet })[];
+};
 
 interface Props {
-  groups: BookmarkGroup[];
+  groups: BookmarkListGroup[];
   /** Navigate into a chat focused on a message. */
   onJump: (chatId: string, messageId: string) => void;
 }
@@ -69,6 +79,12 @@ export function BookmarksList(p: Props): JSX.Element {
                     <span className="cs-row-title" data-compact>
                       {b.label}
                     </span>
+                    {b.snippet ? (
+                      <SnippetText
+                        snippet={b.snippet}
+                        className="line-clamp-1 text-xs text-paper-soft"
+                      />
+                    ) : null}
                   </span>
                 </button>
               )}

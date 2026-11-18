@@ -16,6 +16,8 @@ import { HistoryRowRenameInput } from './HistoryRowRenameInput.js';
 interface Props {
   chat: ChatRow;
   persona: PersonaRow;
+  /** Called just before the row navigates into its chat (History saves its place). */
+  onOpen?: () => void;
   onRename: (next: string | null) => void;
   onDelete: () => void;
 }
@@ -27,7 +29,7 @@ interface Props {
  * a `⋯` menu trailing. Every secondary action — rename, new chat, go to persona,
  * delete — lives in the menu so the row body stays a single tap into the chat.
  */
-export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.Element {
+export function HistoryRow({ chat, persona, onOpen, onRename, onDelete }: Props): JSX.Element {
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -82,7 +84,10 @@ export function HistoryRow({ chat, persona, onRename, onDelete }: Props): JSX.El
           type="button"
           data-row-body
           className="cs-row-main"
-          onClick={() => navigate(`/app/chat/${chat.id}`)}
+          onClick={() => {
+            onOpen?.();
+            navigate(`/app/chat/${chat.id}`);
+          }}
         >
           {leading}
           <span className="cs-row-body">
