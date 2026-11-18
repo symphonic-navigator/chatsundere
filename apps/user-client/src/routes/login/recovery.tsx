@@ -212,7 +212,16 @@ export function Recovery() {
         // Local-only path: session and mk already present from step 1.
         session = step.session;
         mk = step.mk;
-        await activateSession(session, mk);
+        try {
+          await activateSession(session, mk);
+        } catch {
+          // activateSession closed this session (its guard failed), so the step
+          // payload now holds a dead session and a zeroed MK: start again at the
+          // key step rather than retry with them.
+          setStep({ kind: 'step1' });
+          setError(c.errors.unknown);
+          return;
+        }
       } else {
         // step2-deferred without isLinked is unreachable under the spec
         // (deferred only ever set in the full-recovery branch which requires

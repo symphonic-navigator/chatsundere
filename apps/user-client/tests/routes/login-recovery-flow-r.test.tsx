@@ -41,6 +41,7 @@ vi.mock('../../src/lib/server-client.js', () => ({ httpServerClient: {} }));
 vi.mock('../../src/env.js', () => ({ env: { VITE_AUTH_URL: 'https://auth.example.com' } }));
 
 import { CryptoError } from '@chatsundere/crypto';
+import { activateSession } from '../../src/boot/activate-session.js';
 import { HttpError } from '../../src/lib/fetch.js';
 import { Recovery } from '../../src/routes/login/recovery.js';
 
@@ -126,6 +127,26 @@ describe('Recovery (login surface) — flow R back affordance (D2)', () => {
     await screen.findByText('Choose a new passphrase.');
 
     expect(screen.queryByRole('button', { name: 'Re-enter recovery key' })).not.toBeInTheDocument();
+  });
+
+  it('step2-local: a failed activation (session closed by activateSession) returns to step 1', async () => {
+    mockLoginLocalWithRecoveryKey.mockResolvedValue({
+      session: { id: 's1' },
+      mk: new Uint8Array(32),
+    });
+    mockGetLinkedAccount.mockResolvedValue(null);
+    vi.mocked(activateSession).mockRejectedValueOnce(new Error('identity guard failed'));
+    const user = userEvent.setup();
+    renderRoute();
+
+    await user.type(screen.getByLabelText('Recovery key'), FAKE_KEY);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByText('Choose a new passphrase.');
+    await fillAndSubmitPassphrase(user);
+
+    // The dead session must not stay in the step payload: back to the key step.
+    expect(await screen.findByText('Sign in with your recovery key.')).toBeInTheDocument();
+    expect(mockChangePassphraseLocalOnly).not.toHaveBeenCalled();
   });
 
   it('mapOnlineRecoveryError: HttpError 429 without Retry-After → shared "a few minutes" copy', async () => {

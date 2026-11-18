@@ -7,7 +7,7 @@ describe('HistorySearchBar', () => {
   it('renders an input with the placeholder copy', () => {
     const { container } = render(<HistorySearchBar value="" onChange={vi.fn()} />);
     const input = container.querySelector('input') as HTMLInputElement;
-    expect(input.placeholder).toBe('Search chats by title…');
+    expect(input.placeholder).toBe('Search titles and messages…');
   });
   it('reflects the controlled value', () => {
     const { container } = render(<HistorySearchBar value="abc" onChange={vi.fn()} />);

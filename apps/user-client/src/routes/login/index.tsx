@@ -261,7 +261,7 @@ export function Login() {
         return;
       }
 
-      const session = await loginWithLocalBiometric({
+      const { session, mk } = await loginWithLocalBiometric({
         db: getDb(),
         credentialId: new Uint8Array(assertion.rawId),
         challenge,
@@ -272,7 +272,7 @@ export function Login() {
         origin: window.location.origin,
       });
 
-      await activateSession(session);
+      await activateSession(session, mk);
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
       nav.returnTo(await postUnlockTarget(returnTarget));

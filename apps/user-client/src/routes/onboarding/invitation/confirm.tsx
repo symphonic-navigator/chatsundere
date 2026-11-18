@@ -5,6 +5,7 @@ import {
   finishJoinByInvitation,
   getLinkedAccount,
   linkToServer,
+  loginLocalWithPassphrase,
   setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
@@ -210,25 +211,72 @@ function InvitationConfirmInner() {
         // username from the local account, so no other threading is needed.
         const renamed =
           latelinkRename && cleanUsername.length > 0 && cleanUsername !== localSession?.username;
-        if (renamed) {
-          await changeUsername({ db: getDb(), newUsername: cleanUsername });
+        // Prove the passphrase against the local wrap before anything is sent:
+        // after a passkey unlock it may not have been typed for weeks, and
+        // `linkToServer` would register a typo as the server passphrase, splitting
+        // the account (spec §3.6, F1). A typo fails the integrity HMAC first
+        // (`integrity_check_failed`), the AEAD otherwise (`wrong_passphrase`);
+        // both are shown inline, as on the Login page they cannot be told apart.
+        let proof: Awaited<ReturnType<typeof loginLocalWithPassphrase>>;
+        try {
+          proof = await loginLocalWithPassphrase({ db: getDb(), passphrase });
+        } catch (err) {
+          if (
+            err instanceof CryptoError &&
+            (err.code === 'integrity_check_failed' || err.code === 'wrong_passphrase')
+          ) {
+            setPassphraseError(copy.login.errors.wrongPassphrase);
+            setScreen({ kind: 'ready' });
+            return;
+          }
+          throw err;
         }
-        // `linkToServer` runs its own OPAQUE round internally.
-        await linkToServer({
-          db: getDb(),
-          serverClient: httpServerClient,
-          invitationToken: storeCtx.code,
-          baseUrl: storeCtx.baseUrl,
-          issuerLabel: null,
-          passphrase,
-          mk: localMk,
-        });
+        try {
+          // The proof is slow (KDF): if the user signed out meanwhile, nothing
+          // has been sent yet, so they simply unlock again.
+          if (!useSessionStore.getState().mk) {
+            navigate('/login', { replace: true });
+            return;
+          }
+          if (renamed) {
+            await changeUsername({ db: getDb(), newUsername: cleanUsername });
+          }
+          // `linkToServer` wraps the proof's own MK, never the store's: the store
+          // shares its buffer with the live session, and a sign-out during this
+          // network round would zero it in place, wrapping all zeros for the
+          // server (Larissa H1). The proof session never reaches the store, so
+          // closing it below leaves the store's MK intact (spec §3.4.1).
+          await linkToServer({
+            db: getDb(),
+            serverClient: httpServerClient,
+            invitationToken: storeCtx.code,
+            baseUrl: storeCtx.baseUrl,
+            issuerLabel: null,
+            passphrase,
+            mk: proof.mk,
+          });
+        } finally {
+          proof.session.close();
+        }
         useConnectivityStore.getState().onServerOk();
+        // Re-read the session: it may have gone during the await (sign-out, a
+        // refused refresh, a wipe). The device is linked already, so record the
+        // link and send the user to unlock again rather than revive a closed
+        // session without its MK (spec §3.6, F2).
+        const live = useSessionStore.getState().session;
+        if (!live) {
+          const row = await getLinkedAccount(getDb());
+          if (row) useAccountLinkStore.getState().setLinked(row);
+          await resetEngineStateForNewLink();
+          useOnboardingStore.getState().reset();
+          navigate('/login', { replace: true });
+          return;
+        }
         // Preserve the existing MK by omitting the second argument; carry the
         // renamed username so the session reflects the new local identity.
         useSessionStore.getState().setSession({
-          ...localSession,
-          username: renamed ? cleanUsername : (localSession?.username ?? ''),
+          ...live,
+          username: renamed ? cleanUsername : live.username,
           mode: 'linked',
         });
         useOnboardingStore.getState().reset();

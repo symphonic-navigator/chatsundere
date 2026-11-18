@@ -5,6 +5,7 @@ import { closeClientDataDb } from '../boot/client-data-db.js';
 import { closeKnowledgeVectorsDb } from '../boot/knowledge-vectors-db.js';
 import { closeDb } from '../boot/open-db.js';
 import { logoutCurrentSession } from './auth-logout.js';
+import { rotateHistoryGen } from './history-return.js';
 
 /**
  * The complete-wipe erase (spec §4.3 + sync-lifecycle hardening Unit 4): the
@@ -148,6 +149,7 @@ async function clearNonIndexedDbSurfaces(): Promise<void> {
 export async function wipeDevice(): Promise<void> {
   await logoutCurrentSession();
   useSessionStore.getState().closeAndForget();
+  rotateHistoryGen();
 
   closeClientDataDb();
   closeKnowledgeVectorsDb();

@@ -99,4 +99,25 @@ describe('useSessionStore', () => {
     expect(useSessionStore.getState().mk).toBe(mk2);
     expect(useSessionStore.getState().mk).not.toBe(mk1);
   });
+
+  it('refuses to open a session without a master key on an empty store', () => {
+    const close = vi.fn();
+    expect(() => useSessionStore.getState().setSession(makeStubSession({ close }))).toThrow(
+      'setSession: refusing to open a session without a master key',
+    );
+    // Nothing changed, and the refused session was not closed by the store.
+    expect(useSessionStore.getState().session).toBeNull();
+    expect(useSessionStore.getState().mk).toBeNull();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('still preserves mk on omit over an unlocked store', () => {
+    const mk = new Uint8Array(32).fill(0x33) as unknown as MasterKey;
+    useSessionStore.getState().setSession(makeStubSession(), mk);
+    const current = useSessionStore.getState().session;
+    if (!current) throw new Error('session unexpectedly null');
+    useSessionStore.getState().setSession({ ...current, mode: 'linked' });
+    expect(useSessionStore.getState().session?.mode).toBe('linked');
+    expect(useSessionStore.getState().mk).toBe(mk);
+  });
 });
