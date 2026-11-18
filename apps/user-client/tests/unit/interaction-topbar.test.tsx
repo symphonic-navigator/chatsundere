@@ -89,7 +89,7 @@ describe('InteractionTopbar', () => {
     expect(onOpenQuickMenu).toHaveBeenCalledWith(btn);
   });
 
-  it('journal stub shows 0', () => {
+  it('renders no journal pill (Q1: removed, the cockpit Memory button carries the count)', () => {
     const { container } = wrap(
       <InteractionTopbar
         persona={aurum}
@@ -100,7 +100,8 @@ describe('InteractionTopbar', () => {
         onRenameChat={vi.fn()}
       />,
     );
-    expect(container.querySelector('.journal-indicator')?.textContent).toContain('0');
+    expect(container.querySelector('.journal-indicator')).toBeNull();
+    expect(container.querySelector('[title="Uncommitted journal entries"]')).toBeNull();
   });
 
   it('context gauge shows the right percentage', () => {
@@ -187,7 +188,7 @@ describe('InteractionTopbar — title row (chat exists)', () => {
     expect(container.querySelector('.topbar-persona-name-btn')).toBeNull();
   });
 
-  it('project slot shows a muted placeholder when no project', () => {
+  it('renders no project line when the chat has no project', () => {
     const { container } = wrap(
       <InteractionTopbar
         persona={aurum}
@@ -198,10 +199,8 @@ describe('InteractionTopbar — title row (chat exists)', () => {
         onRenameChat={vi.fn()}
       />,
     );
-    const slot = container.querySelector('.topbar-project') as HTMLElement;
-    expect(slot).not.toBeNull();
-    expect(slot.textContent).toBe('(no project)');
-    expect(slot.getAttribute('data-empty')).toBe('true');
+    expect(container.querySelector('.topbar-project')).toBeNull();
+    expect(container.textContent).not.toContain('(no project)');
   });
 
   it('project slot shows the project name (no placeholder) when set', () => {
@@ -218,7 +217,6 @@ describe('InteractionTopbar — title row (chat exists)', () => {
     );
     const slot = container.querySelector('.topbar-project') as HTMLElement;
     expect(slot.textContent).toBe('Rennwagen');
-    expect(slot.getAttribute('data-empty')).toBeNull();
   });
 
   it('tapping the title swaps to an input pre-filled with the current title (or empty when null)', () => {

@@ -63,8 +63,8 @@ describe('MessageControls read-aloud button', () => {
   });
 
   it.each([
-    ['no-provider', 'Set up a TTS provider in My Settings'],
-    ['no-voice', 'Choose a voice for this persona in its editor'],
+    ['no-provider', 'Set up a voice provider in Settings → Voice'],
+    ['no-voice', 'Choose a voice for this persona on its Font & Voice page'],
     ['nothing', 'Nothing to read aloud in this message'],
   ] as const)('marks aria-disabled and sets tooltip for the %s tone', (reason, tooltip) => {
     render(

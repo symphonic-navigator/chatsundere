@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
+import { Link, useInRouterContext, useLocation } from 'react-router-dom';
 import type { MessageRow } from '../../boot/client-data-db.js';
 import { type TtsUnavailableReason, VOICES_UNAVAILABLE_COPY } from '../../lib/voice/resolve-tts.js';
+import { voiceRepairFor } from '../../lib/voice/voice-repair.js';
+import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import { syncCopy } from '../../sync/copy.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { type OverflowItem, OverflowMenu } from '../ui/OverflowMenu.js';
@@ -32,7 +35,7 @@ interface Props {
   /**
    * Why the Read control is disabled, or null when it is actionable.
    * Drives the three constructive disabled-tooltip tones (spec §4):
-   *   'no-provider' → set up a TTS provider
+   *   'no-provider' → set up a voice provider
    *   'no-voice'    → choose a voice (missing, or not listed by the service)
    *   'voices-unavailable' → the ElevenLabs voice list did not load
    *   'nothing'     → nothing speakable in this message
@@ -44,17 +47,37 @@ interface Props {
 export type ReadDisabledReason = TtsUnavailableReason | 'nothing';
 
 const READ_TOOLTIP: Record<ReadDisabledReason, string> = {
-  'no-provider': 'Set up a TTS provider in My Settings',
-  'no-voice': 'Choose a voice for this persona in its editor',
+  'no-provider': 'Set up a voice provider in Settings → Voice',
+  'no-voice': 'Choose a voice for this persona on its Font & Voice page',
   'voices-unavailable': VOICES_UNAVAILABLE_COPY,
   nothing: 'Nothing to read aloud in this message',
 };
+
+/**
+ * The Read note's repair link (spec 0.5.0 papercuts, item 2). It reads the
+ * chat's persona from the chat header and the chat URL from the router, so the
+ * stream's components need no new props.
+ */
+function ReadRepairLink({ reason }: { reason: TtsUnavailableReason }): JSX.Element | null {
+  const location = useLocation();
+  const personaId = useCurrentChatStore((s) => s.chatHeader?.personaId ?? null);
+  const repair = voiceRepairFor(reason, personaId, `${location.pathname}${location.search}`);
+  if (!repair) return null;
+  return (
+    <Link to={repair.to} className="underline" data-ctrl="read-repair">
+      {repair.label}
+    </Link>
+  );
+}
 
 function stop(e: React.MouseEvent): void {
   e.stopPropagation();
 }
 
 export function MessageControls(p: Props): JSX.Element {
+  // The stream also renders outside a router (isolated component tests); the
+  // repair link needs one, so it is offered only inside it.
+  const inRouter = useInRouterContext();
   const [readNote, setReadNote] = useState(false);
   const [readBusy, setReadBusy] = useState(false);
   const [bookmarkNote, setBookmarkNote] = useState(false);
@@ -180,7 +203,15 @@ export function MessageControls(p: Props): JSX.Element {
             ▸ Read
           </button>
           {readNote && p.readDisabledReason ? (
-            <output className="ctrl-note">{READ_TOOLTIP[p.readDisabledReason]}</output>
+            <output className="ctrl-note">
+              {READ_TOOLTIP[p.readDisabledReason]}
+              {inRouter && p.readDisabledReason !== 'nothing' ? (
+                <>
+                  {' '}
+                  <ReadRepairLink reason={p.readDisabledReason} />
+                </>
+              ) : null}
+            </output>
           ) : null}
           {p.onSaveAsTemplate ? (
             <OverflowMenu items={[{ label: 'Save as template', onSelect: p.onSaveAsTemplate }]} />

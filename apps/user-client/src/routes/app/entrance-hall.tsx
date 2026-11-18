@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { PostOnboardingBiometricPrompt } from '../../components/PostOnboardingBiometricPrompt.js';
 import { FirstSyncCard, SetupCard, type SetupStep } from '../../components/SetupCard.js';
 import { NavTile } from '../../components/ui/NavTile.js';
+import { useHelp } from '../../content/help/use-help.js';
 import { useAllArtefactCount } from '../../data/artefacts.js';
 import { useChats } from '../../data/chats.js';
 import { useFilteredLibraries } from '../../data/knowledge.js';
@@ -35,6 +36,7 @@ export function EntranceHall(): JSX.Element {
   const providers = useProviders();
   const mindspaces = useMindspaces();
   const setMindspace = useMindspaceStore((s) => s.update);
+  const { onHelp, helpOverlay } = useHelp('entrance-hall');
 
   useEffect(() => {
     if (settings.data && mindspaces.data) {
@@ -55,7 +57,8 @@ export function EntranceHall(): JSX.Element {
   const providerCount = (providers.data ?? []).filter((p) => p.enabled).length;
 
   const setupSteps: SetupStep[] = [];
-  if (providerCount === 0) setupSteps.push({ label: 'Connect a provider', to: '/app/settings' });
+  if (providerCount === 0)
+    setupSteps.push({ label: 'Connect a provider', to: '/app/settings/providers?return=/app' });
   if (personaCount === 0)
     setupSteps.push({ label: 'Create your first companion', to: '/app/persona/new' });
   const needsSetup = setupSteps.length > 0;
@@ -70,7 +73,17 @@ export function EntranceHall(): JSX.Element {
   return (
     <section className="flex min-h-[80dvh] flex-col gap-6 px-4 pb-12 pt-6">
       <PostOnboardingBiometricPrompt />
-      <div className="text-center">
+      {helpOverlay}
+      <div className="relative px-12 text-center">
+        {/* The same `?` as every other main screen's PageBar. */}
+        <button
+          type="button"
+          aria-label="Help"
+          className="cs-pagebar-help absolute right-0 top-0"
+          onClick={(e) => onHelp(e.currentTarget)}
+        >
+          ?
+        </button>
         <div className="text-[10px] uppercase tracking-[0.3em] text-paper-soft">Welcome back</div>
         <div
           className="mt-2 text-3xl font-display"

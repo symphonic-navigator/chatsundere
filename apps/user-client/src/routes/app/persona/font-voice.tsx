@@ -2,11 +2,12 @@
 
 import { getProvider } from '@chatsundere/llm-unified';
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { TtsModerationNotice } from '../../../components/voice/TtsModerationNotice.js';
 import { VoicePicker } from '../../../components/voice/VoicePicker.js';
 import { useHelp } from '../../../content/help/use-help.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { resolveTtsTransport } from '../../../lib/voice/resolve-tts.js';
 import { usePersonaEditing } from './use-persona-editing.js';
 
@@ -22,6 +23,11 @@ export function PersonaFontVoice(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('persona-font-voice');
   const { persona, patch } = usePersonaEditing(id ?? null);
   const location = useLocation();
+  const [search] = useSearchParams();
+  // A sender (e.g. the chat's voice note) passes `?return=`; without one, Back
+  // is the persona hub.
+  const back = safeReturnPath(search.get('return'), `/app/persona/${id ?? ''}`);
+  const here = encodeURIComponent(`${location.pathname}${location.search}`);
 
   // One-time probe: resolve whether a TTS provider is configured. null = still
   // probing (treated as enabled so the picker isn't prematurely locked during
@@ -43,7 +49,6 @@ export function PersonaFontVoice(): JSX.Element {
 
   // ── Guard: unknown persona ────────────────────────────────────────────────
   if (persona === null) {
-    const back = `/app/persona/${id ?? ''}`;
     return (
       <PageScaffold crumbs={[{ label: 'My Circle', to: '/app/circle' }]} back={back}>
         <div
@@ -51,7 +56,7 @@ export function PersonaFontVoice(): JSX.Element {
           className="flex flex-col items-center gap-4 px-4 pt-16 text-center"
         >
           <p className="text-paper-soft">Persona not found.</p>
-          <Link to={back} className="text-sm text-paper underline">
+          <Link to={`/app/persona/${id ?? ''}`} className="text-sm text-paper underline">
             Back to Persona
           </Link>
         </div>
@@ -68,21 +73,21 @@ export function PersonaFontVoice(): JSX.Element {
           { label: 'Persona', to: `/app/persona/${id ?? ''}` },
           { label: 'Font & Voice' },
         ]}
-        back={`/app/persona/${id ?? ''}`}
+        back={back}
       >
         <div data-testid="persona-font-voice" className="px-4 pt-4" />
       </PageScaffold>
     );
   }
 
-  const back = `/app/persona/${id}`;
+  const hub = `/app/persona/${id}`;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <PageScaffold
       crumbs={[
         { label: 'My Circle', to: '/app/circle' },
-        { label: persona.name || 'Persona', to: back },
+        { label: persona.name || 'Persona', to: hub },
         { label: 'Font & Voice' },
       ]}
       back={back}
@@ -119,11 +124,7 @@ export function PersonaFontVoice(): JSX.Element {
           {serviceLabel ? (
             <p data-testid="voice-service-line" className="text-[11px] text-paper-soft">
               Voices from {serviceLabel} ·{' '}
-              <Link
-                to="/app/settings/voice"
-                state={{ returnTo: location.pathname }}
-                className="underline"
-              >
+              <Link to={`/app/settings/voice?return=${here}`} className="underline">
                 change in My Settings → Voice
               </Link>
             </p>

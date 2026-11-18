@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
+import { MasterKeyUnavailableError, ProviderKeyLockedError } from '../../src/data/send-errors';
 import { useRegenerate } from '../../src/data/send-message';
 import { sealSecret } from '../../src/lib/secrets';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
@@ -195,6 +196,44 @@ describe('useRegenerate (non-destructive)', () => {
     expect(remaining).toBe(2);
     const userStill = await db.messages.get(userMsgId);
     expect(userStill?.contentBlocks).toEqual([{ type: 'text', text: 'tell me a joke' }]);
+  });
+
+  it('throws ProviderKeyLockedError before touching the reply when the key cannot be opened', async () => {
+    const { db, chatId, personaMsgId } = await seedChatWithExchange();
+    const persona = (await db.personas.toArray())[0];
+    const other = asMasterKey(getRandomBytes(32));
+    if (!persona) throw new Error('persona missing');
+    await db.providers.update(persona.providerId, {
+      apiKey: await sealSecret('test-key', other, `provider/${persona.providerId}/api-key`),
+    });
+    const regenSpy = vi.spyOn(useStreamManagerStore.getState(), 'regenerate');
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+    let err: unknown;
+    await act(async () => {
+      err = await result.current
+        .mutateAsync({ chatId, reasoning: { kind: 'on' } })
+        .catch((e: unknown) => e);
+    });
+    expect(err).toBeInstanceOf(ProviderKeyLockedError);
+    expect(regenSpy).not.toHaveBeenCalled();
+    expect((await db.messages.get(personaMsgId))?.contentBlocks).toEqual([
+      { type: 'text', text: 'why did the chicken' },
+    ]);
+  });
+
+  it('throws MasterKeyUnavailableError without a master key', async () => {
+    const { chatId } = await seedChatWithExchange();
+    useSessionStore.setState({ mk: null } as never);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useRegenerate(), { wrapper: wrapper(qc) });
+    let err: unknown;
+    await act(async () => {
+      err = await result.current
+        .mutateAsync({ chatId, reasoning: { kind: 'on' } })
+        .catch((e: unknown) => e);
+    });
+    expect(err).toBeInstanceOf(MasterKeyUnavailableError);
   });
 
   it('aborts an in-flight stream before regenerating', async () => {

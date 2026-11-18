@@ -2,6 +2,7 @@ import type { Offering } from '@chatsundere/llm-unified';
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef } from 'react';
 import type { AttachmentRow, ChatRow, PersonaRow } from '../../boot/client-data-db.js';
+import type { SendBlockNote } from '../../data/send-errors.js';
 import { resolveContextWindow } from '../../lib/context-window.js';
 import type { OfferingResolution } from '../../lib/resolve-offering.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
@@ -67,6 +68,9 @@ interface Props {
   compactable?: boolean;
   /** Called when the user taps the context gauge to request compaction. */
   onCompact?: () => void;
+  /** Forwarded to the cockpit's note slot: why the last send stopped, with its way out. */
+  sendBlock?: SendBlockNote | null;
+  onDismissSendBlock?: () => void;
 }
 
 /**
@@ -247,6 +251,8 @@ export function InteractionMode(p: Props): JSX.Element {
             voiceUnavailable={p.voiceUnavailable}
             onEnterLiveVoice={p.onEnterLiveVoice}
             onRecheckVoice={p.onRecheckVoice}
+            sendBlock={p.sendBlock}
+            onDismissSendBlock={p.onDismissSendBlock}
           />
         </div>
       ) : p.resolution && p.resolution.kind !== 'ok' ? (

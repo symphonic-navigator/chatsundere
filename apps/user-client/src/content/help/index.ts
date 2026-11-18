@@ -8,6 +8,7 @@ import chatArtefacts from './chat-artefacts.md?raw';
 import chatBookmarks from './chat-bookmarks.md?raw';
 import chatKnowledge from './chat-knowledge.md?raw';
 import circle from './circle.md?raw';
+import entranceHall from './entrance-hall.md?raw';
 import history from './history.md?raw';
 import integrations from './integrations.md?raw';
 import knowledgeDocument from './knowledge-document.md?raw';
@@ -38,6 +39,7 @@ import treasuryTemplates from './treasury-templates.md?raw';
 import treasury from './treasury.md?raw';
 
 export type HelpKey =
+  | 'entrance-hall'
   | 'my-account'
   | 'biometric'
   | 'recovery'
@@ -75,6 +77,7 @@ export type HelpKey =
   | 'chat-knowledge';
 
 export const HELP_DOCS: Record<HelpKey, { title: string; markdown: string }> = {
+  'entrance-hall': { title: 'Entrance Hall — help', markdown: entranceHall },
   'my-account': { title: 'My Account — help', markdown: myAccount },
   biometric: { title: 'Biometric — help', markdown: biometric },
   recovery: { title: 'Recovery Key — help', markdown: recovery },

@@ -60,7 +60,7 @@ export function ReasoningPill(p: ReasoningPillProps): JSX.Element {
         : streaming
           ? 'Available once the thought is complete.'
           : m.disabledReason === 'no-voice'
-            ? 'Add a read-aloud voice in My Settings → Voice to hear this.'
+            ? 'No voice yet — set up a voice provider, or give this companion a voice, to hear this.'
             : null;
   const isPlaying = m?.activeId === p.monologueId;
 

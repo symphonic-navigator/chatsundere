@@ -91,7 +91,10 @@ export function ArtefactsPage(): JSX.Element {
           {sections.inChat.length > 0 ? (
             <div className="flex flex-col gap-2">{sections.inChat.map(renderRow)}</div>
           ) : (
-            <p className="artefact-empty">Artefacts you create appear here.</p>
+            <p className="artefact-empty">
+              Nothing here yet. Ask {persona?.name ?? 'your companion'} for a document, a page or a
+              small app, or keep a reply with ◆ Save.
+            </p>
           )}
         </section>
       </div>
