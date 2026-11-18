@@ -85,7 +85,7 @@ Expected support, to be confirmed on device (Manual verification, steps 1–15):
 **A2 — `lib/voice/media-session.ts` plus `use-read-aloud-media-session.ts`:**
 
 - The hook takes the `VoicePlayback` controller, the persona (name, adult flag) and the avatar. While read-aloud is active (`transportState` is `speaking`, `waiting` or `paused`) and live voice is off, it:
-  - sets `navigator.mediaSession.metadata`: `title` = the persona's name, `artist` = "Chatsundere", `artwork` = the persona's avatar (a 256 px square rendered once from the avatar blob, as a `blob:` URL revoked on teardown; the monogram tile when there is no avatar). No message text, ever.
+  - sets `navigator.mediaSession.metadata`: `title` = the persona's name, `artist` = "Chatsundere", `artwork` = the persona's avatar (a 256 px square rendered once from the avatar blob, as a `blob:` URL revoked on teardown; the app icon (`/icons/icon-512.png`) when there is no avatar). No message text, ever.
   - registers `play` → `voice.resumeAudio()`, `pause` → `voice.pause()`, `nexttrack` → `voice.skip()`, `stop` → `voice.stop()`; sets `previoustrack`, `seekforward`, `seekbackward`, `seekto` to `null` so platforms hide them.
   - mirrors `playbackState`: `'playing'` for speaking/waiting, `'paused'` for paused.
 - When read-aloud returns to idle (or the chat unmounts), it clears metadata, sets every handler to `null` and `playbackState` to `'none'`. A stale lock-screen entry pointing at a chat the user has left is the bug to avoid.
@@ -221,6 +221,17 @@ Screens that need content the sweep could not create (a chat with replies, histo
 - **Q1. Boxed buttons: grow visibly to 44, or keep their look with an invisible hit area?** *Recommendation: the split above. Standalone action buttons grow to 44 so they match `cs-btn`, which already sits at 43; compact controls in dense rows (tabs, chips, switches, Select) keep their look and get an invisible hit area.* The mismatch between 32 px "Test & Save" and a 43 px "Check server" is an inconsistency of its own, and dense rows would look bloated at 44.
 
 ---
+
+## Decided by Chris, 2026-11-18
+
+Spec approved ("ansonsten: ja, super!"), every question answered as recommended:
+
+- **Q1:** standalone action buttons grow visibly to 44 px; compact controls in dense rows keep their look and get an invisible hit area.
+- **Q2:** the wake lock is released while read-aloud is paused and taken back on resume.
+- **Q3:** an adult persona shows "Chatsundere" and the app icon on the lock screen; other personas show their name and avatar; message text never.
+- **Q4:** no lock-screen controls during live voice.
+- **Q5:** the wake lock lets go after 5 minutes of listening with no speech detected.
+- The bridge's decision rule stands as written.
 
 ## Prompt-cache consistency
 
