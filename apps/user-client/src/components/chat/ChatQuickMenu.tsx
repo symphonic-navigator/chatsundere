@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { goHistory } from '../../lib/history-return.js';
 import type { QuickMenuAnchor } from '../../state/current-chat.store.js';
 import { PersonaAvatar } from '../PersonaAvatar.js';
 
@@ -149,7 +150,13 @@ export function ChatQuickMenu(p: ChatQuickMenuProps): JSX.Element | null {
           key: 'history',
           label: 'History',
           disabled: false,
-          run: go(`/app/history?personaId=${persona.id}&return=${enc}`),
+          run: () =>
+            goHistory(
+              p.activeChatId,
+              `/app/history?personaId=${persona.id}&return=${enc}`,
+              p.onNavigate,
+              onClose,
+            ),
         },
         {
           key: 'knowledge',

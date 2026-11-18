@@ -5,6 +5,12 @@ import {
   ChatQuickMenu,
   type ChatQuickMenuProps,
 } from '../../../src/components/chat/ChatQuickMenu.js';
+import {
+  currentHistoryGen,
+  historyArrivalState,
+  rememberHistoryReturn,
+  rotateHistoryGen,
+} from '../../../src/lib/history-return.js';
 
 // PersonaAvatar reads the avatar store from the DB; a stub keeps this test pure.
 vi.mock('../../../src/components/PersonaAvatar.js', () => ({
@@ -85,6 +91,35 @@ describe('ChatQuickMenu', () => {
     fireEvent.click(item(name));
     expect(p.onNavigate).toHaveBeenCalledWith(to);
     expect(p.onClose).toHaveBeenCalled();
+  });
+
+  it('History returns to the remembered search for the chat opened from it', () => {
+    rotateHistoryGen();
+    const gen = currentHistoryGen();
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '?tab=bookmarks', state: { q: 'paprika', gen } },
+      'c1',
+    );
+    const p = setup();
+    fireEvent.click(item('History'));
+    expect(p.onClose).toHaveBeenCalled();
+    expect(p.onNavigate).toHaveBeenCalledWith('/app/history?tab=bookmarks');
+    expect(historyArrivalState('/app/history?tab=bookmarks')).toEqual({ q: 'paprika', gen });
+    rotateHistoryGen();
+  });
+
+  it('History opens as before in any other chat', () => {
+    rotateHistoryGen();
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { q: 'paprika', gen: currentHistoryGen() } },
+      'c-other',
+    );
+    const p = setup();
+    fireEvent.click(item('History'));
+    expect(p.onNavigate).toHaveBeenCalledWith(
+      `/app/history?personaId=p1&return=${enc('/app/chat/c1')}`,
+    );
+    rotateHistoryGen();
   });
 
   it('in a lazy chat: entries enabled, New chat disabled with a visible reason, return keeps personaId', () => {

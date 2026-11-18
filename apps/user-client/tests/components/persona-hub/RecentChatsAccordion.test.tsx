@@ -7,6 +7,7 @@ import {
   RECENT_CHATS_OPEN_KEY,
   RecentChatsAccordion,
 } from '../../../src/components/persona-hub/RecentChatsAccordion.js';
+import { currentHistoryGen } from '../../../src/lib/history-return.js';
 
 function chat(n: number, personaId = 'p1', title: string | null = `Chat ${n}`): ChatRow {
   return {
@@ -28,7 +29,12 @@ const fifteen = Array.from({ length: 15 }, (_, i) => chat(i + 1)).reverse();
 
 function Probe(): JSX.Element {
   const loc = useLocation();
-  return <div data-testid="location">{`${loc.pathname}${loc.search}`}</div>;
+  return (
+    <>
+      <div data-testid="location">{`${loc.pathname}${loc.search}`}</div>
+      <div data-testid="state">{JSON.stringify(loc.state ?? null)}</div>
+    </>
+  );
 }
 
 function renderAcc(chats: ChatRow[] | undefined, returnTo = '/app/persona/p1') {
@@ -118,14 +124,15 @@ describe('RecentChatsAccordion', () => {
     expect(rows[0]?.textContent).toContain('Bach evening');
   });
 
-  it('no matches: an empty line, and All in History stays', () => {
+  it('no matches: an empty line, and the link says History searches messages', () => {
     localStorage.setItem(RECENT_CHATS_OPEN_KEY, '1');
     renderAcc(fifteen);
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter chats' }), {
       target: { value: 'zzz' },
     });
     expect(screen.getByText('No chats match "zzz"')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'All in History →' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'All in History →' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Search messages in History →' })).toBeInTheDocument();
   });
 
   it('zero chats (loaded): disabled toggle and a visible No chats yet', () => {
@@ -153,17 +160,22 @@ describe('RecentChatsAccordion', () => {
     expect(params.get('return')).toBe('/app/persona/p1?return=%2Fapp%2Fchat%2Fc9');
   });
 
-  it('All in History carries the trimmed filter as q', () => {
+  it('All in History carries the trimmed filter in navigation state, not in the address', () => {
     localStorage.setItem(RECENT_CHATS_OPEN_KEY, '1');
     renderAcc(fifteen);
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter chats' }), {
       target: { value: '  chat 1 ' },
     });
-    fireEvent.click(screen.getByRole('link', { name: 'All in History →' }));
-    const params = new URLSearchParams(
-      (screen.getByTestId('location').textContent ?? '').split('?')[1],
-    );
-    expect(params.get('q')).toBe('chat 1');
+    const link = screen.getByRole('link', { name: 'All in History →' });
+    expect(link.getAttribute('href')).not.toContain('q=');
+    expect(link.getAttribute('href')).not.toContain('chat');
+    fireEvent.click(link);
+    const loc = screen.getByTestId('location').textContent ?? '';
+    expect(new URLSearchParams(loc.split('?')[1]).get('q')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('state').textContent ?? 'null')).toEqual({
+      q: 'chat 1',
+      gen: currentHistoryGen(),
+    });
   });
 
   it('a row opens its chat', () => {

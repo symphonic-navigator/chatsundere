@@ -60,10 +60,11 @@ import { chatFontScaleValue } from '../../../lib/chat-font-scale.js';
 import { clearLazyDraft, loadLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
+import { noteChatOpened } from '../../../lib/history-return.js';
 import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
 import { loadReplayAttachments } from '../../../lib/replay-pills.js';
 import { resolveOffering } from '../../../lib/resolve-offering.js';
-import { scrollToMessage } from '../../../lib/scroll-to-message.js';
+import { focusMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { resolveTimeAwareness } from '../../../lib/time-awareness.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
@@ -149,11 +150,15 @@ export function ChatPage(): JSX.Element {
     // effect (and its ResizeObserver) snaps to the latest message and
     // overrides our jump — landing the user at the end of the chat.
     setAutoFollow(false);
-    requestAnimationFrame(() => {
-      // one retry — the message row may mount a frame later
-      if (!scrollToMessage(messageId)) {
-        requestAnimationFrame(() => scrollToMessage(messageId));
-      }
+    // A message gone since the link was made (deleted here or through sync)
+    // must not leave the chat parked mid-history in silence (spec §7.4).
+    focusMessage(messageId, () => {
+      setAutoFollow(true);
+      toastStore.show({
+        message: 'That message is no longer here.',
+        tone: 'info',
+        durationMs: 4000,
+      });
     });
   };
 
@@ -874,6 +879,7 @@ export function ChatPage(): JSX.Element {
     ? artefactItems.findIndex((item) => item.id === openArtefactId)
     : -1;
 
+  useEffect(() => noteChatOpened(activeChatId), [activeChatId]);
   const focusId = search.get('focus');
   // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot per focusId once messages are present
   useEffect(() => {
