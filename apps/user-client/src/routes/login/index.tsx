@@ -15,7 +15,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { activateSession } from '../../boot/activate-session.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
-import { PASSPHRASE_SENTENCE } from '../../data/send-errors.js';
 import { useDisplayName } from '../../data/settings.js';
 import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
@@ -54,10 +53,11 @@ export function Login() {
   // Read once per mount: the key is single-use and must not be re-consumed on re-render.
   const [postUpdateReturn] = useState(consumeReturnPath);
   const returnTarget = safeReturnTarget(searchParams.get('return') ?? postUpdateReturn);
-  // `need=passphrase` (spec 0.5.0 papercuts, item 7): the app asked for the
-  // passphrase because the session holds no master key. A passkey unlock would
-  // not restore it, so the passkey stays visible but disabled, and a user who
-  // is already signed in may step back without unlocking.
+  // `need=passphrase` (spec 0.5.0 papercuts, item 7): the app asked to unlock
+  // again because the session holds no master key. Since the passkey fix (#60) a
+  // passkey unlock restores it as well, so both ways stay open; the passphrase
+  // field takes the focus, and a user already signed in may step back with
+  // Not now.
   const needPassphrase = searchParams.get('need') === 'passphrase';
   const sessionActive = useSessionStore((s) => s.session !== null);
 
@@ -305,17 +305,11 @@ export function Login() {
               <button
                 type="button"
                 onClick={() => void handleBiometricUnlock()}
-                disabled={busy || applying || needPassphrase}
-                aria-describedby={needPassphrase ? 'login-passkey-reason' : undefined}
+                disabled={busy || applying}
                 className="w-full rounded-[var(--radius-card)] bg-aurora-600 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? copy.login.unlockingCta : copy.login.passkeyUnlockCta}
               </button>
-              {needPassphrase ? (
-                <p id="login-passkey-reason" className="text-center text-xs text-paper-soft">
-                  {copy.login.needsPassphrase}
-                </p>
-              ) : null}
             </div>
           )}
 
@@ -327,10 +321,9 @@ export function Login() {
             }}
             className="space-y-4"
           >
-            {/* Why the app sent you here, said once above the field — with or
-                without a passkey, since only the passphrase restores the keys. */}
+            {/* Why the app sent you here, said once above the field. */}
             {needPassphrase ? (
-              <p className="text-sm text-paper-soft">{PASSPHRASE_SENTENCE}</p>
+              <p className="text-sm text-paper-soft">{copy.login.unlockAgain}</p>
             ) : null}
             <PassphraseField
               id="login-passphrase"
