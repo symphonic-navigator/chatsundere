@@ -212,6 +212,10 @@ Screens that need content the sweep could not create (a chat with replies, histo
 
 ---
 
+## Prompt-cache consistency
+
+Neither unit changes anything sent to a provider: no system prompt, wire message, tool definition or their order. The wake lock, the media controls, the audio-output route and the hit areas live entirely in the client's UI and playback layer, so the provider's prefix cache is untouched. (TTS requests are unchanged too: same segments, same voice, same order.)
+
 ## Audit gates
 
 - **Laura**, spec-pass now; pre-squash pass on the built diff. Her spec-pass findings are worked in below.
