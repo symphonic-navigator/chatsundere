@@ -340,3 +340,40 @@ describe('PersonaHub — Recent chats accordion', () => {
     expect(screen.getByTestId('history-sentinel')).toBeInTheDocument();
   });
 });
+
+describe('PersonaHub — background helper privacy', () => {
+  it('says the helper sends tool output to its provider', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    renderHub('p-complete');
+
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+
+    expect(
+      screen.getByText(/Runs chat titles, memory, compaction and summaries of long tool results/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/tool output included, goes to its provider/)).toBeInTheDocument();
+    expect(screen.getByText(/Censored and think-only models can't be helpers/)).toBeInTheDocument();
+  });
+
+  it('"Privacy notes" opens the privacy text over the hub and closes back to it', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    renderHub('p-complete');
+
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Privacy & data handling' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Privacy notes' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Privacy & data handling' });
+    expect(dialog).toHaveTextContent('Which provider sees what?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Privacy & data handling' })).toBeNull(),
+    );
+    expect(screen.getByTestId('persona-hub')).toBeInTheDocument();
+  });
+});

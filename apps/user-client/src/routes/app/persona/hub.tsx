@@ -11,7 +11,7 @@ import {
   Sparkles,
   Type,
 } from 'lucide-react';
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AvatarCropModal } from '../../../components/AvatarCropModal.js';
 import { ModelSlotPicker } from '../../../components/ModelSlotPicker.js';
@@ -26,6 +26,8 @@ import { ExportOverlay } from '../../../components/transfer/ExportOverlay.js';
 import { Button } from '../../../components/ui/Button.js';
 import { NavTile } from '../../../components/ui/NavTile.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { ReadingOverlay } from '../../../components/ui/ReadingOverlay.js';
+import { PRIVACY_MD } from '../../../content/help/index.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useChats } from '../../../data/chats.js';
 import { importChatsuneMemory, importChatsuneSessions } from '../../../data/chatsune-import.js';
@@ -87,6 +89,10 @@ export function PersonaHub(): JSX.Element {
   // `?return=` sink.
   const returnPath = safeReturnPath(search.get('return'), '/app/circle');
   const { onHelp, helpOverlay } = useHelp('persona');
+  // The privacy text opens over the hub from the helper's "Privacy notes" link,
+  // in the same reader as the page's help: one tap, no navigation.
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const privacyTriggerRef = useRef<HTMLElement | null>(null);
 
   // Present when navigating here from a Chatsundere persona pack import — drives
   // the one-time PostImportNote (ported from persona-editor.tsx).
@@ -346,6 +352,13 @@ export function PersonaHub(): JSX.Element {
       onHelp={onHelp}
     >
       {helpOverlay}
+      <ReadingOverlay
+        open={showPrivacy}
+        title="Privacy & data handling"
+        markdown={PRIVACY_MD}
+        onClose={() => setShowPrivacy(false)}
+        triggerRef={privacyTriggerRef}
+      />
       <div data-testid="persona-hub" className="flex flex-col gap-4 px-4 pb-8 pt-4">
         {/* Offline notice: persona edits are Class-2 writes paused while the
             server is unreachable (spec §11.2). Edits no-op until reconnection;
@@ -514,8 +527,19 @@ export function PersonaHub(): JSX.Element {
                   }
                 />
                 <p className="mt-1 text-[11px] text-paper-soft/70">
-                  Runs chat titles and memory for you. Censored and think-only models can't be
-                  helpers.
+                  Runs chat titles, memory, compaction and summaries of long tool results. What it
+                  works on, tool output included, goes to its provider. Censored and think-only
+                  models can't be helpers.{' '}
+                  <button
+                    type="button"
+                    className="underline underline-offset-2 hover:text-paper"
+                    onClick={(e) => {
+                      privacyTriggerRef.current = e.currentTarget;
+                      setShowPrivacy(true);
+                    }}
+                  >
+                    Privacy notes
+                  </button>
                 </p>
               </div>
             </div>
