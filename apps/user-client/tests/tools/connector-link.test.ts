@@ -313,3 +313,62 @@ describe('emphasisSplit', () => {
     expect(lead + tail).toBe(host);
   });
 });
+
+describe('review fixes (T1 review, 2026-11-18)', () => {
+  it('strips a long run of trailing punctuation in linear time', () => {
+    const text = `https://a.example/${')'.repeat(100_000)}x`;
+    const started = performance.now();
+    userWroteLink('https://a.example/mcp', [text]);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it.each([
+    'https://localhost../mcp',
+    'https://127.0.0.1../mcp',
+    'https://nas.local../mcp',
+    'https://printer../mcp',
+    'https://a..b/mcp',
+    'https://home.arpa/mcp',
+    'https://0177.0.0.1/mcp',
+    'https://[::ffff:127.0.0.1]/mcp',
+  ])('refuses %s as not public', (raw) => {
+    expect(normaliseConnectorLink(raw)).toEqual({ ok: false, reason: 'not-public' });
+  });
+
+  it('refuses port 0 as invalid', () => {
+    expect(normaliseConnectorLink('https://example.com:0/mcp')).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+  });
+
+  it.each([
+    '`https://a.example/mcp`',
+    '**https://a.example/mcp**',
+    '“https://a.example/mcp”',
+    '‘https://a.example/mcp’',
+    '«https://a.example/mcp»',
+    'https://a.example/mcp…',
+    'see https://a.example/mcp.',
+  ])('finds the user link wrapped as %s', (text) => {
+    expect(userWroteLink('https://a.example/mcp', [text])).toBe(true);
+  });
+
+  it('keeps a closing bracket that closes one inside the link', () => {
+    expect(linksInText('(see https://a.example/mcp_(foo))')).toEqual([
+      'https://a.example/mcp_(foo)',
+    ]);
+  });
+
+  it('ignores a trailing slash only on a link without a query', () => {
+    expect(userWroteLink('https://a.example/mcp?x=/', ['https://a.example/mcp?x='])).toBe(false);
+    expect(userWroteLink('https://a.example/mcp/', ['https://a.example/mcp'])).toBe(true);
+  });
+
+  it('accepts a bare host without a path, and with a port', () => {
+    expect(userWroteLink('https://mcp.kumbu.example/', ['it is mcp.kumbu.example'])).toBe(true);
+    expect(
+      userWroteLink('https://mcp.kumbu.example:8443/mcp', ['mcp.kumbu.example:8443/mcp']),
+    ).toBe(true);
+  });
+});

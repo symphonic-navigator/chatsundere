@@ -99,7 +99,7 @@ Validation, in this order; the first failing rule decides:
 5. **No fragment** (`#…`). A fragment is never sent by `fetch` and is dropped by `canonicalResource`, so it would only pad the display (`https://evil.example/mcp#@mcp.kumbu.example`).
 6. **A public host.** Refused: IP literals (v4 and v6), `localhost`, single-label hosts, and names ending in `.local`, `.localhost`, `.internal`, `.lan`, `.home.arpa`. A home-network server stays a manual act (*Enter details manually*, *Local network*).
 7. **At most 2,048 characters.**
-8. **The user wrote it.** The normalised link must equal, after the same normalisation, a link found in one of this chat's user messages. Links are found in user text by a plain pattern (`https?://` or a bare `host.tld/…`), with trailing punctuation `.,;:!?)]}>'"` removed; a trailing slash is ignored on both sides. Links in attachments, tool results, artefacts and the model's own messages do not count.
+8. **The user wrote it.** The normalised link must equal, after the same normalisation, a link found in one of this chat's user messages. Links are found in user text by a plain pattern (`https?://` or a bare `host.tld`, with or without a port and path), with trailing punctuation and wrappers ``.,;:!?)]}>'"`*”’»…`` removed (a `)` that closes a `(` inside the link stays); a trailing slash is ignored on both sides when the link has no query. Hosts with an empty label (`a..b`) and the bare `home.arpa` count as not public; port 0 is invalid. Links in attachments, tool results, artefacts and the model's own messages do not count.
 
 Then, if a row already exists for the link (§4.3), the result is "already exists"; otherwise "proposed".
 
