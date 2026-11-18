@@ -126,6 +126,14 @@ Security deferrals Tool-replay L-3 (Low) and Summaries M-2 (Medium), both "befor
 
 Not in this unit: Summaries M-2's "consider a persona-bundle fallback when the helper's privacy class is weaker" is a behaviour change; it stays open and I name it in the report.
 
+## Prompt-cache consistency
+
+Review criterion from Chris (2026-11-18): losing the provider's prefix cache makes a chat roughly ten times more expensive, so no item may change or reorder what earlier turns sent.
+
+- **Items 1–6, 9, 10, 11:** UI, copy, navigation and local housekeeping only. Nothing sent to a provider changes: not the system prompt, the wire messages, the tool definitions or their order.
+- **Item 7 (locked key, missing master key):** the change sits in `resolvePersonaContext`, before any request is built. It only turns two throws that already abort the send into typed errors and shows a note. A send that succeeds today builds exactly the same request; a send that fails today still sends nothing. The re-entered key changes only the `Authorization` header, which is not part of the cached prefix.
+- **Item 8 (MCP sign-in):** S1, S7 and S11 change only when and where screens show. S4 resumes an existing pending sign-in instead of starting a new one; either way the result is the same grant for the same server, so the tool list built for the next turn (names, definitions, order from `buildMcpToolNames`) is the one a fresh sign-in would give. Which tools a connected server offers is not touched.
+
 ## Audit gates
 
 - **Larissa (CLAUDE.md §9.1):** no Larissa path is touched; everything is in `apps/user-client`. Items 7 (errors around `openSecret`) and 10 (deleting local rows at unlock) sit next to key handling and data deletion, so I summon a short Larissa read of those two diffs at pre-squash anyway. Item 8 changes only when screens show, not tokens or routes.
