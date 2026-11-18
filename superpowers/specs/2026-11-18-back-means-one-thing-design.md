@@ -39,7 +39,7 @@ Laura's holistic sweep of 2026-11-18 found a hard defect, confirmed in the code:
 
 > **`‹` takes you back to where you were, exactly like your phone's Back.** If you arrived on a page from nowhere (a link, a bookmark, a fresh start), `‹` takes you up to the page above it instead, so it never throws you out of the app. **A crumb takes you up** to that place; if you came through it, you go back to it, so the way back stays short. When you finish something (save a provider, create a persona, sign in), the app takes you back to where you started, and the finished form is gone from Back. Signing out, the adult-mode switch and the end of the first run clear the way back, so Back can never show what you just closed.
 
-Why they agree: `‹` *is* a history step whenever there is a step to take, and every other move is either a new page (forward, one step deeper) or a return (unwind, never a new entry). The history therefore always reads as the path the user walked, without loops, and the phone's Back walks the same path the `‹` walks.
+Why they agree: `‹` *is* a history step whenever there is a step to take, and every other move is either a new page (forward, one step deeper) or a return (unwind, never a new entry). Going up and finishing therefore never create loops in the history (a forward link may still revisit a page, which is honest chronology), and the phone's Back walks the same path the `‹` walks.
 
 ## How the app knows where it came from
 
@@ -64,8 +64,8 @@ Central stamping means no call site has to remember it: plain `<Link>`s, `useNav
 | Move | Rule | Used by |
 |---|---|---|
 | `back(fallback)` | trail not empty → `navigate(-1)`; empty → `navigate(fallback, { replace: true })` | `‹`, save-then-leave, cancel-then-leave |
-| `returnTo(target)` | the nearest entry behind whose pathname is `target`'s → `navigate(-k)`; none → `navigate(target, { replace: true })` | crumbs, "Home" (brand logo, the chat's exit to the Hall), the end of an in-session flow (post-unlock return, the server-linking wizard), a delete that leaves its page |
-| `resetTo(target)` | unwind the whole trail (`navigate(-min(trail, idx))`), then replace that first entry with `target`, behind a one-frame curtain | sign-out, the end of the first run (onboarding, pairing, local account), the NSFW panic |
+| `returnTo(target)` | the nearest entry behind whose pathname is `target`'s → `navigate(-k)`; none → `navigate(target, { replace: true })`, except for the Hall (`/app`), the root, where a miss runs `resetTo('/app')` so Back from the Hall always leaves | crumbs, "Home" (brand logo, the chat's exit to the Hall), the end of an in-session flow (post-unlock return, the server-linking wizard), a delete that leaves its page |
+| `resetTo(target)` | unwind to the document's first entry by React Router's `idx` (`navigate(-idx)`; `idx` is exact for the current document and 0 on its first entry, so it never crosses into another site, and it covers entries without a stamp), then replace that first entry with `target`, behind a curtain | sign-out, the end of the first run (onboarding, pairing, local account), the NSFW panic |
 
 The **fallback** of `back` is the page's existing `back` prop, which already reads `?return=` where the papercut unit added it: `safeReturnPath(search.get('return'), <parent>)`. So the one answer is:
 
@@ -87,28 +87,39 @@ The **curtain** of `resetTo`: while the unwind runs, `NavTransitionOutlet` rende
 | **Installed PWA, iOS** (no browser Back) | `‹` is the only Back; it walks the trail. When iOS restores the last URL without its history, the trail is empty and `‹` goes up. |
 | **iOS edge swipe** (Safari, and installed where iOS offers it) | It is a `POP`, so it walks the same path as `‹`. |
 | **A different document behind** (after an OAuth round trip, after the device wipe's `location.assign`) | The first entry of the new document has no stamp: trail empty, `‹` goes up within the app. The system Back still goes to the provider's page; the app cannot remove other sites' entries (known limit, see below). |
-| **An entry from before this release** | No stamp: treated as empty, so `‹` goes up. One release later every entry has one. |
+| **An entry from before this release** (a tab or PWA kept open across the update) | No stamp: treated as empty, so `‹` goes up. `resetTo` unwinds by `idx`, not by the trail, so sign-out and the panic still clear these entries on update day. |
 
 ## What changes where
 
-1. **`PageBar`**: `‹` calls `back(props.back)`; an ancestor crumb calls `returnTo(crumb.to)`. The `onNavigate` interceptor receives the move, not a path (`{ kind: 'back' } | { kind: 'to', to }`), so a guard can run the same move after its confirm.
+1. **`PageBar`**: `‹` calls `back(props.back)`; the prop's JSDoc (and the component's) says it is the fallback when nothing is behind, not where `‹` always goes; an ancestor crumb calls `returnTo(crumb.to)`. The `onNavigate` interceptor receives the move, not a path (`{ kind: 'back' } | { kind: 'to', to }`), so a guard can run the same move after its confirm.
 2. **`PageScaffold`**: the discard confirm runs the pending move (today it pushes the path, `PageScaffold.tsx:72`).
 3. **Save-then-leave and cancel-then-leave** call `back(<the page's back>)`: the provider page (`provider.tsx:98`), the knowledge document (`document.tsx:141`), the treasury template (`template.tsx:143`), the integration server page's back (`server.tsx:329`, Back only).
 4. **Create-then-show replaces** the form: a new persona (`create.tsx:173`), a Chatsune import landing on the hub (`ChatsuneImportControl.tsx:73` when it runs on the New-persona page), a new knowledge library (`library.tsx:109`), a new integration server (`server.tsx:191`, Back only).
-5. **Deletes that leave their page** call `returnTo(<list>)` (`library.tsx:320`, `document.tsx:308`, `template.tsx:379`, `tree.tsx:200`, `server.tsx:187` and `sign-in.tsx:44` Back only).
+5. **Deletes that leave their page** call `returnTo(<list>)`. A deleted persona's chats can still sit behind (Hall, Chat, Circle after a crumb, then the persona deleted in My Circle): the chat page's missing-chat guard (`chat-page.tsx:186`, today a replace with History) calls `back()` again when the trail is not empty, so `‹` on My Circle skips the orphan and lands on the Hall; with nothing behind it replaces with History as today. (`library.tsx:320`, `document.tsx:308`, `template.tsx:379`, `tree.tsx:200`, `server.tsx:187` and `sign-in.tsx:44` Back only).
 6. **Home**: the brand logo (`root.tsx:168`, today a push to `/` that the Gate replaces with `/app`) and the chat's exit to the Hall (`chat-page.tsx:580`) call `returnTo('/app')`.
 7. **The persona hub**: its "My Circle" crumb always means My Circle (`returnTo('/app/circle')`), and `‹` keeps going where the user came from. Today the crumb carries `returnPath`, so after a quick-menu visit it leads to the chat (papercut session's Laura finding). The ledger's "thread `?return=` through the Hub's NavTiles and each sub-page back" is **subsumed**: a sub-page's `‹` now pops to the hub, which still holds its own `?return=`.
 8. **Roleplay → Model behaviour** (PR #57's new link, not in this base): nothing to add. The link pushes, so Model behaviour's `‹` pops back to Roleplay. The `?return=` proposed in #57 is not needed. A route test for the journey lands with this unit after #57 is merged into `master`; if #57 merges after this unit, its session adds the test instead (the coordinator decides the order).
 9. **Post-unlock return** (`routes/login/index.tsx:196, 276, 362`) and the invitation wizard's end when started from Server linking (`confirm.tsx:241`, `recovery-reveal.tsx:20` with a `?return=`) call `returnTo(target)`: re-entering a passphrase from a page pops back to it instead of stacking a copy.
-10. **The first run** (`onboarding/invitation/confirm.tsx:241` without a `?return=`, `recovery-reveal.tsx:31`, `pairing/confirm.tsx:128`, `onboarding/local/index.tsx:71`, `onboarding/recovery.tsx:122`, `join.tsx:55`, `login/recovery.tsx:225, 258`) calls `resetTo('/app')`: the wizard's steps are gone from Back.
+10. **The first run** (see also "The recovery-key reveal" below) (`onboarding/invitation/confirm.tsx:241` without a `?return=`, `recovery-reveal.tsx:31`, `pairing/confirm.tsx:128`, `onboarding/local/index.tsx:71`, `onboarding/recovery.tsx:122`, `join.tsx:55`, `login/recovery.tsx:225, 258`) calls `resetTo('/app')`: the wizard's steps are gone from Back.
 11. **The wizards' own Back links** (`aria-label="Back"` `<Link>`s in `routes/onboarding/**` and `routes/login/**`) call `back(<their current to>)`, so they pop like everywhere else.
 12. **Sign-out** (`logout.tsx:51`) calls `resetTo('/login')`. The device wipe keeps its full-page `location.assign`; the data behind it is gone.
 13. **The NSFW panic** calls `resetTo('/app')` (the `navigate` argument becomes the `resetTo`). And see the adult-chat guard below.
 14. **History return** (PR #56's `lib/history-return.ts`, not in this base): the mechanism **sits beside it** and replaces one check. `goHistory()` decides "a step back" by comparing React Router's `idx` with a memory-only target, so after a reload the quick menu's History opens a fresh visit. After #56 is merged, its check becomes "is `/app/history` the entry directly behind?" read from the trail, which survives a reload; popping restores History's own `location.state` (query, scroll), which already lives in `history.state` and never in the URL or a storage key. The memory-only return target, the search cache and the generation token stay as they are. The deferral (killed PWA relaunched in a chat) closes for a reload; after a kill the history is gone and a fresh visit is the honest answer. Applied in this unit if #56 is merged first, else handed to the coordinator as a two-line follow-up.
 
+### The recovery-key reveal is a point of no return
+
+Laura's spec-pass found that `form.tsx:77` pushes the confirm step and `confirm.tsx:281` *replaces* it with the reveal after `activateSession` has run, so during the reveal the stack is Welcome, Invitation form, **Recovery**. One system Back pops to an empty invitation form with a live session and a spent token, and on Android there is no Forward back to the key, which is shown only once. The local wizard (`onboarding/local/index.tsx`, one route, the key in component state) has the same exposure: Back leaves the route mid-reveal with the account created.
+
+Rule: **while a recovery key is waiting to be acknowledged, every onboarding route replaces itself with the reveal.**
+
+- Invitation: Welcome (`/onboarding`), the invitation form, scan and confirm check `useOnboardingStore`; while `state.kind === 'invitation_recovery'` they replace themselves with `/onboarding/invitation/recovery` (keeping its `?return=`). Back from the reveal therefore lands on the reveal again; the ways out are "Continue" or leaving the app.
+- Local: the wizard moves its reveal into the same store (a new `local_recovery` state with the key, memory only, as `invitation_recovery` holds it today), and `/onboarding` and `/onboarding/local` show the reveal while it is set.
+- "Continue" clears the state and then runs `resetTo('/app')` (first run) or `returnTo(<return>)` (from Server linking).
+- Pairing has no reveal (the recovery key already exists) and needs nothing.
+
 ### The adult-chat guard (open question Q2)
 
-The panic pushes the user out, but nothing stops a Forward, a reload of a stale tab or a chat sub-page (Bookmarks, Artefacts, Knowledge of an adult chat, where `nsfwPanic` does not act because no chat page is mounted) from showing an adult chat in SFW mode. Proposal: a small guard on `/app/chat/:chatId` and its sub-pages: when the chat's persona is an adult persona and Adult Mode is `sfw`, arriving there replaces with `/app` and shows the panic's toast; being there when the mode flips runs `resetTo('/app')`. Persona pages are left as they are (My Circle shows adult personas in SFW with their badge today; changing that is a design question, not Back).
+The panic pushes the user out, but nothing stops a Forward, a reload of a stale tab or a chat sub-page (Bookmarks, Artefacts, Knowledge of an adult chat, where `nsfwPanic` does not act because no chat page is mounted) from showing an adult chat in SFW mode. Proposal: a small guard on `/app/chat/:chatId` and its sub-pages. It renders nothing until the chat's persona is read (the flag comes from an async Dexie read, so the chat must not paint for a frame first). When the persona is an adult persona and Adult Mode is `sfw`, it runs `resetTo('/app')` with the panic's toast, both on arrival and when the mode flips while the page is open; a plain replace would leave "Hall, Hall" and make Back from the Hall look dead. The panic itself also runs `resetTo('/app')` when an adult chat's `/app/chat/:id` is anywhere in the trail, not only when the chat is mounted, so an adult persona's hub or Roleplay page reached from its chat is cleared as well. Persona pages are left as they are (My Circle shows adult personas in SFW with their badge today; changing that is a design question, not Back).
 
 ## Journeys (the history before and after each step)
 
@@ -186,7 +197,10 @@ Same with Settings → Voice from the cockpit, Expert from the cockpit, and Mode
 
 | Journey | After |
 |---|---|
-| first run: Welcome → Invitation → Scan → Confirm → recovery reveal → Continue | **Hall** ›… (`resetTo`; today: Back re-enters the wizard with a live session) |
+| first run: Welcome → Invitation → Confirm | Welcome, Invitation, **Recovery** (confirm replaced by the reveal, as today) |
+| on the reveal, system Back | Welcome, **Invitation** → replaces itself with **Recovery** (the key is still shown; today: an empty form with a live session, the key gone) |
+| Continue | **Hall** ›… (`resetTo`; today: Back re-enters the wizard with a live session) |
+| local account: name → passphrase → reveal, system Back | **Welcome** → replaces itself with the local reveal (today: the key is gone) |
 | from the Hall, Back | leaves the app |
 | cold start, signed out: `/app/chat/x` → Gate → Login | **Login** (both redirects replace, as today) |
 | unlock | **Chat x** (replaced) |
@@ -209,7 +223,8 @@ Same with Settings → Voice from the cockpit, Expert from the cockpit, and Mode
 | Hall → My Circle → an adult chat | Hall, Circle, **Chat (adult)** |
 | Adult Mode → SFW | **Hall** ›… behind the curtain, toast "Adult mode off — chat closed" *(today: Hall, Circle, Chat, **Hall**, and Back reopens the chat)* |
 | Back | leaves the app |
-| Forward, or a stale tab reloaded on the chat | the adult-chat guard → **Hall** with the toast (Q2) |
+| Forward, or a stale tab reloaded on the chat | the adult-chat guard (nothing painted) → `resetTo` → **Hall** with the toast (Q2) |
+| Hall → adult chat → quick menu → persona → Roleplay, then Adult Mode → SFW | the chat is in the trail → **Hall** ›… (Q2) |
 | on the adult chat's Bookmarks when the mode flips | **Hall** ›… (Q2; today: the page stays open) |
 
 ## Motion
@@ -226,7 +241,7 @@ The reduce-animations switch of #57 and `prefers-reduced-motion` keep acting on 
 
 ## Unsaved edits
 
-The dirty guard (`PageScaffold` `dirty`) intercepts `‹` and the crumbs and now runs the same move after "Discard", so a guarded `‹` pops like an unguarded one. The system Back and the iOS swipe stay unguarded, as logged on 2026-10-09 in `ux-deferrals.md` (`beforeunload` covers reload and tab close). Solving it needs a data router for `useBlocker` (or a hand-made `popstate` trap that re-pushes an entry, which itself breaks "one Back, one thing"). That is not small, so it stays out; the deferral's text is updated to say that `‹` now matches the system Back everywhere except on a dirty page, where only `‹` asks.
+The dirty guard (`PageScaffold` `dirty`) intercepts `‹` and the crumbs and now runs the same move after "Discard", so a guarded `‹` pops like an unguarded one. The system Back and the iOS swipe stay unguarded, as logged on 2026-10-09 in `ux-deferrals.md` (`beforeunload` covers reload and tab close). Solving it needs a data router for `useBlocker` (or a hand-made `popstate` trap that re-pushes an entry, which itself breaks "one Back, one thing"). That is not small, so it stays out; the deferral's text is updated to say that `‹` now matches the system Back everywhere except on a dirty page, where only `‹` asks. Once `‹` and Back are known to be the same, a system Back silently dropping an edit is a sharper surprise than today, so the ledger entry also records Laura's better route for the follow-up: keep the draft on unmount (restore it on return, or save as you go as the Projects tree does), which removes the need for a blocker altogether.
 
 ## Known limits
 
@@ -243,19 +258,19 @@ Nothing in this unit changes what is sent to any provider: it touches routing on
 
 - **Pure trail reducer** (`lib/nav-trail.ts`): push, replace, pop with and without a stamp, the 50-entry cap, the `idx` cut.
 - **Moves against a fake history port**: `back` with and without a trail, `returnTo` hit at depth 1 and 2 and miss, `resetTo` unwinds and replaces, never beyond `idx`.
-- **Route tests** with a real `BrowserRouter` over jsdom's `window.history`: J1 (including the crumb variant), J2, J3, J4, J6, J8, J9 and the dirty-guard confirm, each asserting the stack after every step and that the system Back (`history.back()`) lands where `‹` landed.
+- **Route tests** with a real `BrowserRouter` over jsdom's `window.history`: J1 (including the crumb variant), J2, J3, J4, J6, J7 (the reveal rows, invitation and local), J8, J9 (including the guard rows and update day: entries without a stamp are cleared by `resetTo`) and the dirty-guard confirm, each asserting the stack after every step and that the system Back (`history.back()`) lands where `‹` landed.
 - Tests are written first and seen failing (superpowers TDD, this unit's experiment).
 
 ## Audit gates
 
-- **Laura**: spec-pass (this document; it changes the reachability of nearly every page) and a pre-squash pass on the built flows.
+- **Laura**: spec-pass done on 2026-11-18: one hard defect (Back from the recovery-key reveal into a half-done wizard with the key gone), fixed in this spec ("The recovery-key reveal is a point of no return"); nine soft notes, all worked in (`resetTo` by `idx`, the guard's curtain and reset, Home on a miss resets, the orphaned chat after a persona delete, the wording on loops, the dirty-guard route for the ledger, Q3's priority, the `back` prop's JSDoc, the manual steps). She agrees with Q1 as written, Q2 with the amendment, Q3 with the quick menu first. A pre-squash pass on the built flows follows.
 - **Larissa**: not required, no Larissa path is touched. `safeReturnPath` keeps guarding every `?return=` sink; the stamp holds only pathnames in `history.state`.
 
 ## Open questions for Chris
 
 - **Q1 — Does `‹` go where you came from, or always up to the parent?** Laura's sweep suggested: pop when the entry behind is the page's parent, else replace with the parent. That keeps `‹` meaning "up", but then `‹` and the system Back differ after every cross-link (Hall's setup card → AI Providers: `‹` goes to Settings, Back goes to the Hall). **Recommendation: `‹` goes where you came from** (this spec), with the parent only when nothing is behind, and the crumbs for "up". Reason: one Back, one thing, on every page, and it is what iOS and Android apps do with their own back arrow.
 - **Q2 — Add the adult-chat guard?** **Recommendation: yes.** Reason: the panic's promise is "what was just hidden stays hidden", and today a Forward, a stale tab or a chat's Bookmarks page breaks it; the guard is a few lines on one route group.
-- **Q3 — Back with an open overlay: leave it for a later unit?** **Recommendation: yes, log it in the ledger.** Reason: it touches every overlay (help, quick menu, dialogs, sheets) and is its own design (each overlay owning a history entry); this unit fixes the pages first.
+- **Q3 — Back with an open overlay: leave it for a later unit?** **Recommendation: yes, log it in the ledger with the chat's quick menu first.** Reason: it touches every overlay (help, quick menu, dialogs, sheets) and is its own design (each overlay owning a history entry); this unit fixes the pages first. The quick menu goes first because Android Back with it open leaves the chat, the most frequent Back surprise that remains (Laura).
 
 ## Left to the builder
 
@@ -267,19 +282,25 @@ Nothing in this unit changes what is sent to any provider: it touches routing on
 
 Platforms: **AB** Android Chrome in the browser, **AI** Android installed PWA, **SB** iPhone Safari in the browser, **SI** iPhone installed PWA (no browser Back: use `‹`, and the edge swipe where iOS offers it). "System Back" means the Android Back button or gesture, the browser's Back, or the iOS edge swipe.
 
-1. **(AB, AI, SB, SI) Settings round trip.** Hall → My Settings → AI Providers → any provider. Tap `‹` three times. *Pass:* you are on the Hall. Then press system Back once. *Pass:* the app closes (AI, SI: you are on the home screen; AB, SB: the page before the app, or the browser's new tab), not Settings.
-2. **(AB, AI, SB, SI) Save leaves cleanly.** Hall → My Settings → AI Providers → a provider, change nothing or re-save its key, tap Save. *Pass:* you are on AI Providers. Press system Back (SI: `‹`). *Pass:* My Settings, not the provider page.
+**Start condition for every step**, so that "the app closes" means what it says: AB and SB in a fresh tab with the app as its first page; AI and SI killed (swiped away) and relaunched.
+
+1. **(AB, AI, SB, SI) Settings round trip.** Hall → My Settings → AI Providers → any provider. Tap `‹` three times. *Pass:* you are on the Hall. Then press system Back once (SI: skip). *Pass:* the app closes (AI: the home screen; AB, SB: the browser's new-tab page), not Settings.
+2. **(AB, AI, SB, SI) Save leaves cleanly.** Hall → My Settings → AI Providers → a provider, re-save its key, tap Save. *Pass:* you are on AI Providers. Press system Back (SI: `‹`). *Pass:* My Settings, not the provider page.
 3. **(AB, AI, SB, SI) Crumb goes up.** Open a provider page as in step 2, tap the "My Settings" crumb. *Pass:* My Settings. Then `‹`. *Pass:* the Hall.
-4. **(AB, AI, SB, SI) New persona.** My Circle → New persona → give a name → Create. On the new persona's page press system Back (SI: `‹`). *Pass:* My Circle, not the empty New-persona form.
-5. **(AB, AI, SB, SI) Persona side trip from a chat.** In a chat open the quick menu → the persona → Roleplay. `‹`, `‹`. *Pass:* the persona page, then the chat. Repeat with system Back. *Pass:* the same pages. On the persona page, tap the "My Circle" crumb. *Pass:* My Circle (not the chat); then `‹` returns to the chat.
-6. **(AB, AI, SB, SI) Roleplay → Model behaviour** (once #57 is in). On a roleplay persona's Roleplay page tap "Model behaviour" in the note, then `‹`. *Pass:* Roleplay, not the persona page.
-7. **(AB, SB) Repair trip.** In a chat whose provider key is missing (remove it in AI Providers first), send; tap the note's link to the provider, enter the key, Save. *Pass:* back in the chat, the draft still there. Press system Back. *Pass:* the page before the chat (the Hall or History), not the provider page.
-8. **(AB, AI, SB, SI) History and back** (once #56 is in). History → search a word → tap a hit → quick menu → History. *Pass:* the search and its results are as you left them. Repeat, but pull to reload in the chat first (AB, SB). *Pass:* the same.
-9. **(AB, SB) Deep link.** Copy the URL of a provider page, close the tab, open the URL in a new tab, unlock. Tap `‹` repeatedly. *Pass:* AI Providers, My Settings, the Hall, each once; then system Back leaves the app.
-10. **(AB, AI, SB, SI) Reload keeps the way back** (AB, SB only for the reload). Hall → My Circle → a persona → Font & Voice, reload. `‹` `‹` `‹`. *Pass:* the persona page, My Circle, the Hall.
-11. **(AB, AI, SB, SI) Sign out.** Visit a few pages, then Account → Sign out. On the Login screen press system Back (SI: there is no `‹` on Login; skip). *Pass:* the app closes; no app page and no Login loop.
-12. **(AB, AI) Re-entering the passphrase.** If Memory asks for the passphrase (passkey unlock), tap through, unlock. *Pass:* back on Memory. Press system Back. *Pass:* the page before Memory, not the Login screen and not Memory again.
-13. **(AB, AI, SB, SI) First run** (a fresh profile or a private window, with an invitation). Complete the invitation onboarding to the Hall, then press system Back (SI: none; skip). *Pass:* the app closes; you never see an onboarding step again.
-14. **(AB, AI, SB, SI) NSFW panic.** With Adult Mode on, open an adult persona's chat, switch Adult Mode off in the brand bar. *Pass:* the Hall with the toast "Adult mode off — chat closed", no flash of the chat. Press system Back (SI: skip). *Pass:* the app closes; the chat never reappears. With Q2: open that chat's Bookmarks with Adult Mode on, switch it off. *Pass:* the Hall with the toast.
-15. **(AB, AI, SB, SI) Unsaved edit.** Open a knowledge document, type something, tap `‹`. *Pass:* "Discard unsaved changes?"; "Discard" goes back one page (the library), "Keep editing" stays.
-16. **(SB, SI) Edge swipe.** Repeat step 1's walk-in, then swipe from the left edge instead of `‹`. *Pass:* the same pages as with `‹`, one per swipe.
+4. **(AB, AI, SB, SI) Home logo.** Hall → My Settings → AI Providers → a provider, tap the "Chatsundere" logo in the brand bar. *Pass:* the Hall. Press system Back (SI: skip). *Pass:* the app closes.
+5. **(AB, AI, SB, SI) New persona.** My Circle → New persona → a name → Create. On the new persona's page press system Back (SI: `‹`). *Pass:* My Circle, not the empty New-persona form.
+6. **(AB, AI, SB, SI) Persona side trip from a chat.** In a chat open the quick menu → the persona → Roleplay. `‹`, `‹`. *Pass:* the persona page, then the chat. Repeat with system Back (SI: edge swipe, if offered). *Pass:* the same pages. On the persona page, tap the "My Circle" crumb. *Pass:* My Circle (not the chat); then `‹` returns to the chat.
+7. **(AB, AI, SB, SI) Roleplay → Model behaviour** (once #57 is in). On a roleplay persona's Roleplay page tap "Model behaviour" in the note, then `‹`. *Pass:* Roleplay, not the persona page.
+8. **(AB, AI, SB, SI) Repair trip.** In AI Providers remove the key of the provider a persona uses. Open that persona's chat from the Hall and send something; tap the note's link to the provider, enter the key, Save. *Pass:* back in the chat, the draft still there. Press system Back (SI: `‹` is not on the chat; skip). *Pass:* the Hall, not the provider page.
+9. **(AB, AI, SB, SI) History and back** (once #56 is in). History → search a word → tap a hit → quick menu → History. *Pass:* the search and its results are as you left them. AB, SB: repeat, but pull to reload in the chat first. *Pass:* the same.
+10. **(AB, SB) Deep link.** Copy the URL of a provider page, close the tab, open the URL in a new tab, unlock. Tap `‹` repeatedly. *Pass:* AI Providers, My Settings, the Hall, each once; then system Back leaves the app.
+11. **(SI) Relaunch on a deep page.** Walk to a provider page, kill the app, relaunch. If iOS reopens on the provider page: `‹` repeatedly. *Pass:* AI Providers, My Settings, the Hall, each once. If it opens on the Hall: pass.
+12. **(AB, SB) Reload keeps the way back.** Hall → My Circle → a persona → Font & Voice, pull to reload. `‹` `‹` `‹`. *Pass:* the persona page, My Circle, the Hall. **(AI, SI)** the same walk without a reload. *Pass:* the same pages.
+13. **(AB, AI, SB, SI) Delete leaves cleanly.** My Knowledge → a library → a document → Delete → confirm. *Pass:* the library, without the document. `‹`. *Pass:* My Knowledge; you never see the deleted document again.
+14. **(AB, AI, SB, SI) Sign out.** Visit a few pages, then Account → Sign out → Sign out. On the Login screen press system Back (SI: skip). *Pass:* the app closes; no app page and no Login loop.
+15. **(AB, AI) Re-entering the passphrase.** Sign out, sign in **with your passkey**, then open a persona's Memory: it asks for the passphrase (a passkey unlock holds no master key). Tap through, unlock with the passphrase. *Pass:* back on Memory. Press system Back. *Pass:* the persona page, not the Login screen and not Memory again.
+16. **(AB, AI, SB, SI) First run and the recovery key** (a private window or fresh profile, with an invitation). Go through the invitation onboarding until the recovery key is shown. Press system Back (SB: edge swipe; SI: edge swipe if offered, else skip). *Pass:* the recovery key stays on screen. Tap Continue. *Pass:* the Hall. Press system Back (SI: skip). *Pass:* the app closes; you never see an onboarding step again. Repeat with "Create a local account" up to its recovery key and press system Back. *Pass:* the key stays.
+17. **(AB, AI, SB, SI) NSFW panic.** With Adult Mode on, open an adult persona's chat, switch Adult Mode off in the brand bar. *Pass:* the Hall with the toast "Adult mode off — chat closed", no flash of the chat. Press system Back (SI: skip). *Pass:* the app closes; the chat never reappears. With Q2: open that chat's Bookmarks with Adult Mode on, switch it off. *Pass:* the Hall with the toast. Then: adult chat → quick menu → its persona → Roleplay, switch Adult Mode off. *Pass:* the Hall; Back closes the app.
+18. **(AB, AI, SB, SI) Unsaved edit.** Open a knowledge document, type something, tap `‹`. *Pass:* "Discard unsaved changes?"; "Discard" goes back one page (the library), "Keep editing" stays.
+19. **(SB, SI) Edge swipe.** Repeat step 1's walk-in, then swipe from the left edge instead of `‹`. *Pass:* the same pages as with `‹`, one per swipe.
+20. **(AB, AI) Update day.** Before installing this release, walk Hall → My Circle → a persona → Roleplay on the old build. Let the update arrive (the page reloads), then Account → Sign out. Press system Back. *Pass:* the app closes; none of the old pages come back.
