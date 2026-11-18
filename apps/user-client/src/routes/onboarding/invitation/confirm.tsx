@@ -5,6 +5,7 @@ import {
   finishJoinByInvitation,
   getLinkedAccount,
   linkToServer,
+  loginLocalWithPassphrase,
   setBiometricPromptDue,
   startJoinByInvitation,
 } from '@chatsundere/crypto';
@@ -205,6 +206,14 @@ function InvitationConfirmInner() {
         // username from the local account, so no other threading is needed.
         const renamed =
           latelinkRename && cleanUsername.length > 0 && cleanUsername !== localSession?.username;
+        // Prove the passphrase against the local wrap before anything is sent:
+        // after a passkey unlock it may not have been typed for weeks, and
+        // `linkToServer` would register a typo as the server passphrase, splitting
+        // the account (spec §3.6, F1). The proof session owns its own unwrapped
+        // buffer and never reaches the store, so closing it leaves the store's MK
+        // intact (§3.4.1). A wrong passphrase throws `wrong_passphrase`.
+        const proof = await loginLocalWithPassphrase({ db: getDb(), passphrase });
+        proof.session.close();
         if (renamed) {
           await changeUsername({ db: getDb(), newUsername: cleanUsername });
         }
@@ -219,11 +228,24 @@ function InvitationConfirmInner() {
           mk: localMk,
         });
         useConnectivityStore.getState().onServerOk();
+        // Re-read the session: it may have gone during the await (sign-out, a
+        // refused refresh, a wipe). The device is linked already, so record the
+        // link and send the user to unlock again rather than revive a closed
+        // session without its MK (spec §3.6, F2).
+        const live = useSessionStore.getState().session;
+        if (!live) {
+          const row = await getLinkedAccount(getDb());
+          if (row) useAccountLinkStore.getState().setLinked(row);
+          await resetEngineStateForNewLink();
+          useOnboardingStore.getState().reset();
+          navigate('/login', { replace: true });
+          return;
+        }
         // Preserve the existing MK by omitting the second argument; carry the
         // renamed username so the session reflects the new local identity.
         useSessionStore.getState().setSession({
-          ...localSession,
-          username: renamed ? cleanUsername : (localSession?.username ?? ''),
+          ...live,
+          username: renamed ? cleanUsername : live.username,
           mode: 'linked',
         });
         useOnboardingStore.getState().reset();
@@ -532,6 +554,10 @@ export function mapSubmitError(err: unknown): SubmitMapped {
         kind: 'username_inline',
         message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
       };
+    }
+    if (err.code === 'wrong_passphrase') {
+      // Raised by the late-link passphrase proof (spec §3.6, F1).
+      return { kind: 'passphrase_inline', message: copy.login.errors.wrongPassphrase };
     }
     if (err.code === 'opaque_protocol_error') {
       return {
