@@ -10,6 +10,7 @@ import {
   useUpsertMcpServer,
 } from '../../../data/mcp-servers.js';
 import { useServerGate } from '../../../lib/server-gate.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
 import type { ServerDraft } from '../../../mcp/oauth/sign-in.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -23,6 +24,7 @@ const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as cons
 export function PendingSignInPage(): JSX.Element {
   const { state } = useParams();
   const navigate = useNavigate();
+  const nav = useAppNav();
   const { onHelp, helpOverlay } = useHelp('integrations');
   const servers = useMcpServers();
   const hasProxy = useServerGate('proxy').enabled;
@@ -41,11 +43,12 @@ export function PendingSignInPage(): JSX.Element {
       } catch {
         // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        navigate('/app/integrations');
+        nav.returnTo('/app/integrations');
         return;
       }
     }
-    navigate(`/app/integrations/${serverId}`);
+    // The waiting screen is done: the server's page takes its place in the history.
+    navigate(`/app/integrations/${serverId}`, { replace: true });
   }
 
   return (
@@ -65,7 +68,7 @@ export function PendingSignInPage(): JSX.Element {
           onUseKey={(link) =>
             navigate('/app/integrations/new', link ? { state: { useKeyFor: link } } : undefined)
           }
-          onClose={() => navigate('/app/integrations')}
+          onClose={() => nav.returnTo('/app/integrations')}
         />
       </div>
     </PageScaffold>

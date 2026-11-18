@@ -22,9 +22,12 @@ import { activateSession } from '../../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
+import { BackLink } from '../../../components/ui/BackLink.js';
 import { copy } from '../../../lib/copy.js';
 import { HttpError } from '../../../lib/fetch.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { httpServerClient } from '../../../lib/server-client.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { sanitiseUsernameInput, validateUsername } from '../../../lib/validators.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
@@ -102,6 +105,8 @@ function InvitationConfirmGuarded() {
 
 function InvitationConfirmInner() {
   const navigate = useNavigate();
+  const nav = useAppNav();
+  const [params] = useSearchParams();
   const navTarget = useNavTarget();
   const onboardingState = useOnboardingStore((s) => s.state);
   const setOnboardingState = useOnboardingStore((s) => s.setState);
@@ -286,7 +291,10 @@ function InvitationConfirmInner() {
         // sync cycle so the local vault backfills onto the newly-linked account.
         await resetEngineStateForNewLink();
         void runSyncCycle();
-        navigate('/app', { replace: true });
+        // Started from Server linking, the wizard returns there and leaves the
+        // history; the first run (no `?return=`) lands on the Hall.
+        if (params.get('return')) nav.returnTo(safeReturnPath(params.get('return'), '/app'));
+        else nav.resetTo('/app');
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is
         // used for both OPAQUE rounds (start must match finish).
@@ -319,6 +327,7 @@ function InvitationConfirmInner() {
           userId: result.session.userId,
           username: result.session.username,
           recoveryKeyString: result.recoveryKeyString,
+          search: window.location.search,
         });
         await setBiometricPromptDue(getDb());
         const linkedRow = await getLinkedAccount(getDb());
@@ -359,13 +368,13 @@ function InvitationConfirmInner() {
   if (screen.kind === 'kind_mismatch') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link
+        <BackLink
           to={navTarget('/onboarding/invitation')}
           className="text-2xl text-paper-soft"
           aria-label="Back"
         >
           ←
-        </Link>
+        </BackLink>
         <h1 className="mt-4 font-display text-2xl italic">This is a different kind of code</h1>
         <p className="mt-2 text-sm text-paper-soft">
           The code you entered is for adding another device, not for joining a server with an
@@ -392,13 +401,13 @@ function InvitationConfirmInner() {
   if (screen.kind === 'fatal') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link
+        <BackLink
           to={navTarget('/onboarding/invitation')}
           className="text-2xl text-paper-soft"
           aria-label="Back"
         >
           ←
-        </Link>
+        </BackLink>
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
@@ -418,13 +427,13 @@ function InvitationConfirmInner() {
   if (isLateLink && existingLink && !replaceAcknowledged) {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link
+        <BackLink
           to={navTarget('/onboarding/invitation')}
           className="text-2xl text-paper-soft"
           aria-label="Back"
         >
           ←
-        </Link>
+        </BackLink>
         <h1 className="mt-4 font-display text-2xl italic">Replace this device's server?</h1>
         <p className="mt-2 text-sm text-paper-soft">
           This device is currently connected to{' '}
@@ -448,9 +457,9 @@ function InvitationConfirmInner() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
+      <BackLink to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
         ←
-      </Link>
+      </BackLink>
       <h1 className="mt-4 font-display text-3xl italic">
         {latelinkRename ? "That name's already taken here" : 'Join this server'}
       </h1>

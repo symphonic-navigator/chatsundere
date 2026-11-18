@@ -58,6 +58,7 @@ import {
 import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { InlineEditRow } from '../account/InlineEditRow.js';
@@ -72,6 +73,10 @@ const ThirdPartyImportOverlay = lazy(() =>
   })),
 );
 
+// The crumb always means My Circle; ‹ goes where the user came from (`returnPath`
+// is only its fallback), so a hub opened from a chat no longer sends the crumb there.
+const CIRCLE = '/app/circle';
+
 /**
  * Hub page for an existing persona — the home screen for configuring and
  * launching chats with a persona. Route: `/app/persona/:id`.
@@ -82,6 +87,7 @@ const ThirdPartyImportOverlay = lazy(() =>
 export function PersonaHub(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const nav = useAppNav();
   const location = useLocation();
   const [search] = useSearchParams();
   // Validate `?return=` (it feeds a real `<a href>` below): the shared guard
@@ -159,13 +165,20 @@ export function PersonaHub(): JSX.Element {
   // ── Guard: unknown persona ──────────────────────────────────────────────────
   if (persona === null) {
     return (
-      <PageScaffold crumbs={[{ label: 'My Circle', to: returnPath }]} back={returnPath}>
+      <PageScaffold crumbs={[{ label: 'My Circle', to: CIRCLE }]} back={returnPath}>
         <div
           data-testid="persona-hub"
           className="flex flex-col items-center gap-4 px-4 pt-16 text-center"
         >
           <p className="text-paper-soft">Persona not found.</p>
-          <Link to={returnPath} className="text-sm text-paper underline">
+          <Link
+            to={CIRCLE}
+            onClick={(e) => {
+              e.preventDefault();
+              nav.returnTo(CIRCLE);
+            }}
+            className="text-sm text-paper underline"
+          >
             Back to My Circle
           </Link>
         </div>
@@ -177,7 +190,7 @@ export function PersonaHub(): JSX.Element {
   if (persona === undefined) {
     return (
       <PageScaffold
-        crumbs={[{ label: 'My Circle', to: returnPath }, { label: 'Persona' }]}
+        crumbs={[{ label: 'My Circle', to: CIRCLE }, { label: 'Persona' }]}
         back={returnPath}
       >
         <div data-testid="persona-hub" className="px-4 pt-4" />
@@ -358,7 +371,7 @@ export function PersonaHub(): JSX.Element {
 
   return (
     <PageScaffold
-      crumbs={[{ label: 'My Circle', to: returnPath }, { label: persona.name || 'Persona' }]}
+      crumbs={[{ label: 'My Circle', to: CIRCLE }, { label: persona.name || 'Persona' }]}
       back={returnPath}
       onHelp={onHelp}
     >

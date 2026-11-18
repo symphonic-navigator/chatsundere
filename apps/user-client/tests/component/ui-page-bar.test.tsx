@@ -32,17 +32,37 @@ describe('PageBar', () => {
     expect(screen.queryByRole('button', { name: 'Biometric' })).toBeNull();
   });
 
-  it('ancestor crumb navigates to its route', () => {
+  it('ancestor crumb goes up to its route, replacing when it is not behind', () => {
     renderBar();
     fireEvent.click(screen.getByRole('button', { name: 'My Account' }));
-    expect(mockNavigate).toHaveBeenCalledWith('/app/account');
+    expect(mockNavigate).toHaveBeenCalledWith('/app/account', { replace: true });
   });
 
-  it('the back control navigates to `back` and has a ≥44px hit area label', () => {
+  it('with nothing behind, the back control replaces with its `back` fallback', () => {
     renderBar();
     const back = screen.getByRole('button', { name: 'Back' });
     fireEvent.click(back);
-    expect(mockNavigate).toHaveBeenCalledWith('/app/account');
+    expect(mockNavigate).toHaveBeenCalledWith('/app/account', { replace: true });
+  });
+
+  it('hands an interceptor the move, not a path', () => {
+    const onNavigate = vi.fn();
+    render(
+      <MemoryRouter>
+        <PageBar
+          back="/app/account"
+          crumbs={[{ label: 'My Account', to: '/app/account' }, { label: 'Biometric' }]}
+          onNavigate={onNavigate}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My Account' }));
+    expect(onNavigate.mock.calls).toEqual([
+      [{ kind: 'back' }],
+      [{ kind: 'to', to: '/app/account' }],
+    ]);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('renders the help affordance only when onHelp is given, and calls it with the button element', () => {

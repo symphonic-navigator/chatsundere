@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useSessionStore } from '@chatsundere/ui-shared';
+import { currentKey, trailOf } from '../state/nav-trail.store.js';
 import type { MessageHit, ScanChat, ScanProgress } from './search/scan-messages.js';
+
+const HISTORY_PATH = '/app/history';
 
 /**
  * What My History keeps in its entry's `location.state` (spec §10). `gen`
@@ -169,6 +172,14 @@ export function goHistory(
   close: () => void,
 ): void {
   close();
+  // History directly behind the chat (by the chat entry's trail, which survives a
+  // reload): a step back restores it as left, query and scroll from its own
+  // history.state; nothing goes into the URL or storage.
+  const key = currentKey();
+  if (key !== null && trailOf(key).at(-1) === HISTORY_PATH) {
+    window.history.back();
+    return;
+  }
   const target = chatId ? historyReturnTarget(chatId) : null;
   if (!target) {
     navigateTo(fallback);

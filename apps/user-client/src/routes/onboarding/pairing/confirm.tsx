@@ -19,8 +19,10 @@ import { activateSession } from '../../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
+import { BackLink } from '../../../components/ui/BackLink.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
@@ -64,6 +66,7 @@ export function PairingConfirm() {
 
 function PairingConfirmInner() {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const onboardingState = useOnboardingStore((s) => s.state);
   const setOnboardingState = useOnboardingStore((s) => s.setState);
 
@@ -125,7 +128,7 @@ function PairingConfirmInner() {
       // canRunCycle() would otherwise no-op until a reload or connectivity
       // event happens to fire, leaving a freshly-paired device in an empty vault.
       maybeProbeLinkedServer();
-      navigate('/app', { replace: true });
+      nav.resetTo('/app');
     } catch (err) {
       const mapped = mapError(err);
       if (mapped.kind === 'passphrase_inline') {
@@ -142,9 +145,9 @@ function PairingConfirmInner() {
   if (screen.kind === 'kind_mismatch') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link to="/onboarding/pairing" className="text-2xl text-paper-soft" aria-label="Back">
+        <BackLink to="/onboarding/pairing" className="text-2xl text-paper-soft" aria-label="Back">
           ←
-        </Link>
+        </BackLink>
         <h1 className="mt-4 font-display text-2xl italic">This is an invitation code</h1>
         <p className="mt-2 text-sm text-paper-soft">
           The code you entered is for joining a server with an invitation, not for adding a device.
@@ -170,9 +173,9 @@ function PairingConfirmInner() {
   if (screen.kind === 'fatal') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link to="/onboarding/pairing" className="text-2xl text-paper-soft" aria-label="Back">
+        <BackLink to="/onboarding/pairing" className="text-2xl text-paper-soft" aria-label="Back">
           ←
-        </Link>
+        </BackLink>
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
@@ -192,9 +195,9 @@ function PairingConfirmInner() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding/pairing" className="text-2xl text-paper-soft" aria-label="Back">
+      <BackLink to="/onboarding/pairing" className="text-2xl text-paper-soft" aria-label="Back">
         ←
-      </Link>
+      </BackLink>
       <h1 className="mt-4 font-display text-3xl italic">Add this device</h1>
       <p className="mt-2 text-sm text-paper-soft">
         Enter the passphrase you use on your other device.

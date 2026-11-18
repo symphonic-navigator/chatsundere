@@ -24,7 +24,9 @@ import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
 import { rateLimitMessage } from '../../lib/recovery-copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 import { PassphrasePair, RecoveryKeyLike } from '../../lib/validators.js';
+import { useOnboardingStore } from '../../state/onboarding.store.js';
 
 type RecoveryScope = 'local' | 'full';
 
@@ -46,8 +48,16 @@ type Step =
  */
 export function Recovery() {
   const navigate = useNavigate();
+  const nav = useAppNav();
 
-  const [step, setStep] = useState<Step>({ kind: 'step1' });
+  // A new key not yet acknowledged survives a Back out of this page (the reveal
+  // hold brings the user back here), so it is read from the onboarding store.
+  const [step, setStep] = useState<Step>(() => {
+    const held = useOnboardingStore.getState().state;
+    return held.kind === 'local_recovery' && held.at === '/login/recovery'
+      ? { kind: 'step3', newKeyString: held.recoveryKeyString }
+      : { kind: 'step1' };
+  });
 
   // Step 1 fields.
   const [recoveryKey, setRecoveryKey] = useState('');
@@ -229,9 +239,14 @@ export function Recovery() {
         // key must be registered with the server under an authenticated
         // session, which My Account → Recovery Key owns.
         const { recoveryKeyString } = await regenerateRecoveryKey({ db, mk });
+        useOnboardingStore.getState().setState({
+          kind: 'local_recovery',
+          recoveryKeyString,
+          at: '/login/recovery',
+        });
         setStep({ kind: 'step3', newKeyString: recoveryKeyString });
       } else {
-        navigate('/app', { replace: true });
+        nav.resetTo('/app');
       }
     } catch {
       // changePassphraseLocalOnly or regenerateRecoveryKey failure path.
@@ -264,7 +279,8 @@ export function Recovery() {
   // ── Step 3: new recovery key reveal ───────────────────────────────────────
 
   function handleStep3Finish() {
-    navigate('/app', { replace: true });
+    useOnboardingStore.getState().reset();
+    nav.resetTo('/app');
   }
 
   // ── Error mappers ─────────────────────────────────────────────────────────
@@ -518,7 +534,7 @@ export function Recovery() {
         <div className="text-center">
           <button
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={() => nav.back('/login')}
             className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to sign-in

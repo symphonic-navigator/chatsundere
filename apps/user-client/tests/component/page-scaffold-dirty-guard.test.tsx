@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
+import { NavTrailTracker } from '../../src/components/NavTrailTracker.js';
 import { PageScaffold } from '../../src/components/ui/PageScaffold.js';
 
 afterEach(cleanup);
@@ -54,6 +55,41 @@ describe('PageScaffold dirty-guard', () => {
     wrap(true);
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     fireEvent.click(screen.getByRole('button', { name: /discard/i }));
+    expect(screen.getByText('home screen')).toBeInTheDocument();
+  });
+
+  it('"Discard" runs the move the user asked for: with history behind, Back pops', () => {
+    render(
+      <MemoryRouter initialEntries={['/home']}>
+        <NavTrailTracker />
+        <Routes>
+          <Route
+            path="/page"
+            element={
+              <PageScaffold
+                crumbs={[{ label: 'Parent', to: '/home' }, { label: 'Page' }]}
+                back="/elsewhere"
+                dirty
+              >
+                <div>page body</div>
+              </PageScaffold>
+            }
+          />
+          <Route
+            path="/home"
+            element={
+              <div>
+                home screen <Link to="/page">open page</Link>
+              </div>
+            }
+          />
+          <Route path="/elsewhere" element={<div>elsewhere</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByText('open page'));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(screen.getByText('home screen')).toBeInTheDocument();
   });
 });

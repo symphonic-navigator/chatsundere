@@ -2,13 +2,15 @@
 
 import { ConfirmTyped, useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { Button } from '../../../components/ui/Button.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { wipeDevice } from '../../../lib/wipe-device.js';
+import { useOnboardingStore } from '../../../state/onboarding.store.js';
 
 /**
  * Logout sub-page — the "leaving" surface.
@@ -31,7 +33,7 @@ import { wipeDevice } from '../../../lib/wipe-device.js';
  */
 export function LogoutPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('logout');
-  const navigate = useNavigate();
+  const nav = useAppNav();
 
   // Read the current username for the delete confirmation token.
   const username = useSessionStore((s) => s.session?.username ?? '');
@@ -48,7 +50,11 @@ export function LogoutPage(): JSX.Element {
 
   function signOut(): void {
     useSessionStore.getState().closeAndForget();
-    navigate('/login');
+    // A recovery key still held (the user left its reveal by the logo) must not
+    // greet the next person at the sign-in screen.
+    useOnboardingStore.getState().reset();
+    // Signing out clears the way back: Back from Login leaves the app.
+    nav.resetTo('/login');
   }
 
   async function reallyDeleteLocal(): Promise<void> {

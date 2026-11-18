@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useNavigate } from 'react-router-dom';
 import { useAdultMode } from '../data/settings.js';
 import { nsfwPanic } from '../lib/nsfw-panic.js';
+import { useAppNav } from '../lib/use-app-nav.js';
 import { useCurrentChatStore } from '../state/current-chat.store.js';
 
 /**
@@ -25,7 +25,7 @@ import { useCurrentChatStore } from '../state/current-chat.store.js';
  */
 export function AdultModeToggle(): JSX.Element | null {
   const { mode, toggleMode } = useAdultMode();
-  const navigate = useNavigate();
+  const nav = useAppNav();
   const chatPersonaIsAdult = useCurrentChatStore((s) => s.chatPersonaIsAdult);
   const isNsfw = mode === 'nsfw';
 
@@ -33,7 +33,7 @@ export function AdultModeToggle(): JSX.Element | null {
 
   async function handleToggle() {
     if (mode === 'nsfw') {
-      await nsfwPanic({ navigate });
+      await nsfwPanic({ resetTo: nav.resetTo, trail: nav.trail });
     }
     await toggleMode();
   }
