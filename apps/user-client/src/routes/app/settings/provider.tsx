@@ -278,13 +278,13 @@ export function SettingsProviderPage(): JSX.Element {
               data-1p-ignore
               data-lpignore="true"
               name=""
-              className="flex-1 bg-transparent font-mono text-sm text-paper outline-none"
+              className="-my-2 flex-1 bg-transparent py-2 font-mono text-sm text-paper outline-none"
             />
             <button
               type="button"
               onClick={() => setRevealKey((v) => !v)}
               aria-label={revealKey ? 'Hide key' : 'Show key'}
-              className="text-paper-soft hover:text-paper"
+              className="cs-hit provider-key-eye text-paper-soft hover:text-paper"
             >
               ◉
             </button>
@@ -318,7 +318,10 @@ export function SettingsProviderPage(): JSX.Element {
               </div>
             ) : null}
             {status.kind === 'error' && status.action ? (
-              <Link to={status.action.to} className="mt-1 block underline underline-offset-2">
+              <Link
+                to={status.action.to}
+                className="cs-tap-44 mt-1 flex items-center underline underline-offset-2"
+              >
                 {status.action.label}
               </Link>
             ) : null}
@@ -330,7 +333,7 @@ export function SettingsProviderPage(): JSX.Element {
             type="button"
             onClick={() => void onSave()}
             disabled={saving}
-            className="rounded-md bg-paper px-3 py-2 text-xs uppercase tracking-wider text-ink hover:bg-paper-soft disabled:opacity-50"
+            className="cs-tap-44 rounded-md bg-paper px-3 py-2 text-xs uppercase tracking-wider text-ink hover:bg-paper-soft disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Test & Save'}
           </button>
@@ -342,7 +345,7 @@ export function SettingsProviderPage(): JSX.Element {
           onClick={() => setDebugOpen(true)}
           disabled={testDisabledReason != null}
           title={testDisabledReason ?? undefined}
-          className="self-start rounded-md border border-paper-soft/30 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:bg-paper-soft/10 disabled:opacity-50"
+          className="cs-tap-44 self-start rounded-md border border-paper-soft/30 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:bg-paper-soft/10 disabled:opacity-50"
         >
           Test a model
         </button>

@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { ListRow } from '../../../components/ui/ListRow.js';
 import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import {
   useAddDocuments,
@@ -61,7 +62,9 @@ function NsfwToggle(props: {
   return (
     <div className="flex items-start justify-between gap-3">
       <div>
-        <div className="text-sm text-paper">Adult library</div>
+        <label htmlFor="library-adult-switch" className="block text-sm text-paper">
+          Adult library
+        </label>
         {disabled ? (
           <p className="text-[11px] text-paper-soft">Switch to NSFW mode to mark this adult.</p>
         ) : (
@@ -70,25 +73,14 @@ function NsfwToggle(props: {
           </p>
         )}
       </div>
-      <button
-        type="button"
-        aria-label="Adult library"
-        aria-pressed={props.on}
+      <Switch
+        id="library-adult-switch"
+        ariaLabel="Adult library"
+        checked={props.on}
         disabled={disabled}
-        aria-disabled={disabled}
-        onClick={() => {
-          if (!disabled) props.onToggle();
-        }}
-        className={`h-6 w-12 shrink-0 rounded-full border ${
-          props.on ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-        } ${disabled ? 'opacity-40' : ''}`}
-      >
-        <span
-          className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-            props.on ? 'translate-x-6' : 'translate-x-0'
-          }`}
-        />
-      </button>
+        onChange={() => props.onToggle()}
+        className={disabled ? 'opacity-40' : undefined}
+      />
     </div>
   );
 }

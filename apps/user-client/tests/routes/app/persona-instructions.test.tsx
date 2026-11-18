@@ -118,8 +118,8 @@ describe('PersonaInstructions — Adult Persona toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-instructions')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /adult persona/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    const toggle = screen.getByRole('switch', { name: /adult persona/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
 
     fireEvent.click(toggle);
 
@@ -132,8 +132,8 @@ describe('PersonaInstructions — Adult Persona toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-instructions')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /adult persona/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = screen.getByRole('switch', { name: /adult persona/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
 
     fireEvent.click(toggle);
 

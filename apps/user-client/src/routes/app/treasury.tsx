@@ -144,7 +144,7 @@ export function Treasury(): JSX.Element {
             </span>
             <button
               type="button"
-              className="rounded-md border border-aurora-700 bg-white/[0.02] px-3 py-1 text-xs text-aurora-200"
+              className="cs-hit rounded-md border border-aurora-700 bg-white/[0.02] px-3 py-1 text-xs text-aurora-200"
               aria-pressed={selectMode}
               onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
             >
@@ -173,7 +173,7 @@ export function Treasury(): JSX.Element {
             </div>
             <button
               type="button"
-              className="relative shrink-0 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-paper-soft"
+              className="cs-hit relative shrink-0 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-paper-soft"
               aria-label={
                 activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'
               }
@@ -227,7 +227,7 @@ export function Treasury(): JSX.Element {
         <button
           type="button"
           onClick={() => navigate('/app/treasury/templates')}
-          className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.02] px-3 py-2 text-left text-sm text-paper transition-colors hover:border-paper-soft/50"
+          className="cs-tap-44 flex items-center justify-between rounded-md border border-white/10 bg-white/[0.02] px-3 py-2 text-left text-sm text-paper transition-colors hover:border-paper-soft/50"
         >
           <span>
             📜 Templates

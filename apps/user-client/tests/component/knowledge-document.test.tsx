@@ -115,7 +115,7 @@ describe('KnowledgeDocumentPage', () => {
   it('disables the companion toggle with a reason when there are no phrases', () => {
     docsMock.mockReturnValue({ data: [{ ...READY_DOC, triggerPhrases: [] }], isLoading: false });
     wrapAt('/app/knowledge/a/d1');
-    expect(screen.getByRole('button', { name: /let the companion trigger this/i })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: /let the companion trigger this/i })).toBeDisabled();
     expect(screen.getByText(/add a trigger phrase first/i)).toBeInTheDocument();
   });
 

@@ -32,7 +32,7 @@ export function ListRow({
 }: ListRowProps): JSX.Element {
   return (
     <div className="cs-row">
-      <button type="button" className="cs-row-main" onClick={onOpen}>
+      <button type="button" className="cs-row-main cs-hit" onClick={onOpen}>
         {leading ? <span className="cs-row-leading">{leading}</span> : null}
         <span className="cs-row-body">
           <span className="cs-row-title">{title}</span>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../../components/AutoSizeTextarea.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { greetingHelperGate } from '../../../lib/persona-hub.js';
 import { usePersonaEditing } from './use-persona-editing.js';
@@ -91,27 +92,20 @@ export function PersonaRoleplay(): JSX.Element {
         {/* 1. Roleplay toggle ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Roleplay</div>
+            <label htmlFor="persona-roleplay-switch" className="block text-sm text-paper">
+              Roleplay
+            </label>
             <p className="text-[11px] text-paper-soft">
               The persona becomes a roleplay character: fully in character, short conversational
               replies, narration between asterisks.
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Roleplay"
-            aria-pressed={persona.roleplay}
-            onClick={() => void patch({ roleplay: !persona.roleplay })}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              persona.roleplay ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-            }`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                persona.roleplay ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <Switch
+            id="persona-roleplay-switch"
+            ariaLabel="Roleplay"
+            checked={persona.roleplay}
+            onChange={() => void patch({ roleplay: !persona.roleplay })}
+          />
         </div>
         {persona.roleplay && persona.timeAwareness === undefined && (
           <p data-testid="roleplay-timeless-note" className="-mt-4 text-[11px] text-paper-soft">
@@ -166,31 +160,23 @@ export function PersonaRoleplay(): JSX.Element {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm text-paper">Greeting</div>
+              <label htmlFor="persona-greeting-switch" className="block text-sm text-paper">
+                Greeting
+              </label>
               <p className="text-[11px] text-paper-soft">
                 The persona opens every new chat with a freshly generated message following your
                 rules below.
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Greeting"
-              aria-pressed={persona.greetingEnabled}
+            <Switch
+              id="persona-greeting-switch"
+              ariaLabel="Greeting"
+              checked={persona.greetingEnabled}
               disabled={!persona.roleplay}
               title={!persona.roleplay ? 'Enable Roleplay to set a greeting' : undefined}
-              onClick={() => void patch({ greetingEnabled: !persona.greetingEnabled })}
-              className={`h-6 w-12 shrink-0 rounded-full border ${
-                persona.greetingEnabled
-                  ? 'border-paper bg-paper/30'
-                  : 'border-paper-soft/30 bg-white/5'
-              } disabled:cursor-not-allowed disabled:opacity-40`}
-            >
-              <span
-                className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                  persona.greetingEnabled ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+              onChange={() => void patch({ greetingEnabled: !persona.greetingEnabled })}
+              className="disabled:cursor-not-allowed disabled:opacity-40"
+            />
           </div>
 
           <AutoSizeTextarea
@@ -213,35 +199,27 @@ export function PersonaRoleplay(): JSX.Element {
           {/* Greeting-helper toggle — disabled-with-reason until a helper is set. */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm text-paper">Let the helper write the greeting</div>
+              <label htmlFor="persona-greeting-helper-switch" className="block text-sm text-paper">
+                Let the helper write the greeting
+              </label>
               <p className="text-[11px] text-paper-soft">
                 Use the persona's background helper for the opener too, not just the background
                 chores.
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Let the helper write the greeting"
-              aria-pressed={persona.greetingUsesBackgroundModel ?? false}
+            <Switch
+              id="persona-greeting-helper-switch"
+              ariaLabel="Let the helper write the greeting"
+              checked={persona.greetingUsesBackgroundModel ?? false}
               disabled={greetingHelperDisabled}
               title={greetingHelperReason}
-              onClick={() =>
+              onChange={() =>
                 void patch({
                   greetingUsesBackgroundModel: !(persona.greetingUsesBackgroundModel ?? false),
                 })
               }
-              className={`h-6 w-12 shrink-0 rounded-full border ${
-                persona.greetingUsesBackgroundModel
-                  ? 'border-paper bg-paper/30'
-                  : 'border-paper-soft/30 bg-white/5'
-              } disabled:cursor-not-allowed disabled:opacity-40`}
-            >
-              <span
-                className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                  persona.greetingUsesBackgroundModel ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+              className="disabled:cursor-not-allowed disabled:opacity-40"
+            />
           </div>
         </div>
       </div>

@@ -414,7 +414,7 @@ function InvitationConfirmInner() {
         <Link
           to={navTarget('/onboarding/invitation')}
           replace
-          className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+          className="cs-hit mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
         >
           Try again
         </Link>

@@ -44,7 +44,7 @@ export function RecoveryKeyReveal({ value }: RecoveryKeyRevealProps) {
       <button
         type="button"
         onClick={() => void handleCopy()}
-        className="font-mono text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+        className="recovery-key-copy cs-hit font-mono text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
       >
         {copied ? copy.create.recoveryStep.copiedLabel : copy.create.recoveryStep.copyLabel}
       </button>

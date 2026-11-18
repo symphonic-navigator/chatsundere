@@ -71,10 +71,14 @@ import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator
 import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
 import { useAppNav } from '../../../lib/use-app-nav.js';
+import { useKeyboardOpen } from '../../../lib/use-keyboard-open.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
+import { useLiveVoiceIdle } from '../../../lib/voice/live/use-live-voice-idle.js';
 import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
 import { useMonologuePlayback } from '../../../lib/voice/use-monologue-playback.js';
+import { useReadAloudMediaSession } from '../../../lib/voice/use-read-aloud-media-session.js';
+import { useScreenWakeLock } from '../../../lib/voice/use-screen-wake-lock.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { voiceRepairFor } from '../../../lib/voice/voice-repair.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
@@ -666,6 +670,9 @@ export function ChatPage(): JSX.Element {
   // `editingMessageId` stays set. Routing the decision through one function
   // guarantees the keyboard and voice paths cannot drift out of sync again.
   const onSend = async (text: string): Promise<void> => {
+    // A send is the first gesture of most chats: unlock read-aloud's media
+    // element now, so an auto-read reply can claim the lock-screen controls.
+    voice.primeOutput();
     const action = resolveSendAction(editingMessageId, canReplace);
     if (action === 'replace') {
       await onReplace();
@@ -774,6 +781,8 @@ export function ChatPage(): JSX.Element {
   // forceStreamingRead = isLiveVoice: in live voice every reply is read aloud as
   // it streams (the persona's floor), independent of the auto-read toggle.
   const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages, isLiveVoice);
+  // Lock-screen and headset controls for read-aloud (never live voice, never message text).
+  useReadAloudMediaSession(voice, effectivePersona, isLiveVoice);
 
   const monologue = useMonologuePlayback(effectivePersona, () => voice.stop());
   const monologueActive = monologue.activeId !== null;
@@ -832,6 +841,22 @@ export function ChatPage(): JSX.Element {
   useEffect(() => {
     if (isLiveVoice && isPinned && inputFocused) liveVoice.hold();
   }, [isLiveVoice, isPinned, inputFocused, liveVoice]);
+
+  // Keep the screen awake while voice is sounding or live voice is open. Paused
+  // read-aloud lets go; a live session left listening for 5 minutes lets go too,
+  // so a forgotten one locks on the phone's normal timeout.
+  const liveVoiceIdle = useLiveVoiceIdle(liveVoice.floor, isLiveVoice);
+  useScreenWakeLock(
+    'read-aloud',
+    voice.transportState === 'speaking' || voice.transportState === 'waiting',
+  );
+  useScreenWakeLock(
+    'monologue',
+    monologue.transportState === 'speaking' || monologue.transportState === 'waiting',
+  );
+  useScreenWakeLock('live-voice', isLiveVoice && !liveVoiceIdle);
+  // With the keyboard up the cockpit no longer sits on the home indicator.
+  useKeyboardOpen();
 
   // Stop any in-flight inner-monologue when live voice starts — two audio paths must not overlap.
   useEffect(() => {
@@ -1327,7 +1352,18 @@ export function ChatPage(): JSX.Element {
           onOpenPersonaEditor={onOpenPersonaEditor}
           onAttachFromTreasury={() => setPickerOpen(true)}
           onAttachFromLibrary={() => setDocumentPickerOpen(true)}
-          dictation={dictation}
+          dictation={{
+            ...dictation,
+            // The mic press is a gesture too (pointerup is the one iOS honours).
+            pressStart: () => {
+              voice.primeOutput();
+              dictation.pressStart();
+            },
+            pressEnd: () => {
+              voice.primeOutput();
+              dictation.pressEnd();
+            },
+          }}
           autoReadAloud={autoReadAloud}
           onToggleAutoRead={onToggleAutoRead}
           voiceUnavailable={voiceUnavailable}

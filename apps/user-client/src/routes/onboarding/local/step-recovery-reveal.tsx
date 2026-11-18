@@ -32,12 +32,13 @@ export function StepRecoveryReveal({ recoveryKey, onDone }: StepRecoveryRevealPr
 
       <RecoveryKeyReveal value={recoveryKey} />
 
-      <label className="flex cursor-pointer items-start gap-3">
+      <label className="cs-hit flex cursor-pointer items-start gap-3">
+        {/* The label grows to a 44 px hit area; `relative` keeps the box itself on top. */}
         <input
           type="checkbox"
           checked={confirmStored}
           onChange={(e) => setConfirmStored(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-aurora-500"
+          className="relative mt-0.5 h-4 w-4 shrink-0 accent-aurora-500"
         />
         <span className="text-sm text-paper-soft">{c.confirmLabel}</span>
       </label>

@@ -835,3 +835,13 @@ All five hard defects (H1 to H5) and the softs S2, S3, S6, S8, S9, S10, S12 to S
 - **Rationale for deferral:** None blocks a function or misdirects: each has a working path (close the overlay to reach the approval, *Return to sign-in* on the detail page, Account → Server linking, re-entering the draft).
 - **Follow-up commitment:** Decide with Chris; if accepted, fix with the next touch of the MCP sign-in UI, v0.2.0 release cut at the latest.
 - **Chris sign-off:** not required (soft); confirm the deferral.
+
+## 2026-11-18 — Voice on the go and the thumb pass (Laura pre-squash pass; one hard defect fixed, softs deferred)
+
+- **Affected flow / surface:** touch targets across the user-client; read-aloud lock-screen controls; switch rows.
+- **Finding (Laura's summary):** the hard defect (History's one-tap "Remove bookmark" star squeezed to 15 px by the ⋯ beside it) is fixed: the row's gap is shared fairly, star hit area 26 × 44, no overlap. Live voice parked on `held`/`sttFailed` and pinch-zoom setting the keyboard flag were fixed too. Deferred softs: (1) message action buttons (Edit, Branch, Copy, Bookmark, Regenerate, Save, Read) have 30–34 px tall hit areas, capped by the 4 px row gap of a wrapping row; a larger `row-gap` would let them reach 44 but loosens a wrapped row's look. (2) Other half-gap caps on rarely used pages: mindspace swatches 36 × 36, texture pills 34 high, "Use user default" 157 × 34, bookmark rename 32 × 46. (3) In a brand-new chat the first send remounts the page, so the first auto-read there runs on an unprimed media element; on iOS that one reply may get no Now Playing entry (later reads are primed). (4) Switch call sites carry both an `aria-label` and a visible `<label>`; description lines under the labels do not toggle.
+- **Mode:** pre-squash.
+- **Criterion:** B1 of the spec (44 px, or as close as neighbours allow); least astonishment (3).
+- **Rationale for deferral:** all are above WCAG 2.5.8's 24 px floor, none overlaps, and (1) is a look decision for Chris; (3) degrades to today's behaviour with in-app controls working.
+- **Follow-up commitment:** (1) Chris decides on his device during the 0.5.0 manual verification; (3) keep the read-aloud sink above the new-chat remount after 0.5.0 if step 14 shows it on iOS; (2) and (4) are the starting list of the next thumb sweep.
+- **Chris sign-off:** not required (no blocking hard defect deferred).

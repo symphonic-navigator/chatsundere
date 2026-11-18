@@ -402,6 +402,9 @@ describe('ChatPage opener trigger', () => {
     render(<ChatPage />, { wrapper: wrap(`/app/chat/${chatId}`) });
 
     const retryBtn = await screen.findByRole('button', { name: /Retry/ });
+    // Retry stays disabled until the chat's persona has loaded (it deletes
+    // before it resends); a click before that is swallowed, so wait for it.
+    await waitFor(() => expect(retryBtn).toBeEnabled());
     fireEvent.click(retryBtn);
 
     // The footer Retry path reaches the regenerate mutation, which re-rolls the

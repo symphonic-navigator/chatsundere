@@ -49,7 +49,7 @@ describe('TreasuryTemplatePage — create mode', () => {
     const save = screen.getByRole('button', { name: /^save$/i });
     expect(save).toBeDisabled();
     // Enable the greeting and type something → applyable.
-    fireEvent.click(screen.getByRole('button', { name: /opening greeting/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /opening greeting/i }));
     fireEvent.change(screen.getByLabelText(/greeting text/i), { target: { value: 'Hi there' } });
     expect(screen.getByRole('button', { name: /^save$/i })).not.toBeDisabled();
   });
@@ -57,9 +57,9 @@ describe('TreasuryTemplatePage — create mode', () => {
   it('reveals and hides the greeting text area via its toggle', () => {
     renderCreate();
     expect(screen.queryByLabelText(/greeting text/i)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /opening greeting/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /opening greeting/i }));
     expect(screen.getByLabelText(/greeting text/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /opening greeting/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /opening greeting/i }));
     expect(screen.queryByLabelText(/greeting text/i)).toBeNull();
   });
 
@@ -95,7 +95,7 @@ describe('TreasuryTemplatePage — create mode', () => {
   it('locks the NSFW toggle in SFW mode with a reason', () => {
     mockMode = 'sfw';
     renderCreate();
-    const toggle = screen.getByRole('button', { name: /adult \(nsfw\)/i });
+    const toggle = screen.getByRole('switch', { name: /adult \(nsfw\)/i });
     expect(toggle).toBeDisabled();
     expect(screen.getByText(/turn on adult mode first/i)).toBeTruthy();
   });

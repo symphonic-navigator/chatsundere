@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { Pill } from '../../../components/ui/Pill.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import {
   useAddDocuments,
@@ -250,7 +251,9 @@ function DocumentForm(props: {
         {/* Companion toggle */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Let the companion trigger this too</div>
+            <label htmlFor="document-companion-switch" className="block text-sm text-paper">
+              Let the companion trigger this too
+            </label>
             {companionDisabled ? (
               <p className="text-[11px] text-paper-soft">Add a trigger phrase first.</p>
             ) : (
@@ -259,28 +262,17 @@ function DocumentForm(props: {
               </p>
             )}
           </div>
-          <button
-            type="button"
-            aria-label="Let the companion trigger this too"
-            aria-pressed={companion}
+          <Switch
+            id="document-companion-switch"
+            ariaLabel="Let the companion trigger this too"
+            checked={companion}
             disabled={companionDisabled}
-            aria-disabled={companionDisabled}
-            onClick={() => {
-              if (!companionDisabled) {
-                setCompanion((v) => !v);
-                mark();
-              }
+            onChange={() => {
+              setCompanion((v) => !v);
+              mark();
             }}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              companion ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-            } ${companionDisabled ? 'opacity-40' : ''}`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                companion ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+            className={companionDisabled ? 'opacity-40' : undefined}
+          />
         </div>
 
         <div>

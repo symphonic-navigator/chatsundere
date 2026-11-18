@@ -91,7 +91,7 @@ export function StartOver(): JSX.Element {
           <button
             type="button"
             onClick={() => nav.back('/login')}
-            className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+            className="cs-hit text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to sign-in
           </button>

@@ -120,7 +120,7 @@ export function Integrations(): JSX.Element {
           type="button"
           aria-label="Add MCP server"
           onClick={() => navigate('/app/integrations/new')}
-          className="rounded-md border border-dashed border-white/15 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
+          className="cs-tap-44 rounded-md border border-dashed border-white/15 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
         >
           + Add MCP server
         </button>

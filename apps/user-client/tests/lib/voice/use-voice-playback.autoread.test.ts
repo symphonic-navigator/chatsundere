@@ -20,7 +20,11 @@ vi.mock('../../../src/lib/voice/voice-cache.js', () => ({
 }));
 
 vi.mock('../../../src/lib/voice/audio-sink.js', () => ({
+  isReadAloudBridgeEnabled: () => true,
   AudioSink: class {
+    setRoute = vi.fn();
+    setReadPhase = vi.fn();
+    primeBridge = vi.fn();
     play = vi.fn(async () => {});
     pause = vi.fn(async () => {});
     resume = vi.fn(async () => {});

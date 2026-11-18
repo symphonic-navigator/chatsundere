@@ -338,12 +338,13 @@ export function Recovery() {
 
           <RecoveryKeyReveal value={step.newKeyString} />
 
-          <label className="flex cursor-pointer items-start gap-3">
+          <label className="cs-hit flex cursor-pointer items-start gap-3">
+            {/* The label grows to a 44 px hit area; `relative` keeps the box itself on top. */}
             <input
               type="checkbox"
               checked={confirmStored}
               onChange={(e) => setConfirmStored(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-aurora-500"
+              className="relative mt-0.5 h-4 w-4 shrink-0 accent-aurora-500"
             />
             <span className="text-sm text-paper-soft">{c.newKeyConfirmLabel}</span>
           </label>
@@ -535,7 +536,7 @@ export function Recovery() {
           <button
             type="button"
             onClick={() => nav.back('/login')}
-            className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+            className="cs-hit text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to sign-in
           </button>

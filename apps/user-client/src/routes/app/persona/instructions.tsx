@@ -2,6 +2,7 @@
 
 import { Link, useParams } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useSettings } from '../../../data/settings.js';
 import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../../lib/persona-defaults.js';
@@ -73,55 +74,39 @@ export function PersonaInstructions(): JSX.Element {
         {/* 1. Chatsundere Tonality toggle ─────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Chatsundere Tonality</div>
+            <label htmlFor="persona-tonality-switch" className="block text-sm text-paper">
+              Chatsundere Tonality
+            </label>
             <p className="text-[11px] text-paper-soft">
               The curated Chatsundere voice — open, uncensored on topics, expressive. On by default.
               Turn off for a plainer persona.
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Chatsundere tonality"
-            aria-pressed={persona.chatsundereTonality}
-            onClick={() => void patch({ chatsundereTonality: !persona.chatsundereTonality })}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              persona.chatsundereTonality
-                ? 'border-paper bg-paper/30'
-                : 'border-paper-soft/30 bg-white/5'
-            }`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                persona.chatsundereTonality ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <Switch
+            id="persona-tonality-switch"
+            ariaLabel="Chatsundere tonality"
+            checked={persona.chatsundereTonality}
+            onChange={() => void patch({ chatsundereTonality: !persona.chatsundereTonality })}
+          />
         </div>
 
         {/* 2. Adult Persona toggle ─────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Adult Persona</div>
+            <label htmlFor="persona-adult-switch" className="block text-sm text-paper">
+              Adult Persona
+            </label>
             <p className="text-[11px] text-paper-soft">
               Hidden when sanitised mode is active, and unlocks explicit content in this persona's
               system prompt. Refine the tone further via custom instructions.
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Adult persona"
-            aria-pressed={persona.adultPersona}
-            onClick={() => void patch({ adultPersona: !persona.adultPersona })}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              persona.adultPersona ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-            }`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                persona.adultPersona ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <Switch
+            id="persona-adult-switch"
+            ariaLabel="Adult persona"
+            checked={persona.adultPersona}
+            onChange={() => void patch({ adultPersona: !persona.adultPersona })}
+          />
         </div>
 
         {/* 3. Custom Instructions ──────────────────────────────────────────── */}

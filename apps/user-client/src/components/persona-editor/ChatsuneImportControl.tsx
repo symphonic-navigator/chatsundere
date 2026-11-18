@@ -207,7 +207,7 @@ export function ChatsuneImportControl({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+        className="cs-tap-44 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
       >
         Import a persona
       </button>
@@ -228,14 +228,14 @@ export function ChatsuneImportControl({
                 setPersonaCollision(null);
                 collision.doImport().catch((e) => setError((e as Error).message));
               }}
-              className="rounded-md border border-paper px-3 py-1 text-xs uppercase tracking-wider text-paper hover:bg-paper/10"
+              className="cs-tap-44 rounded-md border border-paper px-3 py-1 text-xs uppercase tracking-wider text-paper hover:bg-paper/10"
             >
               Create anyway
             </button>
             <button
               type="button"
               onClick={() => setPersonaCollision(null)}
-              className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+              className="cs-tap-44 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
             >
               Cancel
             </button>

@@ -93,14 +93,14 @@ export function AvatarField({
         type="button"
         aria-label="Change avatar"
         onClick={() => inputRef.current?.click()}
-        className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+        className="cs-tap-44 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
       >
         Change avatar
       </button>
       <button
         type="button"
         onClick={onRemove}
-        className="text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper"
+        className="cs-hit text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper"
       >
         Remove
       </button>

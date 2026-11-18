@@ -124,7 +124,7 @@ export function AddProviderPicker({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-full p-1 text-paper-soft hover:text-paper"
+            className="cs-hit rounded-full p-1 text-paper-soft hover:text-paper"
           >
             ×
           </button>
@@ -143,7 +143,7 @@ export function AddProviderPicker({
                 <Link
                   to={linkingTo}
                   onClick={onClose}
-                  className="block text-[11px] text-aurora-200 underline"
+                  className="cs-tap-44 flex items-center text-[11px] text-aurora-200 underline"
                 >
                   Open server linking →
                 </Link>

@@ -155,7 +155,7 @@ export function ModelPickerModal({
             type="button"
             aria-label="Close"
             onClick={requestClose}
-            className="rounded-full p-1 text-paper-soft hover:text-paper"
+            className="cs-hit rounded-full p-1 text-paper-soft hover:text-paper"
           >
             ×
           </button>

@@ -31,11 +31,14 @@ export function PersonaGreeting(p: PersonaGreetingProps): JSX.Element {
           <span>{p.notice}</span>
           {p.cause ? <span>{p.cause}</span> : null}
           {p.action ? (
-            <Link to={p.action.to} className="persona-greeting-retry">
+            <Link
+              to={p.action.to}
+              className="persona-greeting-retry cs-tap-44 inline-flex items-center"
+            >
               {p.action.label}
             </Link>
           ) : p.onRetry ? (
-            <button type="button" className="persona-greeting-retry" onClick={p.onRetry}>
+            <button type="button" className="persona-greeting-retry cs-tap-44" onClick={p.onRetry}>
               ↻ Retry
             </button>
           ) : null}

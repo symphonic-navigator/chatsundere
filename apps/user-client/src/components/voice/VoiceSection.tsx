@@ -280,7 +280,7 @@ export function VoiceSection(): JSX.Element {
             type="button"
             aria-pressed={dictationAutoSend}
             onClick={() => update.mutate({ dictationAutoSend: !dictationAutoSend })}
-            className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+            className={`cs-tap-44 w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
               dictationAutoSend
                 ? 'border-paper bg-white/5 text-paper'
                 : 'border-white/5 text-paper-soft hover:border-paper-soft/50'
@@ -319,7 +319,7 @@ export function VoiceSection(): JSX.Element {
             type="button"
             aria-pressed={spectrumEnabled}
             onClick={() => update.mutate({ spectrumEnabled: !spectrumEnabled })}
-            className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+            className={`cs-tap-44 w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
               spectrumEnabled
                 ? 'border-paper bg-white/5 text-paper'
                 : 'border-white/5 text-paper-soft hover:border-paper-soft/50'
@@ -408,7 +408,7 @@ export function VoiceSection(): JSX.Element {
             type="button"
             aria-pressed={screenEffectsEnabled}
             onClick={() => update.mutate({ screenEffectsEnabled: !screenEffectsEnabled })}
-            className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+            className={`cs-tap-44 w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
               screenEffectsEnabled
                 ? 'border-paper bg-white/5 text-paper'
                 : 'border-white/5 text-paper-soft hover:border-paper-soft/50'

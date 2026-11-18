@@ -98,7 +98,7 @@ describe('Reduce animations switch', () => {
   it('sits under Mindspace with its helper as visible text', () => {
     stubReducedMotionQuery(false);
     wrap(<SettingsYouPage />);
-    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    const toggle = screen.getByRole('switch', { name: 'Reduce animations' });
     const mindspace = screen.getByRole('button', { name: /Mindspace/i });
     expect(
       mindspace.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -110,8 +110,8 @@ describe('Reduce animations switch', () => {
   it('with the system off, shows !animationsEnabled and writes the field', () => {
     stubReducedMotionQuery(false);
     wrap(<SettingsYouPage />);
-    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    const toggle = screen.getByRole('switch', { name: 'Reduce animations' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
     expect(toggle).toBeEnabled();
     expect(screen.queryByText(SYSTEM_NOTE)).toBeNull();
     fireEvent.click(toggle);
@@ -122,17 +122,37 @@ describe('Reduce animations switch', () => {
     stubReducedMotionQuery(false);
     STABLE_SETTINGS.animationsEnabled = false;
     wrap(<SettingsYouPage />);
-    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = screen.getByRole('switch', { name: 'Reduce animations' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(toggle);
     expect(updateMock).toHaveBeenCalledWith({ animationsEnabled: true });
+  });
+
+  it('toggles from its visible row label too, but not while the system holds it', () => {
+    const system = stubReducedMotionQuery(false);
+    wrap(<SettingsYouPage />);
+    fireEvent.click(screen.getByText('Reduce animations'));
+    expect(updateMock).toHaveBeenCalledWith({ animationsEnabled: false });
+    updateMock.mockClear();
+    act(() => system.set(true));
+    fireEvent.click(screen.getByText('Reduce animations'));
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the helper and, under the system setting, the note as its description', () => {
+    const system = stubReducedMotionQuery(false);
+    wrap(<SettingsYouPage />);
+    const toggle = screen.getByRole('switch', { name: 'Reduce animations' });
+    expect(toggle).toHaveAccessibleDescription(HELPER);
+    act(() => system.set(true));
+    expect(toggle).toHaveAccessibleDescription(`${HELPER} ${SYSTEM_NOTE}`);
   });
 
   it('with the system on, shows on, disabled, with the visible note', () => {
     stubReducedMotionQuery(true);
     wrap(<SettingsYouPage />);
-    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = screen.getByRole('switch', { name: 'Reduce animations' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(toggle).toBeDisabled();
     expect(toggle).not.toHaveAttribute('title');
     expect(screen.getByText(SYSTEM_NOTE)).toBeVisible();
@@ -144,15 +164,15 @@ describe('Reduce animations switch', () => {
     const system = stubReducedMotionQuery(false);
     STABLE_SETTINGS.animationsEnabled = false;
     wrap(<SettingsYouPage />);
-    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    const toggle = screen.getByRole('switch', { name: 'Reduce animations' });
     expect(toggle).toBeEnabled();
     act(() => system.set(true));
     expect(toggle).toBeDisabled();
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText(SYSTEM_NOTE)).toBeVisible();
     act(() => system.set(false));
     expect(toggle).toBeEnabled();
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByText(SYSTEM_NOTE)).toBeNull();
     expect(updateMock).not.toHaveBeenCalled();
   });

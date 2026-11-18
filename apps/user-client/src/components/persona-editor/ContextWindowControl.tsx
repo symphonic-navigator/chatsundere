@@ -43,7 +43,7 @@ export function ContextWindowControl({
           type="button"
           onClick={() => onChange(null)}
           disabled={value === null}
-          className="text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper disabled:opacity-40"
+          className="cs-hit text-[11px] uppercase tracking-wider text-paper-soft hover:text-paper disabled:opacity-40"
         >
           Use default
         </button>

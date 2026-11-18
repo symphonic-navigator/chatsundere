@@ -6,6 +6,7 @@ import {
 } from '../../../components/MindspacePickerOverlay.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { PickerField } from '../../../components/ui/PickerField.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useMindspaces } from '../../../data/mindspaces.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
@@ -25,13 +26,16 @@ function ReduceAnimationsSwitch({
   onChange: (animationsEnabled: boolean) => void;
 }): JSX.Element {
   const systemReduced = useSystemReducedMotion();
-  const pressed = systemReduced || !animationsEnabled;
+  const on = systemReduced || !animationsEnabled;
+  const switchId = useId();
   const helperId = useId();
   const noteId = useId();
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <div className="text-sm text-paper">Reduce animations</div>
+        <label htmlFor={switchId} className="block text-sm text-paper">
+          Reduce animations
+        </label>
         <p id={helperId} className="text-[11px] text-paper-soft">
           Stills the drifting background, the breathing orbs and other motion on this device. Screen
           effects play gently.
@@ -43,23 +47,15 @@ function ReduceAnimationsSwitch({
           </p>
         ) : null}
       </div>
-      <button
-        type="button"
-        aria-label="Reduce animations"
-        aria-pressed={pressed}
-        aria-describedby={systemReduced ? `${helperId} ${noteId}` : helperId}
+      <Switch
+        id={switchId}
+        ariaLabel="Reduce animations"
+        checked={on}
+        describedBy={systemReduced ? `${helperId} ${noteId}` : helperId}
         disabled={systemReduced}
-        onClick={() => onChange(!animationsEnabled)}
-        className={`h-6 w-12 shrink-0 rounded-full border ${
-          pressed ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-        } disabled:cursor-not-allowed disabled:opacity-40`}
-      >
-        <span
-          className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-            pressed ? 'translate-x-6' : 'translate-x-0'
-          }`}
-        />
-      </button>
+        onChange={(next) => onChange(!next)}
+        className="disabled:cursor-not-allowed disabled:opacity-40"
+      />
     </div>
   );
 }
