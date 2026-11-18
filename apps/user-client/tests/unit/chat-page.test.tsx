@@ -8,6 +8,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db';
+import {
+  currentHistoryGen,
+  historyReturnTarget,
+  rememberHistoryReturn,
+} from '../../src/lib/history-return';
 import { ChatPage } from '../../src/routes/app/chat/chat-page';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
 import { DESKTOP_MEDIA_QUERY } from '../../src/state/effective-chat-mode.js';
@@ -804,5 +809,50 @@ describe('ChatPage — reading-mode Enter hotkey leaves interactive elements alo
     (document.activeElement as HTMLElement | null)?.blur();
     await user.keyboard('{Enter}');
     expect(useCurrentChatStore.getState().isInteractionMode).toBe(true);
+  });
+});
+
+describe('ChatPage — the way back to a History search', () => {
+  async function seedChat(): Promise<string> {
+    const { db, personaId, mindspaceId } = await seedPersonaWithMindspace();
+    const chatId = uuidv7();
+    await db.chats.add({
+      id: chatId,
+      personaId,
+      title: 'Kitchen chaos',
+      resolvedMindspaceId: mindspaceId,
+      createdAt: 0,
+      updatedAt: 0,
+      lastMessageAt: 0,
+      bookmarkedMessageCount: 0,
+      draftInput: '',
+      libraryIds: [],
+    });
+    return chatId;
+  }
+
+  function remember(chatId: string): void {
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { q: 'paprika', gen: currentHistoryGen() } },
+      chatId,
+    );
+  }
+
+  it('keeps the return target in the chat opened from History', async () => {
+    const chatId = await seedChat();
+    remember(chatId);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<ChatPage />, { wrapper: makeWrapper(qc, `/app/chat/${chatId}`) });
+    await waitFor(() => expect(useCurrentChatStore.getState().chatId).toBe(chatId));
+    expect(historyReturnTarget(chatId)?.state.q).toBe('paprika');
+  });
+
+  it('drops the return target once another chat is opened', async () => {
+    const chatId = await seedChat();
+    remember('some-other-chat');
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<ChatPage />, { wrapper: makeWrapper(qc, `/app/chat/${chatId}`) });
+    await waitFor(() => expect(useCurrentChatStore.getState().chatId).toBe(chatId));
+    expect(historyReturnTarget('some-other-chat')).toBeNull();
   });
 });

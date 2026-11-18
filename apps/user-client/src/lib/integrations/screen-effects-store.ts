@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { EffectTrigger } from '@chatsundere/llm-unified';
 import { create } from 'zustand';
+import { prefersReducedMotion } from '../reduced-motion.js';
 
 /** A live effect instance the overlay renders and then removes when finished. */
 export interface ActiveEffect {
@@ -13,11 +14,6 @@ export interface ActiveEffect {
 
 // Monotonic id source — deterministic for tests, no Math.random/Date.now.
 let seq = 0;
-
-const prefersReducedMotion = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 interface ScreenEffectsState {
   active: ActiveEffect[];

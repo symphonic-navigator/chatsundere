@@ -2,7 +2,7 @@
 
 import { CryptoError } from '@chatsundere/crypto';
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getClientDataDb } from '../../boot/client-data-db.js';
 import { importPersonaPack } from '../../data/chatsundere-import.js';
 import { previewChatsuneSessions } from '../../data/chatsune-import.js';
@@ -56,6 +56,7 @@ export function ChatsuneImportControl({
 }): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overwrite, setOverwrite] = useState(false);
@@ -71,6 +72,8 @@ export function ChatsuneImportControl({
   async function doChatsunderePersonaImport(file: Blob, sourceName: string): Promise<void> {
     const result = await importPersonaPack(file, sourceName);
     navigate(`/app/persona/${result.personaId}`, {
+      // From the New-persona form the import finishes it: the form leaves the history.
+      replace: pathname === '/app/persona/new',
       state: {
         justImported: { modelBound: result.modelBound, droppedBindings: result.droppedBindings },
       },

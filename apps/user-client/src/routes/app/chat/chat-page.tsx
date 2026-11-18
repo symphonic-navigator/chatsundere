@@ -60,14 +60,17 @@ import { chatFontScaleValue } from '../../../lib/chat-font-scale.js';
 import { clearLazyDraft, loadLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
+import { noteChatOpened } from '../../../lib/history-return.js';
 import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
 import { loadReplayAttachments } from '../../../lib/replay-pills.js';
 import { resolveOffering } from '../../../lib/resolve-offering.js';
-import { scrollToMessage } from '../../../lib/scroll-to-message.js';
+import { focusMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
+import { resolveTimeAwareness } from '../../../lib/time-awareness.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useKeyboardOpen } from '../../../lib/use-keyboard-open.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
@@ -85,6 +88,7 @@ import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { mutateSynced } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { useChatExport } from './use-chat-export.js';
 import { useComposerDraft } from './use-composer-draft.js';
 import { buildEditOrchestration, resolveSendAction } from './use-edit-orchestration.js';
 
@@ -93,6 +97,7 @@ export function ChatPage(): JSX.Element {
   const [search, setSearchParams] = useSearchParams();
   const personaIdFromQuery = search.get('personaId');
   const navigate = useNavigate();
+  const nav = useAppNav();
   const location = useLocation();
   const qc = useQueryClient();
 
@@ -151,11 +156,15 @@ export function ChatPage(): JSX.Element {
     // effect (and its ResizeObserver) snaps to the latest message and
     // overrides our jump — landing the user at the end of the chat.
     setAutoFollow(false);
-    requestAnimationFrame(() => {
-      // one retry — the message row may mount a frame later
-      if (!scrollToMessage(messageId)) {
-        requestAnimationFrame(() => scrollToMessage(messageId));
-      }
+    // A message gone since the link was made (deleted here or through sync)
+    // must not leave the chat parked mid-history in silence (spec §7.4).
+    focusMessage(messageId, () => {
+      setAutoFollow(true);
+      toastStore.show({
+        message: 'That message is no longer here.',
+        tone: 'info',
+        durationMs: 4000,
+      });
     });
   };
 
@@ -187,9 +196,11 @@ export function ChatPage(): JSX.Element {
   // so the user isn't stranded on a blank page.
   useEffect(() => {
     if (!isLazy && chatId && chatQuery.isFetched && !chatQuery.data?.chat) {
-      navigate('/app/history', { replace: true });
+      // A deleted chat behind the current page is skipped on the way back; with
+      // nothing behind, History is where the user can pick another.
+      nav.back('/app/history');
     }
-  }, [isLazy, chatId, chatQuery.isFetched, chatQuery.data?.chat, navigate]);
+  }, [isLazy, chatId, chatQuery.isFetched, chatQuery.data?.chat, nav]);
 
   // Clear the current-chat store when ChatPage unmounts. Without this, the
   // chatId persists across navigation to /app/history etc., and nsfwPanic
@@ -370,6 +381,14 @@ export function ChatPage(): JSX.Element {
   const diagnosticsReport = useStreamManagerStore((s) =>
     activeChatId ? (s.diagnostics.get(activeChatId) ?? null) : null,
   );
+  const chatExport = useChatExport({
+    open: quickMenuAnchor !== null,
+    chatId: activeChatId,
+    personaName: effectivePersona?.name ?? null,
+    // The file names the user "You" without a display name (spec B2), not by username.
+    userName: settingsQuery.data?.displayName ?? '',
+    streamingMessageId: streamHandle?.draftMessageId ?? null,
+  });
   const [diagOpen, setDiagOpen] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger — closing a stale diagnostics overlay when the chat changes
   useEffect(() => {
@@ -440,6 +459,7 @@ export function ChatPage(): JSX.Element {
       return { usedTokens: 0, systemTokens: 0 };
     // Guard against personas with empty instructions — buildPrompt throws on empty.
     if (!effectivePersona.instructions.trim()) return { usedTokens: 0, systemTokens: 0 };
+    const stamped = resolveTimeAwareness(effectivePersona);
     const sys = buildPrompt(
       {
         tonalityEnabled: effectivePersona.chatsundereTonality,
@@ -458,6 +478,7 @@ export function ChatPage(): JSX.Element {
         modelInstructions: resolveModelInstructions(offering),
         // Mirror the real send so the context gauge counts the same prompt.
         screenEffectsEnabled: settingsQuery.data.screenEffectsEnabled ?? true,
+        time: stamped ? { mode: 'chat' } : undefined,
       },
       'chat',
     );
@@ -467,7 +488,7 @@ export function ChatPage(): JSX.Element {
     const pillsById = new Map((chatQuery.data?.pills ?? []).map((p) => [p.id, p]));
     const historyTokens = (chatQuery.data?.messages ?? [])
       .filter(isContextMessage)
-      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments), 0);
+      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments, stamped), 0);
     const systemTokens = estimateTokens(sys);
     return { usedTokens: systemTokens + historyTokens, systemTokens };
   }, [
@@ -581,7 +602,7 @@ export function ChatPage(): JSX.Element {
 
   const onExitToEntranceHall = (): void => {
     setInteractionMode(false);
-    navigate('/app');
+    nav.returnTo('/app');
   };
 
   const onOpenPersonaEditor = (): void => {
@@ -887,6 +908,7 @@ export function ChatPage(): JSX.Element {
     ? artefactItems.findIndex((item) => item.id === openArtefactId)
     : -1;
 
+  useEffect(() => noteChatOpened(activeChatId), [activeChatId]);
   const focusId = search.get('focus');
   // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot per focusId once messages are present
   useEffect(() => {
@@ -1025,13 +1047,15 @@ export function ChatPage(): JSX.Element {
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
-            retryDisabled={class2Gate.disabled}
+            // Retry deletes before it resends; without the persona it could not resend.
+            retryDisabled={class2Gate.disabled || !effectivePersona}
             retryDisabledReason={class2Gate.tooltip ?? undefined}
             failureKind={last.failureKind}
             onShowDiagnostics={diagnosticsReport ? () => setDiagOpen(true) : undefined}
             onRetry={async () => {
-              // activeChatId is non-null whenever messages exist (chat-mode only).
-              if (!activeChatId) return;
+              // activeChatId is non-null whenever messages exist (chat-mode only). Without
+              // the persona nothing could be resent, so nothing is deleted either.
+              if (!activeChatId || !effectivePersona) return;
               setStreamBlock(null);
               // A typed stop shows the in-stream notice; anything else keeps its old path.
               const stopIfBlocked = (e: unknown): void => {
@@ -1386,6 +1410,8 @@ export function ChatPage(): JSX.Element {
         onClose={closeQuickMenu}
         onEntranceHall={onExitToEntranceHall}
         onNavigate={(to) => navigate(to)}
+        exportState={chatExport.exportState}
+        onExport={chatExport.onExport}
       />
     </div>
   );

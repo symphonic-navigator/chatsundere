@@ -31,6 +31,7 @@ import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debu
 import { safeReturnPath } from '../../../lib/safe-return.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
 import { useServerGate } from '../../../lib/server-gate.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useClass2Gate } from '../../../sync/gate.js';
 
 type Status =
@@ -95,7 +96,9 @@ export function SettingsProviderPage(): JSX.Element {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
 
-  const back = () => navigate(backTo);
+  const nav = useAppNav();
+  // Save and Remove leave the way ‹ does: back to where the user came from.
+  const back = () => nav.back(backTo);
 
   // Opened from a send's "Re-enter key": the key field is where the user goes next.
   const keyInputRef = useRef<HTMLInputElement>(null);

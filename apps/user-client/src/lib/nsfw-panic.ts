@@ -5,8 +5,16 @@ import { useStreamManagerStore } from '../state/stream-manager.store.js';
 import { toastStore } from '../state/toast.store.js';
 
 interface PanicArgs {
-  navigate: (to: string) => void;
+  /** Clears the way back and lands on the target (`useAppNav().resetTo`). */
+  resetTo: (to: string) => void;
+  /** The pathnames behind the current page (`useAppNav().trail`). */
+  trail: () => readonly string[];
 }
+
+/** The toast shown whenever adult mode closes a chat. */
+export const ADULT_CHAT_CLOSED = 'Adult mode off — chat closed';
+
+const CHAT_PATH = /^\/app\/chat\/([^/]+)/;
 
 /**
  * Phase-3.2 NSFW Panic auto-kick. Called when the user toggles
@@ -15,8 +23,9 @@ interface PanicArgs {
  * the partial draft persona-message is written back as
  * `streamingState: 'incomplete'` so the StreamInterruptedFooter
  * can offer Retry/Discard on re-visit; the user-message stays
- * untouched). If the user happens to be inside one of those chats,
- * navigates them to the Entrance Hall and surfaces a brief toast.
+ * untouched). If the user is inside one of those chats, or one of them is
+ * anywhere on the way back, clears the way back to the Entrance Hall (so Back
+ * can never reopen it) and surfaces a brief toast.
  *
  * No-op when no adult personas exist or none are streaming and
  * the active chat is unrelated.
@@ -34,15 +43,20 @@ export async function nsfwPanic(args: PanicArgs): Promise<void> {
   }
 
   const activeChatId = useCurrentChatStore.getState().chatId;
-  if (!activeChatId) return;
+  const behind = args
+    .trail()
+    .map((p) => CHAT_PATH.exec(p)?.[1])
+    .filter((id): id is string => id !== undefined);
+  const chatIds = [...new Set([...(activeChatId ? [activeChatId] : []), ...behind])];
+  if (chatIds.length === 0) return;
 
-  const activeChat = await db.chats.get(activeChatId);
-  if (!activeChat) return;
-  if (!adultPersonaIds.includes(activeChat.personaId)) return;
+  const chats = await db.chats.bulkGet(chatIds);
+  const hidesAdult = chats.some((c) => c !== undefined && adultPersonaIds.includes(c.personaId));
+  if (!hidesAdult) return;
 
-  args.navigate('/app');
+  args.resetTo('/app');
   toastStore.show({
-    message: 'Adult mode off — chat closed',
+    message: ADULT_CHAT_CLOSED,
     tone: 'warn',
     durationMs: 3500,
   });

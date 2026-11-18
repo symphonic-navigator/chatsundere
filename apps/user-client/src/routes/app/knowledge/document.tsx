@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import type { DocumentRow } from '../../../boot/client-data-db.js';
 import { TagEditor } from '../../../components/artefact/TagEditor.js';
 import { ModelDownloadBanner } from '../../../components/knowledge/ModelDownloadBanner.js';
@@ -22,6 +22,7 @@ import {
 } from '../../../data/knowledge.js';
 import { STATUS_LABEL, STATUS_TONE } from '../../../lib/knowledge-status.js';
 import { normalisePhrases } from '../../../lib/treasury-filter.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useClass2Gate } from '../../../sync/gate.js';
 
 /** Outer shell — resolves loading / not-found states before rendering the form. */
@@ -79,7 +80,7 @@ function DocumentForm(props: {
   suggestions: string[];
 }): JSX.Element {
   const { libraryId, existing, suggestions } = props;
-  const navigate = useNavigate();
+  const nav = useAppNav();
   const add = useAddDocuments(libraryId);
   const update = useUpdateDocument(libraryId);
   const del = useDeleteDocument(libraryId);
@@ -139,7 +140,7 @@ function DocumentForm(props: {
         await update.mutateAsync({ id: existing.id, patch });
       }
       setDirty(false);
-      navigate(backTo);
+      nav.back(backTo);
     } catch {
       setSaveError('Could not save — your changes are kept. Try again.');
     } finally {
@@ -297,7 +298,7 @@ function DocumentForm(props: {
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
             del.mutate(existing.id);
-            navigate(backTo);
+            nav.returnTo(backTo);
           }}
         />
       ) : null}

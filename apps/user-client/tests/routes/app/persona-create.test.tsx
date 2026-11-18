@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetClientDataDbForTests,
@@ -52,5 +52,34 @@ describe('PersonaCreate', () => {
     const personas = await getClientDataDb().personas.toArray();
     expect(personas).toHaveLength(1);
     expect(personas[0]?.name).toBe('Aria');
+  });
+
+  it('(c) the finished form leaves the history: Back from the new persona is My Circle', async () => {
+    function HubWithBack() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(-1)}>
+          system back
+        </button>
+      );
+    }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/app/circle', '/app/persona/new']} initialIndex={1}>
+          <Routes>
+            <Route path="/app/circle" element={<div data-testid="circle" />} />
+            <Route path="/app/persona/new" element={<PersonaCreate />} />
+            <Route path="/app/persona/:id" element={<HubWithBack />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByRole('textbox', { name: /^name$/i }), {
+      target: { value: 'Aria' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create persona/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'system back' }));
+    expect(await screen.findByTestId('circle')).toBeInTheDocument();
   });
 });

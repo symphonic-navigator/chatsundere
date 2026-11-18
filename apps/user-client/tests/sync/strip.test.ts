@@ -189,6 +189,13 @@ describe('strip — deny-list collections (§10)', () => {
     expect(sealed.brandNewField).toBe('travels');
   });
 
+  it('seals the time-awareness fields: a message offset and a persona switch', () => {
+    const msg = stripForSeal('messages', { id: 'm1', utcOffsetMinutes: 345 });
+    expect((msg as Record<string, unknown>).utcOffsetMinutes).toBe(345);
+    const persona = stripForSeal('personas', { id: 'p1', timeAwareness: false });
+    expect((persona as Record<string, unknown>).timeAwareness).toBe(false);
+  });
+
   it('returns pulled unchanged when no local row exists', () => {
     const pulled = { id: 'c9', title: 'fresh', updatedAt: 3 };
     expect(restoreLocalFields('chats', pulled, undefined)).toEqual(pulled);

@@ -18,11 +18,13 @@ import { activateSession } from '../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../boot/client-data-identity.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
+import { BackLink } from '../../components/ui/BackLink.js';
 import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
 import { rateLimitMessage } from '../../lib/recovery-copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isValidServerUrl } from '../../lib/server-url.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 
 type Screen =
   | { kind: 'ready' }
@@ -53,6 +55,7 @@ const UNKNOWN_USERNAME_COPY = copy.recovery.errors.unknownUsername;
  */
 export function OnboardingRecovery() {
   const navigate = useNavigate();
+  const nav = useAppNav();
 
   const [baseUrl, setBaseUrl] = useState('');
   const [username, setUsername] = useState('');
@@ -119,7 +122,7 @@ export function OnboardingRecovery() {
       // no-op until a reload or connectivity event happens to fire, leaving a
       // freshly-recovered device in an empty vault.
       maybeProbeLinkedServer();
-      navigate('/app', { replace: true });
+      nav.resetTo('/app');
     } catch (err) {
       if (err instanceof CryptoError && err.code === 'conflict') {
         setScreen({
@@ -181,19 +184,19 @@ export function OnboardingRecovery() {
   if (screen.kind === 'fatal') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
+        <BackLink to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
           ←
-        </Link>
+        </BackLink>
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
         {screen.action === 'onboarding' ? (
-          <Link
+          <BackLink
             to="/onboarding"
             className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to onboarding
-          </Link>
+          </BackLink>
         ) : (
           <button
             type="button"
@@ -211,9 +214,9 @@ export function OnboardingRecovery() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
+      <BackLink to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
         ←
-      </Link>
+      </BackLink>
       <h1 className="mt-4 font-display text-3xl italic">Recover your account</h1>
       <p className="mt-2 text-sm text-paper-soft">
         Enter your recovery key to re-establish access and set a new passphrase.

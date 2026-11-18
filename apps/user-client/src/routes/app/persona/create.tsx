@@ -170,7 +170,8 @@ export function PersonaCreate(): JSX.Element {
       }
 
       // Success: navigate away without resetting isBusy (the page unmounts).
-      navigate(`/app/persona/${pid}`);
+      // The finished form leaves the history: Back from the new persona is My Circle.
+      navigate(`/app/persona/${pid}`, { replace: true });
     } catch (e) {
       setIsBusy(false);
       toastStore.show({ message: (e as Error).message, tone: 'warn', durationMs: 3500 });

@@ -5,6 +5,12 @@ import {
   ChatQuickMenu,
   type ChatQuickMenuProps,
 } from '../../../src/components/chat/ChatQuickMenu.js';
+import {
+  currentHistoryGen,
+  historyArrivalState,
+  rememberHistoryReturn,
+  rotateHistoryGen,
+} from '../../../src/lib/history-return.js';
 
 // PersonaAvatar reads the avatar store from the DB; a stub keeps this test pure.
 vi.mock('../../../src/components/PersonaAvatar.js', () => ({
@@ -24,6 +30,8 @@ function setup(over: Partial<ChatQuickMenuProps> = {}) {
     onClose: vi.fn(),
     onEntranceHall: vi.fn(),
     onNavigate: vi.fn(),
+    exportState: 'ready',
+    onExport: vi.fn(),
     ...over,
   };
   render(<ChatQuickMenu {...props} />);
@@ -39,7 +47,7 @@ describe('ChatQuickMenu', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('lists the nine entries in order', () => {
+  it('lists the ten entries in order', () => {
     setup();
     const labels = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim());
     expect(labels).toEqual([
@@ -50,6 +58,7 @@ describe('ChatQuickMenu', () => {
       'Memories',
       'History',
       'Knowledge',
+      'Export chat',
       'Image settings',
       'Voice settings',
     ]);
@@ -84,6 +93,35 @@ describe('ChatQuickMenu', () => {
     expect(p.onClose).toHaveBeenCalled();
   });
 
+  it('History returns to the remembered search for the chat opened from it', () => {
+    rotateHistoryGen();
+    const gen = currentHistoryGen();
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '?tab=bookmarks', state: { q: 'paprika', gen } },
+      'c1',
+    );
+    const p = setup();
+    fireEvent.click(item('History'));
+    expect(p.onClose).toHaveBeenCalled();
+    expect(p.onNavigate).toHaveBeenCalledWith('/app/history?tab=bookmarks');
+    expect(historyArrivalState('/app/history?tab=bookmarks')).toEqual({ q: 'paprika', gen });
+    rotateHistoryGen();
+  });
+
+  it('History opens as before in any other chat', () => {
+    rotateHistoryGen();
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { q: 'paprika', gen: currentHistoryGen() } },
+      'c-other',
+    );
+    const p = setup();
+    fireEvent.click(item('History'));
+    expect(p.onNavigate).toHaveBeenCalledWith(
+      `/app/history?personaId=p1&return=${enc('/app/chat/c1')}`,
+    );
+    rotateHistoryGen();
+  });
+
   it('in a lazy chat: entries enabled, New chat disabled with a visible reason, return keeps personaId', () => {
     const returnTo = '/app/chat/new?personaId=p1';
     const p = setup({ activeChatId: null, returnTo });
@@ -111,6 +149,7 @@ describe('ChatQuickMenu', () => {
       'Memories',
       'History',
       'Knowledge',
+      'Export chat',
       'Image settings',
       'Voice settings',
     ]);

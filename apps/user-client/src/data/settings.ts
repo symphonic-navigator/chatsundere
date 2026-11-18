@@ -3,6 +3,7 @@
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ClientDataDb, type SettingsRow, getClientDataDb } from '../boot/client-data-db.js';
+import { rotateHistoryGen } from '../lib/history-return.js';
 import { mutateSynced } from '../sync/enqueue.js';
 import { patchTouchesSyncedField } from '../sync/strip.js';
 import { QK } from './queryKeys.js';
@@ -58,7 +59,12 @@ export function useUpdateSettings() {
         },
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: QK.settings }),
+    onSuccess: (_data, patch) => {
+      // An adult-mode flip discards History's held search (spec §10).
+      const prev = qc.getQueryData<SettingsRow>(QK.settings)?.adultMode;
+      if (patch.adultMode !== undefined && patch.adultMode !== prev) rotateHistoryGen();
+      return qc.invalidateQueries({ queryKey: QK.settings });
+    },
   });
 }
 

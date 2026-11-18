@@ -23,6 +23,7 @@ import {
 } from '../../../data/knowledge.js';
 import { useAdultMode } from '../../../data/settings.js';
 import { STATUS_LABEL, STATUS_TONE } from '../../../lib/knowledge-status.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useClass2Gate } from '../../../sync/gate.js';
 import { InlineEditRow } from '../account/InlineEditRow.js';
 import { InlineEditTextarea } from '../settings/InlineEditTextarea.js';
@@ -98,7 +99,8 @@ function CreateLibrary(): JSX.Element {
       description: description.trim(),
       nsfw,
     });
-    navigate(`/app/knowledge/${row.id}`);
+    // The new-library form leaves the history once the library exists.
+    navigate(`/app/knowledge/${row.id}`, { replace: true });
   }
 
   return (
@@ -144,6 +146,7 @@ function CreateLibrary(): JSX.Element {
 
 function EditLibrary(props: { libraryId: string }): JSX.Element {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const libraries = useLibraries();
   const update = useUpdateLibrary();
   const del = useDeleteLibrary();
@@ -309,7 +312,7 @@ function EditLibrary(props: { libraryId: string }): JSX.Element {
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           del.mutate(existing.id);
-          navigate('/app/knowledge');
+          nav.returnTo('/app/knowledge');
         }}
       />
     </PageScaffold>

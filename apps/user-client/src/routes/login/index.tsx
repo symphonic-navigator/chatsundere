@@ -15,12 +15,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { activateSession } from '../../boot/activate-session.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
-import { PASSPHRASE_SENTENCE } from '../../data/send-errors.js';
 import { useDisplayName } from '../../data/settings.js';
 import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
 import { safeReturnPath } from '../../lib/safe-return.js';
 import { httpServerClient } from '../../lib/server-client.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 import { postUnlockTarget } from '../../mcp/oauth/sign-in-session.js';
 import { useAppUpdateStore } from '../../sw/app-update.store.js';
@@ -48,14 +48,16 @@ export function safeReturnTarget(raw: string | null): string {
 
 export function Login() {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const [searchParams] = useSearchParams();
   // Read once per mount: the key is single-use and must not be re-consumed on re-render.
   const [postUpdateReturn] = useState(consumeReturnPath);
   const returnTarget = safeReturnTarget(searchParams.get('return') ?? postUpdateReturn);
-  // `need=passphrase` (spec 0.5.0 papercuts, item 7): the app asked for the
-  // passphrase because the session holds no master key. A passkey unlock would
-  // not restore it, so the passkey stays visible but disabled, and a user who
-  // is already signed in may step back without unlocking.
+  // `need=passphrase` (spec 0.5.0 papercuts, item 7): the app asked to unlock
+  // again because the session holds no master key. Since the passkey fix (#60) a
+  // passkey unlock restores it as well, so both ways stay open; the passphrase
+  // field takes the focus, and a user already signed in may step back with
+  // Not now.
   const needPassphrase = searchParams.get('need') === 'passphrase';
   const sessionActive = useSessionStore((s) => s.session !== null);
 
@@ -193,12 +195,18 @@ export function Login() {
       }
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
-      navigate(await postUnlockTarget(returnTarget), { replace: true });
+      nav.returnTo(await postUnlockTarget(returnTarget));
     } catch (e) {
       // Spec §5.6: no distinction between wrong passphrase and missing account
       // to prevent information leakage.
       if (e instanceof CryptoError) {
-        if (e.code === 'wrong_passphrase' || e.code === 'not_found') {
+        // A typo fails the integrity HMAC first, the AEAD otherwise: both read
+        // as a wrong passphrase, as on the late-link screen.
+        if (
+          e.code === 'wrong_passphrase' ||
+          e.code === 'integrity_check_failed' ||
+          e.code === 'not_found'
+        ) {
           setError(copy.login.errors.wrongPassphrase);
         } else {
           setError(copy.login.errors.unknown);
@@ -259,7 +267,7 @@ export function Login() {
         return;
       }
 
-      const session = await loginWithLocalBiometric({
+      const { session, mk } = await loginWithLocalBiometric({
         db: getDb(),
         credentialId: new Uint8Array(assertion.rawId),
         challenge,
@@ -270,10 +278,10 @@ export function Login() {
         origin: window.location.origin,
       });
 
-      await activateSession(session);
+      await activateSession(session, mk);
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
-      navigate(await postUnlockTarget(returnTarget), { replace: true });
+      nav.returnTo(await postUnlockTarget(returnTarget));
     } catch (_e) {
       // All biometric errors map to the same user-facing message regardless of
       // the underlying cause — no detail that could aid an attacker.
@@ -303,17 +311,11 @@ export function Login() {
               <button
                 type="button"
                 onClick={() => void handleBiometricUnlock()}
-                disabled={busy || applying || needPassphrase}
-                aria-describedby={needPassphrase ? 'login-passkey-reason' : undefined}
+                disabled={busy || applying}
                 className="w-full rounded-[var(--radius-card)] bg-aurora-600 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? copy.login.unlockingCta : copy.login.passkeyUnlockCta}
               </button>
-              {needPassphrase ? (
-                <p id="login-passkey-reason" className="text-center text-xs text-paper-soft">
-                  {copy.login.needsPassphrase}
-                </p>
-              ) : null}
             </div>
           )}
 
@@ -325,10 +327,9 @@ export function Login() {
             }}
             className="space-y-4"
           >
-            {/* Why the app sent you here, said once above the field — with or
-                without a passkey, since only the passphrase restores the keys. */}
+            {/* Why the app sent you here, said once above the field. */}
             {needPassphrase ? (
-              <p className="text-sm text-paper-soft">{PASSPHRASE_SENTENCE}</p>
+              <p className="text-sm text-paper-soft">{copy.login.unlockAgain}</p>
             ) : null}
             <PassphraseField
               id="login-passphrase"
@@ -359,7 +360,7 @@ export function Login() {
             {needPassphrase && sessionActive ? (
               <button
                 type="button"
-                onClick={() => navigate(returnTarget, { replace: true })}
+                onClick={() => nav.returnTo(returnTarget)}
                 className="cs-tap-44 block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
               >
                 {copy.login.notNow}

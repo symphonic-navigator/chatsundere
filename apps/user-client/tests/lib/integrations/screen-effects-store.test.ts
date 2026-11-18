@@ -23,4 +23,14 @@ describe('screen-effects store', () => {
     useScreenEffectsStore.getState().remove(id);
     expect(useScreenEffectsStore.getState().active).toHaveLength(0);
   });
+
+  it('plays the gentle profile while the Reduce animations switch is on', () => {
+    document.documentElement.dataset.motion = 'reduced';
+    try {
+      useScreenEffectsStore.getState().trigger(shower(['🎉']));
+      expect(useScreenEffectsStore.getState().active[0]?.reducedMotion).toBe(true);
+    } finally {
+      delete document.documentElement.dataset.motion;
+    }
+  });
 });

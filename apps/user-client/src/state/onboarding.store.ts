@@ -17,6 +17,14 @@ export type OnboardingState =
       userId: string;
       username: string;
       recoveryKeyString: string;
+      /** The wizard's search (its `?return=`), so a held reveal keeps it. */
+      search?: string;
+    }
+  | {
+      /** A local account's (or a recovery's) new key, shown on `at` until acknowledged. */
+      kind: 'local_recovery';
+      recoveryKeyString: string;
+      at: '/onboarding/local' | '/login/recovery';
     }
   | { kind: 'pairing_input'; baseUrl: string; code: string }
   | {

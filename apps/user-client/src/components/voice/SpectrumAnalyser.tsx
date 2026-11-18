@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useSettings } from '../../data/settings.js';
+import { useReducedMotion } from '../../lib/reduced-motion.js';
 import { SPECTRUM_DEFAULTS } from '../../lib/voice/spectrum-settings.js';
 import { useAnalyserBounds } from '../../lib/voice/use-analyser-bounds.js';
 import { useTtsFrequencyData } from '../../lib/voice/use-tts-frequency-data.js';
@@ -78,7 +79,8 @@ export function SpectrumAnalyser({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const activeRef = useRef(0);
-  const reducedMotionRef = useRef(false);
+  const reducedMotion = useReducedMotion();
+  const reducedMotionRef = useRef(reducedMotion);
   const frozenBinsRef = useRef<Float32Array | null>(null);
 
   // Keep isAudible current without putting it in the rAF effect's deps — an
@@ -94,16 +96,8 @@ export function SpectrumAnalyser({
     noiseBufferRef.current = new Float32Array(barCount);
   }
 
-  // Reduced-motion subscription. Honours OS-level preference live.
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    reducedMotionRef.current = mq.matches;
-    const listener = () => {
-      reducedMotionRef.current = mq.matches;
-    };
-    mq.addEventListener('change', listener);
-    return () => mq.removeEventListener('change', listener);
-  }, []);
+  // Live: honours the system setting and the in-app switch without a reload.
+  reducedMotionRef.current = reducedMotion;
 
   useEffect(() => {
     if (!spectrumEnabled || !animationsEnabled) {

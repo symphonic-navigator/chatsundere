@@ -107,6 +107,15 @@ export function PersonaRoleplay(): JSX.Element {
             onChange={() => void patch({ roleplay: !persona.roleplay })}
           />
         </div>
+        {persona.roleplay && persona.timeAwareness === undefined && (
+          <p data-testid="roleplay-timeless-note" className="-mt-4 text-[11px] text-paper-soft">
+            Roleplay characters don't know the date and time. Change it under{' '}
+            <Link to={`/app/persona/${id}/model`} className="text-paper underline">
+              Model behaviour
+            </Link>
+            .
+          </p>
+        )}
 
         {/* 2. Narration perspective — always visible, disabled when roleplay off ── */}
         <div>
