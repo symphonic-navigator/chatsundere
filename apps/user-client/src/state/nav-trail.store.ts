@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { NavigationType } from 'react-router-dom';
+import { create } from 'zustand';
 import { type Trail, nextTrail } from '../lib/nav-trail.js';
 
 /**
@@ -87,9 +88,27 @@ export function idxOf(key: string): number | null {
   return trails.get(key)?.idx ?? null;
 }
 
+interface NavResetState {
+  /** True while `resetTo` unwinds: the route outlet shows nothing (the curtain). */
+  resetting: boolean;
+  /** Where the running reset lands. */
+  target: string | null;
+  begin: (target: string) => void;
+  end: () => void;
+}
+
+/** The running `resetTo`, if any (spec "Three moves", the curtain and its bound). */
+export const useNavResetStore = create<NavResetState>((set) => ({
+  resetting: false,
+  target: null,
+  begin: (target) => set({ resetting: true, target }),
+  end: () => set({ resetting: false, target: null }),
+}));
+
 /** Forget everything (tests only: a reload in the app does this by itself). */
 export function resetNavTrailForTests(): void {
   trails.clear();
   current = null;
   movingFrom = null;
+  useNavResetStore.getState().end();
 }

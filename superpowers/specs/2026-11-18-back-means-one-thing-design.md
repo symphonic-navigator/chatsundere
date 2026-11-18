@@ -26,7 +26,7 @@ Laura's holistic sweep of 2026-11-18 found a hard defect, confirmed in the code:
 - **Back closing an open overlay** (help reader, quick menu, dialogs, sheets). Today the system Back leaves the page under an open overlay. Making each overlay own a history entry touches every overlay; it is a unit of its own (open question Q3).
 - **A router-level guard for unsaved edits** on the system Back. The deferral of 2026-10-09 in `ux-deferrals.md` stays open: `useBlocker` needs a data router (`createBrowserRouter`), and moving `App.tsx` off `<BrowserRouter>` is a migration, not a fix (see "Unsaved edits").
 - Moving or restyling the page bar, crumbs or `‹` (the thumb pass's area).
-- Anything Eidolon rebuilds: Projects, memory, knowledge editing, the tool loop. Their pages get the new `‹` through the shared `PageBar` and nothing else.
+- Anything Eidolon rebuilds: Projects, memory, knowledge editing, the tool loop. Their pages get the new `‹` through the shared `PageBar` and their own Back calls (a save or delete that leaves), nothing else.
 - `routes/app/integrations/**` and `tools/**` beyond their Back calls (a sibling unit builds there).
 
 ## Anti-goals
@@ -124,6 +124,7 @@ Rule: **while a recovery key is waiting to be acknowledged, every onboarding rou
 - Local: the wizard moves its reveal into the same store (a new `local_recovery` state with the key, memory only, as `invitation_recovery` holds it today), and `/onboarding` and `/onboarding/local` show the reveal while it is set.
 - "Continue" clears the state and then runs `resetTo('/app')` (first run) or `returnTo(<return>)` (from Server linking).
 - Pairing has no reveal (the recovery key already exists) and needs nothing.
+- Found while building: the sign-in recovery (`login/recovery.tsx`, step 3) shows a newly generated key the same way, so it is held by the same rule (`local_recovery` with `at: '/login/recovery'`).
 
 ### The adult-chat guard (open question Q2)
 

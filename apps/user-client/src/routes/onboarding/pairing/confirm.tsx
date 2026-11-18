@@ -22,6 +22,7 @@ import { PassphraseField } from '../../../components/PassphraseField.js';
 import { BackLink } from '../../../components/ui/BackLink.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 
 // ── Screen state ──────────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ export function PairingConfirm() {
 
 function PairingConfirmInner() {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const onboardingState = useOnboardingStore((s) => s.state);
   const setOnboardingState = useOnboardingStore((s) => s.setState);
 
@@ -126,7 +128,7 @@ function PairingConfirmInner() {
       // canRunCycle() would otherwise no-op until a reload or connectivity
       // event happens to fire, leaving a freshly-paired device in an empty vault.
       maybeProbeLinkedServer();
-      navigate('/app', { replace: true });
+      nav.resetTo('/app');
     } catch (err) {
       const mapped = mapError(err);
       if (mapped.kind === 'passphrase_inline') {

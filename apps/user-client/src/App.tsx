@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { AdultChatGuard } from './components/AdultChatGuard.js';
 import { ErrorScreen } from './components/ErrorScreen.js';
 import { MindspaceLayer } from './components/MindspaceLayer.js';
 import { StepUpModalHost } from './components/StepUpModalHost.js';
@@ -151,10 +152,13 @@ export function App() {
                   <Route path="/app/persona/:id/roleplay" element={<PersonaRoleplay />} />
                   <Route path="/app/persona/:id/memory" element={<PersonaMemory />} />
                   <Route path="/app/chat/new" element={<ChatPage />} />
-                  <Route path="/app/chat/:chatId" element={<ChatPage />} />
-                  <Route path="/app/chat/:chatId/bookmarks" element={<BookmarksPage />} />
-                  <Route path="/app/chat/:chatId/artefacts" element={<ArtefactsPage />} />
-                  <Route path="/app/chat/:chatId/knowledge" element={<ChatKnowledgePage />} />
+                  {/* Adult chats stay closed in SFW mode, whatever the way in. */}
+                  <Route element={<AdultChatGuard />}>
+                    <Route path="/app/chat/:chatId" element={<ChatPage />} />
+                    <Route path="/app/chat/:chatId/bookmarks" element={<BookmarksPage />} />
+                    <Route path="/app/chat/:chatId/artefacts" element={<ArtefactsPage />} />
+                    <Route path="/app/chat/:chatId/knowledge" element={<ChatKnowledgePage />} />
+                  </Route>
                   <Route path="/app/history" element={<HistoryPage />} />
                   <Route path="/app/treasury" element={<Treasury />} />
                   <Route path="/app/treasury/templates" element={<TreasuryTemplatesList />} />

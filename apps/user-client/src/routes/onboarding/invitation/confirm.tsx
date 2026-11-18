@@ -246,7 +246,7 @@ function InvitationConfirmInner() {
         // Started from Server linking, the wizard returns there and leaves the
         // history; the first run (no `?return=`) lands on the Hall.
         if (params.get('return')) nav.returnTo(safeReturnPath(params.get('return'), '/app'));
-        else navigate('/app', { replace: true });
+        else nav.resetTo('/app');
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is
         // used for both OPAQUE rounds (start must match finish).
@@ -279,6 +279,7 @@ function InvitationConfirmInner() {
           userId: result.session.userId,
           username: result.session.username,
           recoveryKeyString: result.recoveryKeyString,
+          search: window.location.search,
         });
         await setBiometricPromptDue(getDb());
         const linkedRow = await getLinkedAccount(getDb());

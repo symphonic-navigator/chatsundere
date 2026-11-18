@@ -30,7 +30,8 @@ export function InvitationRecoveryReveal() {
       recoveryKey={state.recoveryKeyString}
       onDone={() => {
         useOnboardingStore.getState().reset();
-        navigate('/app', { replace: true });
+        // The first run ends here: its steps leave the history.
+        nav.resetTo('/app');
       }}
     />
   );

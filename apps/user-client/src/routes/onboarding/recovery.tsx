@@ -24,6 +24,7 @@ import { HttpError } from '../../lib/fetch.js';
 import { rateLimitMessage } from '../../lib/recovery-copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
 import { isValidServerUrl } from '../../lib/server-url.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 
 type Screen =
   | { kind: 'ready' }
@@ -54,6 +55,7 @@ const UNKNOWN_USERNAME_COPY = copy.recovery.errors.unknownUsername;
  */
 export function OnboardingRecovery() {
   const navigate = useNavigate();
+  const nav = useAppNav();
 
   const [baseUrl, setBaseUrl] = useState('');
   const [username, setUsername] = useState('');
@@ -120,7 +122,7 @@ export function OnboardingRecovery() {
       // no-op until a reload or connectivity event happens to fire, leaving a
       // freshly-recovered device in an empty vault.
       maybeProbeLinkedServer();
-      navigate('/app', { replace: true });
+      nav.resetTo('/app');
     } catch (err) {
       if (err instanceof CryptoError && err.code === 'conflict') {
         setScreen({

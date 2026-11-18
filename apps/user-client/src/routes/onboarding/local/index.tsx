@@ -2,11 +2,12 @@
 import { CryptoError, createLocalAccount } from '@chatsundere/crypto';
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { activateSession } from '../../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { copy } from '../../../lib/copy.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
+import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { StepPassphrase } from './step-passphrase.js';
 import { StepRecoveryReveal } from './step-recovery-reveal.js';
 import { StepUsername } from './step-username.js';
@@ -17,8 +18,15 @@ import { StepUsername } from './step-username.js';
  * so the user sees the key the moment it first exists in memory.
  */
 export function CreateAccount() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const nav = useAppNav();
+  // The reveal survives a Back out of this route (the reveal hold returns here):
+  // a key not yet acknowledged is kept in the onboarding store, memory only.
+  const held = useOnboardingStore((s) =>
+    s.state.kind === 'local_recovery' && s.state.at === '/onboarding/local'
+      ? s.state.recoveryKeyString
+      : null,
+  );
+  const [step, setStep] = useState<1 | 2 | 3>(held !== null ? 3 : 1);
   const [username, setUsername] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
@@ -34,6 +42,11 @@ export function CreateAccount() {
       const result = await createLocalAccount({ db: getDb(), username, passphrase });
       await activateSession(result.session, result.mk);
       setRecoveryKey(result.recoveryKeyString);
+      useOnboardingStore.getState().setState({
+        kind: 'local_recovery',
+        recoveryKeyString: result.recoveryKeyString,
+        at: '/onboarding/local',
+      });
       setStep(3);
     } catch (err) {
       // CryptoError messages are internal and not guaranteed British-English
@@ -67,8 +80,11 @@ export function CreateAccount() {
 
   return (
     <StepRecoveryReveal
-      recoveryKey={recoveryKey ?? ''}
-      onDone={() => navigate('/app', { replace: true })}
+      recoveryKey={recoveryKey ?? held ?? ''}
+      onDone={() => {
+        useOnboardingStore.getState().reset();
+        nav.resetTo('/app');
+      }}
     />
   );
 }

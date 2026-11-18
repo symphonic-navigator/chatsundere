@@ -2,7 +2,9 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { computeTransformOrigin } from '../lib/origin-zoom.js';
+import { useNavResetStore } from '../state/nav-trail.store.js';
 import { useNavTransitionStore } from '../state/nav-transition.store.js';
+import { RecoveryRevealHold } from './RecoveryRevealHold.js';
 
 /**
  * Wraps the route outlet and drives the bidirectional Unified-Experience zoom
@@ -18,6 +20,7 @@ export default function NavTransitionOutlet(): JSX.Element {
   const consume = useNavTransitionStore((s) => s.consume);
   const peekLast = useNavTransitionStore((s) => s.peekLast);
   const clearLast = useNavTransitionStore((s) => s.clearLast);
+  const resetting = useNavResetStore((s) => s.resetting);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<HTMLDivElement>(null);
@@ -62,6 +65,9 @@ export default function NavTransitionOutlet(): JSX.Element {
     prevOutlet.current = outlet;
   }, [outlet]);
 
+  // The curtain of `resetTo`: nothing behind the way back is painted while it unwinds.
+  if (resetting) return <div ref={stageRef} className="cs-transition-stage" />;
+
   return (
     <div ref={stageRef} className="cs-transition-stage">
       <div
@@ -70,7 +76,7 @@ export default function NavTransitionOutlet(): JSX.Element {
         className={enterZoom ? 'cs-zoom-in' : undefined}
         onAnimationEnd={() => setEnterZoom(false)}
       >
-        {outlet}
+        <RecoveryRevealHold>{outlet}</RecoveryRevealHold>
       </div>
       {exit ? (
         <div
