@@ -12,9 +12,21 @@ grouped by the chat they live in.
 
 ## Finding a conversation
 
-Search by title at any time, and narrow to a single companion with the persona
-dropdown. The count tells you how many chats match. Tap any row to drop straight
-back into that conversation.
+One search field finds both what a chat is called and what was said in it. Type
+two letters or more and the list shows the matching **chat titles** first, then
+the **messages** that contain your words, grouped by chat with the newest chat
+first. The words can be in any order and don't need their capitals or accents —
+"paprika smoked" finds "Smoked Paprika". Tap a message to open its chat right at
+that spot; come back and the search, the results and your place are still there,
+whether you use Back or **History** in the chat's quick menu.
+
+Narrow everything to a single companion with the persona dropdown; the search
+then only looks inside that companion's chats. Your search stays on this device:
+it is never part of the page address, and it is forgotten when you sign out or
+switch adult mode.
+
+On the Bookmarks tab the same field finds a bookmark by its label or by the text
+of the starred message.
 
 ## Per-chat actions
 

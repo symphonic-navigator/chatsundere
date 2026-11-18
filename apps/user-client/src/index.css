@@ -5762,3 +5762,34 @@ h1 {
     animation: none;
   }
 }
+
+/* Search inside chats (My History): highlighted query words in hit snippets,
+   the section headers and their progress pill — inline-marker aesthetic. */
+.cs-search-mark {
+  color: var(--mindspace-accent, #8c76d7);
+  background: color-mix(in srgb, var(--mindspace-accent, #8c76d7) 16%, transparent);
+  border-radius: 3px;
+  padding: 0;
+}
+.cs-search-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-paper-soft, #b9b4c7);
+}
+.cs-search-progress {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  background: rgba(255, 255, 255, 0.06);
+}

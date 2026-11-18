@@ -28,8 +28,14 @@ export interface SearchCacheEntry {
 const GEN_KEY = 'cs-history-gen';
 
 let memoryGen: string | null = null;
-let returnTarget: (HistoryReturnLocation & { chatId: string }) | null = null;
+// `idx` is React Router's index of the History entry in the tab's back stack,
+// when known: it tells whether that entry sits directly behind the chat.
+let returnTarget: (HistoryReturnLocation & { chatId: string; idx: number | null }) | null = null;
 let searchCache: SearchCacheEntry | null = null;
+// The state handed to the History visit the quick menu opens forward; the
+// menu's navigate takes a path only, so it travels here instead.
+let arrival: { to: string; state: HistoryNavState } | null = null;
+const genListeners = new Set<() => void>();
 
 function newToken(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -78,6 +84,26 @@ export function rotateHistoryGen(): void {
   writeStoredGen(memoryGen);
   returnTarget = null;
   searchCache = null;
+  arrival = null;
+  for (const listener of genListeners) listener();
+}
+
+/** Be told when the generation rotates; returns the unsubscribe. */
+export function subscribeHistoryGen(listener: () => void): () => void {
+  genListeners.add(listener);
+  return () => {
+    genListeners.delete(listener);
+  };
+}
+
+/** React Router's index of the current entry, when the browser history carries it. */
+function currentEntryIdx(): number | null {
+  try {
+    const idx = (window.history.state as { idx?: unknown } | null)?.idx;
+    return typeof idx === 'number' ? idx : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Drops a stray `q` so a remembered address can never carry the query. */
@@ -96,7 +122,59 @@ export function rememberHistoryReturn(loc: HistoryReturnLocation, chatId: string
     pathname: loc.pathname,
     search: withoutQuery(loc.search),
     state: { ...loc.state, gen: currentHistoryGen() },
+    idx: currentEntryIdx(),
   };
+}
+
+/**
+ * A chat page was opened. The return target belongs to the chat opened from
+ * History only: once another chat is open, the quick menu behaves as before.
+ */
+export function noteChatOpened(chatId: string | null): void {
+  if (returnTarget && returnTarget.chatId !== chatId) returnTarget = null;
+}
+
+/**
+ * The quick menu's History entry (spec §10.1): back to the remembered History
+ * location for the chat opened from it — by a step back when that entry sits
+ * directly behind the chat, else by a new visit carrying its state — and to
+ * `fallback` otherwise.
+ */
+export function goHistory(
+  chatId: string | null,
+  fallback: string,
+  navigateTo: (to: string) => void,
+  close: () => void,
+): void {
+  close();
+  const target = chatId ? historyReturnTarget(chatId) : null;
+  if (!target) {
+    navigateTo(fallback);
+    return;
+  }
+  const idx = returnTarget?.idx ?? null;
+  const here = currentEntryIdx();
+  if (idx !== null && here === idx + 1) {
+    window.history.back();
+    return;
+  }
+  arrival = target;
+  navigateTo(target.to);
+}
+
+/**
+ * The state the quick menu handed to a History visit at `to` (path plus
+ * search), within the current generation; null otherwise. Does not consume.
+ */
+export function historyArrivalState(to: string): HistoryNavState | null {
+  if (!arrival || arrival.to !== to) return null;
+  if (arrival.state.gen !== currentHistoryGen()) return null;
+  return arrival.state;
+}
+
+/** Drop the handed-over state once History has taken it. */
+export function clearHistoryArrival(): void {
+  arrival = null;
 }
 
 /**

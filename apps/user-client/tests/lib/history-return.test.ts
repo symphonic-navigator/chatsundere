@@ -4,18 +4,22 @@ import { type AppSession, useSessionStore } from '@chatsundere/ui-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { useAdultMode, useUpdateSettings } from '../../src/data/settings.js';
 import {
   clearSearchCache,
   currentHistoryGen,
   getSearchCache,
+  goHistory,
+  historyArrivalState,
   historyReturnTarget,
+  noteChatOpened,
   rememberHistoryReturn,
   rotateHistoryGen,
   searchCacheKey,
   setSearchCache,
+  subscribeHistoryGen,
 } from '../../src/lib/history-return.js';
 
 function storedValues(): string[] {
@@ -98,6 +102,82 @@ describe('history-return', () => {
       state: { q: 'paprika', gen },
     });
     expect(historyReturnTarget('chat-2')).toBeNull();
+  });
+
+  it('opening another chat drops the return target; the same chat keeps it', () => {
+    const gen = currentHistoryGen();
+    rememberHistoryReturn({ pathname: '/app/history', search: '', state: { gen } }, 'chat-1');
+    noteChatOpened('chat-1');
+    expect(historyReturnTarget('chat-1')).not.toBeNull();
+    noteChatOpened('chat-2');
+    expect(historyReturnTarget('chat-1')).toBeNull();
+  });
+
+  it('a lazy new chat counts as another chat', () => {
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { gen: currentHistoryGen() } },
+      'chat-1',
+    );
+    noteChatOpened(null);
+    expect(historyReturnTarget('chat-1')).toBeNull();
+  });
+
+  it('goHistory falls back to the default address without a target', () => {
+    const nav = vi.fn();
+    const close = vi.fn();
+    goHistory('chat-9', '/app/history?personaId=p1', nav, close);
+    expect(close).toHaveBeenCalledOnce();
+    expect(nav).toHaveBeenCalledWith('/app/history?personaId=p1');
+  });
+
+  it('goHistory opens the remembered location and hands its state over', () => {
+    const gen = currentHistoryGen();
+    rememberHistoryReturn(
+      {
+        pathname: '/app/history',
+        search: '?tab=bookmarks',
+        state: { q: 'paprika', scrollY: 300, gen },
+      },
+      'chat-1',
+    );
+    const nav = vi.fn();
+    goHistory('chat-1', '/app/history?personaId=p1', nav, vi.fn());
+    expect(nav).toHaveBeenCalledWith('/app/history?tab=bookmarks');
+    expect(historyArrivalState('/app/history?tab=bookmarks')).toEqual({
+      q: 'paprika',
+      scrollY: 300,
+      gen,
+    });
+    expect(historyArrivalState('/app/history')).toBeNull();
+    rotateHistoryGen();
+    expect(historyArrivalState('/app/history?tab=bookmarks')).toBeNull();
+  });
+
+  it('goHistory steps back when the History entry sits directly behind the chat', () => {
+    const original = window.history.state;
+    window.history.replaceState({ usr: null, key: 'h', idx: 4 }, '');
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { gen: currentHistoryGen() } },
+      'chat-1',
+    );
+    window.history.replaceState({ usr: null, key: 'c', idx: 5 }, '');
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const nav = vi.fn();
+    goHistory('chat-1', '/app/history', nav, vi.fn());
+    expect(back).toHaveBeenCalledOnce();
+    expect(nav).not.toHaveBeenCalled();
+    back.mockRestore();
+    window.history.replaceState(original, '');
+  });
+
+  it('notifies subscribers on rotation until they unsubscribe', () => {
+    const listener = vi.fn();
+    const off = subscribeHistoryGen(listener);
+    rotateHistoryGen();
+    expect(listener).toHaveBeenCalledOnce();
+    off();
+    rotateHistoryGen();
+    expect(listener).toHaveBeenCalledOnce();
   });
 
   it('a remembered address never carries the query', () => {

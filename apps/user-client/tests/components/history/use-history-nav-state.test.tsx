@@ -9,6 +9,8 @@ import {
 import {
   type HistoryReturnLocation,
   currentHistoryGen,
+  goHistory,
+  rememberHistoryReturn,
   rotateHistoryGen,
 } from '../../../src/lib/history-return.js';
 
@@ -130,5 +132,42 @@ describe('useHistoryNavState', () => {
     });
     await waitFor(() => expect(state()).toEqual({ q: 'paprika', scrollY: 640, gen }));
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+  });
+
+  it('a rotation while mounted clears the typed query and the entry state', async () => {
+    renderAt({
+      pathname: '/app/history',
+      state: { q: 'paprika', scrollY: 420, gen: currentHistoryGen() },
+    });
+    act(() => api?.setQ('paprika stew'));
+    act(() => rotateHistoryGen());
+    expect(screen.getByTestId('q').textContent).toBe('');
+    expect(screen.getByTestId('scroll').textContent).toBe('null');
+    await waitFor(() => expect(state()).toEqual({ gen: currentHistoryGen() }));
+    // The pending debounced write of the old query must not land afterwards.
+    await new Promise((r) => setTimeout(r, 300));
+    expect(state()).toEqual({ gen: currentHistoryGen() });
+  });
+
+  it('takes the state the quick menu handed over for a forward return', async () => {
+    const gen = currentHistoryGen();
+    rememberHistoryReturn(
+      {
+        pathname: '/app/history',
+        search: '?tab=bookmarks',
+        state: { q: 'paprika', scrollY: 90, gen },
+      },
+      'chat-1',
+    );
+    goHistory(
+      'chat-1',
+      '/app/history',
+      () => undefined,
+      () => undefined,
+    );
+    renderAt('/app/history?tab=bookmarks');
+    expect(screen.getByTestId('q').textContent).toBe('paprika');
+    expect(screen.getByTestId('scroll').textContent).toBe('90');
+    await waitFor(() => expect(state()).toEqual({ q: 'paprika', scrollY: 90, gen }));
   });
 });

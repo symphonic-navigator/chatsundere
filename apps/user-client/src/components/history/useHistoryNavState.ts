@@ -4,7 +4,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   type HistoryNavState,
   type HistoryReturnLocation,
+  clearHistoryArrival,
   currentHistoryGen,
+  historyArrivalState,
+  subscribeHistoryGen,
 } from '../../lib/history-return.js';
 
 /** How long the query waits after the last keystroke before it is written to the entry. */
@@ -66,7 +69,10 @@ export function useHistoryNavState(): HistoryNavStateApi {
 
   const [initial] = useState(() => {
     const inbound = new URLSearchParams(location.search).get('q');
-    const st = currentState(location.state);
+    // The quick menu's forward return carries its state beside the path.
+    const st =
+      currentState(location.state) ??
+      currentState(historyArrivalState(`${location.pathname}${location.search}`));
     if (inbound !== null) return { q: inbound, scrollY: null };
     return { q: st?.q ?? '', scrollY: st?.scrollY ?? null };
   });
@@ -79,6 +85,29 @@ export function useHistoryNavState(): HistoryNavStateApi {
   const locationRef = useRef(location);
   locationRef.current = location;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped when the generation rotates while History is mounted.
+  const [genTick, setGenTick] = useState(0);
+
+  useEffect(() => clearHistoryArrival(), []);
+
+  // A rotation (adult-mode flip, sign-out, wipe, decouple) discards the typed
+  // query and the offset here too, not only in the entry's state.
+  useEffect(
+    () =>
+      subscribeHistoryGen(() => {
+        if (timer.current) {
+          clearTimeout(timer.current);
+          timer.current = null;
+        }
+        qRef.current = '';
+        committedRef.current = '';
+        scrollRef.current = null;
+        setQState('');
+        setCommittedQ('');
+        setGenTick((n) => n + 1);
+      }),
+    [],
+  );
 
   const wantState = useCallback((): HistoryNavState => {
     const committed = committedRef.current;
@@ -92,7 +121,7 @@ export function useHistoryNavState(): HistoryNavStateApi {
   // Keeps the entry's state in step with the query, and repairs it whenever
   // another navigation on this entry (a `setSearchParams` with `replace`, say)
   // dropped it. Also discards a stale-generation state and strips `?q=`.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: committedQ re-runs it; the refs carry the values.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: committedQ and genTick re-run it; the refs carry the values.
   useEffect(() => {
     const loc = locationRef.current;
     const stripped = searchWithoutQ(loc.search);
@@ -102,7 +131,7 @@ export function useHistoryNavState(): HistoryNavStateApi {
       { pathname: loc.pathname, search: stripped.search, hash: loc.hash },
       { replace: true, state: want },
     );
-  }, [location.key, location.search, committedQ, navigate, wantState]);
+  }, [location.key, location.search, committedQ, genTick, navigate, wantState]);
 
   const setQ = useCallback((next: string) => {
     qRef.current = next;
@@ -170,5 +199,5 @@ export function useHistoryNavState(): HistoryNavStateApi {
     [],
   );
 
-  return { q, setQ, scrollY: initial.scrollY, saveScroll };
+  return { q, setQ, scrollY: genTick === 0 ? initial.scrollY : null, saveScroll };
 }
