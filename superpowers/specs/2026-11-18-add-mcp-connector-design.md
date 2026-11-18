@@ -279,6 +279,7 @@ The draft of this spec claimed redirects are never followed silently. That was w
 ### 6.4 Imported and synced pills, navigation state, private data
 
 - An imported pill can carry any payload. The card re-validates the stored link with rules 2–7 and shows *Failed* if it does not pass, derives the host from the link at render, ignores every other payload field but `status` and `connectorDismissedAt` (type-checked), and takes `chatPath` from the message row.
+- An imported chat's user turns count as the user's for rule 8: importing a file is the user's own act, so a crafted export can bring a link that passes rule 8. Accepted, because the card, the tap, the check and the sign-in still guard it (as for a link the user pastes from that file by hand).
 - Navigation state is consumed on arrival (§5.2). `history.state` can be set by same-origin script only; the teaser site shares the origin and must stay free of third-party scripts (unchanged).
 - The tool's outputs disclose neither server names nor device state (§2.4). The "already exists" answer is a yes/no for a link the user wrote.
 

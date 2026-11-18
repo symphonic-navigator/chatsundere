@@ -75,6 +75,7 @@ import { loadMemoryContext } from '../memory/repo.js';
 import { enqueueSync, isLinkedForSync, mutateSynced } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 import { EXPERT_MAX_ROUNDS, type ExpertBase } from '../tools/ask-expert.js';
+import { connectorUserTexts } from '../tools/connector-user-texts.js';
 import {
   dispatch as dispatchTool,
   resolveActiveTools,
@@ -985,6 +986,11 @@ async function runIntoDraft(
             void queryClient.invalidateQueries({ queryKey: QK.memory(args.persona.id) }),
         }
       : null;
+  // Regenerating a seed reply replays the template's user turn, which the user never wrote.
+  const currentIsSeed =
+    toolsActive && userMessageId !== null
+      ? (await db.messages.get(userMessageId))?.kind === 'seed'
+      : false;
   const activeTools = toolsActive
     ? resolveActiveTools(
         integrationCtx,
@@ -994,14 +1000,8 @@ async function runIntoDraft(
         args.images ?? null,
         memoryCtx,
         {
-          // The plain text the user typed: their prior turns and this one (spec §2.4 rule 8).
-          userTexts: () => [
-            ...args.priorMessages
-              // A seed turn comes from a template, not from this chat's user.
-              .filter((m) => m.role === 'user' && m.kind !== 'seed')
-              .map((m) => flattenAnswerText(m.contentBlocks)),
-            args.userText,
-          ],
+          userTexts: () =>
+            connectorUserTexts(args.priorMessages, { text: args.userText, seed: currentIsSeed }),
           servers: () => getClientDataDb().mcpServers.orderBy('createdAt').toArray(),
         },
       )

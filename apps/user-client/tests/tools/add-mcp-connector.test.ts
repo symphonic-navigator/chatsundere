@@ -166,9 +166,10 @@ describe('add_mcp_connector execute', () => {
       ctx(['add https://mcp.example.com/mcp'], [row({ url: 'https://other.example.com/mcp' })]),
     );
     await tool.execute({ url: 'https://mcp.example.com/mcp' });
-    await contributeConnectorTool(ctx(['add https://other.example.com/mcp'])).execute({
-      url: 'https://nas.local',
-    });
+    // An "already exists" call reaches the server lookup too.
+    await contributeConnectorTool(
+      ctx(['add https://other.example.com/mcp'], [row({ url: 'https://other.example.com/mcp' })]),
+    ).execute({ url: 'https://other.example.com/mcp' });
     expect(spy).not.toHaveBeenCalled();
   });
 });
