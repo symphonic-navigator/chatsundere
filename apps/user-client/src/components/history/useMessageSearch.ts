@@ -34,6 +34,8 @@ export interface MessageSearchResult {
   /** Null while idle, short or not yet enabled. */
   progress: ScanProgress | null;
   capped: boolean;
+  /** The search's return-cache key; null while idle, short or not yet enabled. */
+  cacheKey: string | null;
 }
 
 interface Held {
@@ -137,10 +139,12 @@ export function useMessageSearch(input: MessageSearchInput): MessageSearchResult
     };
   }, [key]);
 
-  if (length === 0) return { status: 'idle', hits: [], progress: null, capped: false };
+  if (length === 0)
+    return { status: 'idle', hits: [], progress: null, capped: false, cacheKey: null };
   if (length < MIN_MESSAGE_QUERY)
-    return { status: 'short', hits: [], progress: null, capped: false };
-  if (key === null) return { status: 'scanning', hits: [], progress: null, capped: false };
+    return { status: 'short', hits: [], progress: null, capped: false, cacheKey: null };
+  if (key === null)
+    return { status: 'scanning', hits: [], progress: null, capped: false, cacheKey: null };
   // Between a key change and its effect, never show the previous query's hits.
   const view = held?.key === key ? held : heldFor(key, input.chats);
   return {
@@ -148,5 +152,6 @@ export function useMessageSearch(input: MessageSearchInput): MessageSearchResult
     hits: view.hits,
     progress: view.progress,
     capped: view.progress.capped,
+    cacheKey: key,
   };
 }

@@ -18,7 +18,12 @@ import { useFilteredPersonas } from '../../data/personas.js';
 import { useSettings } from '../../data/settings.js';
 import { displayTitle } from '../../lib/chat-title.js';
 import { historyCountLabel } from '../../lib/history-count.js';
-import { rememberHistoryReturn } from '../../lib/history-return.js';
+import {
+  getSearchCache,
+  getSearchCacheView,
+  rememberHistoryReturn,
+  setSearchCacheView,
+} from '../../lib/history-return.js';
 import { safeReturnPath } from '../../lib/safe-return.js';
 import { fold, queryWords } from '../../lib/search/fold.js';
 import { toHitGroups } from '../../lib/search/hit-groups.js';
@@ -28,6 +33,8 @@ import { useMindspaceStore } from '../../state/mindspace.store.js';
 
 /** Title matches shown while the messages section is on screen, before "Show all". */
 const TITLE_PREVIEW = 5;
+/** Keys that scroll the page when focus is not in a text field. */
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 
 type Tab = 'chats' | 'bookmarks';
 
@@ -116,9 +123,15 @@ export function HistoryPage(): JSX.Element {
     () => gatedChats.filter((c) => filterPersonaId === null || c.personaId === filterPersonaId),
     [gatedChats, filterPersonaId],
   );
+  // Titles match by the same rule as messages and bookmarks: folded, every
+  // word, in any order.
   const visibleChats = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return filteredChats.filter((c) => q === '' || displayTitle(c).toLowerCase().includes(q));
+    const words = queryWords(searchQuery);
+    if (words.length === 0) return filteredChats;
+    return filteredChats.filter((c) => {
+      const title = fold(displayTitle(c));
+      return words.every((w) => title.includes(w));
+    });
   }, [filteredChats, searchQuery]);
 
   // The scan's work list: gated before anything is read (spec §6), newest first.
@@ -171,20 +184,60 @@ export function HistoryPage(): JSX.Element {
       .filter((g) => g.bookmarks.length > 0);
   }, [bookmarks.data, visiblePersonaIds, filterPersonaId, searchQuery]);
 
+  const cacheKey = messageSearch.cacheKey;
+  // What was expanded comes back with the held search, so the first render
+  // already has the layout the scroll offset was measured against.
+  const cacheView = cacheKey !== null ? getSearchCacheView(cacheKey) : null;
+
   // Scroll comes back once, when the list it was measured against has rendered:
-  // the titles from the Query cache and, during a message search, the held hits.
+  // the titles from the Query cache and, during a message search, the held hits
+  // (a held search with no hits yet is measured against the titles alone).
   const restoredRef = useRef(false);
+  const userScrolledRef = useRef(false);
+  const heldSearch = cacheKey !== null && getSearchCache(cacheKey) !== null;
   const listReady =
     chats.data !== undefined &&
     personas.data !== undefined &&
     (tab === 'bookmarks'
       ? bookmarks.data !== undefined
-      : messageSearch.status !== 'scanning' || messageSearch.hits.length > 0);
+      : messageSearch.status !== 'scanning' || messageSearch.hits.length > 0 || heldSearch);
   useEffect(() => {
     if (restoredRef.current || !listReady) return;
     restoredRef.current = true;
-    if (nav.scrollY !== null) window.scrollTo(0, nav.scrollY);
+    if (nav.scrollY !== null && !userScrolledRef.current) window.scrollTo(0, nav.scrollY);
   }, [listReady, nav.scrollY]);
+
+  // Once the person has scrolled, their position wins over the restore. Scroll
+  // events are watched from the first frame on, so one the browser still had
+  // pending from the previous page is not taken for theirs.
+  useEffect(() => {
+    const mark = (): void => {
+      userScrolledRef.current = true;
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      if (SCROLL_KEYS.has(e.key)) mark();
+    };
+    const onScroll = (): void => {
+      if (!restoredRef.current) mark();
+    };
+    window.addEventListener('wheel', mark, { passive: true });
+    window.addEventListener('touchmove', mark, { passive: true });
+    window.addEventListener('keydown', onKey);
+    const raf = typeof requestAnimationFrame === 'function';
+    const handle = raf
+      ? requestAnimationFrame(() => window.addEventListener('scroll', onScroll, { passive: true }))
+      : setTimeout(() => window.addEventListener('scroll', onScroll, { passive: true }), 0);
+    return () => {
+      if (raf) cancelAnimationFrame(handle as number);
+      else clearTimeout(handle as ReturnType<typeof setTimeout>);
+      window.removeEventListener('wheel', mark);
+      window.removeEventListener('touchmove', mark);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
 
   function openFromSearch(chatId: string, href: string): void {
     rememberHistoryReturn(nav.saveScroll(), chatId);
@@ -197,7 +250,12 @@ export function HistoryPage(): JSX.Element {
   }
 
   const trimmedQuery = searchQuery.trim();
-  const titlesExpanded = titlesExpandedFor === trimmedQuery;
+  const titlesExpanded = titlesExpandedFor === trimmedQuery || (cacheView?.titlesExpanded ?? false);
+
+  function expandTitles(): void {
+    setTitlesExpandedFor(trimmedQuery);
+    if (cacheKey !== null) setSearchCacheView(cacheKey, { titlesExpanded: true });
+  }
   const shownTitles =
     messagesShown && !titlesExpanded ? visibleChats.slice(0, TITLE_PREVIEW) : visibleChats;
 
@@ -209,7 +267,11 @@ export function HistoryPage(): JSX.Element {
         key={c.id}
         chat={c}
         persona={p}
-        onOpen={() => nav.saveScroll()}
+        onOpen={() => {
+          const loc = nav.saveScroll();
+          // With a query, the way back keeps the search, as from a message hit.
+          if (trimmedQuery !== '') rememberHistoryReturn(loc, c.id);
+        }}
         onRename={(next) => void updateChat.mutateAsync({ id: c.id, patch: { title: next } })}
         onDelete={() => void deleteChat.mutateAsync(c.id)}
       />
@@ -224,6 +286,7 @@ export function HistoryPage(): JSX.Element {
             filterPersonaId={filterPersonaId}
             filterPersonaName={filterPersonaName}
             searchActive={trimmedQuery !== ''}
+            shortQuery={messageSearch.status === 'short'}
             onClearFilter={clearFilter}
           />
         ) : (
@@ -273,7 +336,7 @@ export function HistoryPage(): JSX.Element {
               <button
                 type="button"
                 className="self-start px-3 py-1 text-xs text-paper-soft"
-                onClick={() => setTitlesExpandedFor(trimmedQuery)}
+                onClick={expandTitles}
               >
                 Show all {visibleChats.length} chats
               </button>
@@ -299,7 +362,12 @@ export function HistoryPage(): JSX.Element {
           </h2>
           {hitGroups.length > 0 ? (
             <SearchHitList
+              key={cacheKey ?? ''}
               groups={hitGroups}
+              initialExpanded={cacheView?.expandedGroups}
+              onExpandedChange={(chatIds) => {
+                if (cacheKey !== null) setSearchCacheView(cacheKey, { expandedGroups: chatIds });
+              }}
               personaById={personaById}
               onOpen={(hit, group) => openFromSearch(group.key, hit.href)}
             />
@@ -402,11 +470,14 @@ function ChatsEmptyState({
   filterPersonaId,
   filterPersonaName,
   searchActive,
+  shortQuery,
   onClearFilter,
 }: {
   filterPersonaId: string | null;
   filterPersonaName?: string;
   searchActive: boolean;
+  /** A one-letter query: the hint below asks for more, so the button names the search. */
+  shortQuery: boolean;
   onClearFilter: () => void;
 }): JSX.Element {
   if (searchActive) {
@@ -414,7 +485,7 @@ function ChatsEmptyState({
       <div className="mt-8 grid place-items-center text-center text-paper-soft">
         <p className="font-display text-lg italic text-paper">No chats match your search.</p>
         <button type="button" className="cs-btn mt-3" onClick={onClearFilter}>
-          Clear filter
+          {shortQuery ? 'Clear search' : 'Clear filter'}
         </button>
       </div>
     );

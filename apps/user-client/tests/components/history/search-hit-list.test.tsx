@@ -61,6 +61,26 @@ describe('SearchHitList', () => {
     expect(screen.queryByText(/more in this chat/)).toBeNull();
   });
 
+  it('starts with the held groups expanded and reports every expansion', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onExpandedChange = vi.fn();
+    render(
+      <QueryClientProvider client={qc}>
+        <SearchHitList
+          groups={[group('a', 5), group('b', 4)]}
+          personaById={personaById}
+          onOpen={vi.fn()}
+          initialExpanded={['a']}
+          onExpandedChange={onExpandedChange}
+        />
+      </QueryClientProvider>,
+    );
+    expect(document.querySelectorAll('[data-search-group="a"] [data-search-hit]')).toHaveLength(5);
+    expect(document.querySelectorAll('[data-search-group="b"] [data-search-hit]')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: '+ 1 more in this chat' }));
+    expect(onExpandedChange).toHaveBeenCalledWith(['a', 'b']);
+  });
+
   it('renders the header title, role labels, date and marked words', () => {
     renderList([group('a', 2)]);
     expect(screen.getByRole('heading', { name: 'Chat a' })).toBeInTheDocument();

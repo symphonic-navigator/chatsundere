@@ -11,6 +11,7 @@ import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/cli
 import {
   currentHistoryGen,
   historyReturnTarget,
+  rememberHistoryReturn,
   rotateHistoryGen,
 } from '../../src/lib/history-return';
 import { HistoryPage } from '../../src/routes/app/history';
@@ -698,5 +699,159 @@ describe('HistoryPage — search inside messages', () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 420);
     expect(scrollTo).toHaveBeenCalledTimes(1);
     scrollTo.mockRestore();
+  });
+
+  it('keeps expanded titles and hit groups, and the scroll offset, across the return', async () => {
+    const { sfwId, chatA } = await seed();
+    const db = await openClientDataDb();
+    const ms = (await db.mindspaces.toArray())[0];
+    if (!ms) throw new Error('no mindspace');
+    await db.chats.bulkAdd(
+      Array.from({ length: 6 }, (_, i) => ({
+        id: uuidv7(),
+        personaId: sfwId,
+        title: `stew number ${i}`,
+        resolvedMindspaceId: ms.id,
+        createdAt: 0,
+        updatedAt: 0,
+        lastMessageAt: 300 + i,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      })),
+    );
+    await addMessages(
+      chatA,
+      Array.from({ length: 5 }, (_, i) => ({ id: `s${i}`, text: `a stew, take ${i}` })),
+    );
+    const first = renderHistory();
+    await screen.findByText('stew number 5');
+    typeQuery('stew');
+    await screen.findByText('In messages · 5');
+    await waitFor(() => expect(document.querySelector('.cs-search-progress')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 6 chats' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ 2 more in this chat' }));
+    expect(document.querySelectorAll('[data-history-row]').length).toBe(6);
+    expect(document.querySelectorAll('[data-search-hit]').length).toBe(5);
+
+    const scrollY = vi.spyOn(window, 'scrollY', 'get').mockReturnValue(420);
+    fireEvent.click(document.querySelector('[data-search-hit="s4"] button') as HTMLButtonElement);
+    await screen.findByTestId('chat');
+    scrollY.mockRestore();
+    const target = historyReturnTarget(chatA);
+    if (!target) throw new Error('no return target');
+    expect(target.state.scrollY).toBe(420);
+    first.unmount();
+
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    renderHistory({ pathname: target.to, state: target.state });
+    await screen.findByText('Chat titles · 6');
+    expect(document.querySelectorAll('[data-history-row]').length).toBe(6);
+    expect(document.querySelectorAll('[data-search-hit]').length).toBe(5);
+    expect(screen.queryByRole('button', { name: 'Show all 6 chats' })).toBeNull();
+    expect(screen.queryByText(/more in this chat/)).toBeNull();
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 420));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    scrollTo.mockRestore();
+  });
+
+  it('opening a title match with a query remembers the way back', async () => {
+    const { chatA } = await seed();
+    renderHistory();
+    await screen.findByText('about books');
+    typeQuery('books');
+    await screen.findByText('Chat titles · 1');
+    fireEvent.click(
+      document.querySelector('[data-history-row] [data-row-body]') as HTMLButtonElement,
+    );
+    await screen.findByTestId('chat');
+    const target = historyReturnTarget(chatA);
+    expect(target?.to).toBe('/app/history');
+    expect(target?.state.q).toBe('books');
+  });
+
+  it('opening a chat without a query remembers no way back', async () => {
+    const { chatA } = await seed();
+    renderHistory();
+    await screen.findByText('about books');
+    const row = [...document.querySelectorAll('[data-history-row]')].find((r) =>
+      r.textContent?.includes('about books'),
+    );
+    fireEvent.click(row?.querySelector('[data-row-body]') as HTMLButtonElement);
+    await screen.findByTestId('chat');
+    expect(historyReturnTarget(chatA)).toBeNull();
+  });
+
+  it('titles match folded words in any order', async () => {
+    const { sfwId } = await seed();
+    const db = await openClientDataDb();
+    const ms = (await db.mindspaces.toArray())[0];
+    if (!ms) throw new Error('no mindspace');
+    await db.chats.bulkAdd(
+      ['Smoked Paprika', 'Frau Müller'].map((title, i) => ({
+        id: uuidv7(),
+        personaId: sfwId,
+        title,
+        resolvedMindspaceId: ms.id,
+        createdAt: 0,
+        updatedAt: 0,
+        lastMessageAt: 400 + i,
+        bookmarkedMessageCount: 0,
+        draftInput: '',
+        libraryIds: [],
+      })),
+    );
+    renderHistory();
+    await screen.findByText('Smoked Paprika');
+    const titles = () =>
+      [...document.querySelectorAll('[data-history-row]')].map((r) => r.textContent ?? '');
+    typeQuery('paprika smoked');
+    await waitFor(() => expect(titles()).toHaveLength(1));
+    expect(titles()[0]).toContain('Smoked Paprika');
+    typeQuery('muller');
+    await waitFor(() => expect(titles()[0]).toContain('Frau Müller'));
+    expect(titles()).toHaveLength(1);
+    typeQuery('smoked books');
+    await waitFor(() => expect(titles()).toHaveLength(0));
+  });
+
+  it('arriving on History uses the remembered return up', async () => {
+    await seed();
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { q: 'x', gen: currentHistoryGen() } },
+      'chat-x',
+    );
+    expect(historyReturnTarget('chat-x')).not.toBeNull();
+    renderHistory();
+    await screen.findByText('about books');
+    expect(historyReturnTarget('chat-x')).toBeNull();
+  });
+
+  it('skips the scroll restore once the person has scrolled', async () => {
+    const { chatA } = await seed();
+    await addMessages(chatA, [{ id: 'm1', text: 'smoked paprika' }]);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    renderHistory({
+      pathname: '/app/history',
+      state: { q: 'paprika', scrollY: 420, gen: currentHistoryGen() },
+    });
+    fireEvent.wheel(window);
+    await waitFor(() => expect(document.querySelector('[data-search-hit="m1"]')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('.cs-search-progress')).toBeNull());
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
+  });
+
+  it('a one-letter query with no title match offers Clear search', async () => {
+    const { sfwId } = await seed();
+    renderHistory(`/app/history?personaId=${sfwId}`);
+    await screen.findByText('about books');
+    typeQuery('z');
+    await screen.findByText('No chats match your search.');
+    expect(screen.getByText('Type one more letter to search inside messages.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Clear filter' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    await waitFor(() => expect(document.querySelectorAll('[data-history-row]').length).toBe(2));
+    expect((document.querySelector('input[type="search"]') as HTMLInputElement).value).toBe('');
   });
 });

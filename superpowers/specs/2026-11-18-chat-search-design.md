@@ -64,7 +64,7 @@ The Chats tab keeps its one search field. Its placeholder becomes **"Search titl
 └───────────────────────────────────┘
 ```
 
-- **Chat titles** — exactly today's title filter and `HistoryRow`s (rename, delete, ⋯ menu unchanged). Whenever the messages section is shown (a query of two or more characters — not only while the scan runs, so the list never grows under you when it finishes), more than **five** title matches show as the first five plus a "Show all *n* chats" button that expands in place. With zero title matches the section is left out. With no query the page is unchanged: the full chat list, no section headers.
+- **Chat titles** — exactly today's title filter and `HistoryRow`s (rename, delete, ⋯ menu unchanged). Whenever the messages section is shown (a query of two or more characters — not only while the scan runs, so the list never grows under you when it finishes), more than **five** title matches show as the first five plus a "Show all *n* chats" button that expands in place. With zero title matches the section is left out. With no query the page is unchanged: the full chat list, no section headers. Titles now match with the same folded all-words rule as messages and bookmarks (`fold` + `queryWords`, every word in any order, case and accents ignored), a refinement found in the pre-squash pass.
 - **In messages** — the message hits (§7), streamed in as the scan proceeds.
 - **The sticky count line** (`historyCountLabel`) is hidden while the messages section is shown; the two section headers carry the numbers. (The sketch above still shows it; it goes.) With no query or a one-letter query it stays as today.
 

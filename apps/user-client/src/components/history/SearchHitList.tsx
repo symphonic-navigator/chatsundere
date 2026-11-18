@@ -20,6 +20,10 @@ interface Props {
   personaById: ReadonlyMap<string, HitListPersona>;
   /** A hit was tapped; the caller saves its place and navigates to `hit.href`. */
   onOpen: (hit: SearchHit, group: SearchHitGroup) => void;
+  /** Chat ids of the groups already expanded, as held for the return to History. */
+  initialExpanded?: readonly string[];
+  /** The expanded groups changed; the caller holds them for the return. */
+  onExpandedChange?: (chatIds: string[]) => void;
 }
 
 /** A snippet's text with its query words wrapped in `<mark>`. */
@@ -52,7 +56,15 @@ export function SnippetText({
  * rows, then "+ n more in this chat" expanding the group in place.
  */
 export function SearchHitList(p: Props): JSX.Element {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(p.initialExpanded ?? []),
+  );
+
+  function expand(key: string): void {
+    const next = new Set(expanded).add(key);
+    setExpanded(next);
+    p.onExpandedChange?.([...next]);
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -100,7 +112,7 @@ export function SearchHitList(p: Props): JSX.Element {
               <button
                 type="button"
                 className="self-start px-3 py-1 text-xs text-paper-soft"
-                onClick={() => setExpanded((prev) => new Set(prev).add(g.key))}
+                onClick={() => expand(g.key)}
               >
                 + {more} more in this chat
               </button>

@@ -5,6 +5,7 @@ import {
   type HistoryNavState,
   type HistoryReturnLocation,
   clearHistoryArrival,
+  clearHistoryReturn,
   currentHistoryGen,
   historyArrivalState,
   subscribeHistoryGen,
@@ -88,7 +89,12 @@ export function useHistoryNavState(): HistoryNavStateApi {
   // Bumped when the generation rotates while History is mounted.
   const [genTick, setGenTick] = useState(0);
 
-  useEffect(() => clearHistoryArrival(), []);
+  // The arrival was read above. Being back on History uses the return up: the
+  // target goes too, and the next hit or bookmark tap remembers a fresh one.
+  useEffect(() => {
+    clearHistoryArrival();
+    clearHistoryReturn();
+  }, []);
 
   // A rotation (adult-mode flip, sign-out, wipe, decouple) discards the typed
   // query and the offset here too, not only in the entry's state.

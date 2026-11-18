@@ -8,9 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { useAdultMode, useUpdateSettings } from '../../src/data/settings.js';
 import {
+  clearHistoryReturn,
   clearSearchCache,
   currentHistoryGen,
   getSearchCache,
+  getSearchCacheView,
   goHistory,
   historyArrivalState,
   historyReturnTarget,
@@ -19,6 +21,7 @@ import {
   rotateHistoryGen,
   searchCacheKey,
   setSearchCache,
+  setSearchCacheView,
   subscribeHistoryGen,
 } from '../../src/lib/history-return.js';
 
@@ -89,6 +92,43 @@ describe('history-return', () => {
     expect(getSearchCache(b)?.key).toBe(b);
     clearSearchCache();
     expect(getSearchCache(b)).toBeNull();
+  });
+
+  it('holds what was expanded with the entry, across flushes, and drops it with the entry', () => {
+    const a = searchCacheKey('one', null, []);
+    const b = searchCacheKey('two', null, []);
+    setSearchCache(cacheEntry(a));
+    setSearchCacheView(a, { expandedGroups: ['c1'] });
+    setSearchCacheView(a, { titlesExpanded: true });
+    setSearchCache(cacheEntry(a));
+    expect(getSearchCacheView(a)).toEqual({ expandedGroups: ['c1'], titlesExpanded: true });
+    expect(getSearchCache(a)?.expandedGroups).toEqual(['c1']);
+    expect(getSearchCacheView(b)).toEqual({ expandedGroups: [], titlesExpanded: false });
+    setSearchCache(cacheEntry(b));
+    expect(getSearchCacheView(a)).toEqual({ expandedGroups: [], titlesExpanded: false });
+    setSearchCacheView(b, { titlesExpanded: true });
+    rotateHistoryGen();
+    expect(getSearchCacheView(b)).toEqual({ expandedGroups: [], titlesExpanded: false });
+  });
+
+  it('an expansion before the first flush waits for the entry', () => {
+    const a = searchCacheKey('one', null, []);
+    setSearchCacheView(a, { titlesExpanded: true });
+    expect(getSearchCacheView(a).titlesExpanded).toBe(true);
+    setSearchCache(cacheEntry(a));
+    expect(getSearchCache(a)?.titlesExpanded).toBe(true);
+    setSearchCacheView(a, { expandedGroups: ['c2'] });
+    clearSearchCache();
+    expect(getSearchCacheView(a)).toEqual({ expandedGroups: [], titlesExpanded: false });
+  });
+
+  it('clearHistoryReturn drops the return target', () => {
+    rememberHistoryReturn(
+      { pathname: '/app/history', search: '', state: { gen: currentHistoryGen() } },
+      'chat-1',
+    );
+    clearHistoryReturn();
+    expect(historyReturnTarget('chat-1')).toBeNull();
   });
 
   it('the return target exists only for the chat opened from History', () => {

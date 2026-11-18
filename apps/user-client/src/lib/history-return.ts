@@ -22,6 +22,16 @@ export interface SearchCacheEntry {
   progress: ScanProgress;
   /** The scan's work list; `progress.nextIndex` points into it. */
   chats: ScanChat[];
+  /** Chat ids of the hit groups expanded past their first hits. */
+  expandedGroups?: string[];
+  /** Whether the title matches were expanded past the preview. */
+  titlesExpanded?: boolean;
+}
+
+/** What the person had expanded in a held search's results. */
+export interface SearchCacheView {
+  expandedGroups: string[];
+  titlesExpanded: boolean;
 }
 
 // The only thing History writes to sessionStorage: an opaque token, no content.
@@ -32,6 +42,9 @@ let memoryGen: string | null = null;
 // when known: it tells whether that entry sits directly behind the chat.
 let returnTarget: (HistoryReturnLocation & { chatId: string; idx: number | null }) | null = null;
 let searchCache: SearchCacheEntry | null = null;
+// An expansion made before the search's first flush created its entry; the
+// entry takes it over when it lands, and it goes whenever the entry would.
+let pendingView: ({ key: string } & Partial<SearchCacheView>) | null = null;
 // The state handed to the History visit the quick menu opens forward; the
 // menu's navigate takes a path only, so it travels here instead.
 let arrival: { to: string; state: HistoryNavState } | null = null;
@@ -84,6 +97,7 @@ export function rotateHistoryGen(): void {
   writeStoredGen(memoryGen);
   returnTarget = null;
   searchCache = null;
+  pendingView = null;
   arrival = null;
   for (const listener of genListeners) listener();
 }
@@ -124,6 +138,14 @@ export function rememberHistoryReturn(loc: HistoryReturnLocation, chatId: string
     state: { ...loc.state, gen: currentHistoryGen() },
     idx: currentEntryIdx(),
   };
+}
+
+/**
+ * Drop the return target. History calls it on mount: arriving there uses the
+ * return up, and the next hit or bookmark tap remembers a fresh one.
+ */
+export function clearHistoryReturn(): void {
+  returnTarget = null;
 }
 
 /**
@@ -209,14 +231,55 @@ export function getSearchCache(key: string): SearchCacheEntry | null {
   return searchCache?.key === key ? searchCache : null;
 }
 
-/** Hold one message search (replacing any other) for the return to History. */
+/**
+ * Hold one message search (replacing any other) for the return to History. A
+ * flush for the same search keeps what was expanded unless the entry says.
+ */
 export function setSearchCache(entry: SearchCacheEntry): void {
-  searchCache = entry;
+  const prev =
+    searchCache?.key === entry.key
+      ? searchCache
+      : pendingView?.key === entry.key
+        ? pendingView
+        : null;
+  pendingView = null;
+  searchCache = {
+    ...entry,
+    ...(entry.expandedGroups === undefined && prev?.expandedGroups !== undefined
+      ? { expandedGroups: prev.expandedGroups }
+      : {}),
+    ...(entry.titlesExpanded === undefined && prev?.titlesExpanded !== undefined
+      ? { titlesExpanded: prev.titlesExpanded }
+      : {}),
+  };
+}
+
+/** What was expanded in the held search for `key`; nothing expanded when none matches. */
+export function getSearchCacheView(key: string): SearchCacheView {
+  const src =
+    searchCache?.key === key ? searchCache : pendingView?.key === key ? pendingView : null;
+  return {
+    expandedGroups: src?.expandedGroups ?? [],
+    titlesExpanded: src?.titlesExpanded ?? false,
+  };
+}
+
+/**
+ * Record an expansion in the held search for `key`. Memory only, like the
+ * entry itself; before the entry exists it waits for the entry's first flush.
+ */
+export function setSearchCacheView(key: string, patch: Partial<SearchCacheView>): void {
+  if (searchCache?.key === key) {
+    searchCache = { ...searchCache, ...patch };
+    return;
+  }
+  pendingView = { ...(pendingView?.key === key ? pendingView : { key }), ...patch };
 }
 
 /** Drop the held message search. */
 export function clearSearchCache(): void {
   searchCache = null;
+  pendingView = null;
 }
 
 // Sign-out (and the wipe's `closeAndForget`) ends the session: a new

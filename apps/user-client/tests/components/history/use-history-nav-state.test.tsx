@@ -10,6 +10,7 @@ import {
   type HistoryReturnLocation,
   currentHistoryGen,
   goHistory,
+  historyReturnTarget,
   rememberHistoryReturn,
   rotateHistoryGen,
 } from '../../../src/lib/history-return.js';
@@ -169,5 +170,7 @@ describe('useHistoryNavState', () => {
     expect(screen.getByTestId('q').textContent).toBe('paprika');
     expect(screen.getByTestId('scroll').textContent).toBe('90');
     await waitFor(() => expect(state()).toEqual({ q: 'paprika', scrollY: 90, gen }));
+    // The arrival was read first; then the used-up return target is gone.
+    expect(historyReturnTarget('chat-1')).toBeNull();
   });
 });
