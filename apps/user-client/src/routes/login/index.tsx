@@ -200,7 +200,13 @@ export function Login() {
       // Spec §5.6: no distinction between wrong passphrase and missing account
       // to prevent information leakage.
       if (e instanceof CryptoError) {
-        if (e.code === 'wrong_passphrase' || e.code === 'not_found') {
+        // A typo fails the integrity HMAC first, the AEAD otherwise: both read
+        // as a wrong passphrase, as on the late-link screen.
+        if (
+          e.code === 'wrong_passphrase' ||
+          e.code === 'integrity_check_failed' ||
+          e.code === 'not_found'
+        ) {
           setError(copy.login.errors.wrongPassphrase);
         } else {
           setError(copy.login.errors.unknown);

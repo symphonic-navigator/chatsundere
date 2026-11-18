@@ -57,7 +57,7 @@ export const copy = {
     unlockCta: 'Unlock',
     unlockingCta: 'Unlocking…',
     forgotLink: 'Forgot passphrase?',
-    /** Under the disabled passkey button when the app asked for the passphrase. */
+    /** Above the passphrase field when the app asked to unlock again. */
     unlockAgain: 'Unlock once more so Chatsundere can use your keys.',
     /** Back to where the passphrase was asked for, while a session is still active. */
     notNow: 'Not now',
