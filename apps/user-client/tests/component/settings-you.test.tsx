@@ -59,10 +59,11 @@ vi.mock('../../src/content/help/use-help.js', () => ({
 // ─── Imports (resolved after mocks are registered) ────────────────────────────
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { SettingsYouPage } from '../../src/routes/app/settings/you.js';
+import { stubReducedMotionQuery } from '../helpers/media-query-stub.js';
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -79,5 +80,80 @@ describe('SettingsYouPage', () => {
     expect(await screen.findByLabelText('About me')).toBeInTheDocument();
     expect(screen.getByLabelText('Global instructions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mindspace/i })).toBeInTheDocument();
+  });
+});
+
+describe('Reduce animations switch', () => {
+  const HELPER =
+    'Stills the drifting background, the breathing orbs and other motion on this device. Screen effects play gently.';
+  const SYSTEM_NOTE =
+    'Your device asks for reduced motion, so this stays on. Change it in your system settings.';
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    updateMock.mockClear();
+    STABLE_SETTINGS.animationsEnabled = true;
+  });
+
+  it('sits under Mindspace with its helper as visible text', () => {
+    stubReducedMotionQuery(false);
+    wrap(<SettingsYouPage />);
+    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    const mindspace = screen.getByRole('button', { name: /Mindspace/i });
+    expect(
+      mindspace.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText(HELPER)).toBeVisible();
+    expect(toggle).not.toHaveAttribute('title');
+  });
+
+  it('with the system off, shows !animationsEnabled and writes the field', () => {
+    stubReducedMotionQuery(false);
+    wrap(<SettingsYouPage />);
+    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle).toBeEnabled();
+    expect(screen.queryByText(SYSTEM_NOTE)).toBeNull();
+    fireEvent.click(toggle);
+    expect(updateMock).toHaveBeenCalledWith({ animationsEnabled: false });
+  });
+
+  it('with the switch already on, turning it off writes animationsEnabled: true', () => {
+    stubReducedMotionQuery(false);
+    STABLE_SETTINGS.animationsEnabled = false;
+    wrap(<SettingsYouPage />);
+    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(toggle);
+    expect(updateMock).toHaveBeenCalledWith({ animationsEnabled: true });
+  });
+
+  it('with the system on, shows on, disabled, with the visible note', () => {
+    stubReducedMotionQuery(true);
+    wrap(<SettingsYouPage />);
+    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toBeDisabled();
+    expect(toggle).not.toHaveAttribute('title');
+    expect(screen.getByText(SYSTEM_NOTE)).toBeVisible();
+    fireEvent.click(toggle);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('follows the system setting live and keeps the user choice', () => {
+    const system = stubReducedMotionQuery(false);
+    STABLE_SETTINGS.animationsEnabled = false;
+    wrap(<SettingsYouPage />);
+    const toggle = screen.getByRole('button', { name: 'Reduce animations' });
+    expect(toggle).toBeEnabled();
+    act(() => system.set(true));
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(SYSTEM_NOTE)).toBeVisible();
+    act(() => system.set(false));
+    expect(toggle).toBeEnabled();
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText(SYSTEM_NOTE)).toBeNull();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
