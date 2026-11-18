@@ -11,7 +11,8 @@
  *   - undersized targets: every interactive element whose hit area is below
  *     44 px on either side. The hit area is the element's box united with its
  *     `::before`/`::after` box when that pseudo-element is absolutely
- *     positioned (the `.cs-hit` pattern).
+ *     positioned (the `.cs-hit` pattern), both cut by every overflow-clipping
+ *     ancestor (a row with `overflow: hidden` clips what spills out of it).
  *   - overlaps: points of a 4 px grid over each hit area at which
  *     `document.elementFromPoint` lands on a different interactive element.
  *
@@ -135,6 +136,8 @@ function measureInPage({ min, grid }) {
     if (r.width === 0 || r.height === 0) continue;
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+    // Takes no taps at all (e.g. a fading-out "Scroll to end").
+    if (cs.pointerEvents === 'none') continue;
     if (r.bottom < 0 || r.top > innerHeight * 4) continue;
     els.push(el);
   }
@@ -143,10 +146,53 @@ function measureInPage({ min, grid }) {
     const n = Number.parseFloat(v);
     return Number.isFinite(n) ? n : null;
   };
-  const hitArea = (el) => {
+  // The rectangle beyond which `el`'s overflow-clipping ancestors cut off `el`
+  // itself, or (`pseudo`) a pseudo-element of `el`, which `el`'s own overflow
+  // clips too. A hidden or clipped axis cuts at the padding box. A
+  // scrolling axis cuts a pseudo-element only before its scroll origin, since
+  // one spilling past the far edge just extends the scroll area, and never
+  // cuts `el` itself, which scrolls into view. An absolutely positioned box
+  // escapes the clippers below its containing block, a fixed one all of them.
+  const clipRect = (el, pseudo) => {
+    const c = { l: Number.NEGATIVE_INFINITY, t: Number.NEGATIVE_INFINITY };
+    c.r = Number.POSITIVE_INFINITY;
+    c.b = Number.POSITIVE_INFINITY;
+    let escaping = false;
+    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+      const ns = getComputedStyle(n);
+      if (n !== el && escaping && ns.position !== 'static') escaping = false;
+      if (n === el ? pseudo : !escaping) {
+        const nr = n.getBoundingClientRect();
+        const pl = nr.left + n.clientLeft;
+        const pt = nr.top + n.clientTop;
+        const axis = (ov, lo, hi, start, size, scroll) => {
+          if (ov === 'visible') return;
+          if (ov === 'hidden' || ov === 'clip') {
+            c[lo] = Math.max(c[lo], start);
+            c[hi] = Math.min(c[hi], start + size);
+          } else if (pseudo) c[lo] = Math.max(c[lo], start - scroll);
+        };
+        axis(ns.overflowX, 'l', 'r', pl, n.clientWidth, n.scrollLeft);
+        axis(ns.overflowY, 't', 'b', pt, n.clientHeight, n.scrollTop);
+      }
+      if (ns.position === 'fixed') break;
+      if (ns.position === 'absolute') escaping = true;
+    }
+    return c;
+  };
+  // `clipOwn` false leaves the element's own box whole (for the size check: a
+  // row half scrolled out of a sheet is not a small target); pseudo-elements
+  // are always clipped.
+  const hitArea = (el, clipOwn = true) => {
     const r = el.getBoundingClientRect();
-    let box = { l: r.left, t: r.top, r: r.right, b: r.bottom };
-    const cs = getComputedStyle(el);
+    const own = clipOwn ? clipRect(el, false) : { l: -1e9, t: -1e9, r: 1e9, b: 1e9 };
+    let box = {
+      l: Math.max(r.left, own.l),
+      t: Math.max(r.top, own.t),
+      r: Math.min(r.right, own.r),
+      b: Math.min(r.bottom, own.b),
+    };
+    const clip = clipRect(el, true);
     for (const which of ['::before', '::after']) {
       const ps = getComputedStyle(el, which);
       if (ps.content === 'none' || ps.content === 'normal' || ps.display === 'none') continue;
@@ -161,15 +207,17 @@ function measureInPage({ min, grid }) {
       const tx = new DOMMatrixReadOnly(ps.transform === 'none' ? undefined : ps.transform);
       const x = r.left + (left ?? (r.width - w) / 2) + tx.m41 + el.clientLeft;
       const y = r.top + (top ?? (r.height - h) / 2) + tx.m42 + el.clientTop;
-      // Clipped by the element's own overflow, a pseudo-element takes no taps
-      // outside the element's box.
-      const clipX = cs.overflowX !== 'visible';
-      const clipY = cs.overflowY !== 'visible';
+      // A clipped pseudo-element takes no taps outside the clip.
+      const pl = Math.max(x, clip.l);
+      const pt = Math.max(y, clip.t);
+      const pr = Math.min(x + w, clip.r);
+      const pb = Math.min(y + h, clip.b);
+      if (pr <= pl || pb <= pt) continue;
       box = {
-        l: clipX ? box.l : Math.min(box.l, x),
-        t: clipY ? box.t : Math.min(box.t, y),
-        r: clipX ? box.r : Math.max(box.r, x + w),
-        b: clipY ? box.b : Math.max(box.b, y + h),
+        l: Math.min(box.l, pl),
+        t: Math.min(box.t, pt),
+        r: Math.max(box.r, pr),
+        b: Math.max(box.b, pb),
       };
     }
     return box;
@@ -198,7 +246,7 @@ function measureInPage({ min, grid }) {
   };
   const describe = (el) => {
     const r = el.getBoundingClientRect();
-    const hit = hitArea(el);
+    const hit = hitArea(el, false);
     return {
       name: nameOf(el),
       tag: el.tagName.toLowerCase(),
@@ -239,6 +287,9 @@ function measureInPage({ min, grid }) {
   const small = [];
   const overlaps = [];
   for (const el of els) {
+    const own = hitArea(el);
+    // Wholly clipped away by an ancestor: not on screen, not a target.
+    if (own.r <= own.l || own.b <= own.t) continue;
     const d = describe(el);
     if (d.hitW < min || d.hitH < min) small.push(d);
     if (!hittable(el)) continue;
