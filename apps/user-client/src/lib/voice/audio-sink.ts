@@ -25,7 +25,7 @@ import type { VoiceFilterProfile } from './voice-filter.js';
  * the direct route everywhere and, with it, the Media Session hook registers
  * nothing (spec: "The bridge is separable, with a decision rule").
  */
-export const READ_ALOUD_MEDIA_BRIDGE = true;
+export const READ_ALOUD_MEDIA_BRIDGE = false;
 
 /** Test-only A/B override for one installed build; not a user setting. */
 const BRIDGE_OVERRIDE_KEY = 'cs.readAloudBridge';
