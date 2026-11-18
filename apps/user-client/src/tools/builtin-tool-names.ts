@@ -3,6 +3,7 @@
 /** Wire names of every tool Chatsundere itself provides (everything except MCP). */
 export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
   'calculate_js',
+  'add_mcp_connector',
   'list_artefacts',
   'create_artefact',
   'modify_artefact',

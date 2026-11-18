@@ -99,7 +99,7 @@ Validation, in this order; the first failing rule decides:
 5. **No fragment** (`#…`). A fragment is never sent by `fetch` and is dropped by `canonicalResource`, so it would only pad the display (`https://evil.example/mcp#@mcp.kumbu.example`).
 6. **A public host.** Refused: IP literals (v4 and v6), `localhost`, single-label hosts, and names ending in `.local`, `.localhost`, `.internal`, `.lan`, `.home.arpa`. A home-network server stays a manual act (*Enter details manually*, *Local network*).
 7. **At most 2,048 characters.**
-8. **The user wrote it.** The normalised link must equal, after the same normalisation, a link found in one of this chat's user messages. Links are found in user text by a plain pattern (`https?://` or a bare `host.tld`, with or without a port and path), with trailing punctuation and wrappers ``.,;:!?)]}>'"`*”’»…`` removed (a `)` that closes a `(` inside the link stays); a trailing slash is ignored on both sides when the link has no query. Hosts with an empty label (`a..b`) and the bare `home.arpa` count as not public; port 0 is invalid. Links in attachments, tool results, artefacts and the model's own messages do not count.
+8. **The user wrote it.** The normalised link must equal, after the same normalisation, a link found in one of this chat's user messages. Links are found in user text by a plain pattern (`https?://` or a bare `host.tld`, with or without a port and path), with trailing punctuation and wrappers ``.,;:!?)]}>'"`*”’»…`` removed (a `)` that closes a `(` inside the link stays); a trailing slash is ignored on both sides when the link has no query. Hosts with an empty label (`a..b`) and the bare `home.arpa` count as not public; port 0 is invalid. Links in attachments, tool results, artefacts, seed turns from a template and the model's own messages do not count.
 
 Then, if a row already exists for the link (§4.3), the result is "already exists"; otherwise "proposed".
 
@@ -118,7 +118,7 @@ Then, if a row already exists for the link (§4.3), the result is "already exist
 
 All outputs are constants: no server names, no device state (whether a proxy exists), nothing that can change after the call. So the stored result replays byte-identically on every later turn, and the tool cannot be used to learn which servers the user has beyond yes or no for a link the user wrote themselves.
 
-On a successful proposal the pill's `meta` is exactly `{ connector: { url } }` with the normalised `href`. Nothing else is put in `meta` (it is spread into the pill payload after `result` and `error`, `tool-loop.ts`), and a test pins that.
+On a proposal and on "already exists" (both show a card) the pill's `meta` is exactly `{ connector: { url } }` with the normalised `href`. Nothing else is put in `meta` (it is spread into the pill payload after `result` and `error`, `tool-loop.ts`), and a test pins that.
 
 "Not an MCP server" and "needs a linked server or the proxy" cannot be known without contacting the server, which must not happen before the tap. Both are answered by today's check on *Add server*, which says so to the user and offers *Link a server* where linking helps (`CheckServerStep.tsx`). The model learns of it only if the user tells it.
 

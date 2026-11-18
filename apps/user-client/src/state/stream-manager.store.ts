@@ -993,6 +993,17 @@ async function runIntoDraft(
         args.mcp ?? null,
         args.images ?? null,
         memoryCtx,
+        {
+          // The plain text the user typed: their prior turns and this one (spec §2.4 rule 8).
+          userTexts: () => [
+            ...args.priorMessages
+              // A seed turn comes from a template, not from this chat's user.
+              .filter((m) => m.role === 'user' && m.kind !== 'seed')
+              .map((m) => flattenAnswerText(m.contentBlocks)),
+            args.userText,
+          ],
+          servers: () => getClientDataDb().mcpServers.orderBy('createdAt').toArray(),
+        },
       )
     : [];
   const activeToolDefs = toolDefs(activeTools);
