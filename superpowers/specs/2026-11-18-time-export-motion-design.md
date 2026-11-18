@@ -29,7 +29,8 @@ Losing the provider's prefix cache makes a chat roughly ten times more expensive
 | On a second device | Yes. `createdAt` and `utcOffsetMinutes` sync inside the sealed message record; the second device renders the same bytes even in another time zone. |
 | Regenerate | Yes. The user turn is untouched (`regenerate` clears only the persona reply), so it keeps its stamp. |
 | Edit (replace in place, last user turn) | Every turn before the edited one is identical. The edited turn keeps its `createdAt` and offset, so its stamp is identical too; only its text changes, as today. |
-| Branch | Yes. `useBranchChat` already copies `createdAt`; it must also copy `utcOffsetMinutes` (a field list in `data/chats.ts`, so the plan names it). The branch's prefix is then byte-identical to the source chat's. |
+| Branch | Yes. Both branch paths (`useBranchChat` in `data/chats.ts` and the edit-branch in `data/message-edit.ts`) already copy `createdAt` from an explicit field list; both must also copy `utcOffsetMinutes`, so the plan names them. The branch's prefix is then byte-identical to the source chat's. |
+| Mixed versions (a 0.4.x device in the account) | Yes, except for a branch made on 0.4.x (event 5). Checked in the 0.4.x code: an in-place edit is a Dexie `update` that merges and keeps unknown fields; regenerate only rewrites the persona row; sealing (`stripForSeal`) spreads the whole message row and strips named device-local fields only; applying a pulled row puts the whole sealed record. So the offset survives every 0.4.x path that rewrites an existing row. |
 | Compaction | The tail turns keep their stamps. The summary sits in the system prompt as today; compaction moves the prefix exactly as it does without this feature. |
 | Tool loop | The user turn's stamp is rendered once per turn and is the same in every round; assistant tool calls and tool results carry nothing new. |
 | Attachment replay | The stamp is its own leading text part, in front of the attachment parts, rendered from the same fields, so replayed multimodal turns are as stable as text turns. |
@@ -39,9 +40,12 @@ Losing the provider's prefix cache makes a chat roughly ten times more expensive
 1. **The first turn after updating to 0.5.0**, per existing chat with time on: the system segment and stamps on every user turn appear. One full prompt write per chat, once.
 2. **Switching "Knows the date and time" on or off mid-chat**, or switching roleplay while the time switch is unset (the default follows roleplay): stamps and segment appear or vanish. One full prompt write.
 3. **A time-zone change, for messages sent before 0.5.0 only.** They have no stored offset and render with the device's offset for their own instant, so a device in another zone, or after travel, renders them differently: one full prompt write on that device, once per zone. Messages sent from 0.5.0 on are immune.
-4. **What breaks the prefix today still does:** truncation to the context window, a new compaction checkpoint, editing a turn, the persona's instructions or other system segments changing.
+4. **A branch made on a 0.4.x device.** Its two branch paths copy an explicit field list without `utcOffsetMinutes`, so the branched user turns fall back to the device-offset render of event 3. Cost: in that branch only, one full prompt write per device whose zone differs from the source; the source chat is untouched. Nothing heals the copied rows (history is never rewritten); once every device runs 0.5.0, new branches carry the offset.
+5. **What breaks the prefix today still does:** truncation to the context window, a new compaction checkpoint, editing a turn, the persona's instructions or other system segments changing.
 
 **The test.** A unit test builds the wire messages for turn N, appends a persona reply and a new user turn, builds turn N+1, and asserts that every message of turn N's wire is byte-identical (serialised JSON) to the same position in turn N+1's. It repeats this with the runtime time zone and the browser language changed between the two builds (both must make no difference for messages with an offset), after a simulated regenerate, and for a branched copy. A second test pins the render of a handful of fixed instants, including a DST boundary and a negative offset, to exact strings.
+
+**"Now" is the send time, by design.** After a regenerate or an in-place edit hours later, the newest stamp still shows the original send time, so the model's "now" is that moment, not the moment of the request. That is the price of byte-stable history and the intended behaviour: do not "fix" it by re-stamping.
 
 ---
 
@@ -60,7 +64,7 @@ The system prompt carries no date and no time (`packages/llm-unified/src/composi
 
 ## Non-goals
 
-- No timestamps in title generation, memory extraction, tool summaries, or the compaction summariser's input (memory is rebuilt by Eidolon).
+- No timestamps in title generation, memory extraction, tool summaries, the compaction summariser's input, ask-expert or the artefact author (memory is rebuilt by Eidolon). This is a test, not only a rule: with time on, the inputs each of these jobs builds (whether through `buildEngineWireMessages` or a sibling) are asserted to contain no `<sent`.
 - No user-facing time-zone setting: the device's time zone at the moment of sending is the user's time zone.
 - Nothing is shown in the chat and nothing is written into a message's text.
 
@@ -118,7 +122,7 @@ The second sentence uses `persona.lastInteractionAt` (whole hours under a day, d
 ### A6. Where the code goes
 
 - `packages/llm-unified`: a pure `formatSentStamp(createdAt, utcOffsetMinutes)` and `formatAwayGap(ms)` with tests; the `time` segment in `composition.ts`, driven by a new `BuildPromptInputs.time?: { mode: 'chat' } | { mode: 'greeting'; now: number; utcOffsetMinutes: number; lastInteractionAt?: number }` (absent ⇒ empty segment). No browser globals in the library.
-- `apps/user-client`: `start` stores `utcOffsetMinutes` on the new user row; `buildEngineWireMessages` stamps user rows (prior and active) when the resolved switch is on, so the engine gets the active turn's `createdAt` and offset alongside its content; the greeting call passes its inputs; `estimateReplayTokens`, the overflow failsafe in `start` and the chat page's gauge count the stamp and segment, so meter and wire agree; `useBranchChat` copies the offset; the Model behaviour and Roleplay pages and `modelBehaviourMeta` get the switch, line and token.
+- `apps/user-client`: `start` stores `utcOffsetMinutes` on the new user row; `buildEngineWireMessages` stamps user rows (prior and active) when the resolved switch is on, so the engine gets the active turn's `createdAt` and offset alongside its content; the greeting call passes its inputs; `estimateReplayTokens`, the overflow failsafe in `start` and the chat page's gauge count the stamp and segment, so meter and wire agree; both branch paths copy the offset; the Model behaviour and Roleplay pages and `modelBehaviourMeta` get the switch, line and token.
 
 ### A7. Imitation
 
@@ -286,6 +290,8 @@ Laura spec-pass done. No Larissa path. The file is plaintext leaving the vault b
   - every selector rule inside `@media (prefers-reduced-motion: no-preference) { … }` is narrowed in place to `:where(:root:not([data-motion='reduced']))`, so motion switched on only when the system allows it (the live-voice pulse and dots) stays off under the switch.
 
   `@keyframes` cannot be selector-scoped. A reduce block that redefines keyframes (today `wizard-step-in` and `badge-pulse`) is listed by the plugin at build time, and each gets an equivalent selector rule (`animation: none` or the static end state) inside the same reduce block, so the mirror covers it. `index.css` changes only by those few lines, which keeps clear of the parallel sessions, and any reduced-motion block added later is covered automatically. A unit test runs the transform on the real `index.css` and checks every reduce rule has its twin.
+- **Fails loudly.** The plugin is the one piece of machinery in this package, so it never skips silently: a reduced-motion block it cannot mirror (a nested at-rule, a keyframes redefinition without its selector twin, a syntax it does not parse) fails the build with the file and line. A unit test feeds it each of those cases and expects the error, besides the test on the real `index.css`.
+- **Dev, build and tests.** The plugin's `transform` hook runs the same way under `vite` (dev) and `vite build`. Vitest does not process CSS by default (component tests see no stylesheet either way), so the CSS behaviour is covered by the plugin's own unit tests calling the transform directly, and the JS checks by their tests with the root attribute set.
 - **JS:** the existing checks (`motion.respectsReducedMotion()` in `packages/ui-shared`, `prefersReducedMotion()` in the screen-effects store, the Lightbox, the splash, the spectrum analyser's media query) answer true when either the media query matches or the root attribute is set. `BreathingOrb` and `NavTile` read through a small `useReducedMotion()` hook so a flip takes effect without a reload.
 
 ## Open questions for Chris
