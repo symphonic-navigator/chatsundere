@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// OBSERVATION TEST (050 papercuts, spec Q2): this file pins TODAY's behaviour,
-// it does not describe the desired one. It settles whether a passkey unlock
-// from a cold start leaves the session store's raw `mk` slice null, so that the
-// first thing a send does (the master-key check in `useSendMessage`) fails.
+// REGRESSION TEST (fix/050-passkey-master-key, spec §5.2): a passkey unlock
+// from a cold start hands the master key to the session store, exactly as the
+// passphrase path does. Before the fix the store's raw `mk` slice stayed null,
+// so the first thing a send does (the master-key check in `useSendMessage`)
+// failed and the sync gate stayed shut.
 //
 // It drives the real chain end to end: a real local account
 // (`createLocalAccount`), a real PRF-wrapped passkey row
@@ -12,27 +13,20 @@
 // `navigator.credentials.get` replaced by a software authenticator that signs a
 // genuine assertion and returns a PRF output. `loginWithLocalBiometric`
 // verifies that assertion and unwraps the MK for real.
-//
-// When MK custody is fixed (a later, Larissa-gated unit in `packages/crypto`),
-// the "observed" expectations below flip: rewrite this file as a regression
-// test then, rather than deleting it.
 
 import {
-  type MasterKeySession,
   PRF_INPUT_SALT,
   asMasterKey,
   completeLocalBiometricRegistration,
   createLocalAccount,
-  loginWithLocalBiometric,
 } from '@chatsundere/crypto';
-import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
+import { useAccountLinkStore, useConnectivityStore, useSessionStore } from '@chatsundere/ui-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nanoGpt } from '../../../../packages/llm-unified/src/providers/nano-gpt';
-import { activateSession } from '../../src/boot/activate-session';
 import { _resetClientDataDbForTests } from '../../src/boot/client-data-db';
 import { getClientDataDb } from '../../src/boot/client-data-db';
 import { closeDb, getDb, openDb } from '../../src/boot/open-db';
@@ -40,6 +34,12 @@ import { useSendMessage } from '../../src/data/send-message';
 import { sealSecret } from '../../src/lib/secrets';
 import { Login } from '../../src/routes/login/index';
 import { useStreamManagerStore } from '../../src/state/stream-manager.store';
+import { isClass2Allowed } from '../../src/sync/gate';
+import {
+  _resetTriggersForTests,
+  _setTriggerCycle,
+  initSyncTriggers,
+} from '../../src/sync/triggers';
 
 // JSDOM's structuredClone returns typed arrays whose ArrayBuffer belongs to
 // another realm, so fake-indexeddb (which checks `instanceof ArrayBuffer`)
@@ -122,6 +122,8 @@ function rawSigToDer(sig: Uint8Array): Uint8Array {
 
 interface SoftAuthenticator {
   publicKeyCose: Uint8Array;
+  /** The PRF output the next assertion returns; a test may swap it for a wrong one. */
+  prfOutput: Uint8Array;
   get(options: CredentialRequestOptions): Promise<PublicKeyCredential>;
   calls: CredentialRequestOptions[];
 }
@@ -134,8 +136,9 @@ async function makeSoftAuthenticator(): Promise<SoftAuthenticator> {
   const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
   let counter = 0;
   const calls: CredentialRequestOptions[] = [];
-  return {
+  const authenticator: SoftAuthenticator = {
     publicKeyCose: coseEc2(raw),
+    prfOutput: PRF_OUTPUT,
     calls,
     async get(options) {
       calls.push(options);
@@ -178,11 +181,12 @@ async function makeSoftAuthenticator(): Promise<SoftAuthenticator> {
           userHandle: null,
         },
         getClientExtensionResults: () => ({
-          prf: { results: { first: PRF_OUTPUT.slice().buffer } },
+          prf: { results: { first: authenticator.prfOutput.slice().buffer } },
         }),
       } as unknown as PublicKeyCredential;
     },
   };
+  return authenticator;
 }
 
 // ─── Fixture: account + passkey + persona, then a "cold start" ────────────────
@@ -274,7 +278,7 @@ async function setUpDeviceThenColdStart(auth: SoftAuthenticator) {
     libraryIds: [],
   });
 
-  // Keep a private copy for the control case: close() zeroes the shared buffer.
+  // Keep a private copy to compare against: close() zeroes the shared buffer.
   const mkCopy = asMasterKey(mk.slice());
 
   // Cold start: the in-memory store is empty, as after a reload (nothing of the
@@ -282,23 +286,6 @@ async function setUpDeviceThenColdStart(auth: SoftAuthenticator) {
   session.close();
   useSessionStore.setState({ session: null, mk: null });
   return { personaId, chatId, mkCopy };
-}
-
-/** The unlock the Login page performs, minus the page: real assertion, real unwrap. */
-async function passkeySession(auth: SoftAuthenticator): Promise<MasterKeySession> {
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const cred = await auth.get({ publicKey: { challenge, allowCredentials: [] } });
-  const response = cred.response as AuthenticatorAssertionResponse;
-  return loginWithLocalBiometric({
-    db: getDb(),
-    credentialId: new Uint8Array(cred.rawId),
-    challenge,
-    clientDataJson: new TextDecoder().decode(response.clientDataJSON),
-    authenticatorData: new Uint8Array(response.authenticatorData),
-    signature: new Uint8Array(response.signature),
-    prfOutput: PRF_OUTPUT,
-    origin: window.location.origin,
-  });
 }
 
 function wrapper(qc: QueryClient) {
@@ -326,9 +313,30 @@ async function attemptSend(personaId: string, chatId: string): Promise<unknown> 
   return outcome;
 }
 
+function renderLogin(): void {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/app" element={<p>app shell</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+/** Render the Login page, press the passkey button and wait for the app shell. */
+async function unlockWithPasskey(): Promise<void> {
+  renderLogin();
+  fireEvent.click(await screen.findByRole('button', { name: 'Sign in with passkey' }));
+  await screen.findByText('app shell', undefined, { timeout: 10_000 });
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('OBSERVATION (spec Q2): passkey unlock after a cold start leaves no raw MK', () => {
+describe('Regression (fix/050): a passkey unlock after a cold start hands the MK to the store', () => {
   let auth: SoftAuthenticator;
   let startSpy: ReturnType<typeof vi.fn>;
 
@@ -351,77 +359,77 @@ describe('OBSERVATION (spec Q2): passkey unlock after a cold start leaves no raw
   afterEach(async () => {
     // Let activateSession's fire-and-forget housekeeping settle before the DBs go.
     await new Promise((r) => setTimeout(r, 50));
+    _resetTriggersForTests();
     useSessionStore.getState().closeAndForget();
+    useAccountLinkStore.getState().setLocalOnly();
+    useConnectivityStore.getState().setState({ kind: 'local_offline' });
     await _resetClientDataDbForTests({ keepData: false });
     await deleteCryptoDb();
     vi.restoreAllMocks();
   });
 
-  it('observed today: the Login page passkey path activates a session with mk null, and a send stops at the master-key check', async () => {
-    const { personaId, chatId } = await setUpDeviceThenColdStart(auth);
+  it('unlocks with the passkey button, sets the MK to the account MK, and a send reaches the stream manager', async () => {
+    const { personaId, chatId, mkCopy } = await setUpDeviceThenColdStart(auth);
 
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/login']}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/app" element={<p>app shell</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    await unlockWithPasskey();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Sign in with passkey' }));
-    await screen.findByText('app shell', undefined, { timeout: 10_000 });
-
-    // The page really asked for PRF with the app-wide salt …
+    // The page asked for PRF with the app-wide salt: nothing about the salt changed.
     const prfFirst = (
       auth.calls[0]?.publicKey?.extensions as { prf?: { eval?: { first?: Uint8Array } } }
     )?.prf?.eval?.first;
     expect(prfFirst).toEqual((await PRF_INPUT_SALT).slice());
 
-    // … the unlock succeeded and the session can use the MK internally …
     const { session, mk } = useSessionStore.getState();
-    expect(session).not.toBeNull();
     expect(session?.username).toBe('alice');
-    await expect(session?.deriveDek('probe')).resolves.toBeTruthy();
-
-    // … but the raw-MK slice every reader uses is null (OBSERVED, the Q2 fault).
-    expect(mk).toBeNull();
-
-    // So the first thing a send does fails, and stream-manager is never reached.
-    const outcome = await attemptSend(personaId, chatId);
-    expect(outcome).toBeInstanceOf(Error);
-    expect((outcome as Error).message).toBe(
-      'useSendMessage: master key unavailable — re-authenticate',
-    );
-    expect(startSpy).not.toHaveBeenCalled();
-  }, 30_000);
-
-  it('observed today: activateSession(session) without mk, as login/index.tsx:259 calls it, keeps the null slice', async () => {
-    const { personaId, chatId } = await setUpDeviceThenColdStart(auth);
-    const session = await passkeySession(auth);
-    await activateSession(session);
-
-    expect(useSessionStore.getState().session).toBe(session);
-    expect(useSessionStore.getState().mk).toBeNull();
-    // The MasterKeySession never surfaces its raw MK: no property carries it.
-    expect(Object.keys(session)).not.toContain('mk');
-
-    const outcome = await attemptSend(personaId, chatId);
-    expect((outcome as Error).message).toBe(
-      'useSendMessage: master key unavailable — re-authenticate',
-    );
-  }, 30_000);
-
-  it('control: the same passkey session with the raw MK passed (as the passphrase path does) gets past the check', async () => {
-    const { personaId, chatId, mkCopy } = await setUpDeviceThenColdStart(auth);
-    const session = await passkeySession(auth);
-    await activateSession(session, mkCopy);
+    expect(mk).not.toBeNull();
+    expect(Array.from(mk ?? [])).toEqual(Array.from(mkCopy));
 
     const outcome = await attemptSend(personaId, chatId);
     expect(outcome).toBe('resolved');
     expect(startSpy).toHaveBeenCalledTimes(1);
+  }, 30_000);
+
+  it('shares one buffer between the session and the store, so closeAndForget zeroes it', async () => {
+    await setUpDeviceThenColdStart(auth);
+    await unlockWithPasskey();
+
+    const held = useSessionStore.getState().mk;
+    expect(held).not.toBeNull();
+    useSessionStore.getState().closeAndForget();
+
+    expect(held?.every((byte) => byte === 0)).toBe(true);
+    expect(useSessionStore.getState()).toMatchObject({ session: null, mk: null });
+  }, 30_000);
+
+  it('a wrong PRF output shows the passkey-unlock error and activates no session', async () => {
+    await setUpDeviceThenColdStart(auth);
+    auth.prfOutput = new Uint8Array(32).fill(0x33);
+
+    renderLogin();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in with passkey' }));
+
+    await screen.findByText('Could not verify with passkey. Try your passphrase.', undefined, {
+      timeout: 10_000,
+    });
+    expect(screen.queryByText('app shell')).toBeNull();
+    expect(useSessionStore.getState()).toMatchObject({ session: null, mk: null });
+  }, 30_000);
+
+  it('opens the sync gate on a linked account and fires exactly one cycle on unlock', async () => {
+    await setUpDeviceThenColdStart(auth);
+    useAccountLinkStore
+      .getState()
+      .setLinked({ base_url: 'https://s.example', issuer_label: 's.example', role: 'user' });
+    useConnectivityStore.getState().setState({ kind: 'linked_online' });
+    const cycle = vi.fn((): Promise<void> => Promise.resolve());
+    _setTriggerCycle(cycle);
+    initSyncTriggers();
+    expect(isClass2Allowed()).toBe(false);
+    expect(cycle).not.toHaveBeenCalled();
+
+    await unlockWithPasskey();
+
+    expect(isClass2Allowed()).toBe(true);
+    expect(cycle).toHaveBeenCalledTimes(1);
   }, 30_000);
 });
