@@ -1038,12 +1038,20 @@ export function ChatPage(): JSX.Element {
                 return;
               }
               // The deletes below are synced and would lose the user's message on
-              // every device if the send then could not go out: check the key and
-              // the master key first, and delete nothing when either fails.
+              // every device if the send then could not go out: run the send's own
+              // resolution first, and delete nothing when it fails.
               try {
                 await assertPersonaKeyUsable(activeChatId);
               } catch (e) {
-                stopIfBlocked(e);
+                if (sendBlockOf(e)) {
+                  stopIfBlocked(e);
+                } else {
+                  toastStore.show({
+                    message: "Couldn't retry just now — your message is kept.",
+                    tone: 'warn',
+                    durationMs: 8000,
+                  });
+                }
                 return;
               }
               if (incomplete) await db.messages.delete(incomplete.id);
@@ -1174,6 +1182,7 @@ export function ChatPage(): JSX.Element {
               : null;
             return fix ? { label: fix.label, onSelect: () => navigate(fix.to) } : null;
           })()}
+          onRecheckVoice={voice.recheck}
           onPause={voice.pause}
           onResume={voice.resumeAudio}
           onSkip={voice.skip}

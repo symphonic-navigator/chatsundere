@@ -40,6 +40,7 @@ import { MasterKeyUnavailableError, ProviderKeyLockedError } from '../../src/dat
 import { sealSecret } from '../../src/lib/secrets';
 import { ChatPage } from '../../src/routes/app/chat/chat-page';
 import { useCurrentChatStore } from '../../src/state/current-chat.store';
+import { useToastStore } from '../../src/state/toast.store';
 
 function Landed(): JSX.Element {
   const loc = useLocation();
@@ -186,6 +187,7 @@ beforeEach(async () => {
   assertKey.mockReset().mockResolvedValue(undefined);
   opener.isError = false;
   opener.error = null;
+  useToastStore.getState().clear();
 });
 
 afterEach(async () => {
@@ -311,6 +313,48 @@ describe('ChatPage — typed send stops', () => {
     expect(await db.messages.get(userId)).toBeUndefined();
     expect(await db.messages.get(replyId)).toBeUndefined();
   });
+
+  /** Wire the mocked pre-flight to the real one, so it runs the send's resolution. */
+  async function useRealPreflight(): Promise<void> {
+    const actual = await vi.importActual<typeof import('../../src/data/send-message.js')>(
+      '../../src/data/send-message.js',
+    );
+    assertKey.mockImplementation((id: string) => actual.assertPersonaKeyUsable(id));
+  }
+
+  for (const [label, breakIt] of [
+    [
+      'the offering is missing',
+      async (db: Awaited<ReturnType<typeof openClientDataDb>>, personaId: string) => {
+        await db.personas.update(personaId, { modelId: 'no-such-model' });
+      },
+    ],
+    [
+      'the provider row is gone',
+      async (db: Awaited<ReturnType<typeof openClientDataDb>>) => {
+        await db.providers.delete('nano-gpt');
+      },
+    ],
+  ] as const) {
+    it(`interrupted-reply Retry deletes nothing when ${label}`, async () => {
+      const { db, personaId } = await seedPersona();
+      const { chatId, userId, replyId } = await seedChat(personaId, db, 'incomplete');
+      await breakIt(db, personaId);
+      await useRealPreflight();
+      render(<ChatPage />, { wrapper: makeWrapper(newQc(), `/app/chat/${chatId}`) });
+
+      fireEvent.click(await screen.findByRole('button', { name: /Retry/ }));
+      await waitFor(() =>
+        expect(useToastStore.getState().toasts.map((t) => t.message)).toContain(
+          "Couldn't retry just now — your message is kept.",
+        ),
+      );
+      expect(sendMutate).not.toHaveBeenCalled();
+      expect(await db.messages.get(userId)).toBeDefined();
+      expect(await db.messages.get(replyId)).toBeDefined();
+      expect(await db.syncOutbox.count()).toBe(0);
+    });
+  }
 
   it('opener: the greeting notice carries the cause and the action in place of Retry', async () => {
     const { db, personaId } = await seedPersona();

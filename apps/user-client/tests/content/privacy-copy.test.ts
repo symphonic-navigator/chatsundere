@@ -10,4 +10,13 @@ describe('privacy text', () => {
       `first ${SUMMARY_INPUT_MAX_CHARS.toLocaleString('en-GB')} characters of each result`,
     );
   });
+
+  it('says what the linked server stores and what its relay handles in transit', () => {
+    expect(PRIVACY_MD).not.toContain('Our server keeps none of it.');
+    expect(PRIVACY_MD).not.toContain('sees ciphertext and nothing more');
+    expect(PRIVACY_MD).toContain("Our server stores only encrypted copies it can't read.");
+    expect(PRIVACY_MD).toContain(
+      'which handles them only in transit and neither logs nor stores them.',
+    );
+  });
 });

@@ -51,7 +51,7 @@ const ERROR_COPY: Record<Exclude<MemoryActionError, 'key-locked'>, string> = {
 function memoryErrorCopy(state: MemoryActionState): string {
   const error = state.error ?? 'failed';
   if (error === 'key-locked')
-    return keyLockedSentence(state.lockedKey?.providerName ?? 'this provider');
+    return keyLockedSentence(state.lockedKey?.providerName ?? 'this provider', 'memory');
   if ((state.partialSlices ?? 0) > 0 && error !== 'no-credentials')
     return 'Consolidated some of them — the rest are still below. Try again to finish.';
   return ERROR_COPY[error];
@@ -68,16 +68,17 @@ function MemoryActionErrorLine(p: { state: MemoryActionState; onRetry: () => voi
   return (
     <div className="memory-page-action-error" role="alert">
       <span>{memoryErrorCopy(p.state)}</span>
-      {p.state.error === 'key-locked' ? null : (
-        <button type="button" onClick={p.onRetry}>
-          Retry
-        </button>
-      )}
+      {/* The repair leads: a Retry without the passphrase can only fail again. */}
       {p.state.error === 'no-credentials' ? (
         <button type="button" onClick={() => navigate(passphraseLoginPath(here))}>
           Enter passphrase
         </button>
       ) : null}
+      {p.state.error === 'key-locked' ? null : (
+        <button type="button" onClick={p.onRetry}>
+          Retry
+        </button>
+      )}
       {locked ? (
         <button type="button" onClick={() => navigate(reEnterKeyPath(locked.templateId, here))}>
           Re-enter key

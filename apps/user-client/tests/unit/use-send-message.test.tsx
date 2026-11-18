@@ -419,6 +419,25 @@ describe('useSendMessage', () => {
       await expect(assertPersonaKeyUsable(chatId)).rejects.toBeInstanceOf(ProviderKeyLockedError);
     });
 
+    it('rejects when the offering is missing, as the send would', async () => {
+      const { db, personaId } = await seed();
+      const chatId = await seedStoredChat(db, personaId);
+      await db.personas.update(personaId, { modelId: 'no-such-model' });
+      await expect(assertPersonaKeyUsable(chatId)).rejects.toThrow(/no offering/);
+    });
+
+    it('rejects when the provider row is gone, as the send would', async () => {
+      const { db, personaId, providerId } = await seed();
+      const chatId = await seedStoredChat(db, personaId);
+      await db.providers.delete(providerId);
+      await expect(assertPersonaKeyUsable(chatId)).rejects.toThrow(/provider not found/);
+    });
+
+    it('rejects when the chat is missing', async () => {
+      await seed();
+      await expect(assertPersonaKeyUsable('no-such-chat')).rejects.toThrow(/chat not found/);
+    });
+
     it('throws MasterKeyUnavailableError without a master key', async () => {
       const { db, personaId } = await seed();
       const chatId = await seedStoredChat(db, personaId);

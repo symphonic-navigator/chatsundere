@@ -321,7 +321,7 @@ describe('PersonaMemory — action error copy', () => {
     ).toBeInTheDocument();
   });
 
-  it('no-credentials: the passphrase sentence with Enter passphrase beside Retry, returning here', async () => {
+  it('no-credentials: Enter passphrase comes first, Retry second, returning here', async () => {
     const consolidateNow = vi.fn();
     mockMemoryActions({
       consolidateState: { status: 'error', error: 'no-credentials', partialSlices: 1 },
@@ -332,6 +332,11 @@ describe('PersonaMemory — action error copy', () => {
     expect(alert).toHaveTextContent(
       'Chatsundere needs your passphrase once more before it can use your keys.',
     );
+    expect(
+      within(alert)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Enter passphrase', 'Retry']);
     await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(consolidateNow).toHaveBeenCalled();
     await userEvent.click(within(alert).getByRole('button', { name: 'Enter passphrase' }));
@@ -352,8 +357,9 @@ describe('PersonaMemory — action error copy', () => {
     setup('/app/persona/p1/memory?chat=c1');
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
-      "Your saved key for NanoGPT can't be opened any more. Enter it again to keep chatting.",
+      "Your saved key for NanoGPT can't be opened any more. Enter it again to carry on.",
     );
+    expect(alert).not.toHaveTextContent(/keep chatting/);
     expect(within(alert).queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(within(alert).queryByRole('button', { name: 'Try again' })).toBeNull();
     await userEvent.click(within(alert).getByRole('button', { name: 'Re-enter key' }));

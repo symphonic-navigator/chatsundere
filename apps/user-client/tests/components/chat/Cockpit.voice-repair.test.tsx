@@ -204,6 +204,36 @@ describe('cockpit Live voice tooltip — routed by reason', () => {
   });
 });
 
+describe('cockpit Live voice — a tap on an unavailable button shows the note', () => {
+  it('no-provider: the tap reveals the note and its repair, without starting live voice', () => {
+    const onEnterLiveVoice = vi.fn();
+    const r = renderCockpit({ voiceUnavailable: 'no-provider', onEnterLiveVoice });
+    fireEvent.click(r.getByLabelText('Live voice mode'));
+    expect(onEnterLiveVoice).not.toHaveBeenCalled();
+    expect(screen.getByText(/set up a voice provider/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up voice' }));
+    expect(screen.getByTestId('where').textContent).toBe(`/app/settings/voice?return=${enc}`);
+  });
+
+  it('no-voice: the tap reveals "Choose a voice", and a second tap hides the note', () => {
+    const onEnterLiveVoice = vi.fn();
+    const r = renderCockpit({ voiceUnavailable: 'no-voice', onEnterLiveVoice });
+    const live = r.getByLabelText('Live voice mode');
+    fireEvent.click(live);
+    expect(screen.getByRole('button', { name: 'Choose a voice' })).toBeInTheDocument();
+    fireEvent.click(live);
+    expect(screen.queryByText(/give this companion a voice/i)).toBeNull();
+    expect(onEnterLiveVoice).not.toHaveBeenCalled();
+  });
+
+  it('with a voice, the tap starts live voice as before', () => {
+    const onEnterLiveVoice = vi.fn();
+    const r = renderCockpit({ voiceUnavailable: null, onEnterLiveVoice });
+    fireEvent.click(r.getByLabelText('Live voice mode'));
+    expect(onEnterLiveVoice).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('cockpit artefact-expert note', () => {
   it('Settings opens Settings → Expert with the chat as return', () => {
     useCurrentChatStore.getState().setArtefactExpertError('The artefact expert failed.');

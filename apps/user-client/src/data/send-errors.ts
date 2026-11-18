@@ -75,9 +75,15 @@ export interface SendBlockNote {
 export const PASSPHRASE_SENTENCE =
   'Chatsundere needs your passphrase once more before it can use your keys.';
 
-/** The key sentence item 7 uses wherever a saved provider key can't be opened. */
-export function keyLockedSentence(providerName: string): string {
-  return `Your saved key for ${providerName} can't be opened any more. Enter it again to keep chatting.`;
+/**
+ * The key sentence item 7 uses wherever a saved provider key can't be opened.
+ * `where` picks the ending: the chat surfaces say "to keep chatting"; the memory
+ * page, where nobody is mid-chat, ends neutrally.
+ */
+export function keyLockedSentence(providerName: string, where: 'chat' | 'memory' = 'chat'): string {
+  const ending =
+    where === 'memory' ? 'Enter it again to carry on.' : 'Enter it again to keep chatting.';
+  return `Your saved key for ${providerName} can't be opened any more. ${ending}`;
 }
 
 /** The login page in its passphrase-only mode, returning to `returnTo` afterwards. */

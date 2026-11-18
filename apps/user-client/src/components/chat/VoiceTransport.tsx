@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useState } from 'react';
 import { VOICES_UNAVAILABLE_COPY } from '../../lib/voice/resolve-tts.js';
 import type { DisabledReason } from '../../lib/voice/use-voice-playback.js';
 import type { TransportState } from '../../lib/voice/voice-machine.js';
@@ -20,6 +21,9 @@ export interface VoiceTransportProps {
   /** The page that fixes `voiceUnavailable`, offered beside its note (spec
    *  0.5.0 papercuts, item 2). The caller routes it by reason. */
   repair?: { label: string; onSelect: () => void } | null;
+  /** Re-run the voice resolution, the same recheck the cockpit's voice buttons
+   *  use. Offered as "Try again" while the reason is `voices-unavailable`. */
+  onRecheckVoice?: () => Promise<void>;
   onPause: () => void;
   onResume: () => void;
   onSkip: () => void;
@@ -151,6 +155,13 @@ function DismissIcon(): JSX.Element {
  * holistic {@link VoiceTransportProps.onExitVoice}.
  */
 export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
+  const [rechecking, setRechecking] = useState(false);
+  const recheck = (): void => {
+    if (rechecking || !p.onRecheckVoice) return;
+    setRechecking(true);
+    const done = (): void => setRechecking(false);
+    p.onRecheckVoice().then(done, done);
+  };
   const armed =
     p.state === 'idle' && p.autoReadOn && p.resumeOffer === null && p.providerSkips === 0;
   const readyArmed = armed && p.voiceUnavailable === null;
@@ -200,6 +211,20 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
       {note || p.resumeOffer ? (
         <div className="voice-transport-note" aria-live="polite">
           {note ? <span>{note}</span> : null}
+          {unavailableArmed &&
+          !monologue &&
+          p.voiceUnavailable === 'voices-unavailable' &&
+          p.onRecheckVoice ? (
+            <button
+              type="button"
+              className="voice-transport-startover"
+              disabled={rechecking}
+              aria-busy={rechecking || undefined}
+              onClick={recheck}
+            >
+              Try again
+            </button>
+          ) : null}
           {unavailableArmed && !monologue && p.repair ? (
             <button type="button" className="voice-transport-startover" onClick={p.repair.onSelect}>
               {p.repair.label}

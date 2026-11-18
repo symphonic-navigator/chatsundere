@@ -7,13 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockLoginLocalWithPassphrase = vi.fn();
 const mockActivateSession = vi.fn(async (..._a: unknown[]) => undefined);
+const passkeyRows = vi.hoisted(() => ({
+  rows: [{ credential_id: new Uint8Array([1, 2, 3]) }] as unknown[],
+}));
 
 vi.mock('@chatsundere/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@chatsundere/crypto')>();
   return {
     ...actual,
     getLocalAccount: async () => ({ username: 'chris' }),
-    listLocalBiometric: async () => [{ credential_id: new Uint8Array([1, 2, 3]) }],
+    listLocalBiometric: async () => passkeyRows.rows,
     loginLocalWithPassphrase: (args: unknown) => mockLoginLocalWithPassphrase(args),
   };
 });
@@ -66,7 +69,10 @@ beforeEach(() => {
   useAccountLinkStore.setState({ linkStatus: 'local-only' });
   mockLoginLocalWithPassphrase.mockReset().mockResolvedValue({ session: { id: 's2' }, mk: {} });
   mockActivateSession.mockClear();
+  passkeyRows.rows = [{ credential_id: new Uint8Array([1, 2, 3]) }];
 });
+
+const SENTENCE = 'Chatsundere needs your passphrase once more before it can use your keys.';
 
 describe('Login with need=passphrase (spec 0.5.0 papercuts, item 7)', () => {
   it('shows the passkey button disabled, not hidden, with its reason', async () => {
@@ -115,12 +121,33 @@ describe('Login with need=passphrase (spec 0.5.0 papercuts, item 7)', () => {
     expect(await screen.findByTestId('landed')).toHaveTextContent(/^\/app$/);
   });
 
+  it('says why above the passphrase field when passkeys exist', async () => {
+    renderLogin(NEED_PATH);
+    const input = await passphraseInput();
+    const sentence = screen.getByText(SENTENCE);
+    expect(sentence.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('says why above the passphrase field without any passkey', async () => {
+    passkeyRows.rows = [];
+    renderLogin(NEED_PATH);
+    const input = await passphraseInput();
+    expect(screen.queryByRole('button', { name: /sign in with passkey/i })).toBeNull();
+    const sentence = screen.getByText(SENTENCE);
+    expect(sentence.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('is unchanged without need: passkey enabled, no reason, no Not now', async () => {
     useSessionStore.setState({ session: { id: 's1' } as never, mk: null });
     renderLogin(`/login?return=${encodeURIComponent(RETURN)}`);
     const passkey = await screen.findByRole('button', { name: /sign in with passkey/i });
     expect(passkey).toBeEnabled();
     expect(screen.queryByText('This needs your passphrase')).toBeNull();
+    expect(screen.queryByText(SENTENCE)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
   });
 });

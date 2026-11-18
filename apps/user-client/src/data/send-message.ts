@@ -552,24 +552,16 @@ export function useStartOpener() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Check, without building any request, that the chat's persona key can be
- * opened: throws {@link MasterKeyUnavailableError} or `ProviderKeyLockedError`
- * exactly where the send would. Run before a retry deletes anything, so a send
- * that can't go out loses no message. Any other gap (a chat, persona or provider
- * that is missing) is left to the send itself, which reports it as before.
+ * Check, without building any request, that the send for `chatId` would get
+ * past its resolution: runs the very {@link resolvePersonaContext} the send runs
+ * and discards the result. Throws {@link MasterKeyUnavailableError} or
+ * `ProviderKeyLockedError` exactly where the send would, and a plain `Error` for
+ * any other gap (a missing chat, persona, provider row, template or offering).
+ * Run before a retry deletes anything, so a send that can't go out loses no
+ * message.
  */
 export async function assertPersonaKeyUsable(chatId: string): Promise<void> {
-  const db = getClientDataDb();
-  const mk = requireMasterKey('assertPersonaKeyUsable');
-  const chat = await db.chats.get(chatId);
-  if (!chat) return;
-  const persona = await db.personas.get(chat.personaId);
-  if (!persona) return;
-  const provider = await db.providers.get(persona.providerId);
-  if (!provider || provider.apiKey === null) return;
-  const providerDef = getProvider(provider.templateId);
-  if (!providerDef) return;
-  await openProviderKey({ ...provider, apiKey: provider.apiKey }, providerDef.displayName, mk);
+  await resolvePersonaContext(chatId, 'assertPersonaKeyUsable');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

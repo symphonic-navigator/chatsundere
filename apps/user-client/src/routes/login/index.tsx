@@ -15,6 +15,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { activateSession } from '../../boot/activate-session.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
+import { PASSPHRASE_SENTENCE } from '../../data/send-errors.js';
 import { useDisplayName } from '../../data/settings.js';
 import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
@@ -324,6 +325,11 @@ export function Login() {
             }}
             className="space-y-4"
           >
+            {/* Why the app sent you here, said once above the field — with or
+                without a passkey, since only the passphrase restores the keys. */}
+            {needPassphrase ? (
+              <p className="text-sm text-paper-soft">{PASSPHRASE_SENTENCE}</p>
+            ) : null}
             <PassphraseField
               id="login-passphrase"
               label={copy.login.passphraseLabel}

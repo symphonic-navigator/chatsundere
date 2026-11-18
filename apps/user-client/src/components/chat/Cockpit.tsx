@@ -521,9 +521,14 @@ export function Cockpit(p: Props): JSX.Element {
               recheckVoice('live');
               return;
             }
+            // Unavailable, not inert: the tap shows why, and the repair, on touch
+            // as well as with a pointer (the title alone never shows on touch).
+            if (p.voiceUnavailable) {
+              setVoiceNote((v) => !v);
+              return;
+            }
             p.onEnterLiveVoice?.();
           }}
-          disabled={p.voiceUnavailable !== null && !voiceRetryable}
           data-disabled={p.voiceUnavailable && !voiceRetryable ? 'true' : undefined}
           aria-disabled={p.voiceUnavailable && !voiceRetryable ? true : undefined}
           aria-busy={recheckingVoice === 'live' || undefined}

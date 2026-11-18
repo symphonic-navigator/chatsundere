@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { VoiceTransport } from '../../../src/components/chat/VoiceTransport.js';
 
@@ -152,6 +152,56 @@ describe('VoiceTransport voices-unavailable', () => {
     expect(
       screen.getByText("Couldn't load your ElevenLabs voices — tap to try again."),
     ).toBeInTheDocument();
+  });
+});
+
+describe('VoiceTransport voices-unavailable — Try again', () => {
+  it('offers Try again before the repair link, wired to the recheck', async () => {
+    let release: () => void = () => undefined;
+    const onRecheckVoice = vi.fn(
+      () =>
+        new Promise<void>((res) => {
+          release = res;
+        }),
+    );
+    render(
+      <VoiceTransport
+        state="idle"
+        {...props()}
+        autoReadOn
+        voiceUnavailable="voices-unavailable"
+        repair={{ label: 'Voice settings', onSelect: vi.fn() }}
+        onRecheckVoice={onRecheckVoice}
+      />,
+    );
+    const tryAgain = screen.getByRole('button', { name: 'Try again' });
+    const settings = screen.getByRole('button', { name: 'Voice settings' });
+    // Try again comes first in the note line.
+    expect(tryAgain.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    fireEvent.click(tryAgain);
+    expect(onRecheckVoice).toHaveBeenCalledTimes(1);
+    expect(tryAgain).toBeDisabled();
+    fireEvent.click(tryAgain);
+    expect(onRecheckVoice).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release();
+    });
+    expect(tryAgain).not.toBeDisabled();
+  });
+
+  it('offers no Try again for reasons a retry cannot fix', () => {
+    render(
+      <VoiceTransport
+        state="idle"
+        {...props()}
+        autoReadOn
+        voiceUnavailable="no-provider"
+        onRecheckVoice={vi.fn(async () => {})}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 });
 
