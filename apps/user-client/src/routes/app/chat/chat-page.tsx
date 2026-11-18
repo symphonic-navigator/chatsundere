@@ -61,6 +61,7 @@ import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
+import { useKeyboardOpen } from '../../../lib/use-keyboard-open.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
 import { useLiveVoiceIdle } from '../../../lib/voice/live/use-live-voice-idle.js';
@@ -788,6 +789,8 @@ export function ChatPage(): JSX.Element {
     monologue.transportState === 'speaking' || monologue.transportState === 'waiting',
   );
   useScreenWakeLock('live-voice', isLiveVoice && !liveVoiceIdle);
+  // With the keyboard up the cockpit no longer sits on the home indicator.
+  useKeyboardOpen();
 
   // Stop any in-flight inner-monologue when live voice starts — two audio paths must not overlap.
   useEffect(() => {
